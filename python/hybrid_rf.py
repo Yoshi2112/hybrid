@@ -4,6 +4,129 @@ from numpy import pi
 import os
 import pickle
 from BLcodes import basek_scramble                      # Input an integer (index) and a base and output a number between 0 and 1 (radix-k scrambling routine)
+import matplotlib.pyplot as plt
+from matplotlib import rcParams
+import pdb
+
+def check_cell_distribution(part, node_number, j): #        
+    
+    # Collect information about particles within +- 0.5dx of node_number (E-field nodes are in the cell centers)
+    x_node = (node_number - 0.5) * dx   # Position of node in question
+    f = np.zeros((1, 6))                
+    count = 0           
+
+    for ii in range(N):
+        if (abs(part[0, ii] - x_node) <= 0.5*dx) and (part[8, ii] == j):       
+            f = np.append(f, [part[0:6, ii]], axis=0)
+            count += 1
+
+    #Plot it
+    rcParams.update({'text.color'   : 'k',
+            'axes.labelcolor'   : 'k',
+            'axes.edgecolor'    : 'k',
+            'axes.facecolor'    : 'w',
+            'mathtext.default'  : 'regular',
+            'xtick.color'       : 'k',
+            'ytick.color'       : 'k',
+            'axes.labelsize'    : 24,
+            })
+        
+    fig = plt.figure(figsize=(12,10))
+    fig.patch.set_facecolor('w') 
+    num_bins = 20
+    
+    ax_x = plt.subplot2grid((2, 3), (0,0), colspan=2, rowspan=2)
+    ax_y = plt.subplot2grid((2, 3), (0,2))
+    ax_z = plt.subplot2grid((2, 3), (1,2))
+    
+    xs, BinEdgesx = np.histogram((f[:, 3] - partout[2, j]), bins=num_bins)
+    bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
+    ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
+    ax_x.set_xlabel(r'$v_x$')
+    
+    ys, BinEdgesy = np.histogram(f[:, 4], bins=num_bins)
+    by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
+    ax_y.plot(by, ys, '-', c='c', drawstyle='steps')
+    ax_y.set_xlabel(r'$v_y$')
+    
+    zs, BinEdgesz = np.histogram(f[:, 5], bins=num_bins)
+    bz = 0.5 * (BinEdgesz[1:] + BinEdgesz[:-1])
+    ax_z.plot(bz, zs, '-', c='c', drawstyle='steps')
+    ax_z.set_xlabel(r'$v_z$')
+    
+    plt.show()    
+    
+    return
+
+def check_position_distribution(part, j):
+    
+        #Plot it
+    rcParams.update({'text.color'   : 'k',
+            'axes.labelcolor'   : 'k',
+            'axes.edgecolor'    : 'k',
+            'axes.facecolor'    : 'w',
+            'mathtext.default'  : 'regular',
+            'xtick.color'       : 'k',
+            'ytick.color'       : 'k',
+            'axes.labelsize'    : 24,
+            })
+        
+    fig = plt.figure(figsize=(12,10))
+    fig.patch.set_facecolor('w') 
+    num_bins = 128
+    
+    ax_x = plt.subplot()    
+    
+    xs, BinEdgesx = np.histogram(part[0, idx_start[j]: idx_end[j]] / float(dx), bins=num_bins)
+    bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
+    ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
+    ax_x.set_xlabel(r'$x_p$')
+    ax_x.set_xlim(0, NX)
+    
+    plt.show() 
+    
+    return
+
+def check_velocity_distribution(part, j):
+
+    #Plot it
+    rcParams.update({'text.color'   : 'k',
+            'axes.labelcolor'   : 'k',
+            'axes.edgecolor'    : 'k',
+            'axes.facecolor'    : 'w',
+            'mathtext.default'  : 'regular',
+            'xtick.color'       : 'k',
+            'ytick.color'       : 'k',
+            'axes.labelsize'    : 24,
+            })
+        
+    fig = plt.figure(figsize=(12,10))
+    fig.patch.set_facecolor('w') 
+    num_bins = 100
+    
+    ax_x = plt.subplot2grid((2, 3), (0,0), colspan=2, rowspan=2)
+    ax_y = plt.subplot2grid((2, 3), (0,2))
+    ax_z = plt.subplot2grid((2, 3), (1,2))
+    
+    xs, BinEdgesx = np.histogram(part[3, idx_start[j]: idx_end[j]] / alfie, bins=num_bins)
+    bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
+    ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
+    ax_x.set_xlabel(r'$v_x$')
+    #ax_x.set_xlim(6, 14)
+    
+    ys, BinEdgesy = np.histogram(part[4, idx_start[j]: idx_end[j]] / alfie, bins=num_bins)
+    by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
+    ax_y.plot(by, ys, '-', c='c', drawstyle='steps')
+    ax_y.set_xlabel(r'$v_y$')
+    
+    zs, BinEdgesz = np.histogram(part[5, idx_start[j]: idx_end[j]] / alfie, bins=num_bins)
+    bz = 0.5 * (BinEdgesz[1:] + BinEdgesz[:-1])
+    ax_z.plot(bz, zs, '-', c='c', drawstyle='steps')
+    ax_z.set_xlabel(r'$v_z$')
+
+    plt.show()
+    
+    return
 
 def set_constants():
     global q, c, mp, mu0, kB, e0    
@@ -23,7 +146,7 @@ def set_parameters():
     NX       = 128                              # Number of cells - dimension of array (not including ghost cells)
     max_sec  = 150 * 1 / f0                     # Number of (real) seconds to run program for - 150 periods of f0   
     t_res    = max_sec * 1e-3                   # Time resolution of output data
-    cellpart = 200                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
+    cellpart = 500                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
     ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.    
     B0       = 3.504                            # Unform initial magnetic field value (in T) (must be parallel to an axis)
     ne       = 1e19                             # Electron number density (/m3)
@@ -43,12 +166,12 @@ def initialize_particles():
     partin = np.array([[  1.00000000e+00],      # (0) Mass   (proton units)
                        [  1.00000000e+00],      # (1) Charge (elementary units)
                        [               0],      # (2) Bulk velocity (multiples of vA)
-                       [          0.8*ne],      # (3) Real density (/m3)
-                       [  5.00000000e-01],      # (4) Simulated density (portion of 1)
-                       [  0.00000000e+00],      # (5) Distribution Type (not used here)
+                       [              ne],      # (3) Real density (/m3)
+                       [               1],      # (4) Simulated density (portion of 1)
+                       [               0],      # (5) Distribution Type (not used here)
                        [            5.00],      # (6) Parallel temperature (eV)
                        [            5.00],      # (7) Perpendicular temperature (eV)
-                       [  1.00000000e+00]])     # (8) Hot/Cold (0/1) species flag
+                       [  0.00000000e+00]])     # (8) Hot/Cold (0/1) species flag
     
     part_type     = ['$H^{+}$']
     
@@ -76,7 +199,7 @@ def initialize_particles():
     
     Tpar = partin[6, :] * 11603
     Tper = partin[7, :] * 11603
-    Te0  = 0
+    Te0  = Tpar[0]
 
     idx_start = [np.sum(N_species[0:ii]    )     for ii in range(0, Nj)]                     # Start index values for each species in order
     idx_end   = [np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)]                     # End   index values for each species in order
@@ -260,6 +383,8 @@ def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
     
 def push_E(B, V_i, n_i, dt): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
 
+    global J
+
     E_out = np.zeros((size, 3))     # Output array - new electric field
     JxB   = np.zeros((size, 3))     # V cross B holder
     BdB   = np.zeros((size, 3))     # B cross del cross B holder     
@@ -308,6 +433,8 @@ def push_E(B, V_i, n_i, dt): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
     E_out[0, :]        = E_out[size - 2, :]
     E_out[size - 1, :] = E_out[1, :]
     
+    #pdb.set_trace()
+    
     return E_out
 
 
@@ -346,7 +473,7 @@ def collect_density(I_in, W_in, ptype):
     return n_i
 
 
-def collect_flow(part, ni, W_in): ### Add current for slowly moving cold background density?
+def collect_flow(part, ni, W_in): 
     
     # Empty 3-vector for flow velocities at each node
     V_i = np.zeros((size, Nj, 3), float)    
@@ -381,6 +508,9 @@ def collect_flow(part, ni, W_in): ### Add current for slowly moving cold backgro
             smoothed       = smooth(V_i[:, jj, kk])
             V_i[:, jj, kk] = smoothed
     
+    #V = [np.mean(V_i[xx, 0, :]) for xx in range(size)]
+    #pdb.set_trace()
+    
     return V_i
     
 
@@ -409,11 +539,11 @@ if __name__ == '__main__':
     
     # Metadata
     start_time     = timer()                       # Start Timer
-    drive          = '/home/c3134027/'             # Drive letter for portable HDD (changes between computers) - INCLUDE COLON. For UNIX, put home path here
-    save_path      = 'Runs/Alpha Run'              # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
-    generate_data  = 0                             # Save data? Yes (1), No (0)
-    generate_plots = 0  
-    run_desc = '''Test of temperature anisotropy instability with plasma parameters taken from Gary et al. (1993) and Tanaka (1985) - Run II involving He2+ ions and cold protons.'''
+    drive          = 'C:/'                         # Drive letter for portable HDD (changes between computers) - INCLUDE COLON. For UNIX, put home path here
+    save_path      = 'Runs/Jenkins'                # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
+    generate_data  = 0           #;  plt.ioff()    # Save data? Yes (1), No (0)
+    generate_plots = 1  
+    run_desc = '''1D hybrid code reproduction of PIC code parameters from Jenkins et al. (2013).'''
     
     # Initialize Things
     print 'Initializing parameters...'
@@ -423,8 +553,16 @@ if __name__ == '__main__':
     B, E, Vi, dns, dns_old, W = initialize_fields()
 
     DT, maxtime, framegrab    = set_timestep(part)
-
-    for qq in range(maxtime):
+    
+    # Numerical checks
+    which_species = 0
+    which_cell    = 50
+    
+    check_cell_distribution(part, which_cell, which_species)
+    #check_velocity_distribution(part, which_species)
+    #check_position_distribution(part, which_species)
+    
+    for qq in range(0):
         if qq == 0:
 
             print 'Simulation starting...'
@@ -480,6 +618,129 @@ if __name__ == '__main__':
         if qq%5 == 0:
             print 'Iteration %d of %d complete (%ds)' % (qq, maxtime, int(timer() - start_time))
             
+# ----- Plot commands ----- #
+        if generate_plots == 1:
+            # Initialize Figure Space
+            fig_size = 4, 6
+            fig = plt.figure(figsize=(20,10))   
+            fig.patch.set_facecolor('w')    
+            
+            # Set font things
+            rcParams.update({'text.color'   : 'k',
+                        'axes.labelcolor'   : 'k',
+                        'axes.edgecolor'    : 'k',
+                        'axes.facecolor'    : 'w',
+                        'mathtext.default'  : 'regular',
+                        'xtick.color'       : 'k',
+                        'ytick.color'       : 'k',
+                        'axes.labelsize'    : 16,
+                        })
+            
+            # Set some things    
+            sim_time = qq * DT
+                
+            x_pos = part[0, 0:N] * 1000                 # Particle x-positions (km) (For looking at particle characteristics)  
+            x_cell_num = np.arange(size - 2)            # Numerical cell numbering: x-axis
+      
+        #####       
+            # Plot: Normalized vy - Assumes species 0 is hot hydrogen population
+            vy_pos_hot =  0, 0
+            
+            ax_vy_hot = plt.subplot2grid(fig_size, vy_pos_hot, rowspan=4, colspan=3)    
+            
+            # Normalized to Alfven velocity: For y-axis plot
+            norm_yvel   = part[4, 0:N] / 1e5        # vy (vA / ms-1)
+            
+            # Plot Scatter
+            ax_vy_hot.scatter(x_pos[idx_start[0]: idx_end[0]], norm_yvel[idx_start[0]: idx_end[0]], s=1, c='r', lw=0)        # Hot population
+
+            # Make it look pretty
+            ax_vy_hot.set_title(r'Normalized velocity $v_y$ vs. Position (x)')    
+            
+            ax_vy_hot.set_xlim(0, xmax*1000)
+            ax_vy_hot.set_ylim(-3, 3)
+            ax_vy_hot.set_xlabel('Position (mm)', labelpad=10)
+            ax_vy_hot.set_ylabel(r'$v_y \; (10^{-5} ms^{-1})$', fontsize=24, rotation=90, labelpad=8) 
+                       
+            plt.text(0, -2.99, 'N = %d' % N, fontsize='16')
+        
+        #####
+            # Plot Density
+            den_pos = 0, 3
+            ax_den = plt.subplot2grid((fig_size), (den_pos), colspan=3)
+            
+            # Plot the Things
+            dns_norm = np.zeros((size - 2, Nj), dtype=float)            
+            
+            for ii in range(Nj):
+                if partin[5, ii] == 1:
+                    dns_norm[:, ii] = dns[1: size-1, ii] / (partin[3, ii])
+                else:
+                    dns_norm[:, ii] = dns[1: size-1, ii] / partin[3, ii]
+                    
+            species_colors = ['red', 'cyan']
+            
+            for ii in range(Nj):
+                ax_den.plot(x_cell_num, dns_norm[:, ii], color=species_colors[ii])
+            
+            # Make things pretty
+            ax_den.set_title('Normalized Ion Densities and Magnetic Fields (y, mag) vs. Cell')
+            ax_den.set_xlim(0, NX)
+            ax_den.set_ylim(0, 2)
+            ax_den.set_ylabel('Normalized Density', fontsize=14, rotation=90, labelpad=5)
+            
+        #####
+            # Plot: Electric Field Ez
+            ax_Ez = plt.subplot2grid(fig_size, (1, 3), colspan=3, sharex=ax_den)
+        
+            Ez = E[1:size-1, 2]
+            
+            ax_Ez.plot(x_cell_num, Ez, color='magenta')
+            
+            ax_Ez.set_xlim(0, NX)
+            
+            #ax_Ez.set_ylim(-200e-6, 200e-6)
+            #ax_Ez.set_yticks(np.arange(-200e-6, 201e-6, 50e-6))
+            #ax_Ez.set_yticklabels(np.arange(-150, 201, 50))   
+            #ax_Ez.set_ylabel(r'$E_z$ ($\mu$V)', labelpad=25, rotation=0, fontsize=14)
+            
+            
+        #####
+            # Plot: Magnetic Field - y component + magnitude
+            ax_By = plt.subplot2grid((fig_size), (2, 3), colspan=3, sharex=ax_den)
+            ax_B  = plt.subplot2grid((fig_size), (3, 3), colspan=3, sharex=ax_den)
+                
+            # Normalize field to initial B0
+            mag_B = (np.sqrt(B[1:size-1, 0] ** 2 + B[1:size-1, 1] ** 2 + B[1:size-1, 2] ** 2)) / B0
+            B_y = B[1:size-1, 1] / B0
+            
+            ax_B.plot(x_cell_num, mag_B, color='g')
+            ax_By.plot(x_cell_num, B_y, color='g')
+                
+            ax_B.set_xlim(0,  NX)
+            ax_By.set_xlim(0, NX)
+                
+            ax_B.set_ylim(0, 4)
+            ax_By.set_ylim(-2, 2)
+                
+            ax_B.set_ylabel( r'$|B|$', rotation=0, labelpad=20)
+            ax_By.set_ylabel(r'$B_y$', rotation=0, labelpad=10)
+            ax_B.set_xlabel('Cell Number')
+                    
+            for ax in [ax_den, ax_Ez, ax_By]:
+                plt.setp(ax.get_xticklabels(), visible=False)
+                # The y-ticks will overlap with "hspace=0", so we'll hide the bottom tick
+                ax.set_yticks(ax.get_yticks()[1:])  
+                
+            #for ax in [ax_den, ax_Ez, ax_By, ax_B]:
+                #ax.yaxis.tick_right()
+                #ax.set_label_position("right")
+                
+            # Last Minute plot adjustments
+            plt.tight_layout(pad=1.0, w_pad=1.8)
+            fig.subplots_adjust(hspace=0) 
+            
+
         if qq%framegrab == 0:       # Dump data at specified interval   
         
             r = qq / framegrab          # Capture number
@@ -491,7 +752,7 @@ if __name__ == '__main__':
                     os.makedirs('%s%s' % (drive, save_path))              # Create master test series directory
                     print 'Master directory created'
                     
-                num = len(os.listdir('%s%s' % (drive, save_path)))        # Count number of existing runs. Set to run number manually for static save
+                num  = 0    #len(os.listdir('%s%s' % (drive, save_path)))        # Count number of existing runs. Set to run number manually for static save
 
                 path = ('%s%s/Run %d' % (drive, save_path, num))          # Set root run path (for images)
                 
@@ -499,6 +760,14 @@ if __name__ == '__main__':
                 if os.path.exists(path) == False:
                     os.makedirs(path)
                     print 'Run directory created'            
+            
+            # Save Plots
+            if generate_plots == 1:
+                filename = 'anim%05d.png' % r
+                fullpath = os.path.join(path, filename)
+                plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+                print 'Plot %d produced' % r
+                plt.close('all')            
             
             # Save Data
             if generate_data == 1:
