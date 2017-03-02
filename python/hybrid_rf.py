@@ -17,18 +17,18 @@ def set_constants():
     
     
 def set_parameters():
-    global dxm, t_res, NX, max_sec, cellpart, ie, B0, size, N, k, ne
-    dxm      = 0.625                            # Number of c/wpi per dx
-    t_res    = 0.5                              # Time resolution of data in seconds (default 1s). Determines how often data is captured. Every frame captured if '0'.
+    global dxm, t_res, NX, max_sec, cellpart, ie, B0, size, N, k, ne, xmax
+    f0       = 8e7
+    xmax     = 0.004                            # Max domain size in meters
     NX       = 128                              # Number of cells - dimension of array (not including ghost cells)
-    max_sec  = 500                              # Number of (real) seconds to run program for   
-    cellpart = 800                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
+    max_sec  = 150 * 1 / f0                     # Number of (real) seconds to run program for - 150 periods of f0   
+    t_res    = max_sec * 1e-3                   # Time resolution of output data
+    cellpart = 200                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
     ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.    
-    B0       = 6.75e-9                          # Unform initial magnetic field value (in T) (must be parallel to an axis)
-    ne       = 30e6                             # Electron number density (/m3)
-    k        = 1                                # Sinusoidal Density Parameter - number of wavelengths in spatial domain
+    B0       = 3.504                            # Unform initial magnetic field value (in T) (must be parallel to an axis)
+    ne       = 1e19                             # Electron number density (/m3)
 
-    ## Derived Values ##
+    # Derived Values ##
     size     = NX + 2
     N        = cellpart*NX                      # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
 
@@ -37,36 +37,25 @@ def set_parameters():
 def initialize_particles():
     np.random.seed(21)                          # Random seed 
     global Nj, Te0, partout, n_rel, n0, alfie, dx, partin, idx_start, idx_end, xmax
-    
-    #Vb = 0
-    #Vc = 0 #(0.1272 / 8.3528) * Vb     # Do the fancy calculation thing here afterwards
-    
-    T0 = 115         # Average of T_perp and T_parallel (assuming equal contribution)
-    A  = 5.24        # Anisotropy T_perp / T_parallel
         
     # Species Characteristics - use column number as species identifier
-    #                           H+                   He2+               
-    partin = np.array([[  1.00000000e+00,   4.00000000e+00],        #(0) Mass   (proton units)
-                       [  1.00000000e+00,   2.00000000e+00],        #(1) Charge (charge units)
-                       [               0,                0],        #(2) Bulk Velocity (multiples of alfven speed)
-                       [          0.8*ne,           0.1*ne],        #(3) real density in /m3 - mantissa is density in /cm3
-                       [  5.00000000e-01,   5.00000000e-01],        #(4) Simulated (superparticle) Density (as a portion of 1)
-                       [  0.00000000e+00,   0.00000000e+00],        #(5) Distribution type         0: Uniform, 1: Sinusoidal
-                       [            9.35,   2*T0/(A+1)    ],        #(6) Parallel      Temperature (eV) (x)
-                       [            9.35,   2*T0*A/(A+1)  ],        #(7) Perpendicular Temperature (eV) (y, z)
-                       [  1.00000000e+00,   0.00000000e+00]])       #(8) Hot (0) or Cold (1) species
+    #                           D+            
+    partin = np.array([[  1.00000000e+00],      # (0) Mass   (proton units)
+                       [  1.00000000e+00],      # (1) Charge (elementary units)
+                       [               0],      # (2) Bulk velocity (multiples of vA)
+                       [          0.8*ne],      # (3) Real density (/m3)
+                       [  5.00000000e-01],      # (4) Simulated density (portion of 1)
+                       [  0.00000000e+00],      # (5) Distribution Type (not used here)
+                       [            5.00],      # (6) Parallel temperature (eV)
+                       [            5.00],      # (7) Perpendicular temperature (eV)
+                       [  1.00000000e+00]])     # (8) Hot/Cold (0/1) species flag
     
-    print 'T_par = %.1f eV'  % partin[6, 0]
-    print 'T_perp = %.1f eV\n' % partin[7, 0]
-    
-    part_type      = ['$H^{+}$',
-                      '$He^{2+}$'] 
+    part_type     = ['$H^{+}$']
     
     n0            = np.sum(partin[3, :])                                    # Total ion density - initial density per cell (in m-3 : First number representative of density in cm-3 )
     Nj            = int(np.shape(partin)[1])                                # Number of species (number of columns above)    
     wpi           = np.sqrt((n0 * (q**2)) / (mp * e0 ))                     # Plasma Frequency (rad/s)
-    dx            = np.round(dxm * c / wpi)                                 # Spacial step as function of plasma frequency (in metres)
-    xmax          = NX * dx
+    dx            = xmax / float(NX)
     
     N_real        = (dx * 1. * 1.) * (n0) * NX                              # Total number of real, mobile particles (rect prism with sides dx x 1 x 1 metres)
     n_rel         = np.asarray([partin[3, nn] / n0 for nn in range(Nj)])    # Relative proportion (out of 1) of each species
@@ -85,10 +74,10 @@ def initialize_particles():
     part     = np.zeros((9, N), dtype=float)         # Create array of zeroes N x 13 for pos, vel and F 3-vectors
     old_part = np.zeros((9, N), dtype=float)         # Place to store last particle states while using Predictor-Corrector method
     
-    Te0  = 0.125 * T0 * 11603                                               # 0.5 * (np.sum([n_rel[xx] * partin[7, xx] for xx in range(Nj)]) + np.sum([n_rel[xx] * partin[6, xx] for xx in range(Nj)])) * 11600  # (Initial) Electron temperature (K). Set to 0 for isothermal approximation. Multiply eV by 11.600 for temperature in k-electron-volts
     Tpar = partin[6, :] * 11603
     Tper = partin[7, :] * 11603
-    
+    Te0  = 0
+
     idx_start = [np.sum(N_species[0:ii]    )     for ii in range(0, Nj)]                     # Start index values for each species in order
     idx_end   = [np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)]                     # End   index values for each species in order
     idx       = 0    
@@ -121,9 +110,8 @@ def initialize_particles():
                
     beta = 0.5 * (beta_par + beta_per)
     
-    print 'Proton beta = %.2f' % beta[0]
+    print 'Deuterium beta = %.2f' % beta[0]
     print 'Speed ratio = %d ' % int(c/alfie) 
-    print 'Pr||/Alph|| = %.2f' % (partin[6, 1] / partin[6, 0])
 
     return part, part_type, old_part
 
@@ -131,8 +119,8 @@ def initialize_particles():
 def set_timestep(part):
     gyfreq   = q*B0/mp                          # Proton Gyrofrequency (rad/s) (since this will be the highest of all species)
     gyperiod = 2*pi / gyfreq                    # Gyroperiod in seconds
-    ion_ts = 0.05 * gyperiod                    # Timestep to resolve gyromotion
-    vel_ts = dx / (2 * np.max(part[3:6, :]))    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
+    ion_ts   = 0.05 * gyperiod                  # Timestep to resolve gyromotion
+    vel_ts   = dx / (2 * np.max(part[3:6, :]))  # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
     
     DT        = 0.6 * min(ion_ts, vel_ts)       # Smallest of the two
     framegrab = int(t_res / DT)                 # Number of iterations between dumps
@@ -142,7 +130,7 @@ def set_timestep(part):
         framegrab = 1
     
     print '\nProton gyroperiod = %.2fs' % gyperiod
-    print 'Timestep: %.4fs, %d iterations total\n' % (DT, maxtime)
+    print 'Timestep: %es, %d iterations total\n' % (DT, maxtime)
     return DT, maxtime, framegrab
 
     
@@ -423,7 +411,7 @@ if __name__ == '__main__':
     start_time     = timer()                       # Start Timer
     drive          = '/home/c3134027/'             # Drive letter for portable HDD (changes between computers) - INCLUDE COLON. For UNIX, put home path here
     save_path      = 'Runs/Alpha Run'              # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
-    generate_data  = 1                             # Save data? Yes (1), No (0)
+    generate_data  = 0                             # Save data? Yes (1), No (0)
     generate_plots = 0  
     run_desc = '''Test of temperature anisotropy instability with plasma parameters taken from Gary et al. (1993) and Tanaka (1985) - Run II involving He2+ ions and cold protons.'''
     
