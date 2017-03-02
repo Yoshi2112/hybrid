@@ -36,7 +36,7 @@ def set_parameters():
 
 def initialize_particles():
     np.random.seed(21)                          # Random seed 
-    global Nj, Te0, partout, n_rel, n0, alfie, dx, partin, idx_start, idx_end, xmax
+    global Nj, Te0, partout, n_rel, n0, alfie, dx, partin, idx_start, idx_end, xmax, wpi
         
     # Species Characteristics - use column number as species identifier
     #                           D+            
