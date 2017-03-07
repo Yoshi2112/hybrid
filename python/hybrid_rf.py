@@ -214,8 +214,8 @@ def initialize_particles():
     
         part[8, idx_start[idx]: idx_end[idx]] = idx      # Give index identifier to each particle  
         m    = partout[0, idx]                           # Species mass
-        vpar = np.sqrt(    kB * Tpar[idx] / m)           # Species parallel thermal velocity (x)
-        vper = np.sqrt(2 * kB * Tper[idx] / m)           # Species perpendicular thermal velocity (y, z)
+        vpar = 0#p.sqrt(    kB * Tpar[idx] / m)          # Species parallel thermal velocity (x)
+        vper = 0#np.sqrt(2 * kB * Tper[idx] / m)         # Species perpendicular thermal velocity (y, z)
 
         for jj in range(ii):
             part[0, idx_start[idx] + jj] = xmax * basek_scramble(jj, 2)     # Assign position
@@ -232,14 +232,6 @@ def initialize_particles():
         idx += 1                                    # Move into next species
            
     part[6, :] = part[0, :] / dx + 0.5 ; part[6, :] = part[6, :].astype(int)                        # Initial leftmost node, I
-    
-    beta_par = (2 * mu0 * partin[3, :] * kB * Tpar) / B0 ** 2
-    beta_per = (2 * mu0 * partin[3, :] * kB * Tper) / B0 ** 2
-               
-    beta = 0.5 * (beta_par + beta_per)
-    
-    print 'Deuterium beta = %.2f' % beta[0]
-    print 'Speed ratio = %d ' % int(c/alfie) 
 
     return part, part_type, old_part
 
@@ -396,6 +388,8 @@ def push_E(B, V_i, n_i, dt, qq): # Based off big F(B, n, V) eqn on pg. 140 (eqn.
     J     = np.zeros((size, 3))     # Ion current
     qn    = np.zeros( size,    dtype=float)     # Ion charge density
 
+    E_source = E0 * np.sin(2 * pi * f0 * (qq - 0.5) * dt)           # No initial subtraction from E needed since E is calculated fresh per timestep from source terms.
+
     # Adiabatic Electron Temperature Calculation   
     if ie == 1:    
         gamma = 5./3.
@@ -437,7 +431,9 @@ def push_E(B, V_i, n_i, dt, qq): # Based off big F(B, n, V) eqn on pg. 140 (eqn.
     E_out[0, :]        = E_out[size - 2, :]
     E_out[size - 1, :] = E_out[1, :]
     
-    E_source = E0 * np.sin(2 * pi * f0 * (qq - 0.5) * dt)           # No initial subtraction from E needed since E is calculated fresh per timestep from source terms.
+    # Add source term
+    source_location = NX / 2                
+    E_out[source_location, 0] += E_source
     
     return E_out
 
@@ -545,7 +541,7 @@ if __name__ == '__main__':
     start_time     = timer()                       # Start Timer
     drive          = 'C:/'                         # Drive letter for portable HDD (changes between computers) - INCLUDE COLON. For UNIX, put home path here
     save_path      = 'Runs/Jenkins'                # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
-    generate_data  = 0           #;  plt.ioff()    # Save data? Yes (1), No (0)
+    generate_data  = 0            ;  plt.ioff()    # Save data? Yes (1), No (0)
     generate_plots = 1  
     run_desc = '''1D hybrid code reproduction of PIC code parameters from Jenkins et al. (2013).'''
     
@@ -562,11 +558,11 @@ if __name__ == '__main__':
     which_species = 0
     which_cell    = 50
     
-    check_cell_distribution(part, which_cell, which_species)
+    #check_cell_distribution(part, which_cell, which_species)
     #check_velocity_distribution(part, which_species)
     #check_position_distribution(part, which_species)
     
-    for qq in range(0):
+    for qq in range(maxtime):
         if qq == 0:
 
             print 'Simulation starting...'
@@ -697,7 +693,7 @@ if __name__ == '__main__':
             # Plot: Electric Field Ez
             ax_Ez = plt.subplot2grid(fig_size, (1, 3), colspan=3, sharex=ax_den)
         
-            Ez = E[1:size-1, 2]
+            Ez = E[1:size-1, 0]
             
             ax_Ez.plot(x_cell_num, Ez, color='magenta')
             
