@@ -140,8 +140,11 @@ def set_constants():
     
     
 def set_parameters():
-    global dxm, t_res, NX, max_sec, cellpart, ie, B0, size, N, k, ne, xmax
-    f0       = 8e7
+    global dxm, t_res, NX, max_sec, cellpart, ie, B0, size, N, k, ne, xmax, f0, E0
+    
+    f0       = 8e7                              # Frequency of source wave
+    E0       = 2e4                              # Amplitude of source wave
+    
     xmax     = 0.004                            # Max domain size in meters
     NX       = 128                              # Number of cells - dimension of array (not including ghost cells)
     max_sec  = 150 * 1 / f0                     # Number of (real) seconds to run program for - 150 periods of f0   
@@ -154,6 +157,8 @@ def set_parameters():
     # Derived Values ##
     size     = NX + 2
     N        = cellpart*NX                      # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
+
+    
 
     return    
 
@@ -380,11 +385,10 @@ def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
     
     return B
     
-    
-def push_E(B, V_i, n_i, dt): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
+def push_E(B, V_i, n_i, dt, qq): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
 
     global J
-
+        
     E_out = np.zeros((size, 3))     # Output array - new electric field
     JxB   = np.zeros((size, 3))     # V cross B holder
     BdB   = np.zeros((size, 3))     # B cross del cross B holder     
@@ -433,7 +437,7 @@ def push_E(B, V_i, n_i, dt): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
     E_out[0, :]        = E_out[size - 2, :]
     E_out[size - 1, :] = E_out[1, :]
     
-    #pdb.set_trace()
+    E_source = E0 * np.sin(2 * pi * f0 * (qq - 0.5) * dt)           # No initial subtraction from E needed since E is calculated fresh per timestep from source terms.
     
     return E_out
 
@@ -572,7 +576,7 @@ if __name__ == '__main__':
             Vi          = collect_flow(part, dns, W)                                        # Collect initial current
             
             B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], 0)                                     # Initialize magnetic field (should be second?)
-            E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, 0)                                       # Initialize electric field
+            E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, 0, qq)                                   # Initialize electric field
             
             part = velocity_update(part, B[:, 0:3], E[:, 0:3], -0.5*DT, W)                  # Retard velocity to N - 1/2 to prevent numerical instability
             
@@ -585,7 +589,7 @@ if __name__ == '__main__':
             dns       = 0.5 * (dns + collect_density(part[6, :], W, part[8, :]))            # Collect ion density at N + 1/2 : Collect N + 1 and average with N                                             
             Vi        = collect_flow(part, dns, W)                                          # Collect ion flow at N + 1/2
             E[:, 6:9] = E[:, 0:3]                                                           # Store Electric Field at N because PC, yo
-            E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, DT)                                      # Advance Electric Field to N + 1/2   ii = even numbers
+            E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, DT, qq)                                  # Advance Electric Field to N + 1/2
             
             
             # ----- Predictor-Corrector Method ----- #
@@ -605,7 +609,7 @@ if __name__ == '__main__':
             dns  = 0.5 * (dns + collect_density(part[6, :], W, part[8, :]))                 # Collect ion density as average of N + 1, N + 2
             Vi   = collect_flow(part, dns, W)                                               # Collect ion flow at N + 3/2
             B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], DT)                                    # Push Magnetic Field again to N + 3/2 (Use same E(N + 1)
-            E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, DT)                                      # Push Electric Field to N + 3/2   ii = odd numbers
+            E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, DT, qq + 1)                              # Push Electric Field to N + 3/2   ii = odd numbers
             
             # Correct Fields
             E[:, 0:3] = 0.5 * (E[:, 3:6] + E[:, 0:3])                                       # Electric Field interpolation
