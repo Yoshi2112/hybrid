@@ -148,7 +148,7 @@ def set_parameters():
     
     xmax     = 0.004                            # Max domain size in meters
     NX       = 128                              # Number of cells - dimension of array (not including ghost cells)
-    max_sec  = 150 * 1 / f0                     # Number of (real) seconds to run program for - 150 periods of f0   
+    max_sec  = 1 / f0                           # Number of (real) seconds to run program for - 150 periods of f0   
     t_res    = 0#max_sec * 1e-3                 # Time resolution of output data. Set to 0 to output every timestep.
     cellpart = 500                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
     ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.    
@@ -231,6 +231,7 @@ def initialize_particles():
         idx += 1                                    # Move into next species
            
     part[6, :] = part[0, :] / dx + 0.5 ; part[6, :] = part[6, :].astype(int)                        # Initial leftmost node, I
+    part[3, :] = 0.1*c
 
     return part, part_type, old_part
 
@@ -242,9 +243,9 @@ def set_timestep(part):
     ion_ts   = 0.05 * gyperiod                  # Timestep to resolve gyromotion
     vel_ts   = dx / (2 * np.max(part[3:6, :]))  # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
     
-    DT        = min(ion_ts, vel_ts)             # Smallest of the two
-    framegrab = int(t_res / DT)                 # Number of iterations between dumps
-    maxtime   = int(max_sec / DT) + 1           # Total number of iterations to achieve desired final time
+    DT        = 1e-14#min(ion_ts, vel_ts)               # Smallest of the two
+    framegrab = int(t_res / DT)                         # Number of iterations between dumps
+    maxtime   = int(max_sec / DT) + 1                   # Total number of iterations to achieve desired final time
     
     if framegrab == 0:
         framegrab = 1
@@ -264,7 +265,7 @@ def update_dt(maxtime, DT, framegrab, Vx):
     while ((V_max+dVmax) > (0.5 * dx/DT)):  # If max particle velocity covers more than half a cell in DT
         DT        /= 2              # Halve the timestep
         maxtime   *= 2              # Double the number of future iterations
-        framegrab *= 2              # Double the length between data dumps
+        #framegrab *= 2              # Double the length between data dumps
         x += 1                      # Record how many times it is halved (cumulative total kept in main script)
         print 'Timestep halved. %d iterations remain' % maxtime     # Display that it has been halved and print how many iterations remain now.
         
@@ -361,8 +362,8 @@ def position_update(part):  # Basic Push (x, v) vectors and I, W update
     return part, W_out
     
     
-def assign_weighting(xpos, I, BE):                      # Magnetic/Electric Field, BE == 0/1
-    W_o = ((xpos)/(dx)) - I + (BE / 2.)       # Last term displaces weighting factor by half a cell by adding 0.5 for a retarded electric field grid (i.e. all weightings are 0.5 larger due to further distance from left node, and this weighting applies to the I + 1 node.)
+def assign_weighting(xpos, I, BE):                 # Magnetic/Electric Field, BE == 0/1
+    W_o = ((xpos)/(dx)) - I + (BE / 2.)            # Last term displaces weighting factor by half a cell by adding 0.5 for a retarded electric field grid (i.e. all weightings are 0.5 larger due to further distance from left node, and this weighting applies to the I + 1 node.)
     return W_o
     
     
@@ -401,7 +402,7 @@ def E_ext(qq, dt):
     '''Returns the value for the driving external electric field at t = qq*dt. Minus 1/2 because field is
         analytically evaluated only at the half timestep (0.5, 1.5). Full timesteps use the predictor/corrector
         scheme, which should carry the value for the field'''
-    return (E0 * np.sin(2 * pi * f0 * (qq - 0.5) * dt))
+    return 0#(E0 * np.sin(2 * pi * f0 * (qq - 0.5) * dt))
 
 def push_E(B, V_i, n_i, dt, qq): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
 
@@ -412,7 +413,7 @@ def push_E(B, V_i, n_i, dt, qq): # Based off big F(B, n, V) eqn on pg. 140 (eqn.
     BdB   = np.zeros((size, 3))     # B cross del cross B holder     
     del_p = np.zeros((size, 3))     # Electron pressure tensor gradient array
     J     = np.zeros((size, 3))     # Ion current
-    qn    = np.zeros( size,    dtype=float)     # Ion charge density
+    qn    = np.zeros(size, dtype=float)     # Ion charge density
 
     E_source = E_ext(qq, dt)        # No initial subtraction from E needed since E is calculated fresh per timestep from source terms.
 
@@ -424,7 +425,7 @@ def push_E(B, V_i, n_i, dt, qq): # Based off big F(B, n, V) eqn on pg. 140 (eqn.
     else:
         Te = [Te0 for ii in range(size)]
         
-    # Calculate average/summations over species
+    # Calculate change/current summations over each species
     for jj in range(Nj):
         qn += partout[1, jj] * n_i[:, jj]                  # Total charge density, sum(qj * nj)
         
@@ -582,13 +583,16 @@ if __name__ == '__main__':
     time_pwr                  = 0
     time_history              = []
     
-    # Numerical checks
-    which_species = 0
-    which_cell    = 50
-    
-    #check_cell_distribution(part, which_cell, which_species)
-    #check_velocity_distribution(part, which_species)
-    #check_position_distribution(part, which_species)
+#==============================================================================
+#     # ----- Numerical checks ----- #
+#     which_species = 0
+#     which_cell    = 50
+#     
+#     check_cell_distribution(part, which_cell, which_species)
+#     check_velocity_distribution(part, which_species)
+#     check_position_distribution(part, which_species)
+#     # ---------------------------- #
+#==============================================================================
     
     for qq in range(maxtime):
         if qq == 0:
@@ -607,11 +611,16 @@ if __name__ == '__main__':
         else:
             # N + 1/2
             
-            maxtime, DT, framegrab, time_pwr = update_dt(maxtime, DT, framegrab, part[3, :])    # Reset timestep to keep Courant condition
-            time_history.append(time_pwr)                                                       # Record when the timestep decreases (records zero unless halving takes place)
-            
-            if sum(time_history) >= 12:
-                sys.exit('Simulation terminated: Timestep halved too much')
+#==============================================================================
+#             # ----- Update timestep ----- #
+#             maxtime, DT, framegrab, time_pwr = update_dt(maxtime, DT, framegrab, part[3, :])    # Reset timestep to keep Courant condition
+#             time_history.append(time_pwr)                                                       # Record when the timestep decreases (records zero unless halving takes place)
+#             
+#             if sum(time_history) >= 12:
+#                 sys.exit('Simulation terminated: Timestep halved too much')
+#             
+#             # --------------------------- #
+#==============================================================================
             
             part      = velocity_update(part, B[:, 0:3], E[:, 0:3], DT, W)                 # Advance Velocity to N + 1/2
             part, W   = position_update(part)                                               # Advance Position to N + 1
@@ -678,10 +687,30 @@ if __name__ == '__main__':
             x_cell_num = np.arange(size - 2)            # Numerical cell numbering: x-axis
       
         #####       
-            # Plot: Normalized vy - Assumes species 0 is hot hydrogen population
-            vy_pos_hot =  0, 0
+            # Plot: Normalized vx - Assumes species 0 is hot hydrogen population
+            vx_pos_hot =  0, 0
             
-            ax_vy_hot = plt.subplot2grid(fig_size, vy_pos_hot, rowspan=4, colspan=3)    
+            ax_vx_hot = plt.subplot2grid(fig_size, vx_pos_hot, rowspan=2, colspan=3)    
+            
+            # Normalized to Alfven velocity: For y-axis plot
+            norm_xvel   = part[3, 0:N] / 1e7        # vy (vA / ms-1)
+            
+            # Plot Scatter
+            ax_vx_hot.scatter(x_pos[idx_start[0]: idx_end[0]], norm_xvel[idx_start[0]: idx_end[0]], s=1, c='r', lw=0)        # Hot population
+
+            # Make it look pretty
+            ax_vx_hot.set_title(r'$v_i$ vs. x')    
+            
+            ax_vx_hot.set_xlim(0, xmax*1000)
+            ax_vx_hot.set_ylim(-5, 5)
+            ax_vx_hot.set_xlabel('Position (mm)', labelpad=10)
+            ax_vx_hot.set_ylabel(r'$v_x \; (10^{-7} ms^{-1})$', fontsize=24, rotation=90, labelpad=8) 
+            
+        #####       
+            # Plot: Normalized vy - Assumes species 0 is hot hydrogen population
+            vy_pos_hot =  2, 0
+            
+            ax_vy_hot = plt.subplot2grid(fig_size, vy_pos_hot, rowspan=2, colspan=3)    
             
             # Normalized to Alfven velocity: For y-axis plot
             norm_yvel   = part[4, 0:N] / 1e5        # vy (vA / ms-1)
@@ -690,14 +719,10 @@ if __name__ == '__main__':
             ax_vy_hot.scatter(x_pos[idx_start[0]: idx_end[0]], norm_yvel[idx_start[0]: idx_end[0]], s=1, c='r', lw=0)        # Hot population
 
             # Make it look pretty
-            ax_vy_hot.set_title(r'Normalized velocity $v_y$ vs. Position (x)')    
-            
             ax_vy_hot.set_xlim(0, xmax*1000)
             ax_vy_hot.set_ylim(-3, 3)
             ax_vy_hot.set_xlabel('Position (mm)', labelpad=10)
             ax_vy_hot.set_ylabel(r'$v_y \; (10^{-5} ms^{-1})$', fontsize=24, rotation=90, labelpad=8) 
-                       
-            plt.text(0, -2.99, 'N = %d' % N, fontsize='16')
             
         #####
             # Plot Density
