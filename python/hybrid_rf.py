@@ -7,6 +7,7 @@ from BLcodes import basek_scramble                      # Input an integer (inde
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 import pdb
+import sys
 
 def check_cell_distribution(part, node_number, j): #        
     
@@ -148,7 +149,7 @@ def set_parameters():
     xmax     = 0.004                            # Max domain size in meters
     NX       = 128                              # Number of cells - dimension of array (not including ghost cells)
     max_sec  = 150 * 1 / f0                     # Number of (real) seconds to run program for - 150 periods of f0   
-    t_res    = max_sec * 1e-3                   # Time resolution of output data
+    t_res    = 0#max_sec * 1e-3                 # Time resolution of output data. Set to 0 to output every timestep.
     cellpart = 500                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
     ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.    
     B0       = 3.504                            # Unform initial magnetic field value (in T) (must be parallel to an axis)
@@ -157,8 +158,6 @@ def set_parameters():
     # Derived Values ##
     size     = NX + 2
     N        = cellpart*NX                      # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
-
-    
 
     return    
 
@@ -237,12 +236,13 @@ def initialize_particles():
 
 
 def set_timestep(part):
+    
     gyfreq   = q*B0/mp                          # Proton Gyrofrequency (rad/s) (since this will be the highest of all species)
     gyperiod = 2*pi / gyfreq                    # Gyroperiod in seconds
     ion_ts   = 0.05 * gyperiod                  # Timestep to resolve gyromotion
     vel_ts   = dx / (2 * np.max(part[3:6, :]))  # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
     
-    DT        = 0.6 * min(ion_ts, vel_ts)       # Smallest of the two
+    DT        = min(ion_ts, vel_ts)             # Smallest of the two
     framegrab = int(t_res / DT)                 # Number of iterations between dumps
     maxtime   = int(max_sec / DT) + 1           # Total number of iterations to achieve desired final time
     
@@ -251,7 +251,27 @@ def set_timestep(part):
     
     print '\nProton gyroperiod = %.2fs' % gyperiod
     print 'Timestep: %es, %d iterations total\n' % (DT, maxtime)
+
     return DT, maxtime, framegrab
+
+def update_dt(maxtime, DT, framegrab, Vx):
+    V_max = np.max(Vx)              # Particle maximum velocity
+    
+    qm    = np.max(partout[1, :] / partout[0, :])             
+    dVmax = DT * qm * 2*pi*f0*E0    # Maximum possible change in E(t)
+    x     = 0                       # Number of halvings
+    
+    while ((V_max+dVmax) > (0.5 * dx/DT)):  # If max particle velocity covers more than half a cell in DT
+        DT        /= 2              # Halve the timestep
+        maxtime   *= 2              # Double the number of future iterations
+        framegrab *= 2              # Double the length between data dumps
+        x += 1                      # Record how many times it is halved (cumulative total kept in main script)
+        print 'Timestep halved. %d iterations remain' % maxtime     # Display that it has been halved and print how many iterations remain now.
+        
+        if x >= 12:
+            sys.exit('Simulation terminated: Timestep halved too much')
+        
+    return maxtime, DT, framegrab, x
 
     
 def initialize_fields():  
@@ -377,6 +397,12 @@ def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
     
     return B
     
+def E_ext(qq, dt):
+    '''Returns the value for the driving external electric field at t = qq*dt. Minus 1/2 because field is
+        analytically evaluated only at the half timestep (0.5, 1.5). Full timesteps use the predictor/corrector
+        scheme, which should carry the value for the field'''
+    return (E0 * np.sin(2 * pi * f0 * (qq - 0.5) * dt))
+
 def push_E(B, V_i, n_i, dt, qq): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
 
     global J
@@ -388,7 +414,7 @@ def push_E(B, V_i, n_i, dt, qq): # Based off big F(B, n, V) eqn on pg. 140 (eqn.
     J     = np.zeros((size, 3))     # Ion current
     qn    = np.zeros( size,    dtype=float)     # Ion charge density
 
-    E_source = E0 * np.sin(2 * pi * f0 * (qq - 0.5) * dt)           # No initial subtraction from E needed since E is calculated fresh per timestep from source terms.
+    E_source = E_ext(qq, dt)        # No initial subtraction from E needed since E is calculated fresh per timestep from source terms.
 
     # Adiabatic Electron Temperature Calculation   
     if ie == 1:    
@@ -552,7 +578,9 @@ if __name__ == '__main__':
     part, part_type, old_part = initialize_particles()
     B, E, Vi, dns, dns_old, W = initialize_fields()
 
-    DT, maxtime, framegrab    = set_timestep(part)
+    DT, maxtime, framegrab    = set_timestep(part)      
+    time_pwr                  = 0
+    time_history              = []
     
     # Numerical checks
     which_species = 0
@@ -574,11 +602,18 @@ if __name__ == '__main__':
             B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], 0)                                     # Initialize magnetic field (should be second?)
             E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, 0, qq)                                   # Initialize electric field
             
-            part = velocity_update(part, B[:, 0:3], E[:, 0:3], -0.5*DT, W)                  # Retard velocity to N - 1/2 to prevent numerical instability
+            part = velocity_update(part, B[:, 0:3], E[:, 0:3], -0.5*DT, W)                 # Retard velocity to N - 1/2 to prevent numerical instability
             
         else:
             # N + 1/2
-            part      = velocity_update(part, B[:, 0:3], E[:, 0:3], DT, W)                  # Advance Velocity to N + 1/2
+            
+            maxtime, DT, framegrab, time_pwr = update_dt(maxtime, DT, framegrab, part[3, :])    # Reset timestep to keep Courant condition
+            time_history.append(time_pwr)                                                       # Record when the timestep decreases (records zero unless halving takes place)
+            
+            if sum(time_history) >= 12:
+                sys.exit('Simulation terminated: Timestep halved too much')
+            
+            part      = velocity_update(part, B[:, 0:3], E[:, 0:3], DT, W)                 # Advance Velocity to N + 1/2
             part, W   = position_update(part)                                               # Advance Position to N + 1
             B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], DT)                                    # Advance Magnetic Field to N + 1/2
             
@@ -663,7 +698,7 @@ if __name__ == '__main__':
             ax_vy_hot.set_ylabel(r'$v_y \; (10^{-5} ms^{-1})$', fontsize=24, rotation=90, labelpad=8) 
                        
             plt.text(0, -2.99, 'N = %d' % N, fontsize='16')
-        
+            
         #####
             # Plot Density
             den_pos = 0, 3
@@ -699,10 +734,10 @@ if __name__ == '__main__':
             
             ax_Ez.set_xlim(0, NX)
             
-            #ax_Ez.set_ylim(-200e-6, 200e-6)
+            ax_Ez.set_ylim(-1.5*E0, 1.5*E0)
             #ax_Ez.set_yticks(np.arange(-200e-6, 201e-6, 50e-6))
             #ax_Ez.set_yticklabels(np.arange(-150, 201, 50))   
-            #ax_Ez.set_ylabel(r'$E_z$ ($\mu$V)', labelpad=25, rotation=0, fontsize=14)
+            ax_Ez.set_ylabel(r'$E_x$ (V)', labelpad=25, rotation=0, fontsize=14)
             
             
         #####
