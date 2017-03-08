@@ -406,6 +406,9 @@ def E_ext(qq, dt):
 
 def push_E(B, V_i, n_i, dt, qq): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
 
+    if qq == 50:
+        pdb.set_trace()
+
     global J
         
     E_out = np.zeros((size, 3))     # Output array - new electric field
@@ -415,7 +418,7 @@ def push_E(B, V_i, n_i, dt, qq): # Based off big F(B, n, V) eqn on pg. 140 (eqn.
     J     = np.zeros((size, 3))     # Ion current
     qn    = np.zeros(size, dtype=float)     # Ion charge density
 
-    E_source = E_ext(qq, dt)        # No initial subtraction from E needed since E is calculated fresh per timestep from source terms.
+    E_source = 0#E_ext(qq, dt)        # No initial subtraction from E needed since E is calculated fresh per timestep from source terms.
 
     # Adiabatic Electron Temperature Calculation   
     if ie == 1:    
