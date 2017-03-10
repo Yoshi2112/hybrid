@@ -150,7 +150,7 @@ def set_parameters():
     
     xmax     = 0.004                            # Max domain size in meters
     NX       = 128                              # Number of cells - dimension of array (not including ghost cells)
-    max_sec  = 1 / f0                           # Number of (real) seconds to run program for - 150 periods of f0   
+    max_sec  = 10 / f0                           # Number of (real) seconds to run program for - 150 periods of f0   
     t_res    = 0#max_sec * 1e-3                 # Time resolution of output data. Set to 0 to output every timestep.
     cellpart = 500                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
     ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.    
@@ -233,7 +233,7 @@ def initialize_particles():
         idx += 1                                    # Move into next species
            
     part[6, :] = part[0, :] / dx + 0.5 ; part[6, :] = part[6, :].astype(int)                        # Initial leftmost node, I
-    part[3, :] = 0.3*c
+    part[3, :] = 0*c
 
     return part, part_type, old_part
 
@@ -245,14 +245,14 @@ def set_timestep(part):
     ion_ts   = 0.05 * gyperiod                  # Timestep to resolve gyromotion
     vel_ts   = dx / (2 * np.max(part[3:6, :]))  # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
     
-    DT        = min(ion_ts, vel_ts)   #1e-14             # Smallest of the two
+    DT        = 2.5e-10                         #min(ion_ts, vel_ts)                     # Smallest of the two
     framegrab = int(t_res / DT)                         # Number of iterations between dumps
     maxtime   = int(max_sec / DT) + 1                   # Total number of iterations to achieve desired final time
-    
+
     if framegrab == 0:
         framegrab = 1
     
-    print '\nProton gyroperiod = %.2fs' % gyperiod
+    print '\nProton gyroperiod = %es' % gyperiod
     print 'Timestep: %es, %d iterations total\n' % (DT, maxtime)
 
     return DT, maxtime, framegrab
@@ -385,10 +385,10 @@ def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
     E[ size - 1] = E[ 1]
 
     for mm in range (1, size - 1):
-        Bp[mm, 0] = Bp[mm, 0] - (dt / 2) * 0                                                # Since derivatives for y and z go to zero
+        Bp[mm, 0] = Bp[mm, 0] - (dt / 2) * 0        # Since no y,z spatial derivatives in 1D
         Bp[mm, 1] = Bp[mm, 1] - (dt / 2) * ( (E[mm - 1, 2] - E[mm + 1, 2]) / (2 * dx) )
         Bp[mm, 2] = Bp[mm, 2] - (dt / 2) * ( (E[mm + 1, 1] - E[mm - 1, 1]) / (2 * dx) )
-        
+    
     # Update ghost cells
     Bp[0, :] = Bp[size - 2, :]
     Bp[size - 1, :] = Bp[1, :]
@@ -404,7 +404,7 @@ def E_ext(qq, dt):
     '''Returns the value for the driving external electric field at t = qq*dt. Minus 1/2 because field is
         analytically evaluated only at the half timestep (0.5, 1.5). Full timesteps use the predictor/corrector
         scheme, which should carry the value for the field'''
-    return 0#(E0 * np.sin(2 * pi * f0 * (qq - 0.5) * dt))
+    return (E0 * np.sin(2 * pi * f0 * (qq - 0.5) * dt))
 
 def push_E(B, V_i, n_i, dt, qq): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
 
@@ -417,7 +417,7 @@ def push_E(B, V_i, n_i, dt, qq): # Based off big F(B, n, V) eqn on pg. 140 (eqn.
     J     = np.zeros((size, 3))     # Ion current
     qn    = np.zeros(size, dtype=float)     # Ion charge density
 
-    E_source = 0#E_ext(qq, dt)        # No initial subtraction from E needed since E is calculated fresh per timestep from source terms.
+    E_source = E_ext(qq, dt)        # No initial subtraction from E needed since E is calculated fresh per timestep from source terms.
 
     # Adiabatic Electron Temperature Calculation   
     if ie == 1:    
@@ -462,7 +462,7 @@ def push_E(B, V_i, n_i, dt, qq): # Based off big F(B, n, V) eqn on pg. 140 (eqn.
     
     # Add source term
     source_location = NX / 2                
-    E_out[source_location, 0] += E_source   
+    E_out[source_location, 2] += E_source   
 
     return E_out
 
@@ -492,7 +492,7 @@ def collect_density(I_in, W_in, ptype):
     n_i[size - 1, :] = n_i[1, :]                      # Fill ghost cell
   
     n_i /= float(dx)        # Divide by cell dimensions to give densities per cubic metre
-    pdb.set_trace()
+    
     # Smooth density using Gaussian smoother (1/4, 1/2, 1/4)
     #for jj in range(Nj):
     #    smoothed   = smooth(n_i[:, jj])
@@ -566,7 +566,7 @@ if __name__ == '__main__':
     drive          = '/home/yoshi/'                # Drive letter for portable HDD (changes between computers) - INCLUDE COLON. For UNIX, put home path here
     save_path      = 'Runs/Jenkins'                # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
     generate_data  = 0            ;  plt.ioff()    # Save data? Yes (1), No (0)
-    generate_plots = 0  
+    generate_plots = 1  
     run_desc = '''1D hybrid code reproduction of PIC code parameters from Jenkins et al. (2013).'''
     
     # Initialize Things
@@ -580,6 +580,7 @@ if __name__ == '__main__':
     
     time_pwr                  = 0
     time_history              = []
+    check                     = 1
     
 #==============================================================================
 #     # ----- Numerical checks ----- #
@@ -594,19 +595,18 @@ if __name__ == '__main__':
     
     for qq in range(maxtime):
         dens = dns - n0
-        pdb.set_trace()
         if qq == 0:
 
             print 'Simulation starting...'
 
             W           = assign_weighting(part[0, :], part[6, :], 1)                       # Assign initial (E) weighting to particles
             dns         = collect_density(part[6, :], W, part[8, :])                        # Collect initial density   
-            #Vi          = collect_flow(part, dns, W)                                        # Collect initial current
+            Vi          = collect_flow(part, dns, W)                                        # Collect initial current
             
-            #B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], 0)                                     # Initialize magnetic field (should be second?)
-            #E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, 0, qq)                                   # Initialize electric field
+            B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], 0)                                     # Initialize magnetic field (should be second?)
+            E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, 0, qq)                                   # Initialize electric field
             
-            part = velocity_update(part, B[:, 0:3], E[:, 0:3], -0.5*DT, W)                 # Retard velocity to N - 1/2 to prevent numerical instability
+            #part = velocity_update(part, B[:, 0:3], E[:, 0:3], -0.5*DT, W)                 # Retard velocity to N - 1/2 to prevent numerical instability
             
         else:
             # N + 1/2
@@ -621,45 +621,45 @@ if __name__ == '__main__':
 #             # --------------------------- #
 #==============================================================================
             
-            part      = velocity_update(part, B[:, 0:3], E[:, 0:3], DT, W)                 # Advance Velocity to N + 1/2
-            part, W   = position_update(part)                                               # Advance Position to N + 1
-            #B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], DT)                                    # Advance Magnetic Field to N + 1/2
+            #part      = velocity_update(part, B[:, 0:3], E[:, 0:3], DT, W)                 # Advance Velocity to N + 1/2
+            #part, W   = position_update(part)                                               # Advance Position to N + 1
+            B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], DT)                                    # Advance Magnetic Field to N + 1/2
             
             dns       = 0.5 * (dns + collect_density(part[6, :], W, part[8, :]))            # Collect ion density at N + 1/2 : Collect N + 1 and average with N                                             
-            #Vi        = collect_flow(part, dns, W)                                          # Collect ion flow at N + 1/2
-            #E[:, 6:9] = E[:, 0:3]                                                           # Store Electric Field at N because PC, yo
-            #E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, DT, qq)                                  # Advance Electric Field to N + 1/2
+            Vi        = collect_flow(part, dns, W)                                          # Collect ion flow at N + 1/2
+            E[:, 6:9] = E[:, 0:3]                                                           # Store Electric Field at N because PC, yo
+            E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, DT, qq)                                  # Advance Electric Field to N + 1/2
             
             
             # ----- Predictor-Corrector Method ----- #
 
             # Predict values of fields at N + 1 
-            #B[:, 3:6] = B[:, 0:3]                                                           # Store last "real" magnetic field (N + 1/2)
-            #E[:, 3:6] = E[:, 0:3]                                                           # Store last "real" electric field (N + 1/2)
-            #E[:, 0:3] = -E[:, 6:9] + 2*E[:, 0:3]                                            # Predict Electric Field at N + 1
-            #B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], DT)                                    # Predict Magnetic Field at N + 1 (Faraday, based on E(N + 1))
+            B[:, 3:6] = B[:, 0:3]                                                           # Store last "real" magnetic field (N + 1/2)
+            E[:, 3:6] = E[:, 0:3]                                                           # Store last "real" electric field (N + 1/2)
+            E[:, 0:3] = -E[:, 6:9] + 2*E[:, 0:3]                                            # Predict Electric Field at N + 1
+            B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], DT)                                    # Predict Magnetic Field at N + 1 (Faraday, based on E(N + 1))
             
             # Extrapolate Source terms and fields at N + 3/2
-            #old_part = part                                                                 # Back up particle attributes at N + 1  
-            #dns_old = dns                                                                   # Store last "real" densities (in an E-field position, I know....)
+            old_part = part                                                                 # Back up particle attributes at N + 1  
+            dns_old = dns                                                                   # Store last "real" densities (in an E-field position, I know....)
             
             #part = velocity_update(part, B[:, 0:3], E[:, 0:3], DT, W)                       # Advance particle velocities to N + 3/2
             #part, W = position_update(part)                                                 # Push particles to positions at N + 2
-            #dns  = 0.5 * (dns + collect_density(part[6, :], W, part[8, :]))                 # Collect ion density as average of N + 1, N + 2
-            #Vi   = collect_flow(part, dns, W)                                               # Collect ion flow at N + 3/2
-            #B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], DT)                                    # Push Magnetic Field again to N + 3/2 (Use same E(N + 1)
-            #E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, DT, qq + 1)                              # Push Electric Field to N + 3/2   ii = odd numbers
+            dns  = 0.5 * (dns + collect_density(part[6, :], W, part[8, :]))                 # Collect ion density as average of N + 1, N + 2
+            Vi   = collect_flow(part, dns, W)                                               # Collect ion flow at N + 3/2
+            B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], DT)                                    # Push Magnetic Field again to N + 3/2 (Use same E(N + 1)
+            E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, DT, qq + 1)                              # Push Electric Field to N + 3/2   ii = odd numbers
             
             # Correct Fields
-            #E[:, 0:3] = 0.5 * (E[:, 3:6] + E[:, 0:3])                                       # Electric Field interpolation
-            #B[:, 0:3] = push_B(B[:, 3:6], E[:, 0:3], DT)                                    # Push B using new E and old B
+            E[:, 0:3] = 0.5 * (E[:, 3:6] + E[:, 0:3])                                       # Electric Field interpolation
+            B[:, 0:3] = push_B(B[:, 3:6], E[:, 0:3], DT)                                    # Push B using new E and old B
             
             # Reset Particle Array to last real value
-            #part = old_part                                                                 # The stored densities at N + 1/2 before the PC method took place (previously held PC at N + 3/2)
-            #dns  = dns_old     
+            part = old_part                                                                 # The stored densities at N + 1/2 before the PC method took place (previously held PC at N + 3/2)
+            dns  = dns_old     
         
-        #if qq%5 == 0:
-         #   print 'Iteration %d of %d complete (%ds)' % (qq, maxtime, int(timer() - start_time))
+        if qq%5 == 0:
+            print 'Iteration %d of %d complete (%ds)' % (qq, maxtime, int(timer() - start_time))
             
 # ----- Plot commands ----- #
         if generate_plots == 1:
@@ -758,7 +758,7 @@ if __name__ == '__main__':
             
             ax_Ez.set_xlim(0, NX)
             
-            #ax_Ez.set_ylim(-1.5*E0, 1.5*E0)
+            ax_Ez.set_ylim(-1.5*E0, 1.5*E0)
             #ax_Ez.set_yticks(np.arange(-200e-6, 201e-6, 50e-6))
             #ax_Ez.set_yticklabels(np.arange(-150, 201, 50))   
             ax_Ez.set_ylabel(r'$E_x$ (V)', labelpad=25, rotation=0, fontsize=14)
