@@ -9,6 +9,13 @@ from matplotlib import rcParams
 import pdb
 import sys
 
+def check_CFL():
+    global S
+    S = c * (DT / dx)
+
+    if S > 1:
+        sys.exit('Courant condition violated. Change space/time step.\nS = %d' % int(S))
+
 def check_cell_distribution(part, node_number, j): #        
     
     # Collect information about particles within +- 0.5dx of node_number (E-field nodes are in the cell centers)
@@ -152,7 +159,7 @@ def set_parameters():
     NX       = 128                              # Number of cells - dimension of array (not including ghost cells)
     max_sec  = 10 / f0                           # Number of (real) seconds to run program for - 150 periods of f0   
     t_res    = 0#max_sec * 1e-3                 # Time resolution of output data. Set to 0 to output every timestep.
-    cellpart = 500                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
+    cellpart = 100                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
     ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.    
     B0       = 3.504                            # Unform initial magnetic field value (in T) (must be parallel to an axis)
     ne       = 1e19                             # Electron number density (/m3)
@@ -243,17 +250,18 @@ def set_timestep(part):
     gyfreq   = q*B0/mp                          # Proton Gyrofrequency (rad/s) (since this will be the highest of all species)
     gyperiod = 2*pi / gyfreq                    # Gyroperiod in seconds
     ion_ts   = 0.05 * gyperiod                  # Timestep to resolve gyromotion
-    vel_ts   = dx / (2 * np.max(part[3:6, :]))  # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
-    
-    DT        = 2.5e-10                         #min(ion_ts, vel_ts)                     # Smallest of the two
+    vel_ts   = dx / (2 * np.max(part[3:6, :]))  # Timestep to satisfy particle CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
+    cfl_ts   = 0.001 * dx / c                     # Timestep to satisfy wave CFL condition
+
+    DT        = min(ion_ts, vel_ts, cfl_ts)             # Smallest of the two
     framegrab = int(t_res / DT)                         # Number of iterations between dumps
     maxtime   = int(max_sec / DT) + 1                   # Total number of iterations to achieve desired final time
 
     if framegrab == 0:
         framegrab = 1
     
-    print '\nProton gyroperiod = %es' % gyperiod
-    print 'Timestep: %es, %d iterations total\n' % (DT, maxtime)
+    #print '\nProton gyroperiod = %es' % gyperiod
+    #print 'Timestep: %es, %d iterations total\n' % (DT, maxtime)
 
     return DT, maxtime, framegrab
 
@@ -371,6 +379,8 @@ def assign_weighting(xpos, I, BE):                 # Magnetic/Electric Field, BE
     
 def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
         
+    #pdb.set_trace()
+
     Bp = np.zeros((size, 3), dtype=float)
 
     # Consider B1 only (perturbation)    
@@ -398,6 +408,9 @@ def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
     B[:, 1] = Bp[:, 1] + Bc[1]
     B[:, 2] = Bp[:, 2] + Bc[2] 
     
+    #if np.max(Bp) != 0:
+    #    pdb.set_trace()
+
     return B
     
 def E_ext(qq, dt):
@@ -407,9 +420,12 @@ def E_ext(qq, dt):
     return (E0 * np.sin(2 * pi * f0 * (qq - 0.5) * dt))
 
 def push_E(B, V_i, n_i, dt, qq): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
-
+    
     global J
-        
+    
+    if qq >= 4500:
+        pdb.set_trace()
+
     E_out = np.zeros((size, 3))     # Output array - new electric field
     JxB   = np.zeros((size, 3))     # V cross B holder
     BdB   = np.zeros((size, 3))     # B cross del cross B holder     
@@ -418,7 +434,7 @@ def push_E(B, V_i, n_i, dt, qq): # Based off big F(B, n, V) eqn on pg. 140 (eqn.
     qn    = np.zeros(size, dtype=float)     # Ion charge density
 
     E_source = E_ext(qq, dt)        # No initial subtraction from E needed since E is calculated fresh per timestep from source terms.
-
+    #print 'E_source(z) = %.2f' % E_source
     # Adiabatic Electron Temperature Calculation   
     if ie == 1:    
         gamma = 5./3.
@@ -461,8 +477,11 @@ def push_E(B, V_i, n_i, dt, qq): # Based off big F(B, n, V) eqn on pg. 140 (eqn.
     E_out[size - 1, :] = E_out[1, :]
     
     # Add source term
-    source_location = NX / 2                
+    source_location = size / 2                
     E_out[source_location, 2] += E_source   
+
+    if qq >= 4500:
+        pdb.set_trace()
 
     return E_out
 
@@ -566,7 +585,7 @@ if __name__ == '__main__':
     drive          = '/home/yoshi/'                # Drive letter for portable HDD (changes between computers) - INCLUDE COLON. For UNIX, put home path here
     save_path      = 'Runs/Jenkins'                # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
     generate_data  = 0            ;  plt.ioff()    # Save data? Yes (1), No (0)
-    generate_plots = 1  
+    generate_plots = 0  
     run_desc = '''1D hybrid code reproduction of PIC code parameters from Jenkins et al. (2013).'''
     
     # Initialize Things
@@ -577,11 +596,9 @@ if __name__ == '__main__':
     B, E, Vi, dns, dns_old, W = initialize_fields()
 
     DT, maxtime, framegrab    = set_timestep(part)      
-    
+    check_CFL() 
     time_pwr                  = 0
-    time_history              = []
-    check                     = 1
-    
+
 #==============================================================================
 #     # ----- Numerical checks ----- #
 #     which_species = 0
@@ -593,7 +610,7 @@ if __name__ == '__main__':
 #     # ---------------------------- #
 #==============================================================================
     
-    for qq in range(maxtime):
+    for qq in range(5000):
         dens = dns - n0
         if qq == 0:
 
@@ -605,9 +622,11 @@ if __name__ == '__main__':
             
             B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], 0)                                     # Initialize magnetic field (should be second?)
             E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, 0, qq)                                   # Initialize electric field
-            
+            #print 'B = (%.2f, %.2f, %.2f)' % tuple(B[65, 0:3]/B0)
+            #print 'E = (%.2f, %.2f, %.2f)' % tuple(E[65, 0:3])
+            #print ''
             #part = velocity_update(part, B[:, 0:3], E[:, 0:3], -0.5*DT, W)                 # Retard velocity to N - 1/2 to prevent numerical instability
-            
+            print np.max(E)
         else:
             # N + 1/2
 #==============================================================================
@@ -630,6 +649,9 @@ if __name__ == '__main__':
             E[:, 6:9] = E[:, 0:3]                                                           # Store Electric Field at N because PC, yo
             E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, DT, qq)                                  # Advance Electric Field to N + 1/2
             
+            #print 'B = (%.2f, %.2f, %.2f)' % tuple(B[65, 0:3]/B0)
+            #print 'E = (%.2f, %.2f, %.2f)' % tuple(E[65, 0:3])
+            #print ''
             
             # ----- Predictor-Corrector Method ----- #
 
@@ -653,13 +675,13 @@ if __name__ == '__main__':
             # Correct Fields
             E[:, 0:3] = 0.5 * (E[:, 3:6] + E[:, 0:3])                                       # Electric Field interpolation
             B[:, 0:3] = push_B(B[:, 3:6], E[:, 0:3], DT)                                    # Push B using new E and old B
-            
+          
             # Reset Particle Array to last real value
             part = old_part                                                                 # The stored densities at N + 1/2 before the PC method took place (previously held PC at N + 3/2)
             dns  = dns_old     
-        
-        if qq%5 == 0:
-            print 'Iteration %d of %d complete (%ds)' % (qq, maxtime, int(timer() - start_time))
+            print np.max(E) 
+        #if qq%10 == 0:
+        #    print 'Iteration %d of %d complete (%ds)' % (qq, maxtime, int(timer() - start_time))
             
 # ----- Plot commands ----- #
         if generate_plots == 1:
@@ -826,8 +848,8 @@ if __name__ == '__main__':
                 fullpath = os.path.join(path, filename)
                 plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
                 print 'Plot %d produced' % r
-                plt.close('all')            
-            
+                plt.close('all')
+
             # Save Data
             if generate_data == 1:
                 
