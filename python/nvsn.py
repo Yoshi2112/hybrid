@@ -80,7 +80,7 @@ if __name__ == '__main__':
 
     N        = 10000           # Number of points in graph
     x_start  = 15              # Initial domain value, power of 10              
-    x_stop   = 18              # Final domain value, power of 10               
+    x_stop   = 23              # Final domain value, power of 10               
     n0_in    = np.logspace(x_start, x_stop, N, base=10)
     n_plasma = np.zeros((2, N))
 
@@ -98,14 +98,15 @@ if __name__ == '__main__':
     ax.plot(n0_in, (n_plasma[1,:] ** 2), c='b')
     
     ax.set_xlabel(r'Number density, $n_0$ ($m^{-3}$)')
-    ax.set_ylabel(r'Refractive index, $n$', rotation=90)
+    ax.set_ylabel(r'Refractive index, $n^2$', rotation=90)
     ax.set_title(r'Dispersion Relation for f = %.1fMHz, B = %.3fT, $\theta = %d^{\circ}$' % ((f_in / 1e6), B0_in, theta_in))
 
     ax.get_yaxis().get_major_formatter().set_useOffset(False)
     ax.set_xscale('log')
+    ax.set_yscale('log')
 
-    ax.set_xlim(10**x_start, 10**x_stop)
-    ax.set_ylim(0, 5)
+    #ax.set_xlim(10**x_start, 10**x_stop)
+    #ax.set_ylim(0, 5)
 
 # ----- SECOND PLOT: PHASE VELOCITY ----- #
     fig2 = plt.figure(2)
@@ -116,10 +117,11 @@ if __name__ == '__main__':
 
     ax2.set_xlabel(r'Number density, $n_0$ ($m^{-3}$)')
     ax2.set_ylabel(r'Phase velocity, $v_{ph}$ ($m/s$)') 
-    ax2.set_title(r'Phase velocity plot for f = %.1fMHz, B = %.3fT, $\theta = %d^{\circ}$' % ((f_in / 1e6), B0_in, theta_in), y = 1.08)
+    ax2.set_title(r'Phase velocity plot for f = %.1fMHz, B = %.3fT, $\theta = %d^{\circ}$' % ((f_in / 1e6), B0_in, theta_in))
     
-    ax2.set_xscale('log')
     ax2.get_yaxis().get_major_formatter().set_useOffset(False)
+    ax2.set_xscale('log')
+    ax2.set_yscale('log')
     
     plt.draw()
     plt.show()
