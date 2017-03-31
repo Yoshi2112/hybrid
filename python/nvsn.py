@@ -73,13 +73,15 @@ if __name__ == '__main__':
     #----- PLASMA PARAMETERS -----#
     f_in     = 80e6            # Input wave frequency (Hz)
     theta_in = 0               # Angle from the magnetic field
-    B0_in     = 3.504           # Magnetic field magnitude
+    B0_in    = 3.504           # Magnetic field magnitude
     n0_in    = 1e19            # Electron/Ion density (assuming quasineutrality)
 
     #n_plasma = calc_index(f_in, theta_in, B0_in, n0_in)
 
-    N = 10001                 # Number of points in graph
-    n0_in    = np.linspace(1e18, 1e20, N)
+    N        = 10000           # Number of points in graph
+    x_start  = 15              # Initial domain value, power of 10              
+    x_stop   = 18              # Final domain value, power of 10               
+    n0_in    = np.logspace(x_start, x_stop, N, base=10)
     n_plasma = np.zeros((2, N))
 
     for ii in range(N):
@@ -87,14 +89,37 @@ if __name__ == '__main__':
 
     v_phase = c / n_plasma
    
-    # Plot the things
+# ----- FIRST PLOT: REFRACTIVE INDEX (SQUARED) ----- #
     plt.ioff()
-    fig = plt.figure()
+    fig = plt.figure(1)
     ax  = fig.add_subplot(111)
 
-    ax.plot(n0_in, n_plasma[1, :])
+    ax.plot(n0_in, (n_plasma[0,:] ** 2), c='r')
+    ax.plot(n0_in, (n_plasma[1,:] ** 2), c='b')
     
+    ax.set_xlabel(r'Number density, $n_0$ ($m^{-3}$)')
+    ax.set_ylabel(r'Refractive index, $n$', rotation=90)
+    ax.set_title(r'Dispersion Relation for f = %.1fMHz, B = %.3fT, $\theta = %d^{\circ}$' % ((f_in / 1e6), B0_in, theta_in))
+
     ax.get_yaxis().get_major_formatter().set_useOffset(False)
+    ax.set_xscale('log')
+
+    ax.set_xlim(10**x_start, 10**x_stop)
+    ax.set_ylim(0, 5)
+
+# ----- SECOND PLOT: PHASE VELOCITY ----- #
+    fig2 = plt.figure(2)
+    ax2  = fig2.add_subplot(111)
+
+    ax2.plot(n0_in, v_phase[0,:], c='r')
+    ax2.plot(n0_in, v_phase[1,:], c='b')
+
+    ax2.set_xlabel(r'Number density, $n_0$ ($m^{-3}$)')
+    ax2.set_ylabel(r'Phase velocity, $v_{ph}$ ($m/s$)') 
+    ax2.set_title(r'Phase velocity plot for f = %.1fMHz, B = %.3fT, $\theta = %d^{\circ}$' % ((f_in / 1e6), B0_in, theta_in), y = 1.08)
+    
+    ax2.set_xscale('log')
+    ax2.get_yaxis().get_major_formatter().set_useOffset(False)
+    
     plt.draw()
     plt.show()
-
