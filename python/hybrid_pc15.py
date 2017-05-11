@@ -32,7 +32,7 @@ def set_parameters():
     cellpart = 200                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
     ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.    
     B0       = 4e-9                             # Unform initial magnetic field value (in T) (must be parallel to an axis)
-    k        = 1                                # Sinusoidal Density Parameter - number of wavelengths in spatial domain
+    k        = 5                                # Sinusoidal Density Parameter - number of wavelengths in spatial domain
 
     ## Derived Values ##
     size     = NX + 2
@@ -42,7 +42,7 @@ def set_parameters():
 
 def initialize_particles():
     np.random.seed(21)                          # Random seed 
-    global Nj, Te0, dx, partin, idx_start, idx_end, xmax
+    global Nj, Te0, dx, partin, idx_start, idx_end, xmax, cell_N
 
     # Species Characteristics - use column number as species identifier. Default - 0: Hot protons, 1: Cold protons, 2+: Cold Heavy Ion/s. Extra hot ions require re-coding.
     #                        H+ (cold)             H+ (hot)               
@@ -63,9 +63,10 @@ def initialize_particles():
     
     xmin          = 3.5 * RE                                                # Domain minimum radial distance
     xmax          = 7.0 * RE                                                # Domain maximum radial distance
-    x_range       = xmax - xmin                                             # Size of simulation domain (metres)         
+    x_range       = xmax - xmin             # Size of simulation domain (metres)         
     dx            = x_range / NX                                            # Spacial step (in metres)
     
+    x_cell = np.arange(0, NX*dx, dx)
     N_species     = np.round(N * partin[4, :]).astype(int)                  # Number of sim particles for each species, total    
     
     Te0 = 10. * 11603.                                                      # (Initial) Electron temperature (K)
@@ -80,9 +81,24 @@ def initialize_particles():
     idx_end   = [np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)]                     # End   index values for each species in order
     idx       = 0    
     
-    density_profile  = get_chen_distribution(N)                                              
-    particle_purview = x_range / N_species[0]
+    #density_profile  = get_chen_distribution(N)                                              
+    #particle_purview = x_range / N_species[0]
+   
+    sx      = np.zeros(NX)
+    cell_N  = np.zeros((NX, Nj), dtype=int)
+
+    # Distribution function: Change to Heart's content (??)
+    for ii in range(NX):
+        sx[ii] = np.sin((2*pi*k / (NX*dx)) * x_cell[ii]) + 1
+
     
+    # Normalize Distribution function
+    sx /= np.sum(sx)
+
+    # Multiply by number of particles per species. Normalized means all particles are accounted for.
+    for ii in range(Nj):
+        cell_N[:, ii] = (np.round(sx * N_species[ii]))
+
     for ii in N_species:                             
         part[8, idx_start[idx]: idx_end[idx]] = idx      # Give index identifier to each particle  
         m    = partin[0, idx] * mp                       # Species mass
@@ -104,7 +120,7 @@ def initialize_particles():
         idx += 1                                    # Move into next species
            
     part[6, :] = part[0, :] / dx + 0.5 ; part[6, :] = part[6, :].astype(int)    # Initial leftmost node, I
-    part[7, :] = density_profile * particle_purview                             # Assign real density value across homogenous macroparticle distribution
+    #part[7, :] = density_profile * particle_purview                             # Assign real density value across homogenous macroparticle distribution
 
     return part, part_type, old_part
 
