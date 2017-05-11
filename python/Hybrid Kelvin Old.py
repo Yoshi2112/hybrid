@@ -211,7 +211,7 @@ def initialize_particles():
     idx_end   = [np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)]                     # End   index values for each species in order
     idx       = 0    
 
-    x_cell   = np.arange(0, NX*dx, dx)               # Cell x-positions (km) (For looking at cell characteristics)                                                                        # Index of particle based on position in partin
+    x_cell    = np.arange(0, NX*dx, dx)               # Cell x-positions (km) (For looking at cell characteristics)                                                                        # Index of particle based on position in partin
     
     for ii in N_species:                             
     
