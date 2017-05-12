@@ -9,8 +9,6 @@ from BLcodes import basek_scramble                      # Input an integer (inde
 from chen_density import get_chen_distribution
 import pdb
 
-
-
 def set_constants():
     global q, c, mp, mu0, kB, e0, RE    
     q   = 1.602e-19                             # Elementary charge (C)
@@ -42,92 +40,95 @@ def set_parameters():
 
 def initialize_particles():
     np.random.seed(21)                          # Random seed 
-    global Nj, Te0, dx, partin, idx_start, idx_end, xmax, cell_N
+    global Nj, Te0, dx, partin, idx_start, idx_end, xmax, cell_N, n_contr
 
+    ne = 10.0e6         # Electron density (used to assign portions of ion)
     # Species Characteristics - use column number as species identifier. Default - 0: Hot protons, 1: Cold protons, 2+: Cold Heavy Ion/s. Extra hot ions require re-coding.
     #                        H+ (cold)             H+ (hot)               
-    partin = np.array([[  1.00000000e+00],#,   4.00000000e+00],        #(0) Mass   (proton units)
-                       [  1.00000000e+00],#,   2.00000000e+00],        #(1) Charge (charge units)
-                       [               0],#,               Vc],        #(2) Bulk Velocity (m/s)
-                       [               0],#,            0.5e6],        #(3) real density in /m3 - mantissa is density in /cm3 ## REMOVE ##
-                       [  10.0000000e-01],#,   5.00000000e-01],        #(4) Simulated (superparticle) Density (as a portion of 1)
-                       [               1],#,   0.00000000e+00],        #(5) Distribution type         0: Uniform, 1: Sinusoidal
-                       [               1],#,   1.00000000e+00],        #(6) Parallel      Temperature (eV) (x)
-                       [               1],#,   1.00000000e+00],        #(7) Perpendicular Temperature (eV) (y, z)
-                       [               1]])#,   1.00000000e+00]])       #(8) Hot (0) or Cold (1) species
+    partin = np.array([[  1.00000000e+00,   1.00000000e+00],        #(0) Mass   (proton units)
+                       [  1.00000000e+00,   1.00000000e+00],        #(1) Charge (charge units)
+                       [              0.,               0.],        #(2) Bulk Velocity (m/s)
+                       [            0.95,             0.05],        #(3) Real density as a portion of ne
+                       [   5.0000000e-01,   5.00000000e-01],        #(4) Simulated (superparticle) Density (as a portion of 1)
+                       [               1,                0],        #(5) Distribution type         0: Uniform, 1: Sinusoidal
+                       [             1.0,           25.0e6],        #(6) Parallel      Temperature (eV) (x)
+                       [             1.0,           50.0e6],        #(7) Perpendicular Temperature (eV) (y, z)
+                       [               1,   0.00000000e+00]])      #(8) Hot (0) or Cold (1) species
     
     part_type      = ['$H^{+}$',
                       '$He^{2+}$'] 
     
     Nj            = int(np.shape(partin)[1])                                # Number of species (number of columns above)    
     
-    xmin          = 3.5 * RE                                                # Domain minimum radial distance
-    xmax          = 7.0 * RE                                                # Domain maximum radial distance
-    x_range       = xmax - xmin             # Size of simulation domain (metres)         
+    xmin          = 0   * RE                                                # Domain minimum radial distance
+    xmax          = 3.5 * RE                                                # Domain maximum radial distance
+    x_range       = xmax - xmin                                             # Size of simulation domain (metres)         
     dx            = x_range / NX                                            # Spacial step (in metres)
     
-    x_cell = np.arange(0, NX*dx, dx)
+    x_cell        = np.arange(0, NX*dx, dx)
     N_species     = np.round(N * partin[4, :]).astype(int)                  # Number of sim particles for each species, total    
+    n_contr       = (partin[3, :] * dx * NX * ne) / N_species                    # Real particles per macroparticle        
     
+
     Te0 = 10. * 11603.                                                      # (Initial) Electron temperature (K)
     Tpar = partin[6, :] * 11603                                             # Parallel ion temperature
     Tper = partin[7, :] * 11603                                             # Perpendicular ion temperature
     
-    # Particle Array: Initalization and Loading
-    part     = np.zeros((9, N), dtype=float)         # Create array of zeroes N x 10 for pos, vel 3-vectors, and I, n, and idx values
-    old_part = np.zeros((9, N), dtype=float)         # Place to store last particle states while using Predictor-Corrector method
+    part     = np.zeros((9, N), dtype=float)                                # Create array of zeroes N x 10 for pos, vel 3-vectors, and I, n, and idx values
+    old_part = np.zeros((9, N), dtype=float)                                # Place to store last particle states while using Predictor-Corrector method
     
-    idx_start = [np.sum(N_species[0:ii]    )     for ii in range(0, Nj)]                     # Start index values for each species in order
-    idx_end   = [np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)]                     # End   index values for each species in order
+    idx_start = [np.sum(N_species[0:ii]    )     for ii in range(0, Nj)]    # Start index values for each species in order
+    idx_end   = [np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)]    # End   index values for each species in order
     
-    #density_profile  = get_chen_distribution(N)                                              
-    #particle_purview = x_range / N_species[0]
-   
     sx      = np.ones(NX)
     cell_N  = np.zeros((NX, Nj), dtype=int)
 
-    # Distribution function: Change to Heart's content (??)
+                                                                            # Distribution function: Change to Heart's content (??)
     for ii in range(NX/k, NX - NX/k):
-        sx[ii] = np.sin((2*pi*k / (NX*dx)) * x_cell[ii]) + 1
+        sx[ii] = (0.5 * np.sin((2*pi*k / (NX*dx)) * x_cell[ii])) + 1
 
-    
-    # Normalize Distribution function
-    sx /= np.sum(sx)
+    sx /= np.sum(sx)                                                        # Normalize distribution function
 
-    # Multiply by number of particles per species. Normalized means all particles are accounted for.
     for ii in range(Nj):
-        cell_N[:, ii] = (np.round(sx * N_species[ii]))
+        cell_N[:, ii] = (np.round(sx * N_species[ii]))                      # Multiply by number of particles per species. Normalized means all particles are accounted for.
 
-    if np.sum(cell_N) != N:                         # Can be avoided by picking NX mod k = 0
-        diff = N - np.sum(cell_N)                   # Find how many particles short
-        idxs = np.random.randint(0, NX - 1, diff)   # Create random indexs to put them (very small error)
+    if np.sum(cell_N) != N:                                                 # Can be avoided by picking NX mod k = 0
+        diff = N - np.sum(cell_N)                                           # Find how many particles short
+        idxs = np.random.randint(0, NX - 1, diff)                           # Create random indexs to put them (very small error)
         for ext in idxs:
-            cell_N[ext, 0] += 1                     # Put an extra particle in them
-
-    for ii in range(Nj):   # For each species                          
-        part[8, idx_start[ii]: idx_end[ii]] = ii       # Give index identifier to each particle  
+            cell_N[ext, 0] += 1                                             # Put an extra particle in them
+    
+    # Place particles in configuration space
+    for jj in range(Nj):
+        if partin[5, jj] == 0:                                              # Uniform distribution
+            for ii in range(N_species[jj]):
+                part[0, idx_start[jj] + ii] = NX * dx * (float(ii) / N_species[jj]) # Uniform distribution. Valid for cold particles only?
+        
+        elif partin[5, jj] == 1:
+            acc = 0
+            for ii in range(NX):
+                n_particles = int(np.round(cell_N[ii, jj]))
+                part[0, (idx_start[jj] + acc): idx_start[jj] + acc + n_particles] = np.random.uniform(ii*dx, (ii+1) * dx, n_particles)
+                acc += n_particles
+    
+    for ii in range(Nj):                                # For each species                          
+        part[8, idx_start[ii]: idx_end[ii]] = ii        # Give index identifier to each particle  
         m    = partin[0, ii] * mp                       # Species mass
-        vpar = np.sqrt(    kB * Tpar[idx] / m)           # Species parallel thermal velocity (x)
-        vper = np.sqrt(2 * kB * Tper[idx] / m)           # Species perpendicular thermal velocity (y, z)
+        vpar = np.sqrt(    kB * Tpar[ii] / m)           # Species parallel thermal velocity (x)
+        vper = np.sqrt(2 * kB * Tper[ii] / m)           # Species perpendicular thermal velocity (y, z)
 
-        # Place particles in velocity & configuration space
-        for jj in range(ii):
-            if partin[5, idx] == 0:     # Uniform distribution
-                part[0, idx_start[idx] + jj] = NX * dx * (float(jj) / float(ii)) # Uniform distribution. Valid for cold particles only?
-
+                                                        # Place particles in velocity space
+        for jj in range(N_species[ii]): 
             thetaR = basek_scramble(jj, 3)                                  # Scrambling set for theta (y, z)
             thetaX = basek_scramble(jj, 7)                                  # Scrambling set for theta (x) - throws away second component
-            vr_per = vper * np.sqrt(-2 * np.log( (jj + 0.5) / ii))          # Maxwellian for perpendicular velocity component
-            vr_par = vpar * np.sqrt(-2 * np.log( (jj + 0.5) / ii))          # Maxwellian for parallel (streaming) velocity component
+            vr_per = vper * np.sqrt(-2 * np.log( (jj + 0.5) / N_species[ii]))          # Maxwellian for perpendicular velocity component
+            vr_par = vpar * np.sqrt(-2 * np.log( (jj + 0.5) / N_species[ii]))          # Maxwellian for parallel (streaming) velocity component
             
-            part[3, idx_start[idx] + jj] = vr_par * np.cos(2 * pi * thetaX) + partin[2, idx]    # Parallel particle velocity (distribution + streaming)
-            part[4, idx_start[idx] + jj] = vr_per * np.sin(2 * pi * thetaR)                     # Perpendicular (y) particle velocity
-            part[5, idx_start[idx] + jj] = vr_per * np.cos(2 * pi * thetaR)                     # Perpendicular (z) particle velocity
+            part[3, idx_start[ii] + jj] = vr_par * np.cos(2 * pi * thetaX) + partin[2, ii]    # Parallel particle velocity (distribution + streaming)
+            part[4, idx_start[ii] + jj] = vr_per * np.sin(2 * pi * thetaR)                     # Perpendicular (y) particle velocity
+            part[5, idx_start[ii] + jj] = vr_per * np.cos(2 * pi * thetaR)                     # Perpendicular (z) particle velocity
         
-        idx += 1                                    # Move into next species
-           
     part[6, :] = part[0, :] / dx + 0.5 ; part[6, :] = part[6, :].astype(int)    # Initial leftmost node, I
-    #part[7, :] = density_profile * particle_purview                             # Assign real density value across homogenous macroparticle distribution
 
     return part, part_type, old_part
 
@@ -225,7 +226,7 @@ def position_update(part):  # Basic Push (x, v) vectors and I, W update
     
     # Periodic Boundary Condition: xmax = NX * dx
     for ii in range(N):
-        if part[0, ii] < 0:
+        if part[0, ii] < xmin:
             part[0, ii] = xmax + part[0,ii]
             
         if part[0, ii] > xmax:
@@ -271,7 +272,6 @@ def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
     B[:, 1] = Bp[:, 1] + Bc[1]
     B[:, 2] = Bp[:, 2] + Bc[2] 
     
-    #print 'Bx = %.2f, By = %.2f, Bz = %.2f' % ((B[40, 0] * 1e9), (B[40, 1] * 1e9), (B[40, 2] * 1e9))
     return B
     
     
@@ -330,7 +330,7 @@ def push_E(B, V_i, n_i, dt): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
     return E_out
 
 
-def collect_density(I_in, W_in, ptype, p_den): 
+def collect_density(I_in, W_in, ptype): 
     '''Function to collect charge density in each cell in each cell
     at each timestep. These values are weighted by their distance
     from cell nodes on each side. Can send whole array or individual particles?
@@ -345,15 +345,15 @@ def collect_density(I_in, W_in, ptype, p_den):
         W   = W_in[ii]
         idx = int(ptype[ii])
         
-        n_i[I,     idx] += (1 - W) * p_den[ii]
-        n_i[I + 1, idx] +=      W  * p_den[ii]
+        n_i[I,     idx] += (1 - W) * n_contr[idx]
+        n_i[I + 1, idx] +=      W  * n_contr[idx]
     
     # Move ghost cell contributions - Ghost cells at 0 and size - 2
     n_i[size - 2, :] += n_i[0, :]
     n_i[0, :]         = n_i[size - 2, :]              # Fill ghost cell  
     
-    n_i[1, :]       += n_i[size - 1, :]
-    n_i[size - 1, :] = n_i[1, :]                      # Fill ghost cell
+    n_i[1, :]        += n_i[size - 1, :]
+    n_i[size - 1, :]  = n_i[1, :]                      # Fill ghost cell
     
     n_i /= float(dx)        # Divide by cell dimensions to give densities per cubic metre
    
@@ -366,7 +366,7 @@ def collect_density(I_in, W_in, ptype, p_den):
     return n_i
 
 
-def collect_flow(part, ni, W_in, p_den): ### Add current for slowly moving cold background density?
+def collect_flow(part, ni, W_in): ### Add current for slowly moving cold background density?
     
     # Empty 3-vector for flow velocities at each node
     V_i = np.zeros((size, Nj, 3), float)    
@@ -377,23 +377,23 @@ def collect_flow(part, ni, W_in, p_den): ### Add current for slowly moving cold 
         idx = int(part[8, ii])
         W   =     W_in[ii]
     
-        V_i[I, idx, 0] += (1 - W) * p_den[ii] * part[3, ii]
-        V_i[I, idx, 1] += (1 - W) * p_den[ii] * part[4, ii]
-        V_i[I, idx, 2] += (1 - W) * p_den[ii] * part[5, ii]
+        V_i[I, idx, 0] += (1 - W) * n_contr[idx] * part[3, ii]
+        V_i[I, idx, 1] += (1 - W) * n_contr[idx] * part[4, ii]
+        V_i[I, idx, 2] += (1 - W) * n_contr[idx] * part[5, ii]
         
-        V_i[I + 1, idx, 0] +=  W  * p_den[ii] * part[3, ii]
-        V_i[I + 1, idx, 1] +=  W  * p_den[ii] * part[4, ii]
-        V_i[I + 1, idx, 2] +=  W  * p_den[ii] * part[5, ii]
+        V_i[I + 1, idx, 0] +=  W  * n_contr[idx] * part[3, ii]
+        V_i[I + 1, idx, 1] +=  W  * n_contr[idx] * part[4, ii]
+        V_i[I + 1, idx, 2] +=  W  * n_contr[idx] * part[5, ii]
         
     # Move ghost cell contributions - Ghost cells at 0 and 201, put non-zero value for density in ghost cells (to avoid 0/0 error)
     V_i[size - 2, :, :] += V_i[0, :, :]
-    V_i[0, :, :] = V_i[size - 2, :, :]                # Fill ghost cell
+    V_i[0, :, :]         = V_i[size - 2, :, :]                # Fill ghost cell
     
-    V_i[1, :, :]  += V_i[size - 1, :, :]
-    V_i[size - 1, :, :] = V_i[1, :, :]                # Fill ghost cell
-    
+    V_i[1, :, :]        += V_i[size - 1, :, :]
+    V_i[size - 1, :, :]  = V_i[1, :, :]                # Fill ghost cell
+   
     for ii in range(3):                                  # Divide each dimension by density for averaging (ion flow velocity)
-        V_i[:, :, ii] /= (ni * dx)                       # ni is in m3 - multiply by dx to get entire cell's density (for averaging purposes) 
+        V_i[:, :, ii]   /= (ni * dx)                       # ni is in m3 - multiply by dx to get entire cell's density (for averaging purposes) 
         
 #==============================================================================
 #     # Smooth ion velocity as with density for each species/component
@@ -555,10 +555,10 @@ if __name__ == '__main__':
     
     # Metadata
     start_time     = timer()                       # Start Timer
-    drive          = 'C'                           # Drive letter for portable HDD (changes between computers)
-    save_path      = 'Runs\Chen Test'              # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
+    drive          = '/home/yoshi'                 # Drive letter for portable HDD (changes between computers)
+    save_path      = 'Runs/Chen Test'              # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
     generate_data  = 0                             # Save data? Yes (1), No (0)
-    generate_plots = 0  ;   plt.ioff()             # Save plots, but don't draw them
+    generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
     run_desc = '''Chen density test'''
     
     # Initialize Things
@@ -587,8 +587,8 @@ if __name__ == '__main__':
             print 'Simulation starting...'
 
             W           = assign_weighting(part[0, :], part[6, :], 1)                       # Assign initial (E) weighting to particles
-            dns         = collect_density(part[6, :], W, part[8, :], part[7, :])            # Collect initial density   
-            Vi          = collect_flow(part, dns, W, part[7, :])                            # Collect initial current
+            dns         = collect_density(part[6, :], W, part[8, :])                        # Collect initial density   
+            Vi          = collect_flow(part, dns, W)                                        # Collect initial current
             initial_cell_density      = dns 
             
             B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], 0)                                     # Initialize magnetic field (should be second?)
@@ -602,8 +602,8 @@ if __name__ == '__main__':
             part, W   = position_update(part)                                               # Advance Position to N + 1
             B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], DT)                                    # Advance Magnetic Field to N + 1/2
             
-            dns       = 0.5 * (dns + collect_density(part[6, :], W, part[8, :], part[7, :]))# Collect ion density at N + 1/2 : Collect N + 1 and average with N                                             
-            Vi        = collect_flow(part, dns, W, part[7, :])                                          # Collect ion flow at N + 1/2
+            dns       = 0.5 * (dns + collect_density(part[6, :], W, part[8, :]))            # Collect ion density at N + 1/2 : Collect N + 1 and average with N                                             
+            Vi        = collect_flow(part, dns, W)                                          # Collect ion flow at N + 1/2
             E[:, 6:9] = E[:, 0:3]                                                           # Store Electric Field at N because PC, yo
             E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, DT)                                      # Advance Electric Field to N + 1/2   ii = even numbers
             
@@ -622,8 +622,8 @@ if __name__ == '__main__':
             
             part = velocity_update(part, B[:, 0:3], E[:, 0:3], DT, W)                       # Advance particle velocities to N + 3/2
             part, W = position_update(part)                                                 # Push particles to positions at N + 2
-            dns  = 0.5 * (dns + collect_density(part[6, :], W, part[8, :], part[7, :]))     # Collect ion density as average of N + 1, N + 2
-            Vi   = collect_flow(part, dns, W, part[7, :])                                   # Collect ion flow at N + 3/2
+            dns  = 0.5 * (dns + collect_density(part[6, :], W, part[8, :]))                 # Collect ion density as average of N + 1, N + 2
+            Vi   = collect_flow(part, dns, W)                                               # Collect ion flow at N + 3/2
             B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], DT)                                    # Push Magnetic Field again to N + 3/2 (Use same E(N + 1)
             E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, DT)                                      # Push Electric Field to N + 3/2   ii = odd numbers
             
@@ -657,7 +657,7 @@ if __name__ == '__main__':
             # Set some things    
             sim_time = qq * DT
                 
-            x_pos = part[0, 0:N] / 1000                 # Particle x-positions (km) (For looking at particle characteristics)  
+            x_pos = part[0, 0:N] / RE                 # Particle x-positions (km) (For looking at particle characteristics)  
             x_cell_num = np.arange(size - 2)            # Numerical cell numbering: x-axis
       
         #####       
@@ -789,13 +789,13 @@ if __name__ == '__main__':
             # Initialize run directory
             if ((generate_plots == 1 or generate_data == 1) and (qq == 0)) == True:
 
-                if os.path.exists('%s:\%s' % (drive, save_path)) == False:
-                    os.makedirs('%s:\%s' % (drive, save_path))              # Create master test series directory
+                if os.path.exists('%s/%s' % (drive, save_path)) == False:
+                    os.makedirs('%s/%s' % (drive, save_path))              # Create master test series directory
                     print 'Master directory created'
                     
                 num = 0#len(os.listdir('%s:\%s' % (drive, save_path)))        # Count number of existing runs. Set to run number manually for static save
 
-                path = ('%s:\%s\Run %d' % (drive, save_path, num))          # Set root run path (for images)
+                path = ('%s/%s/Run %d' % (drive, save_path, num))          # Set root run path (for images)
                 
                 
                 if os.path.exists(path) == False:
@@ -813,7 +813,7 @@ if __name__ == '__main__':
             # Save Data
             if generate_data == 1:
                 
-                d_path = ('%s:\%s\Run %d\Data' % (drive, save_path, num))   # Set path for data                
+                d_path = ('%s/%s/Run %d/Data' % (drive, save_path, num))   # Set path for data                
                 
                 if os.path.exists(d_path) == False:                         # Create data directory
                     os.makedirs(d_path)
