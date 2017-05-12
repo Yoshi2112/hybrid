@@ -27,7 +27,7 @@ def set_parameters():
     global dxm, t_res, NX, max_sec, cellpart, ie, B0, size, N, k
     dxm      = 0.25                             # Number of c/wpi per dx
     t_res    = 0.1                              # Time resolution of data in seconds (default 1s). Determines how often data is captured. Every frame captured if '0'.
-    NX       = 512                              # Number of cells - dimension of array (not including ghost cells)
+    NX       = 600                              # Number of cells - dimension of array (not including ghost cells)
     max_sec  = 300                              # Number of (real) seconds to run program for   
     cellpart = 200                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
     ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.    
@@ -51,7 +51,7 @@ def initialize_particles():
                        [               0],#,               Vc],        #(2) Bulk Velocity (m/s)
                        [               0],#,            0.5e6],        #(3) real density in /m3 - mantissa is density in /cm3 ## REMOVE ##
                        [  10.0000000e-01],#,   5.00000000e-01],        #(4) Simulated (superparticle) Density (as a portion of 1)
-                       [  0.00000000e+00],#,   0.00000000e+00],        #(5) Distribution type         0: Uniform, 1: Sinusoidal
+                       [               1],#,   0.00000000e+00],        #(5) Distribution type         0: Uniform, 1: Sinusoidal
                        [               1],#,   1.00000000e+00],        #(6) Parallel      Temperature (eV) (x)
                        [               1],#,   1.00000000e+00],        #(7) Perpendicular Temperature (eV) (y, z)
                        [               1]])#,   1.00000000e+00]])       #(8) Hot (0) or Cold (1) species
@@ -79,16 +79,15 @@ def initialize_particles():
     
     idx_start = [np.sum(N_species[0:ii]    )     for ii in range(0, Nj)]                     # Start index values for each species in order
     idx_end   = [np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)]                     # End   index values for each species in order
-    idx       = 0    
     
     #density_profile  = get_chen_distribution(N)                                              
     #particle_purview = x_range / N_species[0]
    
-    sx      = np.zeros(NX)
+    sx      = np.ones(NX)
     cell_N  = np.zeros((NX, Nj), dtype=int)
 
     # Distribution function: Change to Heart's content (??)
-    for ii in range(NX):
+    for ii in range(NX/k, NX - NX/k):
         sx[ii] = np.sin((2*pi*k / (NX*dx)) * x_cell[ii]) + 1
 
     
@@ -99,15 +98,23 @@ def initialize_particles():
     for ii in range(Nj):
         cell_N[:, ii] = (np.round(sx * N_species[ii]))
 
-    for ii in N_species:                             
-        part[8, idx_start[idx]: idx_end[idx]] = idx      # Give index identifier to each particle  
-        m    = partin[0, idx] * mp                       # Species mass
+    if np.sum(cell_N) != N:                         # Can be avoided by picking NX mod k = 0
+        diff = N - np.sum(cell_N)                   # Find how many particles short
+        idxs = np.random.randint(0, NX - 1, diff)   # Create random indexs to put them (very small error)
+        for ext in idxs:
+            cell_N[ext, 0] += 1                     # Put an extra particle in them
+
+    for ii in range(Nj):   # For each species                          
+        part[8, idx_start[ii]: idx_end[ii]] = ii       # Give index identifier to each particle  
+        m    = partin[0, ii] * mp                       # Species mass
         vpar = np.sqrt(    kB * Tpar[idx] / m)           # Species parallel thermal velocity (x)
         vper = np.sqrt(2 * kB * Tper[idx] / m)           # Species perpendicular thermal velocity (y, z)
 
+        # Place particles in velocity & configuration space
         for jj in range(ii):
-            part[0, idx_start[idx] + jj] = NX * dx * (float(jj) / float(ii)) # Uniform distribution. Valid for cold particles only?
-            
+            if partin[5, idx] == 0:     # Uniform distribution
+                part[0, idx_start[idx] + jj] = NX * dx * (float(jj) / float(ii)) # Uniform distribution. Valid for cold particles only?
+
             thetaR = basek_scramble(jj, 3)                                  # Scrambling set for theta (y, z)
             thetaX = basek_scramble(jj, 7)                                  # Scrambling set for theta (x) - throws away second component
             vr_per = vper * np.sqrt(-2 * np.log( (jj + 0.5) / ii))          # Maxwellian for perpendicular velocity component
@@ -133,7 +140,7 @@ def set_timestep(part):
     
     DT        = 0.3 * min(ion_ts, vel_ts)       # Smallest of the two
     framegrab = int(t_res / DT)                 # Number of iterations between dumps
-    maxtime   = 1#int(max_sec / DT) + 1           # Total number of iterations to achieve desired final time
+    maxtime   = 1#int(max_sec / DT) + 1         # Total number of iterations to achieve desired final time
     
     if framegrab == 0:
         framegrab = 1
@@ -551,7 +558,7 @@ if __name__ == '__main__':
     drive          = 'C'                           # Drive letter for portable HDD (changes between computers)
     save_path      = 'Runs\Chen Test'              # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
     generate_data  = 0                             # Save data? Yes (1), No (0)
-    generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
+    generate_plots = 0  ;   plt.ioff()             # Save plots, but don't draw them
     run_desc = '''Chen density test'''
     
     # Initialize Things
