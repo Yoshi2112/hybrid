@@ -5,8 +5,6 @@ import os
 import pickle
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
-from BLcodes import basek_scramble                      # Input an integer (index) and a base and output a number between 0 and 1 (radix-k scrambling routine)
-from chen_density import get_chen_distribution
 import pdb
 
 def set_constants():
@@ -25,9 +23,9 @@ def set_parameters():
     global dxm, t_res, NX, max_sec, cellpart, ie, B0, size, N, k
     dxm      = 0.25                             # Number of c/wpi per dx
     t_res    = 0.1                              # Time resolution of data in seconds (default 1s). Determines how often data is captured. Every frame captured if '0'.
-    NX       = 600                              # Number of cells - dimension of array (not including ghost cells)
+    NX       = 400                              # Number of cells - dimension of array (not including ghost cells)
     max_sec  = 300                              # Number of (real) seconds to run program for   
-    cellpart = 200                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
+    cellpart = 300                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
     ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.    
     B0       = 4e-9                             # Unform initial magnetic field value (in T) (must be parallel to an axis)
     k        = 5                                # Sinusoidal Density Parameter - number of wavelengths in spatial domain
@@ -35,12 +33,11 @@ def set_parameters():
     ## Derived Values ##
     size     = NX + 2
     N        = cellpart*NX                      # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
-
     return    
 
 def initialize_particles():
     np.random.seed(21)                          # Random seed 
-    global Nj, Te0, dx, partin, idx_start, idx_end, xmax, cell_N, n_contr
+    global Nj, Te0, dx, partin, idx_start, idx_end, xmax, cell_N, n_contr, ne, scramble_position
 
     ne = 10.0e6         # Electron density (used to assign portions of ion)
     # Species Characteristics - use column number as species identifier. Default - 0: Hot protons, 1: Cold protons, 2+: Cold Heavy Ion/s. Extra hot ions require re-coding.
@@ -51,12 +48,12 @@ def initialize_particles():
                        [            0.95,             0.05],        #(3) Real density as a portion of ne
                        [   5.0000000e-01,   5.00000000e-01],        #(4) Simulated (superparticle) Density (as a portion of 1)
                        [               1,                0],        #(5) Distribution type         0: Uniform, 1: Sinusoidal
-                       [             1.0,           25.0e6],        #(6) Parallel      Temperature (eV) (x)
-                       [             1.0,           50.0e6],        #(7) Perpendicular Temperature (eV) (y, z)
-                       [               1,   0.00000000e+00]])      #(8) Hot (0) or Cold (1) species
+                       [             1.0,              1.0],        #(6) Parallel      Temperature (eV) (x)
+                       [             1.0,              1.0],        #(7) Perpendicular Temperature (eV) (y, z)
+                       [               1,                0]])      #(8) Hot (0) or Cold (1) species
     
-    part_type      = ['$H^{+}$',
-                      '$He^{2+}$'] 
+    part_type     = ['$H^{+}$ (cold)',
+                      '$He^{2+}$ (hot)'] 
     
     Nj            = int(np.shape(partin)[1])                                # Number of species (number of columns above)    
     
@@ -67,7 +64,7 @@ def initialize_particles():
     
     x_cell        = np.arange(0, NX*dx, dx)
     N_species     = np.round(N * partin[4, :]).astype(int)                  # Number of sim particles for each species, total    
-    n_contr       = (partin[3, :] * dx * NX * ne) / N_species                    # Real particles per macroparticle        
+    n_contr       = (partin[3, :] * dx * NX * ne) / N_species               # Real particles per macroparticle        
     
 
     Te0 = 10. * 11603.                                                      # (Initial) Electron temperature (K)
@@ -83,7 +80,6 @@ def initialize_particles():
     sx      = np.ones(NX)
     cell_N  = np.zeros((NX, Nj), dtype=int)
 
-                                                                            # Distribution function: Change to Heart's content (??)
     for ii in range(NX/k, NX - NX/k):
         sx[ii] = (0.5 * np.sin((2*pi*k / (NX*dx)) * x_cell[ii])) + 1
 
@@ -100,36 +96,39 @@ def initialize_particles():
     
     # Place particles in configuration space
     for jj in range(Nj):
-        if partin[5, jj] == 0:                                              # Uniform distribution
-            for ii in range(N_species[jj]):
-                part[0, idx_start[jj] + ii] = NX * dx * (float(ii) / N_species[jj]) # Uniform distribution. Valid for cold particles only?
+        part[8, idx_start[jj]: idx_end[jj]] = jj           # Give index identifier to each particle  
+        m       = partin[0, jj] * mp                       # Species mass
+        vpar    = np.sqrt(    kB * Tpar[jj] / m)           # Species parallel thermal velocity (x)
+        vper    = np.sqrt(2 * kB * Tper[jj] / m)           # Species perpendicular thermal velocity (y, z)
+        cell_N_uniform = cellpart * partin[4, :]
         
+        if partin[5, jj] == 0:
+            acc = 0
+            n_particles = int(cell_N_uniform[jj])
+            part[0, idx_start[jj]: idx_end[jj]] = xmax * np.asarray([(float(xx) / N_species[jj]) for xx in range(N_species[jj])])
+
+            for ii in range(NX):
+                part[3, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tpar[jj]) / (partin[0, jj] * mp)), n_particles) + partin[2, jj]
+                part[4, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tper[jj]) / (partin[0, jj] * mp)), n_particles)
+                part[5, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tper[jj]) / (partin[0, jj] * mp)), n_particles)
+                
+                acc += n_particles
+                
         elif partin[5, jj] == 1:
             acc = 0
             for ii in range(NX):
-                n_particles = int(np.round(cell_N[ii, jj]))
-                part[0, (idx_start[jj] + acc): idx_start[jj] + acc + n_particles] = np.random.uniform(ii*dx, (ii+1) * dx, n_particles)
-                acc += n_particles
-    
-    for ii in range(Nj):                                # For each species                          
-        part[8, idx_start[ii]: idx_end[ii]] = ii        # Give index identifier to each particle  
-        m    = partin[0, ii] * mp                       # Species mass
-        vpar = np.sqrt(    kB * Tpar[ii] / m)           # Species parallel thermal velocity (x)
-        vper = np.sqrt(2 * kB * Tper[ii] / m)           # Species perpendicular thermal velocity (y, z)
-
-                                                        # Place particles in velocity space
-        for jj in range(N_species[ii]): 
-            thetaR = basek_scramble(jj, 3)                                  # Scrambling set for theta (y, z)
-            thetaX = basek_scramble(jj, 7)                                  # Scrambling set for theta (x) - throws away second component
-            vr_per = vper * np.sqrt(-2 * np.log( (jj + 0.5) / N_species[ii]))          # Maxwellian for perpendicular velocity component
-            vr_par = vpar * np.sqrt(-2 * np.log( (jj + 0.5) / N_species[ii]))          # Maxwellian for parallel (streaming) velocity component
-            
-            part[3, idx_start[ii] + jj] = vr_par * np.cos(2 * pi * thetaX) + partin[2, ii]    # Parallel particle velocity (distribution + streaming)
-            part[4, idx_start[ii] + jj] = vr_per * np.sin(2 * pi * thetaR)                     # Perpendicular (y) particle velocity
-            part[5, idx_start[ii] + jj] = vr_per * np.cos(2 * pi * thetaR)                     # Perpendicular (z) particle velocity
-        
+                try:
+                    n_particles = int(np.round(cell_N[ii, jj]))
+             
+                    part[0, (idx_start[jj] + acc): idx_start[jj] + acc + n_particles] = (ii*dx) + np.asarray([ dx * (xx / float(n_particles)) for xx in range(n_particles)])
+                    part[3, (idx_start[jj] + acc): idx_start[jj] + acc + n_particles] = partin[2, jj] + np.random.normal(0, np.sqrt((kB * Tpar[jj] / (partin[0, jj] * mp))), n_particles)
+                    part[4, (idx_start[jj] + acc): idx_start[jj] + acc + n_particles] =                 np.random.normal(0, np.sqrt((kB * Tper[jj] / (partin[0, jj] * mp))), n_particles)
+                    part[5, (idx_start[jj] + acc): idx_start[jj] + acc + n_particles] =                 np.random.normal(0, np.sqrt((kB * Tper[jj] / (partin[0, jj] * mp))), n_particles)
+                
+                    acc += n_particles
+                except ValueError:
+                    pdb.set_trace()
     part[6, :] = part[0, :] / dx + 0.5 ; part[6, :] = part[6, :].astype(int)    # Initial leftmost node, I
-
     return part, part_type, old_part
 
   
@@ -150,7 +149,7 @@ def set_timestep(part):
     print 'Timestep: %.4fs, %d iterations total' % (DT, maxtime)
     return DT, maxtime, framegrab
 
-    
+
 def initialize_fields():  
     global Bc, theta
 
@@ -199,7 +198,7 @@ def velocity_update(part, B, E, dt, W_in):  # Based on Appendix A of Ch5 : Hybri
         I   = int(part[6,n])             # Nearest (leftmost) node, I
         Ib  = int(part[0, n] / dx)       # Nearest (leftmost) magnetic node
         We  = W_in[n]                    # E-field weighting
-        idx = int(part[8, n])
+        idx = int(part[8, n])            # Particle species index
         
         E_p = E[I,  0:3] * (1 - We   ) + E[I  + 1, 0:3] * We
         B_p = B[Ib, 0:3] * (1 - Wb[n]) + B[Ib + 1, 0:3] * Wb[n]    
@@ -214,26 +213,22 @@ def velocity_update(part, B, E, dt, W_in):  # Based on Appendix A of Ch5 : Hybri
         part[3,n] = f * vn[0] + h * ( E_p[0] + g * B_p[0] + (v0[1]*B_p[2] - v0[2]*B_p[1]) )
         part[4,n] = f * vn[1] + h * ( E_p[1] + g * B_p[1] - (v0[0]*B_p[2] - v0[2]*B_p[0]) )
         part[5,n] = f * vn[2] + h * ( E_p[2] + g * B_p[2] + (v0[0]*B_p[1] - v0[1]*B_p[0]) )
-        
     return part        
     
     
 def position_update(part):  # Basic Push (x, v) vectors and I, W update
     
-    # Update position vectors - turn off y,z for 1D sim
-    part[0, :] += part[3, :] * DT
-    xmax = NX * dx
+    part[0, :] += part[3, :] * DT                       # Add velocity
     
-    # Periodic Boundary Condition: xmax = NX * dx
-    for ii in range(N):
+    for ii in range(N):                                 # Boundary conditions (periodic)
         if part[0, ii] < xmin:
             part[0, ii] = xmax + part[0,ii]
             
         if part[0, ii] > xmax:
             part[0, ii] = part[0,ii] - xmax
     
-    part[6, :] = part[0, :] / dx + 0.5             # Leftmost node, I
-    part[6, :] = part[6, :].astype(int)            # Integer-ize
+    part[6, :] = part[0, :] / dx + 0.5                  # Leftmost node, I
+    part[6, :] = part[6, :].astype(int)                 # Integer-ize
     W_out      = assign_weighting(part[0, :], part[6, :], 1)
     return part, W_out
     
@@ -271,7 +266,6 @@ def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
     B[:, 0] = Bp[:, 0] + Bc[0]    
     B[:, 1] = Bp[:, 1] + Bc[1]
     B[:, 2] = Bp[:, 2] + Bc[2] 
-    
     return B
     
     
@@ -326,7 +320,8 @@ def push_E(B, V_i, n_i, dt): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
     # Update ghost cells
     E_out[0, :]        = E_out[size - 2, :]
     E_out[size - 1, :] = E_out[1, :]
-    
+
+    #pdb.set_trace()
     return E_out
 
 
@@ -387,12 +382,12 @@ def collect_flow(part, ni, W_in): ### Add current for slowly moving cold backgro
         
     # Move ghost cell contributions - Ghost cells at 0 and 201, put non-zero value for density in ghost cells (to avoid 0/0 error)
     V_i[size - 2, :, :] += V_i[0, :, :]
-    V_i[0, :, :]         = V_i[size - 2, :, :]                # Fill ghost cell
+    V_i[0, :, :]         = V_i[size - 2, :, :]             # Fill ghost cell
     
     V_i[1, :, :]        += V_i[size - 1, :, :]
-    V_i[size - 1, :, :]  = V_i[1, :, :]                # Fill ghost cell
+    V_i[size - 1, :, :]  = V_i[1, :, :]                    # Fill ghost cell
    
-    for ii in range(3):                                  # Divide each dimension by density for averaging (ion flow velocity)
+    for ii in range(3):                                    # Divide each dimension by density for averaging (ion flow velocity)
         V_i[:, :, ii]   /= (ni * dx)                       # ni is in m3 - multiply by dx to get entire cell's density (for averaging purposes) 
         
 #==============================================================================
@@ -402,7 +397,6 @@ def collect_flow(part, ni, W_in): ### Add current for slowly moving cold backgro
 #             smoothed       = smooth(V_i[:, jj, kk])
 #             V_i[:, jj, kk] = smoothed
 #==============================================================================
-    
     return V_i
     
 
@@ -476,7 +470,6 @@ def check_cell_distribution(part, node_number, j): #
     ax_z.set_xlim(-2, 2)
     
     plt.show()    
-    
     return
 
 def check_position_distribution(part, j):
@@ -494,7 +487,7 @@ def check_position_distribution(part, j):
         
     fig = plt.figure(figsize=(12,10))
     fig.patch.set_facecolor('w') 
-    num_bins = 128
+    num_bins = NX
     
     ax_x = plt.subplot()    
     
@@ -505,7 +498,6 @@ def check_position_distribution(part, j):
     ax_x.set_xlim(0, NX)
     
     plt.show() 
-    
     return
 
 def check_velocity_distribution(part, j):
@@ -546,14 +538,11 @@ def check_velocity_distribution(part, j):
     ax_z.set_xlabel(r'$v_z$')
 
     plt.show()
-    
     return
     
 
-#%% Main Program Script
-if __name__ == '__main__':
+if __name__ == '__main__':                         # Main program start
     
-    # Metadata
     start_time     = timer()                       # Start Timer
     drive          = '/home/yoshi'                 # Drive letter for portable HDD (changes between computers)
     save_path      = 'Runs/Chen Test'              # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
@@ -561,31 +550,26 @@ if __name__ == '__main__':
     generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
     run_desc = '''Chen density test'''
     
-    # Initialize Things
     print 'Initializing parameters...'
     set_constants()
     set_parameters()
     part, part_type, old_part = initialize_particles()
     B, E, Vi, dns, dns_old, W = initialize_fields()
 
-
     DT, maxtime, framegrab    = set_timestep(part)
 
-#==============================================================================
-#     # Numerical checks
-#     which_species = 0
-#     which_cell    = 40
-#     
-#     #check_cell_distribution(part, which_cell, which_species)
-#     #check_velocity_distribution(part, which_species)
-#     #check_position_distribution(part, which_species)
-#==============================================================================
+    # --- Numerical Checks (optional)
+    which_species = 1
+    which_cell    = 40
+     
+    #check_cell_distribution(part, which_cell, which_species)
+    #check_velocity_distribution(part, which_species)
+    #check_position_distribution(part, which_species)
+    # -------------------------------
 
     for qq in range(1):
         if qq == 0:
-
             print 'Simulation starting...'
-
             W           = assign_weighting(part[0, :], part[6, :], 1)                       # Assign initial (E) weighting to particles
             dns         = collect_density(part[6, :], W, part[8, :])                        # Collect initial density   
             Vi          = collect_flow(part, dns, W)                                        # Collect initial current
@@ -606,10 +590,8 @@ if __name__ == '__main__':
             Vi        = collect_flow(part, dns, W)                                          # Collect ion flow at N + 1/2
             E[:, 6:9] = E[:, 0:3]                                                           # Store Electric Field at N because PC, yo
             E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, DT)                                      # Advance Electric Field to N + 1/2   ii = even numbers
-            
-            
+                       
             # ----- Predictor-Corrector Method ----- #
-
             # Predict values of fields at N + 1 
             B[:, 3:6] = B[:, 0:3]                                                           # Store last "real" magnetic field (N + 1/2)
             E[:, 3:6] = E[:, 0:3]                                                           # Store last "real" electric field (N + 1/2)
@@ -635,8 +617,9 @@ if __name__ == '__main__':
             part = old_part                                                                 # The stored densities at N + 1/2 before the PC method took place (previously held PC at N + 3/2)
             dns  = dns_old     
                      
-     
-         # ----- Plot commands ----- #
+        ##############################
+        # -------- PLOTTING -------- #
+        ##############################
         if generate_plots == 1:
             # Initialize Figure Space
             fig_size = 4, 7
@@ -654,69 +637,50 @@ if __name__ == '__main__':
                         'axes.labelsize'    : 16,
                         })
             
-            # Set some things    
-            sim_time = qq * DT
-                
-            x_pos = part[0, 0:N] / RE                 # Particle x-positions (km) (For looking at particle characteristics)  
-            x_cell_num = np.arange(size - 2)            # Numerical cell numbering: x-axis
+            sim_time    = qq * DT
+            x_pos       = part[0, 0:N] / RE              # Particle x-positions (km) (For looking at particle characteristics)  
+            x_cell_num  = np.arange(size - 2)            # Numerical cell numbering: x-axis
       
-        #####       
-            # Plot: Normalized vy - Assumes species 0 is hot hydrogen population
-            vy_pos_hot =  0, 0
+        #----- Velocity (vy) Plots: Hot and Cold Species       
+            vy_pos_hot  = 0, 0
             vy_pos_core = 2, 0
             
-            ax_vy_hot = plt.subplot2grid(fig_size, vy_pos_hot, rowspan=2, colspan=3)    
-            ax_vy_core = plt.subplot2grid(fig_size, vy_pos_core, rowspan=2, colspan=3)
+            ax_vy_hot   = plt.subplot2grid(fig_size,  (0, 0), rowspan=2, colspan=3)    
+            ax_vy_core  = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
             
-            # Normalized to Alfven velocity: For y-axis plot
-            norm_yvel   = part[4, 0:N]        # vy (m/s)
+            norm_yvel   = part[4, :]        # y-velocities (for normalization)
             
-            # Plot Scatter
-            ax_vy_hot.scatter(x_pos[idx_start[0]: idx_end[0]], norm_yvel[idx_start[0]: idx_end[0]], s=1, c='r', lw=0)        # Hot population
-                
-#==============================================================================
-#             for ii in range(1, Nj):
-#                 ax_vy_core.scatter(x_pos[idx_start[ii]: idx_end[ii]], norm_yvel[idx_start[ii]: idx_end[ii]], s=1, lw=0, color='c')                                     # 'Other' population
-#==============================================================================
+            ax_vy_hot.scatter( x_pos[idx_start[1]: idx_end[1]], norm_yvel[idx_start[1]: idx_end[1]], s=1, c='r', lw=0)        # Hot population
+            ax_vy_core.scatter(x_pos[idx_start[0]: idx_end[0]], norm_yvel[idx_start[0]: idx_end[0]], s=1, lw=0, color='c')                                     # 'Other' population
             
-            # Make it look pretty
             ax_vy_hot.set_title(r'Normalized velocity $v_y$ vs. Position (x)')    
-            
-            ax_vy_hot.set_xlabel('Position (km)', labelpad=10)
-            ax_vy_hot.set_ylabel(r'$H^+$', fontsize=24, rotation=0, labelpad=8) 
+            ax_vy_hot.set_xlabel(r'Position ($R_E$)', labelpad=10)
+            ax_vy_hot.set_ylabel(r'$H^+$ (hot)', fontsize=20, rotation=90, labelpad=8) 
         
-#==============================================================================
-#             ax_vy_core.set_xlim(0, (NX*dx)/1000)
-#             ax_vy_core.set_ylim(-15, 15)
-#             ax_vy_core.set_xlabel('Position (km)', labelpad=10)
-#             ax_vy_core.set_ylabel(r'$He^2+$', fontsize=24, rotation=0, labelpad=8) 
-#==============================================================================
+            ax_vy_core.set_xlabel('Position (km)', labelpad=10)
+            ax_vy_core.set_ylabel(r'$H^+$ (cold)', fontsize=20, rotation=90, labelpad=8) 
             
-            plt.setp(ax_vy_hot.get_xticklabels(), visible=False)
-            ax_vy_hot.set_yticks(ax_vy_hot.get_yticks()[1:])  
+            plt.setp(ax_vy_hot.get_xticklabels(), visible=False)                                
+            ax_vy_hot.set_yticks(ax_vy_hot.get_yticks()[1:]) 
+
+            for ax in [ax_vy_core, ax_vy_hot]:
+                ax.set_xlim(0, 3.5)
         
-        #####
-            # Plot Density
-            den_pos = 0, 3
-            ax_den = plt.subplot2grid((fig_size), (den_pos), colspan=3)
-            
-            # Plot the Things
-            dns_norm = np.zeros((size - 2, Nj), dtype=float)            
-            
+        #----- Density Plot
+            ax_den = plt.subplot2grid((fig_size), (0, 3), colspan=3)                            # Initialize axes
+            dns_norm = np.zeros((size - 2, Nj), dtype=float)                                    # Initialize normalized density array
+            species_colors = ['cyan', 'red']                                                    # Species colors for plotting (change to hot/cold arrays based off idx values later)
+
             for ii in range(Nj):
-                dns_norm[:, ii] = dns[1: size-1, ii]
+                dns_norm[:, ii] = dns[1: size-1, ii] / (ne * partin[3, ii])                     # Normalize density for each species to initial values
                     
-            species_colors = ['red', 'cyan']
-            
             for ii in range(Nj):
-                ax_den.plot(x_cell_num, dns_norm[:, ii], color=species_colors[ii])
+                ax_den.plot(x_cell_num, dns_norm[:, ii], color=species_colors[ii])              # Create overlayed plots for densities of each species
             
-            # Make things pretty
-            ax_den.set_title('Normalized Ion Densities and Magnetic Fields (y, mag) vs. Cell')
-            ax_den.set_ylabel('Normalized Density', fontsize=14, rotation=90, labelpad=5)
+            ax_den.set_title('Normalized Ion Densities and Magnetic Fields (y, mag) vs. Cell')  # Axes title (For all, since density plot is on top
+            ax_den.set_ylabel('Normalized Density', fontsize=14, rotation=90, labelpad=5)       # Axis (y) label for this specific axes 
             
-        #####
-            # Plot: Electric Field Ez
+        #----- Electric Field (Ez) Plot
             ax_Ez = plt.subplot2grid(fig_size, (1, 3), colspan=3, sharex=ax_den)
         
             Ez = E[1:size-1, 2]
@@ -730,58 +694,51 @@ if __name__ == '__main__':
             ax_Ez.set_yticklabels(np.arange(-150, 201, 50))   
             ax_Ez.set_ylabel(r'$E_z$ ($\mu$V)', labelpad=25, rotation=0, fontsize=14)
             
-            
-        #####
-            # Plot: Magnetic Field - y component + magnitude
-            ax_By = plt.subplot2grid((fig_size), (2, 3), colspan=3, sharex=ax_den)
+        #----- Magnetic Field (By) and Magnitude (|B|) Plots
+            ax_By = plt.subplot2grid((fig_size), (2, 3), colspan=3, sharex=ax_den)              # Initialize Axes
             ax_B  = plt.subplot2grid((fig_size), (3, 3), colspan=3, sharex=ax_den)
                 
-            # Normalize field to initial B0
             mag_B = (np.sqrt(B[1:size-1, 0] ** 2 + B[1:size-1, 1] ** 2 + B[1:size-1, 2] ** 2)) / B0
-            B_y = B[1:size-1, 1] / B0
+            B_y   = B[1:size-1, 1] / B0                                                         # Normalize grid values                                                                 
             
-            ax_B.plot(x_cell_num, mag_B, color='g')
+            ax_B.plot(x_cell_num, mag_B, color='g')                                             # Create axes plots
             ax_By.plot(x_cell_num, B_y, color='g')
                 
-            ax_B.set_xlim(0,  NX)
+            ax_B.set_xlim(0,  NX)                                                               # Set x limit
             ax_By.set_xlim(0, NX)
                 
-            ax_B.set_ylim(0, 4)
+            ax_B.set_ylim(0, 4)                                                                 # Set y limit
             ax_By.set_ylim(-2, 2)
                 
-            ax_B.set_ylabel( r'$|B|$', rotation=0, labelpad=20)
+            ax_B.set_ylabel( r'$|B|$', rotation=0, labelpad=20)                                 # Set labels
             ax_By.set_ylabel(r'$B_y$', rotation=0, labelpad=10)
-            ax_B.set_xlabel('Cell Number')
+            ax_B.set_xlabel('Cell Number')                                                      # Set x-axis label for group (since |B| is on bottom)
                     
             for ax in [ax_den, ax_Ez, ax_By]:
                 plt.setp(ax.get_xticklabels(), visible=False)
                 # The y-ticks will overlap with "hspace=0", so we'll hide the bottom tick
                 ax.set_yticks(ax.get_yticks()[1:])  
                 
-           
-        #####
-            # Last Minute plot adjustments
+        #----- Plot Adjustments
             plt.tight_layout(pad=1.0, w_pad=1.8)
             fig.subplots_adjust(hspace=0)    
             
-            # Figure Text
             text1  = plt.figtext(0.84, 0.01, 'Real Time = %.2f s'           % (sim_time),                   fontsize = 16, color='k')
-            
             text3  = plt.figtext(0.86, 0.94, 'N  = %d'                      % N,                            fontsize = 18)
             #text4  = plt.figtext(0.86, 0.91, r'$n_b$ = %.1f%%'              % (partin[3, 0]/n0 * 100),      fontsize = 18)
             text5  = plt.figtext(0.86, 0.88, 'NX = %d'                      % NX,                           fontsize = 18)
             text6  = plt.figtext(0.86, 0.85, r'$\Delta t$  = %.4fs'         % DT,                           fontsize = 18)
-            
             text7  = plt.figtext(0.86, 0.80, r'$\theta$  = %d$^{\circ}$'    % theta,                        fontsize = 18)            
             text8  = plt.figtext(0.86, 0.77, r'$B_0$ = %.1f nT'             % (B0 * 1e9),                   fontsize = 18)
             #text9  = plt.figtext(0.86, 0.74, r'$n_0$ = %.2f $cm^{-3}$'      % (n0 / 1e6),                   fontsize = 18)
-            
             text10 = plt.figtext(0.86, 0.69, r'$\beta_{b\perp}$ = %.1f'     % partin[7, 0],                 fontsize = 18)
             text11 = plt.figtext(0.86, 0.66, r'$\beta_{b\parallel}$ = %.1f' % partin[6, 0],                 fontsize = 18)
            # text12 = plt.figtext(0.86, 0.63, r'$\beta_{core}$ = %.1f'       % partin[6, 1],                 fontsize = 18)
-            
             text13 = plt.figtext(0.86, 0.58, r'$T_e$  = %dK'                % Te0,                          fontsize = 18)
-
+       
+        ################################
+        # ---------- SAVING ---------- #
+        ################################
         if qq%framegrab == 0:       # Dump data at specified interval   
         
             r = qq / framegrab          # Capture number
