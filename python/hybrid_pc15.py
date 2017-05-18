@@ -22,9 +22,9 @@ def set_constants():
 def set_parameters():
     global dxm, t_res, NX, max_sec, cellpart, ie, B0, size, N, k
     dxm      = 0.25                             # Number of c/wpi per dx
-    t_res    = 0.1                              # Time resolution of data in seconds (default 1s). Determines how often data is captured. Every frame captured if '0'.
+    t_res    = 0                                # Time resolution of data in seconds (default 1s). Determines how often data is captured. Every frame captured if '0'.
     NX       = 400                              # Number of cells - dimension of array (not including ghost cells)
-    max_sec  = 300                              # Number of (real) seconds to run program for   
+    max_sec  = 10000                            # Number of (real) seconds to run program for   
     cellpart = 300                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
     ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.    
     B0       = 4e-9                             # Unform initial magnetic field value (in T) (must be parallel to an axis)
@@ -37,7 +37,7 @@ def set_parameters():
 
 def initialize_particles():
     np.random.seed(21)                          # Random seed 
-    global Nj, Te0, dx, partin, idx_start, idx_end, xmax, cell_N, n_contr, ne, scramble_position
+    global Nj, Te0, dx, partin, idx_start, idx_end, xmax, cell_N, n_contr, ne, scramble_position, xmin
 
     ne = 10.0e6         # Electron density (used to assign portions of ion)
     # Species Characteristics - use column number as species identifier. Default - 0: Hot protons, 1: Cold protons, 2+: Cold Heavy Ion/s. Extra hot ions require re-coding.
@@ -140,7 +140,7 @@ def set_timestep(part):
     
     DT        = 0.3 * min(ion_ts, vel_ts)       # Smallest of the two
     framegrab = int(t_res / DT)                 # Number of iterations between dumps
-    maxtime   = 1#int(max_sec / DT) + 1         # Total number of iterations to achieve desired final time
+    maxtime   = int(max_sec / DT) + 1           # Total number of iterations to achieve desired final time
     
     if framegrab == 0:
         framegrab = 1
@@ -544,9 +544,9 @@ def check_velocity_distribution(part, j):
 if __name__ == '__main__':                         # Main program start
     
     start_time     = timer()                       # Start Timer
-    drive          = '/home/yoshi'                 # Drive letter for portable HDD (changes between computers)
-    save_path      = 'Runs/Chen Test'              # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
-    generate_data  = 0                             # Save data? Yes (1), No (0)
+    drive          = 'C:'                          # Drive letter for portable HDD (changes between computers)
+    save_path      = 'Runs/Sin Run'                # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
+    generate_data  = 1                             # Save data? Yes (1), No (0)
     generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
     run_desc = '''Chen density test'''
     
@@ -567,7 +567,7 @@ if __name__ == '__main__':                         # Main program start
     #check_position_distribution(part, which_species)
     # -------------------------------
 
-    for qq in range(1):
+    for qq in range(maxtime):
         if qq == 0:
             print 'Simulation starting...'
             W           = assign_weighting(part[0, :], part[6, :], 1)                       # Assign initial (E) weighting to particles
@@ -811,6 +811,5 @@ if __name__ == '__main__':                         # Main program start
     # Print Time Elapsed
     elapsed = timer() - start_time
     print "Time to execute program: {0:.2f} seconds".format(round(elapsed,2))
-
 
 
