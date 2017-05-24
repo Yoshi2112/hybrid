@@ -39,22 +39,24 @@ def set_parameters():
 
 def initialize_particles():
     np.random.seed(21)                          # Random seed 
-    global Nj, Te0, dx, partin, idx_start, idx_end, xmax, cell_N, n_contr, ne, scramble_position, xmin
+    global Nj, Te0, dx, dy, partin, idx_start, idx_end, xmax, cell_N, n_contr, ne, scramble_position, xmin
 
+    f = 0.015       # Relative beam density
+    V = 10.0        # Relative streaming velocity 
     # Species Characteristics - use column number as species identifier
     #                        H+ (cold)             H+ (hot)               
-    partin = np.array([[  1.00000000e+00,   1.00000000e+00],        #(0) Mass   (proton units)
-                       [  1.00000000e+00,   1.00000000e+00],        #(1) Charge (charge units)
-                       [              0.,               0.],        #(2) Bulk Velocity (m/s)
-                       [            0.95,             0.05],        #(3) Real density as a portion of ne
-                       [   5.0000000e-01,   5.00000000e-01],        #(4) Simulated (superparticle) Density (as a portion of 1)
-                       [               1,                0],        #(5) Distribution type         0: Uniform, 1: Sinusoidal
-                       [             1.0,              1.0],        #(6) Parallel      Temperature (eV) (x)
-                       [             1.0,              1.0],        #(7) Perpendicular Temperature (eV) (y, z)
-                       [               1,                0]])      #(8) Hot (0) or Cold (1) species
+    partin = np.array([[           1.0  ,             1.0 ],        #(0) Mass   (proton units)
+                       [           1.0  ,             1.0 ],        #(1) Charge (charge units)
+                       [     -f*V/(1-f) ,              V  ],        #(2) Bulk Velocity (m/s)
+                       [           1-f  ,              f  ],        #(3) Real density as a portion of ne
+                       [           0.5  ,            0.5  ],        #(4) Simulated (superparticle) Density (as a portion of 1)
+                       [             0  ,              0  ],        #(5) Distribution type         0: Uniform, 1: Sinusoidal
+                       [           1.0  ,            1.0  ],        #(6) Parallel      Temperature (eV) (x)
+                       [           1.0  ,            1.0  ],        #(7) Perpendicular Temperature (eV) (y, z)
+                       [             1  ,              0  ]])       #(8) Hot (0) or Cold (1) species
     
     part_type     = ['$H^{+}$ (cold)',
-                      '$H^{+}$ (hot)'] 
+                     '$H^{+}$ (hot)'] 
     
     Nj            = int(np.shape(partin)[1])                                # Number of species (number of columns above)    
     dx            = xmax / NX                                               # Spacial step (in metres)
@@ -286,12 +288,12 @@ def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
     
 def push_E(B, V_i, n_i, dt): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
 
-    E_out = np.zeros((size, 3))     # Output array - new electric field
-    JxB   = np.zeros((size, 3))     # V cross B holder
-    BdB   = np.zeros((size, 3))     # B cross del cross B holder     
-    del_p = np.zeros((size, 3))     # Electron pressure tensor gradient array
-    J     = np.zeros((size, 3))     # Ion current
-    qn    = np.zeros( size,    dtype=float)     # Ion charge density
+    E_out = np.zeros((size, size, 3))               # Output array - new electric field
+    JxB   = np.zeros((size, size, 3))               # V cross B holder
+    BdB   = np.zeros((size, size, 3))               # B cross del cross B holder     
+    del_p = np.zeros((size, size, 3))               # Electron pressure tensor gradient array
+    J     = np.zeros((size, size, 3))               # Ion current
+    qn    = np.zeros( size, size,   dtype=float)    # Ion charge density
 
 #==============================================================================
 #     # Adiabatic Electron Temperature Calculation   
@@ -301,137 +303,168 @@ def push_E(B, V_i, n_i, dt): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
 #         Te = Te0 * ((ni / (n0)) ** (gamma - 1))                         ## CHANGE!!! ###
 #     else:
 #==============================================================================
-    Te = [Te0 for ii in range(size)]
+    Te = np.ones(size, size) * Te0                              # Isothermal (const) approximation until adiabatic thing happens 
         
     # Calculate average/summations over species
     for jj in range(Nj):
-        qn += partin[1, jj] * n_i[:, jj] * q                  # Total charge density, sum(qj * nj)
+        qn += partin[1, jj] * n_i[:, :, jj] * q                  # Total charge density, sum(qj * nj)
         
         for kk in range(3):
-            J[:, kk]  += partin[1, jj] * n_i[:, jj] * V_i[:, jj, kk] * q   # Total ion current vector: J_k = qj * nj * Vj_k
+            J[:, :, kk]  += partin[1, jj] * n_i[:, :, jj] * V_i[:, :, jj, kk] * q   # Total ion current vector: J_k = qj * nj * Vj_k
             
     # J cross B
-    JxB[:, 0] +=    J[:, 1] * B[:, 2] - J[:, 2] * B[:, 1]  
-    JxB[:, 1] += - (J[:, 0] * B[:, 2] - J[:, 2] * B[:, 0]) 
-    JxB[:, 2] +=    J[:, 0] * B[:, 1] - J[:, 1] * B[:, 0]   
+    JxB[:, :, 0] +=    J[:, :, 1] * B[:, :, 2] - J[:, :, 2] * B[:, :, 1]  
+    JxB[:, :, 1] += - (J[:, :, 0] * B[:, :, 2] - J[:, :, 2] * B[:, :, 0]) 
+    JxB[:, :, 2] +=    J[:, :, 0] * B[:, :, 1] - J[:, :, 1] * B[:, :, 0]   
     
     for mm in range(1, size - 1):
-        
-        # B cross curl B
-        BdB[mm, 0] =    B[mm, 1]  * ((B[mm + 1, 1] - B[mm - 1, 1]) / (2 * dx)) + B[mm, 2] * ((B[mm + 1, 2] - B[mm - 1, 2]) / (2 * dx))
-        BdB[mm, 1] = (- B[mm, 0]) * ((B[mm + 1, 1] - B[mm - 1, 1]) / (2 * dx))
-        BdB[mm, 2] = (- B[mm, 0]) * ((B[mm + 1, 2] - B[mm - 1, 2]) / (2 * dx))
+        for nn in range(1, size - 1):
+            # B cross curl B
+            BdB[mm, nn, 0] =   B[mm, nn, 1] * ((B[mm + 1, nn, 1] - B[mm - 1, nn, 1]) / (2 * dx)) \
+                             - B[mm, nn, 1] * ((B[mm, nn + 1, 0] - B[mm, nn - 1, 0]) / (2 * dy)) \
+                             + B[mm, nn, 2] * ((B[mm + 1, nn, 2] - B[mm - 1, nn, 2]) / (2 * dx))
+
+            BdB[mm, nn, 1] = - B[mm, nn, 0] * ((B[mm + 1, nn, 1] - B[mm - 1, nn, 1]) / (2 * dx)) \
+                             + B[mm, nn, 0] * ((B[mm, nn + 1, 0] - B[mm, nn - 1, 0]) / (2 * dy)) \
+                             + B[mm, nn, 2] * ((B[mm, nn + 1, 2] - B[mm, nn - 1, 2]) / (2 * dy))
+
+            BdB[mm, nn, 2] = - B[mm, nn, 0] * ((B[mm + 1, nn, 2] - B[mm - 1, nn, 2]) / (2 * dx)) \
+                             - B[mm, nn, 1] * ((B[mm, nn + 1, 2] - B[mm, nn - 1, 2]) / (2 * dy))
     
-        # del P
-        del_p[mm, 0] = ((qn[mm + 1] - qn[mm - 1]) / (2*dx*q)) * kB * Te[mm]
-        del_p[mm, 1] = 0
-        del_p[mm, 2] = 0
+            # del P
+            del_p[mm, 0] = (kB / (2*dx*q)) * ( Te[mm, nn] * (qn[mm + 1, nn] - qn[mm - 1, nn]) 
+                                             + qn[mm, nn] * (Te[mm + 1, nn] - Te[mm - 1, nn]) )
+            del_p[mm, 1] = (kB / (2*dy*q)) * ( Te[mm, nn] * (qn[mm, nn + 1] - qn[mm, nn - 1]) 
+                                             + qn[mm, nn] * (Te[mm, nn + 1] - Te[mm, nn - 1]) )
+            del_p[mm, 2] = 0
     
     # Final Calculation
-    E_out[:, 0] = (- JxB[:, 0] - (del_p[:, 0] ) - (BdB[:, 0] / (mu0))) / (qn[:])
-    E_out[:, 1] = (- JxB[:, 1] - (del_p[:, 1] ) - (BdB[:, 1] / (mu0))) / (qn[:])
-    E_out[:, 2] = (- JxB[:, 2] - (del_p[:, 2] ) - (BdB[:, 2] / (mu0))) / (qn[:])
+    E_out[:, :, 0] = (- JxB[:, :, 0] - (del_p[:, :, 0] ) - (BdB[:, :, 0] / (mu0))) / (qn[:, :])
+    E_out[:, :, 1] = (- JxB[:, :, 1] - (del_p[:, :, 1] ) - (BdB[:, :, 1] / (mu0))) / (qn[:, :])
+    E_out[:, :, 2] = (- JxB[:, :, 2] - (del_p[:, :, 2] ) - (BdB[:, :, 2] / (mu0))) / (qn[:, :])
     
-    # Update ghost cells
-    E_out[0, :]        = E_out[size - 2, :]
-    E_out[size - 1, :] = E_out[1, :]
+    E_out[1, :, :]          += E_out[size - 1, :, :]    # Move ghost cell contributions (sides)
+    E_out[size - 2, :, :]   += E_out[0, :, :]
+
+    E_out[:, 1, :]          += E_out[:, size - 1, :]    # Move ghost cell contributions (top/bottom)
+    E_out[:, size - 2, :]   += E_out[:, 0, :]
+
+    E_out[0, :, :]        = E_out[size - 2, :, :]       # Update ghost cells
+    E_out[:, 0, :]        = E_out[:, size - 2, :]
+
+    E_out[size - 1, :, :] = E_out[1, :, :]              # Update ghost cells
+    E_out[:, size - 1, :] = E_out[:, 1, :]
 
     #pdb.set_trace()
     return E_out
 
 
-def collect_density(I_in, W_in, ptype): 
+def collect_density(part, W): 
     '''Function to collect charge density in each cell in each cell
     at each timestep. These values are weighted by their distance
     from cell nodes on each side. Can send whole array or individual particles?
     How do I sum up the densities one at a time?'''
 
-    n_i = np.zeros((size, Nj), float)
+    n_i = np.zeros((size, size, Nj), float)
    
     # Collect number density of all particles
     for ii in range(N):
         
-        I   = int(I_in[ii])
-        W   = W_in[ii]
-        idx = int(ptype[ii])
+        idx  = int(part[3, ii])
+        Ix   = int(part[6, ii])
+        Iy   = int(part[7, ii])
+        Wx   = W[ii, 0]
+        Wy   = W[ii, 1]
         
-        n_i[I,     idx] += (1 - W) * n_contr[idx]
-        n_i[I + 1, idx] +=      W  * n_contr[idx]
+        n_i[Ix    , Iy    , idx] += (1 - Wx) * (1 - Wy) * n_contr[idx]
+        n_i[Ix + 1, Iy    , idx] +=      Wx  * (1 - Wy) * n_contr[idx]
+        n_i[Ix    , Iy + 1, idx] += (1 - Wx) *      Wy  * n_contr[idx]
+        n_i[Ix + 1, Iy + 1, idx] +=      Wx  *      Wy  * n_contr[idx]
     
     # Move ghost cell contributions - Ghost cells at 0 and size - 2
-    n_i[size - 2, :] += n_i[0, :]
-    n_i[0, :]         = n_i[size - 2, :]              # Fill ghost cell  
-    
-    n_i[1, :]        += n_i[size - 1, :]
-    n_i[size - 1, :]  = n_i[1, :]                      # Fill ghost cell
-    
-    n_i /= float(dx)        # Divide by cell dimensions to give densities per cubic metre
+    n_i[size - 2, :, :] += n_i[0, :, :]                     # Move contribution
+    n_i[:, size - 2, :] += n_i[:, 0, :]                     # Move contribution
+
+    n_i[1, :, :]        += n_i[size - 1, :, :]              # Move contribution
+    n_i[:, 1, :]        += n_i[:, size - 1, :]              # Move contribution
+
+    n_i[:, size - 1, :]  = n_i[:, 1, :]                     # Fill ghost cell
+    n_i[size - 1, :, :]  = n_i[1, :, :]                     # Fill ghost cell
+
+    n_i[0, :, :]         = n_i[size - 2, :, :]              # Fill ghost cell  
+    n_i[:, 0, :]         = n_i[:, size - 2, :]              # Fill ghost cell
+
+    n_i /= float(dx*dy)        # Divide by cell dimensions to give densities per cubic metre
    
-#==============================================================================
-#     # Smooth density using Gaussian smoother (1/4, 1/2, 1/4)
-#     for jj in range(Nj):
-#         smoothed   = smooth(n_i[:, jj])
-#         n_i[:, jj] = smoothed
-#==============================================================================
+    # Smooth density using Gaussian smoother (1/4, 1/2, 1/4)
+    for jj in range(Nj):
+        smoothed   = smooth(n_i[:, jj])
+        n_i[:, jj] = smoothed
     return n_i
 
 
-def collect_flow(part, ni, W_in): ### Add current for slowly moving cold background density?
+def collect_flow(part, ni, W): ### Add current for slowly moving cold background density?
     
     # Empty 3-vector for flow velocities at each node
-    V_i = np.zeros((size, Nj, 3), float)    
+    V_i = np.zeros((size, size, Nj, 3), float)    
     
-    # Loop through all particles: sum velocities for each species. Alter for parallelization?
+    # Loop through all particles: sum velocities for each species.
     for ii in range(N):
-        I   = int(part[6, ii])
         idx = int(part[3, ii])
-        W   =     W_in[ii]
-    
-        V_i[I, idx, 0] += (1 - W) * n_contr[idx] * part[3, ii]
-        V_i[I, idx, 1] += (1 - W) * n_contr[idx] * part[4, ii]
-        V_i[I, idx, 2] += (1 - W) * n_contr[idx] * part[5, ii]
+        Ix  = int(part[6, ii])
+        Iy  = int(part[7, ii])
+        Wx  =        W[ii, 0]
+        Wy  =        W[ii, 1]
         
-        V_i[I + 1, idx, 0] +=  W  * n_contr[idx] * part[3, ii]
-        V_i[I + 1, idx, 1] +=  W  * n_contr[idx] * part[4, ii]
-        V_i[I + 1, idx, 2] +=  W  * n_contr[idx] * part[5, ii]
+        for vv in range(3):
+            V_i[Ix    , Iy    , idx, vv] += (1 - Wx) * (1 - Wy) * n_contr[idx] * part[vv + 3, ii]
+            V_i[Ix + 1, Iy    , idx, vv] +=      Wx  * (1 - Wy) * n_contr[idx] * part[vv + 3, ii]
+            V_i[Ix    , Iy + 1, idx, vv] += (1 - Wx) *      Wy  * n_contr[idx] * part[vv + 3, ii]
+            V_i[Ix + 1, Iy + 1, idx, vv] +=      Wx  *      Wy  * n_contr[idx] * part[vv + 3, ii]
+        
         
     # Move ghost cell contributions - Ghost cells at 0 and 201, put non-zero value for density in ghost cells (to avoid 0/0 error)
-    V_i[size - 2, :, :] += V_i[0, :, :]
-    V_i[0, :, :]         = V_i[size - 2, :, :]             # Fill ghost cell
-    
-    V_i[1, :, :]        += V_i[size - 1, :, :]
-    V_i[size - 1, :, :]  = V_i[1, :, :]                    # Fill ghost cell
+    V_i[size - 2, :, :, :] += V_i[0, :, :, :]                     # Move contribution
+    V_i[:, size - 2, :, :] += V_i[:, 0, :, :]                     # Move contribution
+
+    V_i[1, :, :, :]        += V_i[size - 1, :, :, :]              # Move contribution
+    V_i[:, 1, :, :]        += V_i[:, size - 1, :, :]              # Move contribution
+
+    V_i[:, size - 1, :, :]  = V_i[:, 1, :, :]                     # Fill ghost cell
+    V_i[size - 1, :, :, :]  = V_i[1, :, :, :]                     # Fill ghost cell
+
+    V_i[0, :, :, :]         = V_i[size - 2, :, :, :]              # Fill ghost cell  
+    V_i[:, 0, :, :]         = V_i[:, size - 2, :, :]              # Fill ghost cell
    
-    for ii in range(3):                                    # Divide each dimension by density for averaging (ion flow velocity)
-        V_i[:, :, ii]   /= (ni * dx)                       # ni is in m3 - multiply by dx to get entire cell's density (for averaging purposes) 
+    for ii in range(3):                                           # Divide each dimension by density for averaging (ion flow velocity)
+        V_i[:, :, :, ii]   /= (ni * dx)                           # ni is in m3 - multiply by dx to get entire cell's density (for averaging purposes) 
         
-#==============================================================================
-#     # Smooth ion velocity as with density for each species/component
-#     for jj in range(Nj):
-#         for kk in range(3):
-#             smoothed       = smooth(V_i[:, jj, kk])
-#             V_i[:, jj, kk] = smoothed
-#==============================================================================
+    # Smooth ion velocity as with density for each species/component
+    for jj in range(Nj):
+        for kk in range(3):
+            smoothed       = smooth(V_i[:, jj, kk])
+            V_i[:, jj, kk] = smoothed
     return V_i
     
 
-def smooth(function): 
+def smooth(fn): 
+    new_function = np.zeros((size))
     
-    new_function = np.zeros(size)
-    
-    # Smooth: Assumes nothing in ghost cells
     for ii in range(1, size - 1):
-        new_function[ii - 1] = 0.25*function[ii] + new_function[ii - 1]
-        new_function[ii]     = 0.5*function[ii]  + new_function[ii]
-        new_function[ii + 1] = 0.25*function[ii] + new_function[ii + 1]
+        for jj in range(1, size - 1):
+            new_function[ii, jj] = (4. / 16.) * (fn[ii, jj])        # Do the smoothing: 1/4 - 1/2 - 1/4 Gaussian in 2D
+                                 + (2. / 16.) * (fn[ii + 1, jj]     + fn[ii - 1, jj]     + fn[ii, jj + 1]     + fn[ii, jj - 1])
+                                 + (1. / 16.) * (fn[ii + 1, jj + 1] + fn[ii - 1, jj + 1] + fn[ii + 1, jj - 1] + fn[ii - 1, jj - 1])
         
-    # Move Ghost Cell Contributions: Periodic Boundary Condition
-    new_function[1]        += new_function[size - 1]
-    new_function[size - 2] += new_function[0]
-    
-    # Set ghost cell values to mirror corresponding real cell
-    new_function[0]        = new_function[size - 2]
-    new_function[size - 1] = new_function[1]
+    new_function[size - 2, :]   += new_function[0, :]               # Move ghost cell contributions
+    new_function[:, size - 2]   += new_function[:, 0]
+    new_function[1, :]          += new_function[size - 1, :]
+    new_function[:, 1]          += new_function[:, size - 1]
+
+    new_function[0, :]           = new_function[size - 2, :]        # Fill ghost cells with their real counterparts
+    new_function[:, 0]           = new_function[:, size - 2]
+    new_function[size - 1, :]    = new_function[1, :]
+    new_function[:, size - 1]    = new_function[:, 1]
     return new_function
 
 
@@ -561,9 +594,9 @@ if __name__ == '__main__':                         # Main program start
     start_time     = timer()                       # Start Timer
     drive          = 'C:'                          # Drive letter for portable HDD (changes between computers)
     save_path      = 'Runs/Sin Run'                # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
-    generate_data  = 1                             # Save data? Yes (1), No (0)
-    generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
-    run_desc = '''Chen density test'''
+    generate_data  = 0                             # Save data? Yes (1), No (0)
+    generate_plots = 0  ;   plt.ioff()             # Save plots, but don't draw them
+    run_desc = '''Initial 2D Hybrid test'''
     
     print 'Initializing parameters...'
     set_constants()
@@ -586,7 +619,7 @@ if __name__ == '__main__':                         # Main program start
         if qq == 0:
             print 'Simulation starting...'
             W           = assign_weighting(part[0, :], part[6, :], 1)                       # Assign initial (E) weighting to particles
-            dns         = collect_density(part[6, :], W, part[3, :])                        # Collect initial density   
+            dns         = collect_density(part, W)                                          # Collect initial density   
             Vi          = collect_flow(part, dns, W)                                        # Collect initial current
             initial_cell_density      = dns 
             
@@ -601,7 +634,7 @@ if __name__ == '__main__':                         # Main program start
             part, W   = position_update(part)                                               # Advance Position to N + 1
             B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], DT)                                    # Advance Magnetic Field to N + 1/2
             
-            dns       = 0.5 * (dns + collect_density(part[6, :], W, part[3, :]))            # Collect ion density at N + 1/2 : Collect N + 1 and average with N                                             
+            dns       = 0.5 * (dns + collect_density(part, W))                              # Collect ion density at N + 1/2 : Collect N + 1 and average with N                                             
             Vi        = collect_flow(part, dns, W)                                          # Collect ion flow at N + 1/2
             E[:, 6:9] = E[:, 0:3]                                                           # Store Electric Field at N because PC, yo
             E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, DT)                                      # Advance Electric Field to N + 1/2   ii = even numbers
@@ -619,7 +652,7 @@ if __name__ == '__main__':                         # Main program start
             
             part = velocity_update(part, B[:, 0:3], E[:, 0:3], DT, W)                       # Advance particle velocities to N + 3/2
             part, W = position_update(part)                                                 # Push particles to positions at N + 2
-            dns  = 0.5 * (dns + collect_density(part[6, :], W, part[3, :]))                 # Collect ion density as average of N + 1, N + 2
+            dns  = 0.5 * (dns + collect_density(part, W)                                    # Collect ion density as average of N + 1, N + 2
             Vi   = collect_flow(part, dns, W)                                               # Collect ion flow at N + 3/2
             B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], DT)                                    # Push Magnetic Field again to N + 3/2 (Use same E(N + 1)
             E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, DT)                                      # Push Electric Field to N + 3/2   ii = odd numbers
