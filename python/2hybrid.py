@@ -5,6 +5,8 @@ import os
 import pickle
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
+from mpl_toolkits.mplot3d import Axes3D
+
 import pdb
 
 def set_constants():
@@ -158,8 +160,7 @@ def initialize_fields():
     
 
 def velocity_update(part, B, E, dt, WE_in, WB_in):  # Based on Appendix A of Ch5 : Hybrid Codes by Winske & Omidi.
-    
-    
+     
     for n in range(N):
         vn = part[3:6, n]                # Existing particle velocity
         E_p = 0; B_p = 0                 # Initialize field values
@@ -272,15 +273,6 @@ def push_E(B, V_i, n_i, dt):
     del_p = np.zeros((size, size, 3))               # Electron pressure tensor gradient array
     J     = np.zeros((size, size, 3))               # Ion current
     qn    = np.zeros((size, size    ), dtype=float) # Ion charge density
-
-#==============================================================================
-#     # Adiabatic Electron Temperature Calculation: Turn into function? To treat electron equation of state, etc.   
-#     if ie == 1:    
-#         gamma = 5./3.
-#         ni = np.asarray([np.sum(n_i[xx, :]) for xx in range(size)])
-#         Te = Te0 * ((ni / (n0)) ** (gamma - 1))                         ## CHANGE!!! ###
-#     else:
-#==============================================================================
     Te = np.ones((size, size)) * Te0                              # Isothermal (const) approximation until adiabatic thing happens 
     
     # Calculate average/summations over species
@@ -350,29 +342,16 @@ def collect_density(part, W):
         Iy   = int(part[7, ii])     # Bottom nodes
         Wx   = W[ii, 0:2]           # Left,   right
         Wy   = W[ii, 2:4]           # Bottom, top   node weighting factors
-
-        n_i[Ix    , Iy    , idx] += Wx[0] * Wy[0] * n_contr[idx]  # Bottom left
-        n_i[Ix + 1, Iy    , idx] += Wx[1] * Wy[0] * n_contr[idx]  # Bottom right
-        n_i[Ix    , Iy + 1, idx] += Wx[0] * Wy[1] * n_contr[idx]  # Top left
-        n_i[Ix + 1, Iy + 1, idx] += Wx[1] * Wy[1] * n_contr[idx]  # Top right
+        
+        for jj in range(2):
+            for kk in range(2):
+                n_i[Ix + jj, Iy + kk, idx] += Wx[jj] * Wy[kk] * n_contr[idx]
     
-    n_i /= float(dx*dy)        # Divide by cell dimensions to give densities per cubic metre
-
-    # Move ghost cell contributions - Ghost cells at 0 and size - 2
-    n_i[size - 2, :, :] += n_i[0, :, :]                     # Move contribution
-    n_i[:, size - 2, :] += n_i[:, 0, :]                     # Move contribution
-    n_i[1, :, :]        += n_i[size - 1, :, :]              # Move contribution
-    n_i[:, 1, :]        += n_i[:, size - 1, :]              # Move contribution
-
-    n_i[:, size - 1, :]  = n_i[:, 1, :]                     # Fill ghost cell
-    n_i[size - 1, :, :]  = n_i[1, :, :]                     # Fill ghost cell
-    n_i[0, :, :]         = n_i[size - 2, :, :]              # Fill ghost cell  
-    n_i[:, 0, :]         = n_i[:, size - 2, :]              # Fill ghost cell
+    n_i = manage_ghost_cells(n_i) / (dx*dy)         # Divide by cell size for density per unit volume
 
     # Smooth density using Gaussian smoother (1/4, 1/2, 1/4)
     # for jj in range(Nj):
     #    n_i[:, :, jj] = smooth(n_i[:, :, jj])
-    
     return n_i
 
 
@@ -387,30 +366,16 @@ def collect_current(part, ni, W):
         Iy  = int(part[7, ii])
         Wx  = W[ii, 0:2]
         Wy  = W[ii, 2:4]
-        
-        J_i[Ix    , Iy    , idx, :] += Wx[0] * Wy[0] * n_contr[idx] * part[3:6, ii]     # Does all 3 dimensions at once (much more efficient/parallel)
-        J_i[Ix + 1, Iy    , idx, :] += Wx[1] * Wy[0] * n_contr[idx] * part[3:6, ii]
-        J_i[Ix    , Iy + 1, idx, :] += Wx[0] * Wy[1] * n_contr[idx] * part[3:6, ii]
-        J_i[Ix + 1, Iy + 1, idx, :] += Wx[1] * Wy[1] * n_contr[idx] * part[3:6, ii]
+       
+        for jj in range(2):
+            for kk in range(2):
+                J_i[Ix + jj, Iy + kk, idx, :] += Wx[jj] * Wy[kk] * n_contr[idx] * part[3:6, ii]     # Does all 3 dimensions at once (much more efficient/parallel)
     
     for jj in range(Nj):    # Turn those velocities into currents (per species)
         J_i[:, :, jj, :] *= partin[1, jj] * q
 
-    # Move ghost cell contributions - Ghost cells at 0 and 201, put non-zero value for density in ghost cells (to avoid 0/0 error)
-    J_i[size - 2, :, :, :] += J_i[0, :, :, :]                     # Move contribution
-    J_i[:, size - 2, :, :] += J_i[:, 0, :, :]                     # Move contribution
-    J_i[1, :, :, :]        += J_i[size - 1, :, :, :]              # Move contribution
-    J_i[:, 1, :, :]        += J_i[:, size - 1, :, :]              # Move contribution
+    J_i = manage_ghost_cells(J_i) / (dx*dy)     # Divide by spatial cell size for current per unit
 
-    J_i[:, size - 1, :, :]  = J_i[:, 1, :, :]                     # Fill ghost cell
-    J_i[size - 1, :, :, :]  = J_i[1, :, :, :]                     # Fill ghost cell
-    J_i[0, :, :, :]         = J_i[size - 2, :, :, :]              # Fill ghost cell  
-    J_i[:, 0, :, :]         = J_i[:, size - 2, :, :]              # Fill ghost cell
-    
-    for ii in range(3):                                           # Divide each dimension by density for averaging (ion flow velocity)
-        J_i[:, :, :, ii]   /= (dx * dy)                           # ni is in m3 - multiply by dx to get entire cell's density (for averaging purposes) 
-       
-    # Smooth ion velocity as with density for each species/component
     #for jj in range(Nj):
     #    for kk in range(3):
     #        V_i[:, :, jj, kk] = smooth(V_i[:, :, jj, kk])
@@ -419,13 +384,18 @@ def collect_current(part, ni, W):
 def manage_ghost_cells(arr):
     '''Deals with ghost cells: Moves their contributions and mirrors their counterparts.
        Works like a charm if spatial dimensions always come first in an array'''
-    
-    if len(np.shape(arr)) == 3:
-        new_arr = np.zeros((size, size, np.shape[2]), dtype=float)
-    elif len(np.shape(arr)) == 4:
-        new_arr = np.zeros((size, size, np.shape[2], np.shape[3]), dtype=float)
+   
+    arr[size - 2, :] += arr[0, :]                     # Move contribution
+    arr[:, size - 2] += arr[:, 0]                     # Move contribution
+    arr[1, :]        += arr[size - 1, :]              # Move contribution
+    arr[:, 1]        += arr[:, size - 1]              # Move contribution
 
-    
+    arr[:, size - 1]  = arr[:, 1]                     # Fill ghost cell
+    arr[size - 1, :]  = arr[1, :]                     # Fill ghost cell
+    arr[0, :]         = arr[size - 2, :]              # Fill ghost cell  
+    arr[:, 0]         = arr[:, size - 2]              # Fill ghost cell
+    return arr
+
 def smooth(fn):
     '''Performs a Gaussian smoothing function to a 2D array'''
     new_function = np.zeros((size, size), dtype=float)
@@ -448,116 +418,6 @@ def smooth(fn):
     return new_function
 
 
-def check_cell_distribution(part, node_number, j): #        
-    # Collect information about particles within +- 0.5dx of node_number (E-field nodes are in the cell centers)
-    x_node = (node_number - 0.5) * dx   # Position of node in question
-    f = np.zeros((1, 6))                
-    count = 0           
-
-    for ii in range(N):
-        if (abs(part[0, ii] - x_node) <= 0.5*dx) and (part[3, ii] == j):       
-            f = np.append(f, [part[0:6, ii]], axis=0)
-            count += 1
-    rcParams.update({'text.color'   : 'k',
-            'axes.labelcolor'   : 'k',
-            'axes.edgecolor'    : 'k',
-            'axes.facecolor'    : 'w',
-            'mathtext.default'  : 'regular',
-            'xtick.color'       : 'k',
-            'ytick.color'       : 'k',
-            'axes.labelsize'    : 24,
-            })
-        
-    fig = plt.figure(figsize=(12,10))
-    fig.patch.set_facecolor('w') 
-    num_bins = 50
-    
-    ax_x = plt.subplot2grid((2, 3), (0,0), colspan=2, rowspan=2)
-    ax_y = plt.subplot2grid((2, 3), (0,2))
-    ax_z = plt.subplot2grid((2, 3), (1,2))
-    
-    xs, BinEdgesx = np.histogram((f[:, 3] - partin[2, j]), bins=num_bins)
-    bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
-    ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
-    ax_x.set_xlabel(r'$v_x$')
-    ax_x.set_xlim(-2, 2)
-    
-    ys, BinEdgesy = np.histogram(f[:, 4], bins=num_bins)
-    by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
-    ax_y.plot(by, ys, '-', c='c', drawstyle='steps')
-    ax_y.set_xlabel(r'$v_y$')
-    ax_y.set_xlim(-2, 2)
-    
-    zs, BinEdgesz = np.histogram(f[:, 5], bins=num_bins)
-    bz = 0.5 * (BinEdgesz[1:] + BinEdgesz[:-1])
-    ax_z.plot(bz, zs, '-', c='c', drawstyle='steps')
-    ax_z.set_xlabel(r'$v_z$')
-    ax_z.set_xlim(-2, 2)
-    plt.show()    
-    return
-
-def check_position_distribution(part, j):
-    rcParams.update({'text.color'   : 'k',
-            'axes.labelcolor'   : 'k',
-            'axes.edgecolor'    : 'k',
-            'axes.facecolor'    : 'w',
-            'mathtext.default'  : 'regular',
-            'xtick.color'       : 'k',
-            'ytick.color'       : 'k',
-            'axes.labelsize'    : 24,
-            })
-        
-    fig = plt.figure(figsize=(12,10))
-    fig.patch.set_facecolor('w') 
-    num_bins = NX
-    
-    ax_x = plt.subplot()    
-    xs, BinEdgesx = np.histogram(part[0, idx_start[j]: idx_end[j]] / float(dx), bins=num_bins)
-    bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
-    ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
-    ax_x.set_xlabel(r'$x_p$')
-    ax_x.set_xlim(0, NX)
-    plt.show() 
-    return
-
-def check_velocity_distribution(part, j):
-    rcParams.update({'text.color'   : 'k',
-            'axes.labelcolor'   : 'k',
-            'axes.edgecolor'    : 'k',
-            'axes.facecolor'    : 'w',
-            'mathtext.default'  : 'regular',
-            'xtick.color'       : 'k',
-            'ytick.color'       : 'k',
-            'axes.labelsize'    : 24,
-            })
-        
-    fig = plt.figure(figsize=(12,10))
-    fig.patch.set_facecolor('w') 
-    num_bins = 100
-    
-    ax_x = plt.subplot2grid((2, 3), (0,0), colspan=2, rowspan=2)
-    ax_y = plt.subplot2grid((2, 3), (0,2))
-    ax_z = plt.subplot2grid((2, 3), (1,2))
-    
-    xs, BinEdgesx = np.histogram(part[3, idx_start[j]: idx_end[j]], bins=num_bins)
-    bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
-    ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
-    ax_x.set_xlabel(r'$v_x$')
-    #ax_x.set_xlim(6, 14)
-    
-    ys, BinEdgesy = np.histogram(part[4, idx_start[j]: idx_end[j]], bins=num_bins)
-    by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
-    ax_y.plot(by, ys, '-', c='c', drawstyle='steps')
-    ax_y.set_xlabel(r'$v_y$')
-    
-    zs, BinEdgesz = np.histogram(part[5, idx_start[j]: idx_end[j]], bins=num_bins)
-    bz = 0.5 * (BinEdgesz[1:] + BinEdgesz[:-1])
-    ax_z.plot(bz, zs, '-', c='c', drawstyle='steps')
-    ax_z.set_xlabel(r'$v_z$')
-    plt.show()
-    return
-    
-
 if __name__ == '__main__':                         # Main program start
     
     start_time     = timer()                       # Start Timer
@@ -575,13 +435,6 @@ if __name__ == '__main__':                         # Main program start
 
     DT, maxtime, framegrab    = set_timestep(part)
 
-    # --- Numerical Checks (optional)
-    which_species = 1
-    which_cell    = 40
-     
-    #check_cell_distribution(part, which_cell, which_species)
-    #check_velocity_distribution(part, which_species)
-    #check_position_distribution(part, which_species)
     # -------------------------------
 
     for qq in range(100):
@@ -655,103 +508,12 @@ if __name__ == '__main__':                         # Main program start
                         'axes.labelsize'    : 16,
                         })
             
-            sim_time    = qq * DT
-            x_pos       = part[0, 0:N] / RE              # Particle x-positions (km) (For looking at particle characteristics)  
-            x_cell_num  = np.arange(size - 2)            # Numerical cell numbering: x-axis
-      
-        #----- Velocity (vy) Plots: Hot and Cold Species       
-            vy_pos_hot  = 0, 0
-            vy_pos_core = 2, 0
-            
-            ax_vy_hot   = plt.subplot2grid(fig_size,  (0, 0), rowspan=2, colspan=3)    
-            ax_vy_core  = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
-            
-            norm_yvel   = part[4, :]        # y-velocities (for normalization)
-            
-            ax_vy_hot.scatter( x_pos[idx_start[1]: idx_end[1]], norm_yvel[idx_start[1]: idx_end[1]], s=1, c='r', lw=0)        # Hot population
-            ax_vy_core.scatter(x_pos[idx_start[0]: idx_end[0]], norm_yvel[idx_start[0]: idx_end[0]], s=1, lw=0, color='c')                                     # 'Other' population
-            
-            ax_vy_hot.set_title(r'Normalized velocity $v_y$ vs. Position (x)')    
-            ax_vy_hot.set_xlabel(r'Position ($R_E$)', labelpad=10)
-            ax_vy_hot.set_ylabel(r'$H^+$ (hot)', fontsize=20, rotation=90, labelpad=8) 
-        
-            ax_vy_core.set_xlabel('Position (km)', labelpad=10)
-            ax_vy_core.set_ylabel(r'$H^+$ (cold)', fontsize=20, rotation=90, labelpad=8) 
-            
-            plt.setp(ax_vy_hot.get_xticklabels(), visible=False)                                
-            ax_vy_hot.set_yticks(ax_vy_hot.get_yticks()[1:]) 
-
-            for ax in [ax_vy_core, ax_vy_hot]:
-                ax.set_xlim(0, 3.5)
-        
-        #----- Density Plot
-            ax_den = plt.subplot2grid((fig_size), (0, 3), colspan=3)                            # Initialize axes
-            dns_norm = np.zeros((size - 2, Nj), dtype=float)                                    # Initialize normalized density array
-            plt.show()
-            species_colors = ['cyan', 'red']                                                    # Species colors for plotting (change to hot/cold arrays based off idx values later)
-
-            for ii in range(Nj):
-                dns_norm[:, ii] = dns[1: size-1, ii] / (ne * partin[3, ii])                     # Normalize density for each species to initial values
-                    
-            for ii in range(Nj):
-                ax_den.plot(x_cell_num, dns_norm[:, ii], color=species_colors[ii])              # Create overlayed plots for densities of each species
-            
-            ax_den.set_title('Normalized Ion Densities and Magnetic Fields (y, mag) vs. Cell')  # Axes title (For all, since density plot is on top
-            ax_den.set_ylabel('Normalized Density', fontsize=14, rotation=90, labelpad=5)       # Axis (y) label for this specific axes 
-            
-        #----- Electric Field (Ez) Plot
-            ax_Ez = plt.subplot2grid(fig_size, (1, 3), colspan=3, sharex=ax_den)
-        
-            Ez = E[1:size-1, 2]
-            
-            ax_Ez.plot(x_cell_num, Ez, color='magenta')
-            
-            ax_Ez.set_xlim(0, NX)
-            ax_Ez.set_ylim(-200e-6, 200e-6)
-            
-            ax_Ez.set_yticks(np.arange(-200e-6, 201e-6, 50e-6))
-            ax_Ez.set_yticklabels(np.arange(-150, 201, 50))   
-            ax_Ez.set_ylabel(r'$E_z$ ($\mu$V)', labelpad=25, rotation=0, fontsize=14)
-            
-        #----- Magnetic Field (By) and Magnitude (|B|) Plots
-            ax_By = plt.subplot2grid((fig_size), (2, 3), colspan=3, sharex=ax_den)              # Initialize Axes
-            ax_B  = plt.subplot2grid((fig_size), (3, 3), colspan=3, sharex=ax_den)
-                
-            mag_B = (np.sqrt(B[1:size-1, 0] ** 2 + B[1:size-1, 1] ** 2 + B[1:size-1, 2] ** 2)) / B0
-            B_y   = B[1:size-1, 1] / B0                                                         # Normalize grid values                                                                 
-            
-            ax_B.plot(x_cell_num, mag_B, color='g')                                             # Create axes plots
-            ax_By.plot(x_cell_num, B_y, color='g')
-                
-            ax_B.set_xlim(0,  NX)                                                               # Set x limit
-            ax_By.set_xlim(0, NX)
-                
-            ax_B.set_ylim(0, 4)                                                                 # Set y limit
-            ax_By.set_ylim(-2, 2)
-                
-            ax_B.set_ylabel( r'$|B|$', rotation=0, labelpad=20)                                 # Set labels
-            ax_By.set_ylabel(r'$B_y$', rotation=0, labelpad=10)
-            ax_B.set_xlabel('Cell Number')                                                      # Set x-axis label for group (since |B| is on bottom)
-                    
-            for ax in [ax_den, ax_Ez, ax_By]:
-                plt.setp(ax.get_xticklabels(), visible=False)
-                # The y-ticks will overlap with "hspace=0", so we'll hide the bottom tick
-                ax.set_yticks(ax.get_yticks()[1:])  
-                
-        #----- Plot Adjustments
-            plt.tight_layout(pad=1.0, w_pad=1.8)
-            fig.subplots_adjust(hspace=0)    
-            
-            text1  = plt.figtext(0.84, 0.01, 'Real Time = %.2f s'           % (sim_time),                   fontsize = 16, color='k')
-            text3  = plt.figtext(0.86, 0.94, 'N  = %d'                      % N,                            fontsize = 18)
-            #text4  = plt.figtext(0.86, 0.91, r'$n_b$ = %.1f%%'              % (partin[3, 0]/n0 * 100),      fontsize = 18)
-            text5  = plt.figtext(0.86, 0.88, 'NX = %d'                      % NX,                           fontsize = 18)
-            text6  = plt.figtext(0.86, 0.85, r'$\Delta t$  = %.4fs'         % DT,                           fontsize = 18)
-            text7  = plt.figtext(0.86, 0.80, r'$\theta$  = %d$^{\circ}$'    % theta,                        fontsize = 18)            
-            text8  = plt.figtext(0.86, 0.77, r'$B_0$ = %.1f nT'             % (B0 * 1e9),                   fontsize = 18)
-            #text9  = plt.figtext(0.86, 0.74, r'$n_0$ = %.2f $cm^{-3}$'      % (n0 / 1e6),                   fontsize = 18)
-            text13 = plt.figtext(0.86, 0.58, r'$T_e$  = %dK'                % Te0,                          fontsize = 18)
-       
+            # Slice some things for simplicity
+            sim_time    = qq * DT                   # Corresponding "real time"
+            x_pos       = part[0, :] / RE           # Particle x-positions  
+            y_pos       = part[1, :] / RE           # Particle y positions
+            x_cell_num  = np.arange(size - 2)       # Numerical cell numbering: x-axis
+     
         ################################
         # ---------- SAVING ---------- #
         ################################
