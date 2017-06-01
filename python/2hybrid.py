@@ -54,8 +54,8 @@ def initialize_particles():
                        [           1-f  ,              f  ],        #(3) Real density as a portion of ne
                        [           0.5  ,            0.5  ],        #(4) Simulated (superparticle) Density (as a portion of 1)
                        [             0  ,              0  ],        #(5) Distribution type         0: Uniform, 1: Sinusoidal
-                       [             0  ,              0  ],        #(6) Parallel      Temperature (eV) (x)
-                       [             0  ,              0  ],        #(7) Perpendicular Temperature (eV) (y, z)
+                       [             1  ,              1  ],        #(6) Parallel      Temperature (eV) (x)
+                       [             1  ,              1  ],        #(7) Perpendicular Temperature (eV) (y, z)
                        [             1  ,              0  ]])       #(8) Hot (0) or Cold (1) species
     
     part_type     = ['$H^{+}$ (cold)',
@@ -65,11 +65,10 @@ def initialize_particles():
     dx            = xmax / NX                                               # Spacial step (in metres)
     dy            = ymax / NY
 
-    x_cell        = np.arange(0, NX*dx, dx)                                 # Cell boundary values in metres
     N_species     = np.round(N * partin[4, :]).astype(int)                  # Number of sim particles for each species, total    
     n_contr       = (partin[3, :] * ne * xmax * ymax) / N_species           # Real particles per macroparticle        
     
-    Te0 *= 11603.                                                           # (Initial) Electron temperature (K)
+    Te0  = 11603.                                                           # (Initial) Electron temperature (K)
     Tpar = partin[6, :] * 11603                                             # Parallel ion temperature
     Tper = partin[7, :] * 11603                                             # Perpendicular ion temperature
     
@@ -95,7 +94,7 @@ def initialize_particles():
                 for kk in range(NY):
                     part[0, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.uniform(ii*dx, (ii+1)*dx, n_particles)
                     part[1, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.uniform(kk*dy, (kk+1)*dy, n_particles)
-                    
+
                     part[3, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tpar[jj]) / (partin[0, jj] * mp)), n_particles) + partin[2, jj]
                     part[4, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tper[jj]) / (partin[0, jj] * mp)), n_particles)
                     part[5, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tper[jj]) / (partin[0, jj] * mp)), n_particles)
@@ -330,8 +329,9 @@ def collect_density(part, W):
     n_i = manage_ghost_cells(n_i) / (dx*dy)         # Divide by cell size for density per unit volume
 
     # Smooth density using Gaussian smoother (1/4, 1/2, 1/4)
-    # for jj in range(Nj):
-    #    n_i[:, :, jj] = smooth(n_i[:, :, jj])
+    for jj in range(Nj):
+        n_i[:, :, jj] = smooth(n_i[:, :, jj])
+        
     return n_i
 
 
@@ -356,9 +356,9 @@ def collect_current(part, ni, W):
 
     J_i = manage_ghost_cells(J_i) / (dx*dy)     # Divide by spatial cell size for current per unit
 
-    #for jj in range(Nj):
-    #    for kk in range(3):
-    #        V_i[:, :, jj, kk] = smooth(V_i[:, :, jj, kk])
+    for jj in range(Nj):
+        for kk in range(3):
+            J_i[:, :, jj, kk] = smooth(J_i[:, :, jj, kk])
     return J_i
     
 def manage_ghost_cells(arr):
@@ -393,11 +393,11 @@ def smooth(fn):
 if __name__ == '__main__':                         # Main program start
     
     start_time     = timer()                       # Start Timer
-    drive          = '/home/yoshi/code/hybrid/python/'                      # Drive letter for portable HDD (changes between computers)
+    drive          = 'E:/'                         # Drive letter for portable HDD (changes between computers)
     save_path      = 'runs/two_d_test/'            # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
-    generate_data  = 0                             # Save data? Yes (1), No (0)
+    generate_data  = 1                             # Save data? Yes (1), No (0)
     generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
-    run_desc = '''Initial 2D Hybrid test'''
+    run_desc = '''Full 2D test. 1eV, two proton species with isothermal electrons. Smoothing included. Just to see if anything explodes. Should be in equilibrium hopefully.'''
     
     print 'Initializing parameters...'
     set_constants()
@@ -485,7 +485,7 @@ if __name__ == '__main__':                         # Main program start
             x_cell_num  = np.arange(size)           # Numerical cell numbering: x-axis
             y_cell_num  = np.arange(size)
             
-            alfie       = np.sum([partin[0, jj] * partin[3, jj] for jj in range(Nj)])
+            alfie       = np.sum([partin[0, jj] * partin[3, jj] * ne for jj in range(Nj)])
             vel         = part[3:6, :] / alfie      # Velocities as multiples of the alfven speed 
         
         # PLOT: Spatial values of Bz
@@ -550,8 +550,13 @@ if __name__ == '__main__':                         # Main program start
                     params = dict([('Nj', Nj),
                                    ('DT', DT),
                                    ('NX', NX),
-                                   ('dxm', dxm),
+                                   ('NY', NY),
                                    ('dx', dx),
+                                   ('dy', dy),
+                                   ('xmax', ymax),
+                                   ('xmax', ymax),
+                                   ('k' , k ),
+                                   ('ne', ne),
                                    ('size', size),
                                    ('cellpart', cellpart),
                                    ('B0', B0),
