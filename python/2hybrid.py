@@ -538,7 +538,7 @@ if __name__ == '__main__':                         # Main program start
                     print 'Master directory created'
                     
                 num = 0#len(os.listdir('%s%s' % (drive, save_path)))        # Count number of existing runs. Set to run number manually for static save
-                path = ('%s/%s/Run %d' % (drive, save_path, num))          # Set root run path (for images)
+                path = ('%s/%s/run_%d' % (drive, save_path, num))          # Set root run path (for images)
                 
                 if os.path.exists(path) == False:
                     os.makedirs(path)
