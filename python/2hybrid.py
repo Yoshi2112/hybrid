@@ -553,11 +553,16 @@ if __name__ == '__main__':                         # Main program start
             ax_main2.plot_wireframe(X, Y, (E[:, :, 2]*1e6))
             ax_main2.set_xlim(0, size)
             ax_main2.set_ylim(0, size)
-            ax_main2.set_zlim(-2, 2)
+            ax_main2.set_zlim(-150, 150)
             ax_main2.view_init(elev=25., azim=300.)
 
-            ax_main2.set_xlabel('x (rows?)')
-            ax_main2.set_ylabel('y (cols?)')
+            ax_main.set_xlabel('x (m)')
+            ax_main.set_ylabel('y (m)')
+            ax_main.set_zlabel(r'$B_z$ (nT)')
+
+            ax_main2.set_xlabel('x (m)')
+            ax_main2.set_ylabel('y (m)')
+            ax_main2.set_zlabel(r'$E_z (\mu V)$')
 
         ################################
         # ---------- SAVING ---------- #
@@ -614,6 +619,7 @@ if __name__ == '__main__':                         # Main program start
                                    ('ie', ie),
                                    ('theta', theta),
                                    ('framegrab', framegrab),
+                                   ('ts_history', ts_history),
                                    ('run_desc', run_desc)])
                                    
                     h_name = os.path.join(d_path, 'Header.pckl')                                # Data file containing variables used in run
