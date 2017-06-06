@@ -23,18 +23,18 @@ def set_constants():
 def set_parameters():
     global t_res, NX, NY, max_sec, cellpart, ie, B0, size, N, k, ne, xmax, ymax, Te0
     t_res    = 0                               # Time resolution of data in seconds; how often data is dumped to file. Every frame captured if '0'.
-    NX       = 20                              # Number of cells in x dimension
-    NY       = 20                              # Number of cells in y dimension
-    max_sec  = 10000                            # Number of (real) seconds to run program for   
-    cellpart = 128                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
-    ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.    
-    B0       = 4e-9                             # Unform initial B-field magnitude (in T)
-    k        = 5                                # Sinusoidal Density Parameter - number of wavelengths in spatial domain (k - 2 waves)
-    ne       = 10.0e6                           # Electron density (used to assign portions of ion)
-    Te0      = 0                                # Initial isotropic electron temperature in eV. '0': Isothermal with ions
+    NX       = 32                              # Number of cells in x dimension
+    NY       = 32                              # Number of cells in y dimension
+    max_sec  = 10000                           # Number of (real) seconds to run program for   
+    cellpart = 32                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
+    ie       = 0                               # Adiabatic electrons. 0: off (constant), 1: on.    
+    B0       = 4e-9                            # Unform initial B-field magnitude (in T)
+    k        = 5                               # Sinusoidal Density Parameter - number of wavelengths in spatial domain (k - 2 waves)
+    ne       = 10.0e6                          # Electron density (used to assign portions of ion)
+    Te0      = 0                               # Initial isotropic electron temperature in eV. '0': Isothermal with ions
 
-    size     = NX + 2                           # Size of grid arrays
-    N        = cellpart*NX*NY                   # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
+    size     = NX + 2                          # Size of grid arrays
+    N        = cellpart*NX*NY                  # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
     np.set_printoptions(threshold='nan')
     return    
 
@@ -88,14 +88,18 @@ def initialize_particles():
         cell_N  = cellpart * partin[4, :]
         
         if partin[5, jj] == 0:
-            acc = 0
+            acc         = 0
             n_particles = int(cell_N[jj])
+            sq          = int(np.sqrt(cellpart / Nj))
 
             for ii in range(NX):
                 for kk in range(NY):
-                    part[0, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.uniform(ii*dx, (ii+1)*dx, n_particles)
-                    part[1, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.uniform(kk*dy, (kk+1)*dy, n_particles)
-
+                    for mm in range(sq):
+                        for nn in range(sq):
+                            p_idx = mm*sq + nn
+                            part[0, idx_start[jj] + acc + p_idx] = ((float(mm) / sq + ii) * dx)
+                            part[1, idx_start[jj] + acc + p_idx] = ((float(nn) / sq + kk) * dy)
+                    
                     part[3, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tpar[jj]) / (partin[0, jj] * mp)), n_particles) + partin[2, jj]
                     part[4, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tper[jj]) / (partin[0, jj] * mp)), n_particles)
                     part[5, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tper[jj]) / (partin[0, jj] * mp)), n_particles)
@@ -295,11 +299,11 @@ def push_E(B, J_i, n_i, dt):
                              - B[mm, nn, 1] * ((B[mm, nn + 1, 2] - B[mm, nn - 1, 2]) / (2 * dy))
     
             # del P
-            del_p[mm, 0] = (kB / (2*dx*q)) * ( Te[mm, nn] * (qn[mm + 1, nn] - qn[mm - 1, nn]) 
+            del_p[mm, nn, 0] = (kB / (2*dx*q)) * ( Te[mm, nn] * (qn[mm + 1, nn] - qn[mm - 1, nn]) 
                                              + qn[mm, nn] * (Te[mm + 1, nn] - Te[mm - 1, nn]) )
-            del_p[mm, 1] = (kB / (2*dy*q)) * ( Te[mm, nn] * (qn[mm, nn + 1] - qn[mm, nn - 1]) 
+            del_p[mm, nn, 1] = (kB / (2*dy*q)) * ( Te[mm, nn] * (qn[mm, nn + 1] - qn[mm, nn - 1]) 
                                              + qn[mm, nn] * (Te[mm, nn + 1] - Te[mm, nn - 1]) )
-            del_p[mm, 2] = 0
+            del_p[mm, nn, 2] = 0
     
     for xx in range(3):
         JxB[:, :, xx]   /= qn[:, :]
@@ -313,6 +317,12 @@ def push_E(B, J_i, n_i, dt):
     
     E_out = manage_ghost_cells(E_out, 0)
     
+    #X, Y = np.meshgrid(range(size), range(size))
+    #ax_main2 = plt.subplot2grid((1, 1), (0, 0), projection='3d')
+    #ax_main2.plot_wireframe(X, Y, del_p[:, :, 0])
+    #ax_main2.view_init(elev=30., azim=300.)
+    #plt.show()
+    #pdb.set_trace()
     return E_out
 
 
@@ -336,11 +346,8 @@ def collect_density(part, W):
             for kk in range(2):
                 n_i[Ix + jj, Iy + kk, idx] += Wx[jj] * Wy[kk] * n_contr[idx]
     
-    print n_i[0, 0]
     n_i = manage_ghost_cells(n_i, 1) / (dx*dy)         # Divide by cell size for density per unit volume
-    print n_i[0, 0]
 
-    # Smooth density using Gaussian smoother (1/4, 1/2, 1/4)
     for jj in range(Nj):
         n_i[:, :, jj] = smooth(n_i[:, :, jj])
     return n_i
@@ -378,42 +385,49 @@ def manage_ghost_cells(arr, src):
        variable passed with array because ghost cell field values do not need to be moved:
        But they do need correct (mirrored) ghost cell values'''
     
-    if src == 1:                                          # Move source term contributions to appropriate edge cells
-        arr[size - 2, :] += arr[0, :]                     # Move contribution: Bottom to top
-        arr[1, :]        += arr[size - 1, :]              # Move contribution: Top to bottom
-    
-        arr[1: size - 1, size - 2] += arr[1: size - 1, 0]           # Move contribution: Left to Right
-        arr[1: size - 1, 1]        += arr[1: size - 1, size - 1]    # Move contribution: Right to Left
-                                                        
-    arr[size - 1, :]  = arr[1, :]                     # Fill ghost cell: Top
-    arr[0, :]         = arr[size - 2, :]              # Fill ghost cell: Bottom
-    
-    arr[1: size - 1, 0]         = arr[1: size - 1, size - 2]    # Fill ghost cell: Left
-    arr[1: size - 1, size - 1]  = arr[1: size - 1, 1]           # Fill ghost cell: Right
+    if src == 1:   # Move source term contributions to appropriate edge cells
+        arr[1, 1]                   += arr[size - 1, size - 1]    # TR -> BL : Move corner cell contributions
+        arr[1, size - 2]            += arr[size - 1, 0]           # BR -> TL
+        arr[size - 2, 1]            += arr[0, size - 1]           # TL -> BR
+        arr[size - 2, size - 2]     += arr[0, 0]                  # BL -> TR
+        
+        arr[size - 2, 1: size - 1]  += arr[0, 1: size - 1]        # Move contribution: Bottom to top
+        arr[1, 1:size - 1]          += arr[size - 1, 1: size - 1] # Move contribution: Top to bottom
+        arr[1: size - 1, size - 2]  += arr[1: size - 1, 0]        # Move contribution: Left to Right
+        arr[1: size - 1, 1]         += arr[1: size - 1, size - 1] # Move contribution: Right to Left
+   
+    arr[0, 0]                   = arr[size - 2, size - 2]         # Fill corner cell: BL
+    arr[0, size - 1]            = arr[size - 2, 1]                # Fill corner cell: TL 
+    arr[size - 1, 0]            = arr[1, size - 2]                # Fill corner cell: BR 
+    arr[size - 1, size - 1]     = arr[1, 1]                       # Fill corner cell: TR
 
+    arr[size - 1, 1: size - 1]  = arr[1, 1: size - 1]             # Fill ghost cell: Top
+    arr[0, 1: size - 1]         = arr[size - 2, 1: size - 1]      # Fill ghost cell: Bottom
+    arr[1: size - 1, 0]         = arr[1: size - 1, size - 2]      # Fill ghost cell: Left
+    arr[1: size - 1, size - 1]  = arr[1: size - 1, 1]             # Fill ghost cell: Right
     return arr
 
 def smooth(fn):
-    '''Performs a Gaussian smoothing function to a 2D array'''
+    '''Performs a Gaussian smoothing function to a 2D array.'''
+    
     new_function = np.zeros((size, size), dtype=float)
-
+    
     for ii in range(1, size - 1):
         for jj in range(1, size - 1):
             new_function[ii, jj] = (4. / 16.) * (fn[ii, jj])                                                                        \
                                  + (2. / 16.) * (fn[ii + 1, jj]     + fn[ii - 1, jj]     + fn[ii, jj + 1]     + fn[ii, jj - 1])     \
                                  + (1. / 16.) * (fn[ii + 1, jj + 1] + fn[ii - 1, jj + 1] + fn[ii + 1, jj - 1] + fn[ii - 1, jj - 1])
-    
+   
     new_function = manage_ghost_cells(new_function, 1)        
     return new_function
 
 
 if __name__ == '__main__':                         # Main program start
-    
     start_time     = timer()                       # Start Timer
-    drive          = 'E:/'                         # Drive letter for portable HDD (changes between computers. Use /home/USER/ for linux.)
+    drive          = '/media/yoshi/VERBATIM HD'    # Drive letter for portable HDD (changes between computers. Use /home/USER/ for linux.)
     save_path      = 'runs/two_d_test/'            # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
     generate_data  = 0                             # Save data? Yes (1), No (0)
-    generate_plots = 0  ;   plt.ioff()             # Save plots, but don't draw them
+    generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
     run_desc = '''Full 2D test. 1eV, two proton species with isothermal electrons. Smoothing included. Just to see if anything explodes. Should be in equilibrium hopefully.'''
     
     print 'Initializing parameters...'
@@ -421,10 +435,9 @@ if __name__ == '__main__':                         # Main program start
     set_parameters()
     part, part_type, old_part     = initialize_particles()
     B, E, Vi, dns, dns_old, W, Wb = initialize_fields()
+    DT, maxtime, framegrab        = set_timestep(part)
 
-    DT, maxtime, framegrab    = set_timestep(part)
-
-    for qq in range(1):
+    for qq in range(maxtime):
         if qq == 0:
             print 'Simulation starting...'
             W            = assign_weighting(part[0:2, :], part[6:8, :], 1)                  # Assign initial (E) weighting to particles
@@ -505,26 +518,30 @@ if __name__ == '__main__':                         # Main program start
             alfie       = np.sum([partin[0, jj] * partin[3, jj] * ne for jj in range(Nj)])
             vel         = part[3:6, :] / alfie      # Velocities as multiples of the alfven speed 
         
-        # PLOT: Spatial values of Bz
-        ax_main = plt.subplot2grid(fig_size, (0, 0), projection='3d', rowspan=4, colspan=4)
-        ax_main.set_title(r'$B_z$ (nT)')
-        X, Y = np.meshgrid(x_cell_num, y_cell_num)
+            # PLOT: Spatial values of Bz
+            ax_main = plt.subplot2grid(fig_size, (0, 0), projection='3d', rowspan=4, colspan=4)
+            ax_main.set_title(r'$B_z$ (nT)')
+            X, Y = np.meshgrid(x_cell_num, y_cell_num)
 
-        ax_main.plot_wireframe(X, Y, (B[:, :, 2]*1e9))
-        ax_main.set_xlim(0, size)
-        ax_main.set_ylim(0, size)
-        ax_main.set_zlim(-B0*1e9, B0*1e9)
-        ax_main.view_init(elev=21., azim=300.)
+            ax_main.plot_wireframe(X, Y, (B[:, :, 2]*1e9))
+            ax_main.set_xlim(0, size)
+            ax_main.set_ylim(0, size)
+            ax_main.set_zlim(-B0*1e9, B0*1e9)
+            ax_main.view_init(elev=21., azim=300.)
 
-        # PLOT: Spatial values of Ez
-        ax_main2 = plt.subplot2grid(fig_size, (0, 4), projection='3d', rowspan=4, colspan=4)
-        ax_main2.set_title(r'$E_z$ (mV)')
-        X, Y = np.meshgrid(x_cell_num, y_cell_num)
+            # PLOT: Spatial values of Ez
+            ax_main2 = plt.subplot2grid(fig_size, (0, 4), projection='3d', rowspan=4, colspan=4)
+            ax_main2.set_title(r'$E_z$ (mV)')
+            X, Y = np.meshgrid(x_cell_num, y_cell_num)
 
-        ax_main2.plot_wireframe(X, Y, (E[:, :, 2]*1e6))
-        ax_main2.set_xlim(0, size)
-        ax_main2.set_ylim(0, size)
-        ax_main2.view_init(elev=21., azim=300.)
+            ax_main2.plot_wireframe(X, Y, (E[:, :, 2]*1e6))
+            ax_main2.set_xlim(0, size)
+            ax_main2.set_ylim(0, size)
+            ax_main2.set_zlim(-0.2, 0.2)
+            ax_main2.view_init(elev=30., azim=300.)
+
+            ax_main2.set_xlabel('x (rows?)')
+            ax_main2.set_ylabel('y (cols?)')
 
         ################################
         # ---------- SAVING ---------- #
