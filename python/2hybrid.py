@@ -6,7 +6,7 @@ import pickle
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 from mpl_toolkits.mplot3d import Axes3D
-
+import sys
 import pdb
 
 def set_constants():
@@ -23,8 +23,8 @@ def set_constants():
 def set_parameters():
     global t_res, NX, NY, max_sec, cellpart, ie, B0, size, N, k, ne, xmax, ymax, Te0
     t_res    = 0                               # Time resolution of data in seconds; how often data is dumped to file. Every frame captured if '0'.
-    NX       = 32                              # Number of cells in x dimension
-    NY       = 32                              # Number of cells in y dimension
+    NX       = 128                             # Number of cells in x dimension
+    NY       = 128                             # Number of cells in y dimension
     max_sec  = 10000                           # Number of (real) seconds to run program for   
     cellpart = 32                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
     ie       = 0                               # Adiabatic electrons. 0: off (constant), 1: on.    
@@ -51,21 +51,22 @@ def initialize_particles():
                        [             0. ,              V  ],        #(2) Bulk Velocity (m/s)
                        [           1-f  ,              f  ],        #(3) Real density as a portion of ne
                        [           0.5  ,            0.5  ],        #(4) Simulated (superparticle) Density (as a portion of 1)
-                       [             0  ,              0  ],        #(5) Distribution type         0: Uniform, 1: Sinusoidal
-                       [             0  ,              0  ],        #(6) Parallel      Temperature (eV) (x)
-                       [             0  ,              0  ],        #(7) Perpendicular Temperature (eV) (y, z)
+                       [             0  ,              0  ],        #(5) Distribution type         0: Uniform, 1: Sinusoidal (or beam)
+                       [             1  ,              1  ],        #(6) Parallel      Temperature (eV) (x)
+                       [             1  ,              1  ],        #(7) Perpendicular Temperature (eV) (y, z)
                        [             1  ,              0  ]])       #(8) Hot (0) or Cold (1) species
     
     part_type     = ['$H^{+}$ (cold)',
                      '$H^{+}$ (hot)'] 
    
+    # Reconfigure space for Winske & Quest (1986) testing
     wpi           = np.sqrt((ne * (q ** 2)) / (mp * e0))
-
-    Nj            = int(np.shape(partin)[1])                                # Number of species (number of columns above)    
     dx            = 2 * (c/wpi)                                             # Spacial step (in metres)
     dy            = 2 * (c/wpi)
     xmax          = NX * dx
     ymax          = NY * dy
+
+    Nj            = int(np.shape(partin)[1])                                # Number of species (number of columns above)    
     N_species     = np.round(N * partin[4, :]).astype(int)                  # Number of sim particles for each species, total    
     n_contr       = (partin[3, :] * ne * xmax * ymax) / N_species           # Real particles per macroparticle        
     
@@ -90,8 +91,8 @@ def initialize_particles():
         if partin[5, jj] == 0:
             acc         = 0
             n_particles = int(cell_N[jj])
-            sq          = int(np.sqrt(cellpart / Nj))
-
+            sq          = int(np.sqrt(cellpart/Nj))
+            
             for ii in range(NX):
                 for kk in range(NY):
                     for mm in range(sq):
@@ -128,8 +129,13 @@ def set_timestep(part):
     print 'Timestep: %.4fs, %d iterations total' % (DT, maxtime)
     return DT, maxtime, framegrab
 
-def update_timestep():
-    return
+def update_timestep(part, dt):
+    flag = 0
+    if dx/(2*np.max(part[3:6, :])) < dt:
+        dt /= 2.
+        flag = 1
+        print 'Timestep halved: DT = %.5fs' % dt
+    return (dt, flag)
 
 def initialize_fields():  
     global Bc, theta
@@ -153,9 +159,6 @@ def initialize_fields():
         #       E[mm, 0-2] represent the current field and
         #       E[mm, 3-5] store the last state of the electric field previous to the Predictor-Corrector scheme E (N + 0.5)
         #       E[mm, 6-8] store two steps ago: E-field at E^N
-
-    #for ii in range(NY):
-    #    E[:, ii, 2] = 1e-6 * np.sin(2*pi*(ii*dy/ymax))
 
     Vi      = np.zeros((size, size, Nj, 3), dtype=float)          # Ion Flow (3 dimensions)
     dns     = np.zeros((size, size, Nj),    dtype=float)          # Species number density in each cell (in /m3)
@@ -424,9 +427,9 @@ def smooth(fn):
 
 if __name__ == '__main__':                         # Main program start
     start_time     = timer()                       # Start Timer
-    drive          = '/media/yoshi/VERBATIM HD'    # Drive letter for portable HDD (changes between computers. Use /home/USER/ for linux.)
+    drive          = 'E:/' #'/media/yoshi/VERBATIM HD/'   # Drive letter for portable HDD (changes between computers. Use /home/USER/ for linux.)
     save_path      = 'runs/two_d_test/'            # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
-    generate_data  = 0                             # Save data? Yes (1), No (0)
+    generate_data  = 1                             # Save data? Yes (1), No (0)
     generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
     run_desc = '''Full 2D test. 1eV, two proton species with isothermal electrons. Smoothing included. Just to see if anything explodes. Should be in equilibrium hopefully.'''
     
@@ -436,6 +439,7 @@ if __name__ == '__main__':                         # Main program start
     part, part_type, old_part     = initialize_particles()
     B, E, Vi, dns, dns_old, W, Wb = initialize_fields()
     DT, maxtime, framegrab        = set_timestep(part)
+    ts_history                    = []
 
     for qq in range(maxtime):
         if qq == 0:
@@ -448,10 +452,22 @@ if __name__ == '__main__':                         # Main program start
             E[:, :, 0:3] = push_E(B[:, :, 0:3], Vi, dns, 0)                                 # Initialize electric field
             
             initial_cell_density = dns 
-            part = velocity_update(part, B[:, :, 0:3], E[:, :, 0:3], -0.5*DT, W, Wb)        # Retard velocity to N - 1/2 to prevent numerical instability
+            part = velocity_update(part, B[:, :, 0:3], E[:, :, 0:3], -0.5*DT, W, Wb)  # Retard velocity to N - 1/2 to prevent numerical instability
+            
+            #X, Y = np.meshgrid(np.arange(size), np.arange(size))
+            #dplt = plt.subplot2grid((1, 1), (0, 0), projection='3d')
+            #dplt.plot_wireframe(X, Y, dns[:, :, 1])
+            #plt.show()
         else:
             # N + 1/2
             print 'Timestep %d' % qq
+            
+            DT, ts_flag = update_timestep(part, DT)
+            if ts_flag == 1:
+                ts_history.append(qq)
+                if np.sum(ts_history) >= 7:
+                    sys.exit('Timestep less than 1%% of initial. Consider parameter change.')
+
             part          = velocity_update(part, B[:, :, 0:3], E[:, :, 0:3], DT, W, Wb)    # Advance Velocity to N + 1/2
             part, W, Wb   = position_update(part)                                           # Advance Position to N + 1
             B[:, :, 0:3]  = push_B(B[:, :, 0:3], E[:, :, 0:3], DT)                          # Advance Magnetic Field to N + 1/2
@@ -537,8 +553,8 @@ if __name__ == '__main__':                         # Main program start
             ax_main2.plot_wireframe(X, Y, (E[:, :, 2]*1e6))
             ax_main2.set_xlim(0, size)
             ax_main2.set_ylim(0, size)
-            ax_main2.set_zlim(-0.2, 0.2)
-            ax_main2.view_init(elev=30., azim=300.)
+            ax_main2.set_zlim(-2, 2)
+            ax_main2.view_init(elev=25., azim=300.)
 
             ax_main2.set_xlabel('x (rows?)')
             ax_main2.set_ylabel('y (cols?)')
@@ -556,7 +572,7 @@ if __name__ == '__main__':                         # Main program start
                     os.makedirs('%s/%s' % (drive, save_path))              # Create master test series directory
                     print 'Master directory created'
                     
-                num = 0#len(os.listdir('%s%s' % (drive, save_path)))        # Count number of existing runs. Set to run number manually for static save
+                num = len(os.listdir('%s%s' % (drive, save_path)))        # Count number of existing runs. Set to run number manually for static save
                 path = ('%s/%s/run_%d' % (drive, save_path, num))          # Set root run path (for images)
                 
                 if os.path.exists(path) == False:
