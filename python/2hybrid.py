@@ -465,7 +465,7 @@ if __name__ == '__main__':                         # Main program start
             DT, ts_flag = update_timestep(part, DT)
             if ts_flag == 1:
                 ts_history.append(qq)
-                if np.sum(ts_history) >= 7:
+                if len(ts_history) >= 7:
                     sys.exit('Timestep less than 1%% of initial. Consider parameter change.')
 
             part          = velocity_update(part, B[:, :, 0:3], E[:, :, 0:3], DT, W, Wb)    # Advance Velocity to N + 1/2
