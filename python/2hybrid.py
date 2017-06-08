@@ -4,6 +4,7 @@ from numpy import pi
 import os
 import pickle
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from matplotlib import rcParams
 from mpl_toolkits.mplot3d import Axes3D
 import sys
@@ -21,12 +22,13 @@ def set_constants():
     return    
     
 def set_parameters():
-    global t_res, NX, NY, max_sec, cellpart, ie, B0, size, N, k, ne, xmax, ymax, Te0
+    global seed, t_res, NX, NY, max_sec, cellpart, ie, B0, size, N, k, ne, xmax, ymax, Te0
     t_res    = 0                               # Time resolution of data in seconds; how often data is dumped to file. Every frame captured if '0'.
-    NX       = 128                             # Number of cells in x dimension
-    NY       = 128                             # Number of cells in y dimension
+    NX       = 5                              # Number of cells in x dimension
+    NY       = 5                              # Number of cells in y dimension
     max_sec  = 10000                           # Number of (real) seconds to run program for   
-    cellpart = 32                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
+    square   = 400                              # Number of species particles per cell (assuming even representation)
+    cellpart = 2*square                        # # Particles per cell (# species times # particles/species
     ie       = 0                               # Adiabatic electrons. 0: off (constant), 1: on.    
     B0       = 4e-9                            # Unform initial B-field magnitude (in T)
     k        = 5                               # Sinusoidal Density Parameter - number of wavelengths in spatial domain (k - 2 waves)
@@ -36,10 +38,11 @@ def set_parameters():
     size     = NX + 2                          # Size of grid arrays
     N        = cellpart*NX*NY                  # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
     np.set_printoptions(threshold='nan')
+    seed     = 21
     return    
 
 def initialize_particles():
-    np.random.seed(21)                          # Random seed 
+    np.random.seed(seed)                          # Random seed 
     global Nj, Te0, dx, dy, xmax, ymax, partin, idx_start, idx_end, xmax, cell_N, n_contr, ne, scramble_position, xmin
 
     f = 0.015       # Relative beam density
@@ -61,10 +64,10 @@ def initialize_particles():
    
     # Reconfigure space for Winske & Quest (1986) testing
     wpi           = np.sqrt((ne * (q ** 2)) / (mp * e0))
-    dx            = 2 * (c/wpi)                                             # Spacial step (in metres)
-    dy            = 2 * (c/wpi)
-    xmax          = NX * dx
-    ymax          = NY * dy
+    dx            = 1e5 # * (c/wpi)                                             # Spacial step (in metres)
+    dy            = 1e5 # * (c/wpi)
+    xmax          = 5e5 # NX * dx
+    ymax          = 5e5 # NY * dy
 
     Nj            = int(np.shape(partin)[1])                                # Number of species (number of columns above)    
     N_species     = np.round(N * partin[4, :]).astype(int)                  # Number of sim particles for each species, total    
@@ -260,17 +263,17 @@ def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
     # Combine total B-field: B0 + B1    
     B[:, :, 0] = Bp[:, :, 0] + Bc[0]    
     B[:, :, 1] = Bp[:, :, 1] + Bc[1]
-    B[:, :, 2] = Bp[:, :, 2] + Bc[2] 
+    B[:, :, 2] = Bp[:, :, 2] + Bc[2]
     return B
     
     
-def push_E(B, J_i, n_i, dt):
+def push_E(B, J_species, n_i, dt):
 
     E_out = np.zeros((size, size, 3))               # Output array - new electric field
-    JxB   = np.zeros((size, size, 3))               # V cross B holder
+    Ji    = np.zeros((size, size, 3))               # Total ion current
+    JixB  = np.zeros((size, size, 3))               # V cross B holder
     BdB   = np.zeros((size, size, 3))               # B cross del cross B holder     
     del_p = np.zeros((size, size, 3))               # Electron pressure tensor gradient array
-    J     = np.zeros((size, size, 3))               # Ion current
     qn    = np.zeros((size, size    ), dtype=float) # Ion charge density
     
     Te = np.ones((size, size)) * Te0                             # Isothermal (const) approximation until adiabatic thing happens 
@@ -280,12 +283,12 @@ def push_E(B, J_i, n_i, dt):
         qn += partin[1, jj] * n_i[:, :, jj] * q                  # Total charge density, sum(qj * nj)
         
         for kk in range(3):
-            J[:, :, kk]  += J_i[:, :, jj, kk]                    # Total ion current vector: J_k = qj * nj * Vjk
+            Ji[:, :, kk]  += J_species[:, :, jj, kk]             # Total ion current vector: J_k = qj * nj * Vjk
     
     # J cross B
-    JxB[:, :, 0] +=    J[:, :, 1] * B[:, :, 2] - J[:, :, 2] * B[:, :, 1]   
-    JxB[:, :, 1] += - (J[:, :, 0] * B[:, :, 2] - J[:, :, 2] * B[:, :, 0])   
-    JxB[:, :, 2] +=    J[:, :, 0] * B[:, :, 1] - J[:, :, 1] * B[:, :, 0]
+    JixB[:, :, 0] +=    Ji[:, :, 1] * B[:, :, 2] - Ji[:, :, 2] * B[:, :, 1]   
+    JixB[:, :, 1] += - (Ji[:, :, 0] * B[:, :, 2] - Ji[:, :, 2] * B[:, :, 0])   
+    JixB[:, :, 2] +=    Ji[:, :, 0] * B[:, :, 1] - Ji[:, :, 1] * B[:, :, 0]
     
     for mm in range(1, size - 1):
         for nn in range(1, size - 1):
@@ -309,22 +312,39 @@ def push_E(B, J_i, n_i, dt):
             del_p[mm, nn, 2] = 0
     
     for xx in range(3):
-        JxB[:, :, xx]   /= qn[:, :]
-        BdB[:, :, xx]   /= qn[:, :]
+        JixB[:, :, xx]  /= qn[:, :]
+        BdB[:, :, xx]   /= qn[:, :]*mu0
         del_p[:, :, xx] /= qn[:, :]
 
     # Final Calculation
-    E_out[:, :, 0] = (- JxB[:, :, 0] - (del_p[:, :, 0] ) - (BdB[:, :, 0] / (mu0))) #/ (qn[:, :])
-    E_out[:, :, 1] = (- JxB[:, :, 1] - (del_p[:, :, 1] ) - (BdB[:, :, 1] / (mu0))) #/ (qn[:, :])
-    E_out[:, :, 2] = (- JxB[:, :, 2] - (del_p[:, :, 2] ) - (BdB[:, :, 2] / (mu0))) #/ (qn[:, :])
+    E_out[:, :, 2] = - JixB[:, :, 2] - del_p[:, :, 2] - BdB[:, :, 2] 
     
     E_out = manage_ghost_cells(E_out, 0)
     
     #X, Y = np.meshgrid(range(size), range(size))
-    #ax_main2 = plt.subplot2grid((1, 1), (0, 0), projection='3d')
-    #ax_main2.plot_wireframe(X, Y, del_p[:, :, 0])
-    #ax_main2.view_init(elev=30., azim=300.)
+    #fig = plt.figure()
+
+    #ax_Jx = plt.subplot2grid((2, 2), (0, 0), projection='3d')
+    #ax_Jx.plot_wireframe(X, Y, Ji[:, :, 0])
+    #ax_Jx.view_init(elev=30., azim=300.)
+    #ax_Jx.set_title('Jx')
+
+    #ax_Jy = plt.subplot2grid((2, 2), (0, 1), projection='3d')
+    #ax_Jy.plot_wireframe(X, Y, Ji[:, :, 1])
+    #ax_Jy.view_init(elev=30., azim=300.)
+    #ax_Jy.set_title('Jy')
+    
+    #ax_Jz = plt.subplot2grid((2, 2), (1, 0), projection='3d')
+    #ax_Jz.plot_wireframe(X, Y, Ji[:, :, 2])
+    #ax_Jz.view_init(elev=30., azim=300.) 
+    #ax_Jz.set_title('Jz')
+    
+    #ax_J = plt.subplot2grid((2, 2), (1, 1), projection='3d')
+    #ax_J.plot_wireframe(X, Y, E_out[:, :, 2])
+    #ax_J.view_init(elev=30., azim=300.)
+    #ax_J.set_title('E_out z')
     #plt.show()
+
     #pdb.set_trace()
     return E_out
 
@@ -424,13 +444,89 @@ def smooth(fn):
     new_function = manage_ghost_cells(new_function, 1)        
     return new_function
 
+def check_cell_dist_2d(part, node, species):
+    xlocs = (np.arange(0, size) - 0.5) * dx     # Spatial locations (x, y) of E-field nodes
+    ylocs = (np.arange(0, size) - 0.5) * dy
+    X, Y  = np.meshgrid(xlocs, ylocs)
+    
+    f     = np.zeros((1, 6), dtype=float)       # Somewhere to put the particle data
+    count = 0                                   # Number of particles in area
+
+    # Collect particle infomation if within (0.5dx, 0.5dy) of node
+    for ii in range(N):
+        if ((abs(part[0, ii] - xlocs[node[0]]) <= dx) and
+            (abs(part[1, ii] - ylocs[node[1]]) <= dy) and
+            (part[2, ii] == species)):
+
+            f = np.append(f, [part[0:6, ii]], axis=0)
+            count += 1
+    print 'Node (%d, %d) recieving contributions from %d particles.' % (node[0], node[1], count)
+
+    plt.rc('grid', linestyle='dashed', color='black', alpha=0.3)
+    
+    # Draw figure and spatial boundaries
+    fig = plt.figure(1)
+    ax = fig.add_subplot(111, aspect='equal')
+    ax.add_patch(patches.Rectangle((0, 0), xmax, ymax, fill=False, edgecolor='green'))
+   
+    # Shade in cell containing E-field node. Not useful due to particle shapes?
+    ax.add_patch(patches.Rectangle(((node[0] - 1.5)*dx, (node[1] - 1.5)*dy),    # Bottom left position
+                                   2*dx, 2*dy,                                  # Rectangle dimensions
+                                   facecolor='grey',                        # Rectangle colour
+                                   edgecolor='none',                        # Rectangle edge colour (no edges)
+                                   alpha=0.5))                              # Rectangle opacity
+    
+    # Draw cell grid
+    ax.set_xticks(np.arange(0, xmax+dx, dx))
+    ax.set_yticks(np.arange(0, ymax+dy, dy))
+    plt.grid(True)
+
+    # Plot data and set limits
+    ax.scatter(X, Y, s=10, c='red', marker='^')                      # Draw nodes
+    ax.scatter(part[0, :], part[1, :], s=1, c='blue')   # Draw particles
+    ax.set_xlim(-dx, xmax+dx)
+    ax.set_ylim(-dy, ymax+dy)
+    ax.set_title(r'$N_{cell} = %d$' % (np.sqrt(cellpart/Nj)))
+    
+    fig2 = plt.figure(2, figsize=(12, 10))
+    fig2.patch.set_facecolor('w')
+    num_bins = 50
+    vmag = np.sqrt(part[3, :] ** 2 + part[4, :] ** 2 + part[5, :] ** 2)
+
+    xax = plt.subplot2grid((2, 2), (0, 0))  
+    yax = plt.subplot2grid((2, 2), (0, 1))  
+    zax = plt.subplot2grid((2, 2), (1, 0))  
+    tax = plt.subplot2grid((2, 2), (1, 1))
+
+    xs, BinEdgesx = np.histogram((f[:, 3] - partin[2, species]), bins=num_bins)
+    bx = 0.5*(BinEdgesx[1:] + BinEdgesx[:-1])
+    xax.plot(bx, xs, '-', c='c', drawstyle='steps')
+    xax.set_xlabel(r'$v_x$')
+
+    ys, BinEdgesy = np.histogram((f[:, 4]), bins=num_bins)
+    by = 0.5*(BinEdgesy[1:] + BinEdgesy[:-1])
+    yax.plot(by, ys, '-', c='c', drawstyle='steps')
+    yax.set_xlabel(r'$v_y$')
+    
+    zs, BinEdgesz = np.histogram((f[:, 5]), bins=num_bins)
+    bz = 0.5*(BinEdgesz[1:] + BinEdgesz[:-1])
+    zax.plot(bz, zs, '-', c='c', drawstyle='steps')
+    zax.set_xlabel(r'$v_z$')
+
+    ts, BinEdgest = np.histogram(vmag, bins=num_bins)
+    bt = 0.5*(BinEdgest[1:] + BinEdgest[:-1])
+    tax.plot(bt, ts, '-', c='c', drawstyle='steps')
+    tax.set_xlabel(r'$|v|$')
+
+    plt.show()
+    return
 
 if __name__ == '__main__':                         # Main program start
     start_time     = timer()                       # Start Timer
-    drive          = 'E:/' #'/media/yoshi/VERBATIM HD/'   # Drive letter for portable HDD (changes between computers. Use /home/USER/ for linux.)
+    drive          = '/media/yoshi/VERBATIM HD/'   # Drive letter for portable HDD (changes between computers. Use /home/USER/ for linux.)
     save_path      = 'runs/two_d_test/'            # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
-    generate_data  = 1                             # Save data? Yes (1), No (0)
-    generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
+    generate_data  = 0                             # Save data? Yes (1), No (0)
+    generate_plots = 0  ;   plt.ioff()             # Save plots, but don't draw them
     run_desc = '''Full 2D test. 1eV, two proton species with isothermal electrons. Smoothing included. Just to see if anything explodes. Should be in equilibrium hopefully.'''
     
     print 'Initializing parameters...'
@@ -441,7 +537,7 @@ if __name__ == '__main__':                         # Main program start
     DT, maxtime, framegrab        = set_timestep(part)
     ts_history                    = []
 
-    for qq in range(maxtime):
+    for qq in range(1):
         if qq == 0:
             print 'Simulation starting...'
             W            = assign_weighting(part[0:2, :], part[6:8, :], 1)                  # Assign initial (E) weighting to particles
@@ -452,8 +548,10 @@ if __name__ == '__main__':                         # Main program start
             E[:, :, 0:3] = push_E(B[:, :, 0:3], Vi, dns, 0)                                 # Initialize electric field
             
             initial_cell_density = dns 
-            part = velocity_update(part, B[:, :, 0:3], E[:, :, 0:3], -0.5*DT, W, Wb)  # Retard velocity to N - 1/2 to prevent numerical instability
+            #part = velocity_update(part, B[:, :, 0:3], E[:, :, 0:3], -0.5*DT, W, Wb)  # Retard velocity to N - 1/2 to prevent numerical instability
             
+            check_cell_dist_2d(part, (2, 2), 0) 
+
             #X, Y = np.meshgrid(np.arange(size), np.arange(size))
             #dplt = plt.subplot2grid((1, 1), (0, 0), projection='3d')
             #dplt.plot_wireframe(X, Y, dns[:, :, 1])
@@ -595,7 +693,7 @@ if __name__ == '__main__':                         # Main program start
             # Save Data
             if generate_data == 1:
                 
-                d_path = ('%s/%s/Run %d/Data' % (drive, save_path, num))   # Set path for data                
+                d_path = ('%s/%s/run_%d/data' % (drive, save_path, num))   # Set path for data                
                 
                 if os.path.exists(d_path) == False:                         # Create data directory
                     os.makedirs(d_path)
@@ -608,8 +706,8 @@ if __name__ == '__main__':                         # Main program start
                                    ('NY', NY),
                                    ('dx', dx),
                                    ('dy', dy),
-                                   ('xmax', ymax),
-                                   ('xmax', ymax),
+                                   ('xmax', xmax),
+                                   ('ymax', ymax),
                                    ('k' , k ),
                                    ('ne', ne),
                                    ('size', size),
@@ -617,12 +715,13 @@ if __name__ == '__main__':                         # Main program start
                                    ('B0', B0),
                                    ('Te0', Te0),
                                    ('ie', ie),
+                                   ('seed', seed),
                                    ('theta', theta),
                                    ('framegrab', framegrab),
                                    ('ts_history', ts_history),
                                    ('run_desc', run_desc)])
                                    
-                    h_name = os.path.join(d_path, 'Header.pckl')                                # Data file containing variables used in run
+                    h_name = os.path.join(d_path, 'header.pckl')                                # Data file containing variables used in run
                     
                     with open(h_name, 'wb') as f:
                         pickle.dump(params, f)
