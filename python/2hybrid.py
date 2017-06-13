@@ -24,11 +24,11 @@ def set_constants():
 def set_parameters():
     global seed, t_res, NX, NY, max_sec, cellpart, ie, B0, size, N, k, ne, xmax, ymax, Te0
     t_res    = 0                               # Time resolution of data in seconds; how often data is dumped to file. Every frame captured if '0'.
-    NX       = 5                              # Number of cells in x dimension
-    NY       = 5                              # Number of cells in y dimension
+    NX       = 20                              # Number of cells in x dimension
+    NY       = 20                              # Number of cells in y dimension
     max_sec  = 10000                           # Number of (real) seconds to run program for   
-    square   = 400                              # Number of species particles per cell (assuming even representation)
-    cellpart = 2*square                        # # Particles per cell (# species times # particles/species
+    square   = 10                              # Number of species particles per cell (assuming even representation)
+    cellpart = 2*(square ** 2)                 # No. particles per cell (# species times # particles/species)
     ie       = 0                               # Adiabatic electrons. 0: off (constant), 1: on.    
     B0       = 4e-9                            # Unform initial B-field magnitude (in T)
     k        = 5                               # Sinusoidal Density Parameter - number of wavelengths in spatial domain (k - 2 waves)
@@ -55,8 +55,8 @@ def initialize_particles():
                        [           1-f  ,              f  ],        #(3) Real density as a portion of ne
                        [           0.5  ,            0.5  ],        #(4) Simulated (superparticle) Density (as a portion of 1)
                        [             0  ,              0  ],        #(5) Distribution type         0: Uniform, 1: Sinusoidal (or beam)
-                       [             1  ,              1  ],        #(6) Parallel      Temperature (eV) (x)
-                       [             1  ,              1  ],        #(7) Perpendicular Temperature (eV) (y, z)
+                       [             1.0,              1.0],        #(6) Parallel      Temperature (eV) (x)
+                       [             1.0,              1.0],        #(7) Perpendicular Temperature (eV) (y, z)
                        [             1  ,              0  ]])       #(8) Hot (0) or Cold (1) species
     
     part_type     = ['$H^{+}$ (cold)',
@@ -64,10 +64,10 @@ def initialize_particles():
    
     # Reconfigure space for Winske & Quest (1986) testing
     wpi           = np.sqrt((ne * (q ** 2)) / (mp * e0))
-    dx            = 1e5 # * (c/wpi)                                             # Spacial step (in metres)
-    dy            = 1e5 # * (c/wpi)
-    xmax          = 5e5 # NX * dx
-    ymax          = 5e5 # NY * dy
+    dx            = (c/wpi)                                             # Spacial step (in metres)
+    dy            = (c/wpi)
+    xmax          = NX * dx
+    ymax          = NY * dy
 
     Nj            = int(np.shape(partin)[1])                                # Number of species (number of columns above)    
     N_species     = np.round(N * partin[4, :]).astype(int)                  # Number of sim particles for each species, total    
@@ -254,9 +254,9 @@ def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
     # Curl of E - 2D only (derivatives of z are zero)
     for mm in range (1, size - 1):
         for nn in range(1, size - 1):
-            Bp[mm, 0] = Bp[mm, 0] - (dt / 2.) * (  (E[mm, nn + 1, 2] - E[mm, nn - 1, 2]) / (2 * dy))
-            Bp[mm, 1] = Bp[mm, 1] + (dt / 2.) * (  (E[mm + 1, nn, 2] - E[mm - 1, nn, 2]) / (2 * dx))     # Flipped sign due to j
-            Bp[mm, 2] = Bp[mm, 2] - (dt / 2.) * ( ((E[mm + 1, nn, 1] - E[mm - 1, nn, 1]) / (2 * dx)) - ((E[mm, nn + 1, 0] - E[mm, nn - 1, 0]) / (2 * dy)) )
+            Bp[mm, nn, 0] = Bp[mm, nn, 0] - (dt / 2.) * (  (E[mm, nn + 1, 2] - E[mm, nn - 1, 2]) / (2 * dy))
+            Bp[mm, nn, 1] = Bp[mm, nn, 1] + (dt / 2.) * (  (E[mm + 1, nn, 2] - E[mm - 1, nn, 2]) / (2 * dx))     # Flipped sign due to j
+            Bp[mm, nn, 2] = Bp[mm, nn, 2] - (dt / 2.) * ( ((E[mm + 1, nn, 1] - E[mm - 1, nn, 1]) / (2 * dx)) - ((E[mm, nn + 1, 0] - E[mm, nn - 1, 0]) / (2 * dy)) )
     
     Bp = manage_ghost_cells(Bp, 0)
 
@@ -312,15 +312,13 @@ def push_E(B, J_species, n_i, dt):
             del_p[mm, nn, 2] = 0
     
     for xx in range(3):
-        JixB[:, :, xx]  /= qn[:, :]
-        BdB[:, :, xx]   /= qn[:, :]*mu0
+        JixB[ :, :, xx] /= qn[:, :]
+        BdB[  :, :, xx] /= qn[:, :]*mu0
         del_p[:, :, xx] /= qn[:, :]
+        E_out[:, :, xx]  = - JixB[:, :, xx] - del_p[:, :, xx] - BdB[:, :, xx] 
 
-    # Final Calculation
-    E_out[:, :, 2] = - JixB[:, :, 2] - del_p[:, :, 2] - BdB[:, :, 2] 
-    
     E_out = manage_ghost_cells(E_out, 0)
-    
+
     #X, Y = np.meshgrid(range(size), range(size))
     #fig = plt.figure()
 
@@ -345,7 +343,6 @@ def push_E(B, J_species, n_i, dt):
     #ax_J.set_title('E_out z')
     #plt.show()
 
-    #pdb.set_trace()
     return E_out
 
 
@@ -526,7 +523,7 @@ if __name__ == '__main__':                         # Main program start
     drive          = '/media/yoshi/VERBATIM HD/'   # Drive letter for portable HDD (changes between computers. Use /home/USER/ for linux.)
     save_path      = 'runs/two_d_test/'            # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
     generate_data  = 0                             # Save data? Yes (1), No (0)
-    generate_plots = 0  ;   plt.ioff()             # Save plots, but don't draw them
+    generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
     run_desc = '''Full 2D test. 1eV, two proton species with isothermal electrons. Smoothing included. Just to see if anything explodes. Should be in equilibrium hopefully.'''
     
     print 'Initializing parameters...'
@@ -537,7 +534,7 @@ if __name__ == '__main__':                         # Main program start
     DT, maxtime, framegrab        = set_timestep(part)
     ts_history                    = []
 
-    for qq in range(1):
+    for qq in range(10):
         if qq == 0:
             print 'Simulation starting...'
             W            = assign_weighting(part[0:2, :], part[6:8, :], 1)                  # Assign initial (E) weighting to particles
@@ -548,9 +545,9 @@ if __name__ == '__main__':                         # Main program start
             E[:, :, 0:3] = push_E(B[:, :, 0:3], Vi, dns, 0)                                 # Initialize electric field
             
             initial_cell_density = dns 
-            #part = velocity_update(part, B[:, :, 0:3], E[:, :, 0:3], -0.5*DT, W, Wb)  # Retard velocity to N - 1/2 to prevent numerical instability
+            part = velocity_update(part, B[:, :, 0:3], E[:, :, 0:3], -0.5*DT, W, Wb)  # Retard velocity to N - 1/2 to prevent numerical instability
             
-            check_cell_dist_2d(part, (2, 2), 0) 
+            #check_cell_dist_2d(part, (2, 2), 0) 
 
             #X, Y = np.meshgrid(np.arange(size), np.arange(size))
             #dplt = plt.subplot2grid((1, 1), (0, 0), projection='3d')
@@ -607,7 +604,7 @@ if __name__ == '__main__':                         # Main program start
         ##############################
         if generate_plots == 1:
             # Initialize Figure Space
-            fig_size = 4, 8
+            fig_size = 4, 9
             fig = plt.figure(figsize=(20,10))   
             fig.patch.set_facecolor('w')    
             
@@ -654,13 +651,22 @@ if __name__ == '__main__':                         # Main program start
             ax_main2.set_zlim(-150, 150)
             ax_main2.view_init(elev=25., azim=300.)
 
-            ax_main.set_xlabel('x (m)')
-            ax_main.set_ylabel('y (m)')
+            ax_main.set_xlabel('x')
+            ax_main.set_ylabel('y')
             ax_main.set_zlabel(r'$B_z$ (nT)')
 
             ax_main2.set_xlabel('x (m)')
             ax_main2.set_ylabel('y (m)')
             ax_main2.set_zlabel(r'$E_z (\mu V)$')
+
+            plt.figtext(0.85, 0.90, 'N  = %d' % N, fontsize=24)
+            plt.figtext(0.85, 0.85, r'$T_{b\parallel}$ = %.2feV' % partin[6, 1], fontsize=24)
+            plt.figtext(0.85, 0.80, r'$T_{b\perp}$ = %.2feV' % partin[7, 1], fontsize=24)
+            
+            plt.figtext(0.85, 0.70, r'$NX$ = %d' % NX, fontsize=24)
+            plt.figtext(0.85, 0.65, r'$NY$ = %d' % NY, fontsize=24)
+                    
+            
 
         ################################
         # ---------- SAVING ---------- #
