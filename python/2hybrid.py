@@ -119,7 +119,7 @@ def set_timestep(part):
     gyfreq    = q*B0/mp                          # Proton Gyrofrequency (rad/s) (since this will be the highest of all species)
     gyperiod  = 2*pi / gyfreq                    # Gyroperiod in seconds
     ion_ts    = 0.05 * gyperiod                  # Timestep to resolve gyromotion
-    vel_ts    = dx / (2 * np.max(part[3:6, :]))  # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
+    vel_ts    = dx / (2 * np.max(part[3:5, :]))  # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
     
     DT        = min(ion_ts, vel_ts)              # Smallest of the two
     framegrab = int(t_res / DT)                  # Number of iterations between dumps
@@ -135,7 +135,7 @@ def set_timestep(part):
 def update_timestep(part, dt):
     flag = 0
     if dx/(2*np.max(part[3:6, :])) < dt:
-        dt /= 2.
+        dt  /= 2.
         flag = 1
         print 'Timestep halved: DT = %.5fs' % dt
     return (dt, flag)
@@ -305,10 +305,10 @@ def push_E(B, J_species, n_i, dt):
                              - B[mm, nn, 1] * ((B[mm, nn + 1, 2] - B[mm, nn - 1, 2]) / (2 * dy))
     
             # del P
-            del_p[mm, nn, 0] = (kB / (2*dx*q)) * ( Te[mm, nn] * (qn[mm + 1, nn] - qn[mm - 1, nn]) 
-                                             + qn[mm, nn] * (Te[mm + 1, nn] - Te[mm - 1, nn]) )
-            del_p[mm, nn, 1] = (kB / (2*dy*q)) * ( Te[mm, nn] * (qn[mm, nn + 1] - qn[mm, nn - 1]) 
-                                             + qn[mm, nn] * (Te[mm, nn + 1] - Te[mm, nn - 1]) )
+            del_p[mm, nn, 0] = (kB / (2*dx*q)) * ( Te[mm, nn] * (qn[mm + 1, nn] - qn[mm - 1, nn]) +
+                                                   qn[mm, nn] * (Te[mm + 1, nn] - Te[mm - 1, nn]) )
+            del_p[mm, nn, 1] = (kB / (2*dy*q)) * ( Te[mm, nn] * (qn[mm, nn + 1] - qn[mm, nn - 1]) + 
+                                                   qn[mm, nn] * (Te[mm, nn + 1] - Te[mm, nn - 1]) )
             del_p[mm, nn, 2] = 0
     
     for xx in range(3):
