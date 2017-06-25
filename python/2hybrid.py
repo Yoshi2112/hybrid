@@ -22,13 +22,13 @@ def set_constants():
     return    
     
 def set_parameters():
-    global seed, t_res, NX, NY, max_sec, cellpart, ie, B0, size, N, k, ne, xmax, ymax, Te0
+    global seed, t_res, NX, NY, max_sec, cellpart, ie, B0, size, k, ne, xmax, ymax, Te0
     t_res    = 0                               # Time resolution of data in seconds; how often data is dumped to file. Every frame captured if '0'.
-    NX       = 20                              # Number of cells in x dimension
-    NY       = 20                              # Number of cells in y dimension
+    NX       = 64                              # Number of cells in x dimension
+    NY       = 64                              # Number of cells in y dimension
     max_sec  = 10000                           # Number of (real) seconds to run program for   
-    square   = 10                              # Number of species particles per cell (assuming even representation)
-    cellpart = 2*(square ** 2)                 # No. particles per cell (# species times # particles/species)
+    square   = 6                               # Number of species particles per cell (assuming even representation)
+    cellpart = square ** 2                     # No. particles per cell for each species
     ie       = 0                               # Adiabatic electrons. 0: off (constant), 1: on.    
     B0       = 4e-9                            # Unform initial B-field magnitude (in T)
     k        = 5                               # Sinusoidal Density Parameter - number of wavelengths in spatial domain (k - 2 waves)
@@ -36,28 +36,27 @@ def set_parameters():
     Te0      = 0                               # Initial isotropic electron temperature in eV. '0': Isothermal with ions
 
     size     = NX + 2                          # Size of grid arrays
-    N        = cellpart*NX*NY                  # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
     np.set_printoptions(threshold='nan')
     seed     = 21
     return    
 
 def initialize_particles():
     np.random.seed(seed)                          # Random seed 
-    global Nj, Te0, dx, dy, xmax, ymax, partin, idx_start, idx_end, xmax, cell_N, n_contr, ne, scramble_position, xmin
+    global Nj, N, Te0, dx, dy, xmax, ymax, partin, idx_start, idx_end, xmax, cell_N, n_contr, ne, scramble_position, xmin
 
-    f = 0.015       # Relative beam density
+    f = 0.00       # Relative beam density
     V = 0.0e5       # Relative streaming velocity 
     # Species Characteristics - use column number as species identifier
     #                        H+ (cold)             H+ (hot)               
-    partin = np.array([[           1.0  ,             1.0 ],        #(0) Mass   (proton units)
-                       [           1.0  ,             1.0 ],        #(1) Charge (charge units)
-                       [             0. ,              V  ],        #(2) Bulk Velocity (m/s)
-                       [           1-f  ,              f  ],        #(3) Real density as a portion of ne
-                       [           0.5  ,            0.5  ],        #(4) Simulated (superparticle) Density (as a portion of 1)
-                       [             0  ,              0  ],        #(5) Distribution type         0: Uniform, 1: Sinusoidal (or beam)
-                       [             1.0,              1.0],        #(6) Parallel      Temperature (eV) (x)
-                       [             1.0,              1.0],        #(7) Perpendicular Temperature (eV) (y, z)
-                       [             1  ,              0  ]])       #(8) Hot (0) or Cold (1) species
+    partin = np.array([[           1.0  ], #,             1.0 ],        #(0) Mass   (proton units)
+                       [           1.0  ], #,             1.0 ],        #(1) Charge (charge units)
+                       [             0. ], #,              V  ],        #(2) Bulk Velocity (m/s)
+                       [           1-f  ], #,              f  ],        #(3) Real density as a portion of ne
+                       [           1.0  ], #,            0.5  ],        #(4) Simulated (superparticle) Density (as a portion of 1)
+                       [             0  ], #,              0  ],        #(5) Distribution type         0: Uniform, 1: Sinusoidal (or beam)
+                       [             1.0], #,              1.0],        #(6) Parallel      Temperature (eV) (x)
+                       [             1.0], #,              1.0],        #(7) Perpendicular Temperature (eV) (y, z)
+                       [             1  ]]) #,              0  ]])       #(8) Hot (0) or Cold (1) species
     
     part_type     = ['$H^{+}$ (cold)',
                      '$H^{+}$ (hot)'] 
@@ -70,6 +69,7 @@ def initialize_particles():
     ymax          = NY * dy
 
     Nj            = int(np.shape(partin)[1])                                # Number of species (number of columns above)    
+    N             = cellpart*Nj*NX*NY 
     N_species     = np.round(N * partin[4, :]).astype(int)                  # Number of sim particles for each species, total    
     n_contr       = (partin[3, :] * ne * xmax * ymax) / N_species           # Real particles per macroparticle        
     
@@ -133,12 +133,13 @@ def set_timestep(part):
     return DT, maxtime, framegrab
 
 def update_timestep(part, dt):
-    flag = 0
-    if dx/(2*np.max(part[3:6, :])) < dt:
+    if dx/(2*np.max(part[3:6, :])) <= dt:
         dt  /= 2.
-        flag = 1
+        ts_history.append(qq)
         print 'Timestep halved: DT = %.5fs' % dt
-    return (dt, flag)
+        if len(ts_history) > 7:
+            sys.exit('Timestep less than 1%% of initial. Consider parameter revision')
+    return dt
 
 def initialize_fields():  
     global Bc, theta
@@ -236,8 +237,8 @@ def assign_weighting(pos, I, BE):                               # Magnetic/Elect
     '''Assigns weighting for the nodes adjacent to each
        particle. Outputs the left, right, bottom, and top 
        weighting factors, respectively'''
-    W_x = ((pos[0, :])/(dx)) - I[0, :] + (BE / 2.)              # Last term displaces weighting factor by half a cell by adding 0.5 for a retarded electric field grid (i.e. all weightings are 0.5 larger due to further distance from left node, and this weighting applies to the I + 1 node.)
-    W_y = ((pos[1, :])/(dy)) - I[1, :] + (BE / 2.)              # Last term displaces weighting factor by half a cell by adding 0.5 for a retarded electric field grid (i.e. all weightings are 0.5 larger due to further distance from left node, and this weighting applies to the I + 1 node.)
+    W_x = (pos[0, :] / dx) - I[0, :] + (BE / 2.)              # Last term displaces weighting factor by half a cell by adding 0.5 for a retarded electric field grid (i.e. all weightings are 0.5 larger due to further distance from left node, and this weighting applies to the I + 1 node.)
+    W_y = (pos[1, :] / dy) - I[1, :] + (BE / 2.)              # Last term displaces weighting factor by half a cell by adding 0.5 for a retarded electric field grid (i.e. all weightings are 0.5 larger due to further distance from left node, and this weighting applies to the I + 1 node.)
     
     W_out = np.stack(((1 - W_x), W_x, (1 - W_y), W_y), axis=0)  # Left, Right, 'Left' (Bottom), 'Right' (Top)
     return W_out
@@ -318,7 +319,7 @@ def push_E(B, J_species, n_i, dt):
         E_out[:, :, xx]  = - JixB[:, :, xx] - del_p[:, :, xx] - BdB[:, :, xx] 
 
     E_out = manage_ghost_cells(E_out, 0)
-
+    
     #X, Y = np.meshgrid(range(size), range(size))
     #fig = plt.figure()
 
@@ -367,7 +368,7 @@ def collect_density(part, W):
                 n_i[Ix + jj, Iy + kk, idx] += Wx[jj] * Wy[kk] * n_contr[idx]
     
     n_i = manage_ghost_cells(n_i, 1) / (dx*dy)         # Divide by cell size for density per unit volume
-
+    
     for jj in range(Nj):
         n_i[:, :, jj] = smooth(n_i[:, :, jj])
     return n_i
@@ -391,7 +392,7 @@ def collect_current(part, ni, W):
     
     for jj in range(Nj):    # Turn those velocities into currents (per species)
         J_i[:, :, jj, :] *= partin[1, jj] * q
-
+    
     J_i = manage_ghost_cells(J_i, 1) / (dx*dy)     # Divide by spatial cell size for current per unit
 
     for jj in range(Nj):
@@ -404,7 +405,6 @@ def manage_ghost_cells(arr, src):
        Works like a charm if spatial dimensions always come first in an array. Condition
        variable passed with array because ghost cell field values do not need to be moved:
        But they do need correct (mirrored) ghost cell values'''
-    
     if src == 1:   # Move source term contributions to appropriate edge cells
         arr[1, 1]                   += arr[size - 1, size - 1]    # TR -> BL : Move corner cell contributions
         arr[1, size - 2]            += arr[size - 1, 0]           # BR -> TL
@@ -522,7 +522,7 @@ if __name__ == '__main__':                         # Main program start
     start_time     = timer()                       # Start Timer
     drive          = '/media/yoshi/VERBATIM HD/'   # Drive letter for portable HDD (changes between computers. Use /home/USER/ for linux.)
     save_path      = 'runs/two_d_test/'            # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
-    generate_data  = 0                             # Save data? Yes (1), No (0)
+    generate_data  = 1                             # Save data? Yes (1), No (0)
     generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
     run_desc = '''Full 2D test. 1eV, two proton species with isothermal electrons. Smoothing included. Just to see if anything explodes. Should be in equilibrium hopefully.'''
     
@@ -534,7 +534,7 @@ if __name__ == '__main__':                         # Main program start
     DT, maxtime, framegrab        = set_timestep(part)
     ts_history                    = []
 
-    for qq in range(10):
+    for qq in range(maxtime):
         if qq == 0:
             print 'Simulation starting...'
             W            = assign_weighting(part[0:2, :], part[6:8, :], 1)                  # Assign initial (E) weighting to particles
@@ -547,7 +547,7 @@ if __name__ == '__main__':                         # Main program start
             initial_cell_density = dns 
             part = velocity_update(part, B[:, :, 0:3], E[:, :, 0:3], -0.5*DT, W, Wb)  # Retard velocity to N - 1/2 to prevent numerical instability
             
-            #check_cell_dist_2d(part, (2, 2), 0) 
+            #check_cell_dist_2d(part, (1, 1), 0) 
 
             #X, Y = np.meshgrid(np.arange(size), np.arange(size))
             #dplt = plt.subplot2grid((1, 1), (0, 0), projection='3d')
@@ -557,12 +557,7 @@ if __name__ == '__main__':                         # Main program start
             # N + 1/2
             print 'Timestep %d' % qq
             
-            DT, ts_flag = update_timestep(part, DT)
-            if ts_flag == 1:
-                ts_history.append(qq)
-                if len(ts_history) >= 7:
-                    sys.exit('Timestep less than 1%% of initial. Consider parameter change.')
-
+            DT = update_timestep(part, DT)
             part          = velocity_update(part, B[:, :, 0:3], E[:, :, 0:3], DT, W, Wb)    # Advance Velocity to N + 1/2
             part, W, Wb   = position_update(part)                                           # Advance Position to N + 1
             B[:, :, 0:3]  = push_B(B[:, :, 0:3], E[:, :, 0:3], DT)                          # Advance Magnetic Field to N + 1/2
@@ -660,8 +655,8 @@ if __name__ == '__main__':                         # Main program start
             ax_main2.set_zlabel(r'$E_z (\mu V)$')
 
             plt.figtext(0.85, 0.90, 'N  = %d' % N, fontsize=24)
-            plt.figtext(0.85, 0.85, r'$T_{b\parallel}$ = %.2feV' % partin[6, 1], fontsize=24)
-            plt.figtext(0.85, 0.80, r'$T_{b\perp}$ = %.2feV' % partin[7, 1], fontsize=24)
+            #plt.figtext(0.85, 0.85, r'$T_{b\parallel}$ = %.2feV' % partin[6, 1], fontsize=24)
+            #plt.figtext(0.85, 0.80, r'$T_{b\perp}$ = %.2feV' % partin[7, 1], fontsize=24)
             
             plt.figtext(0.85, 0.70, r'$NX$ = %d' % NX, fontsize=24)
             plt.figtext(0.85, 0.65, r'$NY$ = %d' % NY, fontsize=24)
@@ -735,12 +730,12 @@ if __name__ == '__main__':                         # Main program start
                         print 'Header file saved'
                     
                     p_file = os.path.join(d_path, 'p_data')
-                    np.savez(p_file, partin=partin, part_type=part_type)       # Data file containing particle information
+                    np.savez(p_file, partin=partin, part_type=part_type, ts_history=np.asarray(ts_history))       # Data file containing particle information
                     print 'Particle data saved'
 
                 d_filename = 'data%05d' % r
                 d_fullpath = os.path.join(d_path, d_filename)
-                np.savez(d_fullpath, part=part, Vi=Vi, dns=dns, E = E[:, 0:3], B = B[:, 0:3])   # Data file for each iteration
+                np.savez(d_fullpath, part=part, Vi=Vi, dns=dns, E = E[:, :, 0:3], B = B[:, :, 0:3])   # Data file for each iteration
                 print 'Data saved'
     
     #%%        ----- PRINT RUNTIME -----

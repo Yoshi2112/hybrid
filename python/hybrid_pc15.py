@@ -23,9 +23,9 @@ def set_parameters():
     global dxm, t_res, NX, max_sec, cellpart, ie, B0, size, N, k, mhd_equil
     dxm      = 2                                # Number of c/wpi per dx
     t_res    = 0                                # Time resolution of data in seconds (default 1s). Determines how often data is captured. Every frame captured if '0'.
-    NX       = 128                              # Number of cells - dimension of array (not including ghost cells)
+    NX       = 256                              # Number of cells - dimension of array (not including ghost cells)
     max_sec  = 3600                             # Number of (real) seconds to run program for   
-    cellpart = 256                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
+    cellpart = 300                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
     ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.    
     B0       = 4e-9                             # Unform initial magnetic field value (in T) (must be parallel to an axis)
     k        = 4                                # Sinusoidal Density Parameter - number of wavelengths in spatial domain
@@ -67,7 +67,7 @@ def initialize_particles():
 
     dx            = dxm*(c/wpi)                                             # Spacial step (in metres)
     xmax          = NX*dx
-    xmin = 0
+    xmin          = 0
 
     x_cell        = np.arange(0, NX*dx, dx)
     N_species     = np.round(N * partin[4, :]).astype(int)                  # Number of sim particles for each species, total    
@@ -577,11 +577,11 @@ def check_velocity_distribution(part, j):
 if __name__ == '__main__':                         # Main program start
     
     start_time     = timer()                       # Start Timer
-    drive          = '/home/yoshi/'                # Drive letter for portable HDD (changes between computers)
-    save_path      = 'runs/mhd_equilibrium_test'   # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
-    generate_data  = 0                             # Save data? Yes (1), No (0)
+    drive          = 'E:/'                         # Drive letter for portable HDD (changes between computers)
+    save_path      = 'runs/mhd_resolution_tests'   # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
+    generate_data  = 1                             # Save data? Yes (1), No (0)
     generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
-    run_desc = '''Chen density test'''
+    run_desc = '''None'''
     
     print 'Initializing parameters...'
     set_constants()
@@ -794,7 +794,7 @@ if __name__ == '__main__':                         # Main program start
                     os.makedirs('%s/%s' % (drive, save_path))              # Create master test series directory
                     print 'Master directory created'
                     
-                num = 1#len(os.listdir('%s/%s' % (drive, save_path)))        # Count number of existing runs. Set to run number manually for static save
+                num = len(os.listdir('%s/%s' % (drive, save_path)))        # Count number of existing runs. Set to run number manually for static save
 
                 path = ('%s/%s/run_%d' % (drive, save_path, num))          # Set root run path (for images)
                 
