@@ -29,7 +29,7 @@ def set_parameters():
     ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.    
     B0       = 4e-9                             # Unform initial magnetic field value (in T) (must be parallel to an axis)
     k        = 4                                # Sinusoidal Density Parameter - number of wavelengths in spatial domain
-    mhd_equil= 0                                # Temperature varied to give MHD Equilibrium condition?
+    mhd_equil= 1                                # Temperature varied to give MHD Equilibrium condition?
 
     ## Derived Values ##
     size     = NX + 2
@@ -40,27 +40,27 @@ def initialize_particles():
     np.random.seed(21)                          # Random seed 
     global Nj, Te0, dx, partin, idx_start, idx_end, xmax, cell_N, n_contr, ne, scramble_position, va, xmin
 
-    ne = 8.48e6         # Electron density (used to assign portions of ion)
+    ne = 10e6         # Electron density (used to assign portions of ion)
     va = B0 / np.sqrt(mu0*ne*mp)
 
-    V = 10 * va
+    V = 0 * va
     f = 0.015 * ne
 
     
     # Species Characteristics - use column number as species identifier. Default - 0: Hot protons, 1: Cold protons, 2+: Cold Heavy Ion/s. Extra hot ions require re-coding.
     #                        H+ (cold)             H+ (hot)               
-    partin = np.array([[  1.00,   1.00],        #(0) Mass   (proton units)
-                       [  1.00,   1.00],        #(1) Charge (charge units)
-                  [-f*V/(ne-f),   V   ],        #(2) Bulk Velocity (m/s)
-                       [ne - f,   f   ],        #(3) Real density as a portion of ne
-                       [  0.50,   0.50],        #(4) Simulated (superparticle) Density (as a portion of 1)
-                       [  0   ,   0   ],        #(5) Distribution type         0: Uniform, 1: Sinusoidal
-                       [  0.50,   0.50],        #(6) Parallel      Temperature (eV) (x)
-                       [  0.50,   0.50],        #(7) Perpendicular Temperature (eV) (y, z)
-                       [  1   ,   0   ]])       #(8) Hot (0) or Cold (1) species
+    partin = np.array([[  1.00],#,   1.00],        #(0) Mass   (proton units)
+                       [  1.00],#,   1.00],        #(1) Charge (charge units)
+                  [-f*V/(ne-f)],#,   V   ],        #(2) Bulk Velocity (m/s)
+                       [ne - f],#,   f   ],        #(3) Real density as a portion of ne
+                       [  1   ],#,   0.50],        #(4) Simulated (superparticle) Density (as a portion of 1)
+                       [  1   ],#,   1   ],        #(5) Distribution type         0: Uniform, 1: Sinusoidal
+                       [  0.50],#,   0.50],        #(6) Parallel      Temperature (eV) (x)
+                       [  0.50],#,   0.50],        #(7) Perpendicular Temperature (eV) (y, z)
+                       [  1   ]])#,   0   ]])       #(8) Hot (0) or Cold (1) species
     
-    part_type     = ['$H^{+}$ (cold)',
-                    '$He^{2+}$ (hot)'] 
+    part_type     = ['$H^{+}$ (cold)']
+                    #'$He^{2+}$ (hot)'] 
     
     Nj            = int(np.shape(partin)[1])                                # Number of species (number of columns above)    
     wpi           = np.sqrt((ne * q **2) / (mp*e0))
@@ -73,7 +73,7 @@ def initialize_particles():
     N_species     = np.round(N * partin[4, :]).astype(int)                  # Number of sim particles for each species, total    
     n_contr       = (partin[3, :] * dx * NX * ne) / N_species               # Real particles per macroparticle        
 
-    Te0  = 0.50 * 11603.                                                      # (Initial) Electron temperature (K)
+    Te0  = 0.50 * 11603.                                                    # (Initial) Electron temperature (K)
     Tpar = partin[6, :] * 11603                                             # Parallel ion temperature
     Tper = partin[7, :] * 11603                                             # Perpendicular ion temperature
     
@@ -95,7 +95,8 @@ def initialize_particles():
     for ii in range(Nj):
         cell_N[:, ii] = (np.round(sx * N_species[ii]))                      # Multiply by number of particles per species. Normalized means all particles are accounted for.
 
-    if np.sum(cell_N) != N:                                                 # Can be avoided by picking NX mod k = 0
+    if np.sum(cell_N) != N:       											# Can be avoided by picking NX mod k = 0
+	pdb.set_trace()
         diff = N - np.sum(cell_N)                                           # Find how many particles short
         idxs = np.random.randint(0, NX - 1, diff)                           # Create random indices to put them (very small error)
         for ext in idxs:
@@ -143,9 +144,9 @@ def set_timestep(part):
     ion_ts   = 0.05 * gyperiod                  # Timestep to resolve gyromotion
     vel_ts   = dx / (2 * np.max(part[3, :]))    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
     
-    DT        = min(ion_ts, vel_ts)             # Smallest of the two
+    DT        = 0.1*min(ion_ts, vel_ts)         # Smallest of the two
     framegrab = int(t_res / DT)                 # Number of iterations between dumps
-    maxtime   = int(max_sec / DT) + 1           # Total number of iterations to achieve desired final time
+    maxtime   = 10*int(max_sec / DT) + 1        # Total number of iterations to achieve desired final time
     
     if framegrab == 0:
         framegrab = 1
@@ -156,10 +157,14 @@ def set_timestep(part):
 
 
 def update_timestep(part, dt):
-    #if (dx / (2*np.max(part[3, :]))) < dt:
-    #    dt  /= 2.
-    #    timestep_history.append(qq)
-    #    print 'Timestep halved: DT = %.4fs' % dt
+    if (dx / (2*np.max(part[3, :]))) < dt:
+        dt  /= 2.
+        timestep_history.append(qq)
+        print 'Timestep halved: DT = %.4fs' % dt
+	
+    if len(timestep_history) > 7:
+	sys.exit('Timestep less than 1% of initial. Consider parameter change.')
+
     return dt
 
 
@@ -290,15 +295,6 @@ def push_E(B, V_i, n_i, dt): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
     del_p = np.zeros((size, 3))     # Electron pressure tensor gradient array
     J     = np.zeros((size, 3))     # Ion current
     qn    = np.zeros( size,    dtype=float)     # Ion charge density
-
-#==============================================================================
-#     # Adiabatic Electron Temperature Calculation   
-#     if ie == 1:    
-#         gamma = 5./3.
-#         ni = np.asarray([np.sum(n_i[xx, :]) for xx in range(size)])
-#         Te = Te0 * ((ni / (n0)) ** (gamma - 1))                         ## CHANGE!!! ###
-#     else:
-#==============================================================================
         
     # Calculate average/summations over species
     for jj in range(Nj):
@@ -577,7 +573,7 @@ def check_velocity_distribution(part, j):
 if __name__ == '__main__':                         # Main program start
     
     start_time     = timer()                       # Start Timer
-    drive          = 'E:/'                         # Drive letter for portable HDD (changes between computers)
+    drive          = 'H:/'                         # Drive letter for portable HDD (changes between computers)
     save_path      = 'runs/mhd_resolution_tests'   # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
     generate_data  = 1                             # Save data? Yes (1), No (0)
     generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
@@ -687,8 +683,8 @@ if __name__ == '__main__':                         # Main program start
             norm_xvel   = part[3, :] / va
             norm_yvel   = part[4, :] / va       # y-velocities (for normalization)
             
-            ax_vy_hot.scatter( x_pos[idx_start[1]: idx_end[1]], norm_xvel[idx_start[1]: idx_end[1]], s=1, c='r', lw=0)        # Hot population
-            ax_vy_core.scatter(x_pos[idx_start[1]: idx_end[1]], norm_yvel[idx_start[1]: idx_end[1]], s=1, lw=0, color='c')                                     # 'Other' population
+            ax_vy_hot.scatter( x_pos[idx_start[0]: idx_end[0]], norm_xvel[idx_start[0]: idx_end[0]], s=1, c='r', lw=0)        # Hot population
+            ax_vy_core.scatter(x_pos[idx_start[0]: idx_end[0]], norm_yvel[idx_start[0]: idx_end[0]], s=1, lw=0, color='c')                                     # 'Other' population
             
             ax_vy_hot.set_title(r'Velocity $v_x$ (m/s) vs. Position (x)')    
             ax_vy_hot.set_xlabel(r'Position (km)', labelpad=10)
