@@ -50,7 +50,7 @@ def initialize_particles():
     #                        H+ (cold)             H+ (hot)               
     partin = np.array([[           1.0  ], #,             1.0 ],        #(0) Mass   (proton units)
                        [           1.0  ], #,             1.0 ],        #(1) Charge (charge units)
-                       [             0. ], #,              V  ],        #(2) Bulk Velocity (m/s)
+                       [         60000. ], #,              V  ],        #(2) Bulk Velocity (m/s)
                        [           1-f  ], #,              f  ],        #(3) Real density as a portion of ne
                        [           1.0  ], #,            0.5  ],        #(4) Simulated (superparticle) Density (as a portion of 1)
                        [             0  ], #,              0  ],        #(5) Distribution type         0: Uniform, 1: Sinusoidal (or beam)
@@ -371,6 +371,7 @@ def collect_density(part, W):
     
     for jj in range(Nj):
         n_i[:, :, jj] = smooth(n_i[:, :, jj])
+
     return n_i
 
 
@@ -521,8 +522,8 @@ def check_cell_dist_2d(part, node, species):
 if __name__ == '__main__':                         # Main program start
     start_time     = timer()                       # Start Timer
     drive          = '/media/yoshi/VERBATIM HD/'   # Drive letter for portable HDD (changes between computers. Use /home/USER/ for linux.)
-    save_path      = 'runs/two_d_test/'            # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
-    generate_data  = 1                             # Save data? Yes (1), No (0)
+    save_path      = 'runs/two_d_boundary/'        # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
+    generate_data  = 0                             # Save data? Yes (1), No (0)
     generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
     run_desc = '''Full 2D test. 1eV, two proton species with isothermal electrons. Smoothing included. Just to see if anything explodes. Should be in equilibrium hopefully.'''
     
@@ -545,8 +546,8 @@ if __name__ == '__main__':                         # Main program start
             E[:, :, 0:3] = push_E(B[:, :, 0:3], Vi, dns, 0)                                 # Initialize electric field
             
             initial_cell_density = dns 
+            sim_time             = 0 
             part = velocity_update(part, B[:, :, 0:3], E[:, :, 0:3], -0.5*DT, W, Wb)  # Retard velocity to N - 1/2 to prevent numerical instability
-            
             #check_cell_dist_2d(part, (1, 1), 0) 
 
             #X, Y = np.meshgrid(np.arange(size), np.arange(size))
@@ -615,25 +616,29 @@ if __name__ == '__main__':                         # Main program start
                         })
             
             species_colour = ['cyan', 'red']
+
             # Slice some things for simplicity
-            sim_time    = qq * DT                   # Corresponding "real time"
+            sim_time   += DT
             pos         = part[0:2, :] / RE         # Particle x-positions in Earth-Radii 
             x_cell_num  = np.arange(size)           # Numerical cell numbering: x-axis
             y_cell_num  = np.arange(size)
             
-            alfie       = np.sum([partin[0, jj] * partin[3, jj] * ne for jj in range(Nj)])
+            alfie       = B0 / np.sqrt(mu0 * ne * mp) # Alfven speed (valid for protons only)
             vel         = part[3:6, :] / alfie      # Velocities as multiples of the alfven speed 
         
             # PLOT: Spatial values of Bz
-            ax_main = plt.subplot2grid(fig_size, (0, 0), projection='3d', rowspan=4, colspan=4)
-            ax_main.set_title(r'$B_z$ (nT)')
-            X, Y = np.meshgrid(x_cell_num, y_cell_num)
+            ax_main = plt.subplot2grid(fig_size, (0, 0), rowspan=4, colspan=4)
+           
+            ax_main.pcolor((dns[:, :, 0] / ne), cmap='seismic', vmin=0.25, vmax=1.75)
+            #plt.colorbar(ax_main)
+            #ax_main.set_title(r'$B_z$ (nT)')
+            #X, Y = np.meshgrid(x_cell_num, y_cell_num)
 
-            ax_main.plot_wireframe(X, Y, (B[:, :, 2]*1e9))
-            ax_main.set_xlim(0, size)
-            ax_main.set_ylim(0, size)
-            ax_main.set_zlim(-B0*1e9, B0*1e9)
-            ax_main.view_init(elev=21., azim=300.)
+            #ax_main.plot_wireframe(X, Y, (B[:, :, 2]*1e9))
+            #ax_main.set_xlim(0, size)
+            #ax_main.set_ylim(0, size)
+            #ax_main.set_zlim(-B0*1e9, B0*1e9)
+            #ax_main.view_init(elev=21., azim=300.)
 
             # PLOT: Spatial values of Ez
             ax_main2 = plt.subplot2grid(fig_size, (0, 4), projection='3d', rowspan=4, colspan=4)
@@ -648,21 +653,16 @@ if __name__ == '__main__':                         # Main program start
 
             ax_main.set_xlabel('x')
             ax_main.set_ylabel('y')
-            ax_main.set_zlabel(r'$B_z$ (nT)')
 
             ax_main2.set_xlabel('x (m)')
             ax_main2.set_ylabel('y (m)')
             ax_main2.set_zlabel(r'$E_z (\mu V)$')
 
             plt.figtext(0.85, 0.90, 'N  = %d' % N, fontsize=24)
-            #plt.figtext(0.85, 0.85, r'$T_{b\parallel}$ = %.2feV' % partin[6, 1], fontsize=24)
-            #plt.figtext(0.85, 0.80, r'$T_{b\perp}$ = %.2feV' % partin[7, 1], fontsize=24)
-            
             plt.figtext(0.85, 0.70, r'$NX$ = %d' % NX, fontsize=24)
             plt.figtext(0.85, 0.65, r'$NY$ = %d' % NY, fontsize=24)
+            plt.figtext(0.85, 0.10, r'$t_{real} = %.2fs$' % sim_time, fontsize=20)
                     
-            
-
         ################################
         # ---------- SAVING ---------- #
         ################################

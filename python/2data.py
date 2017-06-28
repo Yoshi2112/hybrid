@@ -19,10 +19,10 @@ part, Vi, dns, B, E, partin, Nj, DT, NX, NY, dx, dy, xmax, ymax, k, ne, size, ce
 
 #%% ---- RUN PARAMETERS ----
 drive_letter = '/media/yoshi/VERBATIM HD/'   # Master directory (or drive) on which run is stored
-sub_path = 'two_d_draft'                     # Location of 'Run' folder, with series name + optional subfolders
+sub_path = 'two_d_test'                      # Location of 'Run' folder, with series name + optional subfolders
 run = 1                                      # Number of run within series
 plot_skip = 1                                # Skip every x files from input directory (Default: 1)
-plot_style = 99
+plot_style = 1
 
 #%% ---- CONSTANTS ----
 q   = 1.602e-19               # Elementary charge (C)
@@ -139,7 +139,7 @@ f = np.asarray([ii * df * 1000 for ii in range(num_files / 2)])   # frequency in
             
 #%% ---- LOAD FILES AND PLOT -----
 # Read files and assign variables. Do the other things as well
-for ii in np.arange(1):
+for ii in np.arange(num_files):
     if ii%plot_skip == 0:
         d_file = 'data%05d.npz' % ii                    # Define target file
         input_path = os.path.join(load_dir, d_file)     # File location
@@ -151,8 +151,6 @@ for ii in np.arange(1):
         # Load E, B, SRC and part arrays
         for var_name, index_position in zip(array_names, num_index):                # Magic subroutine to attach variable names to their stored arrays
             globals()[var_name] = data[array_names[index_position]]                 # Manual would be something like part = data['part']
-        
-        print 'Data file %d loaded' % ii
         
         if plot_style != 0:
             fig_size = 4, 7
@@ -188,14 +186,45 @@ for ii in np.arange(1):
                 print 'Loading saved array.... Please Wait....'
                 By_all = np.load(os.path.join(data_dir, 'By_array.npz'))['By_array']
                 print 'Saved array loaded'
+        
+        elif plot_style == 1: # E, B contour plots. Maybe correlate with density as well?
+            ax1 = plt.subplot2grid((3, 3), (0, 0))
+            ax2 = plt.subplot2grid((3, 3), (1, 0))
+            ax3 = plt.subplot2grid((3, 3), (2, 0))
+            ax4 = plt.subplot2grid((3, 3), (0, 1))
+            ax5 = plt.subplot2grid((3, 3), (1, 1))
+            ax6 = plt.subplot2grid((3, 3), (2, 1))
+            ax7 = plt.subplot2grid((3, 3), (0, 2))
+            ax8 = plt.subplot2grid((3, 3), (1, 2))
+            ax9 = plt.subplot2grid((3, 3), (2, 2))
             
+            ax1.contourf(B[:, :, 0])
+            ax2.contourf(B[:, :, 1])
+            ax3.contourf(B[:, :, 2])
+            ax1.set_title('B')
+
+            ax4.contourf(E[:, :, 0])
+            ax5.contourf(E[:, :, 1])
+            ax6.contourf(E[:, :, 2])
+            ax4.set_title('E')
+
+            ax7.contourf(dns[:, :, 0])
+            ax7.set_title(r'$n_i$')
+
+            for ax in [ax1, ax2, ax3, ax4, ax5, ax6, ax7]:
+                ax.axis('scaled')
+
+            #plt.tight_layout(pad=1, w_pad=0.8)
+            fig.subplots_adjust(hspace=0)
+            #plt.show()
+
 #%%         ---- FINAL PLOTS ----
             
             if ii == (num_files - 2): # For when all values are read - generate plot
                 
             # Misc. Plot stuff - Formatting
-                plt.tight_layout(pad=1, w_pad=0.8)
-                fig.subplots_adjust(hspace=0)
+                #plt.tight_layout(pad=1, w_pad=0.8)
+                #fig.subplots_adjust(hspace=0)
 
                 # Save (single) Plot
                 filename = 'omega on k scaled.png' #% len(os.listdir(save_dir))
@@ -214,7 +243,7 @@ for ii in np.arange(1):
       
 #%%         ---- SAVE OUTPUT -----
        
-        #if plot_style != 0:
+        if plot_style != 0:
 
             # Figure Text
             #text1  = plt.figtext(0.84, 0.01, 'Simulation Time = %.2f s'     % (sim_time[ii]),       fontsize = 16, color='#ffff00')
@@ -242,9 +271,9 @@ for ii in np.arange(1):
             #fig.subplots_adjust(hspace=0)
             
             # Save Plot
-            #filename = 'anim%05d.png' % ii
-            #fullpath = os.path.join(save_dir, filename)    
-            #plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')#, bbox_inches='tight')
-            #plt.close()
+            filename = 'anim%05d.png' % ii
+            fullpath = os.path.join(save_dir, filename)    
+            plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')#, bbox_inches='tight')
+            plt.close()
         
-            #print 'Plot %d of %d created' % (ii + 1, num_files)
+            print 'Plot %d of %d created' % (ii + 1, num_files)
