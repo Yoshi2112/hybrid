@@ -23,9 +23,9 @@ def set_parameters():
     global dxm, t_res, NX, max_sec, cellpart, ie, B0, size, N, k, mhd_equil
     dxm      = 2                                # Number of c/wpi per dx
     t_res    = 0                                # Time resolution of data in seconds (default 1s). Determines how often data is captured. Every frame captured if '0'.
-    NX       = 256                              # Number of cells - dimension of array (not including ghost cells)
+    NX       = 128                              # Number of cells - dimension of array (not including ghost cells)
     max_sec  = 3600                             # Number of (real) seconds to run program for   
-    cellpart = 300                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
+    cellpart = 150                              # Number of Particles per cell (make it an even number for 50/50 hot/cold)
     ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.    
     B0       = 4e-9                             # Unform initial magnetic field value (in T) (must be parallel to an axis)
     k        = 4                                # Sinusoidal Density Parameter - number of wavelengths in spatial domain
@@ -144,9 +144,9 @@ def set_timestep(part):
     ion_ts   = 0.05 * gyperiod                  # Timestep to resolve gyromotion
     vel_ts   = dx / (2 * np.max(part[3, :]))    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
     
-    DT        = 0.1*min(ion_ts, vel_ts)         # Smallest of the two
+    DT        = min(ion_ts, vel_ts)             # Smallest of the two
     framegrab = int(t_res / DT)                 # Number of iterations between dumps
-    maxtime   = 10*int(max_sec / DT) + 1        # Total number of iterations to achieve desired final time
+    maxtime   = int(max_sec / DT) + 1           # Total number of iterations to achieve desired final time
     
     if framegrab == 0:
         framegrab = 1
@@ -164,7 +164,6 @@ def update_timestep(part, dt):
 	
     if len(timestep_history) > 7:
 	sys.exit('Timestep less than 1% of initial. Consider parameter change.')
-
     return dt
 
 
@@ -287,31 +286,29 @@ def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
     return B
     
 
-def interp_B(B):
-    xi = range(size)
-    y2 = np.zeros(size, dtype=float)
-    u  = np.zeros(size, dtype=float)
-    B_interp = np.zeros(size, dtype=float)	
+def cubic_spline_interp(B):
+    '''1D interpolation of the magnetic field values onto the E-field mesh, for use in the push_E update equation. Code adapted from Numerical Recipes for Fortran 90.'''
+    B_interp = np.zeros((size, 3), dtype=float)	
+    xi       = range(size)
+    
+    for dd in range(3):
+        y2 = np.zeros(size)
 
-    # Decomposition Loop
-    for ii in range(1, size - 1):
-	sig    = (xi[ii] - xi[ii - 1]) / (xi[ii + 1] - xi[ii - 1])
-	p      = sig * y2[ii - 1] + 2.
-	y2[ii] = (sig - 1.) / p
-	u[ii]  = (6.*( (B[ii + 1] - B[ii]) / (xi[ii + 1]-xi[ii]) - (B[ii] - B[ii - 1]) / (xi[ii] - xi[ii - 1]))/(xi[ii + 1] - xi[ii - 1]) - sig * u[ii - 1]) / p		
+        # Centered difference for y'' (y2) calculation
+        for ii in range(1, size - 1):
+            y2[ii] = (B[ii - 1, dd] - 2*B[ii, dd] + B[ii + 1, dd]) / (dx ** 2)
+        
+        y2[0]        = y2[size - 2] #B[size - 2, dd] - 2*B[0, dd]        + B[1, dd]
+        y2[size - 1] = y2[1]        #B[size - 2, dd] - 2*B[size - 1, dd] + B[1, dd]
 
-    y2[size - 1] = 0
+        # Actual spline calculation	
+        h = dx ; a = 0.5 ; b = 0.5
 
-    # Back substitution
-    for jj in np.arange(1, size - 1, -1):
-	y2[jj] = y2[jj] * y2[jj + 1] + u[jj]
+        for ii in range(size - 1):
+            B_interp[ii, dd] = a * B[ii, dd] + b * B[ii + 1, dd] + ((a**3 - a)*y2[ii] + (b**3 - b)*y2[ii + 1])*(h**2)/6.
 
-    # Actual spline calculation	
-    h = 1 ; a = 0.5 ; b = 0.5
-
-    for ii in range(size):
-        B_interp[ii] = a * B[ii] + b * B[ii + 1] + ((a**3 - a)*y2a[ii] + (b**3 - b)*y2a[ii + 1])*(h**2)/6.
-
+    B_interp[0]        = B_interp[size - 2]
+    B_interp[size - 1] = B_interp[1]
     return B_interp
    
  
@@ -323,7 +320,10 @@ def push_E(B, V_i, n_i, dt): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
     del_p = np.zeros((size, 3))     # Electron pressure tensor gradient array
     J     = np.zeros((size, 3))     # Ion current
     qn    = np.zeros( size,    dtype=float)     # Ion charge density
-        
+    
+    B_i = cubic_spline_interp(B)    # Magnetic field values interpolated onto E-field grid
+    #B_i = B[:, 0:3]
+
     # Calculate average/summations over species
     for jj in range(Nj):
         qn += partin[1, jj] * n_i[:, jj] * q                  # Total charge density, sum(qj * nj)
@@ -340,16 +340,16 @@ def push_E(B, V_i, n_i, dt): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
             Te[ii] = (4*Te[ii - 1] - Te[ii - 2]) * (1 / ( ((nex[ii + 1] - nex[ii - 1]) / nex[ii]) + 3))
     
     # J cross B
-    JxB[:, 0] +=    J[:, 1] * B[:, 2] - J[:, 2] * B[:, 1]  
-    JxB[:, 1] += - (J[:, 0] * B[:, 2] - J[:, 2] * B[:, 0]) 
-    JxB[:, 2] +=    J[:, 0] * B[:, 1] - J[:, 1] * B[:, 0]   
+    JxB[:, 0] +=    J[:, 1] * B_i[:, 2] - J[:, 2] * B_i[:, 1]  
+    JxB[:, 1] += - (J[:, 0] * B_i[:, 2] - J[:, 2] * B_i[:, 0]) 
+    JxB[:, 2] +=    J[:, 0] * B_i[:, 1] - J[:, 1] * B_i[:, 0]   
     
     for mm in range(1, size - 1):
         
         # B cross curl B
-        BdB[mm, 0] =    B[mm, 1]  * ((B[mm + 1, 1] - B[mm - 1, 1]) / (2 * dx)) + B[mm, 2] * ((B[mm + 1, 2] - B[mm - 1, 2]) / (2 * dx))
-        BdB[mm, 1] = (- B[mm, 0]) * ((B[mm + 1, 1] - B[mm - 1, 1]) / (2 * dx))
-        BdB[mm, 2] = (- B[mm, 0]) * ((B[mm + 1, 2] - B[mm - 1, 2]) / (2 * dx))
+        BdB[mm, 0] =    B_i[mm, 1]  * ((B[mm + 1, 1] - B[mm - 1, 1]) / (2 * dx)) + B[mm, 2] * ((B[mm + 1, 2] - B[mm - 1, 2]) / (2 * dx))
+        BdB[mm, 1] = (- B_i[mm, 0]) * ((B[mm + 1, 1] - B[mm - 1, 1]) / (2 * dx))
+        BdB[mm, 2] = (- B_i[mm, 0]) * ((B[mm + 1, 2] - B[mm - 1, 2]) / (2 * dx))
     
         # del P
         del_p[mm, 0] = (kB / (2*dx*q)) * ( Te[mm] * (qn[mm + 1] - qn[mm - 1]) +  
@@ -371,7 +371,6 @@ def push_E(B, V_i, n_i, dt): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
 
     Te[0]              = Te[size - 2]
     Te[size - 1]       = Te[1]
-
     return E_out
 
 
@@ -592,9 +591,9 @@ def check_velocity_distribution(part, j):
 if __name__ == '__main__':                         # Main program start
     
     start_time     = timer()                       # Start Timer
-    drive          = 'H:/'                         # Drive letter for portable HDD (changes between computers)
-    save_path      = 'runs/mhd_resolution_tests'   # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
-    generate_data  = 1                             # Save data? Yes (1), No (0)
+    drive          = '/media/yoshi/VERBATIM HD/'   # Drive letter for portable HDD (changes between computers)
+    save_path      = 'runs/mhd_b_spline'           # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
+    generate_data  = 0                             # Save data? Yes (1), No (0)
     generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
     run_desc = '''None'''
     
