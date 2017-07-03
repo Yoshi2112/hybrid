@@ -286,7 +286,35 @@ def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
     B[:, 2] = Bp[:, 2] + Bc[2] 
     return B
     
-    
+
+def interp_B(B):
+    xi = range(size)
+    y2 = np.zeros(size, dtype=float)
+    u  = np.zeros(size, dtype=float)
+    B_interp = np.zeros(size, dtype=float)	
+
+    # Decomposition Loop
+    for ii in range(1, size - 1):
+	sig    = (xi[ii] - xi[ii - 1]) / (xi[ii + 1] - xi[ii - 1])
+	p      = sig * y2[ii - 1] + 2.
+	y2[ii] = (sig - 1.) / p
+	u[ii]  = (6.*( (B[ii + 1] - B[ii]) / (xi[ii + 1]-xi[ii]) - (B[ii] - B[ii - 1]) / (xi[ii] - xi[ii - 1]))/(xi[ii + 1] - xi[ii - 1]) - sig * u[ii - 1]) / p		
+
+    y2[size - 1] = 0
+
+    # Back substitution
+    for jj in np.arange(1, size - 1, -1):
+	y2[jj] = y2[jj] * y2[jj + 1] + u[jj]
+
+    # Actual spline calculation	
+    h = 1 ; a = 0.5 ; b = 0.5
+
+    for ii in range(size):
+        B_interp[ii] = a * B[ii] + b * B[ii + 1] + ((a**3 - a)*y2a[ii] + (b**3 - b)*y2a[ii + 1])*(h**2)/6.
+
+    return B_interp
+   
+ 
 def push_E(B, V_i, n_i, dt): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
     global Te
     E_out = np.zeros((size, 3))     # Output array - new electric field
@@ -344,15 +372,6 @@ def push_E(B, V_i, n_i, dt): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
     Te[0]              = Te[size - 2]
     Te[size - 1]       = Te[1]
 
-    #x_diag = np.array([np.max(np.abs(JxB[:, 0])), np.max(np.abs(BdB[:, 0])), np.max(np.abs(del_p[:, 0]))]) 
-    #y_diag = np.array([np.max(np.abs(JxB[:, 1])), np.max(np.abs(BdB[:, 1])), np.max(np.abs(del_p[:, 1]))])
-    #z_diag = np.array([np.max(np.abs(JxB[:, 2])), np.max(np.abs(BdB[:, 2])), np.max(np.abs(del_p[:, 2]))])  
-    
-    #print x_diag
-    #print y_diag
-    #print z_diag
-
-    #pdb.set_trace()
     return E_out
 
 

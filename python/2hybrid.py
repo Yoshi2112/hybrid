@@ -45,17 +45,17 @@ def initialize_particles():
     global Nj, N, Te0, dx, dy, xmax, ymax, partin, idx_start, idx_end, xmax, cell_N, n_contr, ne, scramble_position, xmin
 
     f = 0.00       # Relative beam density
-    V = 0.0e5       # Relative streaming velocity 
+    V = 100000.0e5 # Relative streaming velocity 
     # Species Characteristics - use column number as species identifier
     #                        H+ (cold)             H+ (hot)               
     partin = np.array([[           1.0  ], #,             1.0 ],        #(0) Mass   (proton units)
                        [           1.0  ], #,             1.0 ],        #(1) Charge (charge units)
-                       [         60000. ], #,              V  ],        #(2) Bulk Velocity (m/s)
+                       [         00000. ], #,              V  ],        #(2) Bulk Velocity (m/s)
                        [           1-f  ], #,              f  ],        #(3) Real density as a portion of ne
                        [           1.0  ], #,            0.5  ],        #(4) Simulated (superparticle) Density (as a portion of 1)
                        [             0  ], #,              0  ],        #(5) Distribution type         0: Uniform, 1: Sinusoidal (or beam)
-                       [             1.0], #,              1.0],        #(6) Parallel      Temperature (eV) (x)
-                       [             1.0], #,              1.0],        #(7) Perpendicular Temperature (eV) (y, z)
+                       [             0.0], #,              0.0],        #(6) Parallel      Temperature (eV) (x)
+                       [             0.0], #,              0.0],        #(7) Perpendicular Temperature (eV) (y, z)
                        [             1  ]]) #,              0  ]])       #(8) Hot (0) or Cold (1) species
     
     part_type     = ['$H^{+}$ (cold)',
@@ -267,6 +267,32 @@ def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
     B[:, :, 2] = Bp[:, :, 2] + Bc[2]
     return B
     
+def interp_B(B):
+    xi = range(size)
+    y2 = np.zeros(size, dtype=float)
+    u  = np.zeros(size, dtype=float)
+    B_interp = np.zeros(size, dtype=float)	
+
+    # Decomposition Loop
+    for ii in range(1, size - 1):
+	sig    = (xi[ii] - xi[ii - 1]) / (xi[ii + 1] - xi[ii - 1])
+	p      = sig * y2[ii - 1] + 2.
+	y2[ii] = (sig - 1.) / p
+	u[ii]  = (6.*( (B[ii + 1] - B[ii]) / (xi[ii + 1]-xi[ii]) - (B[ii] - B[ii - 1]) / (xi[ii] - xi[ii - 1]))/(xi[ii + 1] - xi[ii - 1]) - sig * u[ii - 1]) / p		
+
+    y2[size - 1] = 0
+
+    # Back substitution
+    for jj in np.arange(1, size - 1, -1):
+	y2[jj] = y2[jj] * y2[jj + 1] + u[jj]
+
+    # Actual spline calculation	
+    h = 1 ; a = 0.5 ; b = 0.5
+
+    for ii in range(size):
+        B_interp[ii] = a * B[ii] + b * B[ii + 1] + ((a**3 - a)*y2a[ii] + (b**3 - b)*y2a[ii + 1])*(h**2)/6.
+
+    return B_interp
     
 def push_E(B, J_species, n_i, dt):
 
@@ -278,6 +304,10 @@ def push_E(B, J_species, n_i, dt):
     qn    = np.zeros((size, size    ), dtype=float) # Ion charge density
     
     Te = np.ones((size, size)) * Te0                             # Isothermal (const) approximation until adiabatic thing happens 
+	
+    # Calculate value of B at E-field nodes (interpolation)
+
+
     
     # Calculate average/summations over species
     for jj in range(Nj):
@@ -319,30 +349,6 @@ def push_E(B, J_species, n_i, dt):
         E_out[:, :, xx]  = - JixB[:, :, xx] - del_p[:, :, xx] - BdB[:, :, xx] 
 
     E_out = manage_ghost_cells(E_out, 0)
-    
-    #X, Y = np.meshgrid(range(size), range(size))
-    #fig = plt.figure()
-
-    #ax_Jx = plt.subplot2grid((2, 2), (0, 0), projection='3d')
-    #ax_Jx.plot_wireframe(X, Y, Ji[:, :, 0])
-    #ax_Jx.view_init(elev=30., azim=300.)
-    #ax_Jx.set_title('Jx')
-
-    #ax_Jy = plt.subplot2grid((2, 2), (0, 1), projection='3d')
-    #ax_Jy.plot_wireframe(X, Y, Ji[:, :, 1])
-    #ax_Jy.view_init(elev=30., azim=300.)
-    #ax_Jy.set_title('Jy')
-    
-    #ax_Jz = plt.subplot2grid((2, 2), (1, 0), projection='3d')
-    #ax_Jz.plot_wireframe(X, Y, Ji[:, :, 2])
-    #ax_Jz.view_init(elev=30., azim=300.) 
-    #ax_Jz.set_title('Jz')
-    
-    #ax_J = plt.subplot2grid((2, 2), (1, 1), projection='3d')
-    #ax_J.plot_wireframe(X, Y, E_out[:, :, 2])
-    #ax_J.view_init(elev=30., azim=300.)
-    #ax_J.set_title('E_out z')
-    #plt.show()
 
     return E_out
 
@@ -521,9 +527,9 @@ def check_cell_dist_2d(part, node, species):
 
 if __name__ == '__main__':                         # Main program start
     start_time     = timer()                       # Start Timer
-    drive          = '/media/yoshi/VERBATIM HD/'   # Drive letter for portable HDD (changes between computers. Use /home/USER/ for linux.)
+    drive          = 'E:/'                         # Drive letter for portable HDD (changes between computers. Use /home/USER/ for linux.)
     save_path      = 'runs/two_d_boundary/'        # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
-    generate_data  = 0                             # Save data? Yes (1), No (0)
+    generate_data  = 1                             # Save data? Yes (1), No (0)
     generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
     run_desc = '''Full 2D test. 1eV, two proton species with isothermal electrons. Smoothing included. Just to see if anything explodes. Should be in equilibrium hopefully.'''
     
