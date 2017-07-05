@@ -22,49 +22,50 @@ def set_constants():
     return    
     
 def set_parameters():
-    global seed, t_res, NX, NY, max_sec, cellpart, ie, B0, size, k, ne, xmax, ymax, Te0
+    global seed, t_res, NX, NY, max_sec, cellpart, ie, B0, size, k, ne, xmax, ymax, Te0, alfie
     t_res    = 0                               # Time resolution of data in seconds; how often data is dumped to file. Every frame captured if '0'.
-    NX       = 24                              # Number of cells in x dimension
-    NY       = 24                              # Number of cells in y dimension
-    max_sec  = 10000                           # Number of (real) seconds to run program for   
-    square   = 12                              # Number of species particles per cell (assuming even representation)
+    NX       = 128                             # Number of cells in x dimension
+    NY       = 128                             # Number of cells in y dimension
+    max_sec  = 3600                            # Number of (real) seconds to run program for   
+    square   = 4                               # Number of species particles per cell (assuming even representation)
     cellpart = square ** 2                     # No. particles per cell for each species
     ie       = 0                               # Adiabatic electrons. 0: off (constant), 1: on.    
     B0       = 4e-9                            # Unform initial B-field magnitude (in T)
     k        = 5                               # Sinusoidal Density Parameter - number of wavelengths in spatial domain (k - 2 waves)
-    ne       = 10.0e6                          # Electron density (used to assign portions of ion)
+    ne       = 8.48e6                          # Electron density (used to assign portions of ion)
     Te0      = 0                               # Initial isotropic electron temperature in eV. '0': Isothermal with ions
 
     size     = NX + 2                          # Size of grid arrays
+    alfie    = B0 / np.sqrt(mu0 * ne * mp)     # Alfven speed (valid for non-heavy ion simulations only)
     np.set_printoptions(threshold='nan')
     seed     = 21
     return    
 
 def initialize_particles():
     np.random.seed(seed)                          # Random seed 
-    global Nj, N, Te0, dx, dy, xmax, ymax, partin, idx_start, idx_end, xmax, cell_N, n_contr, ne, scramble_position, xmin
+    global Nj, N, Te0, dx, dy, xmax, ymax, partin, idx_start, idx_end, xmax, cell_N, n_contr, ne, scramble_position, xmin, f, V, Tpar, Tper
 
-    f = 0.00       # Relative beam density
-    V = 100000.0e5 # Relative streaming velocity 
+    f = 0.015      # Relative beam density
+    V = 10*alfie   # Relative streaming velocity 
     # Species Characteristics - use column number as species identifier
     #                        H+ (cold)             H+ (hot)               
-    partin = np.array([[           1.0  ], #,             1.0 ],        #(0) Mass   (proton units)
-                       [           1.0  ], #,             1.0 ],        #(1) Charge (charge units)
-                       [         00000. ], #,              V  ],        #(2) Bulk Velocity (m/s)
-                       [           1-f  ], #,              f  ],        #(3) Real density as a portion of ne
-                       [           1.0  ], #,            0.5  ],        #(4) Simulated (superparticle) Density (as a portion of 1)
-                       [             0  ], #,              0  ],        #(5) Distribution type         0: Uniform, 1: Sinusoidal (or beam)
-                       [             0.5], #,              0.0],        #(6) Parallel      Temperature (eV) (x)
-                       [             0.5], #,              0.0],        #(7) Perpendicular Temperature (eV) (y, z)
-                       [             1  ]]) #,              0  ]])       #(8) Hot (0) or Cold (1) species
+    partin = np.array([[           1.0  ,             1.0 ],        #(0) Mass   (proton units)
+                       [           1.0  ,             1.0 ],        #(1) Charge (charge units)
+                       [     -f*V/(1-f) ,              V  ],        #(2) Bulk Velocity (m/s)
+                       [           1-f  ,              f  ],        #(3) Real density as a portion of ne
+                       [           0.5  ,            0.5  ],        #(4) Simulated (superparticle) Density (as a portion of 1)
+                       [             0  ,              1  ],        #(5) Distribution type         0: Uniform, 1: Sinusoidal (or beam)
+                       [             4.7,              4.7],        #(6) Parallel      Temperature (eV) (x)
+                       [             4.7,              4.7],        #(7) Perpendicular Temperature (eV) (y, z)
+                       [             1  ,              0  ]])       #(8) Hot (0) or Cold (1) species
     
     part_type     = ['$H^{+}$ (cold)',
                      '$H^{+}$ (hot)'] 
    
     # Reconfigure space for Winske & Quest (1986) testing
     wpi           = np.sqrt((ne * (q ** 2)) / (mp * e0))
-    dx            = (c/wpi)                                             # Spacial step (in metres)
-    dy            = (c/wpi)
+    dx            = 2*(c/wpi)                                             # Spacial step (in metres)
+    dy            = 2*(c/wpi)
     xmax          = NX * dx
     ymax          = NY * dy
 
@@ -89,30 +90,27 @@ def initialize_particles():
         m       = partin[0, jj] * mp                       # Species mass
         vpar    = np.sqrt(    kB * Tpar[jj] / m)           # Species parallel thermal velocity (x)
         vper    = np.sqrt(2 * kB * Tper[jj] / m)           # Species perpendicular thermal velocity (y, z)
-        cell_N  = cellpart * partin[4, :]
         
-        if partin[5, jj] == 0:
-            acc         = 0
-            n_particles = int(cell_N[jj])
-            sq          = int(np.sqrt(cellpart/Nj))
+        #if partin[5, jj] == 0 or partin[5, jj] == 1:
+        acc         = 0
+        sq          = int(np.sqrt(cellpart/Nj))
             
-            for ii in range(NX):
-                for kk in range(NY):
-                    #for mm in range(sq):
-                    #    for nn in range(sq):
-                    #        p_idx = mm*sq + nn
-                    #        part[0, idx_start[jj] + acc + p_idx] = ((float(mm) / sq + ii) * dx)
-                    #        part[1, idx_start[jj] + acc + p_idx] = ((float(nn) / sq + kk) * dy)
-                    
-                    part[0, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.uniform(0, xmax, n_particles)
-                    part[1, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.uniform(0, xmax, n_particles)
+        for ii in range(NX):
+            for kk in range(NY):
+                #for mm in range(sq):
+                #    for nn in range(sq):
+                #        p_idx = mm*sq + nn
+                #        part[0, idx_start[jj] + acc + p_idx] = ((float(mm) / sq + ii) * dx)
+                #        part[1, idx_start[jj] + acc + p_idx] = ((float(nn) / sq + kk) * dy)
+                part[0, (idx_start[jj] + acc): (idx_start[jj] + acc + cellpart)] = np.random.uniform(ii*dx, (ii + 1)*dx, cellpart)
+                part[1, (idx_start[jj] + acc): (idx_start[jj] + acc + cellpart)] = np.random.uniform(kk*dy, (kk + 1)*dy, cellpart)
 
-                    part[3, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tpar[jj]) / (partin[0, jj] * mp)), n_particles) + partin[2, jj]
-                    part[4, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tper[jj]) / (partin[0, jj] * mp)), n_particles)
-                    part[5, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tper[jj]) / (partin[0, jj] * mp)), n_particles)
+                part[3, (idx_start[jj] + acc): (idx_start[jj] + acc + cellpart)] = np.random.normal(0, np.sqrt((kB * Tpar[jj]) / (partin[0, jj] * mp)), cellpart) + partin[2, jj]
+                part[4, (idx_start[jj] + acc): (idx_start[jj] + acc + cellpart)] = np.random.normal(0, np.sqrt((kB * Tper[jj]) / (partin[0, jj] * mp)), cellpart)
+                part[5, (idx_start[jj] + acc): (idx_start[jj] + acc + cellpart)] = np.random.normal(0, np.sqrt((kB * Tper[jj]) / (partin[0, jj] * mp)), cellpart)
                     
-                    acc += n_particles
-
+                acc += cellpart
+            
     part[6, :] = part[0, :] / dx + 0.5 ; part[6, :] = part[6, :].astype(int)    # Initial leftmost node, Ix
     part[7, :] = part[1, :] / dy + 0.5 ; part[7, :] = part[7, :].astype(int)    # Bottom-most node, Iy
     return part, part_type, old_part
@@ -227,7 +225,7 @@ def position_update(part):  # Basic Push (x, v) vectors and I, W update
             part[1, ii] = ymax + part[1, ii]
 
         if part[1, ii] > ymax:
-            part[1, ii] = part[1, ii] - xmax
+            part[1, ii] = part[1, ii] - ymax
     
     part[6, :] = part[0, :] / dx + 0.5 ; part[6, :] = part[6, :].astype(int)            # Ix update
     part[7, :] = part[1, :] / dy + 0.5 ; part[7, :] = part[7, :].astype(int)            # Iy update
@@ -505,11 +503,11 @@ def check_cell_dist_2d(part, node, species):
 
 if __name__ == '__main__':                         # Main program start
     start_time     = timer()                       # Start Timer
-    drive          = 'C:/'                         # Drive letter for portable HDD (changes between computers. Use /home/USER/ for linux.)
-    save_path      = 'runs/two_d_boundary/'        # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
+    drive          = '/home/yoshi/'                # Drive letter for portable HDD (changes between computers. Use /home/USER/ for linux.)
+    save_path      = 'runs/winske_2d/'             # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
     generate_data  = 0                             # Save data? Yes (1), No (0)
     generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
-    run_desc = '''2D Test: Does the direction of B0 change the boundary that the simulation explodes on?'''
+    run_desc = '''2D Test: Recreation (hopefully) of Winske & Quest (1986) data (with better particle resolution)'''
     
     print 'Initializing parameters...'
     set_constants()
@@ -600,49 +598,53 @@ if __name__ == '__main__':                         # Main program start
             # Slice some things for simplicity
             sim_time   += DT
             pos         = part[0:2, :] / RE         # Particle x-positions in Earth-Radii 
+            vel         = part[3:6, :] / alfie      # Velocities as multiples of the alfven speed
+            B_norm      = B[:, :, :]   / B0
             x_cell_num  = np.arange(size)           # Numerical cell numbering: x-axis
             y_cell_num  = np.arange(size)
-            
-            alfie       = B0 / np.sqrt(mu0 * ne * mp) # Alfven speed (valid for protons only)
-            vel         = part[3:6, :] / alfie      # Velocities as multiples of the alfven speed 
-        
-            # PLOT: Spatial values of Bz
+
+            # PLOT: Density
             ax_main = plt.subplot2grid(fig_size, (0, 0), rowspan=4, colspan=4)
            
-            ax_main.pcolor((dns[:, :, 0] / ne), cmap='seismic', vmin=0.25, vmax=1.75)
-            #plt.colorbar(ax_main)
-            #ax_main.set_title(r'$B_z$ (nT)')
-            #X, Y = np.meshgrid(x_cell_num, y_cell_num)
+            ax_main.pcolormesh((dns[:, :, 1] / (f*ne)), cmap='seismic', vmin=0.25, vmax=1.75)
 
-            #ax_main.plot_wireframe(X, Y, (B[:, :, 2]*1e9))
-            #ax_main.set_xlim(0, size)
-            #ax_main.set_ylim(0, size)
-            #ax_main.set_zlim(-B0*1e9, B0*1e9)
-            #ax_main.view_init(elev=21., azim=300.)
+            ax_main.set_title('Normalized Beam Density')
+            ax_main.set_xlabel('x (m)')
+            ax_main.set_ylabel('y (m)')
 
-            # PLOT: Spatial values of Ez
+            # PLOT: Spatial values of By
             ax_main2 = plt.subplot2grid(fig_size, (0, 4), projection='3d', rowspan=4, colspan=4)
-            ax_main2.set_title(r'$E_z$ (mV)')
+            ax_main2.set_title(r'$B_y$')
             X, Y = np.meshgrid(x_cell_num, y_cell_num)
 
-            ax_main2.plot_wireframe(X, Y, (E[:, :, 2]*1e6))
+            ax_main2.plot_wireframe(X, Y, B_norm[:, :, 1])
             ax_main2.set_xlim(0, size)
             ax_main2.set_ylim(0, size)
-            ax_main2.set_zlim(-150, 150)
+            ax_main2.set_zlim(-1, 1)
             ax_main2.view_init(elev=25., azim=300.)
-
-            ax_main.set_xlabel('x')
-            ax_main.set_ylabel('y')
 
             ax_main2.set_xlabel('x (m)')
             ax_main2.set_ylabel('y (m)')
-            ax_main2.set_zlabel(r'$E_z (\mu V)$')
+            ax_main2.set_zlabel(r'$B_y$')
 
+            # Diagnostic and Informative figures
+            beta_par = (2*mu0*(partin[1, :]*ne)*kB*Tpar) / (B0 ** 2)
+            beta_per = (2*mu0*(partin[1, :]*ne)*kB*Tper) / (B0 ** 2)
+            
             plt.figtext(0.85, 0.90, 'N  = %d' % N, fontsize=24)
-            plt.figtext(0.85, 0.70, r'$NX$ = %d' % NX, fontsize=24)
-            plt.figtext(0.85, 0.65, r'$NY$ = %d' % NY, fontsize=24)
-            plt.figtext(0.82, 0.05, r'$B_0$ = [%.1f, %.1f, %.1f] nT' % (Bc[0]*1e9, Bc[1]*1e9, Bc[2]*1e9), fontsize=20)
+            plt.figtext(0.85, 0.85, r'$NX$ = %d' % NX, fontsize=24)
+            plt.figtext(0.85, 0.80, r'$NY$ = %d' % NY, fontsize=24)
+            
+            plt.figtext(0.85, 0.70, r'$n_e = %.2f cm^{-1}$' % (ne / 1e6), fontsize=24)
+            plt.figtext(0.85, 0.65, r'$n_b$ = %.1f%%' % (f*100), fontsize=24)
 
+            plt.figtext(0.85, 0.55, r'$\beta_{\parallel} = %.1f$' % beta_par[1], fontsize=24)
+            plt.figtext(0.85, 0.50, r'$\beta_{\perp} = %.1f$' % beta_per[1], fontsize=24)
+
+            plt.figtext(0.85, 0.40, r'$V_b = %.2f v_A$' % (partin[2, 1] / alfie), fontsize=24)
+            plt.figtext(0.85, 0.35, r'$V_c = %.2f v_A$' % (partin[2, 0] / alfie), fontsize=24)
+
+            plt.figtext(0.82, 0.05, r'$B_0$ = [%.1f, %.1f, %.1f] nT' % (Bc[0]*1e9, Bc[1]*1e9, Bc[2]*1e9), fontsize=20)
             plt.figtext(0.813, 0.10, r'$t_{real} = %.2fs$' % sim_time, fontsize=20)
                     
         ################################
@@ -658,7 +660,7 @@ if __name__ == '__main__':                         # Main program start
                     os.makedirs('%s/%s' % (drive, save_path))              # Create master test series directory
                     print 'Master directory created'
                     
-                num = len(os.listdir('%s%s' % (drive, save_path)))        # Count number of existing runs. Set to run number manually for static save
+                num = 0#len(os.listdir('%s%s' % (drive, save_path)))        # Count number of existing runs. Set to run number manually for static save
                 path = ('%s/%s/run_%d' % (drive, save_path, num))          # Set root run path (for images)
                 
                 if os.path.exists(path) == False:
