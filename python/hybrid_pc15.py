@@ -620,8 +620,9 @@ if __name__ == '__main__':                         # Main program start
             W           = assign_weighting(part[0, :], part[6, :], 1)                       # Assign initial (E) weighting to particles
             dns         = collect_density(part[6, :], W, part[8, :])                        # Collect initial density   
             Vi          = collect_flow(part, dns, W)                                        # Collect initial current
-            initial_cell_density      = dns 
-            timestep_history          = []
+            initial_cell_density      = dns                                                 # Store initial particle density: For normalization
+            timestep_history          = []                                                  # Array to record which timesteps are halved
+            real_time                 = 0                                                   # Initialize simulation time
 
             B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], 0)                                     # Initialize magnetic field (should be second?)
             E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, 0)                                       # Initialize electric field
@@ -687,7 +688,7 @@ if __name__ == '__main__':                         # Main program start
                         'axes.labelsize'    : 16,
                         })
             
-            sim_time    = qq * DT
+            real_time  += DT
             x_pos       = part[0, 0:N] / 1000            # Particle x-positions (km) (For looking at particle characteristics)  
             x_cell_num  = np.arange(size - 2)            # Numerical cell numbering: x-axis
       
@@ -778,7 +779,7 @@ if __name__ == '__main__':                         # Main program start
             plt.tight_layout(pad=1.0, w_pad=1.8)
             fig.subplots_adjust(hspace=0)    
             
-            text1  = plt.figtext(0.84, 0.01, 'Real Time = %.2f s'           % (sim_time),                   fontsize = 16, color='k')
+            text1  = plt.figtext(0.84, 0.01, 'Real Time = %.2f s'           % (real_time),                  fontsize = 16, color='k')
             text3  = plt.figtext(0.86, 0.94, 'N  = %d'                      % N,                            fontsize = 18)
             text4  = plt.figtext(0.86, 0.91, r'$n_b$ = %.1f%%'              % (partin[3, 0]/ne * 100),      fontsize = 18)
             text5  = plt.figtext(0.86, 0.88, 'NX = %d'                      % NX,                           fontsize = 18)

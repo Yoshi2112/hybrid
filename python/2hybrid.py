@@ -24,10 +24,10 @@ def set_constants():
 def set_parameters():
     global seed, t_res, NX, NY, max_sec, cellpart, ie, B0, size, k, ne, xmax, ymax, Te0
     t_res    = 0                               # Time resolution of data in seconds; how often data is dumped to file. Every frame captured if '0'.
-    NX       = 64                              # Number of cells in x dimension
-    NY       = 64                              # Number of cells in y dimension
+    NX       = 24                              # Number of cells in x dimension
+    NY       = 24                              # Number of cells in y dimension
     max_sec  = 10000                           # Number of (real) seconds to run program for   
-    square   = 6                               # Number of species particles per cell (assuming even representation)
+    square   = 12                              # Number of species particles per cell (assuming even representation)
     cellpart = square ** 2                     # No. particles per cell for each species
     ie       = 0                               # Adiabatic electrons. 0: off (constant), 1: on.    
     B0       = 4e-9                            # Unform initial B-field magnitude (in T)
@@ -54,8 +54,8 @@ def initialize_particles():
                        [           1-f  ], #,              f  ],        #(3) Real density as a portion of ne
                        [           1.0  ], #,            0.5  ],        #(4) Simulated (superparticle) Density (as a portion of 1)
                        [             0  ], #,              0  ],        #(5) Distribution type         0: Uniform, 1: Sinusoidal (or beam)
-                       [             0.0], #,              0.0],        #(6) Parallel      Temperature (eV) (x)
-                       [             0.0], #,              0.0],        #(7) Perpendicular Temperature (eV) (y, z)
+                       [             0.5], #,              0.0],        #(6) Parallel      Temperature (eV) (x)
+                       [             0.5], #,              0.0],        #(7) Perpendicular Temperature (eV) (y, z)
                        [             1  ]]) #,              0  ]])       #(8) Hot (0) or Cold (1) species
     
     part_type     = ['$H^{+}$ (cold)',
@@ -98,12 +98,15 @@ def initialize_particles():
             
             for ii in range(NX):
                 for kk in range(NY):
-                    for mm in range(sq):
-                        for nn in range(sq):
-                            p_idx = mm*sq + nn
-                            part[0, idx_start[jj] + acc + p_idx] = ((float(mm) / sq + ii) * dx)
-                            part[1, idx_start[jj] + acc + p_idx] = ((float(nn) / sq + kk) * dy)
+                    #for mm in range(sq):
+                    #    for nn in range(sq):
+                    #        p_idx = mm*sq + nn
+                    #        part[0, idx_start[jj] + acc + p_idx] = ((float(mm) / sq + ii) * dx)
+                    #        part[1, idx_start[jj] + acc + p_idx] = ((float(nn) / sq + kk) * dy)
                     
+                    part[0, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.uniform(0, xmax, n_particles)
+                    part[1, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.uniform(0, xmax, n_particles)
+
                     part[3, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tpar[jj]) / (partin[0, jj] * mp)), n_particles) + partin[2, jj]
                     part[4, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tper[jj]) / (partin[0, jj] * mp)), n_particles)
                     part[5, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tper[jj]) / (partin[0, jj] * mp)), n_particles)
@@ -221,7 +224,7 @@ def position_update(part):  # Basic Push (x, v) vectors and I, W update
             part[0, ii] = part[0,ii] - xmax
 
         if part[1, ii] < 0:
-            part[1, ii] = ymax + part[0, ii]
+            part[1, ii] = ymax + part[1, ii]
 
         if part[1, ii] > ymax:
             part[1, ii] = part[1, ii] - xmax
@@ -267,33 +270,7 @@ def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
     B[:, :, 2] = Bp[:, :, 2] + Bc[2]
     return B
     
-def interp_B(B):
-    xi = range(size)
-    y2 = np.zeros(size, dtype=float)
-    u  = np.zeros(size, dtype=float)
-    B_interp = np.zeros(size, dtype=float)	
 
-    # Decomposition Loop
-    for ii in range(1, size - 1):
-	sig    = (xi[ii] - xi[ii - 1]) / (xi[ii + 1] - xi[ii - 1])
-	p      = sig * y2[ii - 1] + 2.
-	y2[ii] = (sig - 1.) / p
-	u[ii]  = (6.*( (B[ii + 1] - B[ii]) / (xi[ii + 1]-xi[ii]) - (B[ii] - B[ii - 1]) / (xi[ii] - xi[ii - 1]))/(xi[ii + 1] - xi[ii - 1]) - sig * u[ii - 1]) / p		
-
-    y2[size - 1] = 0
-
-    # Back substitution
-    for jj in np.arange(1, size - 1, -1):
-	y2[jj] = y2[jj] * y2[jj + 1] + u[jj]
-
-    # Actual spline calculation	
-    h = 1 ; a = 0.5 ; b = 0.5
-
-    for ii in range(size):
-        B_interp[ii] = a * B[ii] + b * B[ii + 1] + ((a**3 - a)*y2a[ii] + (b**3 - b)*y2a[ii + 1])*(h**2)/6.
-
-    return B_interp
-    
 def push_E(B, J_species, n_i, dt):
 
     E_out = np.zeros((size, size, 3))               # Output array - new electric field
@@ -381,7 +358,8 @@ def collect_density(part, W):
     return n_i
 
 
-def collect_current(part, ni, W):
+def collect_current(part, ni, W): # Do we really need currents due to each individual ion? Or just sum all at once? Is this legit? Why do papers make it sound hard?
+                                  # Maybe because need to find average velocity/flux per species first? Get this checked.
     
     J_i = np.zeros((size, size, Nj, 3), float)    
     
@@ -397,7 +375,7 @@ def collect_current(part, ni, W):
             for kk in range(2):
                 J_i[Ix + jj, Iy + kk, idx, :] += Wx[jj] * Wy[kk] * n_contr[idx] * part[3:6, ii]     # Does all 3 dimensions at once (much more efficient/parallel)
     
-    for jj in range(Nj):    # Turn those velocities into currents (per species)
+    for jj in range(Nj):    # Turn those velocities into currents (per species): Less calculations?
         J_i[:, :, jj, :] *= partin[1, jj] * q
     
     J_i = manage_ghost_cells(J_i, 1) / (dx*dy)     # Divide by spatial cell size for current per unit
@@ -527,11 +505,11 @@ def check_cell_dist_2d(part, node, species):
 
 if __name__ == '__main__':                         # Main program start
     start_time     = timer()                       # Start Timer
-    drive          = 'E:/'                         # Drive letter for portable HDD (changes between computers. Use /home/USER/ for linux.)
+    drive          = 'C:/'                         # Drive letter for portable HDD (changes between computers. Use /home/USER/ for linux.)
     save_path      = 'runs/two_d_boundary/'        # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
-    generate_data  = 1                             # Save data? Yes (1), No (0)
+    generate_data  = 0                             # Save data? Yes (1), No (0)
     generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
-    run_desc = '''Full 2D test. 1eV, two proton species with isothermal electrons. Smoothing included. Just to see if anything explodes. Should be in equilibrium hopefully.'''
+    run_desc = '''2D Test: Does the direction of B0 change the boundary that the simulation explodes on?'''
     
     print 'Initializing parameters...'
     set_constants()
@@ -556,10 +534,6 @@ if __name__ == '__main__':                         # Main program start
             part = velocity_update(part, B[:, :, 0:3], E[:, :, 0:3], -0.5*DT, W, Wb)  # Retard velocity to N - 1/2 to prevent numerical instability
             #check_cell_dist_2d(part, (1, 1), 0) 
 
-            #X, Y = np.meshgrid(np.arange(size), np.arange(size))
-            #dplt = plt.subplot2grid((1, 1), (0, 0), projection='3d')
-            #dplt.plot_wireframe(X, Y, dns[:, :, 1])
-            #plt.show()
         else:
             # N + 1/2
             print 'Timestep %d' % qq
@@ -667,7 +641,9 @@ if __name__ == '__main__':                         # Main program start
             plt.figtext(0.85, 0.90, 'N  = %d' % N, fontsize=24)
             plt.figtext(0.85, 0.70, r'$NX$ = %d' % NX, fontsize=24)
             plt.figtext(0.85, 0.65, r'$NY$ = %d' % NY, fontsize=24)
-            plt.figtext(0.85, 0.10, r'$t_{real} = %.2fs$' % sim_time, fontsize=20)
+            plt.figtext(0.82, 0.05, r'$B_0$ = [%.1f, %.1f, %.1f] nT' % (Bc[0]*1e9, Bc[1]*1e9, Bc[2]*1e9), fontsize=20)
+
+            plt.figtext(0.813, 0.10, r'$t_{real} = %.2fs$' % sim_time, fontsize=20)
                     
         ################################
         # ---------- SAVING ---------- #

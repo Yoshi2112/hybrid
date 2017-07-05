@@ -463,8 +463,9 @@ if __name__ == '__main__':
             Vi        = collect_flow(part, dns, W)                                        # Collect initial current
             
             B[:, 0:3] = push_B(B[:, 0:3], E[:, 0:3], 0)                                  # Initialize magnetic field (should be second?)
-            #E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, 0, qq)                                 # Initialize electric field
-            #part      = velocity_update(part, B[:, 0:3], E[:, 0:3], -0.5*DT, W)            # Retard velocity to N - 1/2 to prevent numerical instability
+            #E[:, 0:3] = push_E(B[:, 0:3], Vi, dns, 0, qq)                               # Initialize electric field
+            #part      = velocity_update(part, B[:, 0:3], E[:, 0:3], -0.5*DT, W)         # Retard velocity to N - 1/2 to prevent numerical instability
+            real_time  = 0                                                               # Initialize plasma time
         else:
             # N + 1/2
 #==============================================================================
@@ -534,8 +535,8 @@ if __name__ == '__main__':
                         })
             
             # Set some things    
-            sim_time = qq * DT
-            x_pos = part[0, 0:N] * 1000                 # Particle x-positions (km) (For looking at particle characteristics)  
+            real_time  = qq * DT                        # Time within simulation (plasma time)
+            x_pos      = part[0, 0:N] * 1000            # Particle x-positions (km) (For looking at particle characteristics)  
             x_cell_num = np.arange(size - 2)            # Numerical cell numbering: x-axis
       
         #----- Plot: Magnetic Field Components
