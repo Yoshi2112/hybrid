@@ -23,12 +23,11 @@ def set_constants():
     
 def set_parameters():
     global seed, t_res, NX, NY, max_sec, cellpart, ie, B0, size, k, ne, xmax, ymax, Te0, alfie
-    t_res    = 0                               # Time resolution of data in seconds; how often data is dumped to file. Every frame captured if '0'.
+    t_res    = 1                               # Time resolution of data in seconds; how often data is dumped to file. Every frame captured if '0'.
     NX       = 128                             # Number of cells in x dimension
     NY       = 128                             # Number of cells in y dimension
     max_sec  = 3600                            # Number of (real) seconds to run program for   
-    square   = 4                               # Number of species particles per cell (assuming even representation)
-    cellpart = square ** 2                     # No. particles per cell for each species
+    cellpart = 16                              # No. particles per cell for each species (assuming even representation. Perfect squares only for 2D)
     ie       = 0                               # Adiabatic electrons. 0: off (constant), 1: on.    
     B0       = 4e-9                            # Unform initial B-field magnitude (in T)
     k        = 5                               # Sinusoidal Density Parameter - number of wavelengths in spatial domain (k - 2 waves)
@@ -37,6 +36,7 @@ def set_parameters():
 
     size     = NX + 2                          # Size of grid arrays
     alfie    = B0 / np.sqrt(mu0 * ne * mp)     # Alfven speed (valid for non-heavy ion simulations only)
+
     np.set_printoptions(threshold='nan')
     seed     = 21
     return    
@@ -74,10 +74,12 @@ def initialize_particles():
     N_species     = np.round(N * partin[4, :]).astype(int)                  # Number of sim particles for each species, total    
     n_contr       = (partin[3, :] * ne * xmax * ymax) / N_species           # Real particles per macroparticle        
     
-    Te0  = 11603.                                                           # (Initial) Electron temperature (K)
     Tpar = partin[6, :] * 11603                                             # Parallel ion temperature
     Tper = partin[7, :] * 11603                                             # Perpendicular ion temperature
     
+    if Te0 == 0:
+	Te0 = (Tpar[1] + 2*Tper[1]) / 3.				    # Isothermal electron approximation: Somewhere between par/per ion temperatures (FIX LATER!)
+
     part     = np.zeros((8, N), dtype=float)                                # Create array of zeroes N x 9 for 2d, idx, 3v,2I and 2W
     old_part = np.zeros((8, N), dtype=float)                                # Place to store last particle states while using Predictor-Corrector method
     
@@ -135,11 +137,11 @@ def set_timestep(part):
 
 def update_timestep(part, dt):
     if dx/(2*np.max(part[3:6, :])) <= dt:
-        dt  /= 2.
-        ts_history.append(qq)
+        #dt  /= 2.
+        #ts_history.append(qq)
         print 'Timestep halved: DT = %.5fs' % dt
-        if len(ts_history) > 7:
-            sys.exit('Timestep less than 1%% of initial. Consider parameter revision')
+        #if len(ts_history) > 7:
+            #sys.exit('Timestep less than 1%% of initial. Consider parameter revision')
     return dt
 
 def initialize_fields():  
@@ -279,10 +281,6 @@ def push_E(B, J_species, n_i, dt):
     qn    = np.zeros((size, size    ), dtype=float) # Ion charge density
     
     Te = np.ones((size, size)) * Te0                             # Isothermal (const) approximation until adiabatic thing happens 
-	
-    # Calculate value of B at E-field nodes (interpolation)
-
-
     
     # Calculate average/summations over species
     for jj in range(Nj):
@@ -503,9 +501,9 @@ def check_cell_dist_2d(part, node, species):
 
 if __name__ == '__main__':                         # Main program start
     start_time     = timer()                       # Start Timer
-    drive          = '/home/yoshi/'                # Drive letter for portable HDD (changes between computers. Use /home/USER/ for linux.)
+    drive          = 'E:/'                         # Drive letter for portable HDD (changes between computers. Use /home/USER/ for linux.)
     save_path      = 'runs/winske_2d/'             # Save path on 'drive' HDD - each run then saved in numerically sequential subfolder with images and associated data
-    generate_data  = 0                             # Save data? Yes (1), No (0)
+    generate_data  = 1                             # Save data? Yes (1), No (0)
     generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
     run_desc = '''2D Test: Recreation (hopefully) of Winske & Quest (1986) data (with better particle resolution)'''
     
@@ -529,7 +527,7 @@ if __name__ == '__main__':                         # Main program start
             
             initial_cell_density = dns 
             sim_time             = 0 
-            part = velocity_update(part, B[:, :, 0:3], E[:, :, 0:3], -0.5*DT, W, Wb)  # Retard velocity to N - 1/2 to prevent numerical instability
+            part = velocity_update(part, B[:, :, 0:3], E[:, :, 0:3], -0.5*DT, W, Wb)  	    # Retard velocity to N - 1/2 to prevent numerical instability
             #check_cell_dist_2d(part, (1, 1), 0) 
 
         else:
@@ -660,7 +658,7 @@ if __name__ == '__main__':                         # Main program start
                     os.makedirs('%s/%s' % (drive, save_path))              # Create master test series directory
                     print 'Master directory created'
                     
-                num = 0#len(os.listdir('%s%s' % (drive, save_path)))        # Count number of existing runs. Set to run number manually for static save
+                num = len(os.listdir('%s%s' % (drive, save_path)))        # Count number of existing runs. Set to run number manually for static save
                 path = ('%s/%s/run_%d' % (drive, save_path, num))          # Set root run path (for images)
                 
                 if os.path.exists(path) == False:
@@ -708,9 +706,9 @@ if __name__ == '__main__':                         # Main program start
                                    
                     h_name = os.path.join(d_path, 'header.pckl')                                # Data file containing variables used in run
                     
-                    with open(h_name, 'wb') as f:
-                        pickle.dump(params, f)
-                        f.close() 
+                    with open(h_name, 'wb') as fh:
+                        pickle.dump(params, fh)
+                        fh.close() 
                         print 'Header file saved'
                     
                     p_file = os.path.join(d_path, 'p_data')
