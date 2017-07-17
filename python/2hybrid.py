@@ -354,7 +354,7 @@ def collect_density(part, W):
     return n_i
 
 
-def collect_current(part, ni, W): # Do we really need currents due to each individual ion? Or just sum all at once? Is this legit? Why do papers make it sound hard?
+def collect_current(part, W): # Do we really need currents due to each individual ion? Or just sum all at once? Is this legit? Why do papers make it sound hard?
                                   # Maybe because need to find average velocity/flux per species first? Get this checked.
     
     J_i = np.zeros((size, size, Nj, 3), float)    
@@ -371,7 +371,7 @@ def collect_current(part, ni, W): # Do we really need currents due to each indiv
             for kk in range(2):
                 J_i[Ix + jj, Iy + kk, idx, :] += Wx[jj] * Wy[kk] * n_contr[idx] * part[3:6, ii]     # Does all 3 dimensions at once (much more efficient/parallel)
     
-    for jj in range(Nj):    # Turn those velocities into currents (per species): Less calculations?
+    for jj in range(Nj):   
         J_i[:, :, jj, :] *= partin[1, jj] * q
     
     J_i = manage_ghost_cells(J_i, 1) / (dx*dy)     # Divide by spatial cell size for current per unit
@@ -521,7 +521,7 @@ if __name__ == '__main__':                         # Main program start
             W            = assign_weighting(part[0:2, :], part[6:8, :], 1)                  # Assign initial (E) weighting to particles
             Wb           = assign_weighting(part[0:2, :], part[6:8, :], 0)                  # Magnetic field weighting (due to E/B grid displacement)
             dns          = collect_density(part, W)                                         # Collect initial density   
-            Vi           = collect_current(part, dns, W)                                    # Collect initial current
+            Vi           = collect_current(part, W)                                         # Collect initial current
             B[:, :, 0:3] = push_B(B[:, :, 0:3], E[:, :, 0:3], 0)                            # Initialize magnetic field (should be second?)
             E[:, :, 0:3] = push_E(B[:, :, 0:3], Vi, dns, 0)                                 # Initialize electric field
             
@@ -540,7 +540,7 @@ if __name__ == '__main__':                         # Main program start
             B[:, :, 0:3]  = push_B(B[:, :, 0:3], E[:, :, 0:3], DT)                          # Advance Magnetic Field to N + 1/2
             
             dns           = 0.5 * (dns + collect_density(part, W))                          # Collect ion density at N + 1/2 : Collect N + 1 and average with N                                             
-            Vi            = collect_current(part, dns, W)                                   # Collect ion flow at N + 1/2
+            Vi            = collect_current(part, W)                                        # Collect ion flow at N + 1/2
             E[:, :, 6:9]  = E[:, :, 0:3]                                                    # Store Electric Field at N because PC, yo
             E[:, :, 0:3]  = push_E(B[:, :, 0:3], Vi, dns, DT)                               # Advance Electric Field to N + 1/2   ii = even numbers
                       
@@ -559,7 +559,7 @@ if __name__ == '__main__':                         # Main program start
             part         = velocity_update(part, B[:, :, 0:3], E[:, :, 0:3], DT, W, Wb)     # Advance particle velocities to N + 3/2
             part, W, Wb  = position_update(part)                                            # Push particles to positions at N + 2
             dns          = 0.5 * (dns + collect_density(part, W))                           # Collect ion density as average of N + 1, N + 2
-            Vi           = collect_current(part, dns, W)                                    # Collect ion flow at N + 3/2
+            Vi           = collect_current(part, W)                                         # Collect ion flow at N + 3/2
             B[:, :, 0:3] = push_B(B[:, :, 0:3], E[:, :, 0:3], DT)                           # Push Magnetic Field again to N + 3/2 (Use same E(N + 1)
             E[:, :, 0:3] = push_E(B[:, :, 0:3], Vi, dns, DT)                                # Push Electric Field to N + 3/2   ii = odd numbers
             

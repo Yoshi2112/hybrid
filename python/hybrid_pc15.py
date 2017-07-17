@@ -6,6 +6,7 @@ import pickle
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 import pdb
+import sys
 
 def set_constants():
     global q, c, mp, mu0, kB, e0, RE    
@@ -106,8 +107,6 @@ def initialize_particles():
     for jj in range(Nj):
         part[8, idx_start[jj]: idx_end[jj]] = jj           # Give index identifier to each particle  
         m       = partin[0, jj] * mp                       # Species mass
-        vpar    = np.sqrt(    kB * Tpar[jj] / m)           # Species parallel thermal velocity (x)
-        vper    = np.sqrt(2 * kB * Tper[jj] / m)           # Species perpendicular thermal velocity (y, z)
         cell_N_uniform = cellpart * partin[4, :]
         
         if partin[5, jj] == 0:
@@ -116,9 +115,9 @@ def initialize_particles():
             part[0, idx_start[jj]: idx_end[jj]] = xmax * np.asarray([(float(xx) / N_species[jj]) for xx in range(N_species[jj])])
 
             for ii in range(NX):
-                part[3, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tpar[jj]) / (partin[0, jj] * mp)), n_particles) + partin[2, jj]
-                part[4, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tper[jj]) / (partin[0, jj] * mp)), n_particles)
-                part[5, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tper[jj]) / (partin[0, jj] * mp)), n_particles)
+                part[3, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tpar[jj]) / (partin[0, jj] * m)), n_particles) + partin[2, jj]
+                part[4, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tper[jj]) / (partin[0, jj] * m)), n_particles)
+                part[5, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB * Tper[jj]) / (partin[0, jj] * m)), n_particles)
                 
                 acc += n_particles
                 
@@ -289,7 +288,6 @@ def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
 def cubic_spline_interp(B):
     '''1D interpolation of the magnetic field values onto the E-field mesh, for use in the push_E update equation. Code adapted from Numerical Recipes for Fortran 90.'''
     B_interp = np.zeros((size, 3), dtype=float)	
-    xi       = range(size)
     
     for dd in range(3):
         y2 = np.zeros(size)
