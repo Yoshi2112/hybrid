@@ -13,7 +13,7 @@ from hybrid_auxilliary import manage_ghost_cells
 from hybrid_auxilliary import cross_product
 
 @nb.njit(cache=True)
-def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
+def push_B(B, E, dt):
     '''Updates the magnetic field across the simulation domain by implementing a finite difference on Faraday's Law.
     
     INPUT:
@@ -71,7 +71,7 @@ def push_E_equil(B, J_i, n_i, dt):
     '''Calculates the value of the electric field based on source term and magnetic field contributions. This is done via
     a reworking of Ampere's Law that assumes quasineutrality, and removes the requirement to calculate the electron current.
     Based on equation 10 of Buchner (2003, p. 140). This version contains electron temperature variation designed to keep
-    non-uniform plasma spatial distributions in equilibrium via del dot P_e = 0.
+    non-uniform plasma spatial distributions in equilibrium via div(P_e) = 0.
     
     INPUT:
         B   -- Magnetic field array. Displaced from E-field array by half a spatial step.
@@ -93,17 +93,17 @@ def push_E_equil(B, J_i, n_i, dt):
     
     B_i = cubic_spline_interp(B)                                # Magnetic field values interpolated onto E-field grid
     
-    for jj in range(Nj):                                  # Calculate average/summations over species
-        qn += charge[jj] * n_i[:, jj]                        # Total charge density, sum(qj * nj)
+    for jj in range(Nj):                                        # Calculate average/summations over species
+        qn += charge[jj] * n_i[:, jj]                           # Total charge density, sum(qj * nj)
         
         for kk in range(3):                                     # Total ion current vector: J_k = qj * nj * Vj_k
             J[:, kk]  += J_i[:, jj, kk]   
 
     # MHD equilibrium thing
-    Te  = [Te0 for ii in range(size)]                     # Electron temperature per cell
-    nex = qn / q                                          # Electron number density per cell (via quasineutrality)
+    Te  = [Te0 for ii in range(size)]                            # Electron temperature per cell
+    nex = qn / q                                                 # Electron number density per cell (via quasineutrality)
 
-    if mhd_equil == 1:                                    # Finite difference to give del_p = 0
+    if mhd_equil == 1:                                           # Finite difference to give del_p = 0
         for ii in range(2, size - 1):
             Te[ii] = (4*Te[ii - 1] - Te[ii - 2]) * (1 / ( ((nex[ii + 1] - nex[ii - 1]) / nex[ii]) + 3))
     
