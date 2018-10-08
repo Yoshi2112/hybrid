@@ -7,7 +7,7 @@ Created on Fri Sep 22 11:00:58 2017
 import numpy as np
 
 ### RUN DESCRIPTION ###                     # Saves within run for easy referencing
-run_description = ''''''
+run_description = '''Stock standard run for control test'''
 
 
 ### RUN PARAMETERS ###
@@ -34,7 +34,7 @@ RE  = 6.371e6                               # Earth radius in metres
 dxm      = 2                                # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't resolvable by hybrid code)
 t_res    = 0                                # Time resolution. Determines how often data is captured. Every frame captured if '0'.
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_sec  = 1800                             # Simulation runtime, in seconds of simulated time
+max_sec  = 500                              # Simulation runtime, in seconds of simulated time
 cellpart = 100                              # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 B0       = 4e-9                             # Unform initial magnetic field value (in T)

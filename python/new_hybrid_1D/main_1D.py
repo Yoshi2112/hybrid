@@ -21,22 +21,20 @@ def main_simulation_loop():
     B, E, Ji, dns, W, Wb    = init.initialize_fields()
     DT, maxtime, framegrab  = aux.set_timestep(part)
 
-    maxtime = 1
     for qq in range(maxtime):
         if qq == 0:
             print 'Simulation starting...'
-            W           = sources.assign_weighting(part[0, :], part[6, :], 1)               # Assign initial (E) weighting to particles
+            W           = sources.assign_weighting(part[0, :], part[1, :], 1)               # Assign initial (E) weighting to particles
             dns         = sources.collect_density(part[1, :], W, part[2, :])                # Collect initial density
             Ji          = sources.collect_current(part, W)                                  # Collect initial current
 
             B[:, 0:3] = fields.push_B(B[:, 0:3], E[:, 0:3], 0)                              # Initialize magnetic field (should be second?)
             E[:, 0:3] = fields.push_E(B[:, 0:3], Ji, dns, 0)                                # Initialize electric field
 
-            part = particles.velocity_update(part, B[:, 0:3], E[:, 0:3], -0.5*DT, W)        # Retard velocity to N - 1/2 to prevent numerical instability
-
+            part = particles.boris_velocity_update(part, B[:, 0:3], E[:, 0:3], -0.5*DT, W)        # Retard velocity to N - 1/2 to prevent numerical instability
         else:
             # N + 1/2
-            part      = particles.velocity_update(part, B[:, 0:3], E[:, 0:3], DT, W)        # Advance Velocity to N + 1/2
+            part      = particles.boris_velocity_update(part, B[:, 0:3], E[:, 0:3], DT, W)        # Advance Velocity to N + 1/2
             part, W   = particles.position_update(part, DT)                                 # Advance Position to N + 1
             B[:, 0:3] = fields.push_B(B[:, 0:3], E[:, 0:3], DT)                             # Advance Magnetic Field to N + 1/2
 
@@ -56,7 +54,7 @@ def main_simulation_loop():
             old_part = np.copy(part)                                                        # Back up particle attributes at N + 1
             dns_old  = np.copy(dns)                                                         # Store last "real" densities (in an E-field position, I know....)
 
-            part      = particles.velocity_update(part, B[:, 0:3], E[:, 0:3], DT, W)        # Advance particle velocities to N + 3/2
+            part      = particles.boris_velocity_update(part, B[:, 0:3], E[:, 0:3], DT, W)        # Advance particle velocities to N + 3/2
             part, W   = particles.position_update(part, DT)                                 # Push particles to positions at N + 2
             dns       = 0.5 * (dns + sources.collect_density(part[1, :], W, part[2, :]))    # Collect ion density as average of N + 1, N + 2
             Ji        = sources.collect_current(part, W)                                    # Collect ion flow at N + 3/2

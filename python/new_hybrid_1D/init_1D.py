@@ -23,7 +23,7 @@ def particles_per_cell():
 
     for ii in range(Nj):
         if dist_type[ii] == 0:
-            ppc[ii, :] = cellpart * sim_repr[ii]
+            ppc[ii, :] = cellpart * 0.01 * sim_repr[ii]
 
         elif  dist_type[ii] == 1:
             x_cell  = np.arange(0,  NX*dx, dx)                                # Array with distance boundaries between cells
@@ -42,6 +42,7 @@ def particles_per_cell():
                 for ext in idxs:
                     ppc[jj, ext] += 1                                         # Put an extra particle in them
     return ppc
+
 
 def uniform_distribution(ppc):
     '''Creates an analytically uniform distribution of N numbers within each cell boundary
@@ -62,6 +63,7 @@ def uniform_distribution(ppc):
             for kk in range(n_particles):   # For each particle in that cell
                 dist[idx_bounds[jj, 0] + acc + kk] = dx*(float(kk) / n_particles + ii)
             acc += n_particles
+
     return dist
 
 
@@ -98,7 +100,7 @@ def initialize_particles():
         part[4, :] -- Velocity in y
         part[5, :] -- Velocity in z
         '''
-    part     = np.zeros((7, N), dtype=float)                                        # Initialize particle array
+    part     = np.zeros((6, N), dtype=float)                                        # Initialize particle array
     ppc      = particles_per_cell()                                                 # Generate number of particles per cell, per species
 
     for jj in range( Nj):

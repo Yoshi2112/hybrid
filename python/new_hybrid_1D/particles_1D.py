@@ -10,6 +10,7 @@ import numba as nb
 from simulation_parameters_1D  import N, dx, xmax, xmin, charge, mass
 from sources_1D                import assign_weighting, calc_left_node
 
+
 @nb.njit(cache=True)
 def velocity_update(part, B, E, dt, W_in):  # Based on Appendix A of Ch5 : Hybrid Codes by Winske & Omidi.
     '''Updates the velocity of the particles using the explicit solution given in Chapter 5, Appendix A of Hybrid Codes
@@ -73,28 +74,26 @@ def boris_velocity_update(part, B, E, dt, W):
         v_prime = np.zeros(3)                               # Rotation velocity
         v_plus  = np.zeros(3)                               # Second velocity
 
-        vn      = part[3:6, n]                              # Existing particle velocity
-
         I   = int(part[1,n])                                # Nearest (leftmost) node, I
-        Ib  = int(part[0, n] / dx)                    # Nearest (leftmost) magnetic node
+        Ib  = int(part[0, n] / dx)                          # Nearest (leftmost) magnetic node
         We  = W[n]                                          # E-field weighting
         idx = int(part[2, n])                               # Particle species identifier
 
         Ep = E[I,  0:3] * (1 - We   ) + E[I  + 1, 0:3] * We                 # E-field at particle location
         Bp = B[Ib, 0:3] * (1 - Wb[n]) + B[Ib + 1, 0:3] * Wb[n]              # B-field at particle location
 
-        T = (charge[idx] * dt) / (2 * mass[idx]) * Bp             # Boris variable
-        S = 2*T / (1 + np.sqrt(T[0] ** 2 + T[1] ** 2 + T[2] ** 2))          # Boris variable
+        T = (charge[idx] * Bp / mass[idx]) * dt / 2.                        # Boris variable
+        S = 2.*T / (1. + np.sqrt(T[0] ** 2 + T[1] ** 2 + T[2] ** 2))        # Boris variable
 
         # Actual Boris Method
-        v_minus = vn + charge[idx] * Ep * dt / (2 * mass[idx])
+        v_minus    = part[3:6, n] + charge[idx] * Ep * dt / (2 * mass[idx])
 
-        v_prime[0] = v_minus[0] + (charge[idx] * dt / (2 * mass[idx])) * (v_minus[1] * Bp[2] - v_minus[2] * Bp[1])
-        v_prime[1] = v_minus[1] + (charge[idx] * dt / (2 * mass[idx])) * (v_minus[0] * Bp[2] - v_minus[2] * Bp[0])
-        v_prime[2] = v_minus[2] + (charge[idx] * dt / (2 * mass[idx])) * (v_minus[0] * Bp[1] - v_minus[1] * Bp[0])
+        v_prime[0] = v_minus[0] + (v_minus[1] * T[2] - v_minus[2] * T[1])  #removed multiplicative from second term: (charge[idx] * dt / (2 * mass[idx]))
+        v_prime[1] = v_minus[1] - (v_minus[0] * T[2] - v_minus[2] * T[0])
+        v_prime[2] = v_minus[2] + (v_minus[0] * T[1] - v_minus[1] * T[0])
 
         v_plus[0]  = v_minus[0] + (v_prime[1] * S[2] - v_prime[2] * S[1])
-        v_plus[1]  = v_minus[1] + (v_prime[0] * S[2] - v_prime[2] * S[0])
+        v_plus[1]  = v_minus[1] - (v_prime[0] * S[2] - v_prime[2] * S[0])
         v_plus[2]  = v_minus[2] + (v_prime[0] * S[1] - v_prime[1] * S[0])
 
         part[3:6, n] = v_plus + charge[idx] * Ep * dt / (2 * mass[idx])

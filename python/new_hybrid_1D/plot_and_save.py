@@ -11,8 +11,8 @@ import pickle
 import os
 from matplotlib  import rcParams
 import simulation_parameters_1D as const
-from simulation_parameters_1D import generate_data, generate_plots, drive, save_path, N, NX, va, xmax, ne, B0, k
-from simulation_parameters_1D import idx_bounds, Nj, species, temp_type, dist_type, mass, charge, velocity, proportion, sim_repr
+from simulation_parameters_1D import generate_data, generate_plots, drive, save_path, N, NX, va, xmax, ne, B0, k, density
+from simulation_parameters_1D import idx_bounds, Nj, species, temp_type, dist_type, mass, charge, velocity, sim_repr
 
 def manage_directories(qq, framegrab):
     print 'Checking directories...'
@@ -84,7 +84,7 @@ def create_figure_and_save(part, E, B, dns, qq, dt, framegrab):
     species_colors = ['cyan', 'red']                                                    # Species colors for plotting (change to hot/cold arrays based off idx values later)
 
     for ii in range(Nj):
-        dns_norm[:, ii] = dns[1: NX + 1, ii] / (ne)                       # Normalize density for each species to initial values
+        dns_norm[:, ii] = dns[1: NX + 1, ii] / density[ii]                              # Normalize density for each species to initial values
 
     for ii in range(Nj):
         ax_den.plot(x_cell_num, dns_norm[:, ii], color=species_colors[ii])              # Create overlayed plots for densities of each species
@@ -179,7 +179,7 @@ def save_data(dt, framegrab, qq, part, Ji, E, B, dns):
 
         p_file = os.path.join(d_path, 'p_data')
         np.savez(p_file, idx_bounds=idx_bounds, species=species, temp_type=temp_type, dist_type=dist_type, mass=mass,
-                 charge=charge, velocity=velocity, proportion=proportion, sim_repr=sim_repr)               # Data file containing particle information
+                 charge=charge, velocity=velocity, density=density, sim_repr=sim_repr)               # Data file containing particle information
         print 'Particle data saved'
 
     d_filename = 'data%05d' % r
