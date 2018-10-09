@@ -143,7 +143,7 @@ def create_figure_and_save(part, E, B, dns, qq, dt, framegrab):
     path     = drive + save_path + '/run_{}'.format(const.run_num)
     fullpath = os.path.join(path, filename)
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-    print 'Timestep {}: Plot saved' % r
+    print 'Timestep {}: Plot saved'.format(r)
     plt.close('all')
     return
 
