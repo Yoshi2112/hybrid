@@ -15,7 +15,7 @@ drive           = '/media/yoshi/UNI_HD/'    # Drive letter or path for portable 
 save_path       = 'runs/dispersion_plot_2beam/'     # Series save dir   : Folder containing all runs of a series
 run_num         = 0                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 generate_data   = 1                         # Save data flag    : For later analysis
-generate_plots  = 0                         # Save plot flag    : To ensure hybrid is solving correctly during run
+generate_plots  = 1                         # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 21                        # RNG Seed          : Set to enable consistent results for parameter studies
 
 
