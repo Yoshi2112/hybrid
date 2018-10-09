@@ -53,6 +53,7 @@ def velocity_update(part, B, E, dt, W_in):  # Based on Appendix A of Ch5 : Hybri
     return part
 
 
+@nb.njit(cache=True)
 def boris_velocity_update(part, B, E, dt, W):
     '''Updates the velocities of the particles in the simulation using a Boris particle pusher, as detailed
     in Birdsall & Langdon (1985),  59-63.

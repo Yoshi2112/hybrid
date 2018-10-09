@@ -143,7 +143,7 @@ def create_figure_and_save(part, E, B, dns, qq, dt, framegrab):
     path     = drive + save_path + '/run_{}'.format(const.run_num)
     fullpath = os.path.join(path, filename)
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-    print 'Plot %d produced' % r
+    print 'Timestep {}: Plot saved' % r
     plt.close('all')
     return
 
@@ -168,7 +168,7 @@ def save_data(dt, framegrab, qq, part, Ji, E, B, dns):
                        ('ie', const.ie),
                        ('theta', const.theta),
                        ('framegrab', framegrab),
-                       ('run_desc', const.run_desc)])
+                       ('run_desc', const.run_description)])
 
         h_name = os.path.join(d_path, 'Header.pckl')            # Data file containing variables used in run
 
@@ -185,4 +185,4 @@ def save_data(dt, framegrab, qq, part, Ji, E, B, dns):
     d_filename = 'data%05d' % r
     d_fullpath = os.path.join(d_path, d_filename)
     np.savez(d_fullpath, part=part, Ji=Ji, dns=dns, E = E[:, 0:3], B = B[:, 0:3])   # Data file for each iteration
-    print 'Data saved'
+    print 'Timestep {}: Data saved'.format(qq)

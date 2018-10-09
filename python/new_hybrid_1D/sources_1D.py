@@ -33,6 +33,7 @@ def calc_left_node(pos):
     node = pos / dx + 0.5                           # Leftmost node, I
     return node.astype(nb.int32)
 
+
 @nb.njit(cache=True)
 def collect_density(nodes, weights, ptypes):
     '''Collect charge density in each cell at each timestep, weighted by their distance

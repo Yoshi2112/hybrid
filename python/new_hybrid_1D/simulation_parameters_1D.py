@@ -7,15 +7,15 @@ Created on Fri Sep 22 11:00:58 2017
 import numpy as np
 
 ### RUN DESCRIPTION ###                     # Saves within run for easy referencing
-run_description = '''Stock standard run for control test'''
+run_description = '''Winske 1D beam simulation with 1984 values. Trying to see if I can turn this into a dispersion relation.'''
 
 
 ### RUN PARAMETERS ###
 drive           = '/media/yoshi/UNI_HD/'    # Drive letter or path for portable HDD e.g. 'E:/'
 save_path       = 'runs/check_1D_code/'     # Series save dir   : Folder containing all runs of a series
 run_num         = 0                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 0                         # Save data flag    : For later analysis
-generate_plots  = 1                         # Save plot flag    : To ensure hybrid is solving correctly during run
+generate_data   = 1                         # Save data flag    : For later analysis
+generate_plots  = 0                         # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 21                        # RNG Seed          : Set to enable consistent results for parameter studies
 
 
@@ -33,18 +33,16 @@ RE  = 6.371e6                               # Earth radius in metres
 ### SIMULATION PARAMETERS ###
 dxm      = 2                                # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't resolvable by hybrid code)
 t_res    = 0                                # Time resolution. Determines how often data is captured. Every frame captured if '0'.
-NX       = 128                              # Number of cells - doesn't include ghost cells
-max_sec  = 500                              # Simulation runtime, in seconds of simulated time
-cellpart = 100                              # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+NX       = 1024                             # Number of cells - doesn't include ghost cells
+max_sec  = 1100                             # Simulation runtime, in seconds of simulated time
+cellpart = 1000                             # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 B0       = 4e-9                             # Unform initial magnetic field value (in T)
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
 
 ne       = 8.48e6                           # Electron density (used to assign portions of ion)
-Te0      = 0.5 * 11603.                     # Electron temperature (eV to K)
 k        = 1                                # Sinusoidal Density Parameter - number of wavelengths in spatial domain
 mhd_equil= 0                                # Temperature varied to give MHD Equilibrium condition?
-
 
 
 ### PARTICLE PARAMETERS ###
@@ -58,9 +56,9 @@ velocity   = np.asarray([-0.15, 10   ])     # Species bulk velocity (in multiple
 density    = np.asarray([98.5 , 1.5  ])     # Species density as percentage of total density, n_e
 sim_repr   = np.asarray([50.0 , 50.0 ])     # Macroparticle weighting: Percentage of macroparticles assigned to each species
 
-Tpar       = np.array([0.5, 0.5])           # Parallel ion temperature (eV)
-Tper       = np.array([0.5, 0.5])           # Perpendicular ion temperature (eV)
-
+Tpar       = np.array([1.0, 1.0])           # Parallel ion temperature (eV)
+Tper       = np.array([1.0, 1.0])           # Perpendicular ion temperature (eV)
+Te0        = 1.0 * 11603.                   # Electron temperature (eV to K)
 
 
 #####################################                   ###############################################

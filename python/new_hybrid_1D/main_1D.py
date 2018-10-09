@@ -8,6 +8,7 @@ import auxilliary_1D as aux
 import particles_1D  as particles
 import fields_1D     as fields
 import sources_1D    as sources
+import pdb
 
 from simulation_parameters_1D import generate_data, generate_plots
 
@@ -75,7 +76,7 @@ def main_simulation_loop():
             if generate_data == 1:
                 pas.save_data(DT, framegrab, qq, part, Ji, E, B, dns)                       # Save data, if flagged
 
-        print 'Step {} of {} complete'.format(qq, maxtime)
+        print 'Timestep {} of {} complete'.format(qq, maxtime)
     return
 
 if __name__ == '__main__':
