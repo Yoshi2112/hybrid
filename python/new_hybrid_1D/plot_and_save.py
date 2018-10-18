@@ -140,8 +140,8 @@ def create_figure_and_save(part, E, B, dns, qq, dt, framegrab):
     fig.subplots_adjust(hspace=0)
 
     filename = 'anim%05d.png' % r
-    path     = drive + save_path + '/run_{}'.format(const.run_num)
-    fullpath = os.path.join(path, filename)
+    path     = drive + save_path + '/run_{}' + '/anim/'.format(const.run_num)
+    fullpath = path + filename
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
     print 'Timestep {}: Plot saved'.format(r)
     plt.close('all')
