@@ -6,7 +6,7 @@ Created on Fri Sep 22 17:15:59 2017
 """
 import numpy as np
 import numba as nb
-from simulation_parameters_1D import t_res, max_sec, dx, gyfreq
+from simulation_parameters_1D import t_res, plot_res, max_sec, dx, gyfreq
 
 @nb.njit(cache=True)
 def cross_product(A, B):
@@ -32,16 +32,23 @@ def set_timestep(part):
     ion_ts   = 0.05 * gyperiod                  # Timestep to resolve gyromotion
     vel_ts   = dx / (2 * np.max(part[3, :]))    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
 
-    DT        = min(ion_ts, vel_ts)             # Smallest of the two
-    framegrab = int(t_res / DT)           # Number of iterations between dumps
-    maxtime   = int(max_sec / DT) + 1     # Total number of iterations to achieve desired final time
+    DT             = min(ion_ts, vel_ts)        # Smallest of the two
+    data_dump_iter = int(t_res / DT)            # Number of iterations between dumps
+    maxtime        = int(max_sec / DT) + 1      # Total number of iterations in run
 
-    if framegrab == 0:
-        framegrab = 1
+    if plot_res == None:
+        plot_dump_iter = None                   # Disable output plots
+    elif plot_res == 0:
+        plot_dump_iter = 1                      # Plot every iteration
+    else:
+        plot_dump_iter = int(plot_res / DT)     # Number of iterations between plots
+
+    if data_dump_iter == 0:
+        data_dump_iter = 1
 
     print 'Proton gyroperiod = %.2fs' % gyperiod
     print 'Timestep: %.4fs, %d iterations total' % (DT, maxtime)
-    return DT, maxtime, framegrab
+    return DT, maxtime, data_dump_iter, plot_dump_iter
 
 @nb.njit(cache=True)
 def smooth(function):

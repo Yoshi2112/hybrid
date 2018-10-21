@@ -14,14 +14,13 @@ import simulation_parameters_1D as const
 from simulation_parameters_1D import generate_data, generate_plots, drive, save_path, N, NX, va, xmax, ne, B0, k, density
 from simulation_parameters_1D import idx_bounds, Nj, species, temp_type, dist_type, mass, charge, velocity, sim_repr
 
-def manage_directories(qq, framegrab):
+def manage_directories():
     print 'Checking directories...'
     if (generate_data == 1 or generate_plots == 1) == True:
         if os.path.exists('%s/%s' % (drive, save_path)) == False:
             os.makedirs('%s/%s' % (drive, save_path))                        # Create master test series directory
             print 'Master directory created'
 
-        const.run_num = len(os.listdir('%s/%s' % (drive, save_path)))        # Count number of existing runs. Set to run number manually for static save
         path = ('%s/%s/run_%d' % (drive, save_path, const.run_num))          # Set root run path (for images)
 
         if os.path.exists(path) == False:
@@ -30,12 +29,10 @@ def manage_directories(qq, framegrab):
     return
 
 
-def create_figure_and_save(part, E, B, dns, qq, dt, framegrab):
+def create_figure_and_save(part, E, B, dns, qq, dt, plot_dump_iter):
     plt.ioff()
 
-    r = qq / framegrab          # Capture number
-    if qq == 0:
-        manage_directories(qq, framegrab)
+    r = qq / plot_dump_iter          # Capture number
 
     fig_size = 4, 7                                                             # Set figure grid dimensions
     fig = plt.figure(figsize=(20,10))                                           # Initialize Figure Space
@@ -148,39 +145,44 @@ def create_figure_and_save(part, E, B, dns, qq, dt, framegrab):
     return
 
 
-def save_data(dt, framegrab, qq, part, Ji, E, B, dns):
+def store_run_parameters(dt, data_dump_iter):
     d_path = ('%s/%s/run_%d/data' % (drive, save_path, const.run_num))    # Set path for data
-    r      = qq / framegrab                                               # Capture number
 
-    if qq ==0:
-        if os.path.exists(d_path) == False:                               # Create data directory
-            os.makedirs(d_path)
+    manage_directories()
 
-        # Save Header File: Important variables for Data Analysis
-        params = dict([('Nj', Nj),
-                       ('dt', dt),
-                       ('NX', NX),
-                       ('dxm', const.dxm),
-                       ('dx', const.dx),
-                       ('cellpart', const.cellpart),
-                       ('B0', const.B0),
-                       ('Te0', const.Te0),
-                       ('ie', const.ie),
-                       ('theta', const.theta),
-                       ('framegrab', framegrab),
-                       ('run_desc', const.run_description)])
+    if os.path.exists(d_path) == False:                                   # Create data directory
+        os.makedirs(d_path)
 
-        h_name = os.path.join(d_path, 'Header.pckl')            # Data file containing variables used in run
+    # Save Header File: Important variables for Data Analysis
+    params = dict([('Nj', Nj),
+                   ('dt', dt),
+                   ('NX', NX),
+                   ('dxm', const.dxm),
+                   ('dx', const.dx),
+                   ('cellpart', const.cellpart),
+                   ('B0', const.B0),
+                   ('Te0', const.Te0),
+                   ('ie', const.ie),
+                   ('theta', const.theta),
+                   ('data_dump_iter', data_dump_iter),
+                   ('run_desc', const.run_description)])
 
-        with open(h_name, 'wb') as f:
-            pickle.dump(params, f)
-            f.close()
-            print 'Header file saved'
+    h_name = os.path.join(d_path, 'Header.pckl')            # Data file containing dictionary of variables used in run
 
-        p_file = os.path.join(d_path, 'p_data')
-        np.savez(p_file, idx_bounds=idx_bounds, species=species, temp_type=temp_type, dist_type=dist_type, mass=mass,
-                 charge=charge, velocity=velocity, density=density, sim_repr=sim_repr)               # Data file containing particle information
-        print 'Particle data saved'
+    with open(h_name, 'wb') as f:
+        pickle.dump(params, f)
+        f.close()
+        print 'Header file saved'
+
+    p_file = os.path.join(d_path, 'p_data')
+    np.savez(p_file, idx_bounds=idx_bounds, species=species, temp_type=temp_type, dist_type=dist_type, mass=mass,
+             charge=charge, velocity=velocity, density=density, sim_repr=sim_repr)               # Data file containing particle information
+    print 'Particle data saved'
+    return
+
+def save_data(dt, data_dump_iter, qq, part, Ji, E, B, dns):
+    d_path = ('%s/%s/run_%d/data' % (drive, save_path, const.run_num))    # Set path for data
+    r      = qq / data_dump_iter                                          # Capture number
 
     d_filename = 'data%05d' % r
     d_fullpath = os.path.join(d_path, d_filename)

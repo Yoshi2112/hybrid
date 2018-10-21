@@ -17,10 +17,13 @@ import plot_and_save as pas
 
 def main_simulation_loop():
     print 'Initializing parameters...'
+    part                         = init.initialize_particles()
+    B, E, Ji, dns, W, Wb         = init.initialize_fields()
 
-    part                    = init.initialize_particles()
-    B, E, Ji, dns, W, Wb    = init.initialize_fields()
-    DT, maxtime, framegrab  = aux.set_timestep(part)
+    DT, maxtime, data_dump_iter, plot_dump_iter = aux.set_timestep(part)
+
+    if generate_data == 1:
+        pas.store_run_parameters(DT, data_dump_iter)
 
     for qq in range(maxtime):
         if qq == 0:
@@ -70,11 +73,11 @@ def main_simulation_loop():
             part = old_part                                                                 # The stored densities at N + 1/2 before the PC method took place (previously held PC at N + 3/2)
             dns  = dns_old
 
-        if qq%framegrab == 0:                                                               # At a specified interval
-            if generate_plots == 1:
-                pas.create_figure_and_save(part, E, B, dns, qq, DT, framegrab)              # Generate and save plots, if flagged
-            if generate_data == 1:
-                pas.save_data(DT, framegrab, qq, part, Ji, E, B, dns)                       # Save data, if flagged
+        if qq%data_dump_iter == 0 and generate_data == 1:                                   # Save data, if flagged
+            pas.save_data(DT, data_dump_iter, qq, part, Ji, E, B, dns)
+
+        if qq%plot_dump_iter == 0 and generate_plots == 1:                                  # Generate and save plots, if flagged
+            pas.create_figure_and_save(part, E, B, dns, qq, DT, plot_dump_iter)
 
         print 'Timestep {} of {} complete'.format(qq, maxtime)
     return
