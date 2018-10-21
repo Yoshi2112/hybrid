@@ -13,7 +13,7 @@ def cyclotron_frequency(qi, mi):
     return qi * B0 / (mi * c)
 
 def plasma_frequency(qi, ni, mi):
-    return np.sqrt(4 * np.pi * (qi ** 2) * ni / mi)
+    return np.sqrt(4. * np.pi * (qi ** 2) * ni / mi)
 
 def geomagnetic_magnitude(L_shell, lat=0.):
     '''Returns the magnetic field magnitude (intensity) on the specified L shell at the given colatitude, in Tesla
@@ -41,10 +41,12 @@ def nu(idx_start, temp):
 
 def get_k(X_in):
      return np.sqrt(
-            (wpw[0] ** 2 / c ** 2) *
-            ((((1 + delta) * X_in**2) / (1 - X_in)) + 
-            (nu(1, 'b') * ((M[1:] * X_in**2) / (1 - M[1:]*X_in))).sum())
-            )
+                     (wpw[0] ** 2 / c ** 2) *
+                         (
+                             (((1. + delta) * X_in**2) / (1 - X_in)) + 
+                             (nu(1, 'b') * ((M[1:] * X_in**2) / (1 - M[1:]*X_in))).sum()
+                         )
+                   )
 
 def convective_growth_rate(Xi):
     
@@ -80,9 +82,9 @@ if __name__ == '__main__':
     B0  = geomagnetic_magnitude(4.0)  * 1e5     # Background magnetic field (in Gauss: 1e5 is conversion factor T > G)
 
                       # Mass (mp)   Charge (q) n_cold (cc) n_warm(cc)   E_perp (eV) Anisotropy
-    spec = np.array([[ 1.,         1.,         10.,        5.,          5e4,         1.          ]])#],    # Hydrogen
-                     #[ 4.,         1.,         0.,         0.,          0.,         1.          ],    # Helium (cold)
-                     #[ 16.,        1.,         0.,         0.,          0.,         1.          ]])   # Oxygen (cold)
+    spec = np.array([[ 1.,         1.,         10.,        5.,          5e4,         1.         ],    # Hydrogen
+                     [ 4.,         1.,         0.,         5.,          5e4,         1.          ],    # Helium (cold)
+                     [ 16.,        1.,         0.,         5.,          5e4,         1.          ]])   # Oxygen (cold)
 
     # Scale by physical constants
     spec[:, 0] *= mp
@@ -106,11 +108,20 @@ if __name__ == '__main__':
 
     norm_freq = np.linspace(0, 0.5, N, endpoint=False)
     CGR       = np.zeros(N)
+    k         = np.zeros(N)
 
     for ii in range(N):
-        CGR[ii] = convective_growth_rate(norm_freq[ii])
+        k[ii]   = get_k(norm_freq[ii])
+        #CGR[ii] = convective_growth_rate(norm_freq[ii])
 
-    plt.plot(norm_freq, CGR)
+    plt.plot(norm_freq, k)
+    plt.xlim(0, 0.5)
+    
+    # Plot stop bands
+    for ii in range(N):
+        if (np.isnan(k[ii]) == True or k[ii] == np.inf) and ii != N - 1:
+            plt.axvspan(norm_freq[ii], norm_freq[ii + 1])
+            
     plt.show()
 
     
