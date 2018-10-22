@@ -8,7 +8,6 @@ import auxilliary_1D as aux
 import particles_1D  as particles
 import fields_1D     as fields
 import sources_1D    as sources
-import pdb
 
 from simulation_parameters_1D import generate_data, generate_plots
 
@@ -35,10 +34,10 @@ def main_simulation_loop():
             B[:, 0:3] = fields.push_B(B[:, 0:3], E[:, 0:3], 0)                              # Initialize magnetic field (should be second?)
             E[:, 0:3] = fields.push_E(B[:, 0:3], Ji, dns, 0)                                # Initialize electric field
 
-            part = particles.boris_velocity_update(part, B[:, 0:3], E[:, 0:3], -0.5*DT, W)        # Retard velocity to N - 1/2 to prevent numerical instability
+            part = particles.boris_velocity_update(part, B[:, 0:3], E[:, 0:3], -0.5*DT, W)  # Retard velocity to N - 1/2 to prevent numerical instability
         else:
             # N + 1/2
-            part      = particles.boris_velocity_update(part, B[:, 0:3], E[:, 0:3], DT, W)        # Advance Velocity to N + 1/2
+            part      = particles.boris_velocity_update(part, B[:, 0:3], E[:, 0:3], DT, W)  # Advance Velocity to N + 1/2
             part, W   = particles.position_update(part, DT)                                 # Advance Position to N + 1
             B[:, 0:3] = fields.push_B(B[:, 0:3], E[:, 0:3], DT)                             # Advance Magnetic Field to N + 1/2
 

@@ -9,10 +9,13 @@ import matplotlib.pyplot as plt
 import pickle
 
 import os
-from matplotlib  import rcParams
+import sys
+import pdb
+from shutil import rmtree
 import simulation_parameters_1D as const
-from simulation_parameters_1D import generate_data, generate_plots, drive, save_path, N, NX, va, xmax, ne, B0, k, density
-from simulation_parameters_1D import idx_bounds, Nj, species, temp_type, dist_type, mass, charge, velocity, sim_repr
+from   simulation_parameters_1D import generate_data, generate_plots, drive, save_path, N, NX, va, xmax, ne, B0, k, density
+from   simulation_parameters_1D import idx_bounds, Nj, species, temp_type, dist_type, mass, charge, velocity, sim_repr, Tpar, Tper
+from   matplotlib  import rcParams
 
 def manage_directories():
     print 'Checking directories...'
@@ -26,6 +29,16 @@ def manage_directories():
         if os.path.exists(path) == False:
             os.makedirs(path)
             print 'Run directory created'
+        else:
+            print 'Run directory already exists'
+            overwrite_flag = raw_input('Overwrite? (Y/N) \n')
+            if overwrite_flag.lower() == 'y':
+                rmtree(path)
+                os.makedirs(path)
+            elif overwrite_flag.lower() == 'n':
+                sys.exit('Program Terminated: Change run_num in simulation_parameters_1D')
+            else:
+                sys.exit('Unfamiliar input: Run terminated for safety')
     return
 
 
@@ -153,18 +166,21 @@ def store_run_parameters(dt, data_dump_iter):
     if os.path.exists(d_path) == False:                                   # Create data directory
         os.makedirs(d_path)
 
-    # Save Header File: Important variables for Data Analysis
-    params = dict([('Nj', Nj),
+    # Single parameters
+    params = dict([('seed', const.seed),
+                   ('Nj', Nj),
                    ('dt', dt),
                    ('NX', NX),
                    ('dxm', const.dxm),
                    ('dx', const.dx),
                    ('cellpart', const.cellpart),
                    ('B0', const.B0),
+                   ('ne', ne),
                    ('Te0', const.Te0),
                    ('ie', const.ie),
                    ('theta', const.theta),
                    ('data_dump_iter', data_dump_iter),
+                   ('max_sec', const.max_sec),
                    ('run_desc', const.run_description)])
 
     h_name = os.path.join(d_path, 'Header.pckl')            # Data file containing dictionary of variables used in run
@@ -174,9 +190,10 @@ def store_run_parameters(dt, data_dump_iter):
         f.close()
         print 'Header file saved'
 
+    # Particle values: Array parameters
     p_file = os.path.join(d_path, 'p_data')
     np.savez(p_file, idx_bounds=idx_bounds, species=species, temp_type=temp_type, dist_type=dist_type, mass=mass,
-             charge=charge, velocity=velocity, density=density, sim_repr=sim_repr)               # Data file containing particle information
+             charge=charge, velocity=velocity, density=density, sim_repr=sim_repr, Tpar=Tpar, Tper=Tper)
     print 'Particle data saved'
     return
 

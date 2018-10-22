@@ -12,12 +12,11 @@ run_description = '''Winske 1D beam simulation with 1984 values. Trying to see i
 
 ### RUN PARAMETERS ###
 drive           = '/media/yoshi/UNI_HD/'            # Drive letter or path for portable HDD e.g. 'E:/'
-save_path       = 'runs/dispersion_plot_2beam/'     # Series save dir   : Folder containing all runs of a series
+save_path       = 'runs/critical_growth_point/'     # Series save dir   : Folder containing all runs of a series
 run_num         = 0                                 # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 generate_data   = 1                                 # Save data flag    : For later analysis
-generate_plots  = 1                                 # Save plot flag    : To ensure hybrid is solving correctly during run
+generate_plots  = 0                                 # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 21                                # RNG Seed          : Set to enable consistent results for parameter studies
-
 
 ### PHYSICAL CONSTANTS ###
 q   = 1.602e-19                             # Elementary charge (C)
@@ -40,8 +39,8 @@ cellpart = 1000                             # Number of Particles per cell. Ensu
 ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 B0       = 4e-9                             # Unform initial magnetic field value (in T)
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
-
 ne       = 8.48e6                           # Electron density (used to assign portions of ion)
+
 k        = 1                                # Sinusoidal Density Parameter - number of wavelengths in spatial domain
 mhd_equil= 0                                # Temperature varied to give MHD Equilibrium condition?
 
@@ -96,6 +95,3 @@ density   *= 0.01*ne                                    # Real density of each s
 idx_start = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end   = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
 idx_bounds= np.stack((idx_start, idx_end)).transpose()  # Array index boundary values: idx_bounds[species, start/end]
-
-data_dump_iter = 0                                      # Dummy variables: Overwritten at runtime.
-plot_dump_iter = 0
