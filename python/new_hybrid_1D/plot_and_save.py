@@ -72,14 +72,16 @@ def create_figure_and_save(part, E, B, dns, qq, dt, plot_dump_iter):
 
     norm_xvel   = part[3, :] / va
     norm_yvel   = part[4, :] / va       # y-velocities (for normalization)
+    norm_zvel   = part[5, :] / va       # y-velocities (for normalization)
+    norm_perp   = np.sqrt(norm_yvel ** 2 + norm_zvel ** 2)
 
-    ax_vy_hot.scatter( x_pos[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_xvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='r', lw=0)        # Hot population
-    ax_vy_core.scatter(x_pos[idx_bounds[0, 0]: idx_bounds[0, 1]], norm_yvel[idx_bounds[0, 0]: idx_bounds[0, 1]], s=1, lw=0, color='c')                                     # 'Other' population
+    ax_vy_hot.scatter( x_pos[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_perp[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='r', lw=0)        # Hot population
+    ax_vy_core.scatter(x_pos[idx_bounds[0, 0]: idx_bounds[0, 1]], norm_xvel[idx_bounds[0, 0]: idx_bounds[0, 1]], s=1, lw=0, color='c')                                     # 'Other' population
 
-    ax_vy_hot.set_title(r'Velocity $v_x$ (m/s) vs. Position (x)')
+    ax_vy_hot.set_title(r'Velocities $|v_{\perp, h}|$ $v_{x, c}$ (m/s) vs. Position (x)')
     ax_vy_hot.set_xlabel(r'Position (km)', labelpad=10)
 
-    ax_vy_hot.set_ylim(-2, 12)
+    ax_vy_hot.set_ylim(0, None)
     ax_vy_core.set_ylim(-4, 4)
 
     plt.setp(ax_vy_hot.get_xticklabels(), visible=False)
@@ -110,9 +112,9 @@ def create_figure_and_save(part, E, B, dns, qq, dt, plot_dump_iter):
     ax_Ez.plot(x_cell_num, Ez, color='magenta')
 
     ax_Ez.set_xlim(0, NX)
-    ax_Ez.set_ylim(-200e-6, 200e-6)
+    ax_Ez.set_ylim(-200e-5, 200e-5)
 
-    ax_Ez.set_yticks(np.arange(-200e-6, 201e-6, 50e-6))
+    ax_Ez.set_yticks(np.arange(-200e-5, 201e-5, 50e-5))
     ax_Ez.set_yticklabels(np.arange(-150, 201, 50))
     ax_Ez.set_ylabel(r'$E_x$ ($\mu$V)', labelpad=25, rotation=0, fontsize=14)
 
@@ -150,7 +152,11 @@ def create_figure_and_save(part, E, B, dns, qq, dt, plot_dump_iter):
     fig.subplots_adjust(hspace=0)
 
     filename = 'anim%05d.png' % r
-    path     = drive + save_path + '/run_{}' + '/anim/'.format(const.run_num)
+    path     = drive + save_path + '/run_{}/anim/'.format(const.run_num)
+    
+    if os.path.exists(path) == False:                                   # Create data directory
+        os.makedirs(path)
+        
     fullpath = path + filename
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
     print 'Timestep {}: Plot saved'.format(r)
