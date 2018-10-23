@@ -62,7 +62,7 @@ def convective_growth_rate(Xi):
         if np.isnan(outside_term[ii]) == True or abs(outside_term[ii]) == np.inf:
             outside_term[ii] = 0.
 
-        if np.isnan(exp_num[ii]) == True or abs(exp_num[ii]) == np.inf:
+        if np.isnan(exp_num[ii] ) == True or abs(exp_num[ii]) == np.inf:
             exp_num[ii] = 0.
     pdb.set_trace()
     return ((outside_term * np.exp(exp_num / exp_denom) ).sum()) / last_term
