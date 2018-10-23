@@ -203,5 +203,5 @@ def save_data(dt, data_dump_iter, qq, part, Ji, E, B, dns):
 
     d_filename = 'data%05d' % r
     d_fullpath = os.path.join(d_path, d_filename)
-    np.savez(d_fullpath, part=part, Ji=Ji, dns=dns, E = E[:, 0:3], B = B[:, 0:3])   # Data file for each iteration
+    np.savez(d_fullpath, part=part, E = E[:, 0:3], B = B[:, 0:3])   # Data file for each iteration
     print 'Timestep {}: Data saved'.format(qq)

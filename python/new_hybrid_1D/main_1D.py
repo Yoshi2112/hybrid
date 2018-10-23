@@ -57,7 +57,7 @@ def main_simulation_loop():
             old_part = np.copy(part)                                                        # Back up particle attributes at N + 1
             dns_old  = np.copy(dns)                                                         # Store last "real" densities (in an E-field position, I know....)
 
-            part      = particles.boris_velocity_update(part, B[:, 0:3], E[:, 0:3], DT, W)        # Advance particle velocities to N + 3/2
+            part      = particles.boris_velocity_update(part, B[:, 0:3], E[:, 0:3], DT, W)  # Advance particle velocities to N + 3/2
             part, W   = particles.position_update(part, DT)                                 # Push particles to positions at N + 2
             dns       = 0.5 * (dns + sources.collect_density(part[1, :], W, part[2, :]))    # Collect ion density as average of N + 1, N + 2
             Ji        = sources.collect_current(part, W)                                    # Collect ion flow at N + 3/2

@@ -7,16 +7,16 @@ Created on Fri Sep 22 11:00:58 2017
 import numpy as np
 
 ### RUN DESCRIPTION ###                     # Saves within run for easy referencing
-run_description = '''Winske 1D beam simulation with 1984 values. Trying to see if I can turn this into a dispersion relation.'''
+run_description = '''Winske 1D anisotropy simulation based on parameters from h1.f hybrid code (addendum to 1993 book)'''
 
 
 ### RUN PARAMETERS ###
 drive           = '/media/yoshi/UNI_HD/'            # Drive letter or path for portable HDD e.g. 'E:/'
-save_path       = 'runs/critical_growth_point/'     # Series save dir   : Folder containing all runs of a series
+save_path       = 'runs/winske_anisotropy_test/'    # Series save dir   : Folder containing all runs of a series
 run_num         = 0                                 # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 generate_data   = 1                                 # Save data flag    : For later analysis
-generate_plots  = 0                                 # Save plot flag    : To ensure hybrid is solving correctly during run
-seed            = 21                                # RNG Seed          : Set to enable consistent results for parameter studies
+generate_plots  = 1                                 # Save plot flag    : To ensure hybrid is solving correctly during run
+seed            = 131888                            # RNG Seed          : Set to enable consistent results for parameter studies
 
 ### PHYSICAL CONSTANTS ###
 q   = 1.602e-19                             # Elementary charge (C)
@@ -30,16 +30,16 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-dxm      = 2                                # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't resolvable by hybrid code)
+dxm      = 1                                # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't resolvable by hybrid code)
 t_res    = 0                                # Time resolution. Determines how often data is captured. Every frame captured if '0'.
 plot_res = 0                                # Determines how often a plot is generated (in seconds of simulation time). Every frame plotted if '0', or none if None (this is also controlled by the generate_plot flag)
-NX       = 1024                             # Number of cells - doesn't include ghost cells
-max_sec  = 1100                             # Simulation runtime, in seconds of simulated time
-cellpart = 1000                             # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+NX       = 128                              # Number of cells - doesn't include ghost cells
+max_sec  = 100                              # Simulation runtime, in seconds of simulated time
+cellpart = 50                               # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
-B0       = 4e-9                             # Unform initial magnetic field value (in T)
+B0       = 140e-9                           # Unform initial magnetic field value (in T)
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
-ne       = 8.48e6                           # Electron density (used to assign portions of ion)
+ne       = 100e6                            # Electron density (used to assign portions of ion)
 
 k        = 1                                # Sinusoidal Density Parameter - number of wavelengths in spatial domain
 mhd_equil= 0                                # Temperature varied to give MHD Equilibrium condition?
@@ -52,13 +52,13 @@ dist_type  = np.asarray([0, 0])             # Particle distribution type : Unifo
 
 mass       = np.asarray([1.00 , 1.00 ])     # Species ion mass (amu to kg)
 charge     = np.asarray([1.00 , 1.00 ])     # Species ion charge (elementary charge units to Coulombs)
-velocity   = np.asarray([-0.15, 10   ])     # Species bulk velocity (in multiples of the alfven velocity)
-density    = np.asarray([98.5 , 1.5  ])     # Species density as percentage of total density, n_e
+velocity   = np.asarray([-0.1 , 0.9  ])     # Species parallel bulk velocity (in multiples of the alfven velocity)
+density    = np.asarray([90.0 , 10.0 ])     # Species density as percentage of total density, n_e
 sim_repr   = np.asarray([50.0 , 50.0 ])     # Macroparticle weighting: Percentage of macroparticles assigned to each species
 
-Tpar       = np.array([1.0, 1.0])           # Parallel ion temperature (eV)
-Tper       = np.array([1.0, 1.0])           # Perpendicular ion temperature (eV)
-Te0        = 1.0 * 11603.                   # Electron temperature (eV to K)
+Tpar       = np.array([487., 974. ])        # Parallel ion temperature (eV)
+Tper       = np.array([487., 4870.])        # Perpendicular ion temperature (eV)
+Te0        = 487.*11605                     # Electron temperature (eV to K)
 
 
 #####################################                   ###############################################

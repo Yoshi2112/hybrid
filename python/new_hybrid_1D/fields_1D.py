@@ -155,14 +155,14 @@ def push_E(B, J_i, n_i, dt):
     J     = np.zeros((size, 3))                 # Ion current
     qn    = np.zeros(size,    )                 # Ion charge density
 
-    Te = np.ones(size) * Te0                    # Electron temperature array
+    Te    = np.ones(size) * Te0                 # Electron temperature array
 
     # Calculate change/current summations over each species
     for jj in range(Nj):
         qn += charge[jj] * n_i[:, jj]                                       # Total charge density, sum(qj * nj)
 
         for kk in range(3):
-            J[:, kk]  += J_i[:, jj, kk]                                         # Total ion current vector: J_k = qj * nj * Vj_k
+            J[:, kk]  += J_i[:, jj, kk]                                     # Total ion current vector: J_k = qj * nj * Vj_k
 
     JxB = cross_product(J, B)
 
