@@ -10,10 +10,9 @@ import pickle
 
 import os
 import sys
-import pdb
 from shutil import rmtree
 import simulation_parameters_1D as const
-from   simulation_parameters_1D import generate_data, generate_plots, drive, save_path, N, NX, va, xmax, ne, B0, k, density
+from   simulation_parameters_1D import generate_data, generate_plots, drive, save_path, N, NX, xmax, ne, B0, k, density, c
 from   simulation_parameters_1D import idx_bounds, Nj, species, temp_type, dist_type, mass, charge, velocity, sim_repr, Tpar, Tper
 from   matplotlib  import rcParams
 
@@ -67,28 +66,29 @@ def create_figure_and_save(part, E, B, dns, qq, dt, plot_dump_iter):
 
 #----- Velocity (vy) Plots: Hot and Cold Species
 
-    ax_vy_hot   = plt.subplot2grid(fig_size,  (0, 0), rowspan=2, colspan=3)
-    ax_vy_core  = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
+    ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
+    ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
 
-    norm_xvel   = part[3, :] / va
-    norm_yvel   = part[4, :] / va       # y-velocities (for normalization)
-    norm_zvel   = part[5, :] / va       # y-velocities (for normalization)
+    norm_xvel   = part[3, :] / c
+    norm_yvel   = part[4, :] / c       # y-velocities (for normalization)
+    norm_zvel   = part[5, :] / c       # y-velocities (for normalization)
     norm_perp   = np.sqrt(norm_yvel ** 2 + norm_zvel ** 2)
 
-    ax_vy_hot.scatter( x_pos[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_perp[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='r', lw=0)        # Hot population
-    ax_vy_core.scatter(x_pos[idx_bounds[0, 0]: idx_bounds[0, 1]], norm_xvel[idx_bounds[0, 0]: idx_bounds[0, 1]], s=1, lw=0, color='c')                                     # 'Other' population
+    ax_vx.scatter(x_pos[idx_bounds[1, 0]: idx_bounds[1, 1]], 1e3*norm_xvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='r', lw=0)        # Hot population
+    ax_vy.scatter(x_pos[idx_bounds[1, 0]: idx_bounds[1, 1]], 1e3*norm_yvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='r', lw=0)        # 'Other' population
 
-    ax_vy_hot.set_title(r'Velocities $|v_{\perp, h}|$ $v_{x, c}$ (m/s) vs. Position (x)')
-    ax_vy_hot.set_xlabel(r'Position (km)', labelpad=10)
+    ax_vx.set_title(r'Beam velocities ($c^{-1}$) vs. Position (x)')
+    ax_vy.set_xlabel(r'Position (km)', labelpad=10)
 
-    ax_vy_hot.set_ylim(0, None)
-    ax_vy_core.set_ylim(-4, 4)
+    ax_vx.set_ylabel(r'$v_x (\times 10^{-3})$', rotation=90)
+    ax_vy.set_ylabel(r'$v_y (\times 10^{-3})$', rotation=90)
 
-    plt.setp(ax_vy_hot.get_xticklabels(), visible=False)
-    ax_vy_hot.set_yticks(ax_vy_hot.get_yticks()[1:])
+    plt.setp(ax_vx.get_xticklabels(), visible=False)
+    ax_vx.set_yticks(ax_vx.get_yticks()[1:])
 
-    for ax in [ax_vy_core, ax_vy_hot]:
+    for ax in [ax_vy, ax_vx]:
         ax.set_xlim(0, xmax/1000)
+        ax.set_ylim(-2, 2)
 
 #----- Density Plot
     ax_den = plt.subplot2grid((fig_size), (0, 3), colspan=3)                            # Initialize axes
@@ -135,7 +135,7 @@ def create_figure_and_save(part, E, B, dns, qq, dt, plot_dump_iter):
     ax_By.set_ylim(-2, 2)
 
     ax_B.set_ylabel( r'$|B|$', rotation=0, labelpad=20)                                 # Set labels
-    ax_By.set_ylabel(r'$B_y$', rotation=0, labelpad=10)
+    ax_By.set_ylabel(r'$\frac{B_y}{B_0}$', rotation=0, labelpad=10)
     ax_B.set_xlabel('Cell Number')                                                      # Set x-axis label for group (since |B| is on bottom)
 
     for ax in [ax_den, ax_Ez, ax_By]:
@@ -159,7 +159,7 @@ def create_figure_and_save(part, E, B, dns, qq, dt, plot_dump_iter):
         
     fullpath = path + filename
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-    print 'Timestep {}: Plot saved'.format(r)
+    print 'Plot saved'.format(r)
     plt.close('all')
     return
 
@@ -210,4 +210,4 @@ def save_data(dt, data_dump_iter, qq, part, Ji, E, B, dns):
     d_filename = 'data%05d' % r
     d_fullpath = os.path.join(d_path, d_filename)
     np.savez(d_fullpath, part=part, E = E[:, 0:3], B = B[:, 0:3])   # Data file for each iteration
-    print 'Timestep {}: Data saved'.format(qq)
+    print 'Data saved'.format(qq)

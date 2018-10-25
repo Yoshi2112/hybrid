@@ -45,7 +45,7 @@ def collect_density(nodes, weights, ptypes):
         ptypes  -- Particle species index (identifier)
     '''
     size = NX + 2
-    n_i =  np.zeros((size, Nj))
+    n_i  =  np.zeros((size, Nj))
 
     # Collect number density of all particles
     for ii in range(N):
@@ -56,9 +56,9 @@ def collect_density(nodes, weights, ptypes):
         n_i[I,     idx] += (1 - W) * n_contr[idx]
         n_i[I + 1, idx] +=      W  * n_contr[idx]
 
-    n_i /= float(dx)        # Divide by cell dimensions to give densities per cubic metre
+    n_i /= float(dx)                                    # Divide by cell dimensions to give densities per cubic metre
 
-    n_i = manage_ghost_cells(n_i, 1)
+    n_i  = manage_ghost_cells(n_i, 1)
 
     for jj in range(Nj):
         smoothed   = smooth(n_i[:, jj])

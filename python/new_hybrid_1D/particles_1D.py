@@ -124,4 +124,5 @@ def position_update(part, dt):
 
     part[1, :] = calc_left_node(part[0, :])
     W          = assign_weighting(part[0, :], part[1, :], 1)
+
     return part, W

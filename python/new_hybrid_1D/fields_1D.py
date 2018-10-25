@@ -131,6 +131,7 @@ def push_E_equil(B, J_i, n_i, dt):
     Te    = manage_ghost_cells(E_out, 0)
     return E_out
 
+
 @nb.njit(cache=True)
 def push_E(B, J_i, n_i, dt):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
@@ -184,5 +185,4 @@ def push_E(B, J_i, n_i, dt):
     E_out[:, 2] = (- JxB[:, 2] - del_p[:, 2] - (BdB[:, 2] / mu0)) / (qn[:])
 
     E_out = manage_ghost_cells(E_out, 0)
-
     return E_out

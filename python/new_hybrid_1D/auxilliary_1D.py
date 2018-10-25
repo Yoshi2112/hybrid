@@ -6,7 +6,7 @@ Created on Fri Sep 22 17:15:59 2017
 """
 import numpy as np
 import numba as nb
-from simulation_parameters_1D import t_res, plot_res, max_sec, dx, gyfreq
+from simulation_parameters_1D import t_res, plot_res, max_sec, dx, gyfreq, lam_res
 
 @nb.njit(cache=True)
 def cross_product(A, B):
@@ -29,13 +29,13 @@ def cross_product(A, B):
 
 def set_timestep(part):
     gyperiod = 2*np.pi / gyfreq                 # Gyroperiod in seconds
-    ion_ts   = 0.05 * gyperiod                  # Timestep to resolve gyromotion
-    vel_ts   = dx / (2 * np.max(part[3, :]))    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
+    ion_ts   = lam_res * gyperiod               # Timestep to resolve gyromotion
+    vel_ts   = dx / (2. * np.max(part[3, :]))   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
 
     DT             = min(ion_ts, vel_ts)        # Smallest of the two
     data_dump_iter = int(t_res / DT)            # Number of iterations between dumps
     maxtime        = int(max_sec / DT) + 1      # Total number of iterations in run
-
+    
     if plot_res == None:
         plot_dump_iter = None                   # Disable output plots
     elif plot_res == 0:
@@ -49,6 +49,29 @@ def set_timestep(part):
     print 'Proton gyroperiod = %.2fs' % gyperiod
     print 'Timestep: %.4fs, %d iterations total' % (DT, maxtime)
     return DT, maxtime, data_dump_iter, plot_dump_iter
+
+
+def check_timestep(qq, DT, part, maxtime, data_dump_iter, plot_dump_iter):
+    gyperiod = 2*np.pi / gyfreq                 # Gyroperiod in seconds
+    ion_ts   = lam_res * gyperiod               # Timestep to resolve gyromotion
+    vel_ts   = (0.75*dx) / (np.max(part[3, :]))  # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
+
+    DT_new         = min(ion_ts, vel_ts)        # Smallest of the two
+
+    if DT_new < DT:
+        DT *= 0.5
+        maxtime *= 2
+        data_dump_iter *= 2
+        qq *= 2
+        
+        if plot_dump_iter != None:
+            plot_dump_iter *= 2
+            
+        if data_dump_iter != None:
+            data_dump_iter *= 2
+        print 'Timestep halved. DT = {}'.format(DT)
+
+    return qq, DT, maxtime, data_dump_iter, plot_dump_iter
 
 @nb.njit(cache=True)
 def smooth(function):

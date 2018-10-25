@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 
-def check_cell_distribution(part, node_number, j): #
+def check_cell_velocity_distribution(part, node_number, j): #
     '''Checks the velocity distribution of a particle species within a specified cell'''
     # Collect information about particles within +- 0.5dx of node_number (E-field nodes are in the cell centers)
     x_node = (node_number - 0.5) * dx   # Position of node in question
@@ -34,7 +34,7 @@ def check_cell_distribution(part, node_number, j): #
 
     fig = plt.figure(figsize=(12,10))
     fig.patch.set_facecolor('w')
-    num_bins = cellpart/5
+    num_bins = cellpart/20
 
     ax_x = plt.subplot2grid((2, 3), (0,0), colspan=2, rowspan=2)
     ax_y = plt.subplot2grid((2, 3), (0,2))
@@ -43,20 +43,17 @@ def check_cell_distribution(part, node_number, j): #
     xs, BinEdgesx = np.histogram((f[:, 3] - velocity[j]) / va, bins=num_bins)
     bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
     ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
-    ax_x.set_xlabel(r'$v_x$')
-    ax_x.set_xlim(-2, 2)
+    ax_x.set_xlabel(r'$v_x / v_A$')
 
     ys, BinEdgesy = np.histogram(f[:, 4] / va, bins=num_bins)
     by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
     ax_y.plot(by, ys, '-', c='c', drawstyle='steps')
-    ax_y.set_xlabel(r'$v_y$')
-    ax_y.set_xlim(-2, 2)
+    ax_y.set_xlabel(r'$v_y / v_A$')
 
     zs, BinEdgesz = np.histogram(f[:, 5] / va, bins=num_bins)
     bz = 0.5 * (BinEdgesz[1:] + BinEdgesz[:-1])
     ax_z.plot(bz, zs, '-', c='c', drawstyle='steps')
-    ax_z.set_xlabel(r'$v_z$')
-    ax_z.set_xlim(-2, 2)
+    ax_z.set_xlabel(r'$v_z / v_A$')
 
     plt.show()
     return
@@ -113,17 +110,17 @@ def check_velocity_distribution(part, j):
     xs, BinEdgesx = np.histogram(part[3, idx_bounds[j, 0]: idx_bounds[j, 1]] / va, bins=num_bins)
     bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
     ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
-    ax_x.set_xlabel(r'$v_x$')
+    ax_x.set_xlabel(r'$v_x / v_A$')
 
     ys, BinEdgesy = np.histogram(part[4, idx_bounds[j, 0]: idx_bounds[j, 1]] / va, bins=num_bins)
     by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
     ax_y.plot(by, ys, '-', c='c', drawstyle='steps')
-    ax_y.set_xlabel(r'$v_y$')
+    ax_y.set_xlabel(r'$v_y / v_A$')
 
     zs, BinEdgesz = np.histogram(part[5, idx_bounds[j, 0]: idx_bounds[j, 1]] / va, bins=num_bins)
     bz = 0.5 * (BinEdgesz[1:] + BinEdgesz[:-1])
     ax_z.plot(bz, zs, '-', c='c', drawstyle='steps')
-    ax_z.set_xlabel(r'$v_z$')
+    ax_z.set_xlabel(r'$v_z / v_A$')
 
     plt.show()
     return

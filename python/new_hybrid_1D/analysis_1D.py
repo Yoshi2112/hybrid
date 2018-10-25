@@ -76,7 +76,7 @@ kB  = 1.38065e-23             # Boltzmann's Constant (J/K)
 e0  = 8.854e-12               # Epsilon naught - permittivity of free space
 
 #%% ---- LOAD FILE PARAMETERS ----
-run_dir  = '/media/yoshi/UNI_HD/runs/dispersion_plot_2beam/run_1/'  # Main run directory
+run_dir  = 'E:/runs/winske_anisotropy_test/run_1/'  # Main run directory
 data_dir = run_dir + 'data/'                                        # Directory containing .npz output files for the simulation run
 anal_dir = run_dir + 'analysis/'                                    # Output directory for all this analysis (each will probably have a subfolder)
 temp_dir = run_dir + 'temp/'                                        # Saving things like matrices so we only have to do them once
@@ -124,10 +124,15 @@ print 'Particle parameters loaded'
 ii        = start_file
 plot_skip = 1
 
-all_B = np.zeros((num_files, NX + 2, 3))
+#all_B = np.zeros((num_files, NX + 2, 3))
 #all_E = np.zeros((num_files, NX))
 
 #for ii in grab:
+max_v     = np.zeros(num_files)
+spc_av_By = np.zeros(num_files)
+spc_av_Ex = np.zeros(num_files)
+ 
+print 'dt={}'.format(dt)
 for ii in range(num_files):
     if ii%plot_skip == 0:
         print 'Loading file {} of {}'.format(ii, num_files)
@@ -135,10 +140,24 @@ for ii in range(num_files):
         input_path = data_dir + d_file                  # File location
         data       = np.load(input_path)                # Load file
 
-        all_B[ii, :, :] = data['B']
+        max_v[ii]       = abs(data['part'][3]).max()
+        spc_av_By[ii]   = abs(data['B'][1: -1, 1]).max()
+        spc_av_Ex[ii]   = abs(data['E'][1: -1, 0]).max()
+        #all_B[ii, :, :] = data['B']
 
+t = np.arange(num_files) * dt * data_dump_iter     
+#%%
+fig = plt.figure(figsize=(18,10))
+ax  = fig.add_subplot(111)
+
+
+ax.plot(t, max_v / max_v.max(), label='velocity')
+ax.plot(t, spc_av_By / spc_av_By.max(), label='B')
+ax.plot(t, spc_av_Ex / spc_av_Ex.max(), label='E')
+ax.legend()
+plt.show()
 #save_array_file(all_B, 'all_B')
-plot_dispersion(all_B[:, :, 1], 'wk_By')
+#plot_dispersion(all_B[:, :, 1], 'wk_By')
         #E    = data['E']
         #part = data['part']
         #Ji   = data['Ji']

@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:27:33 2017
 import numpy as np
 from sources_1D               import calc_left_node
 from simulation_parameters_1D import dx, NX, cellpart, k, N, kB, Bc, Nj, dist_type, N_species, sim_repr, idx_bounds,    \
-                                     seed, Tpar, Tper, mass, velocity
+                                     seed, Tpar, Tper, mass, velocity, anisotropy, theta
 
 
 def particles_per_cell():
@@ -91,6 +91,29 @@ def normal_distribution(ppc):
 
     return dist
 
+
+def winske_velocity_loading():
+    np.random.seed(seed)
+    dist = np.zeros((3, N))
+    
+    for jj in range(Nj):
+        v_thermal      = np.sqrt(2 * kB * Tpar[jj] / mass[jj])
+        v_magnitude_x  = np.sqrt(-np.log(1. - .999999*np.random.rand(N_species[jj])))
+        theta_x        = 2 * np.pi * np.random.rand(N_species[jj])
+        
+        v_magnitude_yz = np.sqrt(-np.log(1. - .999999*np.random.rand(N_species[jj])))
+        theta_yz       = 2 * np.pi * np.random.rand(N_species[jj])
+        
+        dist[0, idx_bounds[jj, 0]: idx_bounds[jj, 1]] = v_thermal * v_magnitude_x  * np.cos(theta_x)
+        dist[1, idx_bounds[jj, 0]: idx_bounds[jj, 1]] = v_thermal * v_magnitude_yz * np.cos(theta_yz) * np.sqrt(anisotropy[jj])
+        dist[2, idx_bounds[jj, 0]: idx_bounds[jj, 1]] = v_thermal * v_magnitude_yz * np.sin(theta_yz) * np.sqrt(anisotropy[jj])
+        
+        # Rotate if theta != 0
+        dist[0] = dist[0] * np.cos(np.pi * theta / 180.) - dist[2] * np.sin(np.pi * theta / 180.)
+        dist[2] = dist[2] * np.cos(np.pi * theta / 180.) + dist[0] * np.sin(np.pi * theta / 180.)
+    return dist
+
+
 def initialize_particles():
     '''Initialize particle array with structure:
         part[0, :] -- Position in x
@@ -107,7 +130,8 @@ def initialize_particles():
         part[2,  idx_bounds[jj, 0]:  idx_bounds[jj, 1]] = jj                        # Give species index identifier to each particle
 
     part[0, :]   = uniform_distribution(ppc)                                        # Initialize particles in configuration space
-    part[3:6, :] = normal_distribution(ppc)                                         # Initialize particles in velocity space
+    #part[3:6, :] = normal_distribution(ppc)                                        # Initialize particles in velocity space
+    part[3:6, :] = winske_velocity_loading()                                        # Initialize particles in velocity space
     part[1, :]   = calc_left_node(part[0, :])                                       # Initial leftmost node, I
     return part
 
