@@ -88,7 +88,10 @@ def normal_distribution(ppc):
             dist[1, (idx_bounds[jj, 0] + acc): ( idx_bounds[jj, 0] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tper[jj]) /  mass[jj]), n_particles)
             dist[2, (idx_bounds[jj, 0] + acc): ( idx_bounds[jj, 0] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tper[jj]) /  mass[jj]), n_particles)
             acc += n_particles
-
+    
+    # Rotate if theta != 0
+    dist[0] = dist[0] * np.cos(np.pi * theta / 180.) - dist[2] * np.sin(np.pi * theta / 180.)
+    dist[2] = dist[2] * np.cos(np.pi * theta / 180.) + dist[0] * np.sin(np.pi * theta / 180.)
     return dist
 
 
@@ -130,8 +133,8 @@ def initialize_particles():
         part[2,  idx_bounds[jj, 0]:  idx_bounds[jj, 1]] = jj                        # Give species index identifier to each particle
 
     part[0, :]   = uniform_distribution(ppc)                                        # Initialize particles in configuration space
-    #part[3:6, :] = normal_distribution(ppc)                                        # Initialize particles in velocity space
-    part[3:6, :] = winske_velocity_loading()                                        # Initialize particles in velocity space
+    part[3:6, :] = normal_distribution(ppc)                                        # Initialize particles in velocity space
+    #part[3:6, :] = winske_velocity_loading()                                        # Initialize particles in velocity space
     part[1, :]   = calc_left_node(part[0, :])                                       # Initial leftmost node, I
     return part
 

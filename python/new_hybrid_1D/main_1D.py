@@ -12,7 +12,9 @@ import fields_1D     as fields
 import sources_1D    as sources
 import diagnostics as diag
 
-from simulation_parameters_1D import generate_data, generate_plots, dx
+from simulation_parameters_1D import generate_data, generate_plots, dx, c
+
+import matplotlib.pyplot as plt
 
 ## OUTPUT MODULES ##
 import plot_and_save as pas
@@ -20,6 +22,24 @@ import plot_and_save as pas
 def main_simulation_loop():
     print 'Initializing parameters...'
     part                         = init.initialize_particles()
+    
+    plt.figure()
+    plt.scatter(part[0], part[3]/c, s=1, lw=0)
+    plt.xlabel('x')
+    plt.ylabel('vx')
+
+    plt.figure()
+    plt.scatter(part[0], part[4]/c, s=1, lw=0)
+    plt.xlabel('x')
+    plt.ylabel('vy')
+
+    plt.figure()
+    plt.scatter(part[0], part[5]/c, s=1, lw=0)
+    plt.xlabel('x')
+    plt.ylabel('vz')
+    
+    sys.exit() 
+    
     B, E, Ji, dns, W, Wb         = init.initialize_fields()
 
     DT, maxtime, data_dump_iter, plot_dump_iter = aux.set_timestep(part)
