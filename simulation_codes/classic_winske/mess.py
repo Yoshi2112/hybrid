@@ -1,55 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def init():
-    global vmax, vplim
-
-    for k in range(nsp):
-        tx0[k]  = btspec[k] / (2. * wpiwci **2 )    # Get temperature (x? Parallel?) from beta
-        vth[k]  = np.sqrt(2. * tx0[k] / wspec[k])   # Thermal velocity
-        vbx[k]  = vbspec[k] / wpiwci                # Bulk velocity
-        vb0[k]  = np.max((vbx[k], vth[k]))          # Greater of the two
-        ans[k]  = np.sqrt(anspec[k])                # Anisotropy velocity factor
-        vfac    = np.max((1., ans[k]))              #
-        vmax    = np.max((vmax, vfac*vb0[k]))
-        pinv[k] = 1. / (nspec[k])                   # Number of species inverse (fraction?)
-        dfac[k] = xmax * pinv[k] / hx               # Position increment for particles?
-        frac[k] = dnspec[k] / dnspec.sum()          # Density fraction of each species
-        npi[k]  = nspec[k]                          # Seems superfluous?
-
-    vplim = 2. * vmax                               # Particle max speed limit? (for Courant condition?)
-
-    acc1 = 0; acc2 = 0                              # Particle accumulators
-    for kk in range(nsp):
-        isp    = kk
-
-        acc2  += nspec[kk]                          # Increment by number particles in species kk
-        for ii in range(acc1, acc2):
-            x[ii]     = xmax * pinv[isp] * (npi[isp] - .5)              # Place particles in configuration space
-
-            vmag     = np.sqrt(-np.log(1.-.999999*np.random.rand()))    # Velocity magnitude (Maxwellian distribution)
-            th       = 2.*np.pi*np.random.rand()                        # Random angle
-            vxa      = vth[isp]*vmag*np.cos(th) + vbx[isp]              # Particle x-velocity plus bulk velocity
-
-            vmag     = np.sqrt(-np.log(1.-.999999*np.random.rand()))     # Velocity magnitude (Maxwellian distribution)
-            th       = 2.*np.pi*np.random.rand()                        # Random angle
-            vy[ii]   = vth[isp]*ans[isp]*vmag*np.sin(th)                # Particle y-velocity
-            vza      = vth[isp]*ans[isp]*vmag*np.cos(th)                # Particle z-velocity
-
-            vx[ii]   = vxa*cth-vza*sth                                  # Rotate vx to simulation space coordinates
-            vz[ii]   = vza*cth+vxa*sth                                  # Rotate vz to simulation space coordinates
-
-            npi[isp] = npi[isp] - 1                                     # Count variable?
-
-        acc1 = acc2
-
-    # Run one time step with dt=0 to initialize fields
-    dtsav = dt
-    dt    = 0.
-    trans()
-    dt    = dtsav
-    field()
-    return
 
 def trans():
     den = np.zeros(nx + 2)                    #  zero source arrays
@@ -123,9 +74,8 @@ def parmov():
         dta2 = .5 * dta
 
         for l in range(acc1, acc2):
-            rx    = x[l] * hxi + 0.5
-            i     = rx
-            fx    = rx - i
+            i     = int(x[l] / hx + 0.5)
+            fx    = x[l] / hx + 0.5 - i
             fxc   = 1. - fx
 
             exa   = ex[i] * fxc + ex[i + 1] * fx
@@ -155,10 +105,9 @@ def parmov():
                 x[l] += xmax
 
         # push extra half time step to collect density and current
-            rx  = x[l] * hxi + 1.5
-            i   = rx
-            fx  = rx - i
-            fxc = 1. - fx
+            i     = int(x[l] / hx + 0.5)
+            fx    = x[l] / hx + 0.5 - i
+            fxc   = 1. - fx
 
             exa = ex[i]*fxc + ex[i + 1]*fx
             eya = ey[i]*fxc + ey[i + 1]*fx + foy[i]*fxc + foy[i + 1]*fx
@@ -187,9 +136,9 @@ def parmov():
 def field():
     hx2  = .5 * hx
     hxi2 = .5 * hxi
-    dtx  = dt * hxi2
+    #dtx  = dt * hxi2
     hxs  = hx * hx
-    dxt  = hxs / dt
+    #dxt  = hxs / dt
     ec11 = 1.
     ec12 = 0.
     ec21 = 0.
@@ -205,16 +154,16 @@ def field():
     e12  = np.zeros(nx)
     e21  = np.zeros(nx)
     e22  = np.zeros(nx)
-    f1
-    f2
-    g11
-    g12
-    g21
-    g22
-    h11
-    h12
-    h21
-    h22
+    f1   = np.zeros(nx)
+    f2   = np.zeros(nx)
+    g11  = np.zeros(nx)
+    g12  = np.zeros(nx)
+    g21  = np.zeros(nx)
+    g22  = np.zeros(nx)
+    h11  = np.zeros(nx)
+    h12  = np.zeros(nx)
+    h21  = np.zeros(nx)
+    h22  = np.zeros(nx)
 
 #  set up A B C D arrays (eqns. 49-57)
     for i in range(1, nx):
@@ -488,7 +437,52 @@ if __name__ == '__main__':
     viz = np.zeros(nx + 2)
 
     # Main program
-    init()
+    vmax = 0.0
+    for k in range(nsp):
+        tx0[k]  = btspec[k] / (2. * wpiwci **2 )    # Get temperature (x? Parallel?) from beta
+        vth[k]  = np.sqrt(2. * tx0[k] / wspec[k])   # Thermal velocity
+        vbx[k]  = vbspec[k] / wpiwci                # Bulk velocity
+        vb0[k]  = np.max((vbx[k], vth[k]))          # Greater of the two
+        ans[k]  = np.sqrt(anspec[k])                # Anisotropy velocity factor
+        vfac    = np.max((1., ans[k]))              #
+        vmax    = np.max((vmax, vfac*vb0[k]))
+        pinv[k] = 1. / (nspec[k])                   # Number of species inverse (fraction?)
+        dfac[k] = xmax * pinv[k] / hx               # Position increment for particles?
+        frac[k] = dnspec[k] / dnspec.sum()          # Density fraction of each species
+        npi[k]  = nspec[k]                          # Seems superfluous?
+
+    vplim = 2. * vmax                               # Particle max speed limit? (for Courant condition?)
+
+    acc1 = 0; acc2 = 0                              # Particle accumulators
+    for kk in range(nsp):
+        isp    = kk
+
+        acc2  += nspec[kk]                          # Increment by number particles in species kk
+        for ii in range(acc1, acc2):
+            x[ii]     = xmax * pinv[isp] * (npi[isp] - .5)              # Place particles in configuration space
+
+            vmag     = np.sqrt(-np.log(1.-.999999*np.random.rand()))    # Velocity magnitude (Maxwellian distribution)
+            th       = 2.*np.pi*np.random.rand()                        # Random angle
+            vxa      = vth[isp]*vmag*np.cos(th) + vbx[isp]              # Particle x-velocity plus bulk velocity
+
+            vmag     = np.sqrt(-np.log(1.-.999999*np.random.rand()))     # Velocity magnitude (Maxwellian distribution)
+            th       = 2.*np.pi*np.random.rand()                        # Random angle
+            vy[ii]   = vth[isp]*ans[isp]*vmag*np.sin(th)                # Particle y-velocity
+            vza      = vth[isp]*ans[isp]*vmag*np.cos(th)                # Particle z-velocity
+
+            vx[ii]   = vxa*cth-vza*sth                                  # Rotate vx to simulation space coordinates
+            vz[ii]   = vza*cth+vxa*sth                                  # Rotate vz to simulation space coordinates
+
+            npi[isp] = npi[isp] - 1                                     # Count variable?
+
+        acc1 = acc2
+
+    # Run one time step with dt=0 to initialize fields
+    dtsav = dt
+    dt    = 0.
+    trans()
+    dt    = dtsav
+    field()
 
     it = 0; t = 0
     while it <= ntimes:
