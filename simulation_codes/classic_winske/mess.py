@@ -75,19 +75,7 @@ def parmov(by, bz, ex, ey, ez):
         isp  = kk                       # Species identifier
         dta  = dt / wspec[isp]
         dta2 = .5 * dta
-
-# =============================================================================
-#         # REMOVE LATER (HERE TO STOP FIELDS BLOWING UP PARTICLES)
-#         foy = np.zeros(nx + 2)             # Force?
-#         foz = np.zeros(nx + 2)             # Force?
-#         by  = np.ones(nx + 2) * byc        # Magnetic field: y
-#         bz  = np.ones(nx + 2) * bzc        # Magnetic field: z
-#         ex  = np.zeros(nx + 2)             # Electric field: x
-#         ey  = np.zeros(nx + 2)             # Electric field: y
-#         ez  = np.zeros(nx + 2)             # Electric field: z
-#         ##################
-# =============================================================================
-        
+       
         for ii in range(acc1, acc2):
             i     = int(x[ii] / hx + 0.5)
             fx    = x[ii] / hx + 0.5 - i
@@ -113,19 +101,16 @@ def parmov(by, bz, ex, ey, ez):
             dx    = vx[ii] * dt
             x[ii]  = x[ii]  + dx
 
-        # check to see particle is still in simulation region
+            # check to see particle is still in simulation region
             if x[ii] >= xmax:
                 x[ii] -= xmax
             if x[ii] < 0:
                 x[ii] += xmax
 
-        # push extra half time step to collect density and current
-            try:
-                i     = int(x[ii] / hx + 0.5)
-                fx    = x[ii] / hx + 0.5 - i
-                fxc   = 1. - fx
-            except:
-                pdb.set_trace()
+            # push extra half time step to collect density and current
+            i     = int(x[ii] / hx + 0.5)
+            fx    = x[ii] / hx + 0.5 - i
+            fxc   = 1. - fx
 
             exa = ex[i]*fxc + ex[i + 1]*fx
             eya = ey[i]*fxc + ey[i + 1]*fx + foy[i]*fxc + foy[i + 1]*fx
@@ -183,7 +168,7 @@ def field(den, vix, viy, viz):
     h22  = np.zeros(nx + 2)
 
     # Set up A B C D tridiagonal arrays 
-    for i in range(1, nx):
+    for i in range(1, nx + 1):
         df   = den[i] * resis / bxc                                 # Eq 5.43
 
         a12  = -den[i]*hx*vix[i] / (2. * bxc * (1. + df ** 2))      # Eq 5.50                            
@@ -273,7 +258,7 @@ def field(den, vix, viy, viz):
             ec21 = tc21
             ec22 = tc22
 
-    # Solve for X(NX) (77-78) : CHECKED
+    # Solve for X(NX) (77-78)
     en11 = e11[nx - 1] + g11[nx - 1]
     en12 = e12[nx - 1] + g12[nx - 1]
     en21 = e21[nx - 1] + g21[nx - 1]
@@ -299,8 +284,8 @@ def field(den, vix, viy, viz):
     az[nx] = hdi * (-h21 * p1 + h11 * p2)
 
     # get all X(I) (58)
-    for ii in range(1, nx - 1):
-        i     = nx - ii             # Addresses from NX to 2 (FORTRAN) in reverse (NX - 1, 1 in Python)
+    for ii in range(nx - 1, 0, -1):     
+        i     = nx + 1 - ii              # Increment from 1 to nx - 1 inclusive in reverse
         ey[i] = ay[i]
         ez[i] = az[i]
         ay[i] = e11[i]*ay[i + 1] + e12[i]*az[i + 1] + f1[i] + g11[i]*ay[nx] + g12[i]*az[nx]
@@ -316,7 +301,7 @@ def field(den, vix, viy, viz):
     az[0]      = az[nx]
 
     #  Get Ey Ez (35-36); By Bz (31-32)
-    for i in range(1, nx):
+    for i in range(1, nx + 1):
         ey[i] = (ey[i] - ay[i]) / dt
         ez[i] = (ez[i] - az[i]) / dt
         by[i] = (az[i - 1] - az[i + 1]) * hxi2 + byc
@@ -332,7 +317,7 @@ def field(den, vix, viy, viz):
     bz[0]      = bz[nx]
 
     # Calculate del**2 A, electron velocities, drag force
-    for i in range(1, nx):
+    for i in range(1, nx + 1):
         ajy    = -(ay[i + 1] + ay[i + 1] - 2. * ay[i]) / hxs
         ajz    = -(az[i + 1] + az[i + 1] - 2. * az[i]) / hxs
         vey[i] = -ajy / den[i] + viy[i]
@@ -341,7 +326,7 @@ def field(den, vix, viy, viz):
         foz[i] = -resis*ajz
 
     # calculate electron temperature and pressure
-    for i in range(1, nx):
+    for i in range(1, nx + 1):
         if iemod == 0:
             te[i] = te0
         elif iemod == 1:
@@ -359,7 +344,7 @@ def field(den, vix, viy, viz):
     pe[0]      = pe[ nx]
 
     # Calculate Ex
-    for i in range(1, nx):
+    for i in range(1, nx + 1):
         ex[i] = vez[i] * by[i] - vey[i] * bz[i]
         ex[i] = ex[i] - hxi2 * (pe[i + 1] - pe[i - 1]) / den[i]
 
@@ -369,8 +354,10 @@ def field(den, vix, viy, viz):
 
 
 if __name__ == '__main__':
+    save_path = 'F://Storage//runs//winske//'
+    np.random.seed(21)
+    
     c      = 3e10                       # Speed of light in cm/s
-
     ntimes = 1001                       # Number of timesteps
     dtwci  = 0.05                       # Timestep in inverse gyrofrequency
     nx     = 128                        # Number of cells
@@ -508,9 +495,32 @@ if __name__ == '__main__':
     it = 0; t = 0
 
     while it <= ntimes:
+        plt.ioff()
+        
         print 'iteration {}'.format(it)
         it += 1
         t  += dtwci
 
         den, vix, viy, viz = trans(by, bz, ex, ey, ez)
         by, bz, ex, ey, ez = field(den, vix, viy, viz)
+        
+        fig = plt.figure()
+        
+        ax1 = plt.subplot2grid((3, 3), (0, 0), colspan=3)
+        ax2 = plt.subplot2grid((3, 3), (1, 0), colspan=3)
+        ax3 = plt.subplot2grid((3, 3), (2, 0), colspan=3)
+        
+        ax1.plot(ex)
+        ax1.set_ylabel('$E_x$')
+        
+        ax2.plot(ey)
+        ax2.set_ylabel('$E_y$')
+        
+        ax3.plot(ez)
+        ax3.set_ylabel('$E_z$')
+        
+        filename = 'fields_{}.png'.format(it)
+        fullpath = save_path + filename
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+        plt.close('all')
+
