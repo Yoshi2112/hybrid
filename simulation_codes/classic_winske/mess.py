@@ -2,17 +2,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pdb
 
-
+#@nb.njit
 def trans(by, bz, ex, ey, ez):
-    #  Zero source arrays
-    den = np.zeros(nx + 2)                    
-    vix = np.zeros(nx + 2)
+    # Zero source arrays
+    den = np.zeros(nx + 2)                              # Normalized total ion densities for each cell
+    vix = np.zeros(nx + 2)                              # x, y, z normalized moments for each cell
     viy = np.zeros(nx + 2)
     viz = np.zeros(nx + 2)
 
-    dns, vxs, vys, vzs = parmov(by, bz, ex, ey, ez)     # move particles and do particle diagnostics
-
-    for k in range(nsp):                            # put ghost cell contributions into real domain
+    dns, vxs, vys, vzs = parmov(by, bz, ex, ey, ez)     # Move particles and do particle diagnostics
+    
+    for k in range(nsp):                                # Put ghost cell contributions into real domain
         dns[1, k]   += dns[nx + 1, k]
         vxs[1, k]   += vxs[nx + 1, k]
         vys[1, k]   += vys[nx + 1, k]
@@ -22,7 +22,7 @@ def trans(by, bz, ex, ey, ez):
         vys[nx, k]  += vys[0, k]
         vzs[nx, k]  += vzs[0, k]
 
-    for k in range(nsp):                            # normalize species densities and velocities
+    for k in range(nsp):                                # Normalize species densities and velocities
         for i in range(1, nx + 1):
             vxs[i, k] /= dns[i, k]
             vys[i, k] /= dns[i, k]
@@ -31,10 +31,10 @@ def trans(by, bz, ex, ey, ez):
 
     # set ghost cell values
     for k in range(nsp):
-        dns[0, k]       = dns[nx, k]
-        vxs[0, k]       = vxs[nx, k]
-        vys[0, k]       = vys[nx, k]
-        vzs[0, k]       = vzs[nx, k]
+        dns[0, k]      = dns[nx, k]
+        vxs[0, k]      = vxs[nx, k]
+        vys[0, k]      = vys[nx, k]
+        vzs[0, k]      = vzs[nx, k]
         dns[nx + 1, k] = dns[1, k]
         vxs[nx + 1, k] = vxs[1, k]
         vys[nx + 1, k] = vys[1, k]
@@ -61,10 +61,10 @@ def trans(by, bz, ex, ey, ez):
 #      call smooth(viz,nx2)
     return den, vix, viy, viz
 
-
+#@nb.njit
 def parmov(by, bz, ex, ey, ez):
     # Zero particle moments
-    dns = np.zeros((nx + 2, nsp))
+    dns = np.zeros((nx + 2, nsp))               # Total macroparticle number density, per cell
     vxs = np.zeros((nx + 2, nsp))
     vys = np.zeros((nx + 2, nsp))
     vzs = np.zeros((nx + 2, nsp))
@@ -72,9 +72,9 @@ def parmov(by, bz, ex, ey, ez):
     acc1 = 0; acc2 = 0
     for kk in range(nsp):
         acc2  += nspec[kk]
-        isp  = kk                       # Species identifier
-        dta  = dt / wspec[isp]
-        dta2 = .5 * dta
+        isp    = kk                       # Species identifier
+        dta    = dt / wspec[isp]          # dt / m
+        dta2   = .5 * dta                 # dt / 2
        
         for ii in range(acc1, acc2):
             i     = int(x[ii] / hx + 0.5)
@@ -98,8 +98,7 @@ def parmov(by, bz, ex, ey, ez):
             vy[ii] = f * vy[ii] + dta * (eya + vza*bxc - vxa*bza + g*bya)
             vz[ii] = f * vz[ii] + dta * (eza + vxa*bya - vya*bxc + g*bza)
 
-            dx    = vx[ii] * dt
-            x[ii]  = x[ii]  + dx
+            x[ii] += vx[ii] * dt
 
             # check to see particle is still in simulation region
             if x[ii] >= xmax:
@@ -115,7 +114,6 @@ def parmov(by, bz, ex, ey, ez):
             exa = ex[i]*fxc + ex[i + 1]*fx
             eya = ey[i]*fxc + ey[i + 1]*fx + foy[i]*fxc + foy[i + 1]*fx
             eza = ez[i]*fxc + ez[i + 1]*fx + foz[i]*fxc + foz[i + 1]*fx
-
             bya = by[i]*fxc + by[i + 1]*fx
             bza = bz[i]*fxc + bz[i + 1]*fx
 
@@ -152,6 +150,7 @@ def field(den, vix, viy, viz):
     gc21 = 0.
     gc22 = 0.
 
+    # Initialize temp arrays
     e11  = np.zeros(nx + 2)
     e12  = np.zeros(nx + 2)
     e21  = np.zeros(nx + 2)
@@ -168,7 +167,7 @@ def field(den, vix, viy, viz):
     h22  = np.zeros(nx + 2)
 
     # Set up A B C D tridiagonal arrays 
-    for i in range(1, nx + 1):
+    for i in range(1, nx):
         df   = den[i] * resis / bxc                                 # Eq 5.43
 
         a12  = -den[i]*hx*vix[i] / (2. * bxc * (1. + df ** 2))      # Eq 5.50                            
@@ -275,8 +274,8 @@ def field(den, vix, viy, viz):
     h22  = a21 * en12 + a22 * en22 + b22 + c21 * ec12 + c22 * ec22
 
     hdi  = 1. / (h11 * h22 - h12 * h21)
-    p1   = d1 -a11 * f1[nx - 1] - a12 * f2[nx - 1] - c11 * fc1 - c12 * fc2
-    p2   = d2 -a21 * f1[nx - 1] - a22 * f2[nx - 1] - c21 * fc1 - c22 * fc2
+    p1   = d1 - a11 * f1[nx - 1] - a12 * f2[nx - 1] - c11 * fc1 - c12 * fc2
+    p2   = d2 - a21 * f1[nx - 1] - a22 * f2[nx - 1] - c21 * fc1 - c22 * fc2
 
     ey[nx] = ay[nx]
     ez[nx] = az[nx]
@@ -284,13 +283,13 @@ def field(den, vix, viy, viz):
     az[nx] = hdi * (-h21 * p1 + h11 * p2)
 
     # get all X(I) (58)
-    for ii in range(nx - 1, 0, -1):     
-        i     = nx + 1 - ii              # Increment from 1 to nx - 1 inclusive in reverse
-        ey[i] = ay[i]
-        ez[i] = az[i]
-        ay[i] = e11[i]*ay[i + 1] + e12[i]*az[i + 1] + f1[i] + g11[i]*ay[nx] + g12[i]*az[nx]
-        az[i] = e21[i]*ay[i + 1] + e22[i]*az[i + 1] + f2[i] + g21[i]*ay[nx] + g22[i]*az[nx]
+    for ii in range(nx - 1, 0, -1): 
+        ey[ii] = ay[ii]
+        ez[ii] = az[ii]
+        ay[ii] = e11[ii]*ay[ii + 1] + e12[ii]*az[ii + 1] + f1[ii] + g11[ii]*ay[nx] + g12[ii]*az[nx]
+        az[ii] = e21[ii]*ay[ii + 1] + e22[ii]*az[ii + 1] + f2[ii] + g21[ii]*ay[nx] + g22[ii]*az[nx]
 
+    # Fill ghost cells
     ey[nx + 1] = ay[nx + 1]
     ez[nx + 1] = az[nx + 1]
     ay[nx + 1] = ay[1]
@@ -299,7 +298,7 @@ def field(den, vix, viy, viz):
     ez[0]      = az[0]
     ay[0]      = ay[nx]
     az[0]      = az[nx]
-
+    
     #  Get Ey Ez (35-36); By Bz (31-32)
     for i in range(1, nx + 1):
         ey[i] = (ey[i] - ay[i]) / dt
@@ -316,8 +315,10 @@ def field(den, vix, viy, viz):
     by[0]      = by[nx]
     bz[0]      = bz[nx]
 
-    # Calculate del**2 A, electron velocities, drag force
-    for i in range(1, nx + 1):
+    #################################
+    ### ALL ELECTRON AND Ex STUFF ###
+    #################################
+    for i in range(1, nx + 1):                                     # Calculate del**2 A, electron velocities, drag force
         ajy    = -(ay[i + 1] + ay[i + 1] - 2. * ay[i]) / hxs
         ajz    = -(az[i + 1] + az[i + 1] - 2. * az[i]) / hxs
         vey[i] = -ajy / den[i] + viy[i]
@@ -325,23 +326,22 @@ def field(den, vix, viy, viz):
         foy[i] = -resis*ajy
         foz[i] = -resis*ajz
 
-    # calculate electron temperature and pressure
-    for i in range(1, nx + 1):
+    for i in range(1, nx + 1):                                      # Calculate electron temperature and pressure
         if iemod == 0:
             te[i] = te0
         elif iemod == 1:
             te[i] = te0 * (den[i]**gam)
         pe[i]   = te[i]*den[i]
 
-    vey[nx + 1] = vey[1]
+    vey[nx + 1] = vey[1]                                            # Fill ghost cells
     vez[nx + 1] = vez[1]
     te[ nx + 1] = te[1]
     pe[ nx + 1] = pe[1]
     
-    vey[0]     = vey[nx]
-    vez[0]     = vez[nx]
-    te[0]      = te[ nx]
-    pe[0]      = pe[ nx]
+    vey[0]      = vey[nx]
+    vez[0]      = vez[nx]
+    te[0]       = te[ nx]
+    pe[0]       = pe[ nx]
 
     # Calculate Ex
     for i in range(1, nx + 1):
@@ -356,6 +356,7 @@ def field(den, vix, viy, viz):
 if __name__ == '__main__':
     save_path = 'F://Storage//runs//winske//'
     np.random.seed(21)
+    plot   = False
     
     c      = 3e10                       # Speed of light in cm/s
     ntimes = 1001                       # Number of timesteps
@@ -402,7 +403,7 @@ if __name__ == '__main__':
     te0  = bete/(2.*wpiwci**2)          # Initial electron temperature
     pe0  = te0                          # Initial electron pressure
 
-    # Initialize global arrays
+    # Initialize particle state arrays
     tx0  = np.zeros(nsp)
     vth  = np.zeros(nsp)
     vbx  = np.zeros(nsp)
@@ -413,6 +414,7 @@ if __name__ == '__main__':
     frac = np.zeros(nsp)
     npi  = np.zeros(nsp)
 
+    # Initialize global arrays
     x  = np.zeros(npart)
     vx = np.zeros(npart)
     vy = np.zeros(npart)
@@ -434,14 +436,8 @@ if __name__ == '__main__':
     ey  = np.zeros(nx + 2)             # Electric field: y
     ez  = np.zeros(nx + 2)             # Electric field: z
 
-    vxs = np.zeros((nx + 2, nsp))      # Source array: Velocity x
-    vys = np.zeros((nx + 2, nsp))      # Source array: Velocity y
-    vzs = np.zeros((nx + 2, nsp))      # Source array: Velocity z
-
-    dns = np.zeros((nx + 2, nsp))      # Source array: Species density
-
-    den = np.zeros(nx + 2)             # Another density source array?
-    vix = np.zeros(nx + 2)
+    den = np.zeros(nx + 2)             # Total density (moment)
+    vix = np.zeros(nx + 2)             # Average velocities (moment)
     viy = np.zeros(nx + 2)
     viz = np.zeros(nx + 2)
 
@@ -492,35 +488,105 @@ if __name__ == '__main__':
     den, vix, viy, viz  = trans(by, bz, ex, ey, ez)
     dt    = dtsav
     by, bz, ex, ey, ez  = field(den, vix, viy, viz)
-    it = 0; t = 0
-
+    
+    it = 0; t = 0    
     while it <= ntimes:
         plt.ioff()
         
-        print 'iteration {}'.format(it)
+        print '{}'.format(it)
         it += 1
         t  += dtwci
 
         den, vix, viy, viz = trans(by, bz, ex, ey, ez)
         by, bz, ex, ey, ez = field(den, vix, viy, viz)
-        
-        fig = plt.figure()
-        
-        ax1 = plt.subplot2grid((3, 3), (0, 0), colspan=3)
-        ax2 = plt.subplot2grid((3, 3), (1, 0), colspan=3)
-        ax3 = plt.subplot2grid((3, 3), (2, 0), colspan=3)
-        
-        ax1.plot(ex)
-        ax1.set_ylabel('$E_x$')
-        
-        ax2.plot(ey)
-        ax2.set_ylabel('$E_y$')
-        
-        ax3.plot(ez)
-        ax3.set_ylabel('$E_z$')
-        
-        filename = 'fields_{}.png'.format(it)
-        fullpath = save_path + filename
-        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-        plt.close('all')
+                
+        if plot == True:
+            # E-Field
+            fig1 = plt.figure()
+            
+            ax1 = plt.subplot2grid((3, 3), (0, 0), colspan=3)
+            ax2 = plt.subplot2grid((3, 3), (1, 0), colspan=3)
+            ax3 = plt.subplot2grid((3, 3), (2, 0), colspan=3)
+            
+            ax1.set_title(r'Electric Fields ($nV/m$) $\Omega t$ = {}'.format(t))
+            ax1.plot(ex * 1e9)
+            ax1.set_ylabel('$E_x$')
+            ax1.set_ylim(-50, 50)
+            
+            ax2.plot(ey * 1e9)
+            ax2.set_ylabel('$E_y$')
+            ax2.set_ylim(-100, 100)
+            
+            ax3.plot(ez * 1e9)
+            ax3.set_ylabel('$E_z$')
+            ax3.set_ylim(-100, 100)
+            
+            for ax in [ax1, ax2, ax3]:
+                ax.set_xlim(0, 130)
+            
+            filename = 'Efields_{}.png'.format(it)
+            fullpath = save_path + '//E//'+ filename
+            plt.savefig(fullpath, facecolor=fig1.get_facecolor(), edgecolor='none')
+            plt.close('all')
+            
+            # B-Field
+            fig2 = plt.figure()
+            
+            ax1 = plt.subplot2grid((3, 3), (0, 0), colspan=3)
+            ax2 = plt.subplot2grid((3, 3), (1, 0), colspan=3)
+            ax3 = plt.subplot2grid((3, 3), (2, 0), colspan=3)
+            
+            ax1.set_title(r'Magnetic Fields $\Omega t$ = {}'.format(t))
+            ax1.plot(np.sqrt(bxc ** 2 + by ** 2 + bz ** 2))
+            ax1.set_ylabel('$|B| / B_0$')
+            ax1.set_ylim(0, 2)
+            
+            ax2.plot(by / bxc)
+            ax2.set_ylabel('$B_y / B_0$')
+            ax2.set_ylim(-2, 2)
+            
+            ax3.plot(bz / bxc)
+            ax3.set_ylabel('$B_z / B_0$')
+            ax3.set_ylim(-2, 2)
+            
+            for ax in [ax1, ax2, ax3]:
+                ax.set_xlim(0, 130)
+                
+            filename = 'Bfields_{}.png'.format(it)
+            fullpath = save_path + '//B//' + filename
+            plt.savefig(fullpath, facecolor=fig2.get_facecolor(), edgecolor='none')
+            plt.close('all')
 
+
+            # Velocity
+            fig3 = plt.figure()
+            
+            ax1 = plt.subplot2grid((4, 4), (0, 0), colspan=4)
+            ax2 = plt.subplot2grid((4, 4), (1, 0), colspan=4)
+            ax3 = plt.subplot2grid((4, 4), (2, 0), colspan=4)
+            ax4 = plt.subplot2grid((4, 4), (3, 0), colspan=4)
+
+            ax1.set_title(r'Moments (D = {}) $\Omega t$ = {}'.format(den[1:-1].sum(), t))
+            ax1.plot(den)
+            ax1.set_ylabel('$n_i$')
+            ax1.set_ylim(0, 4)
+            
+            ax2.plot(vix)
+            ax2.set_ylabel('$v_x / c$')
+            ax2.set_ylim(-1e-3, 1e-3)
+            
+            ax3.plot(viy)
+            ax3.set_ylabel('$v_y / c$')
+            ax3.set_ylim(-1e-4, 1e-4)
+            
+            ax4.plot(viz)
+            ax4.set_ylabel('$v_z / c$')
+            ax4.set_ylim(-1e-4, 1e-4)
+            
+            for ax in [ax1, ax2, ax3, ax4]:
+                ax.set_xlim(0, 130)
+                
+            filename = 'moments_{}.png'.format(it)
+            fullpath = save_path + '//M//' + filename
+            plt.savefig(fullpath, facecolor=fig3.get_facecolor(), edgecolor='none')
+            plt.close('all')
