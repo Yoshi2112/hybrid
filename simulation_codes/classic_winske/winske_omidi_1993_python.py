@@ -2,6 +2,82 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pdb
 
+def smooth():
+    return
+
+#@nb.njit
+def parmov(by, bz, ex, ey, ez):
+    # Zero particle moments
+    dns = np.zeros((nx + 2, nsp))               # Total macroparticle number density, per cell
+    vxs = np.zeros((nx + 2, nsp))
+    vys = np.zeros((nx + 2, nsp))
+    vzs = np.zeros((nx + 2, nsp))
+    
+    acc1 = 0; acc2 = 0
+    for kk in range(nsp):
+        acc2  += nspec[kk]
+        isp    = kk                       # Species identifier
+        dta    = dt / wspec[isp]          # dt / m
+        dta2   = .5 * dta                 # dt / 2
+       
+        for ii in range(acc1, acc2):
+            i     = int(x[ii] / hx + 0.5)                                           # Leftmost node, I
+            fx    = x[ii] / hx + 0.5 - i                                            # Weight at I + 1
+            fxc   = 1. - fx                                                         # Weight at I
+
+            exa   = ex[i] * fxc + ex[i + 1] * fx                                    # Ex at particle
+            eya   = ey[i] * fxc + ey[i + 1] * fx + foy[i] * fxc + foy[i + 1] * fx   # Ey at particle
+            eza   = ez[i] * fxc + ez[i + 1] * fx + foz[i] * fxc + foz[i + 1] * fx   # Ez at particle
+            bya   = by[i] * fxc + by[i + 1] * fx                                    # By at particle
+            bza   = bz[i] * fxc + bz[i + 1] * fx                                    # Bz at particle
+
+            f     = 1. - dta * dta2 * (bxc**2 + bya**2 + bza**2)
+            g     = dta2 * (vx[ii]*bxc + vy[ii]*bya + vz[ii]*bza)
+
+            vxa   = vx[ii] + dta2 * exa
+            vya   = vy[ii] + dta2 * eya
+            vza   = vz[ii] + dta2 * eza
+
+            vx[ii] = f * vx[ii] + dta * (exa + vya*bza - vza*bya + g*bxc)
+            vy[ii] = f * vy[ii] + dta * (eya + vza*bxc - vxa*bza + g*bya)
+            vz[ii] = f * vz[ii] + dta * (eza + vxa*bya - vya*bxc + g*bza)
+
+            x[ii] += vx[ii] * dt
+
+            # check to see particle is still in simulation region
+            if x[ii] >= xmax:
+                x[ii] -= xmax
+            if x[ii] < 0:
+                x[ii] += xmax
+
+            # push extra half time step to collect density and current
+            i     = int(x[ii] / hx + 0.5)
+            fx    = x[ii] / hx + 0.5 - i
+            fxc   = 1. - fx
+
+            exa = ex[i]*fxc + ex[i + 1]*fx
+            eya = ey[i]*fxc + ey[i + 1]*fx + foy[i]*fxc + foy[i + 1]*fx
+            eza = ez[i]*fxc + ez[i + 1]*fx + foz[i]*fxc + foz[i + 1]*fx
+            bya = by[i]*fxc + by[i + 1]*fx
+            bza = bz[i]*fxc + bz[i + 1]*fx
+
+            vxa = vx[ii] + dta2 * (exa + vy[ii]*bza - vz[ii]*bya)
+            vya = vy[ii] + dta2 * (eya + vz[ii]*bxc - vx[ii]*bza)
+            vza = vz[ii] + dta2 * (eza + vx[ii]*bya - vy[ii]*bxc)
+            
+            vxs[i, isp]    += vxa*fxc
+            vxs[i + 1,isp] += vxa*fx
+            vys[i, isp]    += vya*fxc
+            vys[i + 1,isp] += vya*fx
+            vzs[i, isp]    += vza*fxc
+            vzs[i + 1,isp] += vza*fx
+            dns[i, isp]    += fxc
+            dns[i + 1,isp] += fx
+
+            acc1 = acc2
+    return dns, vxs, vys, vzs
+
+
 #@nb.njit
 def trans(by, bz, ex, ey, ez):
     # Zero source arrays
@@ -60,78 +136,6 @@ def trans(by, bz, ex, ey, ez):
 #      call smooth(viy,nx2)
 #      call smooth(viz,nx2)
     return den, vix, viy, viz
-
-#@nb.njit
-def parmov(by, bz, ex, ey, ez):
-    # Zero particle moments
-    dns = np.zeros((nx + 2, nsp))               # Total macroparticle number density, per cell
-    vxs = np.zeros((nx + 2, nsp))
-    vys = np.zeros((nx + 2, nsp))
-    vzs = np.zeros((nx + 2, nsp))
-    
-    acc1 = 0; acc2 = 0
-    for kk in range(nsp):
-        acc2  += nspec[kk]
-        isp    = kk                       # Species identifier
-        dta    = dt / wspec[isp]          # dt / m
-        dta2   = .5 * dta                 # dt / 2
-       
-        for ii in range(acc1, acc2):
-            i     = int(x[ii] / hx + 0.5)
-            fx    = x[ii] / hx + 0.5 - i
-            fxc   = 1. - fx
-
-            exa   = ex[i] * fxc + ex[i + 1] * fx
-            eya   = ey[i] * fxc + ey[i + 1] * fx + foy[i] * fxc + foy[i + 1] * fx
-            eza   = ez[i] * fxc + ez[i + 1] * fx + foz[i] * fxc + foz[i + 1] * fx
-            bya   = by[i] * fxc + by[i + 1] * fx
-            bza   = bz[i] * fxc + bz[i + 1] * fx
-
-            f     = 1. - dta * dta2 * (bxc**2 + bya**2 + bza**2)
-            g     = dta2 * (vx[ii]*bxc + vy[ii]*bya + vz[ii]*bza)
-
-            vxa   = vx[ii] + dta2 * exa
-            vya   = vy[ii] + dta2 * eya
-            vza   = vz[ii] + dta2 * eza
-
-            vx[ii] = f * vx[ii] + dta * (exa + vya*bza - vza*bya + g*bxc)
-            vy[ii] = f * vy[ii] + dta * (eya + vza*bxc - vxa*bza + g*bya)
-            vz[ii] = f * vz[ii] + dta * (eza + vxa*bya - vya*bxc + g*bza)
-
-            x[ii] += vx[ii] * dt
-
-            # check to see particle is still in simulation region
-            if x[ii] >= xmax:
-                x[ii] -= xmax
-            if x[ii] < 0:
-                x[ii] += xmax
-
-            # push extra half time step to collect density and current
-            i     = int(x[ii] / hx + 0.5)
-            fx    = x[ii] / hx + 0.5 - i
-            fxc   = 1. - fx
-
-            exa = ex[i]*fxc + ex[i + 1]*fx
-            eya = ey[i]*fxc + ey[i + 1]*fx + foy[i]*fxc + foy[i + 1]*fx
-            eza = ez[i]*fxc + ez[i + 1]*fx + foz[i]*fxc + foz[i + 1]*fx
-            bya = by[i]*fxc + by[i + 1]*fx
-            bza = bz[i]*fxc + bz[i + 1]*fx
-
-            vxa = vx[ii] + dta2 * (exa + vy[ii]*bza - vz[ii]*bya)
-            vya = vy[ii] + dta2 * (eya + vz[ii]*bxc - vx[ii]*bza)
-            vza = vz[ii] + dta2 * (eza + vx[ii]*bya - vy[ii]*bxc)
-            
-            vxs[i, isp]    += vxa*fxc
-            vxs[i + 1,isp] += vxa*fx
-            vys[i, isp]    += vya*fxc
-            vys[i + 1,isp] += vya*fx
-            vzs[i, isp]    += vza*fxc
-            vzs[i + 1,isp] += vza*fx
-            dns[i, isp]    += fxc
-            dns[i + 1,isp] += fx
-
-            acc1 = acc2
-    return dns, vxs, vys, vzs
 
 
 def field(den, vix, viy, viz):
@@ -305,6 +309,12 @@ def field(den, vix, viy, viz):
         ez[i] = (ez[i] - az[i]) / dt
         by[i] = (az[i - 1] - az[i + 1]) * hxi2 + byc
         bz[i] = (ay[i + 1] - ay[i - 1]) * hxi2 + bzc
+        
+        if field_zero == 1:
+            ey[i] = 0.0
+            ez[i] = 0.0
+            by[i] = 0.0
+            bz[i] = 0.0
 
     ey[0]      = ey[nx]
     ez[0]      = ez[nx]
@@ -347,6 +357,9 @@ def field(den, vix, viy, viz):
     for i in range(1, nx + 1):
         ex[i] = vez[i] * by[i] - vey[i] * bz[i]
         ex[i] = ex[i] - hxi2 * (pe[i + 1] - pe[i - 1]) / den[i]
+        
+        if field_zero == 1:
+            ex[i] = 0.0
 
     ex[0]      = ex[nx]
     ex[nx + 1] = ex[1]
@@ -356,7 +369,10 @@ def field(den, vix, viy, viz):
 if __name__ == '__main__':
     save_path = 'F://Storage//runs//winske//'
     np.random.seed(21)
-    plot   = False
+    
+    plot         = True
+    field_zero   = 0
+    steady_state = 1
     
     c      = 3e10                       # Speed of light in cm/s
     ntimes = 1001                       # Number of timesteps
@@ -372,6 +388,11 @@ if __name__ == '__main__':
     btspec = np.array([10.,1.])         # Species plasma beta (parallel?)
     anspec = np.array([5.,1.])          # T_perp/T_parallel (anisotropy) for each species
     wspec  = np.array([1.,1.])          # Mass of each species (in multiples of proton mass)
+
+    if steady_state == 1:    
+        vbspec = np.array([0.0, 0.0])   # Bulk velocity for each species
+        btspec = np.array([1.0, 1.0])   # Species plasma beta (parallel?)
+        anspec = np.array([1.0, 1.0])   # T_perp/T_parallel (anisotropy) for each species
 
     gam   = 5. / 3.                     # Polytropic factor for adiabatic electrons
     bete  = 1.                          # Electron beta
@@ -551,7 +572,7 @@ if __name__ == '__main__':
             
             for ax in [ax1, ax2, ax3]:
                 ax.set_xlim(0, 130)
-                
+            
             filename = 'Bfields_{}.png'.format(it)
             fullpath = save_path + '//B//' + filename
             plt.savefig(fullpath, facecolor=fig2.get_facecolor(), edgecolor='none')
