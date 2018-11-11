@@ -18,9 +18,10 @@ Created on Mon Oct 29 11:04:18 2018
 #
 # Converted to Python : Joshua S. Williams
 # October, 2018
-
+#%%
 import numpy as np
 import matplotlib.pyplot as plt
+import pdb
 
 def geomagnetic_magnitude(L_shell, lat=0.):
     '''Returns the magnetic field magnitude (intensity) on the specified L shell at the given colatitude, in Tesla
@@ -37,10 +38,10 @@ if __name__ == '__main__':
     out_fname = path + 'pc1_tst.dat'
 
     normalize = 0                       # Normalize amplitude? (0: No, 1: Yes)
-    normal    = 0
-    maxfreq   = 1.0
+    normal    = 1
+    maxfreq   = 0.5
 
-    L    = 5.95                         # L-shell for magnetic field
+    L    = 4.0                          # L-shell for magnetic field
     B0   = geomagnetic_magnitude(L)     # In Tesla
     NPTS = 1000                         # Number of points to solve growth rate for
     N    = 3                            # Number of species
@@ -52,30 +53,30 @@ if __name__ == '__main__':
     M[2] = 16.0    # Oxygen
 
     # Density of cold species (number/cc)
-    ndensc    = np.zeros(N)
-    ndensc[0] = 84.55
-    ndensc[1] = 2.67
-    ndensc[2] = 1.78
+    ndensc    = np.zeros(N, dtype=float)
+    ndensc[0] = 10
+    ndensc[1] = 0
+    ndensc[2] = 0
 
     # Density of warm species (same order as cold) (number/cc)
-    ndensw    = np.zeros(N)
-    ndensw[0] = 0.88
-    ndensw[1] = 0.10
-    ndensw[2] = 0.02
+    ndensw    = np.zeros(N, dtype=float)
+    ndensw[0] = 5
+    ndensw[1] = 0
+    ndensw[2] = 0
 
     # Input the perpendicular temperature (eV)
-    temperp = np.zeros(N)
-    temperp[0]=30000.
-    temperp[1]=10000.
-    temperp[2]=10000.
+    temperp = np.zeros(N, dtype=float)
+    temperp[0]=50000.
+    temperp[1]=00000.
+    temperp[2]=00000.
 
     # Input the temperature anisotropy
-    A = np.zeros(N)
-    A[0] = 1.25
+    A = np.zeros(N, dtype=float)
+    
+    A[0] = 1
     A[1] = 1.
     A[2] = 1.
-
-
+    
 #######################################
 ######## MAIN SCRIPT ##################
 #######################################
@@ -96,8 +97,9 @@ if __name__ == '__main__':
     numer      = np.zeros(N)
     denom      = np.zeros(N)
 
-    growth     = np.zeros(NPTS)
-    x          = np.zeros(NPTS)
+    growth     = np.zeros(NPTS)               # Convective growth rate value
+    stop       = np.zeros(NPTS)               # Stop band flag
+    x          = np.zeros(NPTS)               # X-axis values
 
     if maxfreq > 1.0:
         maxfreq = 1.0
@@ -155,6 +157,7 @@ if __name__ == '__main__':
         # Check for stop band.
         if (arg4 < 0.0 and x[k] > 1.0 / M[N - 1]):
             growth[k] = 0.0
+            stop[k]   = 1
         else:
             arg3 = arg4 / (x[k]*x[k])
             for i in range(N):
@@ -189,7 +192,36 @@ if __name__ == '__main__':
         for k in range(NPTS):
             growth[k] = growth[k]*1.0E9
 
-    #plt.figure(figsize=(18, 10))
+    #fig = plt.figure(figsize=(18, 10))
+    #ax  = fig.add_subplot(111)
+    
     plt.plot(x, growth)
-    plt.xlabel('Frequency')
-    plt.ylabel('Growth Rate', rotation=90)
+    
+    for ii in range(NPTS - 1):
+        if stop[ii] == 1:
+            plt.axvspan(x[ii], x[ii + 1], color='k')
+    
+    #plt.xlim(0, 2.0)
+    #plt.ylim(0, 100)
+
+    plt.xlabel('Frequency (Hz)', fontsize=14)
+    plt.ylabel('Growth Rate ($\omega / V_g 10^{-7} cm^{-1}$)', rotation=90, fontsize=14)
+    plt.title('Growth Rate: Kozyra parameters (Fig 1a)', fontsize=16)
+    
+# =============================================================================
+#     ax.text(0.82, 0.99, 'Cold', transform=ax.transAxes, fontsize=10, color='b')
+#     ax.text(0.89, 0.99, 'Hot', transform=ax.transAxes, fontsize=10, color='r')
+#     ax.text(0.95, 0.99, '$A_i$', transform=ax.transAxes, fontsize=10, color='k')
+#     
+#     ax.text(0.80, 0.95, '$H^{+}$:'   , transform=ax.transAxes, fontsize=10)
+#     ax.text(0.82, 0.95, '%.3f$cm^{-3}$' % (ndensc[0]/1e6), transform=ax.transAxes, fontsize=10, color='b')
+#     ax.text(0.89, 0.95, '%.3f$cm^{-3}$' % (ndensw[0]/1e6), transform=ax.transAxes, fontsize=10, color='r')
+# 
+#     ax.text(0.79, 0.90, '$He^{+}$:'   , transform=ax.transAxes, fontsize=10)
+#     ax.text(0.82, 0.90, '%.3f$cm^{-3}$' % (ndensc[1]/1e6), transform=ax.transAxes, fontsize=10, color='b')
+#     ax.text(0.89, 0.90, '%.3f$cm^{-3}$' % (ndensw[1]/1e6), transform=ax.transAxes, fontsize=10, color='r')
+# 
+#     ax.text(0.80, 0.85, '$O^{+}$:'   , transform=ax.transAxes, fontsize=10)
+#     ax.text(0.82, 0.85, '%.3f$cm^{-3}$' % (ndensc[2]/1e6), transform=ax.transAxes, fontsize=10, color='b')
+#     ax.text(0.89, 0.85, '%.3f$cm^{-3}$' % (ndensw[2]/1e6), transform=ax.transAxes, fontsize=10, color='r')
+# =============================================================================
