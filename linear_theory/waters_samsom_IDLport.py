@@ -18,10 +18,11 @@ Created on Mon Oct 29 11:04:18 2018
 #
 # Converted to Python : Joshua S. Williams
 # October, 2018
+
 #%%
 import numpy as np
 import matplotlib.pyplot as plt
-import pdb
+
 
 def geomagnetic_magnitude(L_shell, lat=0.):
     '''Returns the magnetic field magnitude (intensity) on the specified L shell at the given colatitude, in Tesla
