@@ -10,36 +10,13 @@ import auxilliary_1D as aux
 import particles_1D  as particles
 import fields_1D     as fields
 import sources_1D    as sources
-import diagnostics as diag
-
-from simulation_parameters_1D import generate_data, generate_plots, dx, c
-
-import matplotlib.pyplot as plt
-
-## OUTPUT MODULES ##
 import plot_and_save as pas
+from simulation_parameters_1D import generate_data, generate_plots, c
+
 
 def main_simulation_loop():
     print 'Initializing parameters...'
     part                         = init.initialize_particles()
-    
-    plt.figure()
-    plt.scatter(part[0], part[3]/c, s=1, lw=0)
-    plt.xlabel('x')
-    plt.ylabel('vx')
-
-    plt.figure()
-    plt.scatter(part[0], part[4]/c, s=1, lw=0)
-    plt.xlabel('x')
-    plt.ylabel('vy')
-
-    plt.figure()
-    plt.scatter(part[0], part[5]/c, s=1, lw=0)
-    plt.xlabel('x')
-    plt.ylabel('vz')
-    
-    sys.exit() 
-    
     B, E, Ji, dns, W, Wb         = init.initialize_fields()
 
     DT, maxtime, data_dump_iter, plot_dump_iter = aux.set_timestep(part)
@@ -47,7 +24,7 @@ def main_simulation_loop():
     if generate_data == 1:
         pas.store_run_parameters(DT, data_dump_iter)
      
-    qq = 0
+    qq      = 0
     while qq < maxtime:
         if qq == 0:
             print 'Simulation starting...'
@@ -106,8 +83,7 @@ def main_simulation_loop():
         if qq%plot_dump_iter == 0 and generate_plots == 1:                                  # Generate and save plots, if flagged
             pas.create_figure_and_save(part, E, B, dns, qq, DT, plot_dump_iter)
 
-        #print (abs(part[3]).max() * DT) / dx
-        print 'Timestep {} of {} complete'.format(qq, maxtime)
+        print 'Timestep {} of {} complete'.format(qq+1, maxtime)
         qq += 1
     return
 

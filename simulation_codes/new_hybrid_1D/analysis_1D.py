@@ -8,10 +8,84 @@ Created on Wed Apr 27 11:56:34 2016
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-from matplotlib import rcParams
 from numpy import pi
 import pickle
+import matplotlib.gridspec as gs
 import pdb
+
+def load_constants():
+    q   = 1.602e-19               # Elementary charge (C)
+    c   = 3e8                     # Speed of light (m/s)
+    me  = 9.11e-31                # Mass of electron (kg)
+    mp  = 1.67e-27                # Mass of proton (kg)
+    e   = -q                      # Electron charge (C)
+    mu0 = (4e-7) * pi             # Magnetic Permeability of Free Space (SI units)
+    kB  = 1.38065e-23             # Boltzmann's Constant (J/K)
+    e0  = 8.854e-12               # Epsilon naught - permittivity of free space
+    return q, c, me, mp, e, mu0, kB, e0
+
+
+def load_particles():
+    p_path = os.path.join(data_dir, 'p_data.npz')                               # File location
+    p_data = np.load(p_path)                                                    # Load file
+
+    density    = p_data['density'] 
+    dist_type  = p_data['dist_type']
+    idx_bounds = p_data['idx_bounds']
+    charge     = p_data['charge']
+    mass       = p_data['mass']
+    Tper       = p_data['Tper']
+    sim_repr   = p_data['sim_repr']
+    temp_type  = p_data['temp_type']
+    velocity   = p_data['velocity']
+    Tpar       = p_data['Tpar']
+    species    = p_data['species']   
+     
+    print 'Particle parameters loaded'
+    return density, dist_type, idx_bounds, charge, mass, Tper, sim_repr, temp_type, velocity, Tpar, species
+
+
+def load_header():
+    h_name = os.path.join(data_dir, 'Header.pckl')                      # Load header file
+    f      = open(h_name)                                               # Open header file
+    obj    = pickle.load(f)                                             # Load variables from header file into python object
+    f.close()                                                           # Close header file
+    
+    Nj              = obj['Nj']
+    cellpart        = obj['cellpart']
+    data_dump_iter  = obj['data_dump_iter']
+    ne              = obj['ne']
+    NX              = obj['NX']
+    dxm             = obj['dxm']
+    seed            = obj['seed']
+    B0              = obj['B0']
+    dx              = obj['dx']
+    Te0             = obj['Te0']
+    theta           = obj['theta']
+    dt              = obj['dt']
+    max_sec         = obj['max_sec']
+    ie              = obj['ie']
+    run_desc        = obj['run_desc']
+    seed            = obj['seed']
+    
+    print 'Header file loaded.'
+    print 'dt = {}s\n'.format(dt)
+    return Nj, cellpart, data_dump_iter, ne, NX, dxm, seed, B0, dx, Te0, theta, dt, max_sec, ie, run_desc, seed
+
+def load_timestep(ii):
+    print 'Loading file {} of {}'.format(ii+1, num_files)
+    d_file     = 'data%05d.npz' % ii                # Define target file
+    input_path = data_dir + d_file                  # File location
+    data       = np.load(input_path)                # Load file
+
+    tposition        = data['part'][0]
+    tvelocity        = data['part'][3:6]
+    tB               = data['B']
+    tE               = data['E']
+    tdns             = data['dns']
+    tJ               = data['J']
+    
+    return tposition, tvelocity, tB, tE, tdns, tJ
 
 def save_array_file(arr, saveas, overwrite=False):
     if os.path.isfile(temp_dir + saveas) == False:
@@ -24,6 +98,10 @@ def save_array_file(arr, saveas, overwrite=False):
             print 'Array already exists as{}, overwriting...'.format(saveas)
     return
 
+
+def plot_k_time(arr, saveas):
+    
+    return
 
 def plot_dispersion(arr, saveas):
     plt.ioff()
@@ -59,109 +137,89 @@ def plot_dispersion(arr, saveas):
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
     plt.close()
     print 'Dispersion Plot saved'
-
     return
 
-start_file = 0                # First file to scan - For starting mid-way    (Default 0: Read all files in directory)
-end_file   = 0                # Last file to scan  - To read in partial sets (Default 0: Read all files in directory)
 
-#%% ---- CONSTANTS ----
-q   = 1.602e-19               # Elementary charge (C)
-c   = 3e8                     # Speed of light (m/s)
-me  = 9.11e-31                # Mass of electron (kg)
-mp  = 1.67e-27                # Mass of proton (kg)
-e   = -q                      # Electron charge (C)
-mu0 = (4e-7) * pi             # Magnetic Permeability of Free Space (SI units)
-kB  = 1.38065e-23             # Boltzmann's Constant (J/K)
-e0  = 8.854e-12               # Epsilon naught - permittivity of free space
+def winske_stackplot(qq):
+#----- Prepare some values for plotting
+    x_cell_num  = np.arange(NX)                                         # Numerical cell numbering: x-axis
+    
+    norm_xvel   = 1e3*velocity[0, :] / c                                # Normalize to speed of light
+    norm_yvel   = 1e3*velocity[1, :] / c
+    By          = B[  1: NX + 1, 1] / B0                                # Normalize to background field
+    dnb         = dns[1: NX + 1, 1] / density[1]                        # Normalize beam density to initial value
+    rat         = B[1: NX + 1, 2] / B[1: NX + 1, 1]                     # Bz/By ratio
+    phi         = np.arctan2(rat) + pi                                  # Wave magnetic phase angle
+    
+#----- Create plots
+    plt.ioff()
+    fig    = plt.figure(1, figsize=(16,9))                              # Initialize figure
+    grids  = gs.GridSpec(5, 1)                                          # Create gridspace
+    fig.patch.set_facecolor('w')                                        # Set figure face color
 
-#%% ---- LOAD FILE PARAMETERS ----
-run_dir  = 'E:/runs/winske_anisotropy_test/run_1/'  # Main run directory
-data_dir = run_dir + 'data/'                                        # Directory containing .npz output files for the simulation run
-anal_dir = run_dir + 'analysis/'                                    # Output directory for all this analysis (each will probably have a subfolder)
-temp_dir = run_dir + 'temp/'                                        # Saving things like matrices so we only have to do them once
+    ax_vx   = fig.add_subplot(grids[0, 0]) 
+    ax_vy   = fig.add_subplot(grids[1, 0]) 
+    ax_den  = fig.add_subplot(grids[2, 0])                              # Initialize axes
+    ax_by   = fig.add_subplot(grids[3, 0]) 
+    ax_phi  = fig.add_subplot(grids[4, 0]) 
 
-for this_dir in [anal_dir, temp_dir]:
-    if os.path.exists(this_dir) == False:                           # Make Output folder if they don't exist
-        os.makedirs(this_dir)
+    ax_vx.scatter(position[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_xvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='k', lw=0)        # Hot population
+    ax_vy.scatter(position[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_yvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='k', lw=0)        # 'Other' population
+    
+    ax_den.plot(x_cell_num, dnb, c='k')                                 # Create overlayed plots for densities of each species
+    ax_by.plot(x_cell_num, By, c='k')
+    ax_phi.plot(x_cell_num, phi, c='k')
 
-#%% ---- LOAD HEADER ----
+    ax_vx.set_ylabel(r'$v_{b, x} (\times 10^{-3})$', rotation=90)
+    ax_vy.set_ylabel(r'$v_{b, y} (\times 10^{-3})$', rotation=90)
+    ax_by.set_ylabel(r'$\frac{B_y}{B_0}$', rotation=0, labelpad=10, fontsize=14)
 
-h_name = os.path.join(data_dir, 'Header.pckl')                      # Load header file
-f      = open(h_name)                                               # Open header file
-obj    = pickle.load(f)                                             # Load variables from header file into python object
-f.close()                                                           # Close header file
+    plt.setp(ax_vx.get_xticklabels(), visible=False)
+    #ax_vx.set_yticks(ax_vx.get_yticks()[1:])
 
-for name in obj.keys():                                             # Assign Header variables to namespace (dicts)
-    globals()[name] = obj[name]                                     # Magic variable creation function
+    for ax in [ax_vx, ax_vy, ax_den, ax_by]:
+        plt.setp(ax.get_xticklabels(), visible=False)
+        ax.set_yticks(ax.get_yticks()[1:])
 
-seed = 21
-np.random.seed(seed)
+#----- Plot adjustments
+    plt.tight_layout(pad=1.0, w_pad=1.8)
+    fig.subplots_adjust(hspace=0)
 
-if end_file == 0:
+#----- Save plots
+    filename = 'stackplot%05d.png' % qq
+    path     = anal_dir + '/stackplot/'
+    
+    if os.path.exists(path) == False:                                   # Create data directory
+        os.makedirs(path)
+        
+    fullpath = path + filename
+    plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+    plt.close('all')
+    return
+
+
+
+if __name__ == '__main__':
+    series   = 'winske_anisotropy_test'
+    run_num  = 0
+    
+    run_dir  = 'E:/runs/{}/run_{}/'.format(series, run_num)             # Main run directory
+    data_dir = run_dir + 'data/'                                        # Directory containing .npz output files for the simulation run
+    anal_dir = run_dir + 'analysis/'                                    # Output directory for all this analysis (each will probably have a subfolder)
+    temp_dir = run_dir + 'temp/'                                        # Saving things like matrices so we only have to do them once
+    
+    for this_dir in [anal_dir, temp_dir]:
+        if os.path.exists(this_dir) == False:                           # Make Output folder if they don't exist
+            os.makedirs(this_dir)
+    
     num_files = len(os.listdir(data_dir)) - 2
-else:
-    num_files = end_file
-
-print 'Header file loaded.'
-
-#%% ---- LOAD PARTICLE PARAMETERS ----
-
-p_path = os.path.join(data_dir, 'p_data.npz')                               # File location
-p_data = np.load(p_path)                                                    # Load file
-
-array_names = p_data.files                                                  # Create list of stored variable names
-num_index   = np.arange(len(array_names))                                   # Number of stored variables
-
-# Load E, B, SRC and part arrays
-for var_name, index_position in zip(array_names, num_index):                # Magic subroutine to attach variable names to their stored arrays
-    globals()[var_name] = p_data[array_names[index_position]]               # Generally contains 'partin', 'partout' and 'part_type' arrays from model run
-
-print 'Particle parameters loaded'
-
-#%% ---- LOAD FILES AND PLOT -----
-# Read files and assign variables. Do the other things as well
-ii        = start_file
-plot_skip = 1
-
-#all_B = np.zeros((num_files, NX + 2, 3))
-#all_E = np.zeros((num_files, NX))
-
-#for ii in grab:
-max_v     = np.zeros(num_files)
-spc_av_By = np.zeros(num_files)
-spc_av_Ex = np.zeros(num_files)
- 
-print 'dt={}'.format(dt)
-for ii in range(num_files):
-    if ii%plot_skip == 0:
-        print 'Loading file {} of {}'.format(ii, num_files)
-        d_file     = 'data%05d.npz' % ii                # Define target file
-        input_path = data_dir + d_file                  # File location
-        data       = np.load(input_path)                # Load file
-
-        max_v[ii]       = abs(data['part'][3]).max()
-        spc_av_By[ii]   = abs(data['B'][1: -1, 1]).max()
-        spc_av_Ex[ii]   = abs(data['E'][1: -1, 0]).max()
-        #all_B[ii, :, :] = data['B']
-
-t = np.arange(num_files) * dt * data_dump_iter     
-#%%
-fig = plt.figure(figsize=(18,10))
-ax  = fig.add_subplot(111)
-
-
-ax.plot(t, max_v / max_v.max(), label='velocity')
-ax.plot(t, spc_av_By / spc_av_By.max(), label='B')
-ax.plot(t, spc_av_Ex / spc_av_Ex.max(), label='E')
-ax.legend()
-plt.show()
-#save_array_file(all_B, 'all_B')
-#plot_dispersion(all_B[:, :, 1], 'wk_By')
-        #E    = data['E']
-        #part = data['part']
-        #Ji   = data['Ji']
-        #dns  = data['dns']
-
-
-
+    
+    q, c, me, mp, e, mu0, kB, e0  = load_constants()  
+    density, dist_type, idx_bounds, charge, mass, Tper, sim_repr, temp_type, velocity, Tpar, species = load_particles()
+    Nj, cellpart, data_dump_iter, ne, NX, dxm, seed, B0, dx, Te0, theta, dt, max_sec, ie, run_desc, seed = load_header()
+    
+    np.random.seed(seed)
+    
+    for ii in range(num_files):
+        position, velocity, B, E, dns, J = load_timestep(ii)
+    

@@ -6,6 +6,7 @@ Created on Fri Sep 22 17:15:59 2017
 """
 import numpy as np
 import numba as nb
+import pdb
 from simulation_parameters_1D import t_res, plot_res, max_sec, dx, gyfreq, lam_res
 
 @nb.njit(cache=True)
@@ -61,7 +62,6 @@ def check_timestep(qq, DT, part, maxtime, data_dump_iter, plot_dump_iter):
     if DT_new < DT:
         DT *= 0.5
         maxtime *= 2
-        data_dump_iter *= 2
         qq *= 2
         
         if plot_dump_iter != None:

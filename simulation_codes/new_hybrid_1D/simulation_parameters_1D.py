@@ -10,12 +10,11 @@ import pdb
 ### RUN DESCRIPTION ###                     # Saves within run for easy referencing
 run_description = '''Winske 1D anisotropy simulation based on parameters from h1.f hybrid code (addendum to 1993 book)'''
 
-
 ### RUN PARAMETERS ###
 drive           = 'E:/'                             # Drive letter or path for portable HDD e.g. 'E:/'
 save_path       = 'runs/winske_anisotropy_test/'    # Series save dir   : Folder containing all runs of a series
-run_num         = 6                                 # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 0                                 # Save data flag    : For later analysis
+run_num         = 2                                 # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+generate_data   = 1                                 # Save data flag    : For later analysis
 generate_plots  = 1                                 # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                               # RNG Seed          : Set to enable consistent results for parameter studies
 
@@ -34,7 +33,7 @@ RE  = 6.371e6                               # Earth radius in metres
 dxm      = 1                                # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't resolvable by hybrid code)
 lam_res  = 0.05                             # Determines simulation DT by fraction of orbit per timestep
 t_res    = 0                                # Time resolution. Determines how often data is captured. Every frame captured if '0'.
-plot_res = 1.0                              # Determines how often a plot is generated (in seconds of simulation time). Every frame plotted if '0', or none if None (this is also controlled by the generate_plot flag)
+plot_res = 1.0                              # Determines how often a plot is generated (in seconds of simulation time). Every frame plotted if '0'
 NX       = 128                              # Number of cells - doesn't include ghost cells
 max_sec  = 100.                             # Simulation runtime, in seconds of simulated time
 cellpart = 80                               # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
@@ -106,7 +105,7 @@ N_species = np.round(N * sim_repr * 0.01).astype(int)   # Number of sim particle
 Nj        = len(mass)                                   # Number of species (number of columns above)
 
 n_contr   = (N_real * 0.01*density) / N_species         # Species density contribution: Real particles per sim particle
-density   *= 0.01*ne                                    # Real density of each species (in /cc)
+density  *= 0.01*ne                                     # Real density of each species (in /cc)
 
 idx_start = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end   = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
