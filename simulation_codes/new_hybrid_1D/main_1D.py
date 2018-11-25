@@ -1,8 +1,6 @@
 ## PYTHON MODULES ##
 from timeit import default_timer as timer
 import numpy as np
-import pdb
-import sys
 
 ## HYBRID MODULES ##
 import init_1D       as init
@@ -26,6 +24,8 @@ def main_simulation_loop():
      
     qq      = 0
     while qq < maxtime:
+        data_save_string = ''; plot_save_string = ''
+        
         if qq == 0:
             print 'Simulation starting...'
             W         = sources.assign_weighting(part[0, :], part[1, :], 1)                 # Assign initial (E) weighting to particles
@@ -79,11 +79,13 @@ def main_simulation_loop():
 
         if qq%data_dump_iter == 0 and generate_data == 1:                                   # Save data, if flagged
             pas.save_data(DT, data_dump_iter, qq, part, Ji, E, B, dns)
+            data_save_string = 'Data saved.'
 
         if qq%plot_dump_iter == 0 and generate_plots == 1:                                  # Generate and save plots, if flagged
             pas.create_figure_and_save(part, E, B, dns, qq, DT, plot_dump_iter)
+            plot_save_string = 'Plot saved.'
 
-        print 'Timestep {} of {} complete'.format(qq+1, maxtime)
+        print 'Timestep {} of {} complete. {} {}'.format(qq+1, maxtime, data_save_string, plot_save_string)
         qq += 1
     return
 

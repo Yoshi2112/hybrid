@@ -100,7 +100,6 @@ def save_array_file(arr, saveas, overwrite=False):
 
 
 def plot_k_time(arr, saveas):
-    
     return
 
 def plot_dispersion(arr, saveas):
@@ -123,7 +122,7 @@ def plot_dispersion(arr, saveas):
     dispersion_plot = fft_matrix2[:f.shape[0], :k.shape[0]] * np.conj(fft_matrix2[:f.shape[0], :k.shape[0]])
 
     fig, ax = plt.subplots()
-
+    
     ax.contourf(k[1:], f[1:], np.log10(dispersion_plot[1:, 1:].real), 500, cmap='jet', extend='both')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
 
     ax.set_title(r'Dispersion Plot: $\omega/k$', fontsize=22)
@@ -144,16 +143,17 @@ def winske_stackplot(qq):
 #----- Prepare some values for plotting
     x_cell_num  = np.arange(NX)                                         # Numerical cell numbering: x-axis
     
+    pos         = position / dx
     norm_xvel   = 1e3*velocity[0, :] / c                                # Normalize to speed of light
     norm_yvel   = 1e3*velocity[1, :] / c
     By          = B[  1: NX + 1, 1] / B0                                # Normalize to background field
+    Bz          = B[  1: NX + 1, 2] / B0
     dnb         = dns[1: NX + 1, 1] / density[1]                        # Normalize beam density to initial value
-    rat         = B[1: NX + 1, 2] / B[1: NX + 1, 1]                     # Bz/By ratio
-    phi         = np.arctan2(rat) + pi                                  # Wave magnetic phase angle
+    phi         = np.arctan2(Bz, By) + pi                               # Wave magnetic phase angle
     
 #----- Create plots
     plt.ioff()
-    fig    = plt.figure(1, figsize=(16,9))                              # Initialize figure
+    fig    = plt.figure(1, figsize=(8.27, 11.69))                       # Initialize figure
     grids  = gs.GridSpec(5, 1)                                          # Create gridspace
     fig.patch.set_facecolor('w')                                        # Set figure face color
 
@@ -163,27 +163,48 @@ def winske_stackplot(qq):
     ax_by   = fig.add_subplot(grids[3, 0]) 
     ax_phi  = fig.add_subplot(grids[4, 0]) 
 
-    ax_vx.scatter(position[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_xvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='k', lw=0)        # Hot population
-    ax_vy.scatter(position[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_yvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='k', lw=0)        # 'Other' population
+    ax_vx.scatter(pos[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_xvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='k', lw=0)        # Hot population
+    ax_vy.scatter(pos[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_yvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='k', lw=0)        # 'Other' population
     
     ax_den.plot(x_cell_num, dnb, c='k')                                 # Create overlayed plots for densities of each species
-    ax_by.plot(x_cell_num, By, c='k')
+    ax_by.plot(x_cell_num, 10*By, c='k')
     ax_phi.plot(x_cell_num, phi, c='k')
 
-    ax_vx.set_ylabel(r'$v_{b, x} (\times 10^{-3})$', rotation=90)
-    ax_vy.set_ylabel(r'$v_{b, y} (\times 10^{-3})$', rotation=90)
-    ax_by.set_ylabel(r'$\frac{B_y}{B_0}$', rotation=0, labelpad=10, fontsize=14)
+    ax_vx.set_ylim(- 1.41 , 1.41) 
+    ax_vy.set_ylim(- 1.41 , 1.41) 
+    ax_den.set_ylim( 0.71 , 1.39)                                         # Initialize axes
+    ax_by.set_ylim(- 5.99 , 4.55) 
+    ax_phi.set_ylim( 0.01 , 6.24) 
+
+    ax_vx.set_yticks( [-1.41, -0.71, 0.00, 0.71, 1.41])
+    ax_vy.set_yticks( [-1.41, -0.71, 0.00, 0.71, 1.41])
+    ax_den.set_yticks([0.71, 0.88, 1.05, 1.22, 1.39])
+    ax_by.set_yticks( [-5.99, -3.36, -0.72, 1.91, 4.55])
+    ax_phi.set_yticks([0.01, 1.57, 3.13, 4.68, 6.24])
+
+    ax_vx.set_ylabel('VX ($x 10^{-3}$)', rotation=90)
+    ax_vy.set_ylabel('VY ($x 10^{-3}$)', rotation=90)
+    ax_den.set_ylabel('DNB', rotation=90)
+    ax_by.set_ylabel('BY ($x 10^{-1}$)', rotation=90)
+    ax_phi.set_ylabel('PHI', rotation=90)
+
+    ax_phi.set_xlim(0, 128)
+    ax_phi.set_xlabel('X (CELL)')
 
     plt.setp(ax_vx.get_xticklabels(), visible=False)
     #ax_vx.set_yticks(ax_vx.get_yticks()[1:])
 
     for ax in [ax_vx, ax_vy, ax_den, ax_by]:
         plt.setp(ax.get_xticklabels(), visible=False)
-        ax.set_yticks(ax.get_yticks()[1:])
+        #ax.set_yticks(ax.get_yticks()[1:])
+        ax.set_xlim(0, 128)
 
 #----- Plot adjustments
-    plt.tight_layout(pad=1.0, w_pad=1.8)
-    fig.subplots_adjust(hspace=0)
+    fig.text(0.42, 0.045, 'IT = {}'.format(data_dump_iter * qq), fontsize=13)    
+    fig.text(0.58, 0.045, 'T = %.2f' % (data_dump_iter * qq * dt / gyperiod), fontsize=13)
+    
+    #plt.tight_layout(pad=1.0, w_pad=1.8)
+    fig.subplots_adjust(hspace=0.1)
 
 #----- Save plots
     filename = 'stackplot%05d.png' % qq
@@ -201,7 +222,7 @@ def winske_stackplot(qq):
 
 if __name__ == '__main__':
     series   = 'winske_anisotropy_test'
-    run_num  = 0
+    run_num  = 2
     
     run_dir  = 'E:/runs/{}/run_{}/'.format(series, run_num)             # Main run directory
     data_dir = run_dir + 'data/'                                        # Directory containing .npz output files for the simulation run
@@ -218,8 +239,12 @@ if __name__ == '__main__':
     density, dist_type, idx_bounds, charge, mass, Tper, sim_repr, temp_type, velocity, Tpar, species = load_particles()
     Nj, cellpart, data_dump_iter, ne, NX, dxm, seed, B0, dx, Te0, theta, dt, max_sec, ie, run_desc, seed = load_header()
     
+    gyperiod   = (2. * np.pi * mp) / (q * B0) 
+    
     np.random.seed(seed)
     
+    #num_files = 1
     for ii in range(num_files):
         position, velocity, B, E, dns, J = load_timestep(ii)
+        winske_stackplot(ii)
     

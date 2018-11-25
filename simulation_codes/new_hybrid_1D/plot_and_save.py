@@ -13,7 +13,7 @@ import sys
 from shutil import rmtree
 import simulation_parameters_1D as const
 from   simulation_parameters_1D import generate_data, generate_plots, drive, save_path, N, NX, xmax, ne, B0, k, density, c, wpiwci
-from   simulation_parameters_1D import idx_bounds, Nj, species, temp_type, dist_type, mass, charge, velocity, sim_repr, Tpar, Tper, gyfreq
+from   simulation_parameters_1D import idx_bounds, Nj, species, temp_type, dist_type, mass, charge, velocity, sim_repr, Tpar, Tper, gyfreq, gyperiod
 
 def manage_directories():
     print 'Checking directories...'
@@ -153,7 +153,7 @@ def create_figure_and_save(part, E, B, dns, qq, dt, plot_dump_iter):
     time_font = 18; time_spacing = 0.04; time_top = 0.19
     
     fig.text(0.87, time_top - 0*time_spacing, 'it  = %d' % qq, fontsize = time_font)
-    fig.text(0.87, time_top - 1*time_spacing, '$\Omega t$ = %.2f' % (qq*dt / gyfreq), fontsize = time_font)
+    fig.text(0.87, time_top - 1*time_spacing, '$\Omega t$ = %.2f' % (qq*dt / gyperiod), fontsize = time_font)
     fig.text(0.87, time_top - 2*time_spacing, 't    = %.2fs' % (qq*dt), fontsize = time_font)
     fig.text(0.87, time_top - 3*time_spacing, 'dt  = %.3fs' % (dt), fontsize = time_font)
 
@@ -169,7 +169,6 @@ def create_figure_and_save(part, E, B, dns, qq, dt, plot_dump_iter):
         
     fullpath = path + filename
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-    print 'Plot saved'.format(r)
     plt.close('all')
     return
 
@@ -211,7 +210,6 @@ def store_run_parameters(dt, data_dump_iter):
     p_file = os.path.join(d_path, 'p_data')
     np.savez(p_file, idx_bounds=idx_bounds, species=species, temp_type=temp_type, dist_type=dist_type, mass=mass,
              charge=charge, velocity=velocity, density=density, sim_repr=sim_repr, Tpar=Tpar, Tper=Tper)
-    print 'Particle data saved'
     return
 
 def save_data(dt, data_dump_iter, qq, part, Ji, E, B, dns):
@@ -221,4 +219,3 @@ def save_data(dt, data_dump_iter, qq, part, Ji, E, B, dns):
     d_filename = 'data%05d' % r
     d_fullpath = os.path.join(d_path, d_filename)
     np.savez(d_fullpath, part=part, E=E[:, 0:3], B=B[:, 0:3], J=Ji, dns=dns)   # Data file for each iteration
-    print 'Data saved'.format(qq)

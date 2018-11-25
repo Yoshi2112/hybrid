@@ -8,7 +8,7 @@ Created on Fri Sep 22 17:55:15 2017
 import numpy as np
 import numba as nb
 
-from simulation_parameters_1D import NX, dx, N, Nj, n_contr, charge
+from simulation_parameters_1D import NX, dx, N, Nj, n_contr, charge, smooth_sources
 from auxilliary_1D            import smooth, manage_ghost_cells
 
 @nb.njit(cache=True)
@@ -60,9 +60,10 @@ def collect_density(nodes, weights, ptypes):
 
     n_i  = manage_ghost_cells(n_i, 1)
 
-    for jj in range(Nj):
-        smoothed   = smooth(n_i[:, jj])
-        n_i[:, jj] = smoothed
+    if smooth_sources == 1:
+        for jj in range(Nj):
+            smoothed   = smooth(n_i[:, jj])
+            n_i[:, jj] = smoothed
 
     return n_i
 
@@ -93,9 +94,10 @@ def collect_current(part, W_in):
     for ii in range(3):
         J_i[:, :, ii] /= dx                                     # Get current density
 
-    for jj in range(Nj):
-        for kk in range(3):
-            smoothed       = smooth(J_i[:, jj, kk])             # Smooth current
-            J_i[:, jj, kk] = smoothed
+    if smooth_sources == 1:
+        for jj in range(Nj):
+            for kk in range(3):
+                smoothed       = smooth(J_i[:, jj, kk])             # Smooth current
+                J_i[:, jj, kk] = smoothed
 
     return J_i

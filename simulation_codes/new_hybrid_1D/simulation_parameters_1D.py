@@ -28,14 +28,13 @@ kB  = 1.381e-23                             # Boltzmann's Constant (J/K)
 e0  = 8.854e-12                             # Epsilon naught - permittivity of free space
 RE  = 6.371e6                               # Earth radius in metres
 
-
 ### SIMULATION PARAMETERS ###
 dxm      = 1                                # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't resolvable by hybrid code)
 lam_res  = 0.05                             # Determines simulation DT by fraction of orbit per timestep
 t_res    = 0                                # Time resolution. Determines how often data is captured. Every frame captured if '0'.
 plot_res = 1.0                              # Determines how often a plot is generated (in seconds of simulation time). Every frame plotted if '0'
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_sec  = 100.                             # Simulation runtime, in seconds of simulated time
+max_sec  = 205.                             # Simulation runtime, in seconds of simulated time
 cellpart = 80                               # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 B0       = 140e-9                           # Unform initial magnetic field value (in T)
@@ -44,7 +43,7 @@ ne       = 50e6                             # Electron density (used to assign p
 
 k        = 1                                # Sinusoidal Density Parameter - number of wavelengths in spatial domain
 mhd_equil= 0                                # Temperature varied to give MHD Equilibrium condition?
-
+smooth_sources = 0                          # Smooth source terms? (0: No, 1: Yes)
 
 ### PARTICLE PARAMETERS ###
 species    = [r'$H^+$ cold', r'$H^+$ hot']  # Species name/labels        : Used for plotting
@@ -84,7 +83,10 @@ if set_override == 1:
 wpi       = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 wpe       = np.sqrt(ne * q ** 2 / (me * e0))            # Electron Plasma Frequency, wpe (rad/s)
 gyfreq    = q*B0/mp                                     # Proton Gyrofrequency (rad/s) (since this will be the highest of all species)
+gyperiod   = (2. * np.pi * mp) / (q * B0) 
 va        = B0 / np.sqrt(mu0*ne*mp)                     # Alfven speed: Assuming proton plasma
+
+t_res     = 0.05*gyperiod
 
 velocity *= va                                          # Cast velocity to m/s
 mass     *= mp                                          # Cast mass to kg
@@ -118,4 +120,4 @@ print 'Frequency ratio: {}'.format(freq_ratio)
 print 'Speed ratio: {}'.format(sped_ratio)
 print 'Density: {}cc'.format(round(ne / 1e6, 2))
 print 'Background magnetic field: {}nT\n'.format(round(B0*1e9, 1))
-print 'Gyroperiod: {}s'.format(round(2. * np.pi / gyfreq, 2))
+print 'Gyroperiod: {}s'.format(round(gyperiod, 2))
