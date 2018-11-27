@@ -367,7 +367,7 @@ def field(den, vix, viy, viz):
 
 
 if __name__ == '__main__':
-    save_path = 'F://Storage//runs//winske//'
+    save_path = 'E://runs//winske//'
     np.random.seed(21)
     
     plot         = True
@@ -383,11 +383,12 @@ if __name__ == '__main__':
     nsp    = 2                          # Number of ion species
 
     nspec  = np.array([5120,5120])      # Number of macroparticles per species
-    vbspec = np.array([0.90,-0.10])     # Bulk velocity for each species
+    wspec  = np.array([1.,1.])          # Mass of each species (in multiples of proton mass)
     dnspec = np.array([0.10,0.900])     # Density of each species (total = n0)
+
+    vbspec = np.array([0.90,-0.10])     # Bulk velocity for each species
     btspec = np.array([10.,1.])         # Species plasma beta (parallel?)
     anspec = np.array([5.,1.])          # T_perp/T_parallel (anisotropy) for each species
-    wspec  = np.array([1.,1.])          # Mass of each species (in multiples of proton mass)
 
     if steady_state == 1:    
         vbspec = np.array([0.0, 0.0])   # Bulk velocity for each species
@@ -399,13 +400,6 @@ if __name__ == '__main__':
     resis = 0.                          # Resistivity (usually 0)
     theta = 0.                          # Angle between B0 and x axis
     iemod = 0                           # Electron model (0: Isothermal, 1: Adiabatic)
-
-    nskip  = 2                          # 1/fraction ions plotted
-    npltp  = 200                        # Particle plot increment
-    npltf  = 200                        # Field plot    increment
-    nplth  = 1000                       # History plot  increment
-    nwrtf  = 20                         # History write increment
-    nwrth  = 40                         # Field write   increment
 
     npart  = nspec.sum()
 
@@ -558,7 +552,7 @@ if __name__ == '__main__':
             ax3 = plt.subplot2grid((3, 3), (2, 0), colspan=3)
             
             ax1.set_title(r'Magnetic Fields $\Omega t$ = {}'.format(t))
-            ax1.plot(np.sqrt(bxc ** 2 + by ** 2 + bz ** 2))
+            ax1.plot(np.sqrt(bxc ** 2 + by ** 2 + bz ** 2) / bxc)
             ax1.set_ylabel('$|B| / B_0$')
             ax1.set_ylim(0, 2)
             
