@@ -623,6 +623,73 @@ def field():
     return
 
 
+def winske_stackplot(qq, time):
+#----- Prepare some values for plotting
+    x_cell_num  = np.arange(nx)                                         # Numerical cell numbering: x-axis
+    phi         = np.arctan2(Bz[2:nx2], By[2:nx2]) + np.pi              # Wave magnetic phase angle
+    
+#----- Create plots
+    plt.ioff()
+    fig    = plt.figure(1, figsize=(8.27, 11.69))                       # Initialize figure
+    grids  = gs.GridSpec(5, 1)                                          # Create gridspace
+    fig.patch.set_facecolor('w')                                        # Set figure face color
+
+    ax_vx   = fig.add_subplot(grids[0, 0]) 
+    ax_vy   = fig.add_subplot(grids[1, 0]) 
+    ax_den  = fig.add_subplot(grids[2, 0])                              # Initialize axes
+    ax_by   = fig.add_subplot(grids[3, 0]) 
+    ax_phi  = fig.add_subplot(grids[4, 0]) 
+
+    ax_vx.scatter(x[:, 1], vx[:, 1]*1e3, s=1, c='k', lw=0)              # Hot population
+    ax_vy.scatter(x[:, 1], vy[:, 1]*1e3, s=1, c='k', lw=0)              # 'Other' population
+    
+    ax_den.plot(x_cell_num, dns[2:nx2, 1], c='k')                       # Create overlayed plots for densities of each species
+    ax_by.plot(x_cell_num, 10*By[2:nx2]/Bxc, c='k')
+    ax_phi.plot(x_cell_num, phi, c='k')
+
+    ax_vx.set_ylim(- 1.41 , 1.41) 
+    ax_vy.set_ylim(- 1.41 , 1.41) 
+    ax_den.set_ylim( 0.71 , 1.39)                                       # Initialize axes
+    ax_by.set_ylim(- 5.99 , 4.55) 
+    ax_phi.set_ylim( 0.01 , 6.24) 
+
+    ax_vx.set_yticks( [-1.41, -0.71, 0.00, 0.71, 1.41])
+    ax_vy.set_yticks( [-1.41, -0.71, 0.00, 0.71, 1.41])
+    ax_den.set_yticks([0.71, 0.88, 1.05, 1.22, 1.39])
+    ax_by.set_yticks( [-5.99, -3.36, -0.72, 1.91, 4.55])
+    ax_phi.set_yticks([0.01, 1.57, 3.13, 4.68, 6.24])
+
+    ax_vx.set_ylabel('VX ($x 10^{-3}$)', rotation=90)
+    ax_vy.set_ylabel('VY ($x 10^{-3}$)', rotation=90)
+    ax_den.set_ylabel('DNB', rotation=90)
+    ax_by.set_ylabel('BY ($x 10^{-1}$)', rotation=90)
+    ax_phi.set_ylabel('PHI', rotation=90)
+
+    ax_phi.set_xlim(0, 128)
+    ax_phi.set_xlabel('X (CELL)')
+
+    plt.setp(ax_vx.get_xticklabels(), visible=False)
+    #ax_vx.set_yticks(ax_vx.get_yticks()[1:])
+
+    for ax in [ax_vx, ax_vy, ax_den, ax_by]:
+        plt.setp(ax.get_xticklabels(), visible=False)
+        #ax.set_yticks(ax.get_yticks()[1:])
+        ax.set_xlim(0, 128)
+
+    #plt.tight_layout(pad=1.0, w_pad=1.8)
+    fig.subplots_adjust(hspace=0.1)
+
+    fig.text(0.42, 0.045, 'IT = {}'.format(qq), fontsize=13)    
+    fig.text(0.58, 0.045, 'T = %.2f' % (time), fontsize=13)
+    
+#----- Save plots
+    filename = 'stackplot%05d.png' % qq
+    fullpath = save_path + '/stackplot/' + filename
+    plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+    plt.close('all')
+    return
+
+
 if __name__ == '__main__':
 ### DEFINE INPUT VARIABLES
     # General
@@ -791,7 +858,7 @@ if __name__ == '__main__':
         pe[i]    = pe0
         By[i]    = Byc
         Bz[i]    = Bzc
-    
+
     #now we run one time step with dt = 0 to initialise the fields
     dtsav    = dt
     dt       = 0.
@@ -818,8 +885,7 @@ if __name__ == '__main__':
 # =============================================================================
             
         print 'Iteration {}, time = {}'.format(it, t)
-        t        = t  + dtwci        #THERES SOMETHING STRANGE ABOUT THE DT AND DTWCI HERE??
-    
+        
         trans()
         field()
     
