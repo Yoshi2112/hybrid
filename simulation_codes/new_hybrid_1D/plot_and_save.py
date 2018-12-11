@@ -150,12 +150,17 @@ def create_figure_and_save(part, E, B, dns, qq, dt, plot_dump_iter):
     fig.text(0.87, 0.54 - 1*spacing, '$He^{+}_w$ = %.1f%%' % 0, fontsize = font)
     fig.text(0.87, 0.54 - 2*spacing, '$O^{+}_w$   = %.1f%%' % 0, fontsize = font)
     
+    if const.smooth_sources == 0:
+        fig.text(0.87, 0.25, 'Smoothing OFF', fontsize = font, color='r')
+    elif const.smooth_sources == 1:
+        fig.text(0.87, 0.25, 'Smoothing ON', fontsize = font, color='g')
+        
     time_font = 18; time_spacing = 0.04; time_top = 0.19
     
     fig.text(0.87, time_top - 0*time_spacing, 'it  = %d' % qq, fontsize = time_font)
-    fig.text(0.87, time_top - 1*time_spacing, '$\Omega t$ = %.2f' % (qq*dt / gyperiod), fontsize = time_font)
-    fig.text(0.87, time_top - 2*time_spacing, 't    = %.2fs' % (qq*dt), fontsize = time_font)
-    fig.text(0.87, time_top - 3*time_spacing, 'dt  = %.3fs' % (dt), fontsize = time_font)
+    fig.text(0.87, time_top - 1*time_spacing, '$\Omega t$ = %.2f' % (qq*dt * const.gyfreq), fontsize = time_font)
+    fig.text(0.87, time_top - 2*time_spacing, 't    = %.3fs' % (qq*dt), fontsize = time_font)
+    fig.text(0.87, time_top - 3*time_spacing, 'dt  = %.4fs' % (dt), fontsize = time_font)
 
 #----- Plot Adjustments
     plt.tight_layout(pad=1.0, w_pad=1.8)
@@ -183,7 +188,9 @@ def store_run_parameters(dt, data_dump_iter):
 
     # Single parameters
     params = dict([('seed', const.seed),
+                   ('smooth_sources', const.smooth_sources),
                    ('Nj', Nj),
+                   ('lam_res', const.lam_res),
                    ('dt', dt),
                    ('NX', NX),
                    ('dxm', const.dxm),

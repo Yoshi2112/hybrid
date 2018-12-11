@@ -1,4 +1,7 @@
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gs
+import pdb
 
 # =============================================================================
 # ;I THINK I MADE A BIG MISTAKE
@@ -37,6 +40,201 @@ import numpy as np
 # ;    since the way in the Winske code was unnecessarily tricky (probably due to an
 # ;    inheritance in converting from a more detailed code).
 # =============================================================================
+
+# =============================================================================
+# def create_figure_and_save(qq):
+#     plt.ioff()
+#     fig_size = 4, 7                                                             # Set figure grid dimensions
+#     fig = plt.figure(figsize=(20,10))                                           # Initialize Figure Space
+#     fig.patch.set_facecolor('w')                                                # Set figure face color
+# 
+#     xpos       = x[1:, 1]                                                       # Particle x-positions
+#     x_cell_num  = np.arange(nx)                                                 # Numerical cell numbering: x-axis
+# 
+# #----- Velocity (vy) Plots: Hot and Cold Species
+#     ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
+#     ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
+# 
+#     xvel   = vx[1:, 1]
+#     yvel   = vy[1:, 1]
+# 
+#     ax_vx.scatter(xpos, xvel, s=1, c='r', lw=0)        # Hot population
+#     ax_vy.scatter(xpos, yvel, s=1, c='r', lw=0)        # 'Other' population
+# 
+#     ax_vx.set_title(r'Beam velocities ($c^{-1}$) vs. Position (x)')
+#     ax_vy.set_xlabel(r'Position (km)', labelpad=10)
+# 
+#     ax_vx.set_ylabel(r'$v_{b, x} (\times 10^{-3})$', rotation=90)
+#     ax_vy.set_ylabel(r'$v_{b, y} (\times 10^{-3})$', rotation=90)
+# 
+#     plt.setp(ax_vx.get_xticklabels(), visible=False)
+# 
+#     for ax in [ax_vy, ax_vx]:
+#         ax.set_xlim(0, nx)
+#         ax.set_ylim(-1.5e-3, 1.5e-3)
+# 
+# #----- Density Plot
+#     ax_den = plt.subplot2grid((fig_size), (0, 3), colspan=3)                            # Initialize axes
+#     species_colors = ['cyan', 'red']                                                    # Species colors for plotting (change to hot/cold arrays based off idx values later)
+# 
+#     for ii in range(nsp):
+#         ax_den.plot(x_cell_num, dns[1:nx+1, ii+1], color=species_colors[ii+1])          # Create overlayed plots for densities of each species
+# 
+#     ax_den.set_title('Ion Densities and Magnetic Fields')                               # Axes title (For all, since density plot is on top
+#     ax_den.set_ylabel('Normalized Density', fontsize=14, rotation=90, labelpad=5)       # Axis (y) label for this specific axes
+#     ax_den.set_ylim(0.5, 1.5)
+#     
+# #----- Electric Field (Ez) Plot
+#     ax_Ez = plt.subplot2grid(fig_size, (1, 3), colspan=3, sharex=ax_den)
+#     ax_Ez.plot(x_cell_num, Ez[1: nx+1, 0], color='magenta')
+# 
+#     ax_Ez.set_xlim(1, nx1)
+#     ax_Ez.set_ylabel(r'$E_x$ ($\mu V m^{-1}$)', labelpad=25, rotation=0, fontsize=14)
+# 
+# #----- Magnetic Field (By) and Magnitude (|B|) Plots
+#     ax_By = plt.subplot2grid((fig_size), (2, 3), colspan=3, sharex=ax_den)              # Initialize Axes
+#     ax_B  = plt.subplot2grid((fig_size), (3, 3), colspan=3, sharex=ax_den)
+# 
+#     mag_B = (np.sqrt(Bx[1:NX+1, 0] ** 2 + By[1: NX+1, 1] ** 2 + Bxc) / B0
+#     #B_y   = B[1:NX+1 , 1] / B0                                                          # Normalize grid values
+# 
+#     ax_B.plot(x_cell_num, mag_B, color='g')                                             # Create axes plots
+#     ax_By.plot(x_cell_num, B_y, color='g')
+# 
+#     ax_B.set_xlim(0,  NX)                                                               # Set x limit
+#     ax_By.set_xlim(0, NX)
+# 
+#     ax_B.set_ylim(0, 1.5)                                                               # Set y limit
+#     ax_By.set_ylim(-1, 1)
+# 
+#     ax_B.set_ylabel( r'$|B|$', rotation=0, labelpad=20, fontsize=14)                    # Set labels
+#     ax_By.set_ylabel(r'$\frac{B_y}{B_0}$', rotation=0, labelpad=10, fontsize=14)
+#     ax_B.set_xlabel('Cell Number')                                                      # Set x-axis label for group (since |B| is on bottom)
+# 
+#     for ax in [ax_den, ax_Ez, ax_By]:
+#         plt.setp(ax.get_xticklabels(), visible=False)
+#         ax.set_yticks(ax.get_yticks()[1:])
+# 
+#     for ax in [ax_den, ax_Ez, ax_By, ax_B]:
+#         qrt = NX / (4.*k)
+#         ax.set_xticks(np.arange(0, NX + qrt, qrt))
+#         ax.grid()
+# 
+# #----- Figure Text
+#     font = 18; spacing = 0.04
+#         
+#     fig.text(0.87, 0.94 - 0*spacing, 'NX = {}'.format(NX), fontsize = font)
+#     fig.text(0.87, 0.94 - 1*spacing, 'N  = {}'.format(N), fontsize = font)
+#     fig.text(0.87, 0.94 - 2*spacing, '$B_0$ = %.2fnT' % (B0*1e9), fontsize = font)
+#     fig.text(0.87, 0.94 - 3*spacing, '$n_0$ = %.2f$cm^{-3}$' % (ne*1e-6), fontsize = font)
+#     fig.text(0.87, 0.94 - 4*spacing, r'$\frac{\omega_i}{\Omega_i}$  = %.2e' % wpiwci, fontsize = font)
+#     
+#     fig.text(0.87, 0.70 - 0*spacing, '$H^{+}_c$   = %.1f%%' % 0, fontsize = font)
+#     fig.text(0.87, 0.70 - 1*spacing, '$He^{+}_c$ = %.1f%%' % 0, fontsize = font)
+#     fig.text(0.87, 0.70 - 2*spacing, '$O^{+}_c $   = %.1f%%' % 0, fontsize = font)
+#     
+#     fig.text(0.87, 0.54 - 0*spacing, '$H^{+}_w$   = %.1f%%' % 0, fontsize = font)
+#     fig.text(0.87, 0.54 - 1*spacing, '$He^{+}_w$ = %.1f%%' % 0, fontsize = font)
+#     fig.text(0.87, 0.54 - 2*spacing, '$O^{+}_w$   = %.1f%%' % 0, fontsize = font)
+#     
+#     if const.smooth_sources == 0:
+#         fig.text(0.87, 0.25, 'Smoothing OFF', fontsize = font, color='r')
+#     elif const.smooth_sources == 1:
+#         fig.text(0.87, 0.25, 'Smoothing ON', fontsize = font, color='g')
+#         
+#     time_font = 18; time_spacing = 0.04; time_top = 0.19
+#     
+#     fig.text(0.87, time_top - 0*time_spacing, 'it  = %d' % qq, fontsize = time_font)
+#     fig.text(0.87, time_top - 1*time_spacing, '$\Omega t$ = %.2f' % (qq*dt * const.gyfreq), fontsize = time_font)
+#     fig.text(0.87, time_top - 2*time_spacing, 't    = %.3fs' % (qq*dt), fontsize = time_font)
+#     fig.text(0.87, time_top - 3*time_spacing, 'dt  = %.4fs' % (dt), fontsize = time_font)
+# 
+# #----- Plot Adjustments
+#     plt.tight_layout(pad=1.0, w_pad=1.8)
+#     fig.subplots_adjust(hspace=0)
+# 
+#     filename = 'anim%05d.png' % r
+#     path     = drive + save_path + '/run_{}/anim/'.format(const.run_num)
+#     
+#     if os.path.exists(path) == False:                                   # Create data directory
+#         os.makedirs(path)
+#         
+#     fullpath = path + filename
+#     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+#     plt.close('all')
+#     return
+# =============================================================================
+
+
+def winske_stackplot(qq, tt):
+#----- Prepare some values for plotting
+    x_cell_num  = np.arange(nx)                                         # Numerical cell numbering: x-axis
+    phi         = np.arctan2(Bz[2:nx2], By[2:nx2]) + np.pi              # Wave magnetic phase angle
+    
+#----- Create plots
+    plt.ioff()
+    fig    = plt.figure(1, figsize=(8.27, 11.69))                       # Initialize figure
+    grids  = gs.GridSpec(5, 1)                                          # Create gridspace
+    fig.patch.set_facecolor('w')                                        # Set figure face color
+
+    ax_vx   = fig.add_subplot(grids[0, 0]) 
+    ax_vy   = fig.add_subplot(grids[1, 0]) 
+    ax_den  = fig.add_subplot(grids[2, 0])                              # Initialize axes
+    ax_by   = fig.add_subplot(grids[3, 0]) 
+    ax_phi  = fig.add_subplot(grids[4, 0]) 
+
+    ax_vx.scatter(x[1:, 1], 1e3*vx[1:, 1], s=1, c='k', lw=0)            # Beam velocity, x
+    ax_vy.scatter(x[1:, 1], 1e3*vy[1:, 1], s=1, c='k', lw=0)            # Beam velocity, y
+    
+    ax_den.plot(x_cell_num, dns[2:nx2, 1]  , c='k')                     # Beam density
+    ax_by.plot(x_cell_num, 10*By[2:nx2] / Bxc, c='k')
+    ax_phi.plot(x_cell_num, phi, c='k')
+
+    ## SET YLIMS
+    ax_vx.set_ylim(- 1.41 , 1.41) 
+    ax_vy.set_ylim(- 1.41 , 1.41) 
+    ax_den.set_ylim( 0.71 , 1.39)
+    ax_by.set_ylim(- 5.99 , 4.55) 
+    ax_phi.set_ylim( 0.01 , 6.24) 
+
+    ## LABEL TICKS
+    ax_vx.set_yticks( [-1.41, -0.71, 0.00, 0.71, 1.41])
+    ax_vy.set_yticks( [-1.41, -0.71, 0.00, 0.71, 1.41])
+    ax_den.set_yticks([0.71, 0.88, 1.05, 1.22, 1.39])
+    ax_by.set_yticks( [-5.99, -3.36, -0.72, 1.91, 4.55])
+    ax_phi.set_yticks([0.01, 1.57, 3.13, 4.68, 6.24])
+
+    # LABEL AXES
+    ax_vx.set_ylabel('VX ($x 10^{-3}$)', rotation=90)
+    ax_vy.set_ylabel('VY ($x 10^{-3}$)', rotation=90)
+    ax_den.set_ylabel('DNB', rotation=90)
+    ax_by.set_ylabel('BY ($x 10^{-1}$)', rotation=90)
+    ax_phi.set_ylabel('PHI', rotation=90)
+
+    ax_phi.set_xlim(0, 128)
+    ax_phi.set_xlabel('X (CELL)')
+
+    plt.setp(ax_vx.get_xticklabels(), visible=False)
+
+    for ax in [ax_vx, ax_vy, ax_den, ax_by]:
+        plt.setp(ax.get_xticklabels(), visible=False)
+        ax.set_xlim(0, 128)
+
+#----- Plot adjustments
+    fig.text(0.42, 0.045, 'IT = %d'  % qq, fontsize=13)    
+    fig.text(0.58, 0.045, 'T = %.2f' % tt, fontsize=13)
+    
+    fig.subplots_adjust(hspace=0.1)
+
+#----- Save plots
+    save_path = 'F://runs//winske_anisotropy_test//vanilla_winske//stackplots//'
+    filename  = 'stackplot%05d.png' % qq
+        
+    fullpath = save_path + filename
+    plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+    plt.close('all')
+    return
+
 
 def trans():
     '''Collects the densities and the currents'''
@@ -427,37 +625,39 @@ def field():
 
 if __name__ == '__main__':
 ### DEFINE INPUT VARIABLES
-    t        = 0               # i added this, NOT IN WINSKE
-    
     # General
+    np.random.seed(101)
+    
     ntimes    = 2001           # time steps
     dtwci     = 0.05           # dt in wci units
     nx        = 128            # no of computational cells (not including two ghost cells)
     xmax      = 128.           # system length in c/wpi units
-    wpiwci    = 10000.         # ratio of wpi/wci (?? i think plasma freq to cyclotron freq?)
-    resis     = 0.             # resistivity eta term
+    wpiwci    = 10000.         # ratio of wpi/wci
     theta     = 0.             # angle between B0 and x axis
     
     # Ions
     nsp       = 2
     nspec     = [5120,5120]    # No of simulation particles of each species
-    vbspec    = [9.00,-1.00]   # Velocity for each species in alfven speed units (va^2=Bo^2/(4*pi*no*mo) see pg 120)
+    vbspec    = [0.90,-0.10]   # Velocity for each species in alfven speed units (va^2=B0^2/(4*pi*no*mo) see pg 120)
     dnspec    = [0.10,0.900]   # Total density of each species
-    btspec    = [100.,1.]      # Plasma beta for each species
-    anspec    = [1.,21.]       # Anisotropy: T-perp/T-parallel for each species (?? see original code and pg 121?)
+    btspec    = [10.,1.0]      # Plasma beta for each species
+    anspec    = [5.0,1.]       # Anisotropy: T-perp/T-parallel for each species (?? see original code and pg 121?)
     wspec     = [1.,1.]        # Mass of each species in proton mass units
     
     # Electrons
-    iemod    = 0               # Electron model (0 for Te constant, 1 for adiabatic)
-    bete    = 1.               # Electron beta
-    
-    # Plotting
-    nskip    = 2               # 1/fraction of ions plotted
-    npltp    = 200             # Time step increment for particle plots
-    npltf    = 200             # Time step increment for field plots
-    nplth    = 1000            # Time step increment for history plots
-    nwrtf    = 20              # Time step increment for history writes
-    nwrth    = 40              # Time step increment for field writes
+    iemod     = 0              # Electron model (0 for Te constant, 1 for adiabatic)
+    bete      = 1.             # Electron beta
+    resis     = 0.             # resistivity eta term
+
+# =============================================================================
+#     # Plotting
+#     nskip    = 2               # 1/fraction of ions plotted
+#     npltp    = 200             # Time step increment for particle plots
+#     npltf    = 200             # Time step increment for field plots
+#     nplth    = 1000            # Time step increment for history plots
+#     nwrtf    = 20              # Time step increment for history writes
+#     nwrth    = 40              # Time step increment for field writes
+# =============================================================================
 
     # This just fixes the numbering problem i had of 1-> instead of 0-> for input values
     nspec    = np.array([0., nspec[0],  nspec[1]], dtype=int)
@@ -522,6 +722,13 @@ if __name__ == '__main__':
     Vez       = np.zeros(nc+1)
     te        = np.zeros(nc+1)              # temperature of electron fluid
     pe        = np.zeros(nc+1)              # pressure of electron fluid
+    
+    #save files
+    by_save   = np.zeros((ntimes, nx))
+    bz_save   = np.zeros((ntimes, nx))
+    ex_save   = np.zeros((ntimes, nx))
+    ey_save   = np.zeros((ntimes, nx))
+    ez_save   = np.zeros((ntimes, nx))
 
     #define some more stuff:
     #grid and dt
@@ -544,7 +751,6 @@ if __name__ == '__main__':
     pe0       = te0                         # pressure term
     
     #ions
-    #I NEED TO LOOK AT EVERYTHING BELOW THIS IN MORE DETAIL
     dnadd    = 0.                    #dnadd and the next loop sums all the total densities of the species
     for k in range(1,nsp + 1):
         dnadd = dnadd+dnspec[k]
@@ -563,8 +769,8 @@ if __name__ == '__main__':
         frac[k]   = dnspec[k]/dnadd
         npi[k]    = nspec[k]
 
-    #this initialises particles
-    #(not sure the theory behind it!)
+    # this initialises particles
+    # (not sure the theory behind it!)
     for k in range(1,nsp + 1):
         for p in range(1,nspec[k] + 1):
             x[p,k]    = xmax*pinv[k]*(npi[k]-.5)
@@ -596,9 +802,31 @@ if __name__ == '__main__':
     field()
 
 ### MAIN LOOP
+    t        = 0
     for it in range(1, ntimes + 1):
+        by_save[it-1, :] = By[2:nx2]
+        bz_save[it-1, :] = Bz[2:nx2]
+        
+        ex_save[it-1, :] = Ex[2:nx2]
+        ey_save[it-1, :] = Ey[2:nx2]
+        ez_save[it-1, :] = Ez[2:nx2]
+        
+# =============================================================================
+#         if round(t%1, 1) == 0:
+#             winske_stackplot(it, t)
+#             print 'Plot saved.'
+# =============================================================================
+            
         print 'Iteration {}, time = {}'.format(it, t)
         t        = t  + dtwci        #THERES SOMETHING STRANGE ABOUT THE DT AND DTWCI HERE??
     
         trans()
         field()
+    
+    field_path = 'F://runs//winske_anisotropy_test//vanilla_winske//fields//'
+    np.save(field_path + 'BYS', by_save)
+    np.save(field_path + 'BZS', bz_save)
+    
+    np.save(field_path + 'EXS', ex_save)
+    np.save(field_path + 'EYS', ey_save)
+    np.save(field_path + 'EZS', ez_save)

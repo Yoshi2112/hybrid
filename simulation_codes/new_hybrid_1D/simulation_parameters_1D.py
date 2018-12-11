@@ -5,15 +5,16 @@ Created on Fri Sep 22 11:00:58 2017
 @author: iarey
 """
 import numpy as np
-import pdb
+from timeit import default_timer as timer
+
 
 ### RUN DESCRIPTION ###                     # Saves within run for easy referencing
 run_description = '''Winske 1D anisotropy simulation based on parameters from h1.f hybrid code (addendum to 1993 book)'''
 
 ### RUN PARAMETERS ###
-drive           = 'E:/'                             # Drive letter or path for portable HDD e.g. 'E:/'
+drive           = 'F:/'                             # Drive letter or path for portable HDD e.g. 'E:/'
 save_path       = 'runs/winske_anisotropy_test/'    # Series save dir   : Folder containing all runs of a series
-run_num         = 2                                 # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+run_num         = 3                                 # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 generate_data   = 1                                 # Save data flag    : For later analysis
 generate_plots  = 1                                 # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                               # RNG Seed          : Set to enable consistent results for parameter studies
@@ -30,11 +31,9 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 dxm      = 1                                # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't resolvable by hybrid code)
-lam_res  = 0.05                             # Determines simulation DT by fraction of orbit per timestep
-t_res    = 0                                # Time resolution. Determines how often data is captured. Every frame captured if '0'.
-plot_res = 1.0                              # Determines how often a plot is generated (in seconds of simulation time). Every frame plotted if '0'
+lam_res  = 0.02                             # Determines simulation DT by fraction of inverse radian gyrofrequency per timestep
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_sec  = 205.                             # Simulation runtime, in seconds of simulated time
+max_sec  = 107.5                            # Simulation runtime, in seconds of simulated time
 cellpart = 80                               # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 B0       = 140e-9                           # Unform initial magnetic field value (in T)
@@ -43,7 +42,11 @@ ne       = 50e6                             # Electron density (used to assign p
 
 k        = 1                                # Sinusoidal Density Parameter - number of wavelengths in spatial domain
 mhd_equil= 0                                # Temperature varied to give MHD Equilibrium condition?
-smooth_sources = 0                          # Smooth source terms? (0: No, 1: Yes)
+smooth_sources = 1                          # Smooth source terms? (0: No, 1: Yes)
+
+t_res    = 0                                # Time resolution. Determines how often data is captured. Every frame captured if '0'.
+plot_res = 0                                # Plot resolution. Determines how often a plot is generated (in seconds of simulation time). Every frame plotted if '0'
+
 
 ### PARTICLE PARAMETERS ###
 species    = [r'$H^+$ cold', r'$H^+$ hot']  # Species name/labels        : Used for plotting
@@ -69,7 +72,7 @@ if set_override == 1:
     beta_e     = 1.                             # Parameters used to make intiial values more compatible with "normalized CGS" codes
     beta_par   = np.array([1., 10.])                           
     beta_per   = np.array([1., 50.])            # Will overwrite temperature values
-    wpiwci     = 1e4                            # Will overwrite density value
+    wpiwci     = 1e4                            # Will overwrite magnetic field value
     
     B0   = c * (1. / wpiwci) * np.sqrt(mu0 * mp * ne)
 
@@ -83,10 +86,10 @@ if set_override == 1:
 wpi       = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 wpe       = np.sqrt(ne * q ** 2 / (me * e0))            # Electron Plasma Frequency, wpe (rad/s)
 gyfreq    = q*B0/mp                                     # Proton Gyrofrequency (rad/s) (since this will be the highest of all species)
-gyperiod   = (2. * np.pi * mp) / (q * B0) 
+gyperiod  = (2. * np.pi * mp) / (q * B0)                # Proton Gyroperiod (seconds)
 va        = B0 / np.sqrt(mu0*ne*mp)                     # Alfven speed: Assuming proton plasma
 
-t_res     = 0.05*gyperiod
+plot_res  = 1. / gyfreq 
 
 velocity *= va                                          # Cast velocity to m/s
 mass     *= mp                                          # Cast mass to kg
@@ -121,3 +124,11 @@ print 'Speed ratio: {}'.format(sped_ratio)
 print 'Density: {}cc'.format(round(ne / 1e6, 2))
 print 'Background magnetic field: {}nT\n'.format(round(B0*1e9, 1))
 print 'Gyroperiod: {}s'.format(round(gyperiod, 2))
+
+if __name__ == '__main__':
+    import main_1D
+    
+    start_time = timer()
+    main_1D.main_simulation_loop()
+
+    print "Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2))  # Time taken to run simulation

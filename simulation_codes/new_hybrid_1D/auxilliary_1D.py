@@ -29,36 +29,36 @@ def cross_product(A, B):
 
 
 def set_timestep(part):
-    gyperiod = 2*np.pi / gyfreq                 # Gyroperiod in seconds
-    ion_ts   = lam_res * gyperiod               # Timestep to resolve gyromotion
-    vel_ts   = dx / (2. * np.max(part[3, :]))   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
+    gyperiod_radian = 1. / gyfreq                      # Inverse gyrofrequency (i.e. seconds to complete 1 radian, rather than per revolution/period)
+    ion_ts          = lam_res * gyperiod_radian        # Timestep to resolve gyromotion
+    vel_ts          = dx / (2. * np.max(part[3, :]))   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
 
-    DT             = min(ion_ts, vel_ts)        # Smallest of the two
-    data_dump_iter = int(t_res / DT)            # Number of iterations between dumps
-    maxtime        = int(max_sec / DT) + 1      # Total number of iterations in run
+    DT             = min(ion_ts, vel_ts)               # Smallest of the two
+    data_dump_iter = int(t_res / DT)                   # Number of iterations between dumps
+    maxtime        = int(max_sec / DT) + 1             # Total number of iterations in run
     
     if plot_res == None:
-        plot_dump_iter = None                   # Disable output plots
+        plot_dump_iter = None                          # Disable output plots
     elif plot_res == 0:
-        plot_dump_iter = 1                      # Plot every iteration
+        plot_dump_iter = 1                             # Plot every iteration
     else:
-        plot_dump_iter = int(plot_res / DT)     # Number of iterations between plots
+        plot_dump_iter = int(plot_res / DT)            # Number of iterations between plots
 
     if data_dump_iter == 0:
         data_dump_iter = 1
 
-    print 'Proton gyroperiod = %.2fs' % gyperiod
+    print 'Proton gyroperiod = %.2fs' % (gyperiod_radian * (1./(2*np.pi)))
     print 'Timestep: %.4fs, %d iterations total' % (DT, maxtime)
     return DT, maxtime, data_dump_iter, plot_dump_iter
 
 
 def check_timestep(qq, DT, part, maxtime, data_dump_iter, plot_dump_iter):
-    gyperiod = 2*np.pi / gyfreq                 # Gyroperiod in seconds
-    ion_ts   = lam_res * gyperiod               # Timestep to resolve gyromotion
-    vel_ts   = (0.75*dx) / (np.max(part[3, :]))  # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
+    gyperiod_radian = 1. / gyfreq                      # Inverse gyrofrequency (i.e. seconds to complete 1 radian, rather than per revolution/period)
+    ion_ts          = lam_res * gyperiod_radian        # Timestep to resolve gyromotion
+    vel_ts          = 0.50*dx / (np.max(part[3, :]))   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
 
-    DT_new         = min(ion_ts, vel_ts)        # Smallest of the two
-
+    DT_new          = min(ion_ts, vel_ts)              # Smallest of the two
+    
     if DT_new < DT:
         DT *= 0.5
         maxtime *= 2

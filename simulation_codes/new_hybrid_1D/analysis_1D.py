@@ -13,7 +13,23 @@ import pickle
 import matplotlib.gridspec as gs
 import pdb
 
+
+def manage_dirs():
+    global run_dir, data_dir, anal_dir, temp_dir
+    
+    run_dir  = 'F:/runs/{}/run_{}/'.format(series, run_num)             # Main run directory
+    data_dir = run_dir + 'data/'                                        # Directory containing .npz output files for the simulation run
+    anal_dir = run_dir + 'analysis/'                                    # Output directory for all this analysis (each will probably have a subfolder)
+    temp_dir = run_dir + 'temp/'                                        # Saving things like matrices so we only have to do them once
+    
+    for this_dir in [anal_dir, temp_dir]:
+        if os.path.exists(this_dir) == False:                           # Make Output folder if they don't exist
+            os.makedirs(this_dir)        
+    return
+
+
 def load_constants():
+    global q, c, me, mp, e, mu0, kB, e0
     q   = 1.602e-19               # Elementary charge (C)
     c   = 3e8                     # Speed of light (m/s)
     me  = 9.11e-31                # Mass of electron (kg)
@@ -22,10 +38,12 @@ def load_constants():
     mu0 = (4e-7) * pi             # Magnetic Permeability of Free Space (SI units)
     kB  = 1.38065e-23             # Boltzmann's Constant (J/K)
     e0  = 8.854e-12               # Epsilon naught - permittivity of free space
-    return q, c, me, mp, e, mu0, kB, e0
+    return
 
 
 def load_particles():
+    global density, dist_type, idx_bounds, charge, mass, Tper, sim_repr, temp_type, velocity, Tpar, species
+    
     p_path = os.path.join(data_dir, 'p_data.npz')                               # File location
     p_data = np.load(p_path)                                                    # Load file
 
@@ -42,10 +60,12 @@ def load_particles():
     species    = p_data['species']   
      
     print 'Particle parameters loaded'
-    return density, dist_type, idx_bounds, charge, mass, Tper, sim_repr, temp_type, velocity, Tpar, species
+    return
 
 
 def load_header():
+    global Nj, cellpart, data_dump_iter, ne, NX, dxm, seed, B0, dx, Te0, theta, dt, max_sec, ie, run_desc, seed, lam_res
+    
     h_name = os.path.join(data_dir, 'Header.pckl')                      # Load header file
     f      = open(h_name)                                               # Open header file
     obj    = pickle.load(f)                                             # Load variables from header file into python object
@@ -67,10 +87,12 @@ def load_header():
     ie              = obj['ie']
     run_desc        = obj['run_desc']
     seed            = obj['seed']
+    lam_res         = obj['lam_res']
     
     print 'Header file loaded.'
     print 'dt = {}s\n'.format(dt)
-    return Nj, cellpart, data_dump_iter, ne, NX, dxm, seed, B0, dx, Te0, theta, dt, max_sec, ie, run_desc, seed
+    return 
+
 
 def load_timestep(ii):
     print 'Loading file {} of {}'.format(ii+1, num_files)
@@ -87,28 +109,141 @@ def load_timestep(ii):
     
     return tposition, tvelocity, tB, tE, tdns, tJ
 
-def save_array_file(arr, saveas, overwrite=False):
-    if os.path.isfile(temp_dir + saveas) == False:
-        print 'Saving array file as {}'.format(temp_dir + saveas)
-        np.save(temp_dir + saveas, arr)
+def get_array(component, tmin, tmax):
+    if component[-1].lower() == 'x':
+        comp_idx = 0
+    elif component[-1].lower() == 'y':
+        comp_idx = 1
+    elif component[-1].lower() == 'z':
+        comp_idx = 2
+    
+    if tmax == None:
+        tmax = num_files
+    
+    num_iter = tmax - tmin
+    arr      = np.zeros((num_iter, NX))
+    
+    if tmin == 0 and tmax == num_files:
+        check_path = temp_dir + component.lower() + '_array' + '.npy'
     else:
-        if overwrite == False:
-            print 'Array already exists as {}, skipping...'.format(saveas)
-        else:
-            print 'Array already exists as{}, overwriting...'.format(saveas)
+        check_path = temp_dir + component.lower() + '_array' + '_{}'.format(tmin) + '_{}'.format(tmax) + '.npy'
+
+    if os.path.isfile(check_path) == True:
+        print 'Array file for {} loaded from memory...'.format(component.upper())
+        arr = np.load(check_path)   
+    else:
+        for ii in range(tmin, tmax):
+            position, velocity, B, E, dns, J = load_timestep(ii)
+            
+            if component[0].upper() == 'B':
+                arr[ii] = B[1:-1, comp_idx]
+            elif component[0].upper() == 'E':
+                arr[ii] = E[1:-1, comp_idx]
+                
+        print 'Saving array file as {}'.format(check_path)
+        np.save(check_path, arr)
+    return arr
+
+def generate_dispersion_relation(component='By', plot=True, tmin=0, tmax=None, normalize=False):
+    ''' Create w/k dispersion plot for times between tmin and tmax.
+    
+    INPUT:
+        component -- field component to analyse. Loads from array file or data files if array file doesn't exist
+        plot      -- Boolean, create plot or only load/save field components
+        tmin      -- First iteration to load
+        tmax      -- Last  iteration to load
+    OUTPUT:
+        None
+        
+    Note -- component keywork is not case sensitive, and should be one of Ex, Ey, Ez, Bx, By or Bz
+    '''
+    arr = get_array(component, tmin, tmax)
+        
+    if plot == True:
+        plot_dispersion(arr, normalize, saveas='dispersion_relation_{}'.format(component.lower()))
     return
 
 
-def plot_k_time(arr, saveas):
+def generate_kt_plot(component='By', tmin=0, tmax=None, plot=True, normalize=False):
+    ''' Create w/k dispersion plot for times between tmin and tmax.
+    
+    INPUT:
+        component -- field component to analyse. Loads from array file or data files if array file doesn't exist
+        plot      -- Boolean, create plot or only load/save field components
+        tmin      -- First iteration to load
+        tmax      -- Last  iteration to load
+    OUTPUT:
+        None
+        
+    Note -- component keywork is not case sensitive, and should be one of Ex, Ey, Ez, Bx, By or Bz
+    '''
+    arr = get_array(component, tmin, tmax)
+    
+    if plot == True:
+        plot_kt(arr, normalize, saveas='kt_plot_{}'.format(component.lower()))
     return
 
-def plot_dispersion(arr, saveas):
+
+def plot_kt(arr, norm, saveas='kt_plot'):
     plt.ioff()
-    df = 1. / (num_files * dt)
-    f  = np.arange(0, 1. / (2*dt), df) * 1000.
+    #t  = np.arange(num_files)  
+    #dk = 1. / (NX * dx)
+    
+# =============================================================================
+#     if norm == True:
+#         k    = np.arange(0, 1. / (2*dx), dk) * c / wpi 
+#         xlab = r'$kc/\omega_i$'
+#     else:
+#         k    = np.arange(0, 1. / (2*dx), dk) * 1e6
+#         xlab = r'$k (m^{-1})$'
+# =============================================================================
 
+    fft_matrix  = np.zeros(arr.shape, dtype='complex128')
+    for ii in range(arr.shape[0]): # Take spatial FFT at each time
+        fft_matrix[ii, :] = np.fft.fft(arr[ii, :] - arr[ii, :].mean())
+
+    #kt_plot = fft_matrix[:, :k.shape[0] / 2] * np.conj(fft_matrix[:, :k.shape[0] / 2])
+    kt = (fft_matrix[:, :arr.shape[1] / 2] * np.conj(fft_matrix[:, :arr.shape[1] / 2])).real
+
+    fig, ax = plt.subplots()
+    
+    ax.pcolormesh(kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
+
+    #ax.pcolormesh(t, k[:k.shape[0] / 2], (kt).T, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
+
+# =============================================================================
+#     ax.set_title(r'k-t Plot: $\omega/k$', fontsize=22)
+#     ax.set_ylabel('Time (s)')
+#     ax.set_xlabel(xlab)
+# =============================================================================
+    plt.xlim(None, 32)
+    fullpath = anal_dir + saveas + '.png'
+    plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+    plt.close()
+    print 'K-T Plot saved'
+    return
+
+
+def plot_dispersion(arr, norm, saveas='dispersion_relation'):
+    print 'Plotting dispersion relation...'
+    plt.ioff()
+    num_times = arr.shape[0]
+    
+    df = 1. / (num_times * dt)
     dk = 1. / (NX * dx)
-    k  = np.arange(0, 1. / (2*dx), dk) * 1e6
+
+    if norm == True:     
+        f  = np.arange(0, 1. / (2*dt), df) / gyfreq
+        k  = np.arange(0, 1. / (2*dx), dk) * c / wpi 
+        
+        xlab = r'$kc/\omega_i$'
+        ylab = r'$\omega / \Omega_i$'
+    else:
+        f  = np.arange(0, 1. / (2*dt), df)
+        k  = np.arange(0, 1. / (2*dx), dk) * 1e6
+        
+        xlab = r'$k (\times 10^{-6}m^{-1})$'
+        ylab = r'f (Hz)'
 
     fft_matrix  = np.zeros(arr.shape, dtype='complex128')
     fft_matrix2 = np.zeros(arr.shape, dtype='complex128')
@@ -123,14 +258,14 @@ def plot_dispersion(arr, saveas):
 
     fig, ax = plt.subplots()
     
-    ax.contourf(k[1:], f[1:], np.log10(dispersion_plot[1:, 1:].real), 500, cmap='jet', extend='both')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
+    ax.pcolormesh(k[1:], f[1:], np.log10(dispersion_plot[1:, 1:].real), cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
 
-    ax.set_title(r'Dispersion Plot: $\omega/k$', fontsize=22)
-    ax.set_ylabel('Temporal Frequency (mHz)')
-    ax.set_xlabel(r'Spatial Frequency ($10^{-6}m^{-1})$')
+    ax.set_title(r'$\omega/k$ plot', fontsize=14)
+    ax.set_ylabel(ylab)
+    ax.set_xlabel(xlab)
 
-    ax.set_xlim(0, 3.0)
-    ax.set_ylim(0, 40)
+    ax.set_xlim(0, 0.2)
+    ax.set_ylim(0, 0.4)
 
     fullpath = anal_dir + saveas + '.png'
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
@@ -139,7 +274,7 @@ def plot_dispersion(arr, saveas):
     return
 
 
-def winske_stackplot(qq):
+def winske_stackplot(qq, title=None):
 #----- Prepare some values for plotting
     x_cell_num  = np.arange(NX)                                         # Numerical cell numbering: x-axis
     
@@ -162,6 +297,9 @@ def winske_stackplot(qq):
     ax_den  = fig.add_subplot(grids[2, 0])                              # Initialize axes
     ax_by   = fig.add_subplot(grids[3, 0]) 
     ax_phi  = fig.add_subplot(grids[4, 0]) 
+
+    if title != None and type(title) == str:
+        ax_vx.set_title(title)
 
     ax_vx.scatter(pos[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_xvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='k', lw=0)        # Hot population
     ax_vy.scatter(pos[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_yvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='k', lw=0)        # 'Other' population
@@ -201,7 +339,7 @@ def winske_stackplot(qq):
 
 #----- Plot adjustments
     fig.text(0.42, 0.045, 'IT = {}'.format(data_dump_iter * qq), fontsize=13)    
-    fig.text(0.58, 0.045, 'T = %.2f' % (data_dump_iter * qq * dt / gyperiod), fontsize=13)
+    fig.text(0.58, 0.045, 'T = %.2f' % (data_dump_iter * qq * dt * gyfreq), fontsize=13)
     
     #plt.tight_layout(pad=1.0, w_pad=1.8)
     fig.subplots_adjust(hspace=0.1)
@@ -219,32 +357,51 @@ def winske_stackplot(qq):
     return
 
 
+def get_gyrophase(vel):
+    gyro = np.arctan2(vel[:, 1], vel[:, 2])
+    return gyro
 
-if __name__ == '__main__':
-    series   = 'winske_anisotropy_test'
-    run_num  = 2
+
+def get_energies(ii):
+    U_B = 0.5 * (1 / mu0) * np.square(B[1:-1]).sum()     # Magnetic potential energy 
     
-    run_dir  = 'E:/runs/{}/run_{}/'.format(series, run_num)             # Main run directory
-    data_dir = run_dir + 'data/'                                        # Directory containing .npz output files for the simulation run
-    anal_dir = run_dir + 'analysis/'                                    # Output directory for all this analysis (each will probably have a subfolder)
-    temp_dir = run_dir + 'temp/'                                        # Saving things like matrices so we only have to do them once
+    for jj in range(Nj):
+        vp2 = velocity[idx_bounds[jj, 0]:idx_bounds[jj, 1], 0] ** 2 \
+            + velocity[idx_bounds[jj, 0]:idx_bounds[jj, 1], 1] ** 2 \
+            + velocity[idx_bounds[jj, 0]:idx_bounds[jj, 1], 2] ** 2
+            
+        K_E = 0.5 * mass[jj] * vp2.sum()                 # Particle total kinetic energy 
     
-    for this_dir in [anal_dir, temp_dir]:
-        if os.path.exists(this_dir) == False:                           # Make Output folder if they don't exist
-            os.makedirs(this_dir)
+    mag_energy[ii]      = U_B
+    particle_energy[ii] = K_E
+    return
+
+
+if __name__ == '__main__':    
+    series   = 'winske_anisotropy_test'                     # Run identifier string 
+    run_num  = 3                                            # Run number
+
+    manage_dirs()                                           # Initialize directories
+    load_constants()                                        # Load SI constants
+    load_particles()                                        # Load particle parameters
+    load_header()                                           # Load simulation parameters
     
-    num_files = len(os.listdir(data_dir)) - 2
+    num_files = len(os.listdir(data_dir)) - 2               # Number of timesteps to load
+    gyfreq    = q * B0 / mp                                 # Proton gyrofrequency (rad/s)
+    wpi       = np.sqrt(ne * q ** 2 / (mp * e0))            # Ion plasma frequency
     
-    q, c, me, mp, e, mu0, kB, e0  = load_constants()  
-    density, dist_type, idx_bounds, charge, mass, Tper, sim_repr, temp_type, velocity, Tpar, species = load_particles()
-    Nj, cellpart, data_dump_iter, ne, NX, dxm, seed, B0, dx, Te0, theta, dt, max_sec, ie, run_desc, seed = load_header()
+    np.random.seed(seed)                                    # Initialize random seed
     
-    gyperiod   = (2. * np.pi * mp) / (q * B0) 
-    
-    np.random.seed(seed)
-    
-    #num_files = 1
-    for ii in range(num_files):
-        position, velocity, B, E, dns, J = load_timestep(ii)
-        winske_stackplot(ii)
+    mag_energy      = np.zeros(num_files)
+    particle_energy = np.zeros(num_files)
+
+    generate_kt_plot(normalize=True)
+
+# =============================================================================
+#     #num_files = 2
+#     for ii in range(num_files):
+#         position, velocity, B, E, dns, J = load_timestep(ii)
+#         #winske_stackplot(ii, title=r'Winske test check: $\Delta t$ = 0.02$\omega^{-1}$, Smoothing ON')
+# 
+# =============================================================================
     

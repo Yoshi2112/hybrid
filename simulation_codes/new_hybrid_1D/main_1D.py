@@ -21,7 +21,7 @@ def main_simulation_loop():
 
     if generate_data == 1:
         pas.store_run_parameters(DT, data_dump_iter)
-     
+
     qq      = 0
     while qq < maxtime:
         data_save_string = ''; plot_save_string = ''
