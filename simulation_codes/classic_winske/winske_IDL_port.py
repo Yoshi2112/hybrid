@@ -796,7 +796,12 @@ if __name__ == '__main__':
     ex_save   = np.zeros((ntimes, nx))
     ey_save   = np.zeros((ntimes, nx))
     ez_save   = np.zeros((ntimes, nx))
+    xb_save   = np.zeros((ntimes, nspec[1]))
+    xc_save   = np.zeros((ntimes, nspec[2]))
 
+    vb_save   = np.zeros((ntimes, 3, nspec[1]))
+    vc_save   = np.zeros((ntimes, 3, nspec[2]))
+    
     #define some more stuff:
     #grid and dt
     hx        = xmax/nx                     # cell size
@@ -878,21 +883,45 @@ if __name__ == '__main__':
         ey_save[it-1, :] = Ey[2:nx2]
         ez_save[it-1, :] = Ez[2:nx2]
         
+        xb_save[it-1, :] = x[1:, 1]
+        xc_save[it-1, :] = x[1:, 2]
+        
+        vb_save[it-1, 0, :] = vx[1:, 1]
+        vb_save[it-1, 1, :] = vy[1:, 1]
+        vb_save[it-1, 2, :] = vz[1:, 1]
+        
+        vc_save[it-1, 0, :] = vx[1:, 2]
+        vc_save[it-1, 1, :] = vy[1:, 2]
+        vc_save[it-1, 2, :] = vz[1:, 2]
+        
 # =============================================================================
 #         if round(t%1, 1) == 0:
 #             winske_stackplot(it, t)
 #             print 'Plot saved.'
 # =============================================================================
-            
-        print 'Iteration {}, time = {}'.format(it, t)
         
         trans()
         field()
+
+        t += dtwci
+        print 'Iteration {}, time = {}'.format(it, t)
     
-    field_path = 'F://runs//winske_anisotropy_test//vanilla_winske//fields//'
+#%%        
+    print 'Saving run data...'
+    field_path = 'E://runs//winske_anisotropy_test//vanilla_winske//save_data//'
     np.save(field_path + 'BYS', by_save)
     np.save(field_path + 'BZS', bz_save)
     
     np.save(field_path + 'EXS', ex_save)
     np.save(field_path + 'EYS', ey_save)
     np.save(field_path + 'EZS', ez_save)
+    
+    np.save(field_path + 'XB', xb_save)
+    np.save(field_path + 'XC', xc_save)
+    
+    np.save(field_path + 'VB', vb_save)
+    np.save(field_path + 'VC', vc_save)
+    
+    print 'Run complete.'
+    
+    

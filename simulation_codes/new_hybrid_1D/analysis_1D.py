@@ -17,7 +17,7 @@ import pdb
 def manage_dirs():
     global run_dir, data_dir, anal_dir, temp_dir
     
-    run_dir  = 'F:/runs/{}/run_{}/'.format(series, run_num)             # Main run directory
+    run_dir  = 'E:/runs/{}/run_{}/'.format(series, run_num)             # Main run directory
     data_dir = run_dir + 'data/'                                        # Directory containing .npz output files for the simulation run
     anal_dir = run_dir + 'analysis/'                                    # Output directory for all this analysis (each will probably have a subfolder)
     temp_dir = run_dir + 'temp/'                                        # Saving things like matrices so we only have to do them once
@@ -144,7 +144,7 @@ def get_array(component, tmin, tmax):
         np.save(check_path, arr)
     return arr
 
-def generate_dispersion_relation(component='By', plot=True, tmin=0, tmax=None, normalize=False):
+def generate_wk_plot(component='By', plot=True, tmin=0, tmax=None, normalize=False):
     ''' Create w/k dispersion plot for times between tmin and tmax.
     
     INPUT:
@@ -160,7 +160,7 @@ def generate_dispersion_relation(component='By', plot=True, tmin=0, tmax=None, n
     arr = get_array(component, tmin, tmax)
         
     if plot == True:
-        plot_dispersion(arr, normalize, saveas='dispersion_relation_{}'.format(component.lower()))
+        plot_wk(arr, normalize, saveas='dispersion_relation_{}'.format(component.lower()))
     return
 
 
@@ -186,7 +186,8 @@ def generate_kt_plot(component='By', tmin=0, tmax=None, plot=True, normalize=Fal
 
 def plot_kt(arr, norm, saveas='kt_plot'):
     plt.ioff()
-    #t  = np.arange(num_files)  
+    t  = np.arange(num_files) * lam_res
+    k  = np.arange(NX)
     #dk = 1. / (NX * dx)
     
 # =============================================================================
@@ -202,20 +203,17 @@ def plot_kt(arr, norm, saveas='kt_plot'):
     for ii in range(arr.shape[0]): # Take spatial FFT at each time
         fft_matrix[ii, :] = np.fft.fft(arr[ii, :] - arr[ii, :].mean())
 
-    #kt_plot = fft_matrix[:, :k.shape[0] / 2] * np.conj(fft_matrix[:, :k.shape[0] / 2])
     kt = (fft_matrix[:, :arr.shape[1] / 2] * np.conj(fft_matrix[:, :arr.shape[1] / 2])).real
 
-    fig, ax = plt.subplots()
+    fig = plt.figure(1, figsize=(12, 8))
+    ax  = fig.add_subplot(111)
     
-    ax.pcolormesh(kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
+    ax.pcolormesh(k[:arr.shape[1] / 2], t, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
 
-    #ax.pcolormesh(t, k[:k.shape[0] / 2], (kt).T, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
-
-# =============================================================================
-#     ax.set_title(r'k-t Plot: $\omega/k$', fontsize=22)
-#     ax.set_ylabel('Time (s)')
-#     ax.set_xlabel(xlab)
-# =============================================================================
+    ax.set_title(r'k-t Plot (Predictor-Corrector)', fontsize=14)
+    ax.set_ylabel(r'$\Omega_i t$', rotation=0)
+    ax.set_xlabel('k (m-number?)')
+    
     plt.xlim(None, 32)
     fullpath = anal_dir + saveas + '.png'
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
@@ -224,7 +222,7 @@ def plot_kt(arr, norm, saveas='kt_plot'):
     return
 
 
-def plot_dispersion(arr, norm, saveas='dispersion_relation'):
+def plot_wk(arr, norm, saveas='dispersion_relation'):
     print 'Plotting dispersion relation...'
     plt.ioff()
     num_times = arr.shape[0]
@@ -256,21 +254,40 @@ def plot_dispersion(arr, norm, saveas='dispersion_relation'):
 
     dispersion_plot = fft_matrix2[:f.shape[0], :k.shape[0]] * np.conj(fft_matrix2[:f.shape[0], :k.shape[0]])
 
-    fig, ax = plt.subplots()
+    fig = plt.figure(1, figsize=(12, 8))
+    ax  = fig.add_subplot(111)
     
     ax.pcolormesh(k[1:], f[1:], np.log10(dispersion_plot[1:, 1:].real), cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
+    #ax.pcolormesh(np.log10(dispersion_plot[1:, 1:].real), cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
 
-    ax.set_title(r'$\omega/k$ plot', fontsize=14)
+    ax.set_title(r'$\omega/k$ plot (Predictor-Corrector)', fontsize=14)
     ax.set_ylabel(ylab)
     ax.set_xlabel(xlab)
 
-    ax.set_xlim(0, 0.2)
+    ax.set_xlim(0, 0.8)
     ax.set_ylim(0, 0.4)
 
     fullpath = anal_dir + saveas + '.png'
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
     plt.close()
     print 'Dispersion Plot saved'
+    return
+
+
+def waterfall_plot(field):
+    plt.ioff()
+    
+    arr = get_array()
+    amp   = 100.                 # Amplitude multiplier of waves: 
+    
+    cells  = np.arange(nx)
+    
+    for (ii, t) in zip(np.arange(ntimes), np.arange(0, ntimes*dt, dt)):
+        #if round(t, 2)%0.5 == 0:
+        plt.plot(cells, amp*(arr[ii] / arr.max()) + ii, c='k', alpha=0.05)
+        
+    plt.xlim(0, nx)
+    plt.show()
     return
 
 
@@ -379,7 +396,7 @@ def get_energies(ii):
 
 if __name__ == '__main__':    
     series   = 'winske_anisotropy_test'                     # Run identifier string 
-    run_num  = 3                                            # Run number
+    run_num  = 2                                            # Run number
 
     manage_dirs()                                           # Initialize directories
     load_constants()                                        # Load SI constants
@@ -395,8 +412,8 @@ if __name__ == '__main__':
     mag_energy      = np.zeros(num_files)
     particle_energy = np.zeros(num_files)
 
-    generate_kt_plot(normalize=True)
-
+    #generate_kt_plot(normalize=True)
+    generate_wk_plot(normalize=True)
 # =============================================================================
 #     #num_files = 2
 #     for ii in range(num_files):
