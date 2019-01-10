@@ -34,7 +34,7 @@ def main_simulation_loop():
     B[:, 0:3]   = fields.push_B(B[:, 0:3], E[:, 0:3], 0)                            # Initialize magnetic field (should be second?)
     E[:, 0:3]   = fields.push_E(B[:, 0:3], Ji, dns, 0)                              # Initialize electric field
 
-    part, W   = particles.position_update(part, 0.5*DT)                             # Retard velocity to N - 1/2 to prevent numerical instability
+    part, W     = particles.position_update(part, 0.5*DT)                           # Retard velocity to N - 1/2 to prevent numerical instability
 
     for qq in range(maxtime):
         # N + 1/2

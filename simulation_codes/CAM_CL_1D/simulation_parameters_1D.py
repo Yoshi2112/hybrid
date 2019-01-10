@@ -49,17 +49,17 @@ mhd_equil= 0                                # Temperature varied to give MHD Equ
 
 ### PARTICLE PARAMETERS ###
 species    = [r'$H^+$ cold', r'$H^+$ hot']  # Species name/labels        : Used for plotting
-temp_type  = np.asarray([0, 1])             # Particle temperature type  : Cold (0) or Hot (1)
-dist_type  = np.asarray([0, 0])             # Particle distribution type : Uniform (0) or sinusoidal/other (1)
+temp_type  = np.asarray([0, 1, 0])             # Particle temperature type  : Cold (0) or Hot (1)
+dist_type  = np.asarray([0, 0, 0])             # Particle distribution type : Uniform (0) or sinusoidal/other (1)
 
-mass       = np.asarray([1.00 , 1.00 ])     # Species ion mass (amu to kg)
-charge     = np.asarray([1.00 , 1.00 ])     # Species ion charge (elementary charge units to Coulombs)
-velocity   = np.asarray([0.   , 0.   ])     # Species parallel bulk velocity (in multiples of the alfven velocity)
-density    = np.asarray([90.0 , 10.0 ])     # Species density as percentage of total density, n_e
-sim_repr   = np.asarray([50.0 , 50.0 ])     # Macroparticle weighting: Percentage of macroparticles assigned to each species
+mass       = np.asarray([1.00 , 1.00 , 4.00])     # Species ion mass (amu to kg)
+charge     = np.asarray([1.00 , 1.00 , 1.00])     # Species ion charge (elementary charge units to Coulombs)
+velocity   = np.asarray([0.   , 0.   , 0.  ])     # Species parallel bulk velocity (in multiples of the alfven velocity)
+density    = np.asarray([85.0 , 10.0 , 5.0 ])     # Species density as percentage of total density, n_e
+sim_repr   = np.asarray([40.0 , 50.0 , 10.0])     # Macroparticle weighting: Percentage of macroparticles assigned to each species
 
-Tpar       = np.array([487., 974. ])*11603  # Parallel ion temperature (K)
-Tper       = np.array([487., 4870.])*11603  # Perpendicular ion temperature (K)
+Tpar       = np.array([487., 974. , 487.])*11603  # Parallel ion temperature (K)
+Tper       = np.array([487., 4870., 487.])*11603  # Perpendicular ion temperature (K)
 Te0        = 487.*11603                     # Electron temperature (K)
 
 
@@ -68,8 +68,8 @@ set_override = 1
 
 if set_override == 1:
     beta_e     = 1.                             # Parameters used to make intiial values more compatible with "normalized CGS" codes
-    beta_par   = np.array([1., 2.])                           
-    beta_per   = np.array([1., 10.])            # Will overwrite temperature values
+    beta_par   = np.array([1., 2.,  1.])                           
+    beta_per   = np.array([1., 10., 1.])            # Will overwrite temperature values
     wpiwci     = 1e4                            # Will overwrite density value
     
     B0   = c * (1. / wpiwci) * np.sqrt(mu0 * mp * ne)
