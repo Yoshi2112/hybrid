@@ -71,16 +71,16 @@ def smooth(function):
     return new_function
 
 @nb.njit(cache=True)
-def manage_ghost_cells(arr, src):
+def manage_ghost_cells(arr):
     '''Deals with ghost cells: Moves their contributions and mirrors their counterparts.
        Works like a charm if spatial dimensions always come first in an array. Condition
        variable passed with array because ghost cell field values do not need to be moved:
        But they do need correct (mirrored) ghost cell values'''
     size = arr.shape[0]
-    if src == 1:   # Move source term contributions to appropriate edge cells
-        arr[size - 2]  += arr[0]                    # Move contribution: Start to end
-        arr[1]         += arr[size - 1]             # Move contribution: End to start
+    
+    arr[size - 2]  += arr[0]                    # Move contribution: Start to end
+    arr[1]         += arr[size - 1]             # Move contribution: End to start
 
-    arr[size - 1]  = arr[1]                         # Fill ghost cell: Top
-    arr[0]         = arr[size - 2]                  # Fill ghost cell: Bottom
+    arr[size - 1]  = arr[1]                     # Fill ghost cell: Top
+    arr[0]         = arr[size - 2]              # Fill ghost cell: Bottom
     return arr

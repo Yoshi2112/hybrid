@@ -142,6 +142,4 @@ def initialize_fields():
 
     Ji      = np.zeros(( NX + 2, Nj, 3), dtype=float)          # Ion Current (3 dimensions)
     dns     = np.zeros(( NX + 2, Nj),    dtype=float)          # Species number density in each cell (in /m3)
-    W       = np.zeros(N,                dtype=float)          # Particle Weights (E-nodes)
-    Wb      = np.zeros(N,                dtype=float)          # Particle Weights (B-nodes)
-    return B, E, Ji, dns, W, Wb
+    return B, E, Ji, dns
