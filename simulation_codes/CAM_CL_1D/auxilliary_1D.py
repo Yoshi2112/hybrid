@@ -6,7 +6,9 @@ Created on Fri Sep 22 17:15:59 2017
 """
 import numpy as np
 import numba as nb
-from simulation_parameters_1D import t_res, plot_res, max_sec, dx, gyfreq, lam_res
+from simulation_parameters_1D import t_res, plot_res, max_sec, dx, gyfreq, lam_res, charge, mass, mu0
+from fields_1D                import interpolate_to_center
+
 
 @nb.njit(cache=True)
 def cross_product(A, B):
@@ -17,7 +19,7 @@ def cross_product(A, B):
 
     OUTPUT:
         output -- The resultant cross product with same dimensions as input vectors
-    '''
+    '''    
     output = np.zeros(A.shape)
 
     output[:, 0] =    A[:, 1] * B[:, 2] - A[:, 2] * B[:, 1]
@@ -26,39 +28,74 @@ def cross_product(A, B):
 
     return output
 
-import pdb
+
 def set_timestep(part):
-    gyperiod = 2*np.pi / gyfreq                 # Gyroperiod in seconds
+    gyperiod = 1 / gyfreq                       # Radian time
     ion_ts   = lam_res * gyperiod               # Timestep to resolve gyromotion
     vel_ts   = dx / (2 * np.max(part[3, :]))    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
 
-    DT             = min(ion_ts, vel_ts)        # Smallest of the two
-    data_dump_iter = int(t_res / DT)            # Number of iterations between dumps
-    maxtime        = int(max_sec / DT) + 1      # Total number of iterations in run
-    
-    if plot_res == None:
-        plot_dump_iter = None                   # Disable output plots
-    elif plot_res == 0:
+    DT       = min(ion_ts, vel_ts)              # Smallest of the two
+    maxtime  = int(max_sec / DT) + 1            # Total number of iterations in run
+
+    if plot_res == 0:
         plot_dump_iter = 1                      # Plot every iteration
     else:
         plot_dump_iter = int(plot_res / DT)     # Number of iterations between plots
 
-    if data_dump_iter == 0:
-        data_dump_iter = 1
+    if t_res == 0:
+        data_dump_iter = 1                      # Dump every iteration
+    else:
+        data_dump_iter = int(t_res / DT)        # Number of iterations between dumps
 
-    print 'Proton gyroperiod = %.2fs' % gyperiod
     print 'Timestep: %.4fs, %d iterations total' % (DT, maxtime)
     return DT, maxtime, data_dump_iter, plot_dump_iter
 
+
+def check_timestep(qq, DT, part, B, E, dns, maxtime, data_dump_iter, plot_dump_iter):
+    max_V           = np.max(part[3, :])
+    k_wave          = np.pi / dx
+    B_cent          = interpolate_to_center(B)
+    B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
+    
+    high_rat        = np.max(charge/mass)
+    
+    gyfreq          = high_rat*max(abs(B_tot))
+    elecfreq        = high_rat*max(abs(E[:, 0]))
+    dispfreq        = (k_wave ** 2) * B_tot / (mu0 * dns)
+    
+    ion_ts          = lam_res / gyfreq                 # Timestep to resolve gyromotion
+    acc_ts          = lam_res / elecfreq               # Timestep to resolve electric field acceleration
+    dis_ts          = lam_res / dispfreq               # Timestep to resolve magnetic field dispersion
+    vel_ts          = 0.50*dx / max_V                  # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
+
+    DT_new          = min(ion_ts, vel_ts, acc_ts, dis_ts)              # Smallest of the two
+    
+    change_flag = 0
+    if DT_new < DT:
+        change_flag = 1
+        DT *= 0.5
+        maxtime *= 2
+        qq *= 2
+        
+        if plot_dump_iter != None:
+            plot_dump_iter *= 2
+            
+        if data_dump_iter != None:
+            data_dump_iter *= 2
+        
+    return qq, DT, maxtime, data_dump_iter, plot_dump_iter, change_flag
+
+
 @nb.njit(cache=True)
 def smooth(function):
-    '''Smoothing function: Applies Gaussian smoothing routine across adjacent cells. Assummes nothing in ghost cells.'''
+    '''Smoothing function: Applies Gaussian smoothing routine across adjacent cells. 
+    Assummes no contribution from ghost cells.'''
     size         = function.shape[0]
     new_function = np.zeros(size)
 
     for ii in range(1, size - 1):
         new_function[ii - 1] = 0.25*function[ii] + new_function[ii - 1]
-        new_function[ii]     = 0.5*function[ii]  + new_function[ii]
+        new_function[ii]     = 0.50*function[ii] + new_function[ii]
         new_function[ii + 1] = 0.25*function[ii] + new_function[ii + 1]
 
     # Move Ghost Cell Contributions: Periodic Boundary Condition

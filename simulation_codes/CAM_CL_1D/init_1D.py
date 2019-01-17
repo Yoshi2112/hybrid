@@ -5,10 +5,9 @@ Created on Fri Sep 22 17:27:33 2017
 @author: iarey
 """
 import numpy as np
-from sources_1D               import calc_left_node
-from simulation_parameters_1D import dx, NX, cellpart, k, N, kB, Bc, Nj, dist_type, N_species, sim_repr, idx_bounds,    \
-                                     seed, Tpar, Tper, mass, velocity
-
+from particles_1D             import calc_left_node, assign_weighting
+from simulation_parameters_1D import dx, NX, cellpart, N, kB, Bc, Nj, dist_type, N_species, sim_repr, idx_bounds,    \
+                                     seed, Tpar, Tper, mass, velocity, theta
 
 def particles_per_cell():
     '''Creates a map of how many particles per cell per specices will be placed in the simulation domain. Allows the
@@ -88,8 +87,12 @@ def normal_distribution(ppc):
             dist[1, (idx_bounds[jj, 0] + acc): ( idx_bounds[jj, 0] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tper[jj]) /  mass[jj]), n_particles)
             dist[2, (idx_bounds[jj, 0] + acc): ( idx_bounds[jj, 0] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tper[jj]) /  mass[jj]), n_particles)
             acc += n_particles
-
+    
+    # Rotate if theta != 0
+    dist[0] = dist[0] * np.cos(np.pi * theta / 180.) - dist[2] * np.sin(np.pi * theta / 180.)
+    dist[2] = dist[2] * np.cos(np.pi * theta / 180.) + dist[0] * np.sin(np.pi * theta / 180.)
     return dist
+
 
 def initialize_particles():
     '''Initialize particle array with structure:
@@ -107,12 +110,13 @@ def initialize_particles():
         part[2,  idx_bounds[jj, 0]:  idx_bounds[jj, 1]] = jj                        # Give species index identifier to each particle
 
     part[0, :]   = uniform_distribution(ppc)                                        # Initialize particles in configuration space
-    part[3:6, :] = normal_distribution(ppc)                                         # Initialize particles in velocity space
+    part[3:6, :] = normal_distribution(ppc)                                        # Initialize particles in velocity space
     part[1, :]   = calc_left_node(part[0, :])                                       # Initial leftmost node, I
+    part[2, :]   = assign_weighting(part[0, :], part[1, :], 1)
     return part
 
 
-def initialize_fields():
+def initialize_magnetic_field():
     '''Initializes field ndarrays and sets initial values for fields based on parameters in  .
 
     INPUT:
@@ -126,20 +130,10 @@ def initialize_fields():
         W   -- E-node weighting array
         Wb  -- B-node weighting array
     '''
-    B = np.zeros(( NX + 2, 6), dtype=float)
-        # Where:
-        #       B[mm, 0-2] represent the current field and
-        #       B[mm, 3-5] store the last state of the magnetic field previous to the Predictor-Corrector scheme
+    B = np.zeros((NX + 1, 3), dtype=float)
+    E = np.zeros((NX + 2, 3), dtype=float)
+
     B[:, 0] = Bc[0]      # Set Bx initial
     B[:, 1] = Bc[1]      # Set By initial
     B[:, 2] = Bc[2]      # Set Bz initial
-
-    E = np.zeros(( NX + 2, 9), dtype=float)
-        # Where:
-        #       E[mm, 0-2] represent the current field and
-        #       E[mm, 3-5] store the last state of the electric field previous to the Predictor-Corrector scheme E (N + 0.5)
-        #       E[mm, 6-8] store two steps ago: E-field at E^N
-
-    Ji      = np.zeros(( NX + 2, Nj, 3), dtype=float)          # Ion Current (3 dimensions)
-    dns     = np.zeros(( NX + 2, Nj),    dtype=float)          # Species number density in each cell (in /m3)
-    return B, E, Ji, dns
+    return B, E

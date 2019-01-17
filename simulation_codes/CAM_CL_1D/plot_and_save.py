@@ -12,7 +12,7 @@ import os
 import sys
 from shutil import rmtree
 import simulation_parameters_1D as const
-from   simulation_parameters_1D import generate_data, generate_plots, drive, save_path, N, NX, xmax, ne, B0, k, density, c
+from   simulation_parameters_1D import generate_data, generate_plots, drive, save_path, N, NX, xmax, ne, B0, density, c
 from   simulation_parameters_1D import idx_bounds, Nj, species, temp_type, dist_type, mass, charge, velocity, sim_repr, Tpar, Tper
 from   matplotlib  import rcParams
 
@@ -143,7 +143,7 @@ def create_figure_and_save(part, E, B, dns, qq, dt, plot_dump_iter):
         ax.set_yticks(ax.get_yticks()[1:])
 
     for ax in [ax_den, ax_Ez, ax_By, ax_B]:
-        qrt = NX / (4.*k)
+        qrt = NX / (4.)
         ax.set_xticks(np.arange(0, NX + qrt, qrt))
         ax.grid()
 
@@ -180,6 +180,7 @@ def store_run_parameters(dt, data_dump_iter):
                    ('dxm', const.dxm),
                    ('dx', const.dx),
                    ('cellpart', const.cellpart),
+                   ('subcycles', const.subcycles),
                    ('B0', const.B0),
                    ('ne', ne),
                    ('Te0', const.Te0),

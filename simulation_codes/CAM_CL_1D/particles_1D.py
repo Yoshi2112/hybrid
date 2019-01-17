@@ -114,7 +114,6 @@ def two_part_velocity_update(part, B, E, dt):
     
     Advances velocity full timestep by first approximating half timestep.
     '''
-    
     W_magnetic = assign_weighting(part[0, :], part[1, :], 0)    # Magnetic field weighting
 
     for jj in range(Nj):
@@ -128,8 +127,8 @@ def two_part_velocity_update(part, B, E, dt):
             Ep = E[I,  0:3] * (1 - We) + E[I  + 1, 0:3] * We                    # E-field at particle location
             Bp = B[Ib, 0:3] * (1 - Wb) + B[Ib + 1, 0:3] * Wb                    # B-field at particle location
             
-            fac    = 0.5*dt*charge[idx]/mass[idx]
-            v_half = part[3:6] + fac*(Ep + cross_product(part[3:6], Bp))
+            fac        = 0.5*dt*charge[idx]/mass[idx]
+            v_half     = part[3:6] + fac*(Ep + cross_product(part[3:6], Bp))
             
             part[3:6] += 2*fac*(Ep + cross_product(v_half, Bp))
     
