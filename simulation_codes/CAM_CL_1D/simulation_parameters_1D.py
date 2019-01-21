@@ -8,12 +8,11 @@ import numpy as np
 import pdb
 
 ### RUN DESCRIPTION ###                     # Saves within run for easy referencing
-run_description = '''Winske 1D anisotropy simulation based on parameters from h1.f hybrid code (addendum to 1993 book)'''
-
+run_description = '''CAM-CL (from Matthews, 1994) steady state test'''
 
 ### RUN PARAMETERS ###
-drive           = 'E:/'                             # Drive letter or path for portable HDD e.g. 'E:/'
-save_path       = 'runs/winske_anisotropy_test/'    # Series save dir   : Folder containing all runs of a series
+drive           = 'D:/'                             # Drive letter or path for portable HDD e.g. 'E:/'
+save_path       = 'runs/CAM_CL_test/'               # Series save dir   : Folder containing all runs of a series
 run_num         = 0                                 # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 generate_data   = 0                                 # Save data flag    : For later analysis
 generate_plots  = 1                                 # Save plot flag    : To ensure hybrid is solving correctly during run
@@ -33,10 +32,10 @@ RE  = 6.371e6                               # Earth radius in metres
 ### SIMULATION PARAMETERS ###
 dxm      = 1                                # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't resolvable by hybrid code)
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_sec  = 200                              # Simulation runtime, in seconds of simulated time
+max_sec  = 200                              # Simulation runtime, in seconds (change to gyroperiods?) of simulated time
 
-subcycles= 12                               # Number of field subcycling steps for Cyclic Leapfrog
-smooth_sources = 1
+subcycles      = 12                         # Number of field subcycling steps for Cyclic Leapfrog
+smooth_sources = 1                          # Flag for source smoothing: Gaussian
 
 cellpart = 40                               # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
@@ -72,7 +71,7 @@ set_override = 1
 if set_override == 1:
     beta_e     = 1.                             # Parameters used to make intiial values more compatible with "normalized CGS" codes
     beta_par   = np.array([1., 1.])             # Was 2 and 10 for anisotropy              
-    beta_per   = np.array([1., 1.])            # Will overwrite temperature values
+    beta_per   = np.array([1., 1.])             # Will overwrite temperature values
     wpiwci     = 1e4                            # Will overwrite density value
     
     B0   = c * (1. / wpiwci) * np.sqrt(mu0 * mp * ne)
@@ -122,3 +121,4 @@ print 'Speed ratio: {}'.format(sped_ratio)
 print 'Density: {}cc'.format(round(ne / 1e6, 2))
 print 'Background magnetic field: {}nT'.format(round(B0*1e9, 1))
 print 'Gyroperiod: {}s'.format(round(2. * np.pi / gyfreq, 2))
+print 'Maximum simulation time: {}s ({} gyroperiods)'.format(max_sec, round(max_sec / (2. * np.pi / gyfreq), 2))

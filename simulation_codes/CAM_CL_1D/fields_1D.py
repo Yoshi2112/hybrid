@@ -61,6 +61,15 @@ def interpolate_to_center(val):
     return center
 
 @nb.njit(cache=True)
+def set_periodic_boundaries(B):
+    ''' Set boundary conditions for the magnetic field: Average end values and assign to first and last grid point
+    '''
+    end_bit = 0.5*(B[0] + B[NX])                              # Average end values (for periodic boundary condition)
+    B[0]   = end_bit
+    B[NX]  = end_bit
+    return B
+
+@nb.njit(cache=True)
 def cyclic_leapfrog(B, n_i, J_i, DT):
     H  = 0.5 * DT                                               # Half-timestep
     dh = H / subcycles                                          # Subcycle timestep
@@ -68,20 +77,27 @@ def cyclic_leapfrog(B, n_i, J_i, DT):
     B1 = np.copy(B)
     B2 = np.copy(B) - dh * get_curl_E(calculate_E(B, J_i, n_i)) # Advance one copy half a timestep
     
+    end_bit = 0.5*(B2[0] + B2[NX])                              # Average end values (for periodic boundary condition)
+    B2[0]   = end_bit
+    B2[NX]  = end_bit
+    
     if subcycles == 1:                                          # Return if subcycles not needed
         return B2
-    
     
     for ii in range(subcycles - 1):             
         if ii%2 == 0:
             B1  -= 2 * dh * get_curl_E(calculate_E(B2, J_i, n_i))
+            B1   = set_periodic_boundaries(B1)
         else:
             B2  -= 2 * dh * get_curl_E(calculate_E(B1, J_i, n_i))
+            B2   = set_periodic_boundaries(B2)
             
     if ii%2 == 0:
         B2  -= dh * get_curl_E(calculate_E(B1, J_i, n_i))
+        B2   = set_periodic_boundaries(B2)
     else:
         B1  -= dh * get_curl_E(calculate_E(B2, J_i, n_i))
+        B1   = set_periodic_boundaries(B1)
 
     B = 0.5 * (B1 + B2)                                         # Average solutions: Could put an evaluation step here
     return B

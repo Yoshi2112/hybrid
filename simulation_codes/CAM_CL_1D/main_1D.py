@@ -1,5 +1,6 @@
 ## PYTHON MODULES ##
 from timeit import default_timer as timer
+import pdb
 
 ## HYBRID MODULES ##
 import init_1D       as init
@@ -26,7 +27,8 @@ if __name__ == '__main__':
     print 'Loading initial state...\n'
     part, dns_int, dns_half, J_plus, J_minus, G, L   = sources.init_collect_moments(part, 0.5*DT)
     
-    for qq in range(maxtime):
+    qq = 0
+    while qq < maxtime:
         qq, DT, maxtime, data_dump_iter, plot_dump_iter, change_flag = aux.check_timestep(qq, DT, part, B, E, dns_int, maxtime, data_dump_iter, plot_dump_iter)
         
         if change_flag == 1:
@@ -49,9 +51,11 @@ if __name__ == '__main__':
             pas.save_data(DT, data_dump_iter, qq, part, J, E, B, dns_int)
 
         if qq%plot_dump_iter == 0 and generate_plots == 1:                                  # Generate and save plots, if flagged
-            pas.create_figure_and_save(part, E, B, dns_int, qq, DT, plot_dump_iter)
+            pas.create_figure_and_save(part, J, B, dns_int, qq, DT, plot_dump_iter)
 
         if (qq + 1)%10 == 0:
             print 'Timestep {} of {} complete'.format(qq + 1, maxtime)
+
+        qq += 1
 
     print "Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2))  # Time taken to run simulation

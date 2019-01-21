@@ -12,7 +12,7 @@ import os
 import sys
 from shutil import rmtree
 import simulation_parameters_1D as const
-from   simulation_parameters_1D import generate_data, generate_plots, drive, save_path, N, NX, xmax, ne, B0, density, c
+from   simulation_parameters_1D import generate_data, generate_plots, drive, save_path, N, NX, dx, xmax, ne, B0, density, va
 from   simulation_parameters_1D import idx_bounds, Nj, species, temp_type, dist_type, mass, charge, velocity, sim_repr, Tpar, Tper
 from   matplotlib  import rcParams
 
@@ -41,86 +41,68 @@ def manage_directories():
     return
 
 
-def create_figure_and_save(part, E, B, dns, qq, dt, plot_dump_iter):
+def create_figure_and_save(part, J, B, qn, qq, dt, plot_dump_iter):
     plt.ioff()
 
-    r = qq / plot_dump_iter          # Capture number
+    r = qq / plot_dump_iter                                                     # Capture number
 
     fig_size = 4, 7                                                             # Set figure grid dimensions
     fig = plt.figure(figsize=(20,10))                                           # Initialize Figure Space
     fig.patch.set_facecolor('w')                                                # Set figure face color
 
-    # Set font things
-    rcParams.update({'text.color'   : 'k',
-                'axes.labelcolor'   : 'k',
-                'axes.edgecolor'    : 'k',
-                'axes.facecolor'    : 'w',
-                'mathtext.default'  : 'regular',
-                'xtick.color'       : 'k',
-                'ytick.color'       : 'k',
-                'axes.labelsize'    : 16,
-                })
+    x_pos       = part[0, :] / dx                                               # Particle x-positions (km) (For looking at particle characteristics)
+    x_cell_num  = np.arange(NX)                                                 # Numerical cell numbering: x-axis
 
-    x_pos       = part[0, 0:N] / 1000            # Particle x-positions (km) (For looking at particle characteristics)
-    x_cell_num  = np.arange(NX)            # Numerical cell numbering: x-axis
-
-#----- Velocity (vy) Plots: Hot and Cold Species
-
-    ax_vx   = plt.subplot2grid(fig_size,  (0, 0), rowspan=2, colspan=3)
+#----- Velocity (x, y) Plots: Hot Species
+    ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
     ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
 
-    norm_xvel   = part[3, :] / c
-    norm_yvel   = part[4, :] / c       # y-velocities (for normalization)
-    norm_zvel   = part[5, :] / c       # y-velocities (for normalization)
-    norm_perp   = np.sqrt(norm_yvel ** 2 + norm_zvel ** 2)
+    norm_xvel   = part[3, :] / va
+    norm_yvel   = part[4, :] / va       # y-velocities (for normalization)
 
-    ax_vx.scatter( x_pos[idx_bounds[1, 0]: idx_bounds[1, 1]], 1e3*norm_xvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='r', lw=0)        # Hot population
-    ax_vy.scatter(x_pos[idx_bounds[1, 0]: idx_bounds[1, 1]], 1e3*norm_yvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='r', lw=0)        # 'Other' population
+    ax_vx.scatter(x_pos[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_xvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='r', lw=0)        # Hot population
+    ax_vy.scatter(x_pos[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_yvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='r', lw=0)        # 'Other' population
 
-    ax_vx.set_title(r'Beam velocities ($c^{-1}$) vs. Position (x)')
-    ax_vy.set_xlabel(r'Position (km)', labelpad=10)
+    ax_vx.set_title(r'Beam velocities ($v_A^{-1}$) vs. Position (x)')
+    ax_vy.set_xlabel(r'Position (cell)', labelpad=10)
 
-    ax_vx.set_ylabel(r'$v_x (\times 10^{-3})$', rotation=90)
-    ax_vy.set_ylabel(r'$v_y (\times 10^{-3})$', rotation=90)
+    ax_vx.set_ylabel(r'$\frac{v_x}{v_A}$', rotation=90)
+    ax_vy.set_ylabel(r'$\frac{v_y}{v_A}$', rotation=90)
 
     plt.setp(ax_vx.get_xticklabels(), visible=False)
     ax_vx.set_yticks(ax_vx.get_yticks()[1:])
 
     for ax in [ax_vy, ax_vx]:
-        ax.set_xlim(0, xmax/1000)
+        ax.set_xlim(0, xmax/dx)
         ax.set_ylim(-2, 2)
 
 #----- Density Plot
-    ax_den = plt.subplot2grid((fig_size), (0, 3), colspan=3)                            # Initialize axes
-    dns_norm = np.zeros((NX, Nj), dtype=float)                                          # Initialize normalized density array
-    species_colors = ['cyan', 'red']                                                    # Species colors for plotting (change to hot/cold arrays based off idx values later)
+    ax_qn = plt.subplot2grid((fig_size), (0, 3), colspan=3)                            # Initialize axes
+    
+    qn_norm   = qn[1: NX + 1] / ((density*charge).sum())                                # Normalize density for each species to initial values
+    ax_qn.plot(x_cell_num, qn_norm, color='green')                                     # Create overlayed plots for densities of each species
 
-    for ii in range(Nj):
-        dns_norm[:, ii] = dns[1: NX + 1, ii] / density[ii]                              # Normalize density for each species to initial values
+    ax_qn.set_title('Normalized Charge/Current Density and B-Fields (y, mag)')  # Axes title (For all, since density plot is on top
+    ax_qn.set_ylabel('$\rho_c$', fontsize=14, rotation=0, labelpad=5)       # Axis (y) label for this specific axes
+    ax_qn.set_ylim(0, 3)
+    
+#----- Current (Jx) Plot
+    ax_Jz = plt.subplot2grid(fig_size, (1, 3), colspan=3, sharex=ax_qn)
 
-    for ii in range(Nj):
-        ax_den.plot(x_cell_num, dns_norm[:, ii], color=species_colors[ii])              # Create overlayed plots for densities of each species
+    Jz = J[1: NX + 1, 0]
 
-    ax_den.set_title('Normalized Ion Densities and Magnetic Fields (y, mag) vs. Cell')  # Axes title (For all, since density plot is on top
-    ax_den.set_ylabel('Normalized Density', fontsize=14, rotation=90, labelpad=5)       # Axis (y) label for this specific axes
-    ax_den.set_ylim(0, 3)
-#----- Electric Field (Ez) Plot
-    ax_Ez = plt.subplot2grid(fig_size, (1, 3), colspan=3, sharex=ax_den)
+    ax_Jz.plot(x_cell_num, Jz, color='magenta')
 
-    Ez = E[1: NX + 1, 0]
+    ax_Jz.set_xlim(0, NX)
+    #ax_Jz.set_ylim(-200e-5, 200e-5)
 
-    ax_Ez.plot(x_cell_num, Ez, color='magenta')
-
-    ax_Ez.set_xlim(0, NX)
-    ax_Ez.set_ylim(-200e-5, 200e-5)
-
-    ax_Ez.set_yticks(np.arange(-200e-5, 201e-5, 50e-5))
-    ax_Ez.set_yticklabels(np.arange(-150, 201, 50))
-    ax_Ez.set_ylabel(r'$E_x$ ($\mu$V)', labelpad=25, rotation=0, fontsize=14)
+    #ax_Jz.set_yticks(np.arange(-200e-5, 201e-5, 50e-5))
+    #ax_Jz.set_yticklabels(np.arange(-150, 201, 50))
+    ax_Jz.set_ylabel(r'$J_x$ ($\mu$A)', labelpad=25, rotation=0, fontsize=14)
 
 #----- Magnetic Field (By) and Magnitude (|B|) Plots
-    ax_By = plt.subplot2grid((fig_size), (2, 3), colspan=3, sharex=ax_den)              # Initialize Axes
-    ax_B  = plt.subplot2grid((fig_size), (3, 3), colspan=3, sharex=ax_den)
+    ax_By = plt.subplot2grid((fig_size), (2, 3), colspan=3, sharex=ax_qn)              # Initialize Axes
+    ax_B  = plt.subplot2grid((fig_size), (3, 3), colspan=3, sharex=ax_qn)
 
     mag_B = (np.sqrt(B[1:NX + 1, 0] ** 2 + B[1: NX + 1, 1] ** 2 + B[1: NX + 1, 2] ** 2)) / B0
     B_y   = B[1: NX + 1 , 1] / B0                                                         # Normalize grid values
@@ -131,18 +113,18 @@ def create_figure_and_save(part, E, B, dns, qq, dt, plot_dump_iter):
     ax_B.set_xlim(0,  NX)                                                               # Set x limit
     ax_By.set_xlim(0, NX)
 
-    ax_B.set_ylim(0, 4)                                                                 # Set y limit
-    ax_By.set_ylim(-2, 2)
+    ax_B.set_ylim(0, 2)                                                                 # Set y limit
+    ax_By.set_ylim(-1, 1)
 
-    ax_B.set_ylabel( r'$|B|$', rotation=0, labelpad=20)                                 # Set labels
-    ax_By.set_ylabel(r'$\frac{B_y}{B_0}$', rotation=0, labelpad=10)
+    ax_B.set_ylabel( r'$|B|$', rotation=0, labelpad=20, fontsize=14)                                 # Set labels
+    ax_By.set_ylabel(r'$\frac{B_y}{B_0}$', rotation=0, labelpad=10, fontsize=14)
     ax_B.set_xlabel('Cell Number')                                                      # Set x-axis label for group (since |B| is on bottom)
 
-    for ax in [ax_den, ax_Ez, ax_By]:
+    for ax in [ax_qn, ax_Jz, ax_By]:
         plt.setp(ax.get_xticklabels(), visible=False)
         ax.set_yticks(ax.get_yticks()[1:])
 
-    for ax in [ax_den, ax_Ez, ax_By, ax_B]:
+    for ax in [ax_qn, ax_Jz, ax_By, ax_B]:
         qrt = NX / (4.)
         ax.set_xticks(np.arange(0, NX + qrt, qrt))
         ax.grid()
