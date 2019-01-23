@@ -116,9 +116,11 @@ idx_bounds= np.stack((idx_start, idx_end)).transpose()                          
 freq_ratio = wpi / gyfreq
 sped_ratio = c / va
 
-print 'Frequency ratio: {}'.format(freq_ratio)
-print 'Speed ratio: {}'.format(sped_ratio)
-print 'Density: {}cc'.format(round(ne / 1e6, 2))
-print 'Background magnetic field: {}nT'.format(round(B0*1e9, 1))
-print 'Gyroperiod: {}s'.format(round(2. * np.pi / gyfreq, 2))
-print 'Maximum simulation time: {}s ({} gyroperiods)'.format(max_sec, round(max_sec / (2. * np.pi / gyfreq), 2))
+# =============================================================================
+# print 'Frequency ratio: {}'.format(freq_ratio)
+# print 'Speed ratio: {}'.format(sped_ratio)
+# print 'Density: {}cc'.format(round(ne / 1e6, 2))
+# print 'Background magnetic field: {}nT'.format(round(B0*1e9, 1))
+# print 'Gyroperiod: {}s'.format(round(2. * np.pi / gyfreq, 2))
+# print 'Maximum simulation time: {}s ({} gyroperiods)'.format(max_sec, round(max_sec / (2. * np.pi / gyfreq), 2))
+# =============================================================================
