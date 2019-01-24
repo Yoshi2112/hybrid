@@ -151,10 +151,9 @@ def boris_alg(v0, Bp, Ep, dt):
     v_prime = np.zeros(3)                                               # Rotation velocity
     v_plus  = np.zeros(3)                                               # Second velocity
 
-    T = (qi * Bp / mi) * dt / 2.                        # Boris variable
-    S = 2.*T / (1. + np.sqrt(T[0] ** 2 + T[1] ** 2 + T[2] ** 2))        # Boris variable
+    T = (qi * Bp / mi) * dt / 2.                                        # Boris variable
+    S = 2.*T / (1. + T.dot(T))                                          # Boris variable
 
-    # Actual Boris Method
     v_minus    = v0 + qi * Ep * dt / (2. * mi)
 
     v_prime[0] = v_minus[0] + (v_minus[1] * T[2] - v_minus[2] * T[1])   # Removed multiplicative from second term: (charge[idx] * dt / (2 * mass[idx]))
@@ -165,53 +164,66 @@ def boris_alg(v0, Bp, Ep, dt):
     v_plus[1]  = v_minus[1] - (v_prime[0] * S[2] - v_prime[2] * S[0])
     v_plus[2]  = v_minus[2] + (v_prime[0] * S[1] - v_prime[1] * S[0])
  
-    v_out = v_plus + qi * Ep * dt / (2. * mi)
-    
-    # Check
-    mag1 = v_minus.dot(v_minus)
-    mag2 = v_plus.dot(v_plus)
-    diff = 100.*abs(mag1 - mag2) / min(mag1, mag2)
-    print diff
+    v_out      = v_plus + qi * Ep * dt / (2. * mi)
     return v_out
 
 
-def test_particle_orbit():
-    v0  = 100.
-    B0  = 4e-9
-    Bc  = np.array([B0, 0., 0.]) 
-    Ec  = np.array([0., 0., 0.]) 
-    vp  = np.array([0., v0, 0.]) 
+def position_update(pos, vel, DT):
+    pos += vel * DT
+    return pos
+
+
+def eval_E(pos):
+    coeff = 1 / (100. * np.sqrt(pos[0] ** 2 + pos[1] ** 2) ** 3)
     
-    resolution = 2000
-    num_rev    = 1
-    maxtime    = resolution*num_rev
-    gyperiod   = (2 * np.pi * mp) / (q * B0) 
+    Ex = coeff * pos[0]
+    Ey = coeff * pos[1]
+    Ez = 0.
+    return np.array([Ex, Ey, Ez])
+
+def eval_B(pos, B0):
+    Bx = 0.0
+    By = 0.0
+    Bz = B0*np.sqrt(pos[0] ** 2 + pos[1] ** 2)
+    return np.array([Bx, By, Bz])
+
+
+def test_particle_orbit():
+    v0    = 1e5
+    B0    = 0.01
+    vp    = np.array([0., v0, 0.]) 
+    rL    = (const.mass[0] * vp[1]) / (abs(const.charge[0] ) * B0)
+    xp    = np.array([-rL, 0., 0.]) 
+
+    resolution = 20
+    num_rev    = 10
+    maxtime    = int(resolution*num_rev)
+    gyperiod   = (2 * np.pi * const.mass[0]) / (const.charge[0] * B0) 
     dt         = gyperiod / resolution 
 
-    v_initial  = v0 
+    xy         = np.zeros((maxtime+1, 2))
     print '\nNumber of revolutions: {}'.format(num_rev)
     print 'Points per revolution: {}'.format(resolution)
     print 'Total number of points: {}'.format(maxtime)
     
-    print '\nGyroperiod: {}s'.format(round(gyperiod, 2))
+    print '\nGyroradius: {}m'.format(rL)
+    print 'Gyroperiod: {}s'.format(round(gyperiod, 2))
     print 'Timestep: {}s'.format(round(dt, 3))
-    
-    circle = plt.Circle((0, 0), v0, color='k', fill=False)
-    fig = plt.figure()
-    ax  = fig.gca()
-    
+    Bc  = eval_B(xp, B0)
+    Ec  = eval_E(xp)
+    vp  = boris_algorithm(vp, Bc, Ec, -0.5*dt, 0)
     for ii in range(maxtime+1):
-        plt.scatter(vp[1], vp[2], c='b', s=3)
-        vp = boris_alg(vp, Bc, Ec, dt)
+        xy[ii, 0] = xp[0]
+        xy[ii, 1] = xp[1]
+
+        Bc  = eval_B(xp, B0)
+        Ec  = eval_E(xp)
+
+        xp = position_update(xp, vp, dt)
+        vp = boris_algorithm(vp, Bc, Ec, dt, 0)
         
-    plt.scatter(vp[1], vp[2], c='b', s=1)   
-    #ax.add_artist(circle)
+    plt.plot(xy[:, 0], xy[:, 1])
     plt.axis('equal')
-    
-    v_final = np.sqrt(vp[0] ** 2 + vp[1] ** 2 + vp[2] ** 2)
-    
-    print '\nInitial Velocity: {}m/s'.format(round(v_initial, 2))
-    print 'Final Velocity:   {}m/s'.format(round(v_final, 2))    
     return
 
 if __name__ == '__main__':

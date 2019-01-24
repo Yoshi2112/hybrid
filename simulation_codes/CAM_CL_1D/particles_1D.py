@@ -58,9 +58,8 @@ def boris_algorithm(v0, Bp, Ep, dt, idx):
     v_plus  = np.zeros(3)                                               # Second velocity
 
     T = (charge[idx] * Bp / mass[idx]) * dt / 2.                        # Boris variable
-    S = 2.*T / (1. + np.sqrt(T[0] ** 2 + T[1] ** 2 + T[2] ** 2))        # Boris variable
+    S = 2.*T / (1. + T.dot(T))                                          # Boris variable
 
-    # Actual Boris Method
     v_minus    = v0 + charge[idx] * Ep * dt / (2. * mass[idx])
 
     v_prime[0] = v_minus[0] + (v_minus[1] * T[2] - v_minus[2] * T[1])   # Removed multiplicative from second term: (charge[idx] * dt / (2 * mass[idx]))
@@ -71,14 +70,8 @@ def boris_algorithm(v0, Bp, Ep, dt, idx):
     v_plus[1]  = v_minus[1] - (v_prime[0] * S[2] - v_prime[2] * S[0])
     v_plus[2]  = v_minus[2] + (v_prime[0] * S[1] - v_prime[1] * S[0])
  
-    v_out = v_plus + charge[idx] * Ep * dt / (2. * mass[idx])
-    
-    # Check
-    mag1 = v_minus.dot(v_minus)
-    mag2 = v_plus.dot(v_plus)
-    diff = 100.*abs(mag1 - mag2) / min(mag1, mag2)
-    print diff
-    return v_out
+    v0         = v_plus + charge[idx] * Ep * dt / (2. * mass[idx])
+    return v0
 
 
 @nb.njit(cache=True)
