@@ -24,22 +24,24 @@ def particles_per_cell():
         if dist_type[ii] == 0:
             ppc[ii, :] = cellpart * 0.01 * sim_repr[ii]
 
-        elif  dist_type[ii] == 1:
-            x_cell  = np.arange(0,  NX*dx, dx)                                # Array with distance boundaries between cells
-            sx      = np.ones(NX)                                             # Initialize distrbution function
-
-            for jj in range(NX):                                              # Create sinusoidal distribution function
-                sx[jj] = (0.5 * np.sin((2*np.pi*k /  NX*dx) * x_cell[jj])) + 1
-
-            sx /= np.sum(sx)                                                  # Normalize sinusoidal distribution function
-
-            ppc[jj, :] = (np.round(sx *  N_species[jj]))                      # Generate number of particles per cell
-
-            if np.sum(ppc[jj, :]) != N:       							              # Check total: Can be avoided by picking NX mod k = 0
-                diff = N - np.sum(ppc[jj, :])                                 # Find how many particles short
-                idxs = np.random.randint(0, NX - 1, diff)                     # Create random indices to put them (very small error)
-                for ext in idxs:
-                    ppc[jj, ext] += 1                                         # Put an extra particle in them
+# =============================================================================
+#         elif  dist_type[ii] == 1:
+#             x_cell  = np.arange(0,  NX*dx, dx)                                # Array with distance boundaries between cells
+#             sx      = np.ones(NX)                                             # Initialize distrbution function
+# 
+#             for jj in range(NX):                                              # Create sinusoidal distribution function
+#                 sx[jj] = (0.5 * np.sin((2*np.pi*k /  NX*dx) * x_cell[jj])) + 1
+# 
+#             sx /= np.sum(sx)                                                  # Normalize sinusoidal distribution function
+# 
+#             ppc[jj, :] = (np.round(sx *  N_species[jj]))                      # Generate number of particles per cell
+# 
+#             if np.sum(ppc[jj, :]) != N:       							              # Check total: Can be avoided by picking NX mod k = 0
+#                 diff = N - np.sum(ppc[jj, :])                                 # Find how many particles short
+#                 idxs = np.random.randint(0, NX - 1, diff)                     # Create random indices to put them (very small error)
+#                 for ext in idxs:
+#                     ppc[jj, ext] += 1                                         # Put an extra particle in them
+# =============================================================================
     return ppc
 
 
@@ -103,15 +105,14 @@ def initialize_particles():
         part[4, :] -- Velocity in y
         part[5, :] -- Velocity in z
         '''
-    part     = np.zeros((6, N), dtype=float)                                        # Initialize particle array
-    ppc      = particles_per_cell()                                                 # Generate number of particles per cell, per species
 
-    for jj in range( Nj):
-        part[2,  idx_bounds[jj, 0]:  idx_bounds[jj, 1]] = jj                        # Give species index identifier to each particle
+    part     = np.zeros((6, N), dtype=float)                                   # Initialize particle array
+    ppc      = particles_per_cell()                                            # Generate number of particles per cell, per species
 
-    part[0, :]   = uniform_distribution(ppc)                                        # Initialize particles in configuration space
-    part[3:6, :] = normal_distribution(ppc)                                        # Initialize particles in velocity space
-    part[1, :]   = calc_left_node(part[0, :])                                       # Initial leftmost node, I
+    part[0, :]   = uniform_distribution(ppc)                                   # Initialize particles in configuration space
+
+    part[3:6, :] = normal_distribution(ppc)                                    # Initialize particles in velocity space
+    part[1, :]   = calc_left_node(part[0, :])                                  # Initial leftmost node, I
     part[2, :]   = assign_weighting(part[0, :], part[1, :], 1)
     return part
 
@@ -137,3 +138,7 @@ def initialize_magnetic_field():
     B[:, 1] = Bc[1]      # Set By initial
     B[:, 2] = Bc[2]      # Set Bz initial
     return B, E
+
+
+if __name__ == '__main__':
+    initialize_particles()

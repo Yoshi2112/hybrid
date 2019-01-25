@@ -1,6 +1,5 @@
 ## PYTHON MODULES ##
 from timeit import default_timer as timer
-import pdb
 
 ## HYBRID MODULES ##
 import init_1D       as init
@@ -9,8 +8,9 @@ import particles_1D  as particles
 import fields_1D     as fields
 import sources_1D    as sources
 import plot_and_save as pas
+import diagnostics   as diag
 
-from simulation_parameters_1D import generate_data, generate_plots
+from simulation_parameters_1D import generate_data, generate_plots, NX, N
 
 
 if __name__ == '__main__':
@@ -27,7 +27,12 @@ if __name__ == '__main__':
     print 'Loading initial state...\n'
     part, dns_int, dns_half, J_plus, J_minus, G, L   = sources.init_collect_moments(part, 0.5*DT)
     
+    #diag.check_cell_velocity_distribution(part, NX/2, 0)
+    #diag.check_position_distribution(part, 0)
+    #diag.check_velocity_distribution(part, 0)
+    
     qq = 0
+    maxtime = 0
     while qq < maxtime:
         qq, DT, maxtime, data_dump_iter, plot_dump_iter, change_flag = aux.check_timestep(qq, DT, part, B, E, dns_int, maxtime, data_dump_iter, plot_dump_iter)
         
@@ -39,7 +44,7 @@ if __name__ == '__main__':
         J = sources.push_current(J_plus, E, B, L, G, DT)
         E = fields.calculate_E(B, J, dns_half)
         
-        part = particles.boris_velocity_update(part, B, E, DT)
+        part = particles.velocity_update(part, B, E, DT)
         
         part, dns_int, J_plus, J_minus, G, L = sources.collect_moments(part, DT)
         

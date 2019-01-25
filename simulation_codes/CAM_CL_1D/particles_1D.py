@@ -36,7 +36,7 @@ def assign_weighting(xpos, I, BE):
     return W_o
 
 
-#@nb.njit(cache=True)
+@nb.njit(cache=True)
 def boris_algorithm(v0, Bp, Ep, dt, idx):
     '''Updates the velocities of the particles in the simulation using a Boris particle pusher, as detailed
     in Birdsall & Langdon (1985),  59-63.

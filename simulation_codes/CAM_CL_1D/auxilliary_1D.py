@@ -6,7 +6,7 @@ Created on Fri Sep 22 17:15:59 2017
 """
 import numpy as np
 import numba as nb
-from simulation_parameters_1D import t_res, plot_res, max_sec, dx, gyfreq, lam_res, charge, mass, mu0, NX
+from simulation_parameters_1D import t_res, plot_res, max_rev, dx, gyfreq, orbit_res, charge, mass, mu0, NX
 
 @nb.njit(cache=True)
 def cross_product(A, B):
@@ -28,12 +28,12 @@ def cross_product(A, B):
 
 
 def set_timestep(part):
-    gyperiod = 1 / gyfreq                       # Radian time
-    ion_ts   = lam_res * gyperiod               # Timestep to resolve gyromotion
+    gyperiod = (2*np.pi) / gyfreq               
+    ion_ts   = orbit_res * gyperiod               # Timestep to resolve gyromotion
     vel_ts   = dx / (2 * np.max(part[3, :]))    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
 
     DT       = min(ion_ts, vel_ts)              # Smallest of the two
-    maxtime  = int(max_sec / DT) + 1            # Total number of iterations in run
+    maxtime  = int(max_rev / orbit_res) + 1       # Total number of iterations in run
 
     if plot_res == 0:
         plot_dump_iter = 1                      # Plot every iteration
@@ -61,13 +61,13 @@ def check_timestep(qq, DT, part, B, E, dns, maxtime, data_dump_iter, plot_dump_i
     B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
     high_rat        = np.max(charge/mass)
     
-    gyfreq          = high_rat*max(abs(B_tot))                      # Gyrofrequency
+    gyfreq          = high_rat*max(abs(B_tot)) / (2 * np.pi)         # Gyrofrequency
     #elecfreq        = high_rat*max(abs(E[:, 0] / max_V))            # Electron acceleration "frequency"
     #dispfreq        = (k_wave ** 2) * np.max(B_tot / (mu0 * dns))   # Dispersion frequency
     
-    ion_ts          = lam_res / gyfreq                 # Timestep to resolve gyromotion
-    #acc_ts          = lam_res / elecfreq               # Timestep to resolve electric field acceleration
-    #dis_ts          = lam_res / dispfreq               # Timestep to resolve magnetic field dispersion
+    ion_ts          = orbit_res / gyfreq                 # Timestep to resolve gyromotion
+    #acc_ts          = orbit_res / elecfreq              # Timestep to resolve electric field acceleration
+    #dis_ts          = orbit_res / dispfreq              # Timestep to resolve magnetic field dispersion
     vel_ts          = 0.50*dx / max_V                  # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
 
     DT_new          = min(ion_ts, vel_ts)              # Smallest of the two (four, later)
