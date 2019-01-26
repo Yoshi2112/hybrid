@@ -8,10 +8,8 @@ import particles_1D  as particles
 import fields_1D     as fields
 import sources_1D    as sources
 import plot_and_save as pas
-import diagnostics   as diag
 
-from simulation_parameters_1D import generate_data, generate_plots, NX, N
-
+from simulation_parameters_1D import generate_data, generate_plots
 
 if __name__ == '__main__':
     start_time = timer()
@@ -19,27 +17,23 @@ if __name__ == '__main__':
     part = init.initialize_particles()
     B, E = init.initialize_magnetic_field()
 
-    DT, maxtime, data_dump_iter, plot_dump_iter = aux.set_timestep(part)
+    DT, max_inc, data_dump_iter, plot_dump_iter = aux.set_timestep(part)
 
     if generate_data == 1:
         pas.store_run_parameters(DT, data_dump_iter)
 
     print 'Loading initial state...\n'
     part, dns_int, dns_half, J_plus, J_minus, G, L   = sources.init_collect_moments(part, 0.5*DT)
-    
-    #diag.check_cell_velocity_distribution(part, NX/2, 0)
-    #diag.check_position_distribution(part, 0)
-    #diag.check_velocity_distribution(part, 0)
-    
+
     qq = 0
-    maxtime = 0
-    while qq < maxtime:
-        qq, DT, maxtime, data_dump_iter, plot_dump_iter, change_flag = aux.check_timestep(qq, DT, part, B, E, dns_int, maxtime, data_dump_iter, plot_dump_iter)
+    while qq < max_inc:
+        qq, DT, max_inc, data_dump_iter, plot_dump_iter, change_flag = aux.check_timestep(qq, DT, part, B, E, dns_int, max_inc, data_dump_iter, plot_dump_iter)
         
         if change_flag == 1:
             print 'Timestep halved. DT = {}'.format(DT)
         
         B = fields.cyclic_leapfrog(B, dns_int, J_minus, DT)
+
         E = fields.calculate_E(B, J_minus, dns_half)
         J = sources.push_current(J_plus, E, B, L, G, DT)
         E = fields.calculate_E(B, J, dns_half)
@@ -59,7 +53,7 @@ if __name__ == '__main__':
             pas.create_figure_and_save(part, J, B, dns_int, qq, DT, plot_dump_iter)
 
         if (qq + 1)%10 == 0:
-            print 'Timestep {} of {} complete'.format(qq + 1, maxtime)
+            print 'Timestep {} of {} complete'.format(qq + 1, max_inc)
 
         qq += 1
 

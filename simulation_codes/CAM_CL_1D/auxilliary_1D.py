@@ -4,11 +4,31 @@ Created on Fri Sep 22 17:15:59 2017
 
 @author: iarey
 """
-import numpy as np
 import numba as nb
-from simulation_parameters_1D import t_res, plot_res, max_rev, dx, gyfreq, orbit_res, charge, mass, mu0, NX
+import numpy as np
+from simulation_parameters_1D import data_res, plot_res, max_rev, dx, gyfreq, orbit_res, charge, mass, NX
 
-@nb.njit(cache=True)
+
+#@nb.njit(cache=True)
+def cross_product_single(A, B):
+    '''Vector (cross) product between 3-vectors, A and B of same dimensions.
+
+    INPUT:
+        A, B -- 3-vectors (single values)
+
+    OUTPUT:
+        output -- The resultant cross product as a 3-vector
+    '''
+    output = np.zeros(A.shape)
+
+    output[0] =    A[1] * B[2] - A[2] * B[1]
+    output[1] = - (A[0] * B[2] - A[2] * B[0])
+    output[2] =    A[0] * B[1] - A[1] * B[0]
+
+    return output
+
+
+#@nb.njit(cache=True)
 def cross_product(A, B):
     '''Vector (cross) product between two vectors, A and B of same dimensions.
 
@@ -17,7 +37,7 @@ def cross_product(A, B):
 
     OUTPUT:
         output -- The resultant cross product with same dimensions as input vectors
-    '''    
+    '''
     output = np.zeros(A.shape)
 
     output[:, 0] =    A[:, 1] * B[:, 2] - A[:, 2] * B[:, 1]
@@ -29,24 +49,25 @@ def cross_product(A, B):
 
 def set_timestep(part):
     gyperiod = (2*np.pi) / gyfreq               
-    ion_ts   = orbit_res * gyperiod               # Timestep to resolve gyromotion
+    ion_ts   = orbit_res * gyperiod             # Timestep to resolve gyromotion
     vel_ts   = dx / (2 * np.max(part[3, :]))    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
 
     DT       = min(ion_ts, vel_ts)              # Smallest of the two
-    maxtime  = int(max_rev / orbit_res) + 1       # Total number of iterations in run
+    max_time = max_rev * gyperiod               # Total number of seconds required
+    max_inc  = int(max_time / DT) + 1           # Total number of increments
 
-    if plot_res == 0:
-        plot_dump_iter = 1                      # Plot every iteration
+    if plot_res == 0:                           # Decide plot and data increments (if enabled)
+        plot_dump_iter = 1
     else:
-        plot_dump_iter = int(plot_res / DT)     # Number of iterations between plots
+        plot_dump_iter = int(plot_res*gyperiod / DT)
 
-    if t_res == 0:
-        data_dump_iter = 1                      # Dump every iteration
+    if data_res == 0:
+        data_dump_iter = 1
     else:
-        data_dump_iter = int(t_res / DT)        # Number of iterations between dumps
+        data_dump_iter = int(data_res*gyperiod / DT)
 
-    print 'Timestep: %.4fs, %d iterations total' % (DT, maxtime)
-    return DT, maxtime, data_dump_iter, plot_dump_iter
+    print 'Timestep: %.4fs, %d iterations total' % (DT, max_inc)
+    return DT, max_inc, data_dump_iter, plot_dump_iter
 
 
 def check_timestep(qq, DT, part, B, E, dns, maxtime, data_dump_iter, plot_dump_iter):
@@ -87,39 +108,3 @@ def check_timestep(qq, DT, part, B, E, dns, maxtime, data_dump_iter, plot_dump_i
         
     return qq, DT, maxtime, data_dump_iter, plot_dump_iter, change_flag
 
-
-@nb.njit(cache=True)
-def smooth(function):
-    '''Smoothing function: Applies Gaussian smoothing routine across adjacent cells. 
-    Assummes no contribution from ghost cells.'''
-    size         = function.shape[0]
-    new_function = np.zeros(size)
-
-    for ii in range(1, size - 1):
-        new_function[ii - 1] = 0.25*function[ii] + new_function[ii - 1]
-        new_function[ii]     = 0.50*function[ii] + new_function[ii]
-        new_function[ii + 1] = 0.25*function[ii] + new_function[ii + 1]
-
-    # Move Ghost Cell Contributions: Periodic Boundary Condition
-    new_function[1]        += new_function[size - 1]
-    new_function[size - 2] += new_function[0]
-
-    # Set ghost cell values to mirror corresponding real cell
-    new_function[0]        = new_function[size - 2]
-    new_function[size - 1] = new_function[1]
-    return new_function
-
-@nb.njit(cache=True)
-def manage_ghost_cells(arr):
-    '''Deals with ghost cells: Moves their contributions and mirrors their counterparts.
-       Works like a charm if spatial dimensions always come first in an array. Condition
-       variable passed with array because ghost cell field values do not need to be moved:
-       But they do need correct (mirrored) ghost cell values'''
-    size = arr.shape[0]
-    
-    arr[size - 2]  += arr[0]                    # Move contribution: Start to end
-    arr[1]         += arr[size - 1]             # Move contribution: End to start
-
-    arr[size - 1]  = arr[1]                     # Fill ghost cell: Top
-    arr[0]         = arr[size - 2]              # Fill ghost cell: Bottom
-    return arr

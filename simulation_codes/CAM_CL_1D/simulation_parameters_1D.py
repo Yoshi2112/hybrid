@@ -10,12 +10,12 @@ import numpy as np
 run_description = '''CAM-CL (from Matthews, 1994) steady state test'''
 
 ### RUN PARAMETERS ###
-drive           = 'D:/'                             # Drive letter or path for portable HDD e.g. 'E:/'
-save_path       = 'runs/CAM_CL_test/'               # Series save dir   : Folder containing all runs of a series
-run_num         = 0                                 # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 0                                 # Save data flag    : For later analysis
-generate_plots  = 0                                 # Save plot flag    : To ensure hybrid is solving correctly during run
-seed            = 105326                            # RNG Seed          : Set to enable consistent results for parameter studies
+drive           = 'F:/'                     # Drive letter or path for portable HDD e.g. 'E:/'
+save_path       = 'runs/CAM_CL_test/'       # Series save dir   : Folder containing all runs of a series
+run_num         = 0                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+generate_data   = 0                         # Save data flag    : For later analysis
+generate_plots  = 0                         # Save plot flag    : To ensure hybrid is solving correctly during run
+seed            = 105326                    # RNG Seed          : Set to enable consistent results for parameter studies
 
 ### PHYSICAL CONSTANTS ###
 q   = 1.602177e-19                          # Elementary charge (C)
@@ -29,33 +29,33 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-dxm      = 1                                # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't resolvable by hybrid code)
+dxm      = 0.5                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't resolvable by hybrid code)
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 200                              # Simulation runtime, in multiples of the gyroperiod
+max_rev  = 50                               # Simulation runtime, in multiples of the gyroperiod
 
 subcycles      = 12                         # Number of field subcycling steps for Cyclic Leapfrog
-smooth_sources = 0                          # Flag for source smoothing: Gaussian
+smooth_sources = 1                          # Flag for source smoothing: Gaussian
 
-cellpart = 4000                              # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart = 100                              # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
 B0       = 140e-9                           # Unform initial magnetic field value (in T)
 ne       = 50e6                             # Electron density (used to assign portions of ion)
 
-orbit_res= 0.05                             # Particle orbit resolution: fraction of gyroperiod
-t_res    = 6                                # Time resolution. Determines how often data is captured. Every frame captured if '0'.
-plot_res = 6                                # Determines how often a plot is generated (in seconds of simulation time). Every frame plotted if '0', or none if None (this is also controlled by the generate_plot flag)
+orbit_res= 0.05                             # Particle orbit resolution: fraction of gyroperiod (gyrofraction, lol)
+data_res = 0.25                             # Data capture resolution in gyrofraction
+plot_res = 0.25                             # Plot capture resolution in gyrofraction
 
 
 ### PARTICLE PARAMETERS ###
 species    = [r'$H^+$ cold', r'$H^+$ hot']  # Species name/labels        : Used for plotting
-temp_type  = np.asarray([0, 0])             # Particle temperature type  : Cold (0) or Hot (1)
+temp_type  = np.asarray([0, 1])             # Particle temperature type  : Cold (0) or Hot (1)
 dist_type  = np.asarray([0, 0])             # Particle distribution type : Uniform (0) or sinusoidal/other (1)
 
 mass       = np.asarray([1.00 , 1.00])      # Species ion mass (proton mass units)
 charge     = np.asarray([1.00 , 1.00])      # Species ion charge (elementary charge units)
-velocity   = np.asarray([0.   , 0.  ])      # Species parallel bulk velocity (alfven velocity units)
+velocity   = np.asarray([0.   , 1.  ])      # Species parallel bulk velocity (alfven velocity units)
 density    = np.asarray([90.0 , 10.0])      # Species density as percentage of total density, n_e
 sim_repr   = np.asarray([50.0 , 50.0])      # Macroparticle weighting: Percentage of macroparticles assigned to each species
 
@@ -69,8 +69,8 @@ set_override = 1
 
 if set_override == 1:
     beta_e     = 1.                             # Parameters used to make intiial values more compatible with "normalized CGS" codes
-    beta_par   = np.array([1., 1.])             # Was 2 and 10 for anisotropy              
-    beta_per   = np.array([1., 1.])             # Will overwrite temperature values
+    beta_par   = np.array([1., 2.])             # Was 2 and 10 for anisotropy              
+    beta_per   = np.array([1., 10.])             # Will overwrite temperature values
     wpiwci     = 1e4                            # Will overwrite density value
     
     B0   = c * (1. / wpiwci) * np.sqrt(mu0 * mp * ne)

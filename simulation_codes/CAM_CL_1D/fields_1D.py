@@ -7,10 +7,10 @@ Created on Fri Sep 22 17:54:19 2017
 import numpy as np
 import numba as nb
 
-from simulation_parameters_1D import NX, dx, Te0, q, mu0, kB, subcycles
 from auxilliary_1D            import cross_product
+from simulation_parameters_1D import NX, dx, Te0, q, mu0, kB, subcycles
 
-@nb.njit(cache=True)
+@nb.njit()
 def get_curl_E(E):
     ''' Returns a vector quantity for the curl of E valid on the B-field grid
     '''
@@ -20,7 +20,7 @@ def get_curl_E(E):
     curl[:, 2] = E[1:,  1] - E[:-1, 1]
     return curl / dx
 
-@nb.njit(cache=True)
+@nb.njit()
 def get_curl_B(B):
     ''' Returns a vector quantity for the curl of B valid on the E-field grid
     
@@ -34,7 +34,7 @@ def get_curl_B(B):
     return curl / dx
 
 
-@nb.njit(cache=True)
+@nb.njit()
 def get_grad_P(charge_density, electron_temp):
     ''' Returns the electron pressure gradient (in 1D) on the E-field grid.
     Could eventually modify this to just do a normal centred difference.
@@ -49,7 +49,7 @@ def get_grad_P(charge_density, electron_temp):
     return centered_grad
 
 
-@nb.njit(cache=True)
+@nb.njit()
 def interpolate_to_center(val):
     ''' Interpolates vector cell edge values (i.e. B-grid quantities) to cell centers (i.e. E-grid quantities)
     Note: First and last array values return zero due to relative array sizes (NX + 1 vs NX + 2)
@@ -60,7 +60,8 @@ def interpolate_to_center(val):
         center[1:-1, ii] = 0.5*(val[:-1, ii] + val[1:, ii])
     return center
 
-@nb.njit(cache=True)
+
+@nb.njit()
 def set_periodic_boundaries(B):
     ''' Set boundary conditions for the magnetic field: Average end values and assign to first and last grid point
     '''
@@ -69,11 +70,12 @@ def set_periodic_boundaries(B):
     B[NX]  = end_bit
     return B
 
-@nb.njit(cache=True)
+
+#@nb.njit()
 def cyclic_leapfrog(B, n_i, J_i, DT):
     H  = 0.5 * DT                                               # Half-timestep
     dh = H / subcycles                                          # Subcycle timestep
-    
+
     B1 = np.copy(B)
     B2 = np.copy(B) - dh * get_curl_E(calculate_E(B, J_i, n_i)) # Advance one copy half a timestep
     
@@ -100,10 +102,11 @@ def cyclic_leapfrog(B, n_i, J_i, DT):
         B1   = set_periodic_boundaries(B1)
 
     B = 0.5 * (B1 + B2)                                         # Average solutions: Could put an evaluation step here
+    
     return B
 
 
-@nb.njit(cache=True)
+#@nb.njit()
 def calculate_E(B, J, qn):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,

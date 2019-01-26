@@ -8,7 +8,7 @@ import simulation_parameters_1D as const
 import particles_1D             as particles
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import rcParams
+import pdb
 
 def check_cell_velocity_distribution(part, node_number, j): #
     '''Checks the velocity distribution of a particle species within a specified cell
@@ -17,33 +17,33 @@ def check_cell_velocity_distribution(part, node_number, j): #
     f = np.zeros((1, 6))
     count = 0
 
-    for ii in range(const.N):
-        if (abs(part[0, ii] - x_node) <= 0.5*const.dx) and (part[2, ii] == j):
+    for ii in np.arange(const.idx_bounds[j, 0], const.idx_bounds[j, 1]):
+        if (abs(part[0, ii] - x_node) <= 0.5*const.dx):
             f = np.append(f, [part[0:6, ii]], axis=0)
             count += 1
-
+            
     fig = plt.figure(figsize=(12,10))
     fig.suptitle('Particle velocity distribution of species {} in cell {}'.format(j, node_number))
     fig.patch.set_facecolor('w')
-    num_bins = const.cellpart/5
+    #num_bins = None
 
     ax_x = plt.subplot2grid((2, 3), (0,0), colspan=2, rowspan=2)
     ax_y = plt.subplot2grid((2, 3), (0,2))
     ax_z = plt.subplot2grid((2, 3), (1,2))
 
-    xs, BinEdgesx = np.histogram((f[:, 3] - const.velocity[j]) / const.va, bins=num_bins)
+    xs, BinEdgesx = np.histogram((f[:, 3] - const.velocity[j]) / const.va)
     bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
     ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
     ax_x.set_xlabel(r'$v_x / v_A$')
     ax_x.set_xlim(-2, 2)
 
-    ys, BinEdgesy = np.histogram(f[:, 4] / const.va, bins=num_bins)
+    ys, BinEdgesy = np.histogram(f[:, 4] / const.va)
     by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
     ax_y.plot(by, ys, '-', c='c', drawstyle='steps')
     ax_y.set_xlabel(r'$v_y / v_A$')
     ax_y.set_xlim(-2, 2)
 
-    zs, BinEdgesz = np.histogram(f[:, 5] / const.va, bins=num_bins)
+    zs, BinEdgesz = np.histogram(f[:, 5] / const.va)
     bz = 0.5 * (BinEdgesz[1:] + BinEdgesz[:-1])
     ax_z.plot(bz, zs, '-', c='c', drawstyle='steps')
     ax_z.set_xlabel(r'$v_z / v_A$')

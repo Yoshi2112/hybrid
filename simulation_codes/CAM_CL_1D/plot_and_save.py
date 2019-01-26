@@ -57,8 +57,8 @@ def create_figure_and_save(part, J, B, qn, qq, dt, plot_dump_iter):
     ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
     ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
 
-    norm_xvel   = part[3, :] / va
-    norm_yvel   = part[4, :] / va       # y-velocities (for normalization)
+    norm_xvel   = part[3, :] / const.c
+    norm_yvel   = part[4, :] / const.c       # y-velocities (for normalization)
 
     ax_vx.scatter(x_pos[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_xvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='r', lw=0)        # Hot population
     ax_vy.scatter(x_pos[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_yvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='r', lw=0)        # 'Other' population
@@ -74,16 +74,16 @@ def create_figure_and_save(part, J, B, qn, qq, dt, plot_dump_iter):
 
     for ax in [ax_vy, ax_vx]:
         ax.set_xlim(0, xmax/dx)
-        ax.set_ylim(-2, 2)
+        ax.set_ylim(-2e-3, 2e-3)
 
 #----- Density Plot
     ax_qn = plt.subplot2grid((fig_size), (0, 3), colspan=3)                            # Initialize axes
     
     qn_norm   = qn[1: NX + 1] / ((density*charge).sum())                                # Normalize density for each species to initial values
-    ax_qn.plot(x_cell_num, qn_norm, color='green')                                     # Create overlayed plots for densities of each species
+    ax_qn.plot(qn_norm, color='green')                                     # Create overlayed plots for densities of each species
 
     ax_qn.set_title('Normalized Charge/Current Density and B-Fields (y, mag)')  # Axes title (For all, since density plot is on top
-    ax_qn.set_ylabel('$\rho_c$', fontsize=14, rotation=0, labelpad=5)       # Axis (y) label for this specific axes
+    ax_qn.set_ylabel(r'$\rho_c$', fontsize=14, rotation=0, labelpad=5)       # Axis (y) label for this specific axes
     ax_qn.set_ylim(0, 3)
     
 #----- Current (Jx) Plot
@@ -91,7 +91,7 @@ def create_figure_and_save(part, J, B, qn, qq, dt, plot_dump_iter):
 
     Jz = J[1: NX + 1, 0]
 
-    ax_Jz.plot(x_cell_num, Jz, color='magenta')
+    ax_Jz.plot(Jz, color='magenta')
 
     ax_Jz.set_xlim(0, NX)
     #ax_Jz.set_ylim(-200e-5, 200e-5)
@@ -104,11 +104,11 @@ def create_figure_and_save(part, J, B, qn, qq, dt, plot_dump_iter):
     ax_By = plt.subplot2grid((fig_size), (2, 3), colspan=3, sharex=ax_qn)              # Initialize Axes
     ax_B  = plt.subplot2grid((fig_size), (3, 3), colspan=3, sharex=ax_qn)
 
-    mag_B = (np.sqrt(B[1:NX + 1, 0] ** 2 + B[1: NX + 1, 1] ** 2 + B[1: NX + 1, 2] ** 2)) / B0
-    B_y   = B[1: NX + 1 , 1] / B0                                                         # Normalize grid values
+    mag_B = (np.sqrt(B[1:NX, 0] ** 2 + B[1:NX, 1] ** 2 + B[1:NX, 2] ** 2)) / B0
+    B_y   = B[1:NX , 1] / B0                                                         # Normalize grid values
 
-    ax_B.plot(x_cell_num, mag_B, color='g')                                             # Create axes plots
-    ax_By.plot(x_cell_num, B_y, color='g')
+    ax_B.plot(mag_B, color='g')                                             # Create axes plots
+    ax_By.plot(B_y, color='g')
 
     ax_B.set_xlim(0,  NX)                                                               # Set x limit
     ax_By.set_xlim(0, NX)
@@ -169,7 +169,7 @@ def store_run_parameters(dt, data_dump_iter):
                    ('ie', const.ie),
                    ('theta', const.theta),
                    ('data_dump_iter', data_dump_iter),
-                   ('max_sec', const.max_sec),
+                   ('max_sec', const.max_rev),
                    ('run_desc', const.run_description)])
 
     h_name = os.path.join(d_path, 'Header.pckl')            # Data file containing dictionary of variables used in run
@@ -192,5 +192,5 @@ def save_data(dt, data_dump_iter, qq, part, Ji, E, B, dns):
 
     d_filename = 'data%05d' % r
     d_fullpath = os.path.join(d_path, d_filename)
-    np.savez(d_fullpath, part=part, E = E[:, 0:3], B = B[:, 0:3])   # Data file for each iteration
+    np.savez(d_fullpath, part=part, E = E[:, 0:3], B = B[:, 0:3], J = Ji, dns = dns)   # Data file for each iteration
     print 'Data saved'.format(qq)
