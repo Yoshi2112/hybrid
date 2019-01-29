@@ -14,7 +14,7 @@ from simulation_parameters_1D import NX, dx, Nj, n_contr, charge, mass, idx_boun
 from fields_1D                import interpolate_to_center
 from auxilliary_1D import cross_product
 
-#@nb.njit()
+@nb.njit()
 def push_current(J, E, B, L, G, dt):
     '''Uses an MHD-like equation to advance the current with a moment method. 
     Could probably be shortened with loops.

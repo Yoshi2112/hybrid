@@ -6,10 +6,12 @@ Created on Fri Sep 22 17:15:59 2017
 """
 import numba as nb
 import numpy as np
+
+import particles_1D as particles
 from simulation_parameters_1D import data_res, plot_res, max_rev, dx, gyfreq, orbit_res, charge, mass, NX
 
 
-#@nb.njit(cache=True)
+@nb.njit(cache=True)
 def cross_product_single(A, B):
     '''Vector (cross) product between 3-vectors, A and B of same dimensions.
 
@@ -28,7 +30,7 @@ def cross_product_single(A, B):
     return output
 
 
-#@nb.njit(cache=True)
+@nb.njit(cache=True)
 def cross_product(A, B):
     '''Vector (cross) product between two vectors, A and B of same dimensions.
 
@@ -78,7 +80,7 @@ def check_timestep(qq, DT, part, B, E, dns, maxtime, data_dump_iter, plot_dump_i
     
     for ii in range(3):
         B_cent[1:-1, ii] = 0.5*(B[:-1, ii] + B[1:, ii])
-
+        
     B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
     high_rat        = np.max(charge/mass)
     
@@ -89,12 +91,14 @@ def check_timestep(qq, DT, part, B, E, dns, maxtime, data_dump_iter, plot_dump_i
     ion_ts          = orbit_res / gyfreq                 # Timestep to resolve gyromotion
     #acc_ts          = orbit_res / elecfreq              # Timestep to resolve electric field acceleration
     #dis_ts          = orbit_res / dispfreq              # Timestep to resolve magnetic field dispersion
-    vel_ts          = 0.50*dx / max_V                  # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
-
-    DT_new          = min(ion_ts, vel_ts)              # Smallest of the two (four, later)
+    vel_ts          = 0.60*dx / max_V                    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
+                                                         # Slightly larger than half to stop automatically halving DT at start
+    DT_new          = min(ion_ts, vel_ts)                # Smallest of the two (four, later)
     
     change_flag = 0
     if DT_new < DT:
+        part = particles.position_update(part, -0.5*DT)     # Roll back particle position before halving timestep
+        
         change_flag = 1
         DT         *= 0.5
         maxtime    *= 2
@@ -106,5 +110,5 @@ def check_timestep(qq, DT, part, B, E, dns, maxtime, data_dump_iter, plot_dump_i
         if data_dump_iter != None:
             data_dump_iter *= 2
         
-    return qq, DT, maxtime, data_dump_iter, plot_dump_iter, change_flag
+    return part, qq, DT, maxtime, data_dump_iter, plot_dump_iter, change_flag
 

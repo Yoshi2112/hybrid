@@ -10,6 +10,8 @@ import numba as nb
 from auxilliary_1D            import cross_product
 from simulation_parameters_1D import NX, dx, Te0, q, mu0, kB, subcycles
 
+import pdb
+
 @nb.njit()
 def get_curl_E(E):
     ''' Returns a vector quantity for the curl of E valid on the B-field grid
@@ -71,14 +73,14 @@ def set_periodic_boundaries(B):
     return B
 
 
-#@nb.njit()
+@nb.njit()
 def cyclic_leapfrog(B, n_i, J_i, DT):
     H  = 0.5 * DT                                               # Half-timestep
     dh = H / subcycles                                          # Subcycle timestep
 
     B1 = np.copy(B)
     B2 = np.copy(B) - dh * get_curl_E(calculate_E(B, J_i, n_i)) # Advance one copy half a timestep
-    
+
     end_bit = 0.5*(B2[0] + B2[NX])                              # Average end values (for periodic boundary condition)
     B2[0]   = end_bit
     B2[NX]  = end_bit
@@ -102,11 +104,11 @@ def cyclic_leapfrog(B, n_i, J_i, DT):
         B1   = set_periodic_boundaries(B1)
 
     B = 0.5 * (B1 + B2)                                         # Average solutions: Could put an evaluation step here
-    
+
     return B
 
 
-#@nb.njit()
+@nb.njit()
 def calculate_E(B, J, qn):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,

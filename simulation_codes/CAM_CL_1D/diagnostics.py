@@ -35,19 +35,19 @@ def check_cell_velocity_distribution(part, node_number, j): #
     bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
     ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
     ax_x.set_xlabel(r'$v_x / v_A$')
-    ax_x.set_xlim(-2, 2)
+    #ax_x.set_xlim(-2, 2)
 
     ys, BinEdgesy = np.histogram(f[:, 4] / const.va)
     by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
     ax_y.plot(by, ys, '-', c='c', drawstyle='steps')
     ax_y.set_xlabel(r'$v_y / v_A$')
-    ax_y.set_xlim(-2, 2)
+    #ax_y.set_xlim(-2, 2)
 
     zs, BinEdgesz = np.histogram(f[:, 5] / const.va)
     bz = 0.5 * (BinEdgesz[1:] + BinEdgesz[:-1])
     ax_z.plot(bz, zs, '-', c='c', drawstyle='steps')
     ax_z.set_xlabel(r'$v_z / v_A$')
-    ax_z.set_xlim(-2, 2)
+    #ax_z.set_xlim(-2, 2)
 
     plt.show()
     return

@@ -51,7 +51,6 @@ def create_figure_and_save(part, J, B, qn, qq, dt, plot_dump_iter):
     fig.patch.set_facecolor('w')                                                # Set figure face color
 
     x_pos       = part[0, :] / dx                                               # Particle x-positions (km) (For looking at particle characteristics)
-    x_cell_num  = np.arange(NX)                                                 # Numerical cell numbering: x-axis
 
 #----- Velocity (x, y) Plots: Hot Species
     ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
@@ -60,8 +59,10 @@ def create_figure_and_save(part, J, B, qn, qq, dt, plot_dump_iter):
     norm_xvel   = part[3, :] / const.c
     norm_yvel   = part[4, :] / const.c       # y-velocities (for normalization)
 
-    ax_vx.scatter(x_pos[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_xvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='r', lw=0)        # Hot population
-    ax_vy.scatter(x_pos[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_yvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='r', lw=0)        # 'Other' population
+    for jj in range(Nj):
+        if temp_type[jj] == 1:
+            ax_vx.scatter(x_pos[idx_bounds[jj, 0]: idx_bounds[jj, 1]], norm_xvel[idx_bounds[jj, 0]: idx_bounds[jj, 1]], s=1, c='r', lw=0)        # Hot population
+            ax_vy.scatter(x_pos[idx_bounds[jj, 0]: idx_bounds[jj, 1]], norm_yvel[idx_bounds[jj, 0]: idx_bounds[jj, 1]], s=1, c='r', lw=0)        # 'Other' population
 
     ax_vx.set_title(r'Beam velocities ($v_A^{-1}$) vs. Position (x)')
     ax_vy.set_xlabel(r'Position (cell)', labelpad=10)
@@ -169,7 +170,7 @@ def store_run_parameters(dt, data_dump_iter):
                    ('ie', const.ie),
                    ('theta', const.theta),
                    ('data_dump_iter', data_dump_iter),
-                   ('max_sec', const.max_rev),
+                   ('max_rev', const.max_rev),
                    ('run_desc', const.run_description)])
 
     h_name = os.path.join(d_path, 'Header.pckl')            # Data file containing dictionary of variables used in run
@@ -181,10 +182,19 @@ def store_run_parameters(dt, data_dump_iter):
 
     # Particle values: Array parameters
     p_file = os.path.join(d_path, 'p_data')
-    np.savez(p_file, idx_bounds=idx_bounds, species=species, temp_type=temp_type, dist_type=dist_type, mass=mass,
-             charge=charge, velocity=velocity, density=density, sim_repr=sim_repr, Tpar=Tpar, Tper=Tper)
+    np.savez(p_file, idx_bounds= idx_bounds,
+                     species   = species,
+                     temp_type = temp_type,
+                     mass      = mass,
+                     charge    = charge,
+                     velocity  = velocity,
+                     density   = density,
+                     sim_repr  = sim_repr,
+                     Tpar      = Tpar,
+                     Tper      = Tper)
     print 'Particle data saved'
     return
+
 
 def save_data(dt, data_dump_iter, qq, part, Ji, E, B, dns):
     d_path = ('%s/%s/run_%d/data' % (drive, save_path, const.run_num))    # Set path for data
