@@ -11,6 +11,7 @@ import os
 from numpy import pi
 import pickle
 import matplotlib.gridspec as gs
+import numba as nb
 import pdb
 
 
@@ -107,11 +108,36 @@ def load_timestep(ii):
     return tposition, tvelocity, tB, tE, tdns, tJ
 
 
-def collect_species_density():
-    ''' Moment collection algorithm needed due to structure of CAM-CL not using species-specific moments.
-    Collects density for each species at cell-center (E-grid)
+@nb.njit()
+def collect_density(pos):
+    '''Collect number and velocity density in each cell at each timestep, weighted by their distance
+    from cell nodes.
+
+    INPUT:
+        pos    -- position of each particle
     '''
-    return
+    size      = NX + 2
+
+    n_i       = np.zeros((size, Nj))
+    
+    node      = pos / dx + 0.5 
+    weight    = (pos / dx) - node + 0.5
+    n_contr   = density / sim_repr                  # Density: initial /m3 of species in cell, divide this by number of particles in the cell
+                                                    # Each macroparticle contributes this amount to the cell's density in /m3
+    for jj in range(Nj):
+        for ii in range(idx_bounds[jj, 0], idx_bounds[jj, 1]):
+            I   = int(node[ii])
+            W   = weight[ii]
+
+            n_i[I,     jj] += (1 - W) * n_contr[jj]
+            n_i[I + 1, jj] +=      W  * n_contr[jj]
+
+    n_i[1]  += n_i[-1]
+    n_i[-1] += n_i[0]
+    
+    n_i[0]   = 0.
+    n_i[-1]  = 0
+    return n_i
 
 
 def get_array(component, tmin, tmax):
@@ -192,7 +218,6 @@ def generate_kt_plot(component='By', tmin=0, tmax=None, plot=True, normalize=Fal
 
 def plot_kt(arr, norm, saveas='kt_plot'):
     plt.ioff()
-    t  = np.arange(num_files) * data_ts
     k  = np.arange(NX)
     
 # =============================================================================
@@ -213,11 +238,11 @@ def plot_kt(arr, norm, saveas='kt_plot'):
     fig = plt.figure(1, figsize=(12, 8))
     ax  = fig.add_subplot(111)
     
-    ax.pcolormesh(k[:arr.shape[1] / 2], t, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
+    ax.pcolormesh(k[:arr.shape[1] / 2], time_radperiods, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
 
     ax.set_title(r'k-t Plot (CAM-CL)', fontsize=14)
     ax.set_ylabel(r'$\Omega_i t$', rotation=0)
-    ax.set_xlabel('k (m-number?)')
+    ax.set_xlabel('k (m-number)')
     
     plt.xlim(None, 32)
     fullpath = anal_dir + saveas + '.png'
@@ -399,19 +424,17 @@ def plot_energies(ii):
     mag_energy[ii]      = U_B
     
     if ii == num_files - 1:
-        time = np.arange(0, num_files * data_ts, data_ts) / gyperiod
-        
         fig  = plt.figure()
         
-        plt.plot(time, mag_energy / mag_energy.max(), label = r'$U_B$')
+        plt.plot(time_radperiods, mag_energy / mag_energy.max(), label = r'$U_B$')
         
         for jj in range(Nj):
-            plt.plot(time, particle_energy[:, jj] / particle_energy[:, jj].max(), label='$K_E$ {}'.format(species[jj]))
+            plt.plot(time_radperiods, particle_energy[:, jj] / particle_energy[:, jj].max(), label='$K_E$ {}'.format(species[jj]))
         
         plt.legend()
         plt.title('Energy Distribution in Simulation')
-        plt.xlabel('Time (gyroperiods)')
-        plt.xlim(0, max_rev)
+        plt.xlabel('Time ($\Omega t$)')
+        plt.xlim(0, 100)
         plt.ylabel('Normalized Energy', rotation=90)
         fullpath = anal_dir + 'energy_plot'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
@@ -422,8 +445,8 @@ def plot_energies(ii):
 
 
 if __name__ == '__main__':   
-    drive    = 'F:'
-    series   = 'CAM_CL_test'                                # Run identifier string 
+    drive    = 'E:'
+    series   = 'CAM_CL_test2'                               # Run identifier string 
     run_num  = 0                                            # Run number
 
     manage_dirs()                                           # Initialize directories
@@ -437,6 +460,10 @@ if __name__ == '__main__':
     gyperiod  = (mp * 2 * np.pi) / (q * B0)                 # Proton gyroperiod (s)
     data_ts   = data_dump_iter * dt                         # Timestep between data records (seconds)
     
+    time_seconds    = np.arange(0, num_files * data_ts, data_ts)
+    time_gperiods   = time_seconds / gyperiod
+    time_radperiods = time_seconds * gyfreq 
+    
     np.random.seed(seed)                                    # Initialize random seed
     
     mag_energy      = np.zeros(num_files)
@@ -445,7 +472,9 @@ if __name__ == '__main__':
     #generate_kt_plot(normalize=True)
         
     for ii in range(num_files):
-        position, velocity, B, E, dns, J = load_timestep(ii)
+        position, velocity, B, E, q_dns, J = load_timestep(ii)
+        dns                                = collect_density(position)
+        
         plot_energies(ii)
         
         #winske_stackplot(ii, title=r'Winske test check: $\Delta t$ = 0.02$\omega^{-1}$, Smoothing ON')

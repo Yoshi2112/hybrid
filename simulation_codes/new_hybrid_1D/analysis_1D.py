@@ -186,7 +186,6 @@ def generate_kt_plot(component='By', tmin=0, tmax=None, plot=True, normalize=Fal
 
 def plot_kt(arr, norm, saveas='kt_plot'):
     plt.ioff()
-    t  = np.arange(num_files) * lam_res
     k  = np.arange(NX)
     #dk = 1. / (NX * dx)
     
@@ -208,7 +207,7 @@ def plot_kt(arr, norm, saveas='kt_plot'):
     fig = plt.figure(1, figsize=(12, 8))
     ax  = fig.add_subplot(111)
     
-    ax.pcolormesh(k[:arr.shape[1] / 2], t, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
+    ax.pcolormesh(k[:arr.shape[1] / 2], time_radperiods, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
 
     ax.set_title(r'k-t Plot (Predictor-Corrector)', fontsize=14)
     ax.set_ylabel(r'$\Omega_i t$', rotation=0)
@@ -280,13 +279,13 @@ def waterfall_plot(field):
     arr = get_array()
     amp   = 100.                 # Amplitude multiplier of waves: 
     
-    cells  = np.arange(nx)
+    cells  = np.arange(NX)
     
-    for (ii, t) in zip(np.arange(ntimes), np.arange(0, ntimes*dt, dt)):
+    for (ii, t) in zip(np.arange(num_files), np.arange(0, num_files*dt, dt)):
         #if round(t, 2)%0.5 == 0:
         plt.plot(cells, amp*(arr[ii] / arr.max()) + ii, c='k', alpha=0.05)
         
-    plt.xlim(0, nx)
+    plt.xlim(0, NX)
     plt.show()
     return
 
@@ -379,24 +378,45 @@ def get_gyrophase(vel):
     return gyro
 
 
-def get_energies(ii):
+def plot_energies(ii):
+    
     U_B = 0.5 * (1 / mu0) * np.square(B[1:-1]).sum()     # Magnetic potential energy 
     
     for jj in range(Nj):
-        vp2 = velocity[idx_bounds[jj, 0]:idx_bounds[jj, 1], 0] ** 2 \
-            + velocity[idx_bounds[jj, 0]:idx_bounds[jj, 1], 1] ** 2 \
-            + velocity[idx_bounds[jj, 0]:idx_bounds[jj, 1], 2] ** 2
+        vp2 = velocity[0, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2 \
+            + velocity[1, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2 \
+            + velocity[2, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2
             
         K_E = 0.5 * mass[jj] * vp2.sum()                 # Particle total kinetic energy 
-    
+        particle_energy[ii, jj] = K_E
+               
+        
     mag_energy[ii]      = U_B
-    particle_energy[ii] = K_E
+    
+    if ii == num_files - 1:
+        fig  = plt.figure()
+        
+        plt.plot(time_radperiods, mag_energy / mag_energy.max(), label = r'$U_B$')
+        
+        for jj in range(Nj):
+            plt.plot(time_radperiods, particle_energy[:, jj] / particle_energy[:, jj].max(), label='$K_E$ {}'.format(species[jj]))
+        
+        plt.legend()
+        plt.title('Energy Distribution in Simulation')
+        plt.xlabel('Time ($\Omega t$)')
+        plt.xlim(0, 100)
+        plt.ylabel('Normalized Energy', rotation=90)
+        fullpath = anal_dir + 'energy_plot'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+        plt.close('all')
+        
+        print 'Energy plot saved'
     return
 
 
 if __name__ == '__main__':    
     series   = 'winske_anisotropy_test'                     # Run identifier string 
-    run_num  = 2                                            # Run number
+    run_num  = 3                                            # Run number
 
     manage_dirs()                                           # Initialize directories
     load_constants()                                        # Load SI constants
@@ -405,20 +425,25 @@ if __name__ == '__main__':
     
     num_files = len(os.listdir(data_dir)) - 2               # Number of timesteps to load
     gyfreq    = q * B0 / mp                                 # Proton gyrofrequency (rad/s)
+    gyperiod  = (mp * 2 * np.pi) / (q * B0)                 # Proton gyroperiod (s)
     wpi       = np.sqrt(ne * q ** 2 / (mp * e0))            # Ion plasma frequency
+    data_ts   = data_dump_iter * dt                         # Timestep between data records (seconds)
+
+    time_seconds    = np.arange(0, num_files * data_ts, data_ts)
+    time_gperiods   = time_seconds / gyperiod
+    time_radperiods = time_seconds * gyfreq 
     
     np.random.seed(seed)                                    # Initialize random seed
     
     mag_energy      = np.zeros(num_files)
-    particle_energy = np.zeros(num_files)
+    particle_energy = np.zeros((num_files, Nj))
 
     #generate_kt_plot(normalize=True)
-    generate_wk_plot(normalize=True)
-# =============================================================================
-#     #num_files = 2
-#     for ii in range(num_files):
-#         position, velocity, B, E, dns, J = load_timestep(ii)
-#         #winske_stackplot(ii, title=r'Winske test check: $\Delta t$ = 0.02$\omega^{-1}$, Smoothing ON')
-# 
-# =============================================================================
+    #generate_wk_plot(normalize=True)
+    #num_files = 2
+    for ii in range(num_files):
+        position, velocity, B, E, dns, J = load_timestep(ii)
+        plot_energies(ii)
+        #winske_stackplot(ii, title=r'Winske test check: $\Delta t$ = 0.02$\omega^{-1}$, Smoothing ON')
+
     

@@ -62,6 +62,9 @@ def plot_dispersion(arr, saveas):
 
     return
 
+
+
+
 start_file = 0                # First file to scan - For starting mid-way    (Default 0: Read all files in directory)
 end_file   = 0                # Last file to scan  - To read in partial sets (Default 0: Read all files in directory)
 
@@ -95,7 +98,7 @@ f.close()                                                           # Close head
 for name in obj.keys():                                             # Assign Header variables to namespace (dicts)
     globals()[name] = obj[name]                                     # Magic variable creation function
 
-seed = 21
+seed = 101
 np.random.seed(seed)
 
 if end_file == 0:
@@ -128,9 +131,11 @@ plot_skip = 1
 #all_E = np.zeros((num_files, NX))
 
 #for ii in grab:
-max_v     = np.zeros(num_files)
-spc_av_By = np.zeros(num_files)
-spc_av_Ex = np.zeros(num_files)
+# =============================================================================
+# max_v     = np.zeros(num_files)
+# spc_av_By = np.zeros(num_files)
+# spc_av_Ex = np.zeros(num_files)
+# =============================================================================
  
 print 'dt={}'.format(dt)
 for ii in range(num_files):
@@ -140,28 +145,36 @@ for ii in range(num_files):
         input_path = data_dir + d_file                  # File location
         data       = np.load(input_path)                # Load file
 
-        max_v[ii]       = abs(data['part'][3]).max()
-        spc_av_By[ii]   = abs(data['B'][1: -1, 1]).max()
-        spc_av_Ex[ii]   = abs(data['E'][1: -1, 0]).max()
+        E    = data['E']
+        part = data['part']
+        J    = data['J']
+        dns  = data['dns']
+# =============================================================================
+#         max_v[ii]       = abs(data['part'][3]).max()
+#         spc_av_By[ii]   = abs(data['B'][1: -1, 1]).max()
+#         spc_av_Ex[ii]   = abs(data['E'][1: -1, 0]).max()
+#         
+# =============================================================================
+
+        
         #all_B[ii, :, :] = data['B']
 
-t = np.arange(num_files) * dt * data_dump_iter     
-#%%
-fig = plt.figure(figsize=(18,10))
-ax  = fig.add_subplot(111)
+#t = np.arange(num_files) * dt * data_dump_iter     
+# =============================================================================
+# #%%
+# fig = plt.figure(figsize=(18,10))
+# ax  = fig.add_subplot(111)
+# 
+# 
+# ax.plot(t, max_v / max_v.max(), label='velocity')
+# ax.plot(t, spc_av_By / spc_av_By.max(), label='B')
+# ax.plot(t, spc_av_Ex / spc_av_Ex.max(), label='E')
+# ax.legend()
+# plt.show()
+# #save_array_file(all_B, 'all_B')
+# #plot_dispersion(all_B[:, :, 1], 'wk_By')
+# =============================================================================
 
-
-ax.plot(t, max_v / max_v.max(), label='velocity')
-ax.plot(t, spc_av_By / spc_av_By.max(), label='B')
-ax.plot(t, spc_av_Ex / spc_av_Ex.max(), label='E')
-ax.legend()
-plt.show()
-#save_array_file(all_B, 'all_B')
-#plot_dispersion(all_B[:, :, 1], 'wk_By')
-        #E    = data['E']
-        #part = data['part']
-        #Ji   = data['Ji']
-        #dns  = data['dns']
 
 
 
