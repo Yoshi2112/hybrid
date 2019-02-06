@@ -153,7 +153,7 @@ def initialize_fields():
         W   -- E-node weighting array
         Wb  -- B-node weighting array
     '''
-    B = np.zeros(( NX + 2, 6), dtype=float)
+    B = np.zeros(( NX + 1, 6), dtype=float)
         # Where:
         #       B[mm, 0-2] represent the current field and
         #       B[mm, 3-5] store the last state of the magnetic field previous to the Predictor-Corrector scheme

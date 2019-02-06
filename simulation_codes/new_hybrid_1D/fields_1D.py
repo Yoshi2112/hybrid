@@ -22,6 +22,7 @@ def push_B(B, E, dt):
     OUTPUT:
         B  --  The updated magnetic field
     '''
+    
     for mm in range (1, NX + 1):
         B[mm, 0] = B[mm, 0] - (dt / 2) * 0                                                # Since derivatives for y and z go to zero
         B[mm, 1] = B[mm, 1] - (dt / 2) * ( (E[mm - 1, 2] - E[mm + 1, 2]) / (2 * dx) )
@@ -98,12 +99,7 @@ def push_E_equil(B, J_i, n_i, dt):
             J[:, kk]  += J_i[:, jj, kk]
 
     # MHD equilibrium thing
-    Te  = [Te0 for ii in range(size)]                            # Electron temperature per cell
-    nex = qn / q                                                 # Electron number density per cell (via quasineutrality)
-
-    if mhd_equil == 1:                                           # Finite difference to give del_p = 0
-        for ii in range(2, size - 1):
-            Te[ii] = (4*Te[ii - 1] - Te[ii - 2]) * (1 / ( ((nex[ii + 1] - nex[ii - 1]) / nex[ii]) + 3))
+    Te  = [Te0 for ii in range(size)]                           # Electron temperature per cell
 
     JxB = cross_product(J, B_i)
 

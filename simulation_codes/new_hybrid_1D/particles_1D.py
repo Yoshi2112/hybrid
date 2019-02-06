@@ -84,7 +84,7 @@ def boris_velocity_update(part, B, E, dt, W):
         Bp = B[Ib, 0:3] * (1 - Wb[n]) + B[Ib + 1, 0:3] * Wb[n]              # B-field at particle location
 
         T = (charge[idx] * Bp / mass[idx]) * dt / 2.                        # Boris variable
-        S = 2.*T / (1. + np.sqrt(T[0] ** 2 + T[1] ** 2 + T[2] ** 2))        # Boris variable
+        S = 2.*T / (1. + (T[0] ** 2 + T[1] ** 2 + T[2] ** 2))               # Boris variable
 
         # Actual Boris Method
         v_minus    = part[3:6, n] + charge[idx] * Ep * dt / (2 * mass[idx])
