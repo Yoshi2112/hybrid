@@ -5,43 +5,26 @@ Created on Fri Sep 22 17:27:33 2017
 @author: iarey
 """
 import numpy as np
-from particles_1D             import calc_left_node, assign_weighting
-from simulation_parameters_1D import dx, NX, cellpart, N, kB, Bc, Nj, dist_type, N_species, sim_repr, idx_bounds,    \
+from particles_1D             import assign_weighting_TSC
+from simulation_parameters_1D import dx, NX, cellpart, N, kB, Bc, Nj, dist_type, sim_repr, idx_bounds,    \
                                      seed, Tpar, Tper, mass, velocity, theta
 
 def particles_per_cell():
-    '''Creates a map of how many particles per cell per specices will be placed in the simulation domain. Allows the
-    distribution functions to initialize each cell correctly and keep fine scale structure (c.f. Initialization over
-    whole domain). Uses parameters specified in  const and part_params.
+    '''
+    Calculates how many particles per cell per specices to be placed in the simulation domain. Currently only does
+    uniform, but useful shell function for later on.
+    
     INPUT:
         <NONE>
+        
     OUTPUT:
-        ppc -- Number of particles per cell per species over simulation domain
+        ppc -- Number of particles per cell per species for each cell in simulation domain. NjxNX ndarray.
     '''
     ppc = np.zeros((Nj, NX), dtype=int)
 
     for ii in range(Nj):
         if dist_type[ii] == 0:
             ppc[ii, :] = cellpart * 0.01 * sim_repr[ii]
-
-# =============================================================================
-#         elif  dist_type[ii] == 1:
-#             x_cell  = np.arange(0,  NX*dx, dx)                                # Array with distance boundaries between cells
-#             sx      = np.ones(NX)                                             # Initialize distrbution function
-# 
-#             for jj in range(NX):                                              # Create sinusoidal distribution function
-#                 sx[jj] = (0.5 * np.sin((2*np.pi*k /  NX*dx) * x_cell[jj])) + 1
-# 
-#             sx /= np.sum(sx)                                                  # Normalize sinusoidal distribution function
-# 
-#             ppc[jj, :] = (np.round(sx *  N_species[jj]))                      # Generate number of particles per cell
-# 
-#             if np.sum(ppc[jj, :]) != N:       							              # Check total: Can be avoided by picking NX mod k = 0
-#                 diff = N - np.sum(ppc[jj, :])                                 # Find how many particles short
-#                 idxs = np.random.randint(0, NX - 1, diff)                     # Create random indices to put them (very small error)
-#                 for ext in idxs:
-#                     ppc[jj, ext] += 1                                         # Put an extra particle in them
-# =============================================================================
     return ppc
 
 
@@ -55,9 +38,12 @@ def uniform_distribution(ppc):
         dist -- numpy ndarray containing numerical distribution
     '''
     dist = np.zeros(N)
+    idx  = np.zeros(N, dtype=np.uint8)
 
     for jj in range(Nj):                    # For each species
         acc = 0
+        idx[idx_bounds[jj, 0]: idx_bounds[jj, 1]] = jj
+        
         for ii in range(NX):                # For each cell
             n_particles = ppc[jj, ii]
 
@@ -65,10 +51,10 @@ def uniform_distribution(ppc):
                 dist[idx_bounds[jj, 0] + acc + kk] = dx*(float(kk) / n_particles + ii)
             acc += n_particles
 
-    return dist
+    return dist, idx
 
 
-def normal_distribution(ppc):
+def gaussian_distribution(ppc):
     '''Creates an N-sampled normal distribution across all particle species within each simulation cell
 
     INPUT:
@@ -97,48 +83,41 @@ def normal_distribution(ppc):
 
 
 def initialize_particles():
-    '''Initialize particle array with structure:
-        part[0, :] -- Position in x
-        part[1, :] -- Leftmost node
-        part[2, :] -- Particle species index
-        part[3, :] -- Velocity in x
-        part[4, :] -- Velocity in y
-        part[5, :] -- Velocity in z
-        '''
-
-    part     = np.zeros((6, N), dtype=float)                                   # Initialize particle array
-    ppc      = particles_per_cell()                                            # Generate number of particles per cell, per species
-
-    part[0, :]   = uniform_distribution(ppc)                                   # Initialize particles in configuration space
-
-    part[3:6, :] = normal_distribution(ppc)                                    # Initialize particles in velocity space
-    part[1, :]   = calc_left_node(part[0, :])                                  # Initial leftmost node, I
-    part[2, :]   = assign_weighting(part[0, :], part[1, :], 1)
-    return part
+    '''Initializes particle arrays.
+    
+    INPUT:
+        <NONE>
+        
+    OUTPUT:
+        pos    -- Particle position array (1, N)
+        vel    -- Particle velocity array (3, N)
+        W_elec -- Initial particle weights on E-grid
+        idx    -- Particle type index
+    '''
+    ppc        = particles_per_cell()
+    pos, idx   = uniform_distribution(ppc)
+    vel        = gaussian_distribution(ppc)
+    Ie, W_elec = assign_weighting_TSC(pos)
+    return pos, vel, Ie, W_elec, idx
 
 
-def initialize_magnetic_field():
-    '''Initializes field ndarrays and sets initial values for fields based on parameters in  .
+def initialize_fields():
+    '''Initializes field ndarrays and sets initial values for fields based on parameters in config file.
 
     INPUT:
         <NONE>
 
     OUTPUT:
-        B   -- Magnetic field array
-        E   -- Electric field array
-        Ji  -- Ion current array
-        dns -- Number density array
-        W   -- E-node weighting array
-        Wb  -- B-node weighting array
+        B   -- Magnetic field array: (NX + 3) Node locations on cell edges/vertices (each cell +1 end boundary +2 guard cells)
+        E   -- Electric field array: (NX + 3) Node locations in cell centres (each cell plus 1+2 guard cells)
+
+    Note: Each field is initialized with one array value extra due to TSC trying to access it when a 
+    particle is located exactly on 
     '''
-    B = np.zeros((NX + 1, 3), dtype=float)
-    E = np.zeros((NX + 2, 3), dtype=float)
+    B = np.zeros((NX + 3, 3), dtype=float)
+    E = np.zeros((NX + 3, 3), dtype=float)
 
     B[:, 0] = Bc[0]      # Set Bx initial
     B[:, 1] = Bc[1]      # Set By initial
     B[:, 2] = Bc[2]      # Set Bz initial
     return B, E
-
-
-if __name__ == '__main__':
-    initialize_particles()

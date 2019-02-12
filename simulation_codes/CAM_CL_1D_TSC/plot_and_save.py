@@ -196,11 +196,11 @@ def store_run_parameters(dt, data_dump_iter):
     return
 
 
-def save_data(dt, data_dump_iter, qq, part, Ji, E, B, dns):
+def save_data(dt, data_dump_iter, qq, pos, vel, Ji, E, B, dns):
     d_path = ('%s/%s/run_%d/data' % (drive, save_path, const.run_num))    # Set path for data
     r      = qq / data_dump_iter                                          # Capture number
 
     d_filename = 'data%05d' % r
     d_fullpath = os.path.join(d_path, d_filename)
-    np.savez(d_fullpath, part=part, E = E[:, 0:3], B = B[:, 0:3], J = Ji, dns = dns)   # Data file for each iteration
+    np.savez(d_fullpath, pos=pos, vel=vel, E = E[1:NX+1, 0:3], B = B[1:NX+2, 0:3], J = Ji[1:NX+1], dns = dns[1:NX+1])   # Data file for each iteration
     print 'Data saved'.format(qq)

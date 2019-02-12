@@ -10,33 +10,228 @@ import numba as nb
 
 import particles_1D as particles
 
-from simulation_parameters_1D import NX, dx, Nj, n_contr, charge, mass, idx_bounds, smooth_sources
+from simulation_parameters_1D import N, NX, Nj, n_contr, charge, mass, smooth_sources, do_parallel
 from fields_1D                import interpolate_to_center
-from auxilliary_1D import cross_product
+from auxilliary_1D            import cross_product
 
-@nb.njit()
+@nb.njit(parallel=do_parallel)
 def push_current(J, E, B, L, G, dt):
-    '''Uses an MHD-like equation to advance the current with a moment method. 
-    Could probably be shortened with loops.
-    '''
-    J_out        = np.zeros((NX + 2, 3))
+    '''Uses an MHD-like equation to advance the current with a moment method as 
+    per Matthews (1994) CAM-CL method. Fills in ghost cells at edges (excluding very last one)
     
+    INPUT:
+        J  -- Ionic current
+        E  -- Electric field
+        B  -- Magnetic field (offset from E by 0.5dx)
+        L  -- "Lambda" MHD variable
+        G  -- "Gamma"  MHD variable
+        dt -- Timestep
+        
+    OUTPUT:
+        J_out -- Advanced current
+    '''
+    J_out        = np.zeros(J.shape)
     B_center     = interpolate_to_center(B)
     G_cross_B    = cross_product(G, B_center)
     
     for ii in range(3):
         J_out[:, ii] = J[:, ii] + 0.5*dt * (L * E[:, ii] + G_cross_B[:, ii]) 
+        
+    J_out[0]    = J_out[NX]
+    J_out[NX+1] = J_out[1]
     return J_out
 
 
-@nb.njit(cache=True)
+@nb.njit(parallel=do_parallel)
+def deposit_both_moments(pos, vel, Ie, W_elec, idx):
+    '''Collect number and velocity moments in each cell, weighted by their distance
+    from cell nodes.
+
+    INPUT:
+        pos    -- Particle positions (x)
+        vel    -- Particle 3-velocities
+        Ie     -- Particle leftmost to nearest E-node
+        W_elec -- Particle TSC weighting across nearest, left, and right nodes
+        idx    -- Particle species identifier
+        
+    OUTPUT:
+        n_i    -- Species number moment array(size, Nj)
+        nu_i   -- Species velocity moment array (size, Nj)
+    '''
+    
+    size      = NX + 3
+    n_i       = np.zeros((size, Nj))
+    nu_i      = np.zeros((size, Nj, 3))
+    
+    for ii in nb.prange(pos.shape[0]):
+        I   = Ie[ ii]
+        sp  = idx[ii]
+    
+        for kk in range(3):
+            nu_i[I,     sp, kk] += W_elec[0, ii] * n_contr[sp] * vel[kk, ii]
+            nu_i[I + 1, sp, kk] += W_elec[1, ii] * n_contr[sp] * vel[kk, ii]
+            nu_i[I + 2, sp, kk] += W_elec[2, ii] * n_contr[sp] * vel[kk, ii]
+        
+        n_i[I,     sp] += W_elec[0, ii] * n_contr[sp]
+        n_i[I + 1, sp] += W_elec[1, ii] * n_contr[sp]
+        n_i[I + 2, sp] += W_elec[2, ii] * n_contr[sp]
+
+    n_i   = manage_ghost_cells(n_i)
+    nu_i  = manage_ghost_cells(nu_i)
+    return n_i, nu_i
+
+
+@nb.njit(parallel=do_parallel)
+def deposit_velocity_moments(vel, Ie, W_elec, idx):
+    '''Collect velocity moment in each cell, weighted by their distance
+    from cell nodes.
+
+    INPUT:
+        vel    -- Particle 3-velocities
+        Ie     -- Particle leftmost to nearest E-node
+        W_elec -- Particle TSC weighting across nearest, left, and right nodes
+        idx    -- Particle species identifier
+        
+    OUTPUT:
+        nu_i   -- Species velocity moment array (size, Nj)
+    '''
+    size      = NX + 3
+    nu_i      = np.zeros((size, Nj, 3))
+
+    for ii in range(N):
+        I   = Ie[ ii]
+        sp  = idx[ii]
+        
+        for kk in range(3):
+            nu_i[I,     sp, kk] += W_elec[0, ii] * n_contr[sp] * vel[kk, ii]
+            nu_i[I + 1, sp, kk] += W_elec[1, ii] * n_contr[sp] * vel[kk, ii]
+            nu_i[I + 2, sp, kk] += W_elec[2, ii] * n_contr[sp] * vel[kk, ii]
+                      
+    nu_i  = manage_ghost_cells(nu_i)
+    return nu_i
+
+
+@nb.njit(parallel=do_parallel)
+def init_collect_moments(pos, vel, Ie, W_elec, idx, DT):
+    '''Moment collection and position advance function. Specifically used at initialization or
+    after timestep synchronization.
+
+    INPUT:
+        pos    -- Particle positions (x)
+        vel    -- Particle 3-velocities
+        Ie     -- Particle leftmost to nearest E-node
+        W_elec -- Particle TSC weighting across nearest, left, and right nodes
+        idx    -- Particle species identifier
+        DT     -- Timestep for position advance
+        
+    OUTPUT:
+        pos     -- Advanced particle positions
+        Ie      -- Updated leftmost to nearest E-nodes
+        W_elec  -- Updated TSC weighting coefficients
+        rho_0   -- Charge  density at initial time (p0)
+        rho     -- Charge  density at +0.5 timestep
+        J_init  -- Current density at initial time (J0)
+        J_plus  -- Current density at +0.5 timestep
+        G       -- "Gamma"  MHD variable for current advance : Current-like
+        L       -- "Lambda" MHD variable for current advance :  Charge-like
+    '''
+    size    = NX + 3
+    
+    rho_0   = np.zeros( size)
+    rho     = np.zeros( size)    
+    J_plus  = np.zeros((size, 3))
+    J_init  = np.zeros((size, 3))
+    L       = np.zeros( size)
+    G       = np.zeros((size, 3))
+
+    ni_init, nu_init     = deposit_both_moments(pos, vel, Ie, W_elec, idx)
+    pos, Ie, W_elec      = particles.position_update(pos, vel, DT)
+    ni, nu_plus          = deposit_both_moments(pos, vel, Ie, W_elec, idx)
+
+    if smooth_sources == 1:
+        for jj in range(Nj):
+            ni[:, jj]  = smooth(ni[:, jj])
+        
+            for kk in range(3):
+                nu_plus[:, jj, kk] = smooth(nu_plus[:,  jj, kk])
+                nu_init[:, jj, kk] = smooth(nu_init[:, jj, kk])
+    
+    for jj in range(Nj):
+        rho_0   += ni_init[:, jj]   * charge[jj]
+        rho     += ni[:, jj]        * charge[jj]
+        L       += ni[:, jj]        * charge[jj] ** 2 / mass[jj]
+        
+        for kk in range(3):
+            J_init[:, kk]  += nu_init[:, jj, kk] * charge[jj]
+            J_plus[ :, kk] += nu_plus[:, jj, kk] * charge[jj]
+            G[      :, kk] += nu_plus[:, jj, kk] * charge[jj] ** 2 / mass[jj]
+
+    return pos, Ie, W_elec, rho_0, rho, J_plus, J_init, G, L
+
+
+@nb.njit(parallel=do_parallel)
+def collect_moments(pos, vel, Ie, W_elec, idx, DT):
+    '''
+    Moment collection and position advance function.
+
+    INPUT:
+        pos    -- Particle positions (x)
+        vel    -- Particle 3-velocities
+        Ie     -- Particle leftmost to nearest E-node
+        W_elec -- Particle TSC weighting across nearest, left, and right nodes
+        idx    -- Particle species identifier
+        DT     -- Timestep for position advance
+        
+    OUTPUT:
+        pos     -- Advanced particle positions
+        Ie      -- Updated leftmost to nearest E-nodes
+        W_elec  -- Updated TSC weighting coefficients
+        rho     -- Charge  density at +0.5 timestep
+        J_plus  -- Current density at +0.5 timestep
+        J_minus -- Current density at initial time (J0)
+        G       -- "Gamma"  MHD variable for current advance
+        L       -- "Lambda" MHD variable for current advance    
+    '''
+    size    = NX + 3
+    
+    rho     = np.zeros(size)    
+    J_plus  = np.zeros((size, 3))
+    J_minus = np.zeros((size, 3))
+    L       = np.zeros(size)
+    G       = np.zeros((size, 3))
+    
+    nu_minus        = deposit_velocity_moments(vel, Ie, W_elec, idx)
+    pos, Ie, W_elec = particles.position_update(pos, vel, DT)
+    ni, nu_plus     = deposit_both_moments(pos, vel, Ie, W_elec, idx)
+    
+    if smooth_sources == 1:
+        for jj in range(Nj):
+            ni[:, jj]  = smooth(ni[:, jj])
+        
+            for kk in range(3):
+                nu_plus[ :, jj, kk] = smooth(nu_plus[:,  jj, kk])
+                nu_minus[:, jj, kk] = smooth(nu_minus[:, jj, kk])
+    
+    for jj in range(Nj):
+        rho     += ni[:, jj]        * charge[jj]
+        L       += ni[:, jj]        * charge[jj] ** 2 / mass[jj]
+        
+        for kk in range(3):
+            J_minus[:, kk] += nu_minus[:, jj, kk] * charge[jj]
+            J_plus[ :, kk] += nu_plus[ :, jj, kk] * charge[jj]
+            G[      :, kk] += nu_plus[ :, jj, kk] * charge[jj] ** 2 / mass[jj]
+        
+    return pos, Ie, W_elec, rho, J_plus, J_minus, G, L
+
+
+@nb.njit(parallel=do_parallel)
 def smooth(function):
     '''Smoothing function: Applies Gaussian smoothing routine across adjacent cells. 
     Assummes no contribution from ghost cells.'''
     size         = function.shape[0]
     new_function = np.zeros(size)
 
-    for ii in range(1, size - 1):
+    for ii in nb.prange(1, size - 1):
         new_function[ii - 1] = 0.25*function[ii] + new_function[ii - 1]
         new_function[ii]     = 0.50*function[ii] + new_function[ii]
         new_function[ii + 1] = 0.25*function[ii] + new_function[ii + 1]
@@ -51,178 +246,16 @@ def smooth(function):
     return new_function
 
 
-@nb.njit(cache=True)
+@nb.njit(parallel=do_parallel)
 def manage_ghost_cells(arr):
     '''Deals with ghost cells: Moves their contributions and mirrors their counterparts.
-       Works like a charm if spatial dimensions always come first in an array. Condition
-       variable passed with array because ghost cell field values do not need to be moved:
-       But they do need correct (mirrored) ghost cell values'''
-    size = arr.shape[0]
-    
-    arr[size - 2]  += arr[0]                    # Move contribution: Start to end
-    arr[1]         += arr[size - 1]             # Move contribution: End to start
+       Works like a charm if spatial dimensions always come first in an array.'''
 
-    arr[size - 1]  = arr[1]                     # Fill ghost cell: Top
-    arr[0]         = arr[size - 2]              # Fill ghost cell: Bottom
+    arr[NX]     += arr[0]                 # Move contribution: Start to end
+    arr[1]      += arr[NX + 1]            # Move contribution: End to start
+
+    arr[NX + 1]  = arr[1]                 # Fill ghost cell: End
+    arr[0]       = arr[NX]                # Fill ghost cell: Start
+    
+    arr[NX + 2]  = arr[2]                 # This one doesn't get used, but prevents nasty nan's from being in array.
     return arr
-
-
-@nb.njit()
-def collect_both_moments(part):
-    '''Collect number and velocity density in each cell at each timestep, weighted by their distance
-    from cell nodes.
-
-    INPUT:
-        part    -- Particle array
-        weights -- Weights array
-        DT      -- Timestep
-        which   -- Collect 'both' (2) number and velocity densities, or 'velocity_only' (1)
-    '''
-    size      = NX + 2
-
-    n_i       = np.zeros((size, Nj))
-    nu_i      = np.zeros((size, Nj, 3))
-    
-    for jj in range(Nj):
-        for ii in range(idx_bounds[jj, 0], idx_bounds[jj, 1]):
-            I   = int(part[1, ii])      # Left node
-            W   = part[2, ii]           # Right weight
-            vel = part[3:6, ii]         # Particle velocity
-    
-            for kk in range(3):
-                nu_i[I,     jj, kk] += (1 - W) * n_contr[jj] * vel[kk]
-                nu_i[I + 1, jj, kk] +=      W  * n_contr[jj] * vel[kk]
-            
-            n_i[I,     jj] += (1 - W) * n_contr[jj]
-            n_i[I + 1, jj] +=      W  * n_contr[jj]
-
-    n_i  /= float(dx)
-    n_i   = manage_ghost_cells(n_i)
-    
-    nu_i /= float(dx)
-    nu_i  = manage_ghost_cells(nu_i)
-    return n_i, nu_i
-
-
-@nb.njit()
-def collect_velocity_moments(part):
-    '''Collect number and velocity density in each cell at each timestep, weighted by their distance
-    from cell nodes.
-
-    INPUT:
-        part    -- Particle array
-        weights -- Weights array
-        DT      -- Timestep
-        which   -- Collect 'both' (2) number and velocity densities, or 'velocity_only' (1)
-    '''
-    size      = NX + 2
-
-    nu_i      = np.zeros((size, Nj, 3))
-    
-    for jj in range(Nj):
-        for ii in range(idx_bounds[jj, 0], idx_bounds[jj, 1]):
-            I   = int(part[1, ii])      # Left node
-            W   = part[2, ii]           # Right weight
-            vel = part[3:6, ii]         # Particle velocity
-    
-            for kk in range(3):
-                nu_i[I,     jj, kk] += (1 - W) * n_contr[jj] * vel[kk]
-                nu_i[I + 1, jj, kk] +=      W  * n_contr[jj] * vel[kk]
-                            
-    nu_i /= float(dx)
-    nu_i  = manage_ghost_cells(nu_i)
-    return nu_i
-
-
-@nb.njit()
-def init_collect_moments(part, DT):
-    '''Primary moment collection and position advance function.
-
-    INPUT:
-        part    -- Particle array
-        weights -- Weights array
-        DT      -- Timestep
-        init    -- Flag to indicate if this is the first time the function is called**
-        
-    ** At first initialization of this function, J- is equivalent to J0 and rho_0 is
-    initial density (usually not returned)
-    
-    '''
-    size    = NX + 2
-    
-    rho_0   = np.zeros(size)
-    rho     = np.zeros(size)    
-    J_plus  = np.zeros((size, 3))
-    J_minus = np.zeros((size, 3))
-    L       = np.zeros(size)
-    G       = np.zeros((size, 3))
-
-    ni_init, nu_minus    = collect_both_moments(part)
-    part                 = particles.position_update(part, DT)
-    ni, nu_plus          = collect_both_moments(part)
-
-    if smooth_sources == 1:
-        for jj in range(Nj):
-            ni[:, jj]  = smooth(ni[:, jj])
-        
-            for kk in range(3):
-                nu_plus[ :, jj, kk] = smooth(nu_plus[:,  jj, kk])
-                nu_minus[:, jj, kk] = smooth(nu_minus[:, jj, kk])
-    
-    for jj in range(Nj):
-        rho_0   += ni_init[:, jj]   * charge[jj]
-        rho     += ni[:, jj]        * charge[jj]
-        L       += ni[:, jj]        * charge[jj] ** 2 / mass[jj]
-        
-        for kk in range(3):
-            J_minus[:, kk] += nu_minus[:, jj, kk] * charge[jj]
-            J_plus[ :, kk] += nu_plus[ :, jj, kk] * charge[jj]
-            G[      :, kk] += nu_plus[ :, jj, kk] * charge[jj] ** 2 / mass[jj]
-
-    return part, rho_0, rho, J_plus, J_minus, G, L
-
-
-@nb.njit()
-def collect_moments(part, DT):
-    '''Primary moment collection and position advance function.
-
-    INPUT:
-        part    -- Particle array
-        weights -- Weights array
-        DT      -- Timestep
-        init    -- Flag to indicate if this is the first time the function is called**
-        
-    ** At first initialization of this function, J- is equivalent to J0 and rho_0 is
-    initial density (usually not returned)
-    
-    '''
-    size    = NX + 2
-    
-    rho     = np.zeros(size)    
-    J_plus  = np.zeros((size, 3))
-    J_minus = np.zeros((size, 3))
-    L       = np.zeros(size)
-    G       = np.zeros((size, 3))
-    
-    nu_minus    = collect_velocity_moments(part)
-    part        = particles.position_update(part, DT)
-    ni, nu_plus = collect_both_moments(part)
-    
-    if smooth_sources == 1:
-        for jj in range(Nj):
-            ni[:, jj]  = smooth(ni[:, jj])
-        
-            for kk in range(3):
-                nu_plus[ :, jj, kk] = smooth(nu_plus[:,  jj, kk])
-                nu_minus[:, jj, kk] = smooth(nu_minus[:, jj, kk])
-    
-    for jj in range(Nj):
-        rho     += ni[:, jj]        * charge[jj]
-        L       += ni[:, jj]        * charge[jj] ** 2 / mass[jj]
-        
-        for kk in range(3):
-            J_minus[:, kk] += nu_minus[:, jj, kk] * charge[jj]
-            J_plus[ :, kk] += nu_plus[ :, jj, kk] * charge[jj]
-            G[      :, kk] += nu_plus[ :, jj, kk] * charge[jj] ** 2 / mass[jj]
-        
-    return part, rho, J_plus, J_minus, G, L
