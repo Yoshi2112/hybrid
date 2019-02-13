@@ -38,7 +38,7 @@ dxm         = 1                             # Number of c/wpi per dx (Ion inerti
 subcycles   = 12                            # Number of field subcycling steps for Cyclic Leapfrog
 cellpart    = 200                           # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
-ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
+ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
 B0       = 200e-9                           # Unform initial magnetic field value (in T)
 ne       = 50e6                             # Electron density (in /m3, same as total ion density)

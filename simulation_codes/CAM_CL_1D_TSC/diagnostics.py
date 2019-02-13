@@ -328,8 +328,8 @@ def test_velocity_deposition():
 
 
 def test_init_collect_moments():
-    E_nodes = (np.arange(const.NX + 3) - 0.5) #* const.dx
-    B_nodes = (np.arange(const.NX + 3) - 1.0) #* const.dx
+   # E_nodes = (np.arange(const.NX + 3) - 0.5) #* const.dx
+   # B_nodes = (np.arange(const.NX + 3) - 1.0) #* const.dx
     
     dt       = 0.1
     velocity = np.array([[0.3 * const.dx / dt, 0.0],
@@ -342,8 +342,6 @@ def test_init_collect_moments():
     left_node, weights = particles.assign_weighting_TSC(position, E_nodes=True)
     
     position, left_node, weights, rho_0, rho, J_plus, J_init, G, L = sources.init_collect_moments(position, velocity, left_node, weights, idx, dt)
-    
-    
     return
 
 
@@ -406,61 +404,174 @@ def test_force_interpolation():
 
 
 def test_curl_B():
-    NX   = 1024   #const.NX
+    NX   = 32     #const.NX
 
-    xmin = 0.0  #const.xmin
+    xmin = 0.0    #const.xmin
     xmax = 2*np.pi#const.xmax
     
-    dx   = xmax / NX
+    dx   = xmax / NX #const.dx
     x    = np.arange(xmin, xmax, dx/100.)              # Simulation domain space 0,NX (normalized to grid)
+    k    = 2.0
 
     # Physical location of nodes
     E_nodes = (np.arange(NX + 3) - 0.5) * dx
     B_nodes = (np.arange(NX + 3) - 1.0) * dx
 
-    test_field =   np.sin(x)
-    deriv      =   np.cos(x)                           # Highly sampled output (derivative)
+    # Set analytic solutions (input/output)
+    #test_field =   np.sin(k*x)
+    deriv      =   k*np.cos(k*x)                           # Highly sampled output (derivative)
     
-    B_input    =   np.sin(B_nodes)                     # Analytic input at node points
-    By_anal    = - np.cos(E_nodes)                     # Analytic solution at nodes 
-    Bz_anal    = - np.cos(E_nodes)                                                
+    B_input    =   np.sin(k*B_nodes)                     # Analytic input at node points
+    By_anal    = - k*np.cos(k*E_nodes)                     # Analytic solution at nodes 
+    Bz_anal    =   k*np.cos(k*E_nodes)                                                
     
     # Finite differences
     test_B       = np.zeros((NX + 3, 3))
     test_B[:, 0] = B_input
     test_B[:, 1] = B_input
     test_B[:, 2] = B_input
-    curl_B       = fields.get_curl(test_B, DX=dx)
+    curl_B       = fields.get_curl_B(test_B, DX=dx)
     
-    plt.figure()
+    plt.figure(figsize=(15, 15))
     marker_size = None
-    #plt.plot(B_nodes, test_B[:, 2], marker='o', c='g', alpha=0.5, label='Bz test input')
+    plt.plot(B_nodes, test_B[:, 2], marker='o', c='g', alpha=0.5, label='Bz test input')
     
     plt.plot(x, -deriv, linestyle=':', c='b', label='By Analytic Solution')
     plt.scatter(E_nodes, By_anal, marker='o', c='k', s=marker_size, label='By Node Solution')
     plt.scatter(E_nodes, curl_B[:, 1], marker='x', c='b', s=marker_size, label='By Finite Difference')
+    
+    r2y = r_squared(curl_B[1:-2, 1], By_anal[1:-2])
+    plt.gcf().text(0.15, 0.95, '$B_y R^2 = %.4f$' % r2y)
+    
+    r2z = r_squared(curl_B[1:-2, 2], Bz_anal[1:-2])
+    plt.gcf().text(0.15, 0.93, '$B_z R^2 = %.4f$' % r2z)
+    
+    plt.plot(x, deriv, linestyle=':', c='r', label='Bz Analytic Solution')   
+    plt.scatter(E_nodes, Bz_anal, marker='o', c='k', s=marker_size, label='Bz Node Solution')
+    plt.scatter(E_nodes, curl_B[:, 2], marker='x', c='r', s=marker_size, label='Bz Finite Difference')   
+    plt.title(r'Test of $\nabla \times B$')
+
+    for kk in range(NX + 3):
+        plt.axvline(E_nodes[kk], linestyle='--', c='r', alpha=0.2)
+        plt.axvline(B_nodes[kk], linestyle='--', c='b', alpha=0.2)
+        
+        plt.axvline(xmin, linestyle='-', c='k', alpha=0.2)
+        plt.axvline(xmax, linestyle='-', c='k', alpha=0.2)
+    
+    plt.xlim(xmin - 1.5*dx, xmax + 2*dx)
     plt.legend()
-    
-    r2 = r_squared(curl_B[:, 1], By_anal)
-    plt.gca().text(0.0, 1.0, '$R^2 = %.4f$' % r2)
-    #plt.plot(x, deriv, linestyle=':', c='r')   
-    #plt.scatter(E_nodes, Bz_anal, marker='o', c='k', s=marker_size, label='Analytic Solution')
-    #plt.scatter(E_nodes, curl_B[:, 2], marker='x', c='r', s=marker_size, label='Bz Finite Difference')   
+    return
 
 
-# =============================================================================
-#     for kk in range(NX + 3):
-#         plt.axvline(E_nodes[kk], linestyle='--', c='r', alpha=0.2)
-#         plt.axvline(B_nodes[kk], linestyle='--', c='b', alpha=0.2)
-#         
-#         plt.axvline(xmin, linestyle='-', c='k', alpha=0.2)
-#         plt.axvline(xmax, linestyle='-', c='k', alpha=0.2)
-# =============================================================================
+def test_curl_E():
+    NX   = 32   #const.NX
+
+    xmin = 0.0  #const.xmin
+    xmax = 2*np.pi#const.xmax
     
-    #plt.xlim(-1.5, NX + 2)
-    #plt.legend()
+    dx   = xmax / NX
+    x    = np.arange(xmin, xmax, dx/100.)              # Simulation domain space 0,NX (normalized to grid)
+    k    = 2.0
+
+    # Physical location of nodes
+    E_nodes = (np.arange(NX + 3) - 0.5) * dx
+    B_nodes = (np.arange(NX + 3) - 1.0) * dx
+
+    # Set analytic solutions (input/output)
+    #test_field =   np.sin(k*x)
+    deriv      =   k*np.cos(k*x)                           # Highly sampled output (derivative)
     
+    E_input    =   np.sin(k*E_nodes)                     # Analytic input at node points
+    Ey_anal    = - k*np.cos(k*B_nodes)                     # Analytic solution at nodes 
+    Ez_anal    =   k*np.cos(k*B_nodes)                                                
+    
+    # Finite differences
+    test_E       = np.zeros((NX + 3, 3))
+    test_E[:, 0] = E_input
+    test_E[:, 1] = E_input
+    test_E[:, 2] = E_input
+    curl_E       = fields.get_curl_E(test_E, DX=dx)
+    
+    plt.figure(figsize=(15, 15))
+    marker_size = None
+    plt.plot(B_nodes, test_E[:, 2], marker='o', c='g', alpha=0.5, label='Bz test input')
+    
+    plt.plot(x, -deriv, linestyle=':', c='b', label='By Analytic Solution')
+    plt.scatter(B_nodes, Ey_anal, marker='o', c='k', s=marker_size, label='By Node Solution')
+    plt.scatter(B_nodes, curl_E[:, 1], marker='x', c='b', s=marker_size, label='By Finite Difference')
+    
+    r2y = r_squared(curl_E[1:-2, 1], Ey_anal[1:-2])
+    plt.gcf().text(0.15, 0.95, '$B_y R^2 = %.4f$' % r2y)
+    
+    r2z = r_squared(curl_E[1:-2, 2], Ez_anal[1:-2])
+    plt.gcf().text(0.15, 0.93, '$B_z R^2 = %.4f$' % r2z)
+    
+    plt.plot(x, deriv, linestyle=':', c='r', label='Bz Analytic Solution')   
+    plt.scatter(B_nodes, Ez_anal, marker='o', c='k', s=marker_size, label='Bz Node Solution')
+    plt.scatter(B_nodes, curl_E[:, 2], marker='x', c='r', s=marker_size, label='Bz Finite Difference')   
+    plt.title(r'Test of $\nabla \times E$')
+
+    for kk in range(NX + 3):
+        plt.axvline(E_nodes[kk], linestyle='--', c='r', alpha=0.2)
+        plt.axvline(B_nodes[kk], linestyle='--', c='b', alpha=0.2)
+        
+        plt.axvline(xmin, linestyle='-', c='k', alpha=0.2)
+        plt.axvline(xmax, linestyle='-', c='k', alpha=0.2)
+    
+    plt.xlim(xmin - 1.5*dx, xmax + 2*dx)
+    plt.legend()
+    return
+
+
+def test_grad_P_varying_qn():
+    NX   = 32      #const.NX
+    xmin = 0.0     #const.xmin
+    xmax = 2*np.pi #const.xmax
+    
+    dx   = xmax / NX
+    x    = np.arange(xmin, xmax, dx/100.)             # Simulation domain space 0,NX (normalized to grid)
+    k    = 2.0
+    
+    # Physical location of nodes
+    E_nodes = (np.arange(NX + 3) - 0.5) * dx
+    B_nodes = (np.arange(NX + 3) - 1.0) * dx
+
+    # Set analytic solutions (input/output)
+    qn_input   = const.q*(np.sin(k*E_nodes) + 1)                    # Analytic input at node points (number density varying)
+    te_input   = np.ones(NX + 3)*const.Te0
+    
+    pe_anal    = const.kB * const.Te0 * k*np.cos(k*B_nodes)         # Analytic solution at nodes 
+    grad_P_anal= const.kB * const.Te0 * k*np.cos(k*x)               # Highly sampled output (derivative)
+
+    # Finite differences
+    grad_PB, grad_P     = fields.get_grad_P(qn_input, te_input, DX=dx)
+    
+    r2 = r_squared(grad_P[1:-2], pe_anal[1:-2])
+    
+    ## PLOT ##
+    plt.figure(figsize=(15, 15))
+    marker_size = None
+
+    plt.plot(x, grad_P_anal, linestyle=':', c='b', label='Analytic Solution')
+    plt.scatter(B_nodes, pe_anal, marker='o', c='k', s=marker_size, label='Node Solution')
+    plt.scatter(B_nodes, grad_PB, marker='x', c='b', s=marker_size, label='Finite Difference (on B)')
+    plt.scatter(E_nodes, grad_P, marker='x', c='r', s=marker_size, label='Finite Difference (on E)')
+    
+    plt.title(r'Test of $\nabla p_e$')
+
+    for kk in range(NX + 3):
+        plt.axvline(E_nodes[kk], linestyle='--', c='r', alpha=0.2)
+        plt.axvline(B_nodes[kk], linestyle='--', c='b', alpha=0.2)
+        
+        plt.axvline(xmin, linestyle='-', c='k', alpha=0.2)
+        plt.axvline(xmax, linestyle='-', c='k', alpha=0.2)
+    
+    plt.gcf().text(0.15, 0.93, '$R^2 = %.4f$' % r2)
+    plt.xlim(xmin - 1.5*dx, xmax + 2*dx)
+    plt.legend()
     return
 
 if __name__ == '__main__':
-    test_curl_B()
+    #animate_moving_weight()
+    #test_curl_B()
+    test_grad_P_varying_qn()

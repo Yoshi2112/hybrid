@@ -51,7 +51,32 @@ def cross_product(A, B):
 
 
 @nb.njit()
-def interpolate_to_center(val):
+def interpolate_to_center_cspline(arr, DX=dx):
+    ''' 
+    Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
+    1D array
+    '''
+    interp = np.zeros(arr.shape[0], dtype=nb.float64)	
+    y2     = np.zeros(arr.shape[0], dtype=nb.float64)
+
+    # Calculate second derivative for interior points
+    for ii in range(1, arr.shape[0] - 1):                       
+        y2[ii] = (arr[ii - 1] - 2*arr[ii] + arr[ii + 1]) 
+    
+    y2[0]      = y2[NX + 1]                                     # Update edge cells
+    y2[NX + 2] = y2[1]                                          
+
+    # Interpolate midpoints using cubic spline
+    for ii in range(NX + 2):
+        interp[ii] = 0.5 * (arr[ii] + arr[ii + 1]) - 0.0625*(y2[ii] + y2[ii + 1])
+
+    interp[0]      = interp[NX + 1]
+    interp[NX + 2] = interp[1]
+    return interp
+
+
+@nb.njit()
+def interpolate_to_center_linear(val):
     ''' 
     Interpolates vector cell edge values (i.e. B-grid quantities) to cell centers (i.e. E-grid quantities)
     Note: First and last (two) array values return zero due to ghost cell values
@@ -91,7 +116,7 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, maxtime, data_iter, plot_iter):
     max_V           = np.max(vel[0, :])
     #k_wave          = np.pi / dx
 
-    B_cent          = interpolate_to_center(B)
+    B_cent          = interpolate_to_center_linear(B)
     B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
     high_rat        = np.max(charge/mass)
 
