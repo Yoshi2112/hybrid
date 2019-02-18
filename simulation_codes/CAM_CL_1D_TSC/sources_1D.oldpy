@@ -68,13 +68,13 @@ def deposit_both_moments(pos, vel, Ie, W_elec, idx):
         sp  = idx[ii]
     
         for kk in range(3):
-            nu_i[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
-            nu_i[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
-            nu_i[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
+            nu_i[I,     sp, kk] += W_elec[0, ii] * n_contr[sp] * vel[kk, ii]
+            nu_i[I + 1, sp, kk] += W_elec[1, ii] * n_contr[sp] * vel[kk, ii]
+            nu_i[I + 2, sp, kk] += W_elec[2, ii] * n_contr[sp] * vel[kk, ii]
         
-        n_i[I,     sp] += W_elec[0, ii]
-        n_i[I + 1, sp] += W_elec[1, ii]
-        n_i[I + 2, sp] += W_elec[2, ii]
+        n_i[I,     sp] += W_elec[0, ii] * n_contr[sp]
+        n_i[I + 1, sp] += W_elec[1, ii] * n_contr[sp]
+        n_i[I + 2, sp] += W_elec[2, ii] * n_contr[sp]
 
     n_i   = manage_ghost_cells(n_i)
     nu_i  = manage_ghost_cells(nu_i)
@@ -103,9 +103,9 @@ def deposit_velocity_moments(vel, Ie, W_elec, idx):
         sp  = idx[ii]
         
         for kk in range(3):
-            nu_i[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
-            nu_i[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
-            nu_i[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
+            nu_i[I,     sp, kk] += W_elec[0, ii] * n_contr[sp] * vel[kk, ii]
+            nu_i[I + 1, sp, kk] += W_elec[1, ii] * n_contr[sp] * vel[kk, ii]
+            nu_i[I + 2, sp, kk] += W_elec[2, ii] * n_contr[sp] * vel[kk, ii]
                       
     nu_i  = manage_ghost_cells(nu_i)
     return nu_i
@@ -157,14 +157,14 @@ def init_collect_moments(pos, vel, Ie, W_elec, idx, DT):
                 nu_init[:, jj, kk] = smooth(nu_init[:, jj, kk])
     
     for jj in range(Nj):
-        rho_0   += ni_init[:, jj]   * n_contr[jj] * charge[jj]
-        rho     += ni[:, jj]        * n_contr[jj] * charge[jj]
-        L       += ni[:, jj]        * n_contr[jj] * charge[jj] ** 2 / mass[jj]
+        rho_0   += ni_init[:, jj]   * charge[jj]
+        rho     += ni[:, jj]        * charge[jj]
+        L       += ni[:, jj]        * charge[jj] ** 2 / mass[jj]
         
         for kk in range(3):
-            J_init[:, kk]  += nu_init[:, jj, kk] * n_contr[jj] * charge[jj]
-            J_plus[ :, kk] += nu_plus[:, jj, kk] * n_contr[jj] * charge[jj]
-            G[      :, kk] += nu_plus[:, jj, kk] * n_contr[jj] * charge[jj] ** 2 / mass[jj]
+            J_init[:, kk]  += nu_init[:, jj, kk] * charge[jj]
+            J_plus[ :, kk] += nu_plus[:, jj, kk] * charge[jj]
+            G[      :, kk] += nu_plus[:, jj, kk] * charge[jj] ** 2 / mass[jj]
 
     return pos, Ie, W_elec, rho_0, rho, J_plus, J_init, G, L
 
@@ -213,13 +213,13 @@ def collect_moments(pos, vel, Ie, W_elec, idx, DT):
                 nu_minus[:, jj, kk] = smooth(nu_minus[:, jj, kk])
     
     for jj in range(Nj):
-        rho  += ni[:, jj] * n_contr[jj] * charge[jj]
-        L    += ni[:, jj] * n_contr[jj] * charge[jj] ** 2 / mass[jj]
+        rho     += ni[:, jj]        * charge[jj]
+        L       += ni[:, jj]        * charge[jj] ** 2 / mass[jj]
         
         for kk in range(3):
-            J_minus[:, kk] += nu_minus[:, jj, kk] * n_contr[jj] * charge[jj]
-            J_plus[ :, kk] += nu_plus[ :, jj, kk] * n_contr[jj] * charge[jj]
-            G[      :, kk] += nu_plus[ :, jj, kk] * n_contr[jj] * charge[jj] ** 2 / mass[jj]
+            J_minus[:, kk] += nu_minus[:, jj, kk] * charge[jj]
+            J_plus[ :, kk] += nu_plus[ :, jj, kk] * charge[jj]
+            G[      :, kk] += nu_plus[ :, jj, kk] * charge[jj] ** 2 / mass[jj]
         
     return pos, Ie, W_elec, rho, J_plus, J_minus, G, L
 

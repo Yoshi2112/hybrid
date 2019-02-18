@@ -50,38 +50,47 @@ def cross_product(A, B):
     return output
 
 
+
 @nb.njit()
-def interpolate_to_center_cspline(arr, DX=dx):
+def interpolate_to_center_cspline1D(arr, DX=dx):
     ''' 
     Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
     1D array
     '''
     interp = np.zeros(arr.shape[0], dtype=nb.float64)	
-    y2     = np.zeros(arr.shape[0], dtype=nb.float64)
-
-    # Calculate second derivative for interior points
-    for ii in range(1, arr.shape[0] - 1):                       
-        y2[ii] = (arr[ii - 1] - 2*arr[ii] + arr[ii + 1]) 
     
-    y2[0]      = y2[NX + 1]                                     # Update edge cells
-    y2[NX + 2] = y2[1]                                          
-
-    # Interpolate midpoints using cubic spline
-    for ii in range(NX + 2):
-        interp[ii] = 0.5 * (arr[ii] + arr[ii + 1]) - 0.0625*(y2[ii] + y2[ii + 1])
-
-    interp[0]      = interp[NX + 1]
-    interp[NX + 2] = interp[1]
+    for ii in range(1, arr.shape[0] - 1):                       
+        interp[ii] = 0.5 * (arr[ii] + arr[ii + 1]) \
+                 - 1./16 * (arr[ii + 2] - arr[ii + 1] - arr[ii] + arr[ii - 1])
+                 
+    interp[0]                = interp[arr.shape[0] - 3]
+    interp[arr.shape[0] - 2] = interp[1]
+    interp[arr.shape[0] - 1] = interp[2]
     return interp
 
 
 @nb.njit()
+def interpolate_to_center_cspline3D(arr, DX=dx):
+    ''' 
+    Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
+    1D array
+    '''
+    dim    = arr.shape[1]
+    interp = np.zeros((arr.shape[0], dim), dtype=nb.float64)	
+
+    # Calculate second derivative for interior points
+    for jj in range(dim):
+        interp[:, jj] = interpolate_to_center_cspline1D(arr[:, jj])
+    return interp
+
+
+#@nb.njit()
 def interpolate_to_center_linear(val):
     ''' 
     Interpolates vector cell edge values (i.e. B-grid quantities) to cell centers (i.e. E-grid quantities)
     Note: First and last (two) array values return zero due to ghost cell values
     '''
-    center = np.zeros((NX + 3, 3))
+    center = np.zeros(val.shape)
     
     for ii in range(3):
         center[1:NX+1, :] = 0.5*(val[1: NX+1, :] + val[2:NX+2, :])
@@ -116,7 +125,7 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, maxtime, data_iter, plot_iter):
     max_V           = np.max(vel[0, :])
     #k_wave          = np.pi / dx
 
-    B_cent          = interpolate_to_center_linear(B)
+    B_cent          = interpolate_to_center_cspline1D(B)
     B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
     high_rat        = np.max(charge/mass)
 
@@ -149,3 +158,51 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, maxtime, data_iter, plot_iter):
     
     return pos, qq, DT, maxtime, data_iter, plot_iter, change_flag
 
+
+
+@nb.njit()
+def old_interpolate_to_center_cspline1D(arr, DX=dx):
+    ''' 
+    Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
+    1D array
+    '''
+
+    interp = np.zeros(arr.shape[0], dtype=nb.float64)	
+    y2     = np.zeros(arr.shape[0], dtype=nb.float64)
+
+    # Calculate second derivative for interior points
+    for ii in range(1, arr.shape[0] - 1):                       
+        y2[ii] = (arr[ii - 1] - 2*arr[ii] + arr[ii + 1]) 
+    
+    # Average y2 at boundaries
+    end_bit                = 0.5*(y2[1] + y2[arr.shape[0] - 2])
+    y2[1]                  = end_bit
+    y2[arr.shape[0] - 2]   = end_bit
+    
+    # Assign ghost cell values
+    y2[0]                = y2[arr.shape[0] - 3]                      # Update edge cells
+    y2[arr.shape[0] - 1] = y2[2]                                          
+
+    # Interpolate midpoints using cubic spline
+    for ii in range(arr.shape[0] - 1):
+        interp[ii] = 0.5 * (arr[ii] + arr[ii + 1]) - 0.0625*(y2[ii] + y2[ii + 1])
+
+    interp[0]                = interp[arr.shape[0] - 3]
+    interp[arr.shape[0] - 2] = interp[1]
+    interp[arr.shape[0] - 1] = interp[2]
+    return interp
+
+
+@nb.njit()
+def old_interpolate_to_center_cspline3D(arr, DX=dx):
+    ''' 
+    Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
+    1D array
+    '''
+    dim    = arr.shape[1]
+    interp = np.zeros((arr.shape[0], dim), dtype=nb.float64)	
+
+    # Calculate second derivative for interior points
+    for jj in range(dim):
+        interp[:, jj] = old_interpolate_to_center_cspline1D(arr[:, jj])
+    return interp

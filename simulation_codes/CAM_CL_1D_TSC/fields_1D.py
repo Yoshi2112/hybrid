@@ -7,8 +7,8 @@ Created on Fri Sep 22 17:54:19 2017
 import numpy as np
 import numba as nb
 
-from auxilliary_1D            import cross_product, interpolate_to_center_linear, interpolate_to_center_cspline
-from simulation_parameters_1D import NX, dx, Te0, ne, q, mu0, kB, subcycles, ie
+from auxilliary_1D            import cross_product, interpolate_to_center_linear, interpolate_to_center_cspline3D, interpolate_to_center_cspline1D
+from simulation_parameters_1D import NX, dx, Te0, ne, q, mu0, kB, subcycles, ie, e_resis
 
 
 @nb.njit()
@@ -33,8 +33,11 @@ def get_curl_B(field, DX=dx):
     for ii in nb.prange(1, field.shape[0]):
         curl[ii - 1, 1] = - (field[ii, 2] - field[ii - 1, 2])
         curl[ii - 1, 2] =    field[ii, 1] - field[ii - 1, 1]
-        
-    curl[NX + 2] = curl[2]
+    
+    # Assign ghost cell values
+    curl[field.shape[0] - 1] = curl[2]
+    curl[field.shape[0] - 2] = curl[1]
+    curl[0] = curl[field.shape[0] - 3]
     return curl / DX
 
 
@@ -61,11 +64,12 @@ def get_curl_E(field, DX=dx):
         curl[ii, 1] = - (field[ii, 2] - field[ii - 1, 2])
         curl[ii, 2] =    field[ii, 1] - field[ii - 1, 1]
 
-    end_bit      = 0.5*(curl[1] + curl[NX + 1])
-    curl[1]      = end_bit
-    curl[NX + 1] = end_bit
+    end_bit                  = 0.5*(curl[1] + curl[field.shape[0] - 2])
+    curl[1]                  = end_bit
+    curl[field.shape[0] - 2] = end_bit
     
-    curl[0]      = curl[NX]
+    curl[0] = curl[field.shape[0] - 3]
+    curl[field.shape[0] - 1] = curl[2]
     return curl / DX
 
 
@@ -76,22 +80,28 @@ def get_electron_temp(qn):
     and the treatment of electrons: i.e. isothermal (ie=0) or adiabatic (ie=1)
     '''
     if ie == 0:
-        te      = np.ones(NX + 3) * Te0
+        te      = np.ones(qn.shape[0]) * Te0
     elif ie == 1:
         gamma_e = 5./3. - 1.
         te      = Te0 * np.power(qn / (q*ne), gamma_e)
     return te
 
 
-#@nb.njit()
-def get_grad_P(qn, te, DX=dx):
+@nb.njit()
+def get_grad_P(qn, te, DX=dx, inter_type=1):
     '''
-    Returns the electron pressure gradient (in 1D) on the E-field grid.
-    Could eventually modify this to just do a normal centred difference.
+    Returns the electron pressure gradient (in 1D) on the E-field grid using P = nkT and 
+    finite difference.
     
-    For isothermal approximation (ie = 0): Grad P depends only on charge gradient, Te constant
-    
-    For adiabatic approximation (ie = 1): Grad P depends on gradients in both Te and ne (i.e. chain rule)
+    INPUT:
+        qn -- Grid charge density
+        te -- Grid electron temperature
+        DX -- Grid separation, used for diagnostic purposes. Defaults to simulation dx.
+        inter_type -- Linear (0) or cubic spline (1) interpolation.
+        
+    NOTE: Interpolation is needed because the finite differencing causes the result to be deposited on the 
+    B-grid. Moving it back to the E-grid requires an interpolation. Cubic spline is desired due to its smooth
+    derivatives and its higher order weighting (without the polynomial craziness)
     '''
     
     grad_pe_B     = np.zeros(qn.shape[0])
@@ -103,24 +113,25 @@ def get_grad_P(qn, te, DX=dx):
         
     grad_pe_B[0] = grad_pe_B[NX]
     
-# =============================================================================
-#         for ii in nb.prange(0, qn.shape[0] - 1):
-#             grad_P[ii]    = 0.5*(grad_pe_B[ii] + grad_pe_B[ii + 1])            # Re-interpolate to E-grid
-# =============================================================================
-
-    grad_P = interpolate_to_center_cspline(grad_pe_B, DX=DX)
+    # Re-interpolate to E-grid
+    if inter_type == 0:
+        for ii in nb.prange(0, qn.shape[0] - 1):
+            grad_P[ii]    = 0.5*(grad_pe_B[ii] + grad_pe_B[ii + 1])            
+    elif inter_type == 1:
+        grad_P = interpolate_to_center_cspline1D(grad_pe_B, DX=DX)
     
     grad_P[0]      = grad_P[NX]
     grad_P[NX + 1] = grad_P[1]
     grad_P[NX + 2] = grad_P[2] 
-    return grad_pe_B, grad_P
+    return grad_P
 
 
 @nb.njit()
 def set_periodic_boundaries(B):
-    ''' Set boundary conditions for the magnetic field: 
-         -- Average "end" values and assign to first and last grid point
-         -- Set ghost cell values so TSC weighting works
+    ''' 
+    Set boundary conditions for the magnetic field: 
+     -- Average "end" values and assign to first and last grid point
+     -- Set ghost cell values so TSC weighting works
     '''
     end_bit = 0.5*(B[1] + B[NX+1])                              # Average end values (for periodic boundary condition)
     B[1]      = end_bit
@@ -166,11 +177,46 @@ def cyclic_leapfrog(B, n_i, J_i, DT):
 
 
 @nb.njit()
-def calculate_E(B, J, qn):
+def calculate_E(B, J, qn, DX=dx):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
     and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
 
+    INPUT:
+        B   -- Magnetic field array. Displaced from E-field array by half a spatial step.
+        J   -- Ion current density. Source term, based on particle velocities
+        qn  -- Charge density. Source term, based on particle positions
+
+    OUTPUT:
+        E_out -- Updated electric field array
+    '''
+    Te       = get_electron_temp(qn)
+
+    B_center = interpolate_to_center_cspline3D(B, DX=DX)
+    JxB      = cross_product(J, B_center)    
+    curlB    = get_curl_B(B, DX=DX)
+    BdB      = cross_product(B_center, curlB) / mu0
+    del_p    = get_grad_P(qn, Te)
+
+    E_out       = np.zeros((J.shape[0], 3))                 
+    E_out[:, 0] = (- JxB[:, 0] - BdB[:, 0] - del_p ) / qn
+    E_out[:, 1] = (- JxB[:, 1] - BdB[:, 1]         ) / qn
+    E_out[:, 2] = (- JxB[:, 2] - BdB[:, 2]         ) / qn
+
+    E_out[0]                = E_out[J.shape[0] - 3]
+    E_out[J.shape[0] - 2]   = E_out[1]
+    E_out[J.shape[0] - 1]   = E_out[2]                                  # This doesn't really get used, but might as well
+    return E_out
+
+
+@nb.njit()
+def calculate_E_w_eresis(B, J, qn):
+    '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
+    electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
+    and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
+
+    Includes electron resistance term
+    
     INPUT:
         B   -- Magnetic field array. Displaced from E-field array by half a spatial step.
         J   -- Ion current density. Source term, based on particle velocities
@@ -190,9 +236,9 @@ def calculate_E(B, J, qn):
     del_p    = get_grad_P(qn, Te)
 
     E_out       = np.zeros((size, 3))                 
-    E_out[:, 0] = (- JxB[:, 0] - BdB[:, 0] - del_p ) / qn
-    E_out[:, 1] = (- JxB[:, 1] - BdB[:, 1]         ) / qn
-    E_out[:, 2] = (- JxB[:, 2] - BdB[:, 2]         ) / qn
+    E_out[:, 0] = (- JxB[:, 0] - BdB[:, 0] + e_resis * J - del_p ) / qn
+    E_out[:, 1] = (- JxB[:, 1] - BdB[:, 1] + e_resis * J         ) / qn
+    E_out[:, 2] = (- JxB[:, 2] - BdB[:, 2] + e_resis * J         ) / qn
 
     E_out[0]        = E_out[NX]
     E_out[NX + 1]   = E_out[1]

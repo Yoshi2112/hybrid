@@ -38,10 +38,11 @@ dxm         = 1                             # Number of c/wpi per dx (Ion inerti
 subcycles   = 12                            # Number of field subcycling steps for Cyclic Leapfrog
 cellpart    = 200                           # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
-ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
+ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
 B0       = 200e-9                           # Unform initial magnetic field value (in T)
 ne       = 50e6                             # Electron density (in /m3, same as total ion density)
+LH_frac  = 1.0                              # Fraction of Lower Hybrid resonance: Used to calculate electron resistivity by setting "anomalous" electron/ion collision as some multiple of the LHF
 
 orbit_res= 0.25                             # Particle orbit resolution: fraction of gyroperiod (gyrofraction, lol)
 data_res = 0                                # Data capture resolution in gyrofraction
@@ -97,6 +98,7 @@ Tpar       = B0 ** 2 * beta_par / (2 * mu0 * ne * kB)
 Tper       = B0 ** 2 * beta_per / (2 * mu0 * ne * kB)
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
+wpe        = np.sqrt(ne * q ** 2 / (me * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B0 / np.sqrt(mu0*ne*mp)                     # Alfven speed: Assuming pure proton plasma
 
 dx         = dxm * c / wpi                               # Spatial cadence, based on ion inertial length
@@ -122,10 +124,15 @@ idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)]
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
 idx_bounds = np.stack((idx_start, idx_end)).transpose()                              # idx_bounds[species, start/end]
 
+gyfreq     = q*B0/mp                                     # Proton   Gyrofrequency (rad/s) (since this will be the highest of all ion species)
+e_gyfreq   = q*B0/me                                     # Electron Gyrofrequency (rad/s)
+k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 
 
+LH_res_is  = (1. / (gyfreq * e_gyfreq)) + (1. / wpi ** 2)# Lower Hybrid Resonance frequency, inverse squared
+LH_res     = 1. / np.sqrt(LH_res_is)                     # Lower Hybrid Resonance frequency
 
-
+e_resis    = (LH_frac * LH_res)  / (e0 * wpe ** 2)       # Electron resistivity (using intial conditions for wpi/wpe)
 
 
 
@@ -181,11 +188,18 @@ if density_normal_sum.sum() != 1.0:
     print '-------------------------------------------------------------------------'
     print 'WARNING: ION DENSITIES DO NOT SUM TO 1.0. SIMULATION WILL NOT BE ACCURATE'
     print '-------------------------------------------------------------------------'
+    print ''
+    print 'ABORTING...'
+    sys.exit()
+    
     
 if sim_repr.sum() != 1.0:
     print '-----------------------------------------------------------------------------------'
     print 'WARNING: MACROPARTICLE DENSITIES DO NOT SUM TO 1.0. SIMULATION WILL NOT BE ACCURATE'
     print '-----------------------------------------------------------------------------------'
+    print ''
+    print 'ABORTING...'
+    sys.exit()
     
 simulated_density_per_cell = (n_contr * charge * cellpart * sim_repr).sum()
 real_density_per_cell      = ne*q
@@ -194,6 +208,9 @@ if simulated_density_per_cell != real_density_per_cell:
     print '--------------------------------------------------------------------------------'
     print 'WARNING: DENSITY CALCULATION ISSUE: RECHECK HOW MACROPARTICLE CONTRIBUTIONS WORK'
     print '--------------------------------------------------------------------------------'
+    print ''
+    print 'ABORTING...'
+    sys.exit()
 
 if subcycles == 0 or subcycles == 1:
     print '-----------------------------------------------------------------------------'
