@@ -11,7 +11,7 @@ import numba as nb
 import particles_1D as particles
 
 from simulation_parameters_1D import N, NX, Nj, n_contr, charge, mass, smooth_sources, do_parallel
-from fields_1D                import interpolate_to_center_linear
+from fields_1D                import interpolate_to_center_cspline3D
 from auxilliary_1D            import cross_product
 
 @nb.njit(parallel=do_parallel)
@@ -31,14 +31,15 @@ def push_current(J, E, B, L, G, dt):
         J_out -- Advanced current
     '''
     J_out        = np.zeros(J.shape)
-    B_center     = interpolate_to_center_linear(B)
+    B_center     = interpolate_to_center_cspline3D(B)
     G_cross_B    = cross_product(G, B_center)
     
     for ii in range(3):
         J_out[:, ii] = J[:, ii] + 0.5*dt * (L * E[:, ii] + G_cross_B[:, ii]) 
-        
-    J_out[0]    = J_out[NX]
-    J_out[NX+1] = J_out[1]
+
+    J_out[0]                = J_out[J.shape[0] - 3]
+    J_out[J.shape[0] - 2]   = J_out[1]
+    J_out[J.shape[0] - 1]   = J_out[2]
     return J_out
 
 
@@ -58,7 +59,6 @@ def deposit_both_moments(pos, vel, Ie, W_elec, idx):
         n_i    -- Species number moment array(size, Nj)
         nu_i   -- Species velocity moment array (size, Nj)
     '''
-    
     size      = NX + 3
     n_i       = np.zeros((size, Nj))
     nu_i      = np.zeros((size, Nj, 3))

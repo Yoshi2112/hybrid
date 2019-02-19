@@ -41,23 +41,23 @@ def manage_directories():
     return
 
 
-def create_figure_and_save(part, J, B, qn, qq, dt, plot_dump_iter):
+def create_figure_and_save(pos, vel, J, B, qn, qq, DT, plot_iter):
     plt.ioff()
 
-    r = qq / plot_dump_iter                                                     # Capture number
+    r = qq / plot_iter                                                     # Capture number
 
     fig_size = 4, 7                                                             # Set figure grid dimensions
     fig = plt.figure(figsize=(20,10))                                           # Initialize Figure Space
     fig.patch.set_facecolor('w')                                                # Set figure face color
 
-    x_pos       = part[0, :] / dx                                               # Particle x-positions (km) (For looking at particle characteristics)
+    x_pos       = pos / dx                                                      # Particle x-positions (km) (For looking at particle characteristics)
 
 #----- Velocity (x, y) Plots: Hot Species
     ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
     ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
 
-    norm_xvel   = part[3, :] / const.c
-    norm_yvel   = part[4, :] / const.c       # y-velocities (for normalization)
+    norm_xvel   = vel[0, :] / const.c
+    norm_yvel   = vel[1, :] / const.c
 
     for jj in range(Nj):
         if temp_type[jj] == 1:
@@ -171,6 +171,9 @@ def store_run_parameters(dt, data_dump_iter):
                    ('theta', const.theta),
                    ('data_dump_iter', data_dump_iter),
                    ('max_rev', const.max_rev),
+                   ('LH_frac', const.LH_frac),
+                   ('orbit_res', const.orbit_res),
+                   ('freq_res', const.freq_res),
                    ('run_desc', const.run_description)])
 
     h_name = os.path.join(d_path, 'Header.pckl')            # Data file containing dictionary of variables used in run
@@ -185,6 +188,7 @@ def store_run_parameters(dt, data_dump_iter):
     np.savez(p_file, idx_bounds= idx_bounds,
                      species   = species,
                      temp_type = temp_type,
+                     dist_type = dist_type,
                      mass      = mass,
                      charge    = charge,
                      velocity  = velocity,
@@ -196,11 +200,11 @@ def store_run_parameters(dt, data_dump_iter):
     return
 
 
-def save_data(dt, data_dump_iter, qq, pos, vel, Ji, E, B, dns):
+def save_data(dt, data_dump_iter, qq, pos, vel, Ji, E, B, Ve, dns):
     d_path = ('%s/%s/run_%d/data' % (drive, save_path, const.run_num))    # Set path for data
     r      = qq / data_dump_iter                                          # Capture number
 
     d_filename = 'data%05d' % r
     d_fullpath = os.path.join(d_path, d_filename)
-    np.savez(d_fullpath, pos=pos, vel=vel, E = E[1:NX+1, 0:3], B = B[1:NX+2, 0:3], J = Ji[1:NX+1], dns = dns[1:NX+1])   # Data file for each iteration
+    np.savez(d_fullpath, pos=pos, vel=vel, E = E[1:NX+1, 0:3], B = B[1:NX+2, 0:3], J = Ji[1:NX+1], dns = dns[1:NX+1], Ve = Ve[1:NX+1])   # Data file for each iteration
     print 'Data saved'.format(qq)

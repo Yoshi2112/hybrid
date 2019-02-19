@@ -7,8 +7,10 @@ Created on Fri Sep 22 17:15:59 2017
 import numba as nb
 import numpy as np
 
+import plot_and_save as pas
 import particles_1D as particles
-from simulation_parameters_1D import data_res, plot_res, max_rev, dx, gyfreq, orbit_res, charge, mass, NX, do_parallel
+from simulation_parameters_1D import data_res, plot_res, max_rev, dx, gyfreq, orbit_res, freq_res, \
+                                     charge, mass, NX, do_parallel, mu0, B0, ne, q, adaptive_subcycling, generate_data
 
 
 @nb.njit(fastmath=True, parallel=do_parallel)
@@ -84,7 +86,7 @@ def interpolate_to_center_cspline3D(arr, DX=dx):
     return interp
 
 
-#@nb.njit()
+@nb.njit()
 def interpolate_to_center_linear(val):
     ''' 
     Interpolates vector cell edge values (i.e. B-grid quantities) to cell centers (i.e. E-grid quantities)
@@ -99,7 +101,7 @@ def interpolate_to_center_linear(val):
 
 
 def set_timestep(vel):
-    gyperiod = (2*np.pi) / gyfreq               
+    gyperiod = (2*np.pi) / gyfreq               # Gyroperiod within uniform field (s)         
     ion_ts   = orbit_res * gyperiod             # Timestep to resolve gyromotion
     vel_ts   = dx / (2 * np.max(vel[0, :]))     # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
 
@@ -116,34 +118,48 @@ def set_timestep(vel):
         data_iter = 1
     else:
         data_iter = int(data_res*gyperiod / DT)
-
-    print 'Timestep: %.4fs, %d iterations total' % (DT, max_inc)
-    return DT, max_inc, data_iter, plot_iter
-
-
-def check_timestep(qq, DT, pos, vel, B, E, dns, maxtime, data_iter, plot_iter):
-    max_V           = np.max(vel[0, :])
-    #k_wave          = np.pi / dx
-
-    B_cent          = interpolate_to_center_cspline1D(B)
-    B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
-    high_rat        = np.max(charge/mass)
-
-    gyfreq          = high_rat*max(abs(B_tot)) / (2 * np.pi)         # Gyrofrequency
-    #elecfreq        = high_rat*max(abs(E[:, 0] / max_V))            # Electron acceleration "frequency"
-    #dispfreq        = (k_wave ** 2) * np.max(B_tot / (mu0 * dns))   # Dispersion frequency
-
-    ion_ts          = orbit_res / gyfreq                 # Timestep to resolve gyromotion
-    #acc_ts          = orbit_res / elecfreq              # Timestep to resolve electric field acceleration
-    #dis_ts          = orbit_res / dispfreq              # Timestep to resolve magnetic field dispersion
-    vel_ts          = 0.75*dx / max_V                    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
-                                                         # Slightly larger than half to stop automatically halving DT at start
-    DT_new          = min(ion_ts, vel_ts)                # Smallest of the two (four, later)
     
+    print 'Timestep: %.4fs, %d iterations total' % (DT, max_inc)
+    
+    if adaptive_subcycling == True:
+        k_max           = np.pi / dx
+        dispfreq        = (k_max ** 2) * B0 / (mu0 * ne * q)            # Dispersion frequency
+        dt_sc           = freq_res * 1./dispfreq
+        subcycles       = int(DT / dt_sc + 1)
+        print 'Number of subcycles required: {}'.format(subcycles)
+    else:
+        print 'Number of subcycles set at default: {}'.format(subcycles)
+    
+    if generate_data == 1:
+        pas.store_run_parameters(DT, data_iter)
+        
+    return DT, max_inc, data_iter, plot_iter, subcycles
+
+
+def check_timestep(qq, DT, pos, vel, B, E, dns, maxtime, data_iter, plot_iter, subcycles):
+    max_Vx          = np.max(vel[0, :])
+    max_V           = np.max(vel)
+    k_max           = np.pi / dx
+
+    B_cent          = interpolate_to_center_cspline3D(B)
+    B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
+    high_rat        = (charge/mass).max()
+    
+    gyfreq          = high_rat  * np.abs(B_tot).max() / (2 * np.pi)      
+    ion_ts          = orbit_res * 1./gyfreq
+    
+    if E.max() != 0:
+        elecfreq        = high_rat*max(abs(E[:, 0] / max_V))             # Electron acceleration "frequency"
+        freq_ts         = freq_res / elecfreq                            
+    else:
+        freq_ts = ion_ts
+    
+    vel_ts          = 0.75*dx / max_Vx                                   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
+    DT_part         = min(freq_ts, vel_ts, ion_ts)                       # Smallest of the particle conditions
+
     change_flag = 0
-    if DT_new < DT:
-        # Roll back particle position before halving timestep
-        pos = particles.position_update(pos, vel, -0.5*DT)
+    if DT_part < 0.9*DT:
+        pos, Ie, W_elec = particles.position_update(pos, vel, -0.5*DT)           # Roll back particle position before halving timestep
         
         change_flag = 1
         DT         *= 0.5
@@ -155,11 +171,44 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, maxtime, data_iter, plot_iter):
             
         if data_iter != None:
             data_iter *= 2
-    
-    return pos, qq, DT, maxtime, data_iter, plot_iter, change_flag
+            
+    elif DT_part >= 3.0*DT:
+        pos, Ie, W_elec = particles.position_update(pos, vel, -0.5*DT)           # Roll back particle position before halving timestep
+        
+        change_flag = 2
+        DT         *= 2.0
+        maxtime    /= 2
+        qq         /= 2
+        subcycles  *= 2
+        
+        if plot_iter == None or plot_iter == 1:
+            plot_iter = 1
+        else:
+            plot_iter /= 2
+        
+        if data_iter == None or data_iter == 1:
+            data_iter = 1
+        else:
+            data_iter /= 2
+
+    if adaptive_subcycling == True:
+        dispfreq        = (k_max ** 2) * (B_tot / (mu0 * dns)).max()             # Dispersion frequency
+        dt_sc           = freq_res * 1./dispfreq
+        new_subcycles   = int(DT / dt_sc + 1)
+        
+        if subcycles < 0.75*new_subcycles:                                       # 0.75 factor in there to provide a little cushioning
+            subcycles *= 2
+            print 'Number of subcycles per timestep doubled to {}'.format(subcycles)
+    else:
+        print 'Number of subcycles set at default: {}'.format(subcycles)
+
+    return pos, qq, DT, maxtime, data_iter, plot_iter, change_flag, subcycles
 
 
 
+#%%
+#%% DEPRECATED OR UNTESTED FUNCTIONS
+#%%
 @nb.njit()
 def old_interpolate_to_center_cspline1D(arr, DX=dx):
     ''' 

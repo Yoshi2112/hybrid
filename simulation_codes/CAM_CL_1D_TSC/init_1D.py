@@ -24,7 +24,7 @@ def particles_per_cell():
 
     for ii in range(Nj):
         if dist_type[ii] == 0:
-            ppc[ii, :] = cellpart * 0.01 * sim_repr[ii]
+            ppc[ii, :] = cellpart * sim_repr[ii]
     return ppc
 
 
