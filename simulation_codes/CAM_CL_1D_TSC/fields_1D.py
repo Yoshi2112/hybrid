@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:54:19 2017
 import numpy as np
 import numba as nb
 
-from auxilliary_1D            import cross_product, interpolate_to_center_linear, interpolate_to_center_cspline3D, interpolate_to_center_cspline1D
+from auxilliary_1D            import cross_product, interpolate_to_center_cspline3D, interpolate_to_center_cspline1D
 from simulation_parameters_1D import NX, dx, Te0, ne, q, mu0, kB, ie, e_resis
 
 
@@ -162,9 +162,9 @@ def cyclic_leapfrog(B, rho_i, J_i, DT, subcycles):
     B1 = np.copy(B)
 
     ## DESYNC SECOND FIELD COPY - PUSH BY DH ##
-    E, Ve = calculate_E(B, J_i, rho_i)
-    B2 = np.copy(B) - dh * get_curl_E(E) 
-    B2 = set_periodic_boundaries(B2)                              
+    E, Ve, Te = calculate_E(B, J_i, rho_i)
+    B2        = np.copy(B) - dh * get_curl_E(E) 
+    B2        = set_periodic_boundaries(B2)                              
     
     ## RETURN IF NO SUBCYCLES REQUIRED ##
     if subcycles == 1:
@@ -173,21 +173,21 @@ def cyclic_leapfrog(B, rho_i, J_i, DT, subcycles):
     ## MAIN SUBCYCLE LOOP ##
     for ii in range(subcycles - 1):             
         if ii%2 == 0:
-            E, Ve = calculate_E(B2, J_i, rho_i)
+            E, Ve, Te = calculate_E(B2, J_i, rho_i)
             B1  -= 2 * dh * get_curl_E(E)
             B1   = set_periodic_boundaries(B1)
         else:
-            E, Ve = calculate_E(B1, J_i, rho_i)
+            E, Ve, Te = calculate_E(B1, J_i, rho_i)
             B2  -= 2 * dh * get_curl_E(E)
             B2   = set_periodic_boundaries(B2)
             
     ## RESYNC FIELD COPIES ##
     if ii%2 == 0:
-        E, Ve = calculate_E(B2, J_i, rho_i)
+        E, Ve, Te = calculate_E(B2, J_i, rho_i)
         B2  -= dh * get_curl_E(E)
         B2   = set_periodic_boundaries(B2)
     else:
-        E, Ve = calculate_E(B1, J_i, rho_i)
+        E, Ve, Te = calculate_E(B1, J_i, rho_i)
         B1  -= dh * get_curl_E(E)
         B1   = set_periodic_boundaries(B1)
 
@@ -197,18 +197,15 @@ def cyclic_leapfrog(B, rho_i, J_i, DT, subcycles):
 
 
 
-
 @nb.njit()
 def calculate_E(B, J, qn, DX=dx):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
     and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
-
     INPUT:
         B   -- Magnetic field array. Displaced from E-field array by half a spatial step.
         J   -- Ion current density. Source term, based on particle velocities
         qn  -- Charge density. Source term, based on particle positions
-
     OUTPUT:
         E_out -- Updated electric field array
     '''
@@ -221,6 +218,7 @@ def calculate_E(B, J, qn, DX=dx):
     
     Te       = get_electron_temp(qn)
     del_p    = get_grad_P(qn, Te)
+    
     B_center = interpolate_to_center_cspline3D(B, DX=DX)
     VexB     = cross_product(Ve, B_center)    
 
@@ -232,7 +230,7 @@ def calculate_E(B, J, qn, DX=dx):
     E_out[0]                = E_out[J.shape[0] - 3]
     E_out[J.shape[0] - 2]   = E_out[1]
     E_out[J.shape[0] - 1]   = E_out[2]                                  # This doesn't really get used, but might as well
-    return E_out, Ve
+    return E_out, Ve, Te
 
 
 #%% DEPRECATED OR UNTESTED
@@ -269,36 +267,3 @@ def calculate_E_old(B, J, qn, DX=dx):
     return E_out
 
 
-@nb.njit()
-def calculate_E_w_eresis(B, J, qn):
-    '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
-    electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
-    and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
-
-    Includes electron resistance term
-    
-    INPUT:
-        B   -- Magnetic field array. Displaced from E-field array by half a spatial step.
-        J   -- Ion current density. Source term, based on particle velocities
-        qn  -- Charge density. Source term, based on particle positions
-
-    OUTPUT:
-        E_out -- Updated electric field array
-    '''
-    Te       = get_electron_temp(qn)
-
-    B_center = interpolate_to_center_linear(B)
-    JxB      = cross_product(J, B_center)    
-    curlB    = get_curl_B(B, e_offset=0)
-    BdB      = cross_product(B_center, curlB) / mu0
-    del_p    = get_grad_P(qn, Te)
-
-    E_out       = np.zeros((J.shape[0], 3))                 
-    E_out[:, 0] = (- JxB[:, 0] - BdB[:, 0] + e_resis * J - del_p ) / qn
-    E_out[:, 1] = (- JxB[:, 1] - BdB[:, 1] + e_resis * J         ) / qn
-    E_out[:, 2] = (- JxB[:, 2] - BdB[:, 2] + e_resis * J         ) / qn
-
-    E_out[0]                = E_out[J.shape[0] - 3]
-    E_out[J.shape[0] - 2]   = E_out[1]
-    E_out[J.shape[0] - 1]   = E_out[2]                                  # This doesn't really get used, but might as well
-    return E_out

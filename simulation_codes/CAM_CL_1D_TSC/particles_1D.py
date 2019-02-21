@@ -72,19 +72,7 @@ def boris_algorithm(v0, Bp, Ep, dt, idx):
 
 
 @nb.njit(parallel=do_parallel)
-def interpolate_forces_to_particle(E, B, Ie, W_elec, Ib, W_mag):
-    Ep = E[Ie    , 0:3] * W_elec[0]                 \
-       + E[Ie + 1, 0:3] * W_elec[1]                 \
-       + E[Ie + 2, 0:3] * W_elec[2]                 # E-field at particle location
-    
-    Bp = B[Ib    , 0:3] * W_mag[0]                  \
-       + B[Ib + 1, 0:3] * W_mag[1]                  \
-       + B[Ib + 2, 0:3] * W_mag[2]                  # B-field at particle location
-    return Ep, Bp
-
-
-@nb.njit(parallel=do_parallel)
-def interpolate_forces_to_particle_w_eresis(E, B, J, Ie, W_elec, Ib, W_mag):
+def interpolate_forces_to_particle(E, B, J, Ie, W_elec, Ib, W_mag):
     '''
     Same as previous function, but also interpolates current to particle position to return
     an electric field modified by electron resistance
@@ -106,7 +94,7 @@ def interpolate_forces_to_particle_w_eresis(E, B, J, Ie, W_elec, Ib, W_mag):
 
 
 @nb.njit(parallel=do_parallel)
-def velocity_update_new(pos, vel, Ie, W_elec, idx, B, E, dt):
+def velocity_update_new(pos, vel, Ie, W_elec, idx, B, E, J, dt):
     '''
     Interpolates the fields to the particle positions using TSC weighting, then
     updates velocities using a Boris particle pusher.
@@ -120,12 +108,12 @@ def velocity_update_new(pos, vel, Ie, W_elec, idx, B, E, dt):
         W    -- Weighting factor of particles to rightmost node
 
     OUTPUT:
-        part -- Returns particle array with updated velocities
+        vel  -- Returns particle array with updated velocities
     '''
     Ib, W_mag = assign_weighting_TSC(pos, E_nodes=False)     # Magnetic field weighting
     
     for ii in nb.prange(N):
-        Ep, Bp     = interpolate_forces_to_particle(E, B, Ie[ii], W_elec[:, ii], Ib[ii], W_mag[:, ii])
+        Ep, Bp     = interpolate_forces_to_particle(E, B, J, Ie[ii], W_elec[:, ii], Ib[ii], W_mag[:, ii])
         vel[:, ii] = boris_algorithm(vel[:, ii], Bp, Ep, dt, idx[ii])
     return vel
 
@@ -145,7 +133,7 @@ def velocity_update(pos, vel, Ie, W_elec, idx, B, E, dt):
         W    -- Weighting factor of particles to rightmost node
 
     OUTPUT:
-        part -- Returns particle array with updated velocities
+        vel  -- Returns particle array with updated velocities
     '''
     Ib, W_mag = assign_weighting_TSC(pos, E_nodes=False)     # Magnetic field weighting
 

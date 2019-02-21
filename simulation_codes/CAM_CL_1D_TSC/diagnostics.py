@@ -860,7 +860,7 @@ def test_cspline_interpolation():
     '''
     Tests E-field update, hall term (B x curl(B)) only by selection of inputs
     '''
-    grids = [16, 32, 64, 128]
+    grids = [8, 16, 32]
     errors = np.zeros(len(grids))
     
     for NX, ii in zip(grids, range(len(grids))):
@@ -1121,9 +1121,9 @@ if __name__ == '__main__':
     #test_curl_E()
     #test_grad_P_varying_qn()
     #test_cross_product()
-    #test_cspline_interpolation()
+    test_cspline_interpolation()
     #test_E_convective()
-    test_E_hall()
+    #test_E_hall()
     #test_interp_cross_manual()
     #test_CAM_CL()
     #test_current_push()

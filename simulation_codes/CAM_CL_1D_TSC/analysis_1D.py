@@ -14,7 +14,6 @@ import matplotlib.gridspec as gs
 import numba as nb
 import pdb
 
-
 def manage_dirs():
     global run_dir, data_dir, anal_dir, temp_dir
     
@@ -43,7 +42,7 @@ def load_constants():
 
 
 def load_particles():
-    global density, dist_type, idx_bounds, charge, mass, Tper, sim_repr, temp_type, velocity, Tpar, species
+    global density, dist_type, idx_bounds, charge, mass, Tper, sim_repr, temp_type, velocity, Tpar, species_lbl
     
     p_path = os.path.join(data_dir, 'p_data.npz')                               # File location
     p_data = np.load(p_path)                                                    # Load file
@@ -55,16 +54,18 @@ def load_particles():
     Tper       = p_data['Tper']
     sim_repr   = p_data['sim_repr']
     temp_type  = p_data['temp_type']
+    dist_type  = p_data['dist_type']
     velocity   = p_data['velocity']
     Tpar       = p_data['Tpar']
-    species    = p_data['species']   
+    species_lbl= p_data['species_lbl']   
      
     print 'Particle parameters loaded'
     return
 
 
 def load_header():
-    global Nj, cellpart, data_dump_iter, ne, NX, dxm, seed, B0, dx, Te0, theta, dt, max_rev, ie, run_desc, seed, subcycles
+    global Nj, cellpart, data_dump_iter, ne, NX, dxm, seed, B0, dx, Te0, theta, dt, max_rev,\
+           ie, run_desc, seed, subcycles, LH_frac, orbit_res, freq_res
     
     h_name = os.path.join(data_dir, 'Header.pckl')                      # Load header file
     f      = open(h_name)                                               # Open header file
@@ -86,8 +87,11 @@ def load_header():
     dt              = obj['dt']
     max_rev         = obj['max_rev']
     ie              = obj['ie']
+    LH_frac         = obj['LH_frac']
+    orbit_res       = obj['orbit_res']
+    freq_res        = obj['freq_res'] 
     run_desc        = obj['run_desc']
-    
+        
     print 'Header file loaded.'
     print 'dt = {}s\n'.format(dt)
     return 
@@ -99,17 +103,19 @@ def load_timestep(ii):
     input_path = data_dir + d_file                  # File location
     data       = np.load(input_path)                # Load file
 
-    tposition        = data['part'][0]
-    tvelocity        = data['part'][3:6]
     tB               = data['B']
     tE               = data['E']
-    tdns             = data['dns']
+    tVe              = data['Ve']
     tJ               = data['J']
-    return tposition, tvelocity, tB, tE, tdns, tJ
+    tpos             = data['pos']
+    tdns             = data['dns']
+    tvel             = data['vel']
+
+    return tB, tE, tVe, tJ, tpos, tdns, tvel
 
 
 @nb.njit()
-def collect_density(pos):
+def collect_number_density(pos):
     '''Collect number and velocity density in each cell at each timestep, weighted by their distance
     from cell nodes.
 
@@ -122,7 +128,7 @@ def collect_density(pos):
     
     node      = pos / dx + 0.5 
     weight    = (pos / dx) - node + 0.5
-    n_contr   = density / sim_repr                  # Density: initial /m3 of species in cell, divide this by number of particles in the cell
+    n_contr    = density / (cellpart*sim_repr)      # Density: initial /m3 of species in cell, divide this by number of particles in the cell
                                                     # Each macroparticle contributes this amount to the cell's density in /m3
     for jj in range(Nj):
         for ii in range(idx_bounds[jj, 0], idx_bounds[jj, 1]):
@@ -164,7 +170,7 @@ def get_array(component, tmin, tmax):
         arr = np.load(check_path)   
     else:
         for ii in range(tmin, tmax):
-            position, velocity, B, E, dns, J = load_timestep(ii)
+            B, E, Ve, J, position, q_dns, velocity = load_timestep(ii)
             
             if component[0].upper() == 'B':
                 arr[ii] = B[0:-1, comp_idx]
@@ -323,7 +329,7 @@ def waterfall_plot(field):
 def winske_stackplot(qq, title=None):
 #----- Prepare some values for plotting
     x_cell_num  = np.arange(NX)                                         # Numerical cell numbering: x-axis
-    
+
     pos         = position / dx
     norm_xvel   = 1e3*velocity[0, :] / c                                # Normalize to speed of light
     norm_yvel   = 1e3*velocity[1, :] / c
@@ -408,40 +414,35 @@ def get_gyrophase(vel):
     return gyro
 
 
-def plot_energies(ii, dns):
+def plot_energies(ii):
     
-    U_B = 0.5 * (1 / mu0) * np.square(B[1:-1]).sum()     # Magnetic potential energy 
+    mag_energy[ii] = 0.5 * (1 / mu0) * np.square(B[1:-2]).sum()         # Magnetic potential energy 
+    electron_energy[ii] = 1.5 * (1. / q) * q_dns.sum() * NX * dx        # Electron pressure energy
     
     for jj in range(Nj):
         vp2 = velocity[0, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2 \
             + velocity[1, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2 \
-            + velocity[2, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2
+            + velocity[2, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2     # Macroparticle kinetic energy
             
-        K_E = 0.5 * mass[jj] * vp2.sum()                 # Particle total kinetic energy 
-        particle_energy[ii, jj] = K_E
+        K_E = 0.5 * mass[jj] * vp2.sum()                                # Species total macroparticle kinetic energy 
+        particle_energy[ii, jj] = K_E * (density[jj] * NX * dx)         # Last bit is number of 'real' particles in simulation domain
                
-        
-    mag_energy[ii]      = U_B 
-    
-    charge_density = np.zeros((NX))
-    for jj in range(Nj):
-        charge_density[:, jj] += (charge[jj] * dns[1:-1, jj])
-    
-    electron_energy[ii] = 1.5 * (1. / q) * charge_density.sum() * NX * dx
-    
     if ii == num_files - 1:
-        fig  = plt.figure()
+        total_energy = mag_energy + particle_energy.sum(axis=1) + electron_energy
         
-        plt.plot(time_radperiods, mag_energy / mag_energy[0],           label = r'$U_B$')
+        fig  = plt.figure(figsize=(12,8))
+        
+        plt.plot(time_radperiods, mag_energy      / mag_energy[0],      label = r'$U_B$')
         plt.plot(time_radperiods, electron_energy / electron_energy[0], label = r'$U_e$')
+        plt.plot(time_radperiods, total_energy    / total_energy[0],    label = r'$Total$')
         
         for jj in range(Nj):
-            plt.plot(time_radperiods, particle_energy[:, jj] / particle_energy[0, jj], label='$K_E$ {}'.format(species[jj]))
+            plt.plot(time_radperiods, particle_energy[:, jj] / particle_energy[0, jj], label='$K_E$ {}'.format(species_lbl[jj]))
         
         plt.legend()
         plt.title('Energy Distribution in Simulation')
         plt.xlabel('Time ($\Omega t$)')
-        plt.xlim(0, 100)
+        plt.xlim(0, 315)
         plt.ylabel('Normalized Energy', rotation=90)
         fullpath = anal_dir + 'energy_plot'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
@@ -452,16 +453,16 @@ def plot_energies(ii, dns):
 
 
 if __name__ == '__main__':   
-    drive    = 'E:'
-    series   = 'CAM_CL_test2'                               # Run identifier string 
-    run_num  = 0                                            # Run number
+    drive    = 'F:'
+    series   = 'CAM_CL_TSC_winske'                          # Run identifier string 
+    run_num  = 1                                            # Run number
 
     manage_dirs()                                           # Initialize directories
     load_constants()                                        # Load SI constants
     load_particles()                                        # Load particle parameters
     load_header()                                           # Load simulation parameters
-    
     num_files = len(os.listdir(data_dir)) - 2               # Number of timesteps to load
+    
     wpi       = np.sqrt(ne * q ** 2 / (mp * e0))            # Ion plasma frequency
     gyfreq    = q * B0 / mp                                 # Proton gyrofrequency (rad/s)
     gyperiod  = (mp * 2 * np.pi) / (q * B0)                 # Proton gyroperiod (s)
@@ -480,11 +481,11 @@ if __name__ == '__main__':
     #generate_kt_plot(normalize=True)
         
     for ii in range(num_files):
-        position, velocity, B, E, q_dns, J = load_timestep(ii)
-        dns                                = collect_density(position)
+        B, E, Ve, J, position, q_dns, velocity = load_timestep(ii)
+        dns                                    = collect_number_density(position)
+        winske_stackplot(ii, title=r'CAM_CL_TSC /w Winske Parameters')
+        plot_energies(ii)
         
-        plot_energies(ii, dns)
         
-        #winske_stackplot(ii, title=r'Winske test check: $\Delta t$ = 0.02$\omega^{-1}$, Smoothing ON')
 
     

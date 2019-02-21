@@ -4,13 +4,12 @@ Created on Fri Sep 22 17:55:15 2017
 
 @author: iarey
 """
-
 import numpy as np
 import numba as nb
 
 import particles_1D as particles
 
-from simulation_parameters_1D import N, NX, Nj, n_contr, charge, mass, smooth_sources, do_parallel
+from simulation_parameters_1D import N, NX, Nj, n_contr, charge, mass, smooth_sources, do_parallel, q, ne, min_dens
 from fields_1D                import interpolate_to_center_cspline3D
 from auxilliary_1D            import cross_product
 
@@ -54,7 +53,7 @@ def deposit_both_moments(pos, vel, Ie, W_elec, idx):
         Ie     -- Particle leftmost to nearest E-node
         W_elec -- Particle TSC weighting across nearest, left, and right nodes
         idx    -- Particle species identifier
-        
+
     OUTPUT:
         n_i    -- Species number moment array(size, Nj)
         nu_i   -- Species velocity moment array (size, Nj)
@@ -165,7 +164,14 @@ def init_collect_moments(pos, vel, Ie, W_elec, idx, DT):
             J_init[:, kk]  += nu_init[:, jj, kk] * n_contr[jj] * charge[jj]
             J_plus[ :, kk] += nu_plus[:, jj, kk] * n_contr[jj] * charge[jj]
             G[      :, kk] += nu_plus[:, jj, kk] * n_contr[jj] * charge[jj] ** 2 / mass[jj]
-
+    
+    for ii in range(size):
+        if rho_0[ii] < min_dens * ne * q:
+            rho_0[ii] = min_dens * ne * q
+            
+        if rho[ii] < min_dens * ne * q:
+            rho[ii] = min_dens * ne * q
+            
     return pos, Ie, W_elec, rho_0, rho, J_plus, J_init, G, L
 
 
@@ -221,6 +227,10 @@ def collect_moments(pos, vel, Ie, W_elec, idx, DT):
             J_plus[ :, kk] += nu_plus[ :, jj, kk] * n_contr[jj] * charge[jj]
             G[      :, kk] += nu_plus[ :, jj, kk] * n_contr[jj] * charge[jj] ** 2 / mass[jj]
         
+    for ii in range(size):
+        if rho[ii] < min_dens * ne * q:
+            rho[ii] = min_dens * ne * q
+            
     return pos, Ie, W_elec, rho, J_plus, J_minus, G, L
 
 
