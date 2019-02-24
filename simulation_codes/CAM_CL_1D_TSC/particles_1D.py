@@ -94,7 +94,7 @@ def interpolate_forces_to_particle(E, B, J, Ie, W_elec, Ib, W_mag):
 
 
 @nb.njit(parallel=do_parallel)
-def velocity_update_new(pos, vel, Ie, W_elec, idx, B, E, J, dt):
+def velocity_update(pos, vel, Ie, W_elec, idx, B, E, J, dt):
     '''
     Interpolates the fields to the particle positions using TSC weighting, then
     updates velocities using a Boris particle pusher.
@@ -119,7 +119,7 @@ def velocity_update_new(pos, vel, Ie, W_elec, idx, B, E, J, dt):
 
 
 @nb.njit(parallel=do_parallel)
-def velocity_update(pos, vel, Ie, W_elec, idx, B, E, dt):
+def velocity_update_old(pos, vel, Ie, W_elec, idx, B, E, dt):
     '''
     Interpolates the fields to the particle positions using TSC weighting, then
     updates velocities using a Boris particle pusher.

@@ -49,7 +49,7 @@ if __name__ == '__main__':
         J         = sources.push_current(J_plus, E, B, L, G, DT)
         E, Ve, Te = fields.calculate_E(B, J, dns_half)
 
-        vel = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, DT)
+        vel = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, J, DT)
 
         # Store pc(1/2) here while pc(3/2) is collected
         dns_int = dns_half          

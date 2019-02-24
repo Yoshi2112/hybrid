@@ -186,6 +186,7 @@ def store_run_parameters(dt, data_dump_iter):
     p_file = os.path.join(d_path, 'p_data')
     np.savez(p_file, idx_bounds  = idx_bounds,
                      species_lbl = species_lbl,
+                     temp_color  = temp_color,
                      temp_type   = temp_type,
                      dist_type   = dist_type,
                      mass        = mass,

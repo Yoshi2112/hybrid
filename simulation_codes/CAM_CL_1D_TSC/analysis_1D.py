@@ -12,7 +12,6 @@ from numpy import pi
 import pickle
 import matplotlib.gridspec as gs
 import numba as nb
-import pdb
 
 def manage_dirs():
     global run_dir, data_dir, anal_dir, temp_dir
@@ -42,7 +41,7 @@ def load_constants():
 
 
 def load_particles():
-    global density, dist_type, idx_bounds, charge, mass, Tper, sim_repr, temp_type, velocity, Tpar, species_lbl
+    global density, dist_type, idx_bounds, charge, mass, Tper, sim_repr, temp_type, temp_color, velocity, Tpar, species_lbl, n_contr
     
     p_path = os.path.join(data_dir, 'p_data.npz')                               # File location
     p_data = np.load(p_path)                                                    # Load file
@@ -54,11 +53,14 @@ def load_particles():
     Tper       = p_data['Tper']
     sim_repr   = p_data['sim_repr']
     temp_type  = p_data['temp_type']
+    temp_color = p_data['temp_color']
     dist_type  = p_data['dist_type']
     velocity   = p_data['velocity']
     Tpar       = p_data['Tpar']
     species_lbl= p_data['species_lbl']   
-     
+    
+    n_contr    = density / (cellpart*sim_repr)                        # Species density contribution: Each macroparticle contributes this density to a cell
+
     print 'Particle parameters loaded'
     return
 
@@ -91,7 +93,7 @@ def load_header():
     orbit_res       = obj['orbit_res']
     freq_res        = obj['freq_res'] 
     run_desc        = obj['run_desc']
-        
+
     print 'Header file loaded.'
     print 'dt = {}s\n'.format(dt)
     return 
@@ -106,12 +108,13 @@ def load_timestep(ii):
     tB               = data['B']
     tE               = data['E']
     tVe              = data['Ve']
+    tTe              = data['Te']
     tJ               = data['J']
     tpos             = data['pos']
     tdns             = data['dns']
     tvel             = data['vel']
 
-    return tB, tE, tVe, tJ, tpos, tdns, tvel
+    return tB, tE, tVe, tTe, tJ, tpos, tdns, tvel
 
 
 @nb.njit()
@@ -170,7 +173,7 @@ def get_array(component, tmin, tmax):
         arr = np.load(check_path)   
     else:
         for ii in range(tmin, tmax):
-            B, E, Ve, J, position, q_dns, velocity = load_timestep(ii)
+            B, E, Ve, Te, J, position, q_dns, velocity = load_timestep(ii)
             
             if component[0].upper() == 'B':
                 arr[ii] = B[0:-1, comp_idx]
@@ -414,37 +417,77 @@ def get_gyrophase(vel):
     return gyro
 
 
-def plot_energies(ii):
+def plot_energies(ii, normalize=True):
     
-    mag_energy[ii] = 0.5 * (1 / mu0) * np.square(B[1:-2]).sum()         # Magnetic potential energy 
-    electron_energy[ii] = 1.5 * (1. / q) * q_dns.sum() * NX * dx        # Electron pressure energy
+    mag_energy[ii]      = (0.5 / mu0) * np.square(B[1:-2]).sum() * NX * dx    # Magnetic potential energy 
+    electron_energy[ii] = 1.5 * (kB * Te * q_dns / q).sum() * NX * dx         # Electron pressure energy
     
     for jj in range(Nj):
         vp2 = velocity[0, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2 \
             + velocity[1, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2 \
-            + velocity[2, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2     # Macroparticle kinetic energy
+            + velocity[2, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2           # Total real particle kinetic energy
             
-        K_E = 0.5 * mass[jj] * vp2.sum()                                # Species total macroparticle kinetic energy 
-        particle_energy[ii, jj] = K_E * (density[jj] * NX * dx)         # Last bit is number of 'real' particles in simulation domain
+        particle_energy[ii, jj] = 0.5 * mass[jj] * vp2.sum() * n_contr[jj] * NX * dx 
                
     if ii == num_files - 1:
         total_energy = mag_energy + particle_energy.sum(axis=1) + electron_energy
+                
+        fig  = plt.figure(figsize=(15, 7))
+        ax   = plt.subplot2grid((7, 7), (0, 0), colspan=6, rowspan=7)
         
-        fig  = plt.figure(figsize=(12,8))
+        if normalize == True:
+            ax.plot(time_radperiods, mag_energy      / mag_energy[0],      label = r'$U_B$', c='green')
+            ax.plot(time_radperiods, electron_energy / electron_energy[0], label = r'$U_e$', c='orange')
+            ax.plot(time_radperiods, total_energy    / total_energy[0],    label = r'$Total$', c='k')
+            
+            for jj in range(Nj):
+                ax.plot(time_radperiods, particle_energy[:, jj] / particle_energy[0, jj],
+                         label='$K_E$ {}'.format(species_lbl[jj]), c=temp_color[jj])
+        else:
+            ax.plot(time_radperiods, mag_energy     , label = r'$U_B$', c='green')
+            ax.plot(time_radperiods, electron_energy, label = r'$U_e$', c='orange')
+            ax.plot(time_radperiods, total_energy   , label = r'$Total$', c='k')
+            
+            for jj in range(Nj):
+                ax.plot(time_gperiods, particle_energy[:, jj],
+                        label='$K_E$ {}'.format(species_lbl[jj]), c=temp_color[jj])
         
-        plt.plot(time_radperiods, mag_energy      / mag_energy[0],      label = r'$U_B$')
-        plt.plot(time_radperiods, electron_energy / electron_energy[0], label = r'$U_e$')
-        plt.plot(time_radperiods, total_energy    / total_energy[0],    label = r'$Total$')
+        ax.legend(loc='center left', bbox_to_anchor=(1, 0.2))
+        fig.tight_layout()
+        
+        
+        percent_ion = np.zeros(Nj)
+        for jj in range(Nj):
+            percent_ion[jj] = round(100.*(particle_energy[-1, jj] - particle_energy[0, jj]) / particle_energy[0, jj], 2)
+        
+        percent_elec  = round(100.*(electron_energy[-1] - electron_energy[0]) / electron_energy[0], 2)
+        percent_mag   = round(100.*(mag_energy[-1]      - mag_energy[0])      / mag_energy[0], 2)
+        percent_total = round(100.*(total_energy[-1]    - total_energy[0])    / total_energy[0], 2)
+            
+        fsize = 14; fname='monospace'
+        plt.figtext(0.85, 0.92, r'$\Delta E$ OVER RUNTIME',            fontsize=fsize+2, fontname=fname)
+        plt.figtext(0.85, 0.92, '________________________',            fontsize=fsize+2, fontname=fname)
+        plt.figtext(0.85, 0.88, 'TOTAL   : {:>7}%'.format(percent_total),  fontsize=fsize,  fontname=fname)
+        plt.figtext(0.85, 0.84, 'MAGNETIC: {:>7}%'.format(percent_mag),    fontsize=fsize,  fontname=fname)
+        plt.figtext(0.85, 0.80, 'ELECTRON: {:>7}%'.format(percent_elec),   fontsize=fsize,  fontname=fname)
         
         for jj in range(Nj):
-            plt.plot(time_radperiods, particle_energy[:, jj] / particle_energy[0, jj], label='$K_E$ {}'.format(species_lbl[jj]))
+            plt.figtext(0.85, 0.76-jj*0.04, 'ION{}    : {:>7}%'.format(jj, percent_ion[jj]), fontsize=fsize,  fontname=fname)
         
-        plt.legend()
-        plt.title('Energy Distribution in Simulation')
-        plt.xlabel('Time ($\Omega t$)')
-        plt.xlim(0, 315)
-        plt.ylabel('Normalized Energy', rotation=90)
-        fullpath = anal_dir + 'energy_plot'
+        ax.set_xlabel('Time (Gyroperiods)')
+        ax.set_xlim(0, time_gperiods[-1])
+        
+        if normalize == True:
+            ax.set_title('Normalized Energy Distribution in Simulation Space')
+            ax.set_ylabel('Normalized Energy', rotation=90)
+            fullpath = anal_dir + 'norm_energy_plot'
+            fig.subplots_adjust(bottom=0.07, top=0.96, left=0.04)
+        else:
+            ax.set_title('Energy Distribution in Simulation Space')
+            ax.set_ylabel('Energy (Joules)', rotation=90)
+            fullpath = anal_dir + 'energy_plot'
+            fig.subplots_adjust(bottom=0.07, top=0.96, left=0.055)
+        
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
         plt.close('all')
         
@@ -455,12 +498,12 @@ def plot_energies(ii):
 if __name__ == '__main__':   
     drive    = 'F:'
     series   = 'CAM_CL_TSC_winske'                          # Run identifier string 
-    run_num  = 1                                            # Run number
+    run_num  = 3                                            # Run number
 
     manage_dirs()                                           # Initialize directories
     load_constants()                                        # Load SI constants
-    load_particles()                                        # Load particle parameters
     load_header()                                           # Load simulation parameters
+    load_particles()                                        # Load particle parameters
     num_files = len(os.listdir(data_dir)) - 2               # Number of timesteps to load
     
     wpi       = np.sqrt(ne * q ** 2 / (mp * e0))            # Ion plasma frequency
@@ -481,10 +524,10 @@ if __name__ == '__main__':
     #generate_kt_plot(normalize=True)
         
     for ii in range(num_files):
-        B, E, Ve, J, position, q_dns, velocity = load_timestep(ii)
-        dns                                    = collect_number_density(position)
-        winske_stackplot(ii, title=r'CAM_CL_TSC /w Winske Parameters')
-        plot_energies(ii)
+        B, E, Ve, Te, J, position, q_dns, velocity = load_timestep(ii)
+        dns                                        = collect_number_density(position)
+        #winske_stackplot(ii, title=r'CAM_CL_TSC /w Winske Parameters')
+        plot_energies(ii, normalize=False)
         
         
 

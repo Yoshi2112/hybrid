@@ -222,10 +222,12 @@ def calculate_E(B, J, qn, DX=dx):
     B_center = interpolate_to_center_cspline3D(B, DX=DX)
     VexB     = cross_product(Ve, B_center)    
 
-    E_out       = np.zeros((J.shape[0], 3))                 
-    E_out[:, 0] = - VexB[:, 0] - del_p / qn
-    E_out[:, 1] = - VexB[:, 1]
-    E_out[:, 2] = - VexB[:, 2]
+    E_out        = np.zeros((J.shape[0], 3))                 
+    E_out[:, 0]  = - VexB[:, 0] - del_p / qn
+    E_out[:, 1]  = - VexB[:, 1]
+    E_out[:, 2]  = - VexB[:, 2]
+
+    E_out       += e_resis * J
 
     E_out[0]                = E_out[J.shape[0] - 3]
     E_out[J.shape[0] - 2]   = E_out[1]
