@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 
-from simulation_parameters_1D  import N, dx, xmax, xmin, charge, mass, do_parallel, e_resis
+from simulation_parameters_1D  import N, dx, xmax, xmin, charge, mass, do_parallel, e_resis, q
 import auxilliary_1D as aux
 
 
@@ -72,7 +72,7 @@ def boris_algorithm(v0, Bp, Ep, dt, idx):
 
 
 @nb.njit(parallel=do_parallel)
-def interpolate_forces_to_particle(E, B, J, Ie, W_elec, Ib, W_mag):
+def interpolate_forces_to_particle(E, B, J, Ie, W_elec, Ib, W_mag, idx):
     '''
     Same as previous function, but also interpolates current to particle position to return
     an electric field modified by electron resistance
@@ -87,9 +87,9 @@ def interpolate_forces_to_particle(E, B, J, Ie, W_elec, Ib, W_mag):
    
     Jp = J[Ie    , 0:3] * W_elec[0]                 \
        + J[Ie + 1, 0:3] * W_elec[1]                 \
-       + J[Ie + 2, 0:3] * W_elec[2]                 # E-field at particle location
+       + J[Ie + 2, 0:3] * W_elec[2]                 # Current at particle location
        
-    Ep -= e_resis * Jp
+    Ep -= (charge[idx] / q) * e_resis * Jp          # "Effective" E-field accounting for electron resistance
     return Ep, Bp
 
 
@@ -113,7 +113,7 @@ def velocity_update(pos, vel, Ie, W_elec, idx, B, E, J, dt):
     Ib, W_mag = assign_weighting_TSC(pos, E_nodes=False)     # Magnetic field weighting
     
     for ii in nb.prange(N):
-        Ep, Bp     = interpolate_forces_to_particle(E, B, J, Ie[ii], W_elec[:, ii], Ib[ii], W_mag[:, ii])
+        Ep, Bp     = interpolate_forces_to_particle(E, B, J, Ie[ii], W_elec[:, ii], Ib[ii], W_mag[:, ii], idx[ii])
         vel[:, ii] = boris_algorithm(vel[:, ii], Bp, Ep, dt, idx[ii])
     return vel
 

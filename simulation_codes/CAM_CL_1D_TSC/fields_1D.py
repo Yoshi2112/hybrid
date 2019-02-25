@@ -64,12 +64,15 @@ def get_curl_E(field, DX=dx):
         curl[ii, 1] = - (field[ii, 2] - field[ii - 1, 2])
         curl[ii, 2] =    field[ii, 1] - field[ii - 1, 1]
 
-    end_bit                  = 0.5*(curl[1] + curl[field.shape[0] - 2])
-    curl[1]                  = end_bit
-    curl[field.shape[0] - 2] = end_bit
-    
-    curl[0] = curl[field.shape[0] - 3]
-    curl[field.shape[0] - 1] = curl[2]
+    curl = set_periodic_boundaries(curl)
+# =============================================================================
+#     end_bit                  = 0.5*(curl[1] + curl[field.shape[0] - 2])
+#     curl[1]                  = end_bit
+#     curl[field.shape[0] - 2] = end_bit
+#     
+#     curl[0] = curl[field.shape[0] - 3]
+#     curl[field.shape[0] - 1] = curl[2]
+# =============================================================================
     return curl / DX
 
 
@@ -129,7 +132,7 @@ def get_grad_P(qn, te, DX=dx, inter_type=1):
 @nb.njit()
 def set_periodic_boundaries(B):
     ''' 
-    Set boundary conditions for the magnetic field: 
+    Set boundary conditions for the magnetic field (or values on the B-grid, i.e. curl[E]): 
      -- Average "end" values and assign to first and last grid point
      -- Set ghost cell values so TSC weighting works
     '''

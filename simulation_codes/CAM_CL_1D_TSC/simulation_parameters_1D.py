@@ -15,7 +15,7 @@ run_description = '''Test of electron resistance with Winske parameters (more pa
 drive           = 'F:/'                     # Drive letter or path for portable HDD e.g. 'E:/'
 save_path       = 'runs/test_electron_resis/' # Series save dir   : Folder containing all runs of a series
 run_num         = 0                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 0                         # Save data flag    : For later analysis
+generate_data   = 1                         # Save data flag    : For later analysis
 generate_plots  = 1                         # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                       # RNG Seed          : Set to enable consistent results for parameter studies
 
@@ -35,9 +35,9 @@ RE  = 6.371e6                               # Earth radius in metres
 NX       = 128                              # Number of cells - doesn't include ghost cells
 max_rev  = 50                               # Simulation runtime, in multiples of the gyroperiod
 
-dxm         = 1.0                           # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't resolvable by hybrid code)
+dxm         = 1.0                           # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
 subcycles   = 12                            # Number of field subcycling steps for Cyclic Leapfrog
-cellpart    = 80                            # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart    = 250                           # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
 ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
@@ -48,10 +48,10 @@ LH_frac  = 0.0                              # Fraction of Lower Hybrid resonance
                                             # Used to calculate electron resistivity by setting "anomalous"
                                             # electron/ion collision as some multiple of the LHF. 0 disables e_resis.
 
-orbit_res= 0.1                              # Particle orbit resolution: fraction of gyroperiod (gyrofraction, lol)
-freq_res = 0.05                             # Frequency resolution: Timestep limited to this fraction of inverse
-data_res = 0.1                              # Data capture resolution in gyrofraction
-plot_res = 0.1                              # Plot capture resolution in gyrofraction
+orbit_res= 0.1                              # Particle orbit resolution: Fraction of gyroperiod in seconds
+freq_res = 0.05                             # Frequency resolution: Fraction of inverse radian frequencies
+data_res = 0.1                              # Data capture resolution in gyroperiod fraction
+plot_res = 1.0                              # Plot capture resolution in gyroperiod fraction
 
 
 ### PARTICLE PARAMETERS ###
