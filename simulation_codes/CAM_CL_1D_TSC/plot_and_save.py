@@ -173,7 +173,10 @@ def store_run_parameters(dt, data_dump_iter):
                    ('LH_frac', const.LH_frac),
                    ('orbit_res', const.orbit_res),
                    ('freq_res', const.freq_res),
-                   ('run_desc', const.run_description)])
+                   ('run_desc', const.run_description),
+                   ('method_type', 'CAM_CL'),
+                   ('particle_shape', 'TSC')
+                   ])
 
     h_name = os.path.join(d_path, 'Header.pckl')            # Data file containing dictionary of variables used in run
 

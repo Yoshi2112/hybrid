@@ -9,19 +9,20 @@ import sys
 import platform
 
 ### RUN DESCRIPTION ###
-run_description = '''Test of Triangular Shaped Cloud weighting.'''
+run_description = '''Test of electron resistance with Winske parameters (more particles)'''
 
 ### RUN PARAMETERS ###
-drive           = 'E:/'                     # Drive letter or path for portable HDD e.g. 'E:/'
-save_path       = 'runs/CAM_CL_TSC_test/'   # Series save dir   : Folder containing all runs of a series
-run_num         = 0                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 0                         # Save data flag    : For later analysis
-generate_plots  = 0                         # Save plot flag    : To ensure hybrid is solving correctly during run
+drive           = 'F:/'                     # Drive letter or path for portable HDD e.g. 'E:/'
+save_path       = 'runs/test_electron_resis/' # Series save dir   : Folder containing all runs of a series
+run_num         = 9                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+generate_data   = 1                         # Save data flag    : For later analysis
+generate_plots  = 1                         # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                       # RNG Seed          : Set to enable consistent results for parameter studies
+
 
 ### PHYSICAL CONSTANTS ###
 q   = 1.602177e-19                          # Elementary charge (C)
-c   = 2.998925e+8                           # Speed of light (m/s)
+c   = 2.998925e+08                          # Speed of light (m/s)
 mp  = 1.672622e-27                          # Mass of proton (kg)
 me  = 9.109384e-31                          # Mass of electron (kg)
 kB  = 1.380649e-23                          # Boltzmann's Constant (J/K)
@@ -31,43 +32,54 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 32                               # Number of cells - doesn't include ghost cells
-max_rev  = 16                               # Simulation runtime, in multiples of the gyroperiod
+NX       = 128                              # Number of cells - doesn't include ghost cells
+max_rev  = 50                               # Simulation runtime, in multiples of the gyroperiod
 
-dxm         = 1                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't resolvable by hybrid code)
+dxm         = 1.0                           # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
 subcycles   = 12                            # Number of field subcycling steps for Cyclic Leapfrog
-cellpart    = 200                           # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart    = 250                           # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
 ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
 B0       = 200e-9                           # Unform initial magnetic field value (in T)
 ne       = 50e6                             # Electron density (in /m3, same as total ion density)
 
-orbit_res= 0.25                             # Particle orbit resolution: fraction of gyroperiod (gyrofraction, lol)
-data_res = 0                                # Data capture resolution in gyrofraction
-plot_res = 0                                # Plot capture resolution in gyrofraction
+LH_frac  = 20.0                             # Fraction of Lower Hybrid resonance: 
+                                            # Used to calculate electron resistivity by setting "anomalous"
+                                            # electron/ion collision as some multiple of the LHF. 0 disables e_resis.
+
+orbit_res= 0.1                              # Particle orbit resolution: Fraction of gyroperiod in seconds
+freq_res = 0.05                             # Frequency resolution: Fraction of inverse radian frequencies
+data_res = 0.1                              # Data capture resolution in gyroperiod fraction
+plot_res = 1.0                              # Plot capture resolution in gyroperiod fraction
 
 
 ### PARTICLE PARAMETERS ###
-species    = [r'$H^+$ cold', r'$H^+$ hot']                  # Species name/labels        : Used for plotting
+species_lbl= [r'$H^+$ cold', r'$H^+$ hot']                  # Species name/labels        : Used for plotting
 temp_color = ['b', 'r']
 temp_type  = np.asarray([0, 1])                             # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
 dist_type  = np.asarray([0, 0])                             # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
 
-mass       = np.asarray([1.00 , 1.00])                      # Species ion mass (proton mass units)
-charge     = np.asarray([1.00 , 1.00])                      # Species ion charge (elementary charge units)
-density    = np.asarray([0.90 , 0.10])                      # Species charge density as normalized fraction (add to 1.0)
-velocity   = np.asarray([0.00 , 1.00])                      # Species parallel bulk velocity (alfven velocity units)
-sim_repr   = np.asarray([0.50 , 0.50])                      # Macroparticle weighting: Percentage of macroparticles assigned to each species
+mass       = np.asarray([1.00, 1.00])                       # Species ion mass (proton mass units)
+charge     = np.asarray([1.00, 1.00])                       # Species ion charge (elementary charge units)
+density    = np.asarray([0.90, 0.10])                       # Species charge density as normalized fraction (add to 1.0)
+velocity   = np.asarray([0.00, 0.00])                       # Species parallel bulk velocity (alfven velocity units)
+sim_repr   = np.asarray([0.50, 0.50])                       # Macroparticle weighting: Percentage of macroparticles assigned to each species
 
 beta_e     = 1.                                             # Electron beta
 beta_par   = np.array([1., 10.])                            # Ion species parallel beta
 beta_per   = np.array([1., 50.])                            # Ion species perpendicular beta
 
-do_parallel    = False                                      # Flag (True/False) for auto-parallel using numba.njit()
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
-set_override   = 1                                          # Flag to override magnetic field value for specific regime
+min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
+
+adaptive_timestep   = True                                  # Flag (True/False) for adaptive timestep based on particle and field parameters
+adaptive_subcycling = True                                  # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
+do_parallel         = False                                 # Flag (True/False) for auto-parallel using numba.njit()
+
+ratio_override = 1                                          # Flag to override magnetic field value for specific regime
 wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
+
 
 
 
@@ -85,7 +97,7 @@ wpiwci         = 1e4                                        # Desired plasma/cyc
 
 #%%### DERIVED SIMULATION PARAMETERS
 
-if set_override == 1:
+if ratio_override == 1:
     B0   = c * (1. / wpiwci) * np.sqrt(mu0 * mp * ne)
     print '\n'
     print '----------------------------------------------------------------'
@@ -97,6 +109,7 @@ Tpar       = B0 ** 2 * beta_par / (2 * mu0 * ne * kB)
 Tper       = B0 ** 2 * beta_per / (2 * mu0 * ne * kB)
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
+wpe        = np.sqrt(ne * q ** 2 / (me * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B0 / np.sqrt(mu0*ne*mp)                     # Alfven speed: Assuming pure proton plasma
 
 dx         = dxm * c / wpi                               # Spatial cadence, based on ion inertial length
@@ -122,10 +135,14 @@ idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)]
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
 idx_bounds = np.stack((idx_start, idx_end)).transpose()                              # idx_bounds[species, start/end]
 
+gyfreq     = q*B0/mp                                     # Proton   Gyrofrequency (rad/s) (since this will be the highest of all ion species)
+e_gyfreq   = q*B0/me                                     # Electron Gyrofrequency (rad/s)
+k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 
+LH_res_is  = 1. / (gyfreq * e_gyfreq) + 1. / wpi ** 2    # Lower Hybrid Resonance frequency, inverse squared
+LH_res     = 1. / np.sqrt(LH_res_is)                     # Lower Hybrid Resonance frequency
 
-
-
+e_resis    = (LH_frac * LH_res)  / (e0 * wpe ** 2)       # Electron resistivity (using intial conditions for wpi/wpe)
 
 
 
@@ -158,7 +175,6 @@ idx_bounds = np.stack((idx_start, idx_end)).transpose()                         
 #%%
 #%%
 #%%### INPUT TESTS AND CHECKS
-gyfreq     = q*B0/mp                                     # Proton Gyrofrequency (rad/s) (since this will be the highest of all species)
 sped_ratio = c / va
 
 print 'Speed ratio: {}'.format(sped_ratio)
@@ -181,11 +197,18 @@ if density_normal_sum.sum() != 1.0:
     print '-------------------------------------------------------------------------'
     print 'WARNING: ION DENSITIES DO NOT SUM TO 1.0. SIMULATION WILL NOT BE ACCURATE'
     print '-------------------------------------------------------------------------'
+    print ''
+    print 'ABORTING...'
+    sys.exit()
+    
     
 if sim_repr.sum() != 1.0:
     print '-----------------------------------------------------------------------------------'
     print 'WARNING: MACROPARTICLE DENSITIES DO NOT SUM TO 1.0. SIMULATION WILL NOT BE ACCURATE'
     print '-----------------------------------------------------------------------------------'
+    print ''
+    print 'ABORTING...'
+    sys.exit()
     
 simulated_density_per_cell = (n_contr * charge * cellpart * sim_repr).sum()
 real_density_per_cell      = ne*q
@@ -194,9 +217,13 @@ if simulated_density_per_cell != real_density_per_cell:
     print '--------------------------------------------------------------------------------'
     print 'WARNING: DENSITY CALCULATION ISSUE: RECHECK HOW MACROPARTICLE CONTRIBUTIONS WORK'
     print '--------------------------------------------------------------------------------'
+    print ''
+    print 'ABORTING...'
+    sys.exit()
 
 if subcycles == 0 or subcycles == 1:
     print '-----------------------------------------------------------------------------'
     print 'Subcycling DISABLED: Magnetic field will advance only once per half-timestep.'
     print '-----------------------------------------------------------------------------'
     subcycles = 1
+    

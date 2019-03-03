@@ -4,14 +4,13 @@ Created on Fri Sep 22 17:55:15 2017
 
 @author: iarey
 """
-
 import numpy as np
 import numba as nb
 
 import particles_1D as particles
 
-from simulation_parameters_1D import N, NX, Nj, n_contr, charge, mass, smooth_sources, do_parallel
-from fields_1D                import interpolate_to_center_linear
+from simulation_parameters_1D import N, NX, Nj, n_contr, charge, mass, smooth_sources, do_parallel, q, ne, min_dens
+from fields_1D                import interpolate_to_center_cspline3D
 from auxilliary_1D            import cross_product
 
 @nb.njit(parallel=do_parallel)
@@ -31,14 +30,15 @@ def push_current(J, E, B, L, G, dt):
         J_out -- Advanced current
     '''
     J_out        = np.zeros(J.shape)
-    B_center     = interpolate_to_center_linear(B)
+    B_center     = interpolate_to_center_cspline3D(B)
     G_cross_B    = cross_product(G, B_center)
     
     for ii in range(3):
         J_out[:, ii] = J[:, ii] + 0.5*dt * (L * E[:, ii] + G_cross_B[:, ii]) 
-        
-    J_out[0]    = J_out[NX]
-    J_out[NX+1] = J_out[1]
+
+    J_out[0]                = J_out[J.shape[0] - 3]
+    J_out[J.shape[0] - 2]   = J_out[1]
+    J_out[J.shape[0] - 1]   = J_out[2]
     return J_out
 
 
@@ -53,12 +53,11 @@ def deposit_both_moments(pos, vel, Ie, W_elec, idx):
         Ie     -- Particle leftmost to nearest E-node
         W_elec -- Particle TSC weighting across nearest, left, and right nodes
         idx    -- Particle species identifier
-        
+
     OUTPUT:
         n_i    -- Species number moment array(size, Nj)
         nu_i   -- Species velocity moment array (size, Nj)
     '''
-    
     size      = NX + 3
     n_i       = np.zeros((size, Nj))
     nu_i      = np.zeros((size, Nj, 3))
@@ -68,13 +67,13 @@ def deposit_both_moments(pos, vel, Ie, W_elec, idx):
         sp  = idx[ii]
     
         for kk in range(3):
-            nu_i[I,     sp, kk] += W_elec[0, ii] * n_contr[sp] * vel[kk, ii]
-            nu_i[I + 1, sp, kk] += W_elec[1, ii] * n_contr[sp] * vel[kk, ii]
-            nu_i[I + 2, sp, kk] += W_elec[2, ii] * n_contr[sp] * vel[kk, ii]
+            nu_i[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
+            nu_i[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
+            nu_i[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
         
-        n_i[I,     sp] += W_elec[0, ii] * n_contr[sp]
-        n_i[I + 1, sp] += W_elec[1, ii] * n_contr[sp]
-        n_i[I + 2, sp] += W_elec[2, ii] * n_contr[sp]
+        n_i[I,     sp] += W_elec[0, ii]
+        n_i[I + 1, sp] += W_elec[1, ii]
+        n_i[I + 2, sp] += W_elec[2, ii]
 
     n_i   = manage_ghost_cells(n_i)
     nu_i  = manage_ghost_cells(nu_i)
@@ -103,9 +102,9 @@ def deposit_velocity_moments(vel, Ie, W_elec, idx):
         sp  = idx[ii]
         
         for kk in range(3):
-            nu_i[I,     sp, kk] += W_elec[0, ii] * n_contr[sp] * vel[kk, ii]
-            nu_i[I + 1, sp, kk] += W_elec[1, ii] * n_contr[sp] * vel[kk, ii]
-            nu_i[I + 2, sp, kk] += W_elec[2, ii] * n_contr[sp] * vel[kk, ii]
+            nu_i[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
+            nu_i[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
+            nu_i[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
                       
     nu_i  = manage_ghost_cells(nu_i)
     return nu_i
@@ -157,15 +156,22 @@ def init_collect_moments(pos, vel, Ie, W_elec, idx, DT):
                 nu_init[:, jj, kk] = smooth(nu_init[:, jj, kk])
     
     for jj in range(Nj):
-        rho_0   += ni_init[:, jj]   * charge[jj]
-        rho     += ni[:, jj]        * charge[jj]
-        L       += ni[:, jj]        * charge[jj] ** 2 / mass[jj]
+        rho_0   += ni_init[:, jj]   * n_contr[jj] * charge[jj]
+        rho     += ni[:, jj]        * n_contr[jj] * charge[jj]
+        L       += ni[:, jj]        * n_contr[jj] * charge[jj] ** 2 / mass[jj]
         
         for kk in range(3):
-            J_init[:, kk]  += nu_init[:, jj, kk] * charge[jj]
-            J_plus[ :, kk] += nu_plus[:, jj, kk] * charge[jj]
-            G[      :, kk] += nu_plus[:, jj, kk] * charge[jj] ** 2 / mass[jj]
-
+            J_init[:, kk]  += nu_init[:, jj, kk] * n_contr[jj] * charge[jj]
+            J_plus[ :, kk] += nu_plus[:, jj, kk] * n_contr[jj] * charge[jj]
+            G[      :, kk] += nu_plus[:, jj, kk] * n_contr[jj] * charge[jj] ** 2 / mass[jj]
+    
+    for ii in range(size):
+        if rho_0[ii] < min_dens * ne * q:
+            rho_0[ii] = min_dens * ne * q
+            
+        if rho[ii] < min_dens * ne * q:
+            rho[ii] = min_dens * ne * q
+            
     return pos, Ie, W_elec, rho_0, rho, J_plus, J_init, G, L
 
 
@@ -213,14 +219,18 @@ def collect_moments(pos, vel, Ie, W_elec, idx, DT):
                 nu_minus[:, jj, kk] = smooth(nu_minus[:, jj, kk])
     
     for jj in range(Nj):
-        rho     += ni[:, jj]        * charge[jj]
-        L       += ni[:, jj]        * charge[jj] ** 2 / mass[jj]
+        rho  += ni[:, jj] * n_contr[jj] * charge[jj]
+        L    += ni[:, jj] * n_contr[jj] * charge[jj] ** 2 / mass[jj]
         
         for kk in range(3):
-            J_minus[:, kk] += nu_minus[:, jj, kk] * charge[jj]
-            J_plus[ :, kk] += nu_plus[ :, jj, kk] * charge[jj]
-            G[      :, kk] += nu_plus[ :, jj, kk] * charge[jj] ** 2 / mass[jj]
+            J_minus[:, kk] += nu_minus[:, jj, kk] * n_contr[jj] * charge[jj]
+            J_plus[ :, kk] += nu_plus[ :, jj, kk] * n_contr[jj] * charge[jj]
+            G[      :, kk] += nu_plus[ :, jj, kk] * n_contr[jj] * charge[jj] ** 2 / mass[jj]
         
+    for ii in range(size):
+        if rho[ii] < min_dens * ne * q:
+            rho[ii] = min_dens * ne * q
+            
     return pos, Ie, W_elec, rho, J_plus, J_minus, G, L
 
 

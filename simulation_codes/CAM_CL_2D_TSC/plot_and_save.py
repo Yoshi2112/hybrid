@@ -13,8 +13,7 @@ import sys
 from shutil import rmtree
 import simulation_parameters_1D as const
 from   simulation_parameters_1D import generate_data, generate_plots, drive, save_path, N, NX, dx, xmax, ne, B0, density, va
-from   simulation_parameters_1D import idx_bounds, Nj, species, temp_type, dist_type, mass, charge, velocity, sim_repr, Tpar, Tper
-from   matplotlib  import rcParams
+from   simulation_parameters_1D import idx_bounds, Nj, species_lbl, temp_type, dist_type, mass, charge, velocity, sim_repr, Tpar, Tper, temp_color
 
 def manage_directories():
     print 'Checking directories...'
@@ -41,34 +40,34 @@ def manage_directories():
     return
 
 
-def create_figure_and_save(part, J, B, qn, qq, dt, plot_dump_iter):
+def create_figure_and_save(pos, vel, J, B, qn, qq, DT, plot_iter):
     plt.ioff()
 
-    r = qq / plot_dump_iter                                                     # Capture number
+    r = qq / plot_iter                                                     # Capture number
 
     fig_size = 4, 7                                                             # Set figure grid dimensions
     fig = plt.figure(figsize=(20,10))                                           # Initialize Figure Space
     fig.patch.set_facecolor('w')                                                # Set figure face color
 
-    x_pos       = part[0, :] / dx                                               # Particle x-positions (km) (For looking at particle characteristics)
-
+    x_pos       = pos / dx                                                      # Particle x-positions (km) (For looking at particle characteristics)
+    #pdb.set_trace()
 #----- Velocity (x, y) Plots: Hot Species
     ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
     ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
 
-    norm_xvel   = part[3, :] / const.c
-    norm_yvel   = part[4, :] / const.c       # y-velocities (for normalization)
+    norm_xvel   = vel[0, :] / const.c
+    norm_yvel   = vel[1, :] / const.c
 
     for jj in range(Nj):
-        if temp_type[jj] == 1:
-            ax_vx.scatter(x_pos[idx_bounds[jj, 0]: idx_bounds[jj, 1]], norm_xvel[idx_bounds[jj, 0]: idx_bounds[jj, 1]], s=1, c='r', lw=0)        # Hot population
-            ax_vy.scatter(x_pos[idx_bounds[jj, 0]: idx_bounds[jj, 1]], norm_yvel[idx_bounds[jj, 0]: idx_bounds[jj, 1]], s=1, c='r', lw=0)        # 'Other' population
+        ax_vx.scatter(x_pos[idx_bounds[jj, 0]: idx_bounds[jj, 1]], norm_xvel[idx_bounds[jj, 0]: idx_bounds[jj, 1]], s=3, c=temp_color[jj], lw=0, label=species_lbl[jj])
+        ax_vy.scatter(x_pos[idx_bounds[jj, 0]: idx_bounds[jj, 1]], norm_yvel[idx_bounds[jj, 0]: idx_bounds[jj, 1]], s=3, c=temp_color[jj], lw=0)
 
-    ax_vx.set_title(r'Beam velocities ($v_A^{-1}$) vs. Position (x)')
-    ax_vy.set_xlabel(r'Position (cell)', labelpad=10)
+    ax_vx.legend()
+    ax_vx.set_title(r'Particle velocities vs. Position (x)')
+    ax_vy.set_xlabel(r'Cell', labelpad=10)
 
-    ax_vx.set_ylabel(r'$\frac{v_x}{v_A}$', rotation=90)
-    ax_vy.set_ylabel(r'$\frac{v_y}{v_A}$', rotation=90)
+    ax_vx.set_ylabel(r'$\frac{v_x}{c}$', rotation=90)
+    ax_vy.set_ylabel(r'$\frac{v_y}{c}$', rotation=90)
 
     plt.setp(ax_vx.get_xticklabels(), visible=False)
     ax_vx.set_yticks(ax_vx.get_yticks()[1:])
@@ -85,31 +84,31 @@ def create_figure_and_save(part, J, B, qn, qq, dt, plot_dump_iter):
 
     ax_qn.set_title('Normalized Charge/Current Density and B-Fields (y, mag)')  # Axes title (For all, since density plot is on top
     ax_qn.set_ylabel(r'$\rho_c$', fontsize=14, rotation=0, labelpad=5)       # Axis (y) label for this specific axes
-    ax_qn.set_ylim(0, 3)
+    ax_qn.set_ylim(0, 2)
     
 #----- Current (Jx) Plot
-    ax_Jz = plt.subplot2grid(fig_size, (1, 3), colspan=3, sharex=ax_qn)
+    ax_Jx = plt.subplot2grid(fig_size, (1, 3), colspan=3, sharex=ax_qn)
 
-    Jz = J[1: NX + 1, 0]
+    Jx = J[1: NX + 1, 0]
 
-    ax_Jz.plot(Jz, color='magenta')
+    ax_Jx.plot(Jx, color='magenta')
 
-    ax_Jz.set_xlim(0, NX)
-    #ax_Jz.set_ylim(-200e-5, 200e-5)
+    ax_Jx.set_xlim(0, NX)
+    #ax_Jx.set_ylim(-200e-5, 200e-5)
 
-    #ax_Jz.set_yticks(np.arange(-200e-5, 201e-5, 50e-5))
-    #ax_Jz.set_yticklabels(np.arange(-150, 201, 50))
-    ax_Jz.set_ylabel(r'$J_x$ ($\mu$A)', labelpad=25, rotation=0, fontsize=14)
+    #ax_Jx.set_yticks(np.arange(-200e-5, 201e-5, 50e-5))
+    #ax_Jx.set_yticklabels(np.arange(-150, 201, 50))
+    ax_Jx.set_ylabel(r'$J_x$', labelpad=25, rotation=0, fontsize=14)
 
 #----- Magnetic Field (By) and Magnitude (|B|) Plots
     ax_By = plt.subplot2grid((fig_size), (2, 3), colspan=3, sharex=ax_qn)              # Initialize Axes
     ax_B  = plt.subplot2grid((fig_size), (3, 3), colspan=3, sharex=ax_qn)
 
-    mag_B = (np.sqrt(B[1:NX, 0] ** 2 + B[1:NX, 1] ** 2 + B[1:NX, 2] ** 2)) / B0
-    B_y   = B[1:NX , 1] / B0                                                         # Normalize grid values
+    mag_B = (np.sqrt(B[1:NX+2, 0] ** 2 + B[1:NX+2, 1] ** 2 + B[1:NX+2, 2] ** 2)) / B0
+    B_y   = B[1:NX+2 , 1] / B0                                                         # Normalize grid values
 
-    ax_B.plot(mag_B, color='g')                                             # Create axes plots
-    ax_By.plot(B_y, color='g')
+    ax_B.plot(mag_B, color='g')                                                        # Create axes plots
+    ax_By.plot(B_y, color='g') 
 
     ax_B.set_xlim(0,  NX)                                                               # Set x limit
     ax_By.set_xlim(0, NX)
@@ -117,15 +116,15 @@ def create_figure_and_save(part, J, B, qn, qq, dt, plot_dump_iter):
     ax_B.set_ylim(0, 2)                                                                 # Set y limit
     ax_By.set_ylim(-1, 1)
 
-    ax_B.set_ylabel( r'$|B|$', rotation=0, labelpad=20, fontsize=14)                                 # Set labels
+    ax_B.set_ylabel( r'$|B|$', rotation=0, labelpad=20, fontsize=14)                    # Set labels
     ax_By.set_ylabel(r'$\frac{B_y}{B_0}$', rotation=0, labelpad=10, fontsize=14)
     ax_B.set_xlabel('Cell Number')                                                      # Set x-axis label for group (since |B| is on bottom)
 
-    for ax in [ax_qn, ax_Jz, ax_By]:
+    for ax in [ax_qn, ax_Jx, ax_By]:
         plt.setp(ax.get_xticklabels(), visible=False)
         ax.set_yticks(ax.get_yticks()[1:])
 
-    for ax in [ax_qn, ax_Jz, ax_By, ax_B]:
+    for ax in [ax_qn, ax_Jx, ax_By, ax_B]:
         qrt = NX / (4.)
         ax.set_xticks(np.arange(0, NX + qrt, qrt))
         ax.grid()
@@ -171,6 +170,9 @@ def store_run_parameters(dt, data_dump_iter):
                    ('theta', const.theta),
                    ('data_dump_iter', data_dump_iter),
                    ('max_rev', const.max_rev),
+                   ('LH_frac', const.LH_frac),
+                   ('orbit_res', const.orbit_res),
+                   ('freq_res', const.freq_res),
                    ('run_desc', const.run_description)])
 
     h_name = os.path.join(d_path, 'Header.pckl')            # Data file containing dictionary of variables used in run
@@ -179,28 +181,31 @@ def store_run_parameters(dt, data_dump_iter):
         pickle.dump(params, f)
         f.close()
         print 'Header file saved'
-
+        
     # Particle values: Array parameters
     p_file = os.path.join(d_path, 'p_data')
-    np.savez(p_file, idx_bounds= idx_bounds,
-                     species   = species,
-                     temp_type = temp_type,
-                     mass      = mass,
-                     charge    = charge,
-                     velocity  = velocity,
-                     density   = density,
-                     sim_repr  = sim_repr,
-                     Tpar      = Tpar,
-                     Tper      = Tper)
+    np.savez(p_file, idx_bounds  = idx_bounds,
+                     species_lbl = species_lbl,
+                     temp_color  = temp_color,
+                     temp_type   = temp_type,
+                     dist_type   = dist_type,
+                     mass        = mass,
+                     charge      = charge,
+                     velocity    = velocity,
+                     density     = density,
+                     sim_repr    = sim_repr,
+                     Tpar        = Tpar,
+                     Tper        = Tper)
     print 'Particle data saved'
     return
 
 
-def save_data(dt, data_dump_iter, qq, pos, vel, Ji, E, B, dns):
+def save_data(dt, data_dump_iter, qq, pos, vel, Ji, E, B, Ve, Te, dns):
     d_path = ('%s/%s/run_%d/data' % (drive, save_path, const.run_num))    # Set path for data
     r      = qq / data_dump_iter                                          # Capture number
 
     d_filename = 'data%05d' % r
     d_fullpath = os.path.join(d_path, d_filename)
-    np.savez(d_fullpath, pos=pos, vel=vel, E = E[1:NX+1, 0:3], B = B[1:NX+2, 0:3], J = Ji[1:NX+1], dns = dns[1:NX+1])   # Data file for each iteration
+    np.savez(d_fullpath, pos = pos, vel = vel, E = E[1:NX+1, 0:3], B = B[1:NX+2, 0:3], J = Ji[1:NX+1],
+                         dns = dns[1:NX+1], Ve = Ve[1:NX+1], Te = Te[1:NX+1])   # Data file for each iteration
     print 'Data saved'.format(qq)

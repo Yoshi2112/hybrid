@@ -150,6 +150,25 @@ def velocity_update_old(pos, vel, Ie, W_elec, idx, B, E, dt):
     return vel
 
 
+@nb.njit()
+def two_part_velocity_update(pos, vel, Ie, W_elec, idx, B, E, J, dt):
+    ''' Backup velocity update from Matthews (1994), just in case Boris isn't compatible with it.
+    
+    Advances velocity full timestep by first approximating half timestep.
+    '''
+    Ib, W_mag = assign_weighting_TSC(pos, E_nodes=False)     # Magnetic field weighting
+
+    for ii in nb.prange(N):
+        Ep, Bp = interpolate_forces_to_particle(E, B, J, Ie[ii], W_elec[:, ii], Ib[ii], W_mag[:, ii], idx[ii])
+        
+        fac        = 0.5*dt*charge[idx[ii]]/mass[idx[ii]]
+        v_half     = vel[:, ii] + fac*(Ep + aux.cross_product_single(vel[:, ii], Bp))
+        
+        vel[:, ii] += 2*fac*(Ep + aux.cross_product_single(v_half, Bp))
+    
+    return vel
+
+
 @nb.njit(parallel=do_parallel, fastmath=True)
 def position_update(pos, vel, dt):
     '''Updates the position of the particles using x = x0 + vt. 

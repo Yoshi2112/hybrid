@@ -497,8 +497,8 @@ def plot_energies(ii, normalize=True):
 
 if __name__ == '__main__':   
     drive    = 'F:'
-    series   = 'CAM_CL_TSC_winske'                          # Run identifier string 
-    run_num  = 3                                            # Run number
+    series   = 'CAM_CL_velocity_test'                          # Run identifier string 
+    run_num  = 0                                            # Run number
 
     manage_dirs()                                           # Initialize directories
     load_constants()                                        # Load SI constants
@@ -527,7 +527,7 @@ if __name__ == '__main__':
         B, E, Ve, Te, J, position, q_dns, velocity = load_timestep(ii)
         dns                                        = collect_number_density(position)
         #winske_stackplot(ii, title=r'CAM_CL_TSC /w Winske Parameters')
-        plot_energies(ii, normalize=False)
+        plot_energies(ii, normalize=True)
         
         
 
