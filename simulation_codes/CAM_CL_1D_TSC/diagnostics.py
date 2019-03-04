@@ -120,17 +120,17 @@ def check_velocity_distribution(part, j):
 def test_particle_orbit():
     
     def eval_E(pos):
-        coeff = 1 / (100. * np.sqrt(pos[0] ** 2 + pos[1] ** 2) ** 3)
+        #coeff = 1 / (100. * np.sqrt(pos[0] ** 2 + pos[1] ** 2) ** 3)
         
-        Ex = coeff * pos[0]
-        Ey = coeff * pos[1]
+        Ex = 0.#coeff * pos[0]
+        Ey = 0.#coeff * pos[1]
         Ez = 0.
         return np.array([Ex, Ey, Ez])
 
     def eval_B(pos, B0):
-        Bx = 0.0
+        Bx = B0
         By = 0.0
-        Bz = B0*np.sqrt(pos[0] ** 2 + pos[1] ** 2)
+        Bz = 0.0#B0*np.sqrt(pos[0] ** 2 + pos[1] ** 2)
         return np.array([Bx, By, Bz])
 
     def position_update(pos, vel, DT):
@@ -138,41 +138,66 @@ def test_particle_orbit():
         return pos
     
     v0    = 1e5
-    B0    = 0.01
-    vp    = np.array([0., v0, 0.]) 
+    B0    = 9.72197368e-9
+    vp    = np.array([0., 0., v0]) 
     rL    = (const.mass[0] * vp[1]) / (abs(const.charge[0] ) * B0)
-    xp    = np.array([-rL, 0., 0.]) 
-
-    resolution = 20
-    num_rev    = 10
-    maxtime    = int(resolution*num_rev)
+    xp    = np.array([0., -rL , 0.]) 
+    
+    perfect_orbit = plt.Circle((0, 0), rL, color='k', fill=False)
+    
+    gyfrac     = 0.01
+    num_rev    = 5000
+    
     gyperiod   = (2 * np.pi * const.mass[0]) / (const.charge[0] * B0) 
-    dt         = gyperiod / resolution 
-
-    xy         = np.zeros((maxtime+1, 2))
-    print '\nNumber of revolutions: {}'.format(num_rev)
-    print 'Points per revolution: {}'.format(resolution)
-    print 'Total number of points: {}'.format(maxtime)
+    maxtime    = gyperiod*num_rev
+    dt         = gyfrac * gyperiod
+    max_inc    = int(maxtime / dt) + 1
+    
+    P          = np.zeros((max_inc+1, 3))
+    print '\nNumber of orbits: {}'.format(num_rev)
+    print 'Increments per orbit: {}'.format(round(1./gyfrac, 2))
+    print 'Total number of points: {}'.format(max_inc)
     
     print '\nGyroradius: {}m'.format(rL)
     print 'Gyroperiod: {}s'.format(round(gyperiod, 2))
-    print 'Timestep: {}s'.format(round(dt, 3))
+    print 'Timestep: {}s'.format(round(dt, 5))
+    print 'Total time: {}s'.format(round(maxtime, 1))
+    
+    init_KE = 0.5 * const.mass[0] * vp[0] ** 2 + vp[1] ** 2 + vp[2] ** 2
     
     Bc  = eval_B(xp, B0)
     Ec  = eval_E(xp)
-    vp  = particles.boris_algorithm(vp, Bc, Ec, -0.5*dt, 0)
-    for ii in range(maxtime+1):
-        xy[ii, 0] = xp[0]
-        xy[ii, 1] = xp[1]
+    
+    P[0, 0] = xp[0]
+    P[0, 1] = xp[1]
+    P[0, 2] = xp[2]
+        
+    xp = position_update(xp, vp, 0.5*dt)
+    for ii in range(1, max_inc+1):
+        P[ii, 0] = xp[0]
+        P[ii, 1] = xp[1]
+        P[ii, 2] = xp[2]
 
         Bc  = eval_B(xp, B0)
         Ec  = eval_E(xp)
 
-        xp = position_update(xp, vp, dt)
-        vp = particles.boris_algorithm(vp, Bc, Ec, dt, 0)
+        #vp  = particles.boris_algorithm(vp, Bc, Ec, dt, 0)
+        vp  = particles.two_step_algorithm(vp, Bc, Ec, dt, 0)
         
-    plt.plot(xy[:, 0], xy[:, 1])
+        xp = position_update(xp, vp, dt)
+    
+    final_KE = 0.5 * const.mass[0] * vp[0] ** 2 + vp[1] ** 2 + vp[2] ** 2
+    
+    plt.figure(figsize=(12, 8))
+    plt.plot(P[:, 1], P[:, 2])
+    plt.xlabel('y')
+    plt.ylabel('z')
     plt.axis('equal')
+    #plt.gca().add_artist(perfect_orbit)
+    
+    KE_change = 100.*(final_KE - init_KE) / init_KE
+    plt.figtext(0.125, 0.885, r'$\Delta E = {}\%$'.format(KE_change))
+    plt.title('Boris algorithm: %.1f orbits, dt = %.3f$ T_c^{-1}$' % (num_rev, gyfrac))
     return
 
 
@@ -1117,11 +1142,12 @@ def test_current_push():
 
 
 if __name__ == '__main__':
+    test_particle_orbit()
     #animate_moving_weight()
     #test_curl_E()
     #test_grad_P_varying_qn()
     #test_cross_product()
-    test_cspline_interpolation()
+    #test_cspline_interpolation()
     #test_E_convective()
     #test_E_hall()
     #test_interp_cross_manual()

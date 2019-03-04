@@ -81,6 +81,14 @@ def boris_algorithm(v0, Bp, Ep, dt, idx):
 
 
 @nb.jit(nopython=njit, parallel=do_parallel)
+def two_step_algorithm(v0, Bp, Ep, dt, idx):
+    fac        = 0.5*dt*charge[idx]/mass[idx]
+    v_half     = v0 + fac*(Ep + aux.cross_product_single(v0, Bp))
+    v0        += 2*fac*(Ep + aux.cross_product_single(v_half, Bp))
+    return v0
+
+
+@nb.jit(nopython=njit, parallel=do_parallel)
 def interpolate_forces_to_particle(E, B, Ie, W_elec, Ib, W_mag, idx):
     '''
     Same as previous function, but also interpolates current to particle position to return
@@ -118,6 +126,7 @@ def velocity_update(pos, vel, Ie, W_elec, idx, B, E, dt):
     for ii in nb.prange(N):
         Ep, Bp     = interpolate_forces_to_particle(E, B, Ie[ii], W_elec[:, ii], Ib[ii], W_mag[:, ii], idx[ii])
         vel[:, ii] = boris_algorithm(vel[:, ii], Bp, Ep, dt, idx[ii])
+        #vel[:, ii] = two_step_algorithm(vel[:, ii], Bp, Ep, dt, idx[ii])
     return vel
 
 

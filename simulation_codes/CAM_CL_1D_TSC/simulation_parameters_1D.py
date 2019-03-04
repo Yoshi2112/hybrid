@@ -15,7 +15,7 @@ run_description = '''Test of electron resistance with Winske parameters (more pa
 drive           = 'F:/'                     # Drive letter or path for portable HDD e.g. 'E:/'
 save_path       = 'runs/PC_CAMCL_comparison/'       # Series save dir   : Folder containing all runs of a series
 run_num         = 1                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 1                         # Save data flag    : For later analysis
+generate_data   = 0                         # Save data flag    : For later analysis
 generate_plots  = 0                         # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                       # RNG Seed          : Set to enable consistent results for parameter studies
 

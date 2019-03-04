@@ -8,7 +8,7 @@ import particles_1D  as particles
 import fields_1D     as fields
 import sources_1D    as sources
 import plot_and_save as pas
-#import diagnostics   as diag
+import diagnostics   as diag
 
 from simulation_parameters_1D import generate_data, generate_plots, adaptive_timestep
 

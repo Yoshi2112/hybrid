@@ -11,6 +11,13 @@ from simulation_parameters_1D  import N, dx, xmax, xmin, charge, mass, do_parall
 import auxilliary_1D as aux
 
 
+def two_step_algorithm(v0, Bp, Ep, dt, idx):
+    fac        = 0.5*dt*charge[idx]/mass[idx]
+    v_half     = v0 + fac*(Ep + aux.cross_product_single(v0, Bp))
+    v0        += 2*fac*(Ep + aux.cross_product_single(v_half, Bp))
+    return v0
+
+
 @nb.njit(parallel=do_parallel)
 def assign_weighting_TSC(pos, E_nodes=True):
     '''Triangular-Shaped Cloud (TSC) weighting scheme used to distribute particle densities to
@@ -71,6 +78,9 @@ def boris_algorithm(v0, Bp, Ep, dt, idx):
     return v0
 
 
+
+
+
 @nb.njit(parallel=do_parallel)
 def interpolate_forces_to_particle(E, B, J, Ie, W_elec, Ib, W_mag, idx):
     '''
@@ -114,58 +124,8 @@ def velocity_update(pos, vel, Ie, W_elec, idx, B, E, J, dt):
     
     for ii in nb.prange(N):
         Ep, Bp     = interpolate_forces_to_particle(E, B, J, Ie[ii], W_elec[:, ii], Ib[ii], W_mag[:, ii], idx[ii])
-        vel[:, ii] = boris_algorithm(vel[:, ii], Bp, Ep, dt, idx[ii])
-    return vel
-
-
-@nb.njit(parallel=do_parallel)
-def velocity_update_old(pos, vel, Ie, W_elec, idx, B, E, dt):
-    '''
-    Interpolates the fields to the particle positions using TSC weighting, then
-    updates velocities using a Boris particle pusher.
-    Based on Birdsall & Langdon (1985), pp. 59-63.
-
-    INPUT:
-        part -- Particle array containing velocities to be updated
-        B    -- Magnetic field on simulation grid
-        E    -- Electric field on simulation grid
-        dt   -- Simulation time cadence
-        W    -- Weighting factor of particles to rightmost node
-
-    OUTPUT:
-        vel  -- Returns particle array with updated velocities
-    '''
-    Ib, W_mag = assign_weighting_TSC(pos, E_nodes=False)     # Magnetic field weighting
-
-    for ii in nb.prange(N):
-        Ep = E[Ie[ii]    , 0:3] * W_elec[0, ii]                 \
-           + E[Ie[ii] + 1, 0:3] * W_elec[1, ii]                 \
-           + E[Ie[ii] + 2, 0:3] * W_elec[2, ii]                 # E-field at particle location
-        
-        Bp = B[Ib[ii]    , 0:3] * W_mag[0, ii]                  \
-           + B[Ib[ii] + 1, 0:3] * W_mag[1, ii]                  \
-           + B[Ib[ii] + 2, 0:3] * W_mag[2, ii]                  # B-field at particle location
- 
-        vel[:, ii] = boris_algorithm(vel[:, ii], Bp, Ep, dt, idx[ii])
-    return vel
-
-
-@nb.njit()
-def two_part_velocity_update(pos, vel, Ie, W_elec, idx, B, E, J, dt):
-    ''' Backup velocity update from Matthews (1994), just in case Boris isn't compatible with it.
-    
-    Advances velocity full timestep by first approximating half timestep.
-    '''
-    Ib, W_mag = assign_weighting_TSC(pos, E_nodes=False)     # Magnetic field weighting
-
-    for ii in nb.prange(N):
-        Ep, Bp = interpolate_forces_to_particle(E, B, J, Ie[ii], W_elec[:, ii], Ib[ii], W_mag[:, ii], idx[ii])
-        
-        fac        = 0.5*dt*charge[idx[ii]]/mass[idx[ii]]
-        v_half     = vel[:, ii] + fac*(Ep + aux.cross_product_single(vel[:, ii], Bp))
-        
-        vel[:, ii] += 2*fac*(Ep + aux.cross_product_single(v_half, Bp))
-    
+        vel[:, ii] = boris_algorithm(   vel[:, ii], Bp, Ep, dt, idx[ii])
+        #vel[:, ii] = two_step_algorithm(vel[:, ii], Bp, Ep, dt, idx[ii])
     return vel
 
 
