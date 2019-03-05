@@ -11,6 +11,7 @@ from simulation_parameters_1D  import N, dx, xmax, xmin, charge, mass, do_parall
 import auxilliary_1D as aux
 
 
+@nb.njit()
 def two_step_algorithm(v0, Bp, Ep, dt, idx):
     fac        = 0.5*dt*charge[idx]/mass[idx]
     v_half     = v0 + fac*(Ep + aux.cross_product_single(v0, Bp))
@@ -50,7 +51,7 @@ def assign_weighting_TSC(pos, E_nodes=True):
     return left_node, weights
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit()
 def boris_algorithm(v0, Bp, Ep, dt, idx):
     '''Updates the velocities of the particles in the simulation using a Boris particle pusher, as detailed
     in Birdsall & Langdon (1985),  59-63.
@@ -78,10 +79,7 @@ def boris_algorithm(v0, Bp, Ep, dt, idx):
     return v0
 
 
-
-
-
-@nb.njit(parallel=do_parallel)
+@nb.njit()
 def interpolate_forces_to_particle(E, B, J, Ie, W_elec, Ib, W_mag, idx):
     '''
     Same as previous function, but also interpolates current to particle position to return
@@ -129,7 +127,7 @@ def velocity_update(pos, vel, Ie, W_elec, idx, B, E, J, dt):
     return vel
 
 
-@nb.njit(parallel=do_parallel, fastmath=True)
+@nb.njit(parallel=do_parallel)
 def position_update(pos, vel, dt):
     '''Updates the position of the particles using x = x0 + vt. 
     Also updates particle nearest node and weighting.

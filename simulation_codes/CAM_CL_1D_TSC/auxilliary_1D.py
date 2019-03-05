@@ -13,7 +13,7 @@ import particles_1D as particles
 import simulation_parameters_1D as const
 
 
-@nb.njit(fastmath=True, parallel=const.do_parallel)
+@nb.njit()
 def cross_product_single(A, B):
     '''
     Vector (cross) product between 3-vectors, A and B of same dimensions.
@@ -32,7 +32,7 @@ def cross_product_single(A, B):
     return output
 
 
-@nb.njit(fastmath=True, parallel=const.do_parallel)
+@nb.njit(parallel=const.do_parallel)
 def cross_product(A, B):
     '''
     Vector (cross) product between two vectors, A and B of same dimensions.
@@ -86,16 +86,15 @@ def interpolate_to_center_cspline3D(arr, DX=const.dx):
     return interp
 
 
-@nb.njit()
-def interpolate_to_center_linear(val):
+@nb.jit(nopython=const.njit, parallel=const.do_parallel)
+def interpolate_to_center_linear_1D(val):
     ''' 
     Interpolates vector cell edge values (i.e. B-grid quantities) to cell centers (i.e. E-grid quantities)
     Note: First and last (two) array values return zero due to ghost cell values
     '''
     center = np.zeros(val.shape)
     
-    for ii in range(3):
-        center[1:const.NX+1, :] = 0.5*(val[1: const.NX+1, :] + val[2:const.NX+2, :])
+    center[1:const.NX + 1] = 0.5*(val[1: const.NX + 1] + val[2:const.NX + 2])
         
     return center
 

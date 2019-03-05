@@ -19,8 +19,6 @@ if __name__ == '__main__':
     B, E_int                                     = init.initialize_fields()
     DT, max_inc, data_iter, plot_iter, subcycles = aux.set_timestep(vel)
 
-    #diag.check_velocity_distribution(vel)
-    
     q_dens, Ji    = sources.collect_moments(vel, Ie, W_elec, idx)
     E_int, Ve, Te = fields.calculate_E(B, Ji, q_dens)
     vel           = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E_int, -0.5*DT)

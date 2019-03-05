@@ -7,20 +7,23 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 
-from simulation_parameters_1D  import N, dx, xmax, xmin, charge, mass, do_parallel, njit
+from simulation_parameters_1D  import N, dx, xmax, xmin, charge, mass, do_parallel
 import auxilliary_1D as aux
 from sources_1D import collect_moments
 
 
-@nb.jit(nopython=njit)
+@nb.njit()
 def advance_particles_and_moments(pos, vel, Ie, W_elec, idx, B, E, DT):
+    '''
+    Helper function to group the particle advance and moment collection functions
+    '''
     vel             = velocity_update(pos, vel, Ie, W_elec, idx, B, E, DT)
-    pos, Ie, W_elec = position_update(pos, vel, DT)
+    pos, Ie, W_elec = position_update(pos, vel, DT)    
     q_dens, Ji      = collect_moments(vel, Ie, W_elec, idx)
     return pos, vel, Ie, W_elec, q_dens, Ji
 
 
-@nb.jit(nopython=njit, parallel=do_parallel)
+@nb.njit(parallel=do_parallel)
 def assign_weighting_TSC(pos, E_nodes=True):
     '''Triangular-Shaped Cloud (TSC) weighting scheme used to distribute particle densities to
     nodes and interpolate field values to particle positions.
@@ -52,7 +55,7 @@ def assign_weighting_TSC(pos, E_nodes=True):
     return left_node, weights
 
 
-@nb.jit(nopython=njit, parallel=do_parallel)
+@nb.njit()
 def boris_algorithm(v0, Bp, Ep, dt, idx):
     '''Updates the velocities of the particles in the simulation using a Boris particle pusher, as detailed
     in Birdsall & Langdon (1985),  59-63.
@@ -80,7 +83,7 @@ def boris_algorithm(v0, Bp, Ep, dt, idx):
     return v0
 
 
-@nb.jit(nopython=njit, parallel=do_parallel)
+@nb.njit()
 def two_step_algorithm(v0, Bp, Ep, dt, idx):
     fac        = 0.5*dt*charge[idx]/mass[idx]
     v_half     = v0 + fac*(Ep + aux.cross_product_single(v0, Bp))
@@ -88,7 +91,7 @@ def two_step_algorithm(v0, Bp, Ep, dt, idx):
     return v0
 
 
-@nb.jit(nopython=njit, parallel=do_parallel)
+@nb.njit()
 def interpolate_forces_to_particle(E, B, Ie, W_elec, Ib, W_mag, idx):
     '''
     Same as previous function, but also interpolates current to particle position to return
@@ -104,7 +107,7 @@ def interpolate_forces_to_particle(E, B, Ie, W_elec, Ib, W_mag, idx):
     return Ep, Bp
 
 
-@nb.jit(nopython=njit, parallel=do_parallel)
+@nb.njit(parallel=do_parallel)
 def velocity_update(pos, vel, Ie, W_elec, idx, B, E, dt):
     '''
     Interpolates the fields to the particle positions using TSC weighting, then
@@ -130,7 +133,7 @@ def velocity_update(pos, vel, Ie, W_elec, idx, B, E, dt):
     return vel
 
 
-@nb.jit(nopython=njit, parallel=do_parallel, fastmath=True)
+@nb.njit(parallel=do_parallel)
 def position_update(pos, vel, dt):
     '''Updates the position of the particles using x = x0 + vt. 
     Also updates particle nearest node and weighting.

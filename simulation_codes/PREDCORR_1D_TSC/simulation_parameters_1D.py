@@ -9,13 +9,13 @@ import sys
 import platform
 
 ### RUN DESCRIPTION ###
-run_description = '''New Predictor-Corrector Test /w CAM-CL script base.'''
+run_description = '''Testing for access violations by plot and save functions'''
 
 ### RUN PARAMETERS ###
-drive           = 'F:/'                     # Drive letter or path for portable HDD e.g. 'E:/'
-save_path       = 'runs/PC_CAMCL_comparison/'       # Series save dir   : Folder containing all runs of a series
-run_num         = 1                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 1                         # Save data flag    : For later analysis
+drive           = 'E:/'                     # Drive letter or path for portable HDD e.g. 'E:/'
+save_path       = 'runs/test_access/'       # Series save dir   : Folder containing all runs of a series
+run_num         = 0                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+generate_data   = 0                         # Save data flag    : For later analysis
 generate_plots  = 0                         # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                       # RNG Seed          : Set to enable consistent results for parameter studies
 
@@ -33,7 +33,7 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 300                              # Simulation runtime, in multiples of the gyroperiod
+max_rev  = 50                               # Simulation runtime, in multiples of the gyroperiod
 
 dxm         = 1.0                           # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
 cellpart    = 80                            # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion

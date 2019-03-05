@@ -8,11 +8,11 @@ import numpy as np
 import numba as nb
 
 from particles_1D             import advance_particles_and_moments
-from auxilliary_1D            import cross_product, interpolate_to_center_cspline3D, interpolate_to_center_cspline1D
+from auxilliary_1D            import cross_product, interpolate_to_center_cspline3D, interpolate_to_center_cspline1D, interpolate_to_center_linear
 from simulation_parameters_1D import NX, dx, Te0, ne, q, mu0, kB, ie, njit
 
 
-@nb.jit(nopython=njit)
+@nb.njit()
 def predictor_corrector(B, E_int, E_half, pos, vel, q_dens, Ie, W_elec, idx, DT):
     '''
     Isolated predictor-corrector method for easy debugging/coding. Predicts the
@@ -39,7 +39,7 @@ def predictor_corrector(B, E_int, E_half, pos, vel, q_dens, Ie, W_elec, idx, DT)
     '''
     E_pred          = 2.0*E_half - 1.0*E_int
     B_pred          = push_B(B, E_pred, DT)
-    
+
     P, V, I, W, Q, J = advance_particles_and_moments(pos.copy(), vel.copy(), Ie.copy(), W_elec.copy(), idx, B_pred, E_pred, DT)
     
     q_dens          = 0.5*(q_dens + Q)
@@ -51,7 +51,7 @@ def predictor_corrector(B, E_int, E_half, pos, vel, q_dens, Ie, W_elec, idx, DT)
     return E_corr, B_corr
 
 
-@nb.jit(nopython=njit)
+@nb.njit()
 def get_curl_E(field, DX=dx):
     ''' Returns a vector quantity for the curl of a field valid at the positions 
     between its gridpoints (i.e. curl(E) -> B-grid, etc.)
@@ -78,7 +78,7 @@ def get_curl_E(field, DX=dx):
     return curl / DX
 
 
-@nb.jit(nopython=njit)
+@nb.njit()
 def push_B(B, E, DT):
     '''
     Used as part of predictor corrector for predicing B based on an approximated
@@ -89,7 +89,7 @@ def push_B(B, E, DT):
     return B_out
 
 
-@nb.jit(nopython=njit)
+@nb.njit()
 def set_periodic_boundaries(B):
     ''' 
     Set boundary conditions for the magnetic field (or values on the B-grid, i.e. curl[E]): 
@@ -105,7 +105,7 @@ def set_periodic_boundaries(B):
     return B
 
 
-@nb.jit(nopython=njit)
+@nb.njit()
 def cyclic_leapfrog(B, rho_i, J_i, DT, subcycles):
     '''
     Solves for the magnetic field push by keeping two copies and subcycling between them,
@@ -159,7 +159,7 @@ def cyclic_leapfrog(B, rho_i, J_i, DT, subcycles):
     return B
 
 
-@nb.jit(nopython=njit)
+@nb.njit()
 def get_curl_B(field, DX=dx):
     ''' Returns a vector quantity for the curl of a field valid at the positions 
     between its gridpoints (i.e. curl(B) -> E-grid, etc.)
@@ -189,7 +189,7 @@ def get_curl_B(field, DX=dx):
     return curl / DX
 
 
-@nb.jit(nopython=njit)
+@nb.njit()
 def get_electron_temp(qn):
     '''
     Calculate the electron temperature in each cell. Depends on the charge density of each cell
@@ -203,7 +203,7 @@ def get_electron_temp(qn):
     return te
 
 
-@nb.jit(nopython=njit)
+@nb.njit()
 def get_grad_P(qn, te, DX=dx, inter_type=1):
     '''
     Returns the electron pressure gradient (in 1D) on the E-field grid using P = nkT and 
@@ -226,22 +226,21 @@ def get_grad_P(qn, te, DX=dx, inter_type=1):
     for ii in nb.prange(1, qn.shape[0]):
         grad_pe_B[ii] = (Pe[ii] - Pe[ii - 1])  / DX
         
-    grad_pe_B[0] = grad_pe_B[NX]
+    grad_pe_B[0] = grad_pe_B[qn.shape[0] - 3]
     
     # Re-interpolate to E-grid
     if inter_type == 0:
-        for ii in nb.prange(0, qn.shape[0] - 1):
-            grad_P[ii]    = 0.5*(grad_pe_B[ii] + grad_pe_B[ii + 1])            
+        grad_P = interpolate_to_center_linear(grad_pe_B, DX=DX)           
     elif inter_type == 1:
         grad_P = interpolate_to_center_cspline1D(grad_pe_B, DX=DX)
-    
-    grad_P[0]      = grad_P[NX]
-    grad_P[NX + 1] = grad_P[1]
-    grad_P[NX + 2] = grad_P[2] 
+
+    grad_P[0]               = grad_P[qn.shape[0] - 3]
+    grad_P[qn.shape[0] - 2] = grad_P[1]
+    grad_P[qn.shape[0] - 1] = grad_P[2] 
     return grad_P
 
 
-@nb.jit(nopython=njit)
+@nb.njit()
 def calculate_E(B, J, qn, DX=dx):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,

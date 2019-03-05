@@ -7,9 +7,9 @@ Created on Fri Sep 22 17:55:15 2017
 import numpy as np
 import numba as nb
 
-from simulation_parameters_1D import NX, Nj, n_contr, charge, smooth_sources, do_parallel, njit, q, ne, min_dens
+from simulation_parameters_1D import NX, Nj, n_contr, charge, smooth_sources, do_parallel, q, ne, min_dens
 
-@nb.jit(nopython=njit, parallel=do_parallel)
+@nb.njit(parallel=do_parallel)
 def deposit_both_moments(vel, Ie, W_elec, idx):
     '''Collect number and velocity moments in each cell, weighted by their distance
     from cell nodes.
@@ -46,7 +46,7 @@ def deposit_both_moments(vel, Ie, W_elec, idx):
     return n_i, nu_i
 
 
-@nb.jit(nopython=njit, parallel=do_parallel)
+@nb.njit()
 def collect_moments(vel, Ie, W_elec, idx):
     '''
     Moment (charge/current) collection function.
@@ -88,7 +88,7 @@ def collect_moments(vel, Ie, W_elec, idx):
     return q_dens, Ji
 
 
-@nb.jit(nopython=njit, parallel=do_parallel)
+@nb.njit(parallel=do_parallel)
 def smooth(function):
     '''Smoothing function: Applies Gaussian smoothing routine across adjacent cells. 
     Assummes no contribution from ghost cells.'''
@@ -110,7 +110,7 @@ def smooth(function):
     return new_function
 
 
-@nb.jit(nopython=njit, parallel=do_parallel)
+@nb.njit()
 def manage_ghost_cells(arr):
     '''Deals with ghost cells: Moves their contributions and mirrors their counterparts.
        Works like a charm if spatial dimensions always come first in an array.'''

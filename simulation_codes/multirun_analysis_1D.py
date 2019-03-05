@@ -13,6 +13,8 @@ import pickle
 import numba as nb
 from collections import OrderedDict
 from matplotlib.lines import Line2D
+import pdb
+
 
 def manage_dirs():
     global run_dir, data_dir, anal_dir, temp_dir, base_dir
@@ -69,12 +71,14 @@ def load_particles():
 
 def load_header():
     global Nj, cellpart, data_dump_iter, ne, NX, dxm, seed, B0, dx, Te0, theta, dt, max_rev,\
-           ie, run_desc, seed, subcycles, LH_frac, orbit_res, freq_res, particle_shape, method_type
+           ie, run_desc, seed, subcycles, LH_frac, orbit_res, freq_res, particle_shape, method_type, method_type
     
     h_name = os.path.join(data_dir, 'Header.pckl')                      # Load header file
     f      = open(h_name)                                               # Open header file
     obj    = pickle.load(f)                                             # Load variables from header file into python object
     f.close()                                                           # Close header file
+    
+    method_type = obj['method_type']
     
     Nj              = obj['Nj']
     cellpart        = obj['cellpart']
@@ -91,12 +95,16 @@ def load_header():
     dt              = obj['dt']
     max_rev         = obj['max_rev']
     ie              = obj['ie']
-    LH_frac         = obj['LH_frac']
     orbit_res       = obj['orbit_res']
     freq_res        = obj['freq_res'] 
     run_desc        = obj['run_desc']
     particle_shape  = obj['particle_shape']
     method_type     = obj['method_type']
+    
+    if method_type == 'CAM_CL':
+        LH_frac         = obj['LH_frac']
+    elif method_type == 'PREDCORR':
+        pass
 
     print 'Header file loaded.'
     print 'dt = {}s\n'.format(dt)
@@ -270,17 +278,22 @@ def plot_energies(energy, ax, normalize=True):
 if __name__ == '__main__':   
     plt.ioff()
     
-    drive           = 'F:'
-    series          = 'CAM_CL_velocity_test'                    # Run identifier string 
+    drive           = 'E:'
+    series          = 'PC_CAMCL_comparison'                     # Run identifier string 
     
     runs_to_analyse = [0                ,   1 ]                 # Run number
     run_styles      = ['-'              , '--']
-    run_labels      = ['Two-step Leapfrog', 'Boris Algorithm']
+    run_labels      = ['Predictor-Corrector', 'CAM-CL']
+    total_energies  = np.zeros(len(runs_to_analyse))
     
     fig  = plt.figure(figsize=(15, 7))
     ax   = plt.subplot2grid((7, 7), (0, 0), colspan=6, rowspan=7)
     run_legend, ax  = create_legend(ax)
         
+    fsize = 10; fname='monospace'; left = 0.86
+    plt.figtext(left, 0.50, r'TOTAL ENERGY CONSERVATION',    fontsize=fsize, fontname=fname)
+    plt.figtext(left, 0.50,  '_________________________',     fontsize=fsize, fontname=fname)
+
     for run_num, ii in zip(runs_to_analyse, range(len(runs_to_analyse))):
         manage_dirs()                                           # Initialize directories
         load_constants()                                        # Load SI constants
@@ -297,7 +310,10 @@ if __name__ == '__main__':
         energies = get_run_energies()
 
         plot_energies(energies, ax)
-    
+        
+        total_energy_change = 100.*(energies[1, -1] - energies[1, -0]) / energies[1, 0]
+        plt.figtext(left, 0.475-ii*0.02, '{:>8} : {:>7}%'.format(method_type, round(total_energy_change, 2)),  fontsize=fsize,  fontname=fname)
+
     fig.tight_layout()
     
     handles, labels = plt.gca().get_legend_handles_labels()
@@ -305,7 +321,8 @@ if __name__ == '__main__':
     ax.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1, 0.8))
 
     ax.add_artist(run_legend)
-    
+
+        
     fullpath = base_dir + 'energy_plot'
     ax.set_ylim(0.85, 1.4)
     ax.set_xlim(0, 60)
