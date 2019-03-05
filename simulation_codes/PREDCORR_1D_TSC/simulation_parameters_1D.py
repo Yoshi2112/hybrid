@@ -12,7 +12,7 @@ import platform
 run_description = '''Test of Pred-Corr energy conservation with 5000 ppc and Winske parameters'''
 
 ### RUN PARAMETERS ###
-drive           = 'E:/'                     # Drive letter or path for portable HDD e.g. 'E:/'
+drive           = '/media/yoshi/UNI_HD/'    # Drive letter or path for portable HDD e.g. 'E:/'
 save_path       = 'runs/PC_CAMCL_better/'   # Series save dir   : Folder containing all runs of a series
 run_num         = 0                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 generate_data   = 1                         # Save data flag    : For later analysis

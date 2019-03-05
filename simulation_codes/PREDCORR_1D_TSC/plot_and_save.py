@@ -162,7 +162,6 @@ def store_run_parameters(dt, data_dump_iter):
                    ('dxm', const.dxm),
                    ('dx', const.dx),
                    ('cellpart', const.cellpart),
-                   ('subcycles', const.subcycles),
                    ('B0', const.B0),
                    ('ne', ne),
                    ('Te0', const.Te0),
