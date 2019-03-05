@@ -12,9 +12,9 @@ import platform
 run_description = '''Test of CAM-CL energy conservation with 5000 ppc and Winske parameters'''
 
 ### RUN PARAMETERS ###
-drive           = 'E:/'                     # Drive letter or path for portable HDD e.g. 'E:/'
+drive           = '/media/yoshi/UNI_HD/'    # Drive letter or path for portable HDD e.g. 'E:/'
 save_path       = 'runs/PC_CAMCL_better/'   # Series save dir   : Folder containing all runs of a series
-run_num         = 1                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+run_num         = 4                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 generate_data   = 1                         # Save data flag    : For later analysis
 generate_plots  = 0                         # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                       # RNG Seed          : Set to enable consistent results for parameter studies
@@ -75,7 +75,7 @@ min_dens       = 0.05                                       # Allowable minimum 
 
 adaptive_timestep   = True                                  # Flag (True/False) for adaptive timestep based on particle and field parameters
 adaptive_subcycling = True                                  # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
-do_parallel         = False                                 # Flag (True/False) for auto-parallel using numba.njit()
+do_parallel         = True                                 # Flag (True/False) for auto-parallel using numba.njit()
 
 ratio_override = 1                                          # Flag to override magnetic field value for specific regime
 wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
