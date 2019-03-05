@@ -85,7 +85,7 @@ def interpolate_to_center_cspline3D(arr, DX=const.dx):
     return interp
 
 
-@nb.jit(nopython=const.njit, parallel=const.do_parallel)
+@nb.njit(parallel=const.do_parallel)
 def interpolate_to_center_linear_1D(val):
     ''' 
     Interpolates vector cell edge values (i.e. B-grid quantities) to cell centers (i.e. E-grid quantities)
@@ -101,7 +101,7 @@ def interpolate_to_center_linear_1D(val):
 def set_timestep(vel):
     gyperiod = (2*np.pi) / const.gyfreq               # Gyroperiod within uniform field (s)         
     ion_ts   = const.orbit_res * gyperiod             # Timestep to resolve gyromotion
-    vel_ts   = const.dx / (2 * np.max(vel[0, :]))     # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
+    vel_ts   = 0.5 * const.dx / np.max(vel[0, :])     # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
 
     DT       = min(ion_ts, vel_ts)
     max_time = const.max_rev * gyperiod               # Total runtime in seconds
@@ -118,24 +118,14 @@ def set_timestep(vel):
         data_iter = int(const.data_res*gyperiod / DT)
     
     print 'Timestep: %.4fs, %d iterations total' % (DT, max_inc)
-    
-    if const.adaptive_subcycling == True:
-        k_max           = np.pi / const.dx
-        dispfreq        = (k_max ** 2) * const.B0 / (const.mu0 * const.ne * const.q)            # Dispersion frequency
-        dt_sc           = const.freq_res * 1./dispfreq
-        subcycles       = int(DT / dt_sc + 1)
-        print 'Number of subcycles required: {}'.format(subcycles)
-    else:
-        subcycles = const.subcycles
-        print 'Number of subcycles set at default: {}'.format(subcycles)
-    
+
     if const.generate_data == 1:
         pas.store_run_parameters(DT, data_iter)
         
-    return DT, max_inc, data_iter, plot_iter, subcycles
+    return DT, max_inc, data_iter, plot_iter
 
 
-def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, plot_iter, subcycles, idx):
+def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, plot_iter, idx):
     max_Vx          = np.max(vel[0, :])
     max_V           = np.max(vel)
     k_max           = np.pi / const.dx
@@ -144,6 +134,7 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, 
     B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
     high_rat        = (const.charge/const.mass).max()
     
+    dispfreq        = (k_max ** 2) * (B_tot / (const.mu0 * dns)).max()           # Dispersion frequency
     gyfreq          = high_rat  * np.abs(B_tot).max() / (2 * np.pi)      
     ion_ts          = const.orbit_res * 1./gyfreq
     
@@ -153,8 +144,13 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, 
     else:
         Eacc_ts = ion_ts
     
-    vel_ts          = 0.75*const.dx / max_Vx                                     # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
-    DT_part         = min(Eacc_ts, vel_ts, ion_ts)                               # Smallest of the particle conditions
+    if const.account_for_dispersion == True:
+        disp_ts     = const.dispersion_allowance * const.freq_res / dispfreq     # Making this a little bigger so it doesn't wreck everything
+    else:
+        disp_ts     = ion_ts
+    
+    vel_ts          = 0.80 * const.dx / max_Vx                                   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
+    DT_part         = min(Eacc_ts, vel_ts, ion_ts, disp_ts)                      # Smallest of the allowable timesteps
 
     if DT_part < 0.9*DT:
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, 0.5*DT)    # Re-sync vel/pos       
@@ -187,25 +183,6 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, 
             data_iter = 1
         else:
             data_iter /= 2
-            
-        print 'Timestep Doubled. Syncing particle velocity with DT = {}'.format(DT)
-
-    if const.adaptive_subcycling == True:
-        dispfreq        = (k_max ** 2) * (B_tot / (const.mu0 * dns)).max()             # Dispersion frequency
-        dt_sc           = const.freq_res * 1./dispfreq
-        new_subcycles   = int(DT / dt_sc + 1)
         
-        if subcycles < 0.75*new_subcycles:                                       
-            subcycles *= 2
-            print 'Number of subcycles per timestep doubled to {}'.format(subcycles)
-        if subcycles > 3.0*new_subcycles:                                      
-            subcycles     = (subcycles + 1) / 2
-            print 'Number of subcycles per timestep halved to {}'.format(subcycles)
-            
-        if subcycles > const.subcycle_max:
-            const.adaptive_subcycling = False
-            subcycles = const.subcycle_max
-    else:
-        pass
 
-    return pos, vel, qq, DT, max_inc, data_iter, plot_iter, subcycles
+    return pos, vel, qq, DT, max_inc, data_iter, plot_iter

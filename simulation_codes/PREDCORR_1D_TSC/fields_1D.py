@@ -8,8 +8,8 @@ import numpy as np
 import numba as nb
 
 from particles_1D             import advance_particles_and_moments
-from auxilliary_1D            import cross_product, interpolate_to_center_cspline3D, interpolate_to_center_cspline1D, interpolate_to_center_linear
-from simulation_parameters_1D import NX, dx, Te0, ne, q, mu0, kB, ie, njit
+from auxilliary_1D            import cross_product, interpolate_to_center_cspline3D, interpolate_to_center_cspline1D, interpolate_to_center_linear_1D
+from simulation_parameters_1D import NX, dx, Te0, ne, q, mu0, kB, ie
 
 
 @nb.njit()
@@ -106,60 +106,6 @@ def set_periodic_boundaries(B):
 
 
 @nb.njit()
-def cyclic_leapfrog(B, rho_i, J_i, DT, subcycles):
-    '''
-    Solves for the magnetic field push by keeping two copies and subcycling between them,
-    averaging them at the end of the cycle as per Matthews (1994). The source terms are
-    unchanged during the subcycle step. This method damps the high frequency dispersion 
-    inherent in explicit hybrid simulations.
-    
-    INPUT:
-        B     -- Magnetic field to update
-        rho_i -- Total ion charge density
-        J_i   -- Total ionic current density
-        DT    -- Master simulation timestep. This function advances the field by 0.5*DT
-        subcycles -- The number of subcycle steps to be performed. 
-    '''
-    H  = 0.5 * DT  
-    dh = H / subcycles  
-    B1 = B.copy()
-
-    ## DESYNC SECOND FIELD COPY - PUSH BY DH ##
-    E, Ve, Te = calculate_E(B, J_i, rho_i)
-    B2        = B.copy() - dh * get_curl_E(E) 
-    B2        = set_periodic_boundaries(B2)                              
-    
-    ## RETURN IF NO SUBCYCLES REQUIRED ##
-    if subcycles == 1:
-        return B2
-
-    ## MAIN SUBCYCLE LOOP ##
-    for ii in range(subcycles - 1):             
-        if ii%2 == 0:
-            E, Ve, Te = calculate_E(B2, J_i, rho_i)
-            B1  -= 2 * dh * get_curl_E(E)
-            B1   = set_periodic_boundaries(B1)
-        else:
-            E, Ve, Te = calculate_E(B1, J_i, rho_i)
-            B2  -= 2 * dh * get_curl_E(E)
-            B2   = set_periodic_boundaries(B2)
-            
-    ## RESYNC FIELD COPIES ##
-    if ii%2 == 0:
-        E, Ve, Te = calculate_E(B2, J_i, rho_i)
-        B2  -= dh * get_curl_E(E)
-        B2   = set_periodic_boundaries(B2)
-    else:
-        E, Ve, Te = calculate_E(B1, J_i, rho_i)
-        B1  -= dh * get_curl_E(E)
-        B1   = set_periodic_boundaries(B1)
-
-    ## AVERAGE FIELD SOLUTIONS: COULD PERFORM A CONVERGENCE TEST HERE IN FUTURE ##
-    B = 0.5 * (B1 + B2)
-    return B
-
-
-@nb.njit()
 def get_curl_B(field, DX=dx):
     ''' Returns a vector quantity for the curl of a field valid at the positions 
     between its gridpoints (i.e. curl(B) -> E-grid, etc.)
@@ -230,7 +176,7 @@ def get_grad_P(qn, te, DX=dx, inter_type=1):
     
     # Re-interpolate to E-grid
     if inter_type == 0:
-        grad_P = interpolate_to_center_linear(grad_pe_B, DX=DX)           
+        grad_P = interpolate_to_center_linear_1D(grad_pe_B)           
     elif inter_type == 1:
         grad_P = interpolate_to_center_cspline1D(grad_pe_B, DX=DX)
 

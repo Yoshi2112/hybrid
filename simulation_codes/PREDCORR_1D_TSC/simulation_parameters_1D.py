@@ -9,13 +9,13 @@ import sys
 import platform
 
 ### RUN DESCRIPTION ###
-run_description = '''Testing for access violations by plot and save functions'''
+run_description = '''Test of Pred-Corr energy conservation with 5000 ppc and Winske parameters'''
 
 ### RUN PARAMETERS ###
 drive           = 'E:/'                     # Drive letter or path for portable HDD e.g. 'E:/'
-save_path       = 'runs/test_access/'       # Series save dir   : Folder containing all runs of a series
+save_path       = 'runs/PC_CAMCL_better/'   # Series save dir   : Folder containing all runs of a series
 run_num         = 0                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 0                         # Save data flag    : For later analysis
+generate_data   = 1                         # Save data flag    : For later analysis
 generate_plots  = 0                         # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                       # RNG Seed          : Set to enable consistent results for parameter studies
 
@@ -33,10 +33,10 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 50                               # Simulation runtime, in multiples of the gyroperiod
+max_rev  = 25                               # Simulation runtime, in multiples of the gyroperiod
 
-dxm         = 1.0                           # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
-cellpart    = 80                            # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
+cellpart = 5000                             # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
 ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
@@ -68,13 +68,10 @@ beta_per   = np.array([1., 50.])                            # Ion species perpen
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
 
-adaptive_timestep   = True                                  # Flag (True/False) for adaptive timestep based on particle and field parameters
-adaptive_subcycling = False                                 # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
-subcycles           = 1                                     # Number of (starting) field subcycling steps for Cyclic Leapfrog
-subcycle_max        = 1000
-
-do_parallel         = False                                 # Flag (True/False) for auto-parallel using numba.njit()
-njit                = True                                  # Flag for Numba no-python mode 
+adaptive_timestep      = True                               # Flag (True/False) for adaptive timestep based on particle and field parameters
+account_for_dispersion = False                              # Whether or not to reduce timestep to prevent dispersion getting too high
+dispersion_allowance   = 2.                                 # Multiple of how much past frac*wD^-1 is allowed: Used to stop dispersion from slowing down sim too much  
+do_parallel            = False                              # Flag (True/False) for auto-parallel using numba.njit()
 
 ratio_override = 1                                          # Flag to override magnetic field value for specific regime
 wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
@@ -209,9 +206,3 @@ if simulated_density_per_cell != real_density_per_cell:
     print 'ABORTING...'
     sys.exit()
 
-if subcycles == 0 or subcycles == 1:
-    print '-----------------------------------------------------------------------------'
-    print 'Subcycling DISABLED: Magnetic field will advance only once per half-timestep.'
-    print '-----------------------------------------------------------------------------'
-    subcycles = 1
-    

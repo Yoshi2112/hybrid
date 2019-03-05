@@ -15,9 +15,9 @@ from simulation_parameters_1D import generate_data, generate_plots
 if __name__ == '__main__':
     start_time = timer()
     
-    pos, vel, Ie, W_elec, idx                    = init.initialize_particles()
-    B, E_int                                     = init.initialize_fields()
-    DT, max_inc, data_iter, plot_iter, subcycles = aux.set_timestep(vel)
+    pos, vel, Ie, W_elec, idx           = init.initialize_particles()
+    B, E_int                            = init.initialize_fields()
+    DT, max_inc, data_iter, plot_iter   = aux.set_timestep(vel)
 
     q_dens, Ji    = sources.collect_moments(vel, Ie, W_elec, idx)
     E_int, Ve, Te = fields.calculate_E(B, Ji, q_dens)
@@ -26,8 +26,8 @@ if __name__ == '__main__':
     qq      = 0
     while qq < max_inc:
         # Check timestep
-        pos, vel, qq, DT, max_inc, data_iter, plot_iter, subcycles \
-        = aux.check_timestep(qq, DT, pos, vel, B, E_int, q_dens, Ie, W_elec, max_inc, data_iter, plot_iter, subcycles, idx)
+        pos, vel, qq, DT, max_inc, data_iter, plot_iter \
+        = aux.check_timestep(qq, DT, pos, vel, B, E_int, q_dens, Ie, W_elec, max_inc, data_iter, plot_iter, idx)
         
         # Main loop
         pos, vel, Ie, W_elec, q_dens_adv, Ji = particles.advance_particles_and_moments(pos, vel, Ie, W_elec, idx, B, E_int, DT)

@@ -9,13 +9,13 @@ import sys
 import platform
 
 ### RUN DESCRIPTION ###
-run_description = '''Test of electron resistance with Winske parameters (more particles)'''
+run_description = '''Test of CAM-CL energy conservation with 5000 ppc and Winske parameters'''
 
 ### RUN PARAMETERS ###
-drive           = 'F:/'                     # Drive letter or path for portable HDD e.g. 'E:/'
-save_path       = 'runs/PC_CAMCL_comparison/'       # Series save dir   : Folder containing all runs of a series
+drive           = 'E:/'                     # Drive letter or path for portable HDD e.g. 'E:/'
+save_path       = 'runs/PC_CAMCL_better/'   # Series save dir   : Folder containing all runs of a series
 run_num         = 1                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 0                         # Save data flag    : For later analysis
+generate_data   = 1                         # Save data flag    : For later analysis
 generate_plots  = 0                         # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                       # RNG Seed          : Set to enable consistent results for parameter studies
 
@@ -33,11 +33,11 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 300                              # Simulation runtime, in multiples of the gyroperiod
+max_rev  = 25                               # Simulation runtime, in multiples of the gyroperiod
 
 dxm         = 1.0                           # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
 subcycles   = 4                             # Number of field subcycling steps for Cyclic Leapfrog
-cellpart    = 80                            # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart    = 5000                          # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
 ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
