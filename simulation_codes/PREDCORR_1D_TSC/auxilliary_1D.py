@@ -100,8 +100,15 @@ def interpolate_to_center_linear_1D(val):
 
 def set_timestep(vel):
     gyperiod = (2*np.pi) / const.gyfreq               # Gyroperiod within uniform field (s)         
+    k_max    = np.pi / const.dx
     ion_ts   = const.orbit_res * gyperiod             # Timestep to resolve gyromotion
-    vel_ts   = 0.5 * const.dx / np.max(vel[0, :])     # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
+    vel_ts   = 0.5 * const.dx / np.max(vel[0, :])     # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
+   
+    if const.account_for_dispersion == True:
+        dispfreq = (k_max ** 2) * (const.B0 / (const.mu0 * const.ne))           # Dispersion frequency
+        disp_ts  = const.dispersion_allowance * const.freq_res / dispfreq
+    else:
+        disp_ts  = ion_ts
 
     DT       = min(ion_ts, vel_ts)
     max_time = const.max_rev * gyperiod               # Total runtime in seconds
