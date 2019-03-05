@@ -6,7 +6,6 @@ Created on Fri Sep 22 17:15:59 2017
 """
 import numba as nb
 import numpy as np
-import pdb
 
 import plot_and_save as pas
 import particles_1D as particles
@@ -86,7 +85,7 @@ def interpolate_to_center_cspline3D(arr, DX=const.dx):
     return interp
 
 
-@nb.jit(nopython=const.njit, parallel=const.do_parallel)
+@nb.njit(parallel=const.do_parallel)
 def interpolate_to_center_linear_1D(val):
     ''' 
     Interpolates vector cell edge values (i.e. B-grid quantities) to cell centers (i.e. E-grid quantities)

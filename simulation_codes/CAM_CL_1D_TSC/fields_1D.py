@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:54:19 2017
 import numpy as np
 import numba as nb
 
-from auxilliary_1D            import cross_product, interpolate_to_center_cspline3D, interpolate_to_center_cspline1D, interpolate_to_center_linear
+from auxilliary_1D            import cross_product, interpolate_to_center_cspline3D, interpolate_to_center_cspline1D, interpolate_to_center_linear_1D
 from simulation_parameters_1D import NX, dx, Te0, ne, q, mu0, kB, ie, e_resis
 
 
@@ -109,7 +109,7 @@ def get_grad_P(qn, te, DX=dx, inter_type=1):
     
     # Re-interpolate to E-grid
     if inter_type == 0:
-        grad_P = interpolate_to_center_linear(grad_pe_B, DX=DX)           
+        grad_P = interpolate_to_center_linear_1D(grad_pe_B)           
     elif inter_type == 1:
         grad_P = interpolate_to_center_cspline1D(grad_pe_B, DX=DX)
 
