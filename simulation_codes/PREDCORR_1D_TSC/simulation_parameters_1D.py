@@ -14,11 +14,11 @@ run_description = '''Test of Pred-Corr energy conservation with 5000 ppc and Win
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path       = 'runs/Box_test_ev1_H_only/'   # Series save dir   : Folder containing all runs of a series
-run_num         = 15                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 1                         # Save data flag    : For later analysis
-generate_plots  = 0                         # Save plot flag    : To ensure hybrid is solving correctly during run
-seed            = 101                       # RNG Seed          : Set to enable consistent results for parameter studies
-
+run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+generate_data   = 0                             # Save data flag    : For later analysis
+generate_plots  = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
+seed            = 101                           # RNG Seed          : Set to enable consistent results for parameter studies
+cpu_affin       = [6]                           # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 ### PHYSICAL CONSTANTS ###
 q   = 1.602177e-19                          # Elementary charge (C)
@@ -160,6 +160,7 @@ k_max      = np.pi / dx                                  # Maximum permissible w
 #%%
 #%%
 #%%### INPUT TESTS AND CHECKS
+
 sped_ratio = c / va
 
 print 'Speed ratio: {}'.format(sped_ratio)
@@ -167,6 +168,12 @@ print 'Density: {}cc'.format(round(ne / 1e6, 2))
 print 'Background magnetic field: {}nT'.format(round(B0*1e9, 1))
 print 'Gyroperiod: {}s'.format(round(2. * np.pi / gyfreq, 2))
 print 'Maximum simulation time: {}s ({} gyroperiods)'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev)
+
+if cpu_affin != None:
+    import psutil
+    run_proc = psutil.Process()
+    run_proc.cpu_affinity(cpu_affin)
+    print '\nCPU affinity for this run (PID {}) set to CPU {}'.format(run_proc.pid, run_proc.cpu_affinity())
 
 python_version = sys.version.split()[0]
 operating_sys  = platform.system()

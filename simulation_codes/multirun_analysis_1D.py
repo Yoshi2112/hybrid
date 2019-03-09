@@ -78,12 +78,10 @@ def load_header():
     obj    = pickle.load(f)                                             # Load variables from header file into python object
     f.close()                                                           # Close header file
     
-    method_type = obj['method_type']
-    
+    #pdb.set_trace()
     Nj              = obj['Nj']
     cellpart        = obj['cellpart']
     data_dump_iter  = obj['data_dump_iter']
-    subcycles       = obj['subcycles']
     ne              = obj['ne']
     NX              = obj['NX']
     dxm             = obj['dxm']
@@ -103,6 +101,7 @@ def load_header():
     
     if method_type == 'CAM_CL':
         LH_frac         = obj['LH_frac']
+        subcycles       = obj['subcycles']
     elif method_type == 'PREDCORR':
         pass
 
@@ -279,11 +278,15 @@ if __name__ == '__main__':
     plt.ioff()
     
     drive           = 'E:'
-    series          = 'PC_CAMCL_comparison'                     # Run identifier string 
+    series          = 'PC_CAMCL_better'                         # Run identifier string 
     
-    runs_to_analyse = [0                ,   1 ]                 # Run number
-    run_styles      = ['-'              , '--']
-    run_labels      = ['Predictor-Corrector', 'CAM-CL']
+    runs_to_analyse = [0   ,  1   ,  2 ]                        # Run number
+    run_styles      = ['-' , '--' , ':']
+    
+    run_labels      = ['Predictor-Corrector',
+                       'CAM-CL' ,
+                       r'Pred-Corr equivalent $\Delta t$']
+    
     total_energies  = np.zeros(len(runs_to_analyse))
     
     fig  = plt.figure(figsize=(15, 7))
@@ -325,7 +328,7 @@ if __name__ == '__main__':
         
     fullpath = base_dir + 'energy_plot'
     ax.set_ylim(0.85, 1.4)
-    ax.set_xlim(0, 60)
+    ax.set_xlim(0, 25)
     fig.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
     plt.close('all')
     
