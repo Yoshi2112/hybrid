@@ -13,12 +13,12 @@ run_description = '''Test of Pred-Corr energy conservation with 5000 ppc and Win
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs/Box_test_ev1_H_only/'   # Series save dir   : Folder containing all runs of a series
-run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 0                             # Save data flag    : For later analysis
+save_path       = 'runs/Box_test_ev2_H_only/'   # Series save dir   : Folder containing all runs of a series
+run_num         = 23                            # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+generate_data   = 1                             # Save data flag    : For later analysis
 generate_plots  = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                           # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [6]                           # Set CPU affinity for run. Must be list. Auto-assign: None.
+cpu_affin       = [6, 7]                        # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 ### PHYSICAL CONSTANTS ###
 q   = 1.602177e-19                          # Elementary charge (C)
@@ -33,19 +33,19 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 40                               # Simulation runtime, in multiples of the gyroperiod
+max_rev  = 30                               # Simulation runtime, in multiples of the gyroperiod
 
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
 cellpart = 20000                            # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
-B0       = 100e-9                           # Unform initial magnetic field value (in T)
-ne       = 90e6                            # Electron density (in /m3, same as total ion density)
+B0       = 260e-9                           # Unform initial magnetic field value (in T)
+ne       = 300e6                            # Electron density (in /m3, same as total ion density)
 
 orbit_res= 0.1                              # Particle orbit resolution: Fraction of gyroperiod in seconds
 freq_res = 0.05                             # Frequency resolution: Fraction of inverse radian frequencies
-data_res = 0.05                             # Data capture resolution in gyroperiod fraction
+data_res = 0.25                             # Data capture resolution in gyroperiod fraction
 plot_res = 1.0                              # Plot capture resolution in gyroperiod fraction
 
 
