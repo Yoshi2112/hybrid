@@ -9,13 +9,13 @@ import sys
 import platform
 
 ### RUN DESCRIPTION ###
-run_description = '''Test of Pred-Corr energy conservation with 5000 ppc and Winske parameters. Parallelized.'''
+run_description = '''Testing parallel PREDCORR code.'''
 
 ### RUN PARAMETERS ###
-drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs/Box_test_ev1_H_only/'   # Series save dir   : Folder containing all runs of a series
-run_num         = 7                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 1                         # Save data flag    : For later analysis
+drive           = '/media/yoshi/UNI_HD/'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
+save_path       = 'runs/parallel_test/'   # Series save dir   : Folder containing all runs of a series
+run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+generate_data   = 0                         # Save data flag    : For later analysis
 generate_plots  = 0                         # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                       # RNG Seed          : Set to enable consistent results for parameter studies
 
@@ -33,10 +33,10 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 40                               # Simulation runtime, in multiples of the gyroperiod
+max_rev  = 10                               # Simulation runtime, in multiples of the gyroperiod
 
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
-cellpart = 20000                            # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart = 1000                             # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
@@ -70,8 +70,8 @@ min_dens       = 0.05                                       # Allowable minimum 
 
 adaptive_timestep      = True                               # Flag (True/False) for adaptive timestep based on particle and field parameters
 account_for_dispersion = False                              # Whether or not to reduce timestep to prevent dispersion getting too high
-dispersion_allowance   = 1.                                 # Multiple of how much past frac*wD^-1 is allowed: Used to stop dispersion from slowing down sim too much  
-do_parallel            = False                              # Flag (True/False) for auto-parallel using numba.njit()
+dispersion_allowance   = 1.                                 # Multiple of how much past frac*wD^-1 is allowed: Used to stop dispersion from slowing down sim too much
+do_parallel            = True                               # Flag (True/False) for auto-parallel using numba.njit()
 
 ratio_override = 0                                          # Flag to override magnetic field value for specific regime
 wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
@@ -99,7 +99,7 @@ if ratio_override == 1:
     print '----------------------------------------------------------------'
     print 'WARNING: RATIO OVERRIDE IN EFFECT - INPUT MAGNETIC FIELD IGNORED'
     print '----------------------------------------------------------------'
-    
+
 Te0        = B0 ** 2 * beta_e   / (2 * mu0 * ne * kB)    # Temperatures of species in Kelvin (used for particle velocity initialization)
 Tpar       = B0 ** 2 * beta_par / (2 * mu0 * ne * kB)
 Tper       = B0 ** 2 * beta_per / (2 * mu0 * ne * kB)
@@ -175,7 +175,7 @@ if do_parallel == True and python_version[0] == '2' and operating_sys == 'Window
     print '\n'
     print 'PYTHON VERSION {} DETECTED. PARALLEL PROCESSING ONLY WORKS IN PYTHON 3.x AND/OR LINUX'
     print 'PARALLEL FLAG DISABLED'
-    
+
 density_normal_sum = (charge / q) * (density / ne)
 
 if density_normal_sum.sum() != 1.0:
@@ -185,8 +185,8 @@ if density_normal_sum.sum() != 1.0:
     print ''
     print 'ABORTING...'
     sys.exit()
-    
-    
+
+
 if sim_repr.sum() != 1.0:
     print '-----------------------------------------------------------------------------------'
     print 'WARNING: MACROPARTICLE DENSITIES DO NOT SUM TO 1.0. SIMULATION WILL NOT BE ACCURATE'
@@ -194,7 +194,7 @@ if sim_repr.sum() != 1.0:
     print ''
     print 'ABORTING...'
     sys.exit()
-    
+
 simulated_density_per_cell = (n_contr * charge * cellpart * sim_repr).sum()
 real_density_per_cell      = ne*q
 
