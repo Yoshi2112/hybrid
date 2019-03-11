@@ -5,9 +5,11 @@ Created on Fri Sep 22 17:27:33 2017
 @author: iarey
 """
 import numpy as np
+import numba as nb
 from simulation_parameters_1D import dx, NX, cellpart, N, kB, Bc, Nj, dist_type, sim_repr, idx_bounds,    \
                                      seed, Tpar, Tper, mass, velocity, theta
 
+@nb.njit()
 def particles_per_cell():
     '''
     Calculates how many particles per cell per specices to be placed in the simulation domain. Currently only does
@@ -19,7 +21,7 @@ def particles_per_cell():
     OUTPUT:
         ppc -- Number of particles per cell per species for each cell in simulation domain. NjxNX ndarray.
     '''
-    ppc = np.zeros((Nj, NX), dtype=int)
+    ppc = np.zeros((Nj, NX), dtype=nb.int32)
 
     for ii in range(Nj):
         if dist_type[ii] == 0:
@@ -27,6 +29,7 @@ def particles_per_cell():
     return ppc
 
 
+@nb.njit()
 def uniform_distribution(ppc):
     '''Creates an analytically uniform distribution of N numbers within each cell boundary
 
@@ -53,6 +56,7 @@ def uniform_distribution(ppc):
     return dist, idx
 
 
+@nb.njit()
 def gaussian_distribution(ppc):
     '''Creates an N-sampled normal distribution across all particle species within each simulation cell
 
@@ -81,6 +85,7 @@ def gaussian_distribution(ppc):
     return dist
 
 
+@nb.njit()
 def initialize_particles():
     '''Initializes particle arrays.
 
@@ -99,6 +104,7 @@ def initialize_particles():
     return pos, vel, idx
 
 
+@nb.njit()
 def initialize_fields():
     '''Initializes field ndarrays and sets initial values for fields based on parameters in config file.
 
@@ -112,8 +118,8 @@ def initialize_fields():
     Note: Each field is initialized with one array value extra due to TSC trying to access it when a
     particle is located exactly on
     '''
-    B = np.zeros((NX + 3, 3), dtype=float)
-    E = np.zeros((NX + 3, 3), dtype=float)
+    B = np.zeros((NX + 3, 3), dtype=nb.float64)
+    E = np.zeros((NX + 3, 3), dtype=nb.float64)
 
     B[:, 0] = Bc[0]      # Set Bx initial
     B[:, 1] = Bc[1]      # Set By initial

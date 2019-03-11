@@ -7,8 +7,8 @@ import auxilliary_1D as aux
 import particles_1D_multithreaded  as particles
 import fields_1D     as fields
 import plot_and_save as pas
-import pdb
-from simulation_parameters_1D import generate_data, generate_plots
+
+from simulation_parameters_1D import generate_data, generate_plots, adaptive_timestep
 
 
 if __name__ == '__main__':
@@ -24,10 +24,12 @@ if __name__ == '__main__':
     particles.sync_velocities(pos, vel, idx, B, E_int, -0.5*DT)
 
     qq      = 0
+    max_inc = 10
     while qq < max_inc:
 
         # TIMESTEP CHECK
-        qq, DT, max_inc, data_iter, plot_iter \
+        if adaptive_timestep == True:
+            qq, DT, max_inc, data_iter, plot_iter \
         = aux.check_timestep(qq, DT, pos, vel, B, E_int, q_dens, max_inc, data_iter, plot_iter, idx)
 
 
@@ -51,15 +53,11 @@ if __name__ == '__main__':
         if qq%plot_iter == 0 and generate_plots == 1:
             pas.create_figure_and_save(pos, vel, E_int, B, q_dens, qq, DT, plot_iter)
 
-        if (qq + 1)%25 == 0:
+        if (qq + 1)%1 == 0:
             print 'Timestep {} of {} complete'.format(qq + 1, max_inc)
 
         qq += 1
 
 
-
-
-
-
-
     print "Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2))  # Time taken to run simulation
+    print "Average time per iteration: {0:.2f} seconds".format(round(timer() - start_time,2) / max_inc)

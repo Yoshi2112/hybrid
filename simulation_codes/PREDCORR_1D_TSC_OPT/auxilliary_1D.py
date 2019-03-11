@@ -31,7 +31,7 @@ def cross_product_single(A, B):
     return output
 
 
-@nb.njit(parallel=const.do_parallel)
+@nb.njit()
 def cross_product(A, B):
     '''
     Vector (cross) product between two vectors, A and B of same dimensions.
@@ -52,7 +52,7 @@ def cross_product(A, B):
 
 
 
-@nb.njit(parallel=const.do_parallel)
+@nb.njit()
 def interpolate_to_center_cspline1D(arr, DX=const.dx):
     '''
     Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
@@ -70,7 +70,7 @@ def interpolate_to_center_cspline1D(arr, DX=const.dx):
     return interp
 
 
-@nb.njit(parallel=const.do_parallel)
+@nb.njit()
 def interpolate_to_center_cspline3D(arr, DX=const.dx):
     '''
     Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
@@ -85,7 +85,7 @@ def interpolate_to_center_cspline3D(arr, DX=const.dx):
     return interp
 
 
-@nb.njit(parallel=const.do_parallel)
+@nb.njit()
 def interpolate_to_center_linear_1D(val):
     '''
     Interpolates vector cell edge values (i.e. B-grid quantities) to cell centers (i.e. E-grid quantities)
@@ -110,7 +110,7 @@ def set_timestep(vel):
     else:
         disp_ts  = ion_ts
 
-    DT       = min(ion_ts, vel_ts)
+    DT       = min(ion_ts, vel_ts, disp_ts)
     max_time = const.max_rev * gyperiod               # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1                 # Total number of time steps
 

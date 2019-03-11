@@ -5,6 +5,7 @@ Created on Fri Sep 22 11:00:58 2017
 @author: iarey
 """
 import numpy as np
+import numba as nb
 import sys
 import platform
 
@@ -32,11 +33,11 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 128                              # Number of cells - doesn't include ghost cells
+NX       = 32                               # Number of cells - doesn't include ghost cells
 max_rev  = 10                               # Simulation runtime, in multiples of the gyroperiod
 
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
-cellpart = 1000                             # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart = 1000000                          # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
@@ -71,9 +72,9 @@ min_dens       = 0.05                                       # Allowable minimum 
 adaptive_timestep      = True                               # Flag (True/False) for adaptive timestep based on particle and field parameters
 account_for_dispersion = False                              # Whether or not to reduce timestep to prevent dispersion getting too high
 dispersion_allowance   = 1.                                 # Multiple of how much past frac*wD^-1 is allowed: Used to stop dispersion from slowing down sim too much
-do_parallel            = True                               # Flag (True/False) for auto-parallel using numba.njit()
+do_parallel            = False                              # Flag (True/False) for auto-parallel using numba.njit()
 
-ratio_override = 0                                          # Flag to override magnetic field value for specific regime
+ratio_override = 1                                          # Flag to override magnetic field value for specific regime
 wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
 
 
@@ -137,10 +138,8 @@ k_max      = np.pi / dx                                  # Maximum permissible w
 
 
 
-
-
-
-
+if do_parallel == True:
+    nb.config.THREADING_LAYER = 'threadsafe'
 
 
 
