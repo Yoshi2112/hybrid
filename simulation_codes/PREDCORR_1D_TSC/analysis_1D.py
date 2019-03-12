@@ -12,6 +12,7 @@ from numpy import pi
 import pickle
 import matplotlib.gridspec as gs
 import numba as nb
+import pdb
 
 def manage_dirs():
     global run_dir, data_dir, anal_dir, temp_dir
@@ -67,7 +68,7 @@ def load_particles():
 
 def load_header():
     global Nj, cellpart, data_dump_iter, ne, NX, dxm, seed, B0, dx, Te0, theta, dt, max_rev,\
-           ie, run_desc, seed, subcycles, LH_frac, orbit_res, freq_res
+           ie, run_desc, seed, subcycles, LH_frac, orbit_res, freq_res, method_type, particle_shape
     
     h_name = os.path.join(data_dir, 'Header.pckl')                      # Load header file
     f      = open(h_name)                                               # Open header file
@@ -75,9 +76,10 @@ def load_header():
     f.close()                                                           # Close header file
     
     Nj              = obj['Nj']
+    method_type     = obj['method_type']
+    particle_shape  = obj['particle_shape']
     cellpart        = obj['cellpart']
     data_dump_iter  = obj['data_dump_iter']
-    subcycles       = obj['subcycles']
     ne              = obj['ne']
     NX              = obj['NX']
     dxm             = obj['dxm']
@@ -96,6 +98,15 @@ def load_header():
     print 'Header file loaded.'
     print 'dt = {}s\n'.format(dt)
     return 
+
+
+def create_idx():
+    N_part = cellpart * NX
+    idx    = np.zeros(N_part, dtype=int)
+    
+    for jj in range(Nj):
+        idx[idx_bounds[jj, 0]: idx_bounds[jj, 1]] = jj
+    return idx
 
 
 def load_timestep(ii):
@@ -175,14 +186,20 @@ def get_array(component, tmin, tmax):
             B, E, Ve, Te, J, position, q_dns, velocity = load_timestep(ii)
             
             if component[0].upper() == 'B':
-                arr[ii] = B[0:-1, comp_idx]
+                arr[ii] = B[1:-2, comp_idx]
             elif component[0].upper() == 'E':
-                arr[ii] = E[1:-1, comp_idx]
+                arr[ii] = E[1:-2, comp_idx]
                 
         print 'Saving array file as {}'.format(check_path)
         np.save(check_path, arr)
     return arr
 
+
+def extract_all_arrays():
+    
+    for comp in []:
+        get_array(comp)
+    return
 
 def generate_wk_plot(component='By', plot=True, tmin=0, tmax=None, normalize=False):
     ''' Create w/k dispersion plot for times between tmin and tmax. STILL ISN'T WORKING GREAT....
@@ -246,9 +263,9 @@ def plot_kt(arr, norm, saveas='kt_plot'):
     fig = plt.figure(1, figsize=(12, 8))
     ax  = fig.add_subplot(111)
     
-    ax.pcolormesh(k[:arr.shape[1] / 2], time_radperiods, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
+    ax.pcolormesh(k[:arr.shape[1] / 2], time_gperiods, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
 
-    ax.set_title(r'k-t Plot (CAM-CL)', fontsize=14)
+    ax.set_title(r'k-t Plot', fontsize=14)
     ax.set_ylabel(r'$\Omega_i t$', rotation=0)
     ax.set_xlabel('k (m-number)')
     
@@ -435,17 +452,17 @@ def plot_energies(ii, normalize=True):
         ax   = plt.subplot2grid((7, 7), (0, 0), colspan=6, rowspan=7)
         
         if normalize == True:
-            ax.plot(time_radperiods, mag_energy      / mag_energy[0],      label = r'$U_B$', c='green')
-            ax.plot(time_radperiods, electron_energy / electron_energy[0], label = r'$U_e$', c='orange')
-            ax.plot(time_radperiods, total_energy    / total_energy[0],    label = r'$Total$', c='k')
+            ax.plot(time_gperiods, mag_energy      / mag_energy[0],      label = r'$U_B$', c='green')
+            ax.plot(time_gperiods, electron_energy / electron_energy[0], label = r'$U_e$', c='orange')
+            ax.plot(time_gperiods, total_energy    / total_energy[0],    label = r'$Total$', c='k')
             
             for jj in range(Nj):
-                ax.plot(time_radperiods, particle_energy[:, jj] / particle_energy[0, jj],
+                ax.plot(time_gperiods, particle_energy[:, jj] / particle_energy[0, jj],
                          label='$K_E$ {}'.format(species_lbl[jj]), c=temp_color[jj])
         else:
-            ax.plot(time_radperiods, mag_energy     , label = r'$U_B$', c='green')
-            ax.plot(time_radperiods, electron_energy, label = r'$U_e$', c='orange')
-            ax.plot(time_radperiods, total_energy   , label = r'$Total$', c='k')
+            ax.plot(time_gperiods, mag_energy     , label = r'$U_B$', c='green')
+            ax.plot(time_gperiods, electron_energy, label = r'$U_e$', c='orange')
+            ax.plot(time_gperiods, total_energy   , label = r'$Total$', c='k')
             
             for jj in range(Nj):
                 ax.plot(time_gperiods, particle_energy[:, jj],
@@ -495,39 +512,40 @@ def plot_energies(ii, normalize=True):
 
 
 if __name__ == '__main__':   
-    drive    = 'F:'
-    series   = 'new_PC_test'                                # Run identifier string 
-    run_num  = 1                                            # Run number
-
-    manage_dirs()                                           # Initialize directories
-    load_constants()                                        # Load SI constants
-    load_header()                                           # Load simulation parameters
-    load_particles()                                        # Load particle parameters
-    num_files = len(os.listdir(data_dir)) - 2               # Number of timesteps to load
+    drive    = 'E:'
+    series   = 'Box_test_ev1_H_only'                        # Run identifier string 
+    num_runs = len(os.listdir(drive + '/runs/' + series))
     
-    wpi       = np.sqrt(ne * q ** 2 / (mp * e0))            # Ion plasma frequency
-    gyfreq    = q * B0 / mp                                 # Proton gyrofrequency (rad/s)
-    gyperiod  = (mp * 2 * np.pi) / (q * B0)                 # Proton gyroperiod (s)
-    data_ts   = data_dump_iter * dt                         # Timestep between data records (seconds)
-    
-    time_seconds    = np.arange(0, num_files * data_ts, data_ts)
-    time_gperiods   = time_seconds / gyperiod
-    time_radperiods = time_seconds * gyfreq 
-    
-    np.random.seed(seed)                                    # Initialize random seed
-    
-    mag_energy      = np.zeros(num_files)
-    particle_energy = np.zeros((num_files, Nj))
-    electron_energy = np.zeros(num_files)
-
-    #generate_kt_plot(normalize=True)
+    for run_num  in range(num_runs):                                            # Run number
+        manage_dirs()                                           # Initialize directories
+        load_constants()                                        # Load SI constants
+        load_header()                                           # Load simulation parameters
+        load_particles()                                        # Load particle parameters
+        num_files = len(os.listdir(data_dir)) - 2               # Number of timesteps to load
         
-    for ii in range(num_files):
-        B, E, Ve, Te, J, position, q_dns, velocity = load_timestep(ii)
-        dns                                        = collect_number_density(position)
-        #winske_stackplot(ii, title=r'CAM_CL_TSC /w Winske Parameters')
-        plot_energies(ii, normalize=True)
+        wpi       = np.sqrt(ne * q ** 2 / (mp * e0))            # Ion plasma frequency
+        gyfreq    = q * B0 / mp                                 # Proton gyrofrequency (rad/s)
+        gyperiod  = (mp * 2 * np.pi) / (q * B0)                 # Proton gyroperiod (s)
+        data_ts   = data_dump_iter * dt                         # Timestep between data records (seconds)
         
+        time_seconds    = np.arange(0, num_files * data_ts, data_ts)
+        time_gperiods   = time_seconds / gyperiod
+        time_radperiods = time_seconds * gyfreq 
+        
+        np.random.seed(seed)                                    # Initialize random seed
+        
+        mag_energy      = np.zeros(num_files)
+        particle_energy = np.zeros((num_files, Nj))
+        electron_energy = np.zeros(num_files)
+    
+        #generate_kt_plot(normalize=True)
+            
+        for ii in range(num_files):
+            B, E, Ve, Te, J, position, q_dns, velocity = load_timestep(ii)
+            #dns                                       = collect_number_density(position)
+            #winske_stackplot(ii, title=r'CAM_CL_TSC /w Winske Parameters')
+            plot_energies(ii, normalize=True)
+            
         
 
     
