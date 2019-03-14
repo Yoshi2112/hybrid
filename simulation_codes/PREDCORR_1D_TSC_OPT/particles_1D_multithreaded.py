@@ -208,3 +208,22 @@ def smooth(function):
     new_function[0]        = new_function[size - 2]
     new_function[size - 1] = new_function[1]
     return new_function
+
+
+if __name__ == '__main__':
+    import pdb
+
+    pos_test = np.linspace(xmin, xmax, N)
+    vel_test = np.array([np.random.normal(0, 1, N),
+                         np.random.normal(0, 1, N),
+                         np.random.normal(0, 1, N)])
+    idx = np.ones(N)
+    B   = np.ones((NX + 3, 3)) * 4e-9
+    E   = np.zeros((NX + 3, 3))
+    dt  = 0.001 
+
+    pdb.set_trace()
+
+
+
+

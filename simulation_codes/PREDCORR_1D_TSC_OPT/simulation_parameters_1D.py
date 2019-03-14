@@ -37,7 +37,7 @@ NX       = 32                               # Number of cells - doesn't include 
 max_rev  = 10                               # Simulation runtime, in multiples of the gyroperiod
 
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
-cellpart = 1000000                          # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart = 100000                          # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
