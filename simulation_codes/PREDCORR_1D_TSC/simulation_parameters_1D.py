@@ -16,9 +16,9 @@ drive           = 'F:'                          # Drive letter or path for porta
 save_path       = 'runs/Box_test_ev1_lowres/'   # Series save dir   : Folder containing all runs of a series
 run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 generate_data   = 0                             # Save data flag    : For later analysis
-generate_plots  = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                           # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin       = [0, 1]                        # Set CPU affinity for run. Must be list. Auto-assign: None.
+
 
 ### PHYSICAL CONSTANTS ###
 q   = 1.602177e-19                          # Elementary charge (C)
@@ -46,7 +46,6 @@ ne       = 20e6                             # Electron density (in /m3, same as 
 orbit_res= 0.1                              # Particle orbit resolution: Fraction of gyroperiod in seconds
 freq_res = 0.05                             # Frequency resolution: Fraction of inverse radian frequencies
 data_res = 0.05                             # Data capture resolution in gyroperiod fraction
-plot_res = 1.0                              # Plot capture resolution in gyroperiod fraction
 
 
 ### PARTICLE PARAMETERS ###
@@ -68,16 +67,18 @@ beta_per   = np.array([1., 50.])                            # Ion species perpen
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
 
-adaptive_timestep      = True                               # Flag (True/False) for adaptive timestep based on particle and field parameters
-account_for_dispersion = False                              # Whether or not to reduce timestep to prevent dispersion getting too high
+account_for_dispersion = False                              # Flag (True/False) whether or not to reduce timestep to prevent dispersion getting too high
 dispersion_allowance   = 1.                                 # Multiple of how much past frac*wD^-1 is allowed: Used to stop dispersion from slowing down sim too much  
+adaptive_timestep      = True                               # Flag (True/False) for adaptive timestep based on particle and field parameters
 do_parallel            = False                              # Flag (True/False) for auto-parallel using numba.njit()
 
 ratio_override = 0                                          # Flag to override magnetic field value for specific regime
 wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
 
 
-
+## DIAGNOSTIC PLOT FUNCTIONS: NOT ALWAYS COMPATIBLE WITH NJIT()
+plot_res       = 1.0                                        # Plot capture resolution in gyroperiod fraction
+generate_plots = 0                                          # Save plot flag    : To ensure hybrid is solving correctly during run
 
 
 

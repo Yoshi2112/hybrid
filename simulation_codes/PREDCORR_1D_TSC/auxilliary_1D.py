@@ -114,13 +114,6 @@ def set_timestep(vel):
     max_time = const.max_rev * gyperiod               # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1                 # Total number of time steps
 
-    if const.generate_plots == 0:
-        plot_iter = 0
-    elif const.plot_res == 0:                           # Decide plot and data increments (if enabled)
-        plot_iter = 1
-    else:
-        plot_iter = int(const.plot_res*gyperiod / DT)
-
     if const.generate_data == 0:
         data_iter = 0
     elif const.data_res == 0:
@@ -128,11 +121,11 @@ def set_timestep(vel):
     else:
         data_iter = int(const.data_res*gyperiod / DT)
 
-    return DT, max_inc, data_iter, plot_iter
+    return DT, max_inc, data_iter
 
 
 @nb.njit()
-def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, plot_iter, idx):
+def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, idx):
     max_Vx          = np.max(vel[0, :])
     max_V           = np.max(vel)
     k_max           = np.pi / const.dx
@@ -166,7 +159,6 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, 
         qq         *= 2
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, -0.5*DT)   # De-sync vel/pos 
 
-        plot_iter  *= 2
         data_iter  *= 2
             
         ch_flag = 1
@@ -178,11 +170,6 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, 
         qq         /= 2
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, -0.5*DT)   # De-sync vel/pos 
         
-        if plot_iter == 1:
-            plot_iter = 1
-        else:
-            plot_iter /= 2
-        
         if data_iter == 1:
             data_iter = 1
         else:
@@ -190,4 +177,4 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, 
         
         ch_flag = 2
 
-    return pos, vel, qq, DT, max_inc, data_iter, plot_iter, ch_flag
+    return pos, vel, qq, DT, max_inc, data_iter, ch_flag
