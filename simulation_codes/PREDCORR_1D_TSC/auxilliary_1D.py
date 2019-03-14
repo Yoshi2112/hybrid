@@ -7,7 +7,6 @@ Created on Fri Sep 22 17:15:59 2017
 import numba as nb
 import numpy as np
 
-import plot_and_save as pas
 import particles_1D as particles
 import simulation_parameters_1D as const
 
@@ -98,6 +97,7 @@ def interpolate_to_center_linear_1D(val):
     return center
 
 
+@nb.njit()
 def set_timestep(vel):
     gyperiod = (2*np.pi) / const.gyfreq               # Gyroperiod within uniform field (s)         
     k_max    = np.pi / const.dx
@@ -110,28 +110,28 @@ def set_timestep(vel):
     else:
         disp_ts  = ion_ts
 
-    DT       = min(ion_ts, vel_ts)
+    DT       = min(ion_ts, vel_ts, disp_ts)
     max_time = const.max_rev * gyperiod               # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1                 # Total number of time steps
 
-    if const.plot_res == 0:                           # Decide plot and data increments (if enabled)
+    if const.generate_plots == 0:
+        plot_iter = 0
+    elif const.plot_res == 0:                           # Decide plot and data increments (if enabled)
         plot_iter = 1
     else:
         plot_iter = int(const.plot_res*gyperiod / DT)
 
-    if const.data_res == 0:
+    if const.generate_data == 0:
+        data_iter = 0
+    elif const.data_res == 0:
         data_iter = 1
     else:
         data_iter = int(const.data_res*gyperiod / DT)
-    
-    print 'Timestep: %.4fs, %d iterations total' % (DT, max_inc)
 
-    if const.generate_data == 1:
-        pas.store_run_parameters(DT, data_iter)
-        
     return DT, max_inc, data_iter, plot_iter
 
 
+@nb.njit()
 def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, plot_iter, idx):
     max_Vx          = np.max(vel[0, :])
     max_V           = np.max(vel)
@@ -139,14 +139,13 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, 
 
     B_cent          = interpolate_to_center_cspline3D(B)
     B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
-    high_rat        = (const.charge/const.mass).max()
-    
+
     dispfreq        = (k_max ** 2) * (B_tot / (const.mu0 * dns)).max()           # Dispersion frequency
-    gyfreq          = high_rat  * np.abs(B_tot).max() / (2 * np.pi)      
+    gyfreq          = const.high_rat  * np.abs(B_tot).max() / (2 * np.pi)      
     ion_ts          = const.orbit_res * 1./gyfreq
     
     if E.max() != 0:
-        elecfreq        = high_rat*max(abs(E[:, 0] / max_V))                     # Electron acceleration "frequency"
+        elecfreq        = const.high_rat*(np.abs(E[:, 0] / max_V).max())               # Electron acceleration "frequency"
         Eacc_ts         = const.freq_res / elecfreq                            
     else:
         Eacc_ts = ion_ts
@@ -159,20 +158,18 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, 
     vel_ts          = 0.80 * const.dx / max_Vx                                   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
     DT_part         = min(Eacc_ts, vel_ts, ion_ts, disp_ts)                      # Smallest of the allowable timesteps
 
+    ch_flag = 0
     if DT_part < 0.9*DT:
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, 0.5*DT)    # Re-sync vel/pos       
         DT         *= 0.5
         max_inc    *= 2
         qq         *= 2
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, -0.5*DT)   # De-sync vel/pos 
-        
-        if plot_iter != None:
-            plot_iter *= 2
+
+        plot_iter  *= 2
+        data_iter  *= 2
             
-        if data_iter != None:
-            data_iter *= 2
-            
-        print 'Timestep halved. Syncing particle velocity with DT = {}'.format(DT)
+        ch_flag = 1
             
     elif DT_part >= 4.0*DT and qq%2 == 0:
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, 0.5*DT)    # Re-sync vel/pos          
@@ -181,15 +178,16 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, 
         qq         /= 2
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, -0.5*DT)   # De-sync vel/pos 
         
-        if plot_iter == None or plot_iter == 1:
+        if plot_iter == 1:
             plot_iter = 1
         else:
             plot_iter /= 2
         
-        if data_iter == None or data_iter == 1:
+        if data_iter == 1:
             data_iter = 1
         else:
             data_iter /= 2
         
+        ch_flag = 2
 
-    return pos, vel, qq, DT, max_inc, data_iter, plot_iter
+    return pos, vel, qq, DT, max_inc, data_iter, plot_iter, ch_flag

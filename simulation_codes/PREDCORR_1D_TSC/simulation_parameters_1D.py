@@ -9,16 +9,16 @@ import sys
 import platform
 
 ### RUN DESCRIPTION ###
-run_description = '''Test of Pred-Corr energy conservation with 5000 ppc and Winske parameters. Parallelized.'''
+run_description = '''Check of ev1_H_only with less particles. Saturation amplitudes seem a bit weird.'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs/Box_test_ev2_H_only/'   # Series save dir   : Folder containing all runs of a series
-run_num         = 23                            # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 1                             # Save data flag    : For later analysis
+save_path       = 'runs/Box_test_ev1_lowres/'   # Series save dir   : Folder containing all runs of a series
+run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+generate_data   = 0                             # Save data flag    : For later analysis
 generate_plots  = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                           # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [6, 7]                        # Set CPU affinity for run. Must be list. Auto-assign: None.
+cpu_affin       = [0, 1]                        # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 ### PHYSICAL CONSTANTS ###
 q   = 1.602177e-19                          # Elementary charge (C)
@@ -33,19 +33,19 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 30                               # Simulation runtime, in multiples of the gyroperiod
+max_rev  = 20                               # Simulation runtime, in multiples of the gyroperiod
 
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
-cellpart = 20000                            # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart = 5000                             # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
-ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
+ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
-B0       = 260e-9                           # Unform initial magnetic field value (in T)
-ne       = 300e6                            # Electron density (in /m3, same as total ion density)
+B0       = 100e-9                           # Unform initial magnetic field value (in T)
+ne       = 20e6                             # Electron density (in /m3, same as total ion density)
 
 orbit_res= 0.1                              # Particle orbit resolution: Fraction of gyroperiod in seconds
 freq_res = 0.05                             # Frequency resolution: Fraction of inverse radian frequencies
-data_res = 0.25                             # Data capture resolution in gyroperiod fraction
+data_res = 0.05                             # Data capture resolution in gyroperiod fraction
 plot_res = 1.0                              # Plot capture resolution in gyroperiod fraction
 
 
@@ -58,7 +58,7 @@ dist_type  = np.asarray([0, 0])                             # Particle distribut
 mass       = np.asarray([1.00, 1.00])                       # Species ion mass (proton mass units)
 charge     = np.asarray([1.00, 1.00])                       # Species ion charge (elementary charge units)
 density    = np.asarray([0.90, 0.10])                       # Species charge density as normalized fraction (add to 1.0)
-velocity   = np.asarray([0.00, 0.00])                       # Species parallel bulk velocity (alfven velocity units)
+velocity   = np.asarray([1.00, 1.00])                       # Species parallel bulk velocity (alfven velocity units)
 sim_repr   = np.asarray([0.50, 0.50])                       # Macroparticle weighting: Percentage of macroparticles assigned to each species
 
 beta_e     = 1.                                             # Electron beta
@@ -134,7 +134,7 @@ idx_bounds = np.stack((idx_start, idx_end)).transpose()                         
 gyfreq     = q*B0/mp                                     # Proton   Gyrofrequency (rad/s) (since this will be the highest of all ion species)
 e_gyfreq   = q*B0/me                                     # Electron Gyrofrequency (rad/s)
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
-
+high_rat   = np.divide(charge, mass).max()
 
 
 
@@ -169,11 +169,14 @@ print 'Background magnetic field: {}nT'.format(round(B0*1e9, 1))
 print 'Gyroperiod: {}s'.format(round(2. * np.pi / gyfreq, 2))
 print 'Maximum simulation time: {}s ({} gyroperiods)'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev)
 
-if cpu_affin != None:
+if None not in cpu_affin:
     import psutil
     run_proc = psutil.Process()
     run_proc.cpu_affinity(cpu_affin)
-    print '\nCPU affinity for this run (PID {}) set to CPU {}'.format(run_proc.pid, run_proc.cpu_affinity())
+    if len(cpu_affin) == 1:
+        print '\nCPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0])
+    else:
+        print '\nCPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity())))
 
 python_version = sys.version.split()[0]
 operating_sys  = platform.system()
