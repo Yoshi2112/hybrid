@@ -186,9 +186,9 @@ def get_array(component, tmin, tmax):
             B, E, Ve, Te, J, position, q_dns, velocity = load_timestep(ii)
             
             if component[0].upper() == 'B':
-                arr[ii] = B[1:-2, comp_idx]
+                arr[ii] = B[:-1, comp_idx]
             elif component[0].upper() == 'E':
-                arr[ii] = E[1:-2, comp_idx]
+                arr[ii] = E[:, comp_idx]
                 
         print 'Saving array file as {}'.format(check_path)
         np.save(check_path, arr)
@@ -512,7 +512,7 @@ def plot_energies(ii, normalize=True):
 
 
 if __name__ == '__main__':   
-    drive    = 'E:'
+    drive    = '/media/yoshi/UNI_HD/'
     series   = 'Box_test_ev1_H_only'                        # Run identifier string 
     num_runs = len(os.listdir(drive + '/runs/' + series))
     

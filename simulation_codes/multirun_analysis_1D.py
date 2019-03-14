@@ -244,9 +244,9 @@ def get_array(component, tmin, tmax):
             B, E, Ve, Te, J, position, q_dns, velocity, idx = load_timestep(ii)
             
             if component[0].upper() == 'B':
-                arr[ii] = B[1:-2, comp_idx]
+                arr[ii] = B[:-1, comp_idx]
             elif component[0].upper() == 'E':
-                arr[ii] = E[1:-2, comp_idx]
+                arr[ii] = E[:, comp_idx]
                 
         print 'Saving array file as {}'.format(check_path)
         np.save(check_path, arr)
@@ -394,9 +394,9 @@ def plot_growth_grid(plot_ratio=True, norm=False):
 if __name__ == '__main__':   
     plt.ioff()
     
-    drive      = 'E:'
-    series     = 'Box_test_ev1_H_only'                          # Run identifier string 
-    series_dir = 'F://runs//{}//'.format(series)
+    drive      = '/media/yoshi/UNI_HD/'
+    series     = 'Box_test_ev2_H_only'                          # Run identifier string 
+    series_dir = '{}/runs//{}//'.format(drive, series)
     num_runs   = len(os.listdir(series_dir))
     
     max_field  = np.zeros((3, num_runs))                        # B0, n0, max_By
