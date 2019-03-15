@@ -20,7 +20,7 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, idx, B, E, DT):
     vel             = velocity_update(pos, vel, Ie, W_elec, idx, B, E, DT)
     pos, Ie, W_elec = position_update(pos, vel, DT)    
     q_dens, Ji      = collect_moments(vel, Ie, W_elec, idx)
-    return pos, vel, Ie, W_elec, q_dens, Ji
+    return q_dens, Ji
 
 
 @nb.njit(parallel=do_parallel)
@@ -122,15 +122,14 @@ def velocity_update(pos, vel, Ie, W_elec, idx, B, E, dt):
         W    -- Weighting factor of particles to rightmost node
 
     OUTPUT:
-        vel  -- Returns particle array with updated velocities
+        None -- vel array is mutable (I/O array)
     '''
     Ib, W_mag = assign_weighting_TSC(pos, E_nodes=False)     # Magnetic field weighting
     
     for ii in nb.prange(N):
         Ep, Bp     = interpolate_forces_to_particle(E, B, Ie[ii], W_elec[:, ii], Ib[ii], W_mag[:, ii], idx[ii])
         vel[:, ii] = boris_algorithm(vel[:, ii], Bp, Ep, dt, idx[ii])
-        #vel[:, ii] = two_step_algorithm(vel[:, ii], Bp, Ep, dt, idx[ii])
-    return vel
+    return
 
 
 @nb.njit(parallel=do_parallel)

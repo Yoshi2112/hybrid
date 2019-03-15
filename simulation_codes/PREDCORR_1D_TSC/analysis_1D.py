@@ -67,7 +67,7 @@ def load_particles():
 
 
 def load_header():
-    global Nj, cellpart, data_dump_iter, ne, NX, dxm, seed, B0, dx, Te0, theta, dt, max_rev,\
+    global Nj, cellpart, data_iter, ne, NX, dxm, seed, B0, dx, Te0, theta, dt, max_rev,\
            ie, run_desc, seed, subcycles, LH_frac, orbit_res, freq_res, method_type, particle_shape
     
     h_name = os.path.join(data_dir, 'Header.pckl')                      # Load header file
@@ -79,7 +79,7 @@ def load_header():
     method_type     = obj['method_type']
     particle_shape  = obj['particle_shape']
     cellpart        = obj['cellpart']
-    data_dump_iter  = obj['data_dump_iter']
+    data_iter       = obj['data_dump_iter']
     ne              = obj['ne']
     NX              = obj['NX']
     dxm             = obj['dxm']
@@ -99,16 +99,6 @@ def load_header():
     print 'dt = {}s\n'.format(dt)
     return 
 
-
-def create_idx():
-    N_part = cellpart * NX
-    idx    = np.zeros(N_part, dtype=int)
-    
-    for jj in range(Nj):
-        idx[idx_bounds[jj, 0]: idx_bounds[jj, 1]] = jj
-    return idx
-
-
 def load_timestep(ii):
     print 'Loading file {} of {}'.format(ii+1, num_files)
     d_file     = 'data%05d.npz' % ii                # Define target file
@@ -124,9 +114,92 @@ def load_timestep(ii):
     tdns             = data['dns']
     tvel             = data['vel']
 
+
+    try:
+        global real_time
+        real_time = data['real_time'][0]
+    except:
+        pass
+    
     return tB, tE, tVe, tTe, tJ, tpos, tdns, tvel
 
 
+@nb.njit()
+def create_idx():
+    N_part = cellpart * NX
+    idx    = np.zeros(N_part, dtype=nb.int32)
+    
+    for jj in range(Nj):
+        idx[idx_bounds[jj, 0]: idx_bounds[jj, 1]] = jj
+    return idx
+
+
+@nb.njit()
+def manage_ghost_cells(arr):
+    '''Deals with ghost cells: Moves their contributions and mirrors their counterparts.
+       Works like a charm if spatial dimensions always come first in an array.'''
+
+    arr[NX]     += arr[0]                 # Move contribution: Start to end
+    arr[1]      += arr[NX + 1]            # Move contribution: End to start
+
+    arr[NX + 1]  = arr[1]                 # Fill ghost cell: End
+    arr[0]       = arr[NX]                # Fill ghost cell: Start
+    
+    arr[NX + 2]  = arr[2]                 # This one doesn't get used, but prevents nasty nan's from being in array.
+    return arr
+
+
+@nb.njit()
+def assign_weighting_TSC(pos, E_nodes=True):
+    '''Triangular-Shaped Cloud (TSC) weighting scheme used to distribute particle densities to
+    nodes and interpolate field values to particle positions.
+
+    INPUT:
+        pos  -- particle positions (x)
+        BE   -- Flag: Weighting factor for Magnetic (0) or Electric (1) field node
+        
+    OUTPUT:
+        weights -- 3xN array consisting of leftmost (to the nearest) node, and weights for -1, 0 TSC nodes
+    '''
+    Np         = pos.shape[0]
+    
+    left_node  = np.zeros(Np,      dtype=np.uint16)
+    weights    = np.zeros((3, Np), dtype=np.float64)
+    
+    if E_nodes == True:
+        grid_offset   = 0.5
+    else:
+        grid_offset   = 1.0
+    
+    for ii in nb.prange(Np):
+        left_node[ii]  = int(round(pos[ii] / dx + grid_offset) - 1.0)
+        delta_left     = left_node[ii] - pos[ii] / dx - grid_offset
+    
+        weights[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))
+        weights[1, ii] = 0.75 - np.square(delta_left + 1.)
+        weights[2, ii] = 1.0  - weights[0, ii] - weights[1, ii]
+    return left_node, weights
+
+@nb.njit()
+def collect_moments(Ie, W_elec, idx):
+    n_contr   = density / (cellpart*sim_repr)
+    size      = NX + 3
+    n_i       = np.zeros((size, Nj))
+    
+    for ii in nb.prange(Ie.shape[0]):
+        I   = Ie[ ii]
+        sp  = idx[ii]
+        
+        n_i[I,     sp] += W_elec[0, ii]
+        n_i[I + 1, sp] += W_elec[1, ii]
+        n_i[I + 2, sp] += W_elec[2, ii]
+        
+    for jj in range(Nj):
+        n_i[:, jj] *= n_contr[jj]
+
+    n_i   = manage_ghost_cells(n_i)
+    return n_i
+    
 @nb.njit()
 def collect_number_density(pos):
     '''Collect number and velocity density in each cell at each timestep, weighted by their distance
@@ -135,28 +208,12 @@ def collect_number_density(pos):
     INPUT:
         pos    -- position of each particle
     '''
-    size      = NX + 2
 
-    n_i       = np.zeros((size, Nj))
-    
-    node      = pos / dx + 0.5 
-    weight    = (pos / dx) - node + 0.5
-    n_contr    = density / (cellpart*sim_repr)      # Density: initial /m3 of species in cell, divide this by number of particles in the cell
-                                                    # Each macroparticle contributes this amount to the cell's density in /m3
-    for jj in range(Nj):
-        for ii in range(idx_bounds[jj, 0], idx_bounds[jj, 1]):
-            I   = int(node[ii])
-            W   = weight[ii]
 
-            n_i[I,     jj] += (1 - W) * n_contr[jj]
-            n_i[I + 1, jj] +=      W  * n_contr[jj]
-
-    n_i[1]  += n_i[-1]
-    n_i[-1] += n_i[0]
-    
-    n_i[0]   = 0.
-    n_i[-1]  = 0
-    return n_i
+    left_node, weights  = assign_weighting_TSC(pos, E_nodes=True) 
+    idx                 = create_idx()
+    den                 = collect_moments(left_node, weights, idx)   
+    return den
 
 
 def get_array(component, tmin, tmax):
@@ -345,85 +402,111 @@ def waterfall_plot(field):
     return
 
 
-def winske_stackplot(qq, title=None):
-#----- Prepare some values for plotting
-    x_cell_num  = np.arange(NX)                                         # Numerical cell numbering: x-axis
-
-    pos         = position / dx
-    norm_xvel   = 1e3*velocity[0, :] / c                                # Normalize to speed of light
-    norm_yvel   = 1e3*velocity[1, :] / c
-    By          = B[  1: NX + 1, 1] / B0                                # Normalize to background field
-    Bz          = B[  1: NX + 1, 2] / B0
-    dnb         = dns[1: NX + 1, 1] / density[1]                        # Normalize beam density to initial value
-    phi         = np.arctan2(Bz, By) + pi                               # Wave magnetic phase angle
-    
-#----- Create plots
+def diagnostic_multiplot(qq):
     plt.ioff()
-    fig    = plt.figure(1, figsize=(8.27, 11.69))                       # Initialize figure
-    grids  = gs.GridSpec(5, 1)                                          # Create gridspace
-    fig.patch.set_facecolor('w')                                        # Set figure face color
 
-    ax_vx   = fig.add_subplot(grids[0, 0]) 
-    ax_vy   = fig.add_subplot(grids[1, 0]) 
-    ax_den  = fig.add_subplot(grids[2, 0])                              # Initialize axes
-    ax_by   = fig.add_subplot(grids[3, 0]) 
-    ax_phi  = fig.add_subplot(grids[4, 0]) 
+    fig_size = 4, 7                                                             # Set figure grid dimensions
+    fig = plt.figure(figsize=(20,10))                                           # Initialize Figure Space
+    fig.patch.set_facecolor('w')                                                # Set figure face color
 
-    if title != None and type(title) == str:
-        ax_vx.set_title(title)
+    va        = B0 / np.sqrt(mu0*ne*mp)                                         # Alfven speed: Assuming pure proton plasma
 
-    ax_vx.scatter(pos[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_xvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='k', lw=0)        # Hot population
-    ax_vy.scatter(pos[idx_bounds[1, 0]: idx_bounds[1, 1]], norm_yvel[idx_bounds[1, 0]: idx_bounds[1, 1]], s=1, c='k', lw=0)        # 'Other' population
-    
-    ax_den.plot(x_cell_num, dnb, c='k')                                 # Create overlayed plots for densities of each species
-    ax_by.plot(x_cell_num, 10*By, c='k')
-    ax_phi.plot(x_cell_num, phi, c='k')
+    pos       = position / dx                                                   # Cell particle position
+    vel       = velocity / va                                                   # Normalized velocity
 
-    ax_vx.set_ylim(- 1.41 , 1.41) 
-    ax_vy.set_ylim(- 1.41 , 1.41) 
-    ax_den.set_ylim( 0.71 , 1.39)                                         # Initialize axes
-    ax_by.set_ylim(- 5.99 , 4.55) 
-    ax_phi.set_ylim( 0.01 , 6.24) 
+    den_norm  = dns / density                                                   # Normalize density for each species to initial values
+    qdens_norm= q_dns / (density*charge).sum()                                  # Normalized change density
+     
+#----- Velocity (x, y) Plots: Hot Species
+    ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
+    ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
 
-    ax_vx.set_yticks( [-1.41, -0.71, 0.00, 0.71, 1.41])
-    ax_vy.set_yticks( [-1.41, -0.71, 0.00, 0.71, 1.41])
-    ax_den.set_yticks([0.71, 0.88, 1.05, 1.22, 1.39])
-    ax_by.set_yticks( [-5.99, -3.36, -0.72, 1.91, 4.55])
-    ax_phi.set_yticks([0.01, 1.57, 3.13, 4.68, 6.24])
+    for jj in range(Nj):
+        ax_vx.scatter(pos[idx_bounds[jj, 0]: idx_bounds[jj, 1]], vel[0, idx_bounds[jj, 0]: idx_bounds[jj, 1]], s=3, c=temp_color[jj], lw=0, label=species_lbl[jj])
+        ax_vy.scatter(pos[idx_bounds[jj, 0]: idx_bounds[jj, 1]], vel[1, idx_bounds[jj, 0]: idx_bounds[jj, 1]], s=3, c=temp_color[jj], lw=0)
 
-    ax_vx.set_ylabel('VX ($x 10^{-3}$)', rotation=90)
-    ax_vy.set_ylabel('VY ($x 10^{-3}$)', rotation=90)
-    ax_den.set_ylabel('DNB', rotation=90)
-    ax_by.set_ylabel('BY ($x 10^{-1}$)', rotation=90)
-    ax_phi.set_ylabel('PHI', rotation=90)
+    ax_vx.legend()
+    ax_vx.set_title(r'Particle velocities vs. Position (x)')
+    ax_vy.set_xlabel(r'Cell', labelpad=10)
 
-    ax_phi.set_xlim(0, 128)
-    ax_phi.set_xlabel('X (CELL)')
+    ax_vx.set_ylabel(r'$\frac{v_x}{c}$', rotation=90)
+    ax_vy.set_ylabel(r'$\frac{v_y}{c}$', rotation=90)
 
     plt.setp(ax_vx.get_xticklabels(), visible=False)
-    #ax_vx.set_yticks(ax_vx.get_yticks()[1:])
+    ax_vx.set_yticks(ax_vx.get_yticks()[1:])
 
-    for ax in [ax_vx, ax_vy, ax_den, ax_by]:
-        plt.setp(ax.get_xticklabels(), visible=False)
-        #ax.set_yticks(ax.get_yticks()[1:])
-        ax.set_xlim(0, 128)
+    for ax in [ax_vy, ax_vx]:
+        ax.set_xlim(0, NX)
+        ax.set_ylim(-10, 10)
 
-#----- Plot adjustments
-    fig.text(0.42, 0.045, 'IT = {}'.format(data_dump_iter * qq), fontsize=13)    
-    fig.text(0.58, 0.045, 'T = %.2f' % (data_dump_iter * qq * dt * gyfreq), fontsize=13)
+#----- Density Plot
+    ax_den = plt.subplot2grid((fig_size), (0, 3), colspan=3)                     # Initialize axes
     
-    #plt.tight_layout(pad=1.0, w_pad=1.8)
-    fig.subplots_adjust(hspace=0.1)
+    ax_den.plot(qdens_norm, color='green')                                       # Create overlayed plots for densities of each species
 
-#----- Save plots
-    filename = 'stackplot%05d.png' % qq
-    path     = anal_dir + '/stackplot/'
+    for jj in range(Nj):
+        ax_den.plot(den_norm, color=temp_color[jj])
+        
+    ax_den.set_title('Normalized Densities and Fields')                          # Axes title (For all, since density plot is on top
+    ax_den.set_ylabel(r'$\frac{n_i}{n_0}$', fontsize=14, rotation=0, labelpad=5) # Axis (y) label for this specific axes
+    ax_den.set_ylim(0, 2)
+    
+#----- E-field (Ex) Plot
+    ax_Ex = plt.subplot2grid(fig_size, (1, 3), colspan=3, sharex=ax_den)
+
+    ax_Ex.plot(E[:, 0], color='red', label=r'$E_x$')
+    ax_Ex.plot(E[:, 1], color='cyan', label=r'$E_x$')
+    ax_Ex.plot(E[:, 2], color='black', label=r'$E_x$')
+
+    ax_Ex.set_xlim(0, NX)
+
+    #ax_Jx.set_yticks(np.arange(-200e-5, 201e-5, 50e-5))
+    #ax_Jx.set_yticklabels(np.arange(-150, 201, 50))
+    ax_Ex.set_ylabel(r'$E$', labelpad=25, rotation=0, fontsize=14)
+
+#----- Magnetic Field (By) and Magnitude (|B|) Plots
+    ax_By = plt.subplot2grid((fig_size), (2, 3), colspan=3, sharex=ax_den)
+    ax_B  = plt.subplot2grid((fig_size), (3, 3), colspan=3, sharex=ax_den)
+
+    mag_B  = (np.sqrt(B[:-1, 0] ** 2 + B[:-1, 1] ** 2 + B[:-1, 2] ** 2)) / B0
+    B_norm = B[:-1, :] / B0                                                           
+
+    ax_B.plot(mag_B, color='g')                                                        # Create axes plots
+    ax_By.plot(B_norm[:, 1], color='g') 
+    ax_By.plot(B_norm[:, 2], color='b') 
+
+    ax_B.set_xlim(0,  NX)                                                               # Set x limit
+    ax_By.set_xlim(0, NX)
+
+    ax_B.set_ylim(0, 2)                                                                 # Set y limit
+    ax_By.set_ylim(-1, 1)
+
+    ax_B.set_ylabel( r'$|B|$', rotation=0, labelpad=20, fontsize=14)                    # Set labels
+    ax_By.set_ylabel(r'$\frac{B_{y,z}}{B_0}$', rotation=0, labelpad=10, fontsize=14)
+    ax_B.set_xlabel('Cell Number')                                                      # Set x-axis label for group (since |B| is on bottom)
+
+    for ax in [ax_den, ax_Ex, ax_By]:
+        plt.setp(ax.get_xticklabels(), visible=False)
+        ax.set_yticks(ax.get_yticks()[1:])
+
+    for ax in [ax_den, ax_Ex, ax_By, ax_B]:
+        qrt = NX / (4.)
+        ax.set_xticks(np.arange(0, NX + qrt, qrt))
+        ax.grid()
+
+#----- Plot Adjustments
+    plt.tight_layout(pad=1.0, w_pad=1.8)
+    fig.subplots_adjust(hspace=0)
+
+    filename = 'diag%05d.png' % ii
+    path     = anal_dir + '/diagnostic_plot/'
     
     if os.path.exists(path) == False:                                   # Create data directory
         os.makedirs(path)
         
     fullpath = path + filename
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+    print 'Plot saved'.format(ii)
     plt.close('all')
     return
 
@@ -512,40 +595,40 @@ def plot_energies(ii, normalize=True):
 
 
 if __name__ == '__main__':   
-    drive    = '/media/yoshi/UNI_HD/'
-    series   = 'Box_test_ev1_H_only'                        # Run identifier string 
+    drive    = 'F:'#'/media/yoshi/UNI_HD/'
+    series   = 'Box_test_ev1_lowres'                        # Run identifier string 
     num_runs = len(os.listdir(drive + '/runs/' + series))
+    run_num  = 0                                            # Run number
     
-    for run_num  in range(num_runs):                                            # Run number
-        manage_dirs()                                           # Initialize directories
-        load_constants()                                        # Load SI constants
-        load_header()                                           # Load simulation parameters
-        load_particles()                                        # Load particle parameters
-        num_files = len(os.listdir(data_dir)) - 2               # Number of timesteps to load
-        
-        wpi       = np.sqrt(ne * q ** 2 / (mp * e0))            # Ion plasma frequency
-        gyfreq    = q * B0 / mp                                 # Proton gyrofrequency (rad/s)
-        gyperiod  = (mp * 2 * np.pi) / (q * B0)                 # Proton gyroperiod (s)
-        data_ts   = data_dump_iter * dt                         # Timestep between data records (seconds)
-        
-        time_seconds    = np.arange(0, num_files * data_ts, data_ts)
-        time_gperiods   = time_seconds / gyperiod
-        time_radperiods = time_seconds * gyfreq 
-        
-        np.random.seed(seed)                                    # Initialize random seed
-        
-        mag_energy      = np.zeros(num_files)
-        particle_energy = np.zeros((num_files, Nj))
-        electron_energy = np.zeros(num_files)
+    manage_dirs()                                           # Initialize directories
+    load_constants()                                        # Load SI constants
+    load_header()                                           # Load simulation parameters
+    load_particles()                                        # Load particle parameters
+    num_files = len(os.listdir(data_dir)) - 2               # Number of timesteps to load
     
-        #generate_kt_plot(normalize=True)
-            
-        for ii in range(num_files):
-            B, E, Ve, Te, J, position, q_dns, velocity = load_timestep(ii)
-            #dns                                       = collect_number_density(position)
-            #winske_stackplot(ii, title=r'CAM_CL_TSC /w Winske Parameters')
-            plot_energies(ii, normalize=True)
-            
-        
+    wpi       = np.sqrt(ne * q ** 2 / (mp * e0))            # Ion plasma frequency
+    gyfreq    = q * B0 / mp                                 # Proton gyrofrequency (rad/s)
+    gyperiod  = (mp * 2 * np.pi) / (q * B0)                 # Proton gyroperiod (s)
+    data_ts   = data_iter * dt                              # Timestep between data records (seconds)
+    
+    time_seconds    = np.arange(0, num_files * data_ts, data_ts)
+    time_gperiods   = time_seconds / gyperiod
+    time_radperiods = time_seconds * gyfreq 
+    
+    np.random.seed(seed)                                    # Initialize random seed
+    
+    mag_energy      = np.zeros(num_files)
+    particle_energy = np.zeros((num_files, Nj))
+    electron_energy = np.zeros(num_files)
 
+    #generate_kt_plot(normalize=True)
+        
+    for ii in range(num_files):
+        B, E, Ve, Te, J, position, q_dns, velocity = load_timestep(ii)
+        dns                                        = collect_number_density(position)
+        diagnostic_multiplot(ii)
+        #plot_energies(ii, normalize=True)
+        
     
+
+

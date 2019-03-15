@@ -40,7 +40,7 @@ def predictor_corrector(B, E_int, E_half, pos, vel, q_dens, Ie, W_elec, idx, DT)
     E_pred          = 2.0*E_half - 1.0*E_int
     B_pred          = push_B(B, E_pred, DT)
 
-    P, V, I, W, Q, J = advance_particles_and_moments(pos.copy(), vel.copy(), Ie.copy(), W_elec.copy(), idx, B_pred, E_pred, DT)
+    Q, J            = advance_particles_and_moments(pos.copy(), vel.copy(), Ie.copy(), W_elec.copy(), idx, B_pred, E_pred, DT)
     
     q_dens          = 0.5*(q_dens + Q)
     B_pred          = push_B(B_pred, E_pred, DT)

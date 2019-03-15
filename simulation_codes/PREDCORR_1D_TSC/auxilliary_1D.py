@@ -162,6 +162,7 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, 
         data_iter  *= 2
             
         ch_flag = 1
+
             
     elif DT_part >= 4.0*DT and qq%2 == 0:
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, 0.5*DT)    # Re-sync vel/pos          
@@ -169,7 +170,7 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, 
         max_inc     = (max_inc + 1) / 2
         qq         /= 2
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, -0.5*DT)   # De-sync vel/pos 
-        
+
         if data_iter == 1:
             data_iter = 1
         else:
@@ -177,4 +178,4 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, 
         
         ch_flag = 2
 
-    return pos, vel, qq, DT, max_inc, data_iter, ch_flag
+    return qq, DT, max_inc, data_iter, ch_flag
