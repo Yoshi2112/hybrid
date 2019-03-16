@@ -20,7 +20,7 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, idx, B, E, DT):
     vel             = velocity_update(pos, vel, Ie, W_elec, idx, B, E, DT)
     pos, Ie, W_elec = position_update(pos, vel, DT)    
     q_dens, Ji      = collect_moments(vel, Ie, W_elec, idx)
-    return q_dens, Ji
+    return pos, vel, Ie, W_elec, q_dens, Ji
 
 
 @nb.njit(parallel=do_parallel)
@@ -129,7 +129,7 @@ def velocity_update(pos, vel, Ie, W_elec, idx, B, E, dt):
     for ii in nb.prange(N):
         Ep, Bp     = interpolate_forces_to_particle(E, B, Ie[ii], W_elec[:, ii], Ib[ii], W_mag[:, ii], idx[ii])
         vel[:, ii] = boris_algorithm(vel[:, ii], Bp, Ep, dt, idx[ii])
-    return
+    return vel
 
 
 @nb.njit(parallel=do_parallel)

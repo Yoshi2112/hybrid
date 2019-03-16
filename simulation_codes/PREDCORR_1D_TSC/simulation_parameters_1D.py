@@ -9,12 +9,12 @@ import sys
 import platform
 
 ### RUN DESCRIPTION ###
-run_description = '''Check of ev1_H_only with less particles. Saturation amplitudes seem a bit weird.'''
+run_description = '''Check of ev1_H_only (run 8) with less particles. Saturation amplitudes seem a bit weird.'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs/Box_test_ev1_lowres/'   # Series save dir   : Folder containing all runs of a series
-run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path       = 'runs/compare_two/'           # Series save dir   : Folder containing all runs of a series
+run_num         = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 generate_data   = 1                             # Save data flag    : For later analysis
 seed            = 101                           # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin       = [None]                        # Set CPU affinity for run. Must be list. Auto-assign: None.
@@ -33,12 +33,12 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 15                               # Simulation runtime, in multiples of the gyroperiod
+max_rev  = 11                               # Simulation runtime, in multiples of the gyroperiod
 
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
-cellpart = 1000                             # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart = 10000                            # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
-ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
+ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
 B0       = 130e-9                           # Unform initial magnetic field value (in T)
 ne       = 20e6                             # Electron density (in /m3, same as total ion density)

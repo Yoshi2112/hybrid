@@ -178,4 +178,4 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, 
         
         ch_flag = 2
 
-    return qq, DT, max_inc, data_iter, ch_flag
+    return vel, qq, DT, max_inc, data_iter, ch_flag

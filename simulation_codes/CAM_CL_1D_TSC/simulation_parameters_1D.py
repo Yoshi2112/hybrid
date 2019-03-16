@@ -12,12 +12,13 @@ import platform
 run_description = '''Test of CAM-CL energy conservation with 5000 ppc and Winske parameters'''
 
 ### RUN PARAMETERS ###
-drive           = '/media/yoshi/UNI_HD/'    # Drive letter or path for portable HDD e.g. 'E:/'
-save_path       = 'runs/PC_CAMCL_better/'   # Series save dir   : Folder containing all runs of a series
-run_num         = 4                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+drive           = 'F:'#'/media/yoshi/UNI_HD/'    # Drive letter or path for portable HDD e.g. 'E:/'
+save_path       = 'runs/compare_two/'       # Series save dir   : Folder containing all runs of a series
+run_num         = 7                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 generate_data   = 1                         # Save data flag    : For later analysis
 generate_plots  = 0                         # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                       # RNG Seed          : Set to enable consistent results for parameter studies
+cpu_affin       = [None]                    # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 ### PHYSICAL CONSTANTS ###
@@ -33,16 +34,16 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 25                               # Simulation runtime, in multiples of the gyroperiod
+max_rev  = 15                               # Simulation runtime, in multiples of the gyroperiod
 
 dxm         = 1.0                           # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
 subcycles   = 4                             # Number of field subcycling steps for Cyclic Leapfrog
-cellpart    = 5000                          # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart    = 20000                          # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
-ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
+ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
-B0       = 200e-9                           # Unform initial magnetic field value (in T)
-ne       = 50e6                             # Electron density (in /m3, same as total ion density)
+B0       = 130e-9                           # Unform initial magnetic field value (in T)
+ne       = 20e6                             # Electron density (in /m3, same as total ion density)
 
 LH_frac  = 0.0                              # Fraction of Lower Hybrid resonance: 
                                             # Used to calculate electron resistivity by setting "anomalous"
@@ -75,9 +76,9 @@ min_dens       = 0.05                                       # Allowable minimum 
 
 adaptive_timestep   = True                                  # Flag (True/False) for adaptive timestep based on particle and field parameters
 adaptive_subcycling = True                                  # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
-do_parallel         = True                                 # Flag (True/False) for auto-parallel using numba.njit()
+do_parallel         = False                                 # Flag (True/False) for auto-parallel using numba.njit()
 
-ratio_override = 1                                          # Flag to override magnetic field value for specific regime
+ratio_override = 0                                          # Flag to override magnetic field value for specific regime
 wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
 
 
@@ -182,6 +183,16 @@ print 'Density: {}cc'.format(round(ne / 1e6, 2))
 print 'Background magnetic field: {}nT'.format(round(B0*1e9, 1))
 print 'Gyroperiod: {}s'.format(round(2. * np.pi / gyfreq, 2))
 print 'Maximum simulation time: {}s ({} gyroperiods)'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev)
+
+if None not in cpu_affin:
+    import psutil
+    run_proc = psutil.Process()
+    run_proc.cpu_affinity(cpu_affin)
+    if len(cpu_affin) == 1:
+        print '\nCPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0])
+    else:
+        print '\nCPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity())))
+
 
 python_version = sys.version.split()[0]
 operating_sys  = platform.system()
