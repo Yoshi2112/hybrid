@@ -497,7 +497,7 @@ def plot_energies(ii, normalize=True):
 
 if __name__ == '__main__':   
     drive    = 'F:'
-    series   = 'CAM_CL_velocity_test'                          # Run identifier string 
+    series   = 'CAM_CL_velocity_test'                       # Run identifier string 
     run_num  = 0                                            # Run number
 
     manage_dirs()                                           # Initialize directories

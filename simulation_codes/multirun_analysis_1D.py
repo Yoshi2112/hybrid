@@ -427,7 +427,7 @@ def examine_run_parameters():
 if __name__ == '__main__':   
     plt.ioff()
     
-    plot_energy_comparison = True
+    plot_energy_comparison = False
     
     
     drive      = 'F:'#'/media/yoshi/UNI_HD/'
@@ -437,25 +437,21 @@ if __name__ == '__main__':
     
     examine_run_parameters()
     
-# =============================================================================
-#     for run_num in range(num_runs):
-#         manage_dirs()                                           # Initialize directories
-#         load_constants()                                        # Load SI constants
-#         load_header()                                           # Load simulation parameters
-#         load_particles()                                        # Load particle parameters
-#         num_files = len(os.listdir(data_dir)) - 2               # Number of timesteps to load
-# =============================================================================
-# =============================================================================
-#         max_field  = np.zeros((3, num_runs))                        # B0, n0, max_By
-#
-#         BY = get_array('By', 0, None)
-#         
-#         max_field[0, run_num] = ne / 1e6                        # Density in cc
-#         max_field[1, run_num] = B0 * 1e9                        # B0 in nT
-#         max_field[2, run_num] = abs(BY).max() * 1e9             # Max abs(By) in nT
-#         
-#     plot_growth_grid(norm=True)
-# =============================================================================
+    for run_num in range(num_runs):
+        manage_dirs()                                           # Initialize directories
+        load_constants()                                        # Load SI constants
+        load_header()                                           # Load simulation parameters
+        load_particles()                                        # Load particle parameters
+        num_files = len(os.listdir(data_dir)) - 2               # Number of timesteps to load
+        max_field  = np.zeros((3, num_runs))                        # B0, n0, max_By
+
+        BY = get_array('By', 0, None)
+        
+        max_field[0, run_num] = ne / 1e6                        # Density in cc
+        max_field[1, run_num] = B0 * 1e9                        # B0 in nT
+        max_field[2, run_num] = abs(BY).max() * 1e9             # Max abs(By) in nT
+        
+    plot_growth_grid(norm=True)
 
     
     
