@@ -14,11 +14,11 @@ import pickle
 import numba as nb
 from collections import OrderedDict
 from matplotlib.lines import Line2D
-
+import tabulate
 import pdb
 
 
-def manage_dirs():
+def manage_dirs(create_new=True):
     global run_dir, data_dir, anal_dir, temp_dir, base_dir
     
     base_dir = '{}/runs/{}/'.format(drive, series)                      # Main series directory, containing runs
@@ -66,8 +66,6 @@ def load_particles():
     species_lbl= p_data['species_lbl']   
     
     n_contr    = density / (cellpart*sim_repr)                        # Species density contribution: Each macroparticle contributes this density to a cell
-
-    print 'Particle parameters loaded'
     return
 
 
@@ -106,9 +104,6 @@ def load_header():
         subcycles       = obj['subcycles']
     elif method_type == 'PREDCORR':
         pass
-
-    print 'Header file loaded.'
-    print 'dt = {}s\n'.format(dt)
     return 
 
 
@@ -391,30 +386,76 @@ def plot_growth_grid(plot_ratio=True, norm=False):
     return
 
 
-if __name__ == '__main__':   
-    plt.ioff()
+def examine_run_parameters():
+    '''
+    Diagnostic information to compare runs at a glance. Values include
     
-    drive      = '/media/yoshi/UNI_HD/'
-    series     = 'Box_test_ev2_H_only'                          # Run identifier string 
-    series_dir = '{}/runs//{}//'.format(drive, series)
-    num_runs   = len(os.listdir(series_dir))
+    N
+    Nj
+    NX
+    B0
+    ne
     
-    max_field  = np.zeros((3, num_runs))                        # B0, n0, max_By
+    number of files
+    '''
+    global run_num, num_files
+    
+    run_params = ['cellpart', 'Nj', 'B0', 'ne', 'NX', 'num_files', 'Te0', 'max_rev', 'ie', 'theta', 'dxm']
+    run_head   = []
+    run_dict = {}
+    for param in run_params:
+        run_dict[param] = []
     
     for run_num in range(num_runs):
-        manage_dirs()                                           # Initialize directories
-        load_constants()                                        # Load SI constants
+        manage_dirs(create_new=False)
         load_header()                                           # Load simulation parameters
         load_particles()                                        # Load particle parameters
         num_files = len(os.listdir(data_dir)) - 2               # Number of timesteps to load
+        run_head.append('Run {}'.format(run_num))
         
-        BY = get_array('By', 0, None)
+        for param in run_params:
+            run_dict[param].append(globals()[param])
         
-        max_field[0, run_num] = ne / 1e6                        # Density in cc
-        max_field[1, run_num] = B0 * 1e9                        # B0 in nT
-        max_field[2, run_num] = abs(BY).max() * 1e9             # Max abs(By) in nT
-        
-    plot_growth_grid(norm=True)
+        #table = [["Sun",696000,1989100000],["Earth",6371,5973.6], ["Moon",1737,73.5],["Mars",3390,641.85]]
+    
+    print '\n'
+    print 'Simulation parameters for runs in series \'{}\':'.format(series)
+    print '\n'
+    print(tabulate.tabulate(run_dict, headers="keys"))
+    return
+
+if __name__ == '__main__':   
+    plt.ioff()
+    
+    plot_energy_comparison = True
+    
+    
+    drive      = 'F:'#'/media/yoshi/UNI_HD/'
+    series     = 'compare_two'                                  # Run identifier string 
+    series_dir = '{}/runs//{}//'.format(drive, series)
+    num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
+    
+    examine_run_parameters()
+    
+# =============================================================================
+#     for run_num in range(num_runs):
+#         manage_dirs()                                           # Initialize directories
+#         load_constants()                                        # Load SI constants
+#         load_header()                                           # Load simulation parameters
+#         load_particles()                                        # Load particle parameters
+#         num_files = len(os.listdir(data_dir)) - 2               # Number of timesteps to load
+# =============================================================================
+# =============================================================================
+#         max_field  = np.zeros((3, num_runs))                        # B0, n0, max_By
+#
+#         BY = get_array('By', 0, None)
+#         
+#         max_field[0, run_num] = ne / 1e6                        # Density in cc
+#         max_field[1, run_num] = B0 * 1e9                        # B0 in nT
+#         max_field[2, run_num] = abs(BY).max() * 1e9             # Max abs(By) in nT
+#         
+#     plot_growth_grid(norm=True)
+# =============================================================================
 
     
     
@@ -431,14 +472,17 @@ if __name__ == '__main__':
     
     
     
-    compare_plots = False
-    if compare_plots == True:
-        runs_to_analyse = [0   ,  1   ,  2 ]                        # Run number
-        run_styles      = ['-' , '--' , ':']
+
+    if plot_energy_comparison == True:
+        runs_to_analyse = [4, 5, 6, 7]                        # Run number
+        run_styles      = ['-' , '--', ':', '-.']
         
-        run_labels      = ['Predictor-Corrector',
-                           'CAM-CL' ,
-                           r'Pred-Corr equivalent $\Delta t$']
+        run_labels      = ['1k',
+                           '5k',
+                           '10k',
+                           '20k']
+        
+        energy_suffix = '_CAM_CL'
         
         total_energies  = np.zeros(len(runs_to_analyse))
         
@@ -478,10 +522,9 @@ if __name__ == '__main__':
     
         ax.add_artist(run_legend)
     
-            
-        fullpath = base_dir + 'energy_plot'
+        fullpath = base_dir + 'energy_plot' + energy_suffix
         ax.set_ylim(0.85, 1.4)
-        ax.set_xlim(0, 25)
+        ax.set_xlim(0, 15)
         fig.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
         plt.close('all')
         

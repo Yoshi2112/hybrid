@@ -11,36 +11,27 @@ import save_routines as save
 
 from simulation_parameters_1D import generate_data, NX
 
-def initialize():
-    pos, vel, Ie, W_elec, idx   = init.initialize_particles()
-    B, E_int                    = init.initialize_fields()
-    DT, max_inc, data_iter      = aux.set_timestep(vel)
-    
-    q_dens, Ji                  = sources.collect_moments(vel, Ie, W_elec, idx)
-    
-    E_int, Ve, Te               = fields.calculate_E(B, Ji, q_dens)
-    vel                         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E_int, -0.5*DT)
-    return pos, vel, Ie, W_elec, idx, B, E_int, q_dens, Ji, Ve, Te, DT, max_inc, data_iter 
 
-
-def loop():
-    return
-
-def main():
-    pos, vel, Ie, W_elec, idx, B, E_int, q_dens, Ji, Ve, Te, DT, max_inc, data_iter  = initialize()
+if __name__ == '__main__':
+    start_time = timer()
     
+    pos, vel, Ie, W_elec, idx           = init.initialize_particles()
+    B, E_int                            = init.initialize_fields()
+    
+    DT, max_inc, data_iter              = aux.set_timestep(vel)
+    print 'Timestep: %.4fs, %d iterations total' % (DT, max_inc)
     if generate_data == 1:
         save.store_run_parameters(DT, data_iter)
-        
-    print 'Timestep: %.4fs, %d iterations total' % (DT, max_inc)
-    print 'Initial source term check:'
-    print 'Average cell density: {}cc'.format(q_dens[1: NX + 1].mean())
-    print 'Average cell current: {}A/m'.format(Ji[1: NX + 1].mean())
+    
+    q_dens, Ji    = sources.collect_moments(vel, Ie, W_elec, idx)
+    
+    E_int, Ve, Te = fields.calculate_E(B, Ji, q_dens)
+    vel           = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E_int, -0.5*DT)
 
     qq      = 0
-    max_inc  = 50
     while qq < max_inc:
-        pos, vel, qq, DT, max_inc, data_iter, ch_flag \
+        # Check timestep
+        vel, qq, DT, max_inc, data_iter, ch_flag \
         = aux.check_timestep(qq, DT, pos, vel, B, E_int, q_dens, Ie, W_elec, max_inc, data_iter, idx)
         
         if ch_flag == 1:
@@ -66,10 +57,4 @@ def main():
             print 'Timestep {} of {} complete'.format(qq + 1, max_inc)
 
         qq += 1
-    return
-
-
-if __name__ == '__main__':
-    start_time = timer()
-    main()
     print "Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2))  # Time taken to run simulation
