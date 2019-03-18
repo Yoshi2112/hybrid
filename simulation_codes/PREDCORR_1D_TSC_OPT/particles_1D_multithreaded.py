@@ -11,8 +11,11 @@ import pdb
 from simulation_parameters_1D  import N, NX, dx, xmax, xmin, Nj, charge, mass, n_contr, do_parallel, smooth_sources, min_dens, ne, q
 import auxilliary_1D as aux
 
+def init_and_run():
+    return
 
-@nb.njit(parallel=do_parallel)
+
+@nb.njit(parallel=True)
 def advance_particles_and_moments(pos, vel, idx, B, E, DT):
     '''
     Helper function to group the particle advance and moment collection functions.
@@ -24,11 +27,12 @@ def advance_particles_and_moments(pos, vel, idx, B, E, DT):
     q_dens = np.zeros(E.shape[0])
     Ji     = np.zeros(E.shape)
 
+    # Code for each particle
     for ii in nb.prange(N):
         Ie, We       = assign_weighting(pos[ii], E_nodes=True)
         Ib, Wb       = assign_weighting(pos[ii], E_nodes=False)
         vel[:, ii]   = velocity_update(vel[:, ii], Ie, We, Ib, Wb, idx[ii], B, E, DT)
-        pos[ii]      = position_update(pos[ii], vel[:, ii], DT)
+        position_update(pos[ii], vel[:, ii], DT)
 
         deposit_moments(n_i, nu_i, vel[:, ii], Ie, We, idx[ii])
 
@@ -113,17 +117,7 @@ def velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     return vel
 
 
-@nb.njit()
-def position_update(pos, vel, dt):
 
-    pos += vel[0] * dt
-
-    if pos < xmin:
-        pos += xmax
-
-    if pos > xmax:
-        pos -= xmax
-    return pos
 
 
 @nb.njit()
@@ -200,7 +194,7 @@ def smooth(function):
         new_function[ii]     = 0.50*function[ii] + new_function[ii]
         new_function[ii + 1] = 0.25*function[ii] + new_function[ii + 1]
 
-    # Move Ghost Cell Contributions: Periodic Boundary Condition
+    # Move Ghospost Cell Contributions: Periodic Boundary Condition
     new_function[1]        += new_function[size - 1]
     new_function[size - 2] += new_function[0]
 
@@ -210,20 +204,72 @@ def smooth(function):
     return new_function
 
 
-if __name__ == '__main__':
-    import pdb
+#@nb.njit()
+def position_update(pos, vel, dt):
+    '''
+    Single particle thing
+    '''
+    pos += vel[0] * dt
 
+    if pos < xmin:
+        pos += xmax
+
+    if pos > xmax:
+        pos -= xmax
+    return pos
+
+
+
+@nb.guvectorize(["void(float64[:], float64[:,:], float64)"], "(n),(t,n),()", target='cpu')
+def position_update_vectorize(pos, vel, dt):
+    for ii in range(pos.shape[0]):
+        pos[ii] += vel[0, ii] * dt
+
+        if pos[ii] < xmin:
+            pos[ii] += xmax
+
+        if pos[ii] > xmax:
+            pos[ii] -= xmax
+    return
+
+
+if __name__ == '__main__':
+
+    @nb.njit(parallel=False)
+    def test_call_function(pos, vel, dt, vec=False):
+
+        if vec == True:
+            position_update_vectorize(pos, vel, dt)
+        else:
+            for ii in nb.prange(pos.shape[0]):
+                pos[ii] = position_update(pos[ii], vel[:, ii], dt)
+
+        return
+
+    N        = 320000000
     pos_test = np.linspace(xmin, xmax, N)
     vel_test = np.array([np.random.normal(0, 1, N),
                          np.random.normal(0, 1, N),
                          np.random.normal(0, 1, N)])
-    idx = np.ones(N)
-    B   = np.ones((NX + 3, 3)) * 4e-9
-    E   = np.zeros((NX + 3, 3))
-    dt  = 0.001 
+    dt_test  = 0.001
 
-    pdb.set_trace()
+# =============================================================================
+#     idx_test = np.ones(N, dtype=int)
+#     B_test   = np.ones((NX + 3, 3)) * 4e-9
+#     E_test   = np.zeros((NX + 3, 3))
+#
+# =============================================================================
+# =============================================================================
+#     advance_particles_and_moments(pos_test, vel_test, idx_test,  B_test, E_test, dt_test)
+#
+#     advance_particles_and_moments.parallel_diagnostics(level=4)
+# =============================================================================
+    from timeit import default_timer as timer
 
+    print 'Calling particle push'
 
+    start_time = timer()
+    test_call_function(pos_test, vel_test, dt_test, vec=False)
+    end_time = timer()
 
-
+    print 'Execution time: {}s'.format(round(end_time - start_time, 3))
