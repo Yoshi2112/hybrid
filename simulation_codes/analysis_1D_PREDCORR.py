@@ -12,7 +12,6 @@ from numpy import pi
 import pickle
 import matplotlib.gridspec as gs
 import numba as nb
-import pdb
 
 def manage_dirs():
     global run_dir, data_dir, anal_dir, temp_dir

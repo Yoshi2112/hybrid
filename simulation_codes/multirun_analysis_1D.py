@@ -270,7 +270,7 @@ def get_run_energies():
     '''
     
     energy_output    = np.zeros((4 + Nj, num_files))
-    time_gperiods    = np.arange(0, num_files * data_ts, data_ts)  / gyperiod
+    time_gperiods    = np.array([ii * data_ts for ii in range(num_files)])  / gyperiod
     energy_output[0] = time_gperiods        
     
     for ii in range(num_files):
@@ -428,7 +428,6 @@ if __name__ == '__main__':
     plt.ioff()
     
     plot_energy_comparison = False
-    
     
     drive      = 'F:'#'/media/yoshi/UNI_HD/'
     series     = 'compare_two'                                  # Run identifier string 
