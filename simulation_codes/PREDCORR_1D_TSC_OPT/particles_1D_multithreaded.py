@@ -11,9 +11,6 @@ import pdb
 from simulation_parameters_1D  import N, NX, dx, xmax, xmin, Nj, charge, mass, n_contr, do_parallel, smooth_sources, min_dens, ne, q
 import auxilliary_1D as aux
 
-def init_and_run():
-    return
-
 
 @nb.njit(parallel=True)
 def advance_particles_and_moments(pos, vel, idx, B, E, DT):
@@ -28,7 +25,7 @@ def advance_particles_and_moments(pos, vel, idx, B, E, DT):
     Ji     = np.zeros(E.shape)
 
     # Code for each particle
-    for ii in nb.prange(N):
+    for ii in nb.prange(pos.shape[0]):
         Ie, We       = assign_weighting(pos[ii], E_nodes=True)
         Ib, Wb       = assign_weighting(pos[ii], E_nodes=False)
         vel[:, ii]   = velocity_update(vel[:, ii], Ie, We, Ib, Wb, idx[ii], B, E, DT)
@@ -36,9 +33,110 @@ def advance_particles_and_moments(pos, vel, idx, B, E, DT):
 
         deposit_moments(n_i, nu_i, vel[:, ii], Ie, We, idx[ii])
 
-    transform_moments_to_densities(q_dens, Ji, n_i, nu_i)
+    #transform_moments_to_densities(q_dens, Ji, n_i, nu_i)
 
     return q_dens, Ji
+
+
+@nb.njit(parallel=True)
+def fully_explicit_advance(pos, vel, idx, B, E, q_dens, Ji, DT):
+    '''
+    Helper function to group the particle advance and moment collection functions.
+
+    Recode to do single loop over particle table. Don't use vectorised array operations... yet
+    '''
+    charge = np.array([1., 1.]) * 1.602e-19
+    mass   = np.array([1., 1.]) * 1.673e-27
+
+    n_i    = np.zeros((E.shape[0], Nj))
+    nu_i   = np.zeros((E.shape[0], Nj, 3))
+    q_dens = np.zeros(E.shape[0])
+    Ji     = np.zeros(E.shape)
+
+    # LOOP for each particle
+    for ii in nb.prange(pos.shape[0]):
+        We = np.zeros(3, dtype=np.float64)
+        Wb = np.zeros(3, dtype=np.float64)
+
+        # E-field node and weights
+        Ie = int(round(pos[ii] / dx + 0.5) - 1.0)
+        delta_left  = Ie - pos[ii] / dx - 0.5
+        We[0]       = 0.5  * (1.5 - abs(delta_left)) ** 2
+        We[1]       = 0.75 - (delta_left + 1.) ** 2
+        We[2]       = 1.0  - We[0] - We[1]
+
+        # B-field node and weights
+        Ib = int(round(pos[ii] / dx + 1.0) - 1.0)
+        delta_left  = Ib - pos[ii] / dx - 1.0
+        Wb[0]       = 0.5  * (1.5 - abs(delta_left)) ** 2
+        Wb[1]       = 0.75 - (delta_left + 1.) ** 2
+        Wb[2]       = 1.0  - Wb[0] - Wb[1]
+
+        # Interpolate forces to particle
+        Ep = E[Ie    , 0:3] * We[0]  \
+           + E[Ie + 1, 0:3] * We[1]  \
+           + E[Ie + 2, 0:3] * We[2]
+
+        Bp = B[Ib    , 0:3] * Wb[0]  \
+           + B[Ib + 1, 0:3] * Wb[1]  \
+           + B[Ib + 2, 0:3] * Wb[2]
+
+        # Boris velocity advance
+        T = (charge[idx[ii]] * Bp / mass[idx[ii]]) * DT / 2.     # Boris variable
+        S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)      # Boris variable
+
+        v_minus       = vel[:, ii] + charge[idx[ii]] * Ep * DT / (2. * mass[idx[ii]])
+
+        v_prime       = np.zeros(3)
+        v_prime[0]    = v_minus[0] + (v_minus[1] * T[2] - v_minus[2] * T[1])
+        v_prime[1]    = v_minus[1] + (v_minus[2] * T[0] - v_minus[0] * T[2])
+        v_prime[2]    = v_minus[2] + (v_minus[0] * T[1] - v_minus[1] * T[0])
+
+        v_plus        = np.zeros(3)
+        v_plus[0]     = v_minus[0] + (v_prime[1] * S[2] - v_prime[2] * S[1])
+        v_plus[1]     = v_minus[1] + (v_prime[2] * S[0] - v_prime[0] * S[2])
+        v_plus[2]     = v_minus[2] + (v_prime[0] * S[1] - v_prime[1] * S[0])
+
+        vel[:, ii]    = v_plus + charge[idx[ii]] * Ep * DT / (2. * mass[idx[ii]])
+
+        # Position update and check
+        pos[ii]      += vel[0, ii] * DT
+
+        if pos[ii] < xmin:
+            pos[ii] += xmax
+
+        if pos[ii] > xmax:
+            pos[ii] -= xmax
+
+        # Deposit partial moments to grid (multiplication later)
+        for kk in range(3):
+            nu_i[Ie,     idx[ii], kk] += We[0] * vel[kk, ii]
+            nu_i[Ie + 1, idx[ii], kk] += We[1] * vel[kk, ii]
+            nu_i[Ie + 2, idx[ii], kk] += We[2] * vel[kk, ii]
+
+        n_i[Ie,     idx[ii]] += We[0]
+        n_i[Ie + 1, idx[ii]] += We[1]
+        n_i[Ie + 2, idx[ii]] += We[2]
+
+    ### END LOOP ###
+    for jj in range(Nj):
+        q_dens  += n_i[:, jj] * n_contr[jj] * charge[jj]
+
+        for kk in range(3):
+            Ji[:, kk] += nu_i[:, jj, kk] * n_contr[jj] * charge[jj]
+
+    if smooth_sources == 1:
+        for jj in range(Nj):
+            n_i[:, jj]  = smooth(n_i[:, jj])
+
+            for kk in range(3):
+                nu_i[ :, jj, kk] = smooth(nu_i[:,  jj, kk])
+
+    for ii in range(q_dens.shape[0]):
+        if q_dens[ii] < min_dens * ne * q:
+            q_dens[ii] = min_dens * ne * q
+
+    return
 
 
 @nb.njit(parallel=do_parallel)
@@ -115,9 +213,6 @@ def velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
 
     vel        = v_plus + charge[idx] * Ep * dt / (2. * mass[idx])
     return vel
-
-
-
 
 
 @nb.njit()
@@ -204,7 +299,7 @@ def smooth(function):
     return new_function
 
 
-#@nb.njit()
+@nb.njit()
 def position_update(pos, vel, dt):
     '''
     Single particle thing
@@ -220,56 +315,34 @@ def position_update(pos, vel, dt):
 
 
 
-@nb.guvectorize(["void(float64[:], float64[:,:], float64)"], "(n),(t,n),()", target='cpu')
-def position_update_vectorize(pos, vel, dt):
-    for ii in range(pos.shape[0]):
-        pos[ii] += vel[0, ii] * dt
-
-        if pos[ii] < xmin:
-            pos[ii] += xmax
-
-        if pos[ii] > xmax:
-            pos[ii] -= xmax
-    return
-
-
 if __name__ == '__main__':
+    Nj = 2; dx = 18008; xmin = 0; xmax = 576259.8616; NX = 128
 
-    @nb.njit(parallel=False)
-    def test_call_function(pos, vel, dt, vec=False):
-
-        if vec == True:
-            position_update_vectorize(pos, vel, dt)
-        else:
-            for ii in nb.prange(pos.shape[0]):
-                pos[ii] = position_update(pos[ii], vel[:, ii], dt)
-
-        return
-
-    N        = 320000000
-    pos_test = np.linspace(xmin, xmax, N)
-    vel_test = np.array([np.random.normal(0, 1, N),
-                         np.random.normal(0, 1, N),
-                         np.random.normal(0, 1, N)])
+    test_N   = 32000000
+    pos_test = np.linspace(xmin, xmax, test_N)
+    vel_test = np.array([np.random.normal(0, 1, test_N),
+                         np.random.normal(0, 1, test_N),
+                         np.random.normal(0, 1, test_N)])
+    idx_test = np.ones(test_N, dtype=int)
     dt_test  = 0.001
 
-# =============================================================================
-#     idx_test = np.ones(N, dtype=int)
-#     B_test   = np.ones((NX + 3, 3)) * 4e-9
-#     E_test   = np.zeros((NX + 3, 3))
-#
-# =============================================================================
+    B_test   = np.ones((NX + 3, 3)) * 4e-9
+    E_test   = np.zeros((NX + 3, 3))
+    q_dens_test = np.zeros(NX + 3)
+    Ji_test  = np.zeros((NX + 3, 3))
+
 # =============================================================================
 #     advance_particles_and_moments(pos_test, vel_test, idx_test,  B_test, E_test, dt_test)
-#
 #     advance_particles_and_moments.parallel_diagnostics(level=4)
 # =============================================================================
+
     from timeit import default_timer as timer
 
     print('Calling particle push')
 
     start_time = timer()
-    test_call_function(pos_test, vel_test, dt_test, vec=False)
+    fully_explicit_advance(pos_test, vel_test, idx_test, B_test, E_test, q_dens_test, Ji_test, dt_test)
+    #advance_particles_and_moments(pos_test, vel_test, idx_test,  B_test, E_test, dt_test)
     end_time = timer()
 
     print('Execution time: {}s'.format(round(end_time - start_time, 3)))
