@@ -171,23 +171,23 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, max_inc, data_iter, plot_iter, s
         if data_iter != None:
             data_iter *= 2
             
-    elif DT_part >= 4.0*DT and qq%2 == 0:
+    elif DT_part >= 4.0*DT and qq%2 == 0 and data_iter%2 == 0 and max_inc%2 == 0:
         pos, Ie, W_elec = particles.position_update(pos, vel, -0.5*DT)          # Roll back particle position before halving timestep
         
-        change_flag = 2
-        DT         *= 2.0
-        max_inc     = (max_inc + 1) / 2                                         # This ensures timesteps aren't cut off by halving (more likely to be added, which isn't bad)
-        qq         /= 2
+        change_flag  = 2
+        DT          *= 2.0
+        max_inc      = max_inc // 2
+        qq         //= 2
         
         if plot_iter == None or plot_iter == 1:
-            plot_iter = 1
+            plot_iter   = 1
         else:
-            plot_iter /= 2
+            plot_iter //= 2
         
         if data_iter == None or data_iter == 1:
-            data_iter = 1
+            data_iter   = 1
         else:
-            data_iter /= 2
+            data_iter //= 2
 
     if const.adaptive_subcycling == True:
         dispfreq        = (k_max ** 2) * (B_tot / (const.mu0 * dns)).max()             # Dispersion frequency
@@ -197,8 +197,9 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, max_inc, data_iter, plot_iter, s
         if subcycles < 0.75*new_subcycles:                                       
             subcycles *= 2
             print('Number of subcycles per timestep doubled to {}'.format(subcycles))
-        if subcycles > 3.0*new_subcycles:                                      
-            subcycles     = (subcycles + 1) / 2
+            
+        if subcycles > 3.0*new_subcycles and subcycles%2 == 0:                                      
+            subcycles //= 2
             print('Number of subcycles per timestep halved to {}'.format(subcycles))
             
         if subcycles > 1000:
