@@ -224,4 +224,4 @@ if __name__ == '__main__':
 
     end_time   = timer()
 
-    print 'Execution time: {}s'.format(round(end_time - start_time, 5))
+    print('Execution time: {}s'.format(round(end_time - start_time, 5)))

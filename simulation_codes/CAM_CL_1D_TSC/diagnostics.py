@@ -154,14 +154,14 @@ def test_particle_orbit():
     max_inc    = int(maxtime / dt) + 1
     
     P          = np.zeros((max_inc+1, 3))
-    print '\nNumber of orbits: {}'.format(num_rev)
-    print 'Increments per orbit: {}'.format(round(1./gyfrac, 2))
-    print 'Total number of points: {}'.format(max_inc)
+    print('\nNumber of orbits: {}'.format(num_rev))
+    print('Increments per orbit: {}'.format(round(1./gyfrac, 2)))
+    print('Total number of points: {}'.format(max_inc))
     
-    print '\nGyroradius: {}m'.format(rL)
-    print 'Gyroperiod: {}s'.format(round(gyperiod, 2))
-    print 'Timestep: {}s'.format(round(dt, 5))
-    print 'Total time: {}s'.format(round(maxtime, 1))
+    print('\nGyroradius: {}m'.format(rL))
+    print('Gyroperiod: {}s'.format(round(gyperiod, 2)))
+    print('Timestep: {}s'.format(round(dt, 5)))
+    print('Total time: {}s'.format(round(maxtime, 1)))
     
     init_KE = 0.5 * const.mass[0] * vp[0] ** 2 + vp[1] ** 2 + vp[2] ** 2
     
@@ -311,7 +311,7 @@ def test_density_and_velocity_deposition():
         species_color = const.temp_color[jj]
         plt.plot(E_nodes, normalized_density, marker='o', c=species_color)
         
-        print 'Normalized total density contribution of species {} is {}'.format(jj, normalized_density.sum())
+        print('Normalized total density contribution of species {} is {}'.format(jj, normalized_density.sum()))
 
     for ii in range(const.NX + 3):
         plt.axvline(E_nodes[ii], linestyle='--', c='r', alpha=0.2)
@@ -342,7 +342,7 @@ def test_velocity_deposition():
         species_color = const.temp_color[jj]
         plt.plot(E_nodes, normalized_density, marker='o', c=species_color)
         
-        print 'Normalized total density contribution of species {} is {}'.format(jj, normalized_density.sum())
+        print('Normalized total density contribution of species {} is {}'.format(jj, normalized_density.sum()))
 
     for ii in range(const.NX + 3):
         plt.axvline(E_nodes[ii], linestyle='--', c='r', alpha=0.2)
@@ -402,7 +402,7 @@ def test_force_interpolation():
     
         Ep, Bp     = particles.interpolate_forces_to_particle(E, B, Ie[0], W_elec[:, 0], Ib[0], W_mag[:, 0])
 
-        for ax, jj in zip([ax1, ax2, ax3], range(3)):
+        for ax, jj in zip([ax1, ax2, ax3], list(range(3))):
             ax.clear()
             ax.set_xlim(-1.5, const.NX + 2)
             
@@ -629,7 +629,7 @@ def test_cross_product():
 
     test_result = aux.cross_product(A, B)
     diff        = test_result - anal_result
-    print diff
+    print(diff)
 
     return
 
@@ -888,7 +888,7 @@ def test_cspline_interpolation():
     grids = [8, 16, 32]
     errors = np.zeros(len(grids))
     
-    for NX, ii in zip(grids, range(len(grids))):
+    for NX, ii in zip(grids, list(range(len(grids)))):
         #NX   = 32      #const.NX
         xmin = 0.0     #const.xmin
         xmax = 2*np.pi #const.xmax
@@ -930,7 +930,7 @@ def test_cspline_interpolation():
         
     for ii in range(len(grids) - 1):
         order = np.log(errors[ii] / errors[ii + 1]) / np.log(2)
-        print order
+        print(order)
 
     plot = True
     if plot == True:
@@ -976,7 +976,7 @@ def test_interp_cross_manual():
     k    = 1.0
     marker_size = 20
     
-    for NX, ii in zip(grids, range(len(grids))):
+    for NX, ii in zip(grids, list(range(len(grids)))):
         dx   = xmax / NX
         #x    = np.arange(xmin, xmax, dx/100.)
 
@@ -1023,7 +1023,7 @@ def test_interp_cross_manual():
         
     for ii in range(len(grids) - 1):
         order = np.log(errors[ii] / errors[ii + 1]) / np.log(2)
-        print order
+        print(order)
 
 
     # OUTPUTS (Plots the highest grid-resolution version)

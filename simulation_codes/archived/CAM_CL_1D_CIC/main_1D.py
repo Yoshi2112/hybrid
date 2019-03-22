@@ -24,7 +24,7 @@ if __name__ == '__main__':
     if generate_data == 1:
         pas.store_run_parameters(DT, data_dump_iter)
     
-    print 'Loading initial state...\n'
+    print('Loading initial state...\n')
     part, dns_int, dns_half, J_plus, J_minus, G, L   = sources.init_collect_moments(part, 0.5*DT)
     
     qq      = 0
@@ -32,7 +32,7 @@ if __name__ == '__main__':
         part, qq, DT, max_inc, data_dump_iter, plot_dump_iter, change_flag = aux.check_timestep(qq, DT, part, B, E, dns_int, max_inc, data_dump_iter, plot_dump_iter)
 
         if change_flag == 1:
-            print 'Timestep halved. Syncing particle velocity/position with DT = {}'.format(DT)
+            print('Timestep halved. Syncing particle velocity/position with DT = {}'.format(DT))
             part, dns_int, dns_half, J_plus, J_minus, G, L   = sources.init_collect_moments(part, 0.5*DT)
             
         B = fields.cyclic_leapfrog(B, dns_int, J_minus, DT)
@@ -55,9 +55,9 @@ if __name__ == '__main__':
             pas.create_figure_and_save(part, J, B, dns_int, qq, DT, plot_dump_iter)
 
         if (qq + 1)%10 == 0:
-            print 'Timestep {} of {} complete'.format(qq + 1, max_inc)
+            print('Timestep {} of {} complete'.format(qq + 1, max_inc))
 
         qq += 1
 
-    print "Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2))  # Time taken to run simulation
+    print("Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2)))  # Time taken to run simulation
 

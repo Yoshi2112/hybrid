@@ -47,8 +47,8 @@ def set_timestep(part):
     if data_dump_iter == 0:
         data_dump_iter = 1
 
-    print 'Proton gyroperiod = %.2fs' % (gyperiod_radian * (1./(2*np.pi)))
-    print 'Timestep: %.4fs, %d iterations total' % (DT, maxtime)
+    print('Proton gyroperiod = %.2fs' % (gyperiod_radian * (1./(2*np.pi))))
+    print('Timestep: %.4fs, %d iterations total' % (DT, maxtime))
     return DT, maxtime, data_dump_iter, plot_dump_iter
 
 
@@ -69,7 +69,7 @@ def check_timestep(qq, DT, part, maxtime, data_dump_iter, plot_dump_iter):
             
         if data_dump_iter != None:
             data_dump_iter *= 2
-        print 'Timestep halved. DT = {}'.format(DT)
+        print('Timestep halved. DT = {}'.format(DT))
 
     return qq, DT, maxtime, data_dump_iter, plot_dump_iter
 

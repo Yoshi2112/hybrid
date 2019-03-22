@@ -508,7 +508,7 @@ if __name__ == '__main__':
     while it <= ntimes:
         plt.ioff()
         
-        print '{}'.format(it)
+        print('{}'.format(it))
         it += 1
         t  += dtwci
 

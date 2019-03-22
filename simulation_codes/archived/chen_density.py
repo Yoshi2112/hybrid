@@ -64,8 +64,8 @@ def get_chen_distribution(n):
     ne = np.zeros(n)
     
     # Locate transition positions
-    val1 = (L_pp + L0) / 2.     ;   idx1 = min(range(len(L)), key=lambda i: abs(L[i]-val1))
-    val2 = (L0 + L1)   / 2.     ;   idx2 = min(range(len(L)), key=lambda i: abs(L[i]-val2))
+    val1 = (L_pp + L0) / 2.     ;   idx1 = min(list(range(len(L))), key=lambda i: abs(L[i]-val1))
+    val2 = (L0 + L1)   / 2.     ;   idx2 = min(list(range(len(L))), key=lambda i: abs(L[i]-val2))
     
     # Construct electron density profile
     for ii in range(n):

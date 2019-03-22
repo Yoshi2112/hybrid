@@ -30,7 +30,7 @@ def get_curl_B(field, DX=dx):
     '''
     curl = np.zeros(field.shape)
     
-    for ii in nb.prange(1, field.shape[0]):
+    for ii in np.arange(1, field.shape[0]):
         curl[ii - 1, 1] = - (field[ii, 2] - field[ii - 1, 2])
         curl[ii - 1, 2] =    field[ii, 1] - field[ii - 1, 1]
     
@@ -60,7 +60,7 @@ def get_curl_E(field, DX=dx):
     '''
     curl = np.zeros(field.shape)
     
-    for ii in nb.prange(1, field.shape[0]):
+    for ii in np.arange(1, field.shape[0]):
         curl[ii, 1] = - (field[ii, 2] - field[ii - 1, 2])
         curl[ii, 2] =    field[ii, 1] - field[ii - 1, 1]
 
@@ -102,7 +102,7 @@ def get_grad_P(qn, te, DX=dx, inter_type=1):
     grad_P        = np.zeros(qn.shape[0])
     Pe            = qn * kB * te / q
 
-    for ii in nb.prange(1, qn.shape[0]):
+    for ii in np.arange(1, qn.shape[0]):
         grad_pe_B[ii] = (Pe[ii] - Pe[ii - 1])  / DX
         
     grad_pe_B[0] = grad_pe_B[qn.shape[0] - 3]
@@ -229,7 +229,7 @@ def calculate_E(B, J, qn, DX=dx):
 
 
 #%% DEPRECATED OR UNTESTED
-@nb.njit()
+#@nb.njit()
 def calculate_E_old(B, J, qn, DX=dx):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,

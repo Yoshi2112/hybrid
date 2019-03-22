@@ -135,13 +135,13 @@ def test_particle_orbit():
     dt         = gyperiod / resolution 
 
     xy         = np.zeros((maxtime+1, 2))
-    print '\nNumber of revolutions: {}'.format(num_rev)
-    print 'Points per revolution: {}'.format(resolution)
-    print 'Total number of points: {}'.format(maxtime)
+    print('\nNumber of revolutions: {}'.format(num_rev))
+    print('Points per revolution: {}'.format(resolution))
+    print('Total number of points: {}'.format(maxtime))
     
-    print '\nGyroradius: {}m'.format(rL)
-    print 'Gyroperiod: {}s'.format(round(gyperiod, 2))
-    print 'Timestep: {}s'.format(round(dt, 3))
+    print('\nGyroradius: {}m'.format(rL))
+    print('Gyroperiod: {}s'.format(round(gyperiod, 2)))
+    print('Timestep: {}s'.format(round(dt, 3)))
     
     Bc  = eval_B(xp, B0)
     Ec  = eval_E(xp)

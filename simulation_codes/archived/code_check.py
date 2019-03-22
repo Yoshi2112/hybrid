@@ -20,7 +20,7 @@ def check_cell_distribution(part, node_number, j): #
         if (abs(part[0, ii] - x_node) <= 0.5*dx) and (part[8, ii] == j):       
             f = np.append(f, [part[0:6, ii]], axis=0)
             count += 1
-    print count
+    print(count)
     #Plot it
     rcParams.update({'text.color'   : 'k',
             'axes.labelcolor'   : 'k',

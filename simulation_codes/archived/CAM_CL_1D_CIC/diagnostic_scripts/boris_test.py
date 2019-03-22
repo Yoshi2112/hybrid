@@ -91,7 +91,7 @@ def test_particle_orbit():
         xp  = position_update(xp, vp, dt)
         
         if ii%2 == 0:
-            print ii, xp, vp
+            print(ii, xp, vp)
         
 # =============================================================================
 #     plt.scatter(vp[1], vp[2], c='b', s=1)   

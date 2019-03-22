@@ -104,10 +104,10 @@ wpiwci         = 1e4                                        # Desired plasma/cyc
 
 if set_override == 1:
     B0   = c * (1. / wpiwci) * np.sqrt(mu0 * mp * ne)
-    print '\n'
-    print '----------------------------------------------------------------'
-    print 'WARNING: RATIO OVERRIDE IN EFFECT - INPUT MAGNETIC FIELD IGNORED'
-    print '----------------------------------------------------------------'
+    print('\n')
+    print('----------------------------------------------------------------')
+    print('WARNING: RATIO OVERRIDE IN EFFECT - INPUT MAGNETIC FIELD IGNORED')
+    print('----------------------------------------------------------------')
     
 Te0        = B0 ** 2 * beta_e   / (2 * mu0 * ne * kB)   # Temperatures of species in Kelvin
 Tpar       = B0 ** 2 * beta_par / (2 * mu0 * ne * kB)
@@ -145,12 +145,12 @@ idx_bounds = np.stack((idx_start, idx_end)).transpose()                         
 freq_ratio = wpi / gyfreq
 sped_ratio = c / va
 
-print 'Frequency ratio: {}'.format(freq_ratio)
-print 'Speed ratio: {}'.format(sped_ratio)
-print 'Density: {}cc'.format(round(ne / 1e6, 2))
-print 'Background magnetic field: {}nT'.format(round(B0*1e9, 1))
-print 'Gyroperiod: {}s'.format(round(2. * np.pi / gyfreq, 2))
-print 'Maximum simulation time: {}s ({} gyroperiods)'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev)
+print('Frequency ratio: {}'.format(freq_ratio))
+print('Speed ratio: {}'.format(sped_ratio))
+print('Density: {}cc'.format(round(ne / 1e6, 2)))
+print('Background magnetic field: {}nT'.format(round(B0*1e9, 1)))
+print('Gyroperiod: {}s'.format(round(2. * np.pi / gyfreq, 2)))
+print('Maximum simulation time: {}s ({} gyroperiods)'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev))
 
 #%%### INPUT TESTS AND CHECKS
 

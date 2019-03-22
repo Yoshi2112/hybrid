@@ -26,4 +26,4 @@ if __name__ == '__main__':
     base   = 3
 
     frac = base_k_brf(number, base)
-    print frac
+    print(frac)

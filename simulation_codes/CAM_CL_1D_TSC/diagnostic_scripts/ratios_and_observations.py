@@ -19,7 +19,7 @@ B_min = 0e-9
 B_max = 300e-9
 B     = np.linspace(B_min, B_max, npts)
 
-powers = range(1, 5)
+powers = list(range(1, 5))
 
 for pwr in powers:
     sqrt_n = (rat * (10 ** pwr) * B) / 1e3

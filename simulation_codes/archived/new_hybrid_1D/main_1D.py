@@ -13,7 +13,7 @@ from simulation_parameters_1D import generate_data, generate_plots, c
 
 
 def main_simulation_loop():
-    print 'Initializing parameters...'
+    print('Initializing parameters...')
     part                         = init.initialize_particles()
     B, E, Ji, dns, W, Wb         = init.initialize_fields()
 
@@ -27,7 +27,7 @@ def main_simulation_loop():
         data_save_string = ''; plot_save_string = ''
         
         if qq == 0:
-            print 'Simulation starting...'
+            print('Simulation starting...')
             W         = sources.assign_weighting(part[0, :], part[1, :], 1)                 # Assign initial (E) weighting to particles
             dns       = sources.collect_density(part[1, :], W, part[2, :])                  # Collect initial density
             Ji        = sources.collect_current(part, W)                                    # Collect initial current
@@ -85,7 +85,7 @@ def main_simulation_loop():
             pas.create_figure_and_save(part, E, B, dns, qq, DT, plot_dump_iter)
             plot_save_string = 'Plot saved.'
 
-        print 'Timestep {} of {} complete. {} {}'.format(qq+1, maxtime, data_save_string, plot_save_string)
+        print('Timestep {} of {} complete. {} {}'.format(qq+1, maxtime, data_save_string, plot_save_string))
         qq += 1
     return
 
@@ -93,4 +93,4 @@ if __name__ == '__main__':
     start_time = timer()
     main_simulation_loop()
 
-    print "Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2))  # Time taken to run simulation
+    print("Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2)))  # Time taken to run simulation

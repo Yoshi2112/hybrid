@@ -45,7 +45,7 @@ def generate_fourier_analyses(arr):
     fullpath = plot_path + 'wk' + '.png'
     fig.savefig(fullpath, edgecolor='none', bbox_inches='tight')
     plt.close()
-    print 'w-k Plot saved'
+    print('w-k Plot saved')
     
     fig2 = plt.figure(2, figsize=(12, 8))
     ax2  = fig2.add_subplot(111)
@@ -59,7 +59,7 @@ def generate_fourier_analyses(arr):
     fullpath = plot_path + 'kt' + '.png'
     fig2.savefig(fullpath, edgecolor='none', bbox_inches='tight')
     plt.close()
-    print 'k-t Plot saved'
+    print('k-t Plot saved')
     return
 
 
@@ -110,7 +110,7 @@ def plot_energies():
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
     plt.close('all')
     
-    print 'Energy plot saved'
+    print('Energy plot saved')
     return
 
 

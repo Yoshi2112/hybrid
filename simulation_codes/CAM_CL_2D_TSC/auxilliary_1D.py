@@ -119,17 +119,17 @@ def set_timestep(vel):
     else:
         data_iter = int(const.data_res*gyperiod / DT)
     
-    print 'Timestep: %.4fs, %d iterations total' % (DT, max_inc)
+    print('Timestep: %.4fs, %d iterations total' % (DT, max_inc))
     
     if const.adaptive_subcycling == True:
         k_max           = np.pi / const.dx
         dispfreq        = (k_max ** 2) * const.B0 / (const.mu0 * const.ne * const.q)            # Dispersion frequency
         dt_sc           = const.freq_res * 1./dispfreq
         subcycles       = int(DT / dt_sc + 1)
-        print 'Number of subcycles required: {}'.format(subcycles)
+        print('Number of subcycles required: {}'.format(subcycles))
     else:
         subcycles = const.subcycles
-        print 'Number of subcycles set at default: {}'.format(subcycles)
+        print('Number of subcycles set at default: {}'.format(subcycles))
     
     if const.generate_data == 1:
         pas.store_run_parameters(DT, data_iter)
@@ -198,10 +198,10 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, max_inc, data_iter, plot_iter, s
         
         if subcycles < 0.75*new_subcycles:                                       
             subcycles *= 2
-            print 'Number of subcycles per timestep doubled to {}'.format(subcycles)
+            print('Number of subcycles per timestep doubled to {}'.format(subcycles))
         if subcycles > 3.0*new_subcycles:                                      
             subcycles     = (subcycles + 1) / 2
-            print 'Number of subcycles per timestep halved to {}'.format(subcycles)
+            print('Number of subcycles per timestep halved to {}'.format(subcycles))
             
         if subcycles > 1000:
             const.adaptive_subcycling = False

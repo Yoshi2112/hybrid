@@ -88,7 +88,7 @@ f = open(h_name)                                                            # Op
 obj = pickle.load(f)                                                        # Load variables from header file into python object
 f.close()                                                                   # Close header file
         
-for name in obj.keys():                                                     # Assign Header variables to namespace (dicts)
+for name in list(obj.keys()):                                                     # Assign Header variables to namespace (dicts)
     globals()[name] = obj[name]                                             # Magic variable creation function
 
 np.random.seed(seed)    
@@ -99,7 +99,7 @@ if end_file == 0:
 else:
     num_files = end_file                            
 
-print 'Header file loaded.'
+print('Header file loaded.')
 
 #%% ---- LOAD PARTICLE PARAMETERS ----
 
@@ -113,7 +113,7 @@ num_index = np.arange(len(array_names))                                     # Nu
 for var_name, index_position in zip(array_names, num_index):                # Magic subroutine to attach variable names to their stored arrays
     globals()[var_name] = p_data[array_names[index_position]]               # Generally contains 'partin', 'partout' and 'part_type' arrays from model run
 
-print 'Particle parameters loaded'
+print('Particle parameters loaded')
 
 ''' 
 partin:      (0) Mass (proton units)
@@ -608,13 +608,13 @@ while ii < num_files:
                 # Collate all By (field) information
                 if os.path.isfile(os.path.join(data_dir, 'By_array.npz')) == False:
                     By_all[ii, :] = B[1:size-1, 1] / B0                                 ## This bit determines which field!!!
-                    print 'File %d of %d read' % ((ii + 1), num_files)
+                    print('File %d of %d read' % ((ii + 1), num_files))
                     ii += 1
                 else:
                     ii = num_files - 2
-                    print 'Loading saved array....\n Please Wait....'
+                    print('Loading saved array....\n Please Wait....')
                     By_all = np.load(os.path.join(data_dir, 'By_array.npz'))['By_array']
-                    print 'Saved array loaded'
+                    print('Saved array loaded')
                     ii = num_files
 
             if subplot_style == 'D':                    # Collect data if no saved array
@@ -633,16 +633,16 @@ while ii < num_files:
                         wy[ii, jj] = n_rel[jj] * 0.5 * partin[0, jj] * (y_av)
                         wz[ii, jj] = n_rel[jj] * 0.5 * partin[0, jj] * (z_av)
                     
-                    print 'File %d of %d read' % ((ii + 1), num_files)
+                    print('File %d of %d read' % ((ii + 1), num_files))
                     W     = np.asarray([wx, wy, wz])
                     F     = np.asarray([wb, we])
                     ii += 1
                   
                 else:               # Load array if it exists
-                    print 'Loading energy arrays....\n Please Wait....'
+                    print('Loading energy arrays....\n Please Wait....')
                     W = np.load(os.path.join(data_dir, 'W_array.npz'))['W_array']
                     F = np.load(os.path.join(data_dir, 'F_array.npz'))['F_array']
-                    print 'Energy arrays loaded'  
+                    print('Energy arrays loaded')  
                     ii = num_files
                     
             if (subplot_style == 'E') or (subplot_style == 'F') or (subplot_style == 'G') or (subplot_style == 'H') or (subplot_style == 'I'):
@@ -693,7 +693,7 @@ while ii < num_files:
             plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')#, bbox_inches='tight')
             plt.close()
         
-            print 'Plot %d of %d created' % (ii + 1, num_files)
+            print('Plot %d of %d created' % (ii + 1, num_files))
             ii += 1
             
 #%%         ---- DO PLOTS ----
@@ -720,7 +720,7 @@ if plot_style == 0:
         plt.grid()
     
         plot_name = 'k vs t.png'     
-        print 'Spatial plot created'
+        print('Spatial plot created')
         
 #%%             ----- TEMPORAL FFT vs. TIME PLOT (A2) -----
     if subplot_style == 'A2':
@@ -739,7 +739,7 @@ if plot_style == 0:
         plt.grid()
     
         plot_name = 'k vs t.png'     
-        print 'Spatial plot created'
+        print('Spatial plot created')
     
 #%%             ----- OMEGA vs. K DISPERSION PLOT -----                
     if subplot_style == 'B':
@@ -781,7 +781,7 @@ if plot_style == 0:
         #plt.grid()
         
         plot_name = 'w vs k.png'
-        print 'Dispersion plot created'
+        print('Dispersion plot created')
         
 #%%             ----- WATERFALL PLOT -----                
     if subplot_style == 'C':
@@ -884,7 +884,7 @@ if plot_style == 0:
         ax7 = plt.subplot2grid((fig_size), (1, 6), colspan=2, sharex=ax3, sharey=ax4)
              
         # pdb.set_trace()
-        for ax, jj in zip([ax0, ax1, ax2, ax3], range(4)):
+        for ax, jj in zip([ax0, ax1, ax2, ax3], list(range(4))):
 
             ax.set_title(r'$\Omega_i t$ = %.1f' % times[jj])
             
@@ -894,7 +894,7 @@ if plot_style == 0:
                 ax.set_ylim(-15, 15)
                 
                 
-        for ax, jj in zip([ax4, ax5, ax6, ax7], range(4)):
+        for ax, jj in zip([ax4, ax5, ax6, ax7], list(range(4))):
             for kk in range(Nj):
                 ax.scatter(fourpos[jj, idx_start[kk]: idx_end[kk]], fourvel[jj, 1, idx_start[kk]: idx_end[kk]] / alfie, s=psize, lw=0, c=species_colors[kk])
                 ax.set_xlim(0, xmax / 1000)
@@ -933,7 +933,7 @@ if plot_style == 0:
         ax2 = plt.subplot2grid((fig_size), (0, 4), colspan=2)
         ax3 = plt.subplot2grid((fig_size), (0, 6), colspan=2)
         
-        for ax, jj in zip([ax0, ax1, ax2, ax3], range(4)):
+        for ax, jj in zip([ax0, ax1, ax2, ax3], list(range(4))):
 
             ax.set_title('t = %.1f s' % times[jj])
         
@@ -975,7 +975,7 @@ if plot_style == 0:
         ax2 = plt.subplot2grid((fig_size), (0, 4), colspan=2)
         ax3 = plt.subplot2grid((fig_size), (0, 6), colspan=2)
         
-        for ax, jj in zip([ax0, ax1, ax2, ax3], range(4)):
+        for ax, jj in zip([ax0, ax1, ax2, ax3], list(range(4))):
 
             ax.set_title(r'$\Omega_i t$ = %.1f' % times[jj])
             
@@ -1017,7 +1017,7 @@ if plot_style == 0:
         
         pad = 50           
         
-        for ax, jj in zip([ax0, ax1, ax2, ax3], range(4)):
+        for ax, jj in zip([ax0, ax1, ax2, ax3], list(range(4))):
             ax.zaxis.set_rotate_label(False)
             ax.set_title(r'$\Omega_i t$ = %.1f' % times[jj])
             
@@ -1064,7 +1064,7 @@ if plot_style == 0:
         
         B_limit = 0.01 * B0             # Power limit
         
-        for ax, jj in zip([ax0, ax1, ax2, ax3], range(4)):
+        for ax, jj in zip([ax0, ax1, ax2, ax3], list(range(4))):
 
             ax.set_title(r't = %.1fs' % times[jj], fontsize=18)
             phi = np.zeros(NX)
@@ -1110,7 +1110,7 @@ if plot_style == 0:
     fullpath = os.path.join(save_dir, plot_name)    
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')#, bbox_inches='tight')
     plt.close()
-    print 'Plot saved'
+    print('Plot saved')
     
     # Save Data Array
     By_filename = 'By_array.npz'    # Magnetic Field history: y-component
@@ -1122,17 +1122,17 @@ if plot_style == 0:
         
         if os.path.isfile(By_fullpath) == False:
             np.savez(By_fullpath, By_array=By_all)
-            print 'By array saved'
+            print('By array saved')
             
     elif subplot_style == 'D':
         W_fullpath = os.path.join(data_dir, W_filename)
         
         if os.path.isfile(W_fullpath) == False:
             np.savez(W_fullpath, W_array=W)
-            print 'W array saved'
+            print('W array saved')
             
         F_fullpath = os.path.join(data_dir, F_filename)
         
         if os.path.isfile(F_fullpath) == False:
             np.savez(F_fullpath, F_array=F)
-            print 'F array saved'
+            print('F array saved')

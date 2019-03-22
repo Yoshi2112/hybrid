@@ -114,7 +114,7 @@ Tprp = ((alfie ** 2) * partout[0, :] * partin[6, :]) / (2 * kB)        # Perpend
 if electron_temp == 0:                                      # Initial electron temp (const. if ie = 0)
     Te0 = Tprp[0]                                           # Isothermal with perpendicular temperature of first species
     
-print 'speeds: %d \n freqs: %d' % (c / alfie, wpi / gyfreq)
+print('speeds: %d \n freqs: %d' % (c / alfie, wpi / gyfreq))
 
 #%%         ----- PARTICLES -----
 # Particle Array: Initalization and Loading
@@ -192,7 +192,7 @@ def check_particles(density_array):
     total = np.sum(dns[1:size-1, 1:size-1, :]) * dx * dx    # Exclude ghost cells
     percent = (total / N_real) * 100                        # Calculate as % of initial particles
     
-    print 'Spatial domain currently contains %.1f%% of real particles' % percent
+    print('Spatial domain currently contains %.1f%% of real particles' % percent)
     return
 
 def check_velocity(idj):
@@ -271,7 +271,7 @@ def check_position():   # Hard-coded for 2 species
     
 
 def assign_weighting(part):
-    print 'Weighting particles...'
+    print('Weighting particles...')
     h_i = np.zeros((2,2))                                                 # Empty distance array
     W_o = np.zeros((2, 2, N))    
    
@@ -287,13 +287,13 @@ def assign_weighting(part):
     
         w_i         = (h_i ** (-p)) / np.sum(h_i ** (-p))           
         W_o[:, :, ii] = w_i
-    print 'Max weighting function: %.3f\n' % np.max(W_o)
+    print('Max weighting function: %.3f\n' % np.max(W_o))
 
     return W_o
                 
     
 def velocity_update(part, B, E, dt, W_in):  # Based on Appendix A of Ch5 : Hybrid Codes by Winske & Omidi.
-    print 'Updating velocity...'
+    print('Updating velocity...')
     for n in range(N):
         
         vn = part[3:6, n]                   # Existing particle velocity
@@ -321,7 +321,7 @@ def velocity_update(part, B, E, dt, W_in):  # Based on Appendix A of Ch5 : Hybri
         part[4,n] = f * vn[1] + h * ( E_p[1] + g * B_p[1] - (v0[0]*B_p[2] - v0[2]*B_p[0]) )
         part[5,n] = f * vn[2] + h * ( E_p[2] + g * B_p[2] + (v0[0]*B_p[1] - v0[1]*B_p[0]) )
         
-    print 'Max velocity: %.2f vA\n' % np.max(part[3:5, :] / alfie)
+    print('Max velocity: %.2f vA\n' % np.max(part[3:5, :] / alfie))
         
     return part        
     
@@ -342,7 +342,7 @@ def check_boundary(pos):
 
 
 def position_update(part):  # Basic Push (x, v) vectors and I, W update
-    print 'Pushing particles...'
+    print('Pushing particles...')
     
     part[0, :] += part[3, :] * DT                       # Update position vectors
     part[1, :] += part[4, :] * DT
@@ -354,13 +354,13 @@ def position_update(part):  # Basic Push (x, v) vectors and I, W update
     part[7, :] = part[1, :] / dy + 0.5                  # Bottom-most node index, Iy
 
     W_out = assign_weighting(part)                      # Calculate IDW coefficients from 4 nearest nodes
-    print 'Max position values: %.4f, %.4f\n' % (np.max(part[0, :]) / xmax, np.max(part[1, :]) / ymax)
+    print('Max position values: %.4f, %.4f\n' % (np.max(part[0, :]) / xmax, np.max(part[1, :]) / ymax))
     
     return part, W_out
     
     
 def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
-    print 'Updating magnetic field...'    
+    print('Updating magnetic field...')    
     Bp = np.zeros((size, size, 3), dtype=float)
  
     Bp[:, :, 0] = B[:, :, 0] - Bxc      # Consider B1 only (perturbation)   
@@ -389,7 +389,7 @@ def push_B(B, E, dt):   # Basically Faraday's Law. (B, E) vectors
     Bp[size - 1, :, :] = Bp[1, :, :]     # Update ghost cells
     Bp[:, size - 1, :] = Bp[:, 1, :]    
         
-    print 'Max B-field value: %.2f B0\n' % (np.max(B) / B0)
+    print('Max B-field value: %.2f B0\n' % (np.max(B) / B0))
     return B
     
 def electron_temperature(e_flag, n_i):
@@ -403,7 +403,7 @@ def electron_temperature(e_flag, n_i):
     return Te
 
 def push_E(B, V_i, n_i, dt): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
-    print 'Updating electric field...'
+    print('Updating electric field...')
     E_out = np.zeros((size, size, 3))     # Output array - new electric field
     VxB   = np.zeros((size, size, 3))     # V cross B holder
     del_p = np.zeros((size, size, 3))     # Electron pressure tensor gradient array
@@ -469,7 +469,7 @@ def push_E(B, V_i, n_i, dt): # Based off big F(B, n, V) eqn on pg. 140 (eqn. 10)
     for ii in range(3):
         E_out[:, :, ii] = smooth(E_out[:, :, ii])
     
-    print 'Max E-field value: %.2f microvolts\n' % np.max(E_out * 1.0e6)       
+    print('Max E-field value: %.2f microvolts\n' % np.max(E_out * 1.0e6))       
     return E_out
 
 
@@ -478,7 +478,7 @@ def collect_density(Nx, Ny, Nidx, W_in):
     at each timestep. These values are weighted by their distance
     from cell nodes on each side. Can send whole array or individual particles?
     How do I sum up the densities one at a time?'''
-    print 'Collecting density...'
+    print('Collecting density...')
     n_i = np.zeros((size, size, Nj), float)
     
     # Collect number density of all particles: Create subfunction particle_count ?
@@ -516,13 +516,13 @@ def collect_density(Nx, Ny, Nidx, W_in):
         for jj in range(1, size - 1):
             if np.sum(n_i[ii, jj, :]) == 0:
                 n_i[ii, jj, 1] += 0.05 * (partin[3, 1] * n0)      # 5% of initial cold H+ density (hard-coded for now)
-                print 'Extra added at node (%d, %d)' % (ii, jj)
+                print('Extra added at node (%d, %d)' % (ii, jj))
 
     return n_i
   
 # Recieves particle array containing all info, plus 'n_i', which is the *simulated* particle density across all cells
 def collect_flow(Nx, Ny, Nidx, ni, W_in):
-    print 'Collecting flow velocities...'
+    print('Collecting flow velocities...')
     # Empty 3-vector for flow velocities at each node
     V_i = np.zeros((size, size, Nj, 3), float)    
     
@@ -563,7 +563,7 @@ def collect_flow(Nx, Ny, Nidx, ni, W_in):
                     else:
                         V_i[mm, nn, jj, ii] /= (ni[mm, nn, jj] * dx * dy)  
                         
-    print 'Max ion flow velocity: %d km/s\n' % np.max(V_i / 1e3)     
+    print('Max ion flow velocity: %d km/s\n' % np.max(V_i / 1e3))     
     return V_i
     
 
@@ -609,7 +609,7 @@ if __name__ == '__main__':
     #%%        ----- MAIN PROGRAM -----
     for qq in range(maxtime):
         if qq == 0:
-            print '\nLoop 0: Initializing----'
+            print('\nLoop 0: Initializing----')
             check_integrity(partin, Nj, part_type)
             
             # Initalize fields and collect source terms, etc.            : Use dt = 0
@@ -623,10 +623,10 @@ if __name__ == '__main__':
                 
             # Retard Velocity : Use dt = - 0.5
             part = velocity_update(part, B[:, :, 0:3], E[:, :, 0:3], -0.5*DT, W)                    # This stops the bad things from happening (e.g. Numerical instabilities)
-            print '\n----------------------'
+            print('\n----------------------')
            
         else:
-            print '\nLoop %d' % qq
+            print('\nLoop %d' % qq)
             # N + 1/2
             part      = velocity_update(part, B[:, :, 0:3], E[:, :, 0:3], -0.5*DT, W)               # Advance Velocity to N + 1/2
             part, W   = position_update(part)                                                       # Advance Position to N + 1
@@ -790,7 +790,7 @@ if __name__ == '__main__':
                 filename = 'anim%05d.png' % r
                 fullpath = os.path.join(path, filename)
                 plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-                print 'Plot %d produced. Elapsed time: %.1fs' % (r, timer() - start_time)
+                print('Plot %d produced. Elapsed time: %.1fs' % (r, timer() - start_time))
                 plt.close('all')
             
             # Save Data
@@ -821,17 +821,17 @@ if __name__ == '__main__':
                     with open(h_name, 'wb') as f:
                         pickle.dump(params, f)
                         f.close() 
-                        print 'Header file saved'
+                        print('Header file saved')
                     
                     p_file = os.path.join(d_path, 'p_data')
                     np.savez(p_file, partin=partin, partout=partout, part_type=part_type)       # Data file containing particle information
-                    print 'Particle data saved'
+                    print('Particle data saved')
 
                 d_filename = 'data%05d' % r
                 d_fullpath = os.path.join(d_path, d_filename)
                 np.savez(d_fullpath, part=part, Vi=Vi, dns=dns, E = E[:, :, 0:3], B = B[:, :, 0:3])   # Data file for each iteration
-                print 'Data %d saved. Elapsed time: %.1fs' % (r, timer() - start_time)
+                print('Data %d saved. Elapsed time: %.1fs' % (r, timer() - start_time))
     
     #%%        ----- PRINT RUNTIME -----
     elapsed = timer() - start_time
-    print "Time to execute program: {0:.2f} seconds".format(round(elapsed,2))
+    print("Time to execute program: {0:.2f} seconds".format(round(elapsed,2)))

@@ -116,7 +116,7 @@ def create_idx():
     return idx
 
 def load_timestep(ii):
-    print 'Loading file {} of {}'.format(ii+1, num_files)
+    print('Loading file {} of {}'.format(ii+1, num_files))
     d_file     = 'data%05d.npz' % ii                # Define target file
     input_path = data_dir + d_file                  # File location
     data       = np.load(input_path)                # Load file
@@ -232,7 +232,7 @@ def get_array(component, tmin, tmax):
         check_path = temp_dir + component.lower() + '_array' + '_{}'.format(tmin) + '_{}'.format(tmax) + '.npy'
 
     if os.path.isfile(check_path) == True:
-        print 'Array file for {} loaded from memory...'.format(component.upper())
+        print('Array file for {} loaded from memory...'.format(component.upper()))
         arr = np.load(check_path)   
     else:
         for ii in range(tmin, tmax):
@@ -243,7 +243,7 @@ def get_array(component, tmin, tmax):
             elif component[0].upper() == 'E':
                 arr[ii] = E[:, comp_idx]
                 
-        print 'Saving array file as {}'.format(check_path)
+        print('Saving array file as {}'.format(check_path))
         np.save(check_path, arr)
     return arr
 
@@ -354,7 +354,7 @@ def plot_growth_grid(plot_ratio=True, norm=False):
         B_max  = 300e-9
         B_axis = np.linspace(B_min, B_max, npts)
         
-        powers = range(1, 5)
+        powers = list(range(1, 5))
         for pwr in powers:
             #sqrt_n = (rat * (10 ** pwr) * B_axis) / 1e3
             n      = (rat * (10 ** pwr) * B_axis) ** 2 / 1e6
@@ -418,10 +418,10 @@ def examine_run_parameters():
         
         #table = [["Sun",696000,1989100000],["Earth",6371,5973.6], ["Moon",1737,73.5],["Mars",3390,641.85]]
     
-    print '\n'
-    print 'Simulation parameters for runs in series \'{}\':'.format(series)
-    print '\n'
-    print(tabulate.tabulate(run_dict, headers="keys"))
+    print('\n')
+    print('Simulation parameters for runs in series \'{}\':'.format(series))
+    print('\n')
+    print((tabulate.tabulate(run_dict, headers="keys")))
     return
 
 if __name__ == '__main__':   
@@ -489,7 +489,7 @@ if __name__ == '__main__':
         plt.figtext(left, 0.50, r'TOTAL ENERGY CONSERVATION',    fontsize=fsize, fontname=fname)
         plt.figtext(left, 0.50,  '_________________________',     fontsize=fsize, fontname=fname)
     
-        for run_num, ii in zip(runs_to_analyse, range(len(runs_to_analyse))):
+        for run_num, ii in zip(runs_to_analyse, list(range(len(runs_to_analyse)))):
             manage_dirs()                                           # Initialize directories
             load_constants()                                        # Load SI constants
             load_header()                                           # Load simulation parameters
@@ -501,7 +501,7 @@ if __name__ == '__main__':
             gyperiod  = (mp * 2 * np.pi) / (q * B0)                 # Proton gyroperiod (s)
             data_ts   = data_dump_iter * dt                         # Timestep between data records (seconds)
                    
-            print 'Analysing run {}'.format(run_num)
+            print('Analysing run {}'.format(run_num))
             energies = get_run_energies()
     
             plot_energies(energies, ax)
@@ -512,8 +512,8 @@ if __name__ == '__main__':
         fig.tight_layout()
         
         handles, labels = plt.gca().get_legend_handles_labels()
-        by_label = OrderedDict(zip(labels, handles))
-        ax.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1, 0.8))
+        by_label = OrderedDict(list(zip(labels, handles)))
+        ax.legend(list(by_label.values()), list(by_label.keys()), loc='center left', bbox_to_anchor=(1, 0.8))
     
         ax.add_artist(run_legend)
     

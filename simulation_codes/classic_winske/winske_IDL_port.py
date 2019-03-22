@@ -904,10 +904,10 @@ if __name__ == '__main__':
         field()
 
         t += dtwci
-        print 'Iteration {}, time = {}'.format(it, t)
+        print('Iteration {}, time = {}'.format(it, t))
     
 #%%        
-    print 'Saving run data...'
+    print('Saving run data...')
     field_path = 'E://runs//winske_anisotropy_test//vanilla_winske//save_data//'
     np.save(field_path + 'BYS', by_save)
     np.save(field_path + 'BZS', bz_save)
@@ -922,6 +922,6 @@ if __name__ == '__main__':
     np.save(field_path + 'VB', vb_save)
     np.save(field_path + 'VC', vc_save)
     
-    print 'Run complete.'
+    print('Run complete.')
     
     

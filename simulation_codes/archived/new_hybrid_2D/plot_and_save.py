@@ -19,18 +19,18 @@ from part_params import idx_bounds, Nj, species, temp_type, dist_type, mass, \
                         charge, velocity, proportion, sim_repr, Tpar, Tper, seed, rand_sample
 import pdb
 def manage_directories(qq, framegrab):
-    print 'Checking directories...'
+    print('Checking directories...')
     if (generate_data == 1 or generate_plots == 1) == True:
         if os.path.exists('%s/%s' % (drive, save_path)) == False:
             os.makedirs('%s/%s' % (drive, save_path))                        # Create master test series directory
-            print 'Master directory created'
+            print('Master directory created')
             
         const.run_num = len(os.listdir('%s/%s' % (drive, save_path)))        # Count number of existing runs. Set to run number manually for static save
         path = ('%s/%s/run_%d' % (drive, save_path, const.run_num))          # Set root run path (for images)    
         
         if os.path.exists(path) == False:
             os.makedirs(path)
-            print 'Run directory created' 
+            print('Run directory created') 
     return
 
 
@@ -70,7 +70,7 @@ def create_figure_and_save(part, E, B, dns, qq, dt, framegrab):
     y_cell_num  = np.arange(NY + 2)
     X, Y        = np.meshgrid(x_cell_num, y_cell_num)
 
-    for (ii, comp) in zip(range(3), ['x', 'y', 'z']):   # Do magnetic field
+    for (ii, comp) in zip(list(range(3)), ['x', 'y', 'z']):   # Do magnetic field
         ax = fig.add_subplot(grids[0, ii], projection='3d')
         ax.plot_wireframe(X, Y, B_norm[:, :, ii])
         
@@ -85,7 +85,7 @@ def create_figure_and_save(part, E, B, dns, qq, dt, framegrab):
         ax.zaxis.set_rotate_label(False)                        # Disable automatic rotation
         ax.set_zlabel(r'$B_{%s}$' % comp, rotation=0)
         
-    for (ii, comp) in zip(range(3), ['x', 'y', 'z']):   # Do electric field
+    for (ii, comp) in zip(list(range(3)), ['x', 'y', 'z']):   # Do electric field
         ax = fig.add_subplot(grids[1, ii], projection='3d')
         ax.plot_wireframe(X, Y, E_norm[:, :, ii])
         
@@ -174,7 +174,7 @@ def create_figure_and_save(part, E, B, dns, qq, dt, framegrab):
         path     = drive + save_path + '/run_{}'.format(const.run_num)
         fullpath = os.path.join(path, filename)
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-        print 'Plot %d produced' % r
+        print('Plot %d produced' % r)
         plt.close('all')     
     return
 
@@ -211,14 +211,14 @@ def save_data(dt, framegrab, qq, part, Ji, E, B, dns):
         with open(h_name, 'wb') as f:
             pickle.dump(params, f)
             f.close() 
-            print 'Header file saved'
+            print('Header file saved')
         
         p_file = os.path.join(d_path, 'p_data')
         np.savez(p_file, idx_bounds=idx_bounds, species=species, temp_type=temp_type, dist_type=dist_type, mass=mass,
                  charge=charge, velocity=velocity, proportion=proportion, sim_repr=sim_repr)               # Data file containing particle information
-        print 'Particle data saved'
+        print('Particle data saved')
 
     d_filename = 'data%05d' % r
     d_fullpath = os.path.join(d_path, d_filename)
     np.savez(d_fullpath, part=part, Ji=Ji, dns=dns, E = E[:, 0:3], B = B[:, 0:3])   # Data file for each iteration
-    print 'Data saved'
+    print('Data saved')

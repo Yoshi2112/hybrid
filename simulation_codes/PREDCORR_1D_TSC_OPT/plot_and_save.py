@@ -16,20 +16,20 @@ from   simulation_parameters_1D import generate_data, generate_plots, drive, sav
 from   simulation_parameters_1D import idx_bounds, Nj, species_lbl, temp_type, dist_type, mass, charge, velocity, sim_repr, Tpar, Tper, temp_color
 
 def manage_directories():
-    print 'Checking directories...'
+    print('Checking directories...')
     if (generate_data == 1 or generate_plots == 1) == True:
         if os.path.exists('%s/%s' % (drive, save_path)) == False:
             os.makedirs('%s/%s' % (drive, save_path))                        # Create master test series directory
-            print 'Master directory created'
+            print('Master directory created')
 
         path = ('%s/%s/run_%d' % (drive, save_path, const.run_num))          # Set root run path (for images)
 
         if os.path.exists(path) == False:
             os.makedirs(path)
-            print 'Run directory created'
+            print('Run directory created')
         else:
-            print 'Run directory already exists'
-            overwrite_flag = raw_input('Overwrite? (Y/N) \n')
+            print('Run directory already exists')
+            overwrite_flag = input('Overwrite? (Y/N) \n')
             if overwrite_flag.lower() == 'y':
                 rmtree(path)
                 os.makedirs(path)
@@ -141,7 +141,7 @@ def create_figure_and_save(pos, vel, E, B, qn, qq, DT, plot_iter):
         
     fullpath = path + filename
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-    print 'Plot saved'.format(r)
+    print('Plot saved'.format(r))
     plt.close('all')
     return
 
@@ -181,7 +181,7 @@ def store_run_parameters(dt, data_dump_iter):
     with open(h_name, 'wb') as f:
         pickle.dump(params, f)
         f.close()
-        print 'Header file saved'
+        print('Header file saved')
         
     # Particle values: Array parameters
     p_file = os.path.join(d_path, 'p_data')
@@ -197,7 +197,7 @@ def store_run_parameters(dt, data_dump_iter):
                      sim_repr    = sim_repr,
                      Tpar        = Tpar,
                      Tper        = Tper)
-    print 'Particle data saved'
+    print('Particle data saved')
     return
 
 
@@ -209,4 +209,4 @@ def save_data(dt, data_iter, qq, pos, vel, Ji, E, B, Ve, Te, dns):
     d_fullpath = os.path.join(d_path, d_filename)
     np.savez(d_fullpath, pos = pos, vel = vel, E = E[1:NX+1, 0:3], B = B[1:NX+2, 0:3], J = Ji[1:NX+1],
                          dns = dns[1:NX+1], Ve = Ve[1:NX+1], Te = Te[1:NX+1])   # Data file for each iteration
-    print 'Data saved'.format(qq)
+    print('Data saved'.format(qq))

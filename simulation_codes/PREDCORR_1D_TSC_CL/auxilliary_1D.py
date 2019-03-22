@@ -117,17 +117,17 @@ def set_timestep(vel):
     else:
         data_iter = int(const.data_res*gyperiod / DT)
     
-    print 'Timestep: %.4fs, %d iterations total' % (DT, max_inc)
+    print('Timestep: %.4fs, %d iterations total' % (DT, max_inc))
     
     if const.adaptive_subcycling == True:
         k_max           = np.pi / const.dx
         dispfreq        = (k_max ** 2) * const.B0 / (const.mu0 * const.ne * const.q)            # Dispersion frequency
         dt_sc           = const.freq_res * 1./dispfreq
         subcycles       = int(DT / dt_sc + 1)
-        print 'Number of subcycles required: {}'.format(subcycles)
+        print('Number of subcycles required: {}'.format(subcycles))
     else:
         subcycles = const.subcycles
-        print 'Number of subcycles set at default: {}'.format(subcycles)
+        print('Number of subcycles set at default: {}'.format(subcycles))
     
     if const.generate_data == 1:
         pas.store_run_parameters(DT, data_iter)
@@ -169,7 +169,7 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, 
         if data_iter != None:
             data_iter *= 2
             
-        print 'Timestep halved. Syncing particle velocity with DT = {}'.format(DT)
+        print('Timestep halved. Syncing particle velocity with DT = {}'.format(DT))
             
     elif DT_part >= 4.0*DT and qq%2 == 0:
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, 0.5*DT)    # Re-sync vel/pos          
@@ -188,7 +188,7 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, 
         else:
             data_iter /= 2
             
-        print 'Timestep Doubled. Syncing particle velocity with DT = {}'.format(DT)
+        print('Timestep Doubled. Syncing particle velocity with DT = {}'.format(DT))
 
     if const.adaptive_subcycling == True:
         dispfreq        = (k_max ** 2) * (B_tot / (const.mu0 * dns)).max()             # Dispersion frequency
@@ -197,10 +197,10 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, 
         
         if subcycles < 0.75*new_subcycles:                                       
             subcycles *= 2
-            print 'Number of subcycles per timestep doubled to {}'.format(subcycles)
+            print('Number of subcycles per timestep doubled to {}'.format(subcycles))
         if subcycles > 3.0*new_subcycles:                                      
             subcycles     = (subcycles + 1) / 2
-            print 'Number of subcycles per timestep halved to {}'.format(subcycles)
+            print('Number of subcycles per timestep halved to {}'.format(subcycles))
             
         if subcycles > const.subcycle_max:
             const.adaptive_subcycling = False

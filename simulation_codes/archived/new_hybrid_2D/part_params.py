@@ -36,4 +36,4 @@ idx_start = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])
 idx_end   = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
 idx_bounds= np.stack((idx_start, idx_end)).transpose()  # Array index boundary values: idx_bounds[species, start/end]
 
-rand_sample = np.random.choice(range(const.N/2), const.cellpart/2, replace=False)
+rand_sample = np.random.choice(list(range(const.N/2)), const.cellpart/2, replace=False)

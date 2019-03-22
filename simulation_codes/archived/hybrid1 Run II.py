@@ -56,8 +56,8 @@ def initialize_particles():
                        [            9.35,   2*T0*A/(A+1)  ],        #(7) Perpendicular Temperature (eV) (y, z)
                        [  1.00000000e+00,   0.00000000e+00]])       #(8) Hot (0) or Cold (1) species
     
-    print 'T_par = %.1f eV'  % partin[6, 0]
-    print 'T_perp = %.1f eV\n' % partin[7, 0]
+    print('T_par = %.1f eV'  % partin[6, 0])
+    print('T_perp = %.1f eV\n' % partin[7, 0])
     
     part_type      = ['$H^{+}$',
                       '$He^{2+}$'] 
@@ -121,9 +121,9 @@ def initialize_particles():
                
     beta = 0.5 * (beta_par + beta_per)
     
-    print 'Proton beta = %.2f' % beta[0]
-    print 'Speed ratio = %d ' % int(c/alfie) 
-    print 'Pr||/Alph|| = %.2f' % (partin[6, 1] / partin[6, 0])
+    print('Proton beta = %.2f' % beta[0])
+    print('Speed ratio = %d ' % int(c/alfie)) 
+    print('Pr||/Alph|| = %.2f' % (partin[6, 1] / partin[6, 0]))
 
     return part, part_type, old_part
 
@@ -141,8 +141,8 @@ def set_timestep(part):
     if framegrab == 0:
         framegrab = 1
     
-    print '\nProton gyroperiod = %.2fs' % gyperiod
-    print 'Timestep: %.4fs, %d iterations total\n' % (DT, maxtime)
+    print('\nProton gyroperiod = %.2fs' % gyperiod)
+    print('Timestep: %.4fs, %d iterations total\n' % (DT, maxtime))
     return DT, maxtime, framegrab
 
     
@@ -428,7 +428,7 @@ if __name__ == '__main__':
     run_desc = '''Test of temperature anisotropy instability with plasma parameters taken from Gary et al. (1993) and Tanaka (1985) - Run II involving He2+ ions and cold protons.'''
     
     # Initialize Things
-    print 'Initializing parameters...'
+    print('Initializing parameters...')
     set_constants()
     set_parameters()
     part, part_type, old_part = initialize_particles()
@@ -439,7 +439,7 @@ if __name__ == '__main__':
     for qq in range(maxtime):
         if qq == 0:
 
-            print 'Simulation starting...'
+            print('Simulation starting...')
 
             W           = assign_weighting(part[0, :], part[6, :], 1)                       # Assign initial (E) weighting to particles
             dns         = collect_density(part[6, :], W, part[8, :])                        # Collect initial density   
@@ -490,7 +490,7 @@ if __name__ == '__main__':
             dns  = dns_old     
         
         if qq%5 == 0:
-            print 'Iteration %d of %d complete (%ds)' % (qq, maxtime, int(timer() - start_time))
+            print('Iteration %d of %d complete (%ds)' % (qq, maxtime, int(timer() - start_time)))
             
         if qq%framegrab == 0:       # Dump data at specified interval   
         
@@ -501,7 +501,7 @@ if __name__ == '__main__':
 
                 if os.path.exists('%s%s' % (drive, save_path)) == False:
                     os.makedirs('%s%s' % (drive, save_path))              # Create master test series directory
-                    print 'Master directory created'
+                    print('Master directory created')
                     
                 num = len(os.listdir('%s%s' % (drive, save_path)))        # Count number of existing runs. Set to run number manually for static save
 
@@ -510,7 +510,7 @@ if __name__ == '__main__':
                 
                 if os.path.exists(path) == False:
                     os.makedirs(path)
-                    print 'Run directory created'            
+                    print('Run directory created')            
             
             # Save Data
             if generate_data == 1:
@@ -542,18 +542,18 @@ if __name__ == '__main__':
                     with open(h_name, 'wb') as f:
                         pickle.dump(params, f)
                         f.close() 
-                        print 'Header file saved'
+                        print('Header file saved')
                     
                     p_file = os.path.join(d_path, 'p_data')
                     np.savez(p_file, partin=partin, partout=partout, part_type=part_type)       # Data file containing particle information
-                    print 'Particle data saved'
+                    print('Particle data saved')
 
                 d_filename = 'data%05d' % r
                 d_fullpath = os.path.join(d_path, d_filename)
                 np.savez(d_fullpath, part=part, Vi=Vi, dns=dns, E = E[:, 0:3], B = B[:, 0:3])   # Data file for each iteration
-                print 'Data saved'
+                print('Data saved')
     
     #%%        ----- PRINT RUNTIME -----
     # Print Time Elapsed
     elapsed = timer() - start_time
-    print "Time to execute program: {0:.2f} seconds".format(round(elapsed,2))
+    print("Time to execute program: {0:.2f} seconds".format(round(elapsed,2)))

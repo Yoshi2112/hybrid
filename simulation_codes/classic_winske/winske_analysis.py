@@ -15,13 +15,13 @@ import pdb
 
 def save_array_file(arr, saveas, overwrite=False):
     if os.path.isfile(temp_dir + saveas) == False:
-        print 'Saving array file as {}'.format(temp_dir + saveas)
+        print('Saving array file as {}'.format(temp_dir + saveas))
         np.save(temp_dir + saveas, arr)
     else:
         if overwrite == False:
-            print 'Array already exists as {}, skipping...'.format(saveas)
+            print('Array already exists as {}, skipping...'.format(saveas))
         else:
-            print 'Array already exists as{}, overwriting...'.format(saveas)
+            print('Array already exists as{}, overwriting...'.format(saveas))
     return
 
 
@@ -58,7 +58,7 @@ def plot_dispersion(arr, saveas):
     fullpath = anal_dir + saveas + '.png'
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
     plt.close()
-    print 'Dispersion Plot saved'
+    print('Dispersion Plot saved')
 
     return
 
@@ -95,7 +95,7 @@ f      = open(h_name)                                               # Open heade
 obj    = pickle.load(f)                                             # Load variables from header file into python object
 f.close()                                                           # Close header file
 
-for name in obj.keys():                                             # Assign Header variables to namespace (dicts)
+for name in list(obj.keys()):                                             # Assign Header variables to namespace (dicts)
     globals()[name] = obj[name]                                     # Magic variable creation function
 
 seed = 101
@@ -106,7 +106,7 @@ if end_file == 0:
 else:
     num_files = end_file
 
-print 'Header file loaded.'
+print('Header file loaded.')
 
 #%% ---- LOAD PARTICLE PARAMETERS ----
 
@@ -120,7 +120,7 @@ num_index   = np.arange(len(array_names))                                   # Nu
 for var_name, index_position in zip(array_names, num_index):                # Magic subroutine to attach variable names to their stored arrays
     globals()[var_name] = p_data[array_names[index_position]]               # Generally contains 'partin', 'partout' and 'part_type' arrays from model run
 
-print 'Particle parameters loaded'
+print('Particle parameters loaded')
 
 #%% ---- LOAD FILES AND PLOT -----
 # Read files and assign variables. Do the other things as well
@@ -137,10 +137,10 @@ plot_skip = 1
 # spc_av_Ex = np.zeros(num_files)
 # =============================================================================
  
-print 'dt={}'.format(dt)
+print('dt={}'.format(dt))
 for ii in range(num_files):
     if ii%plot_skip == 0:
-        print 'Loading file {} of {}'.format(ii, num_files)
+        print('Loading file {} of {}'.format(ii, num_files))
         d_file     = 'data%05d.npz' % ii                # Define target file
         input_path = data_dir + d_file                  # File location
         data       = np.load(input_path)                # Load file

@@ -68,7 +68,7 @@ def set_timestep(part):
     else:
         data_dump_iter = int(data_res*gyperiod / DT)
 
-    print 'Timestep: %.4fs, %d iterations total' % (DT, max_inc)
+    print('Timestep: %.4fs, %d iterations total' % (DT, max_inc))
     return DT, max_inc, data_dump_iter, plot_dump_iter
 
 

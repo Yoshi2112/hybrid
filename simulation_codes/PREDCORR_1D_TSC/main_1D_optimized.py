@@ -67,10 +67,10 @@ def main():
     if generate_data == 1:
         save.store_run_parameters(DT, data_iter)
         
-    print 'Timestep: %.4fs, %d iterations total' % (DT, max_inc)
-    print 'Initial source term check:'
-    print 'Average cell density: {}cc'.format(q_dens[1: NX + 1].mean())
-    print 'Average cell current: {}A/m'.format(Ji[1: NX + 1].mean())
+    print('Timestep: %.4fs, %d iterations total' % (DT, max_inc))
+    print('Initial source term check:')
+    print('Average cell density: {}cc'.format(q_dens[1: NX + 1].mean()))
+    print('Average cell current: {}A/m'.format(Ji[1: NX + 1].mean()))
 
     xx       = 0; ch_flag  = 0; real_time = 0.
     max_inc = 50; data_iter = 25
@@ -81,17 +81,17 @@ def main():
         DT, ch_flag, max_inc, data_iter, real_time = numerical_loop(real_time, pos, vel, Ie, W_elec, idx, B, E_int, q_dens, Ji, Ve, Te, DT, max_inc, data_iter, ch_flag)
                 
         if ch_flag != 0:          
-            print 'Timestep changed by factor of {}. New DT = {}'.format(2 ** (ch_flag), DT)
+            print('Timestep changed by factor of {}. New DT = {}'.format(2 ** (ch_flag), DT))
             
         if generate_data == 1:
             if xx%data_iter == 0:
                 save.save_data(real_time, DT, data_iter, xx, pos, vel, Ji, E_int, B, Ve, Te, q_dens)
 
-        print 'Timestep {} of {} complete'.format(xx, max_inc)
+        print('Timestep {} of {} complete'.format(xx, max_inc))
     return
 
 
 if __name__ == '__main__':
     start_time = timer()
     main()
-    print "Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2))  # Time taken to run simulation
+    print("Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2)))  # Time taken to run simulation

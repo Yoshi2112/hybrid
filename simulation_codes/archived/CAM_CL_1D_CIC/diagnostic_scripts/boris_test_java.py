@@ -43,9 +43,9 @@ if __name__ == '__main__':
     xp  = np.array([rL, 0.,  0.])
     vp  = update_velocity(vp, E, B, -0.5*dt)
 
-    print 'Gyroperiod is: {}s'.format(GP)
-    print 'Timestep is: {}s'.format(dt)
-    print 'Number of iterations per orbit: {}'.format(round(GP/dt, 2))
+    print('Gyroperiod is: {}s'.format(GP))
+    print('Timestep is: {}s'.format(dt))
+    print('Number of iterations per orbit: {}'.format(round(GP/dt, 2)))
 
     #plt.figure()
     for ii in range(10):
@@ -53,7 +53,7 @@ if __name__ == '__main__':
         xp = push_particle(xp, vp, dt)
 
         if ii%2 == 0:
-            print ii, xp, vp
+            print(ii, xp, vp)
 
 # =============================================================================
 #         plt.scatter(xp[0], xp[1], s=1, c='b')

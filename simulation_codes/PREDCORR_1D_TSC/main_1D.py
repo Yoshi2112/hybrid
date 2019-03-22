@@ -19,7 +19,7 @@ if __name__ == '__main__':
     B, E_int                            = init.initialize_fields()
     
     DT, max_inc, data_iter              = aux.set_timestep(vel)
-    print 'Timestep: %.4fs, %d iterations total' % (DT, max_inc)
+    print('Timestep: %.4fs, %d iterations total' % (DT, max_inc))
     if generate_data == 1:
         save.store_run_parameters(DT, data_iter)
     
@@ -35,9 +35,9 @@ if __name__ == '__main__':
         = aux.check_timestep(qq, DT, pos, vel, B, E_int, q_dens, Ie, W_elec, max_inc, data_iter, idx)
         
         if ch_flag == 1:
-            print 'Timestep halved. Syncing particle velocity with DT = {}'.format(DT)
+            print('Timestep halved. Syncing particle velocity with DT = {}'.format(DT))
         elif ch_flag == 2:
-            print 'Timestep Doubled. Syncing particle velocity with DT = {}'.format(DT)
+            print('Timestep Doubled. Syncing particle velocity with DT = {}'.format(DT))
         
         # Main loop
         pos, vel, Ie, W_elec, q_dens_adv, Ji = particles.advance_particles_and_moments(pos, vel, Ie, W_elec, idx, B, E_int, DT)
@@ -54,7 +54,7 @@ if __name__ == '__main__':
                 save.save_data(DT, data_iter, qq, pos, vel, Ji, E_int, B, Ve, Te, q_dens)
 
         if (qq + 1)%25 == 0:
-            print 'Timestep {} of {} complete'.format(qq + 1, max_inc)
+            print('Timestep {} of {} complete'.format(qq + 1, max_inc))
 
         qq += 1
-    print "Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2))  # Time taken to run simulation
+    print("Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2)))  # Time taken to run simulation

@@ -77,14 +77,14 @@ f = open(h_name)
 obj = pickle.load(f)
 f.close()
 
-for name in obj.keys():                              # Assign Header variables to namespace (dicts)
+for name in list(obj.keys()):                              # Assign Header variables to namespace (dicts)
     globals()[name] = obj[name]
 
 np.random.seed(seed)
 num_files = len(os.listdir(load_dir)) - 2            # Minus two for header and particle files     
 #num_files = 700                                     # Manually change this to read custom length data sets
 
-print 'Header file loaded.'
+print('Header file loaded.')
 
 #%% ---- LOAD PARTICLE PARAMETERS ----
 
@@ -98,7 +98,7 @@ num_index = np.arange(len(array_names))           # Number of stored variables
 for var_name, index_position in zip(array_names, num_index):                # Magic subroutine to attach variable names to their stored arrays
     globals()[var_name] = p_data[array_names[index_position]]               # Generally contains 'partin', 'partout' and 'part_type' arrays from model run
 
-print 'Particle parameters loaded'
+print('Particle parameters loaded')
 
 ''' 
 partin:      (0) Mass (proton units)
@@ -483,7 +483,7 @@ for ii in np.arange(num_files):
 #==============================================================================
             
         elif plot_style == 7:
-            print np.max()
+            print(np.max())
 
         
 #%%     Plot Style 0
@@ -492,12 +492,12 @@ for ii in np.arange(num_files):
             # Collate all By information           
             if os.path.isfile(os.path.join(data_dir, 'By_array.npz')) == False:
                 By_all[ii, :] = B[1:size-1, 1] / B0
-                print 'File %d of %d read' % ((ii + 1), num_files)
+                print('File %d of %d read' % ((ii + 1), num_files))
             else:
                 ii = num_files - 2
-                print 'Loading saved array.... Please Wait....'
+                print('Loading saved array.... Please Wait....')
                 By_all = np.load(os.path.join(data_dir, 'By_array.npz'))['By_array']
-                print 'Saved array loaded'
+                print('Saved array loaded')
             
 #%%         ---- FINAL PLOTS ----
             
@@ -584,14 +584,14 @@ for ii in np.arange(num_files):
                 fullpath = os.path.join(save_dir, filename)    
                 plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')#, bbox_inches='tight')
                 plt.close()
-                print 'Plot saved'
+                print('Plot saved')
                 
                 # Save Data Array
                 d_filename = 'By_array.npz'
                 d_fullpath = os.path.join(data_dir, d_filename)
                 if os.path.isfile(d_fullpath) == False:
                     np.savez(d_fullpath, By_array=By_all)
-                    print 'Array saved'
+                    print('Array saved')
                 break
       
 #%%         ---- SAVE OUTPUT -----
@@ -631,4 +631,4 @@ for ii in np.arange(num_files):
             plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')#, bbox_inches='tight')
             plt.close()
         
-            print 'Plot %d of %d created' % (ii + 1, num_files)
+            print('Plot %d of %d created' % (ii + 1, num_files))

@@ -127,11 +127,11 @@ e_resis    = (LH_frac * LH_res)  / (e0 * wpe ** 2)      # Electron resistivity (
 freq_ratio = wpi / gyfreq
 sped_ratio = c / va
 
-print 'Frequency ratio: {}'.format(freq_ratio)
-print 'Speed ratio: {}'.format(sped_ratio)
-print 'Density: {}cc'.format(round(ne / 1e6, 2))
-print 'Background magnetic field: {}nT\n'.format(round(B0*1e9, 1))
-print 'Gyroperiod: {}s'.format(round(gyperiod, 2))
+print('Frequency ratio: {}'.format(freq_ratio))
+print('Speed ratio: {}'.format(sped_ratio))
+print('Density: {}cc'.format(round(ne / 1e6, 2)))
+print('Background magnetic field: {}nT\n'.format(round(B0*1e9, 1)))
+print('Gyroperiod: {}s'.format(round(gyperiod, 2)))
 
 if __name__ == '__main__':
     import main_1D
@@ -139,4 +139,4 @@ if __name__ == '__main__':
     start_time = timer()
     main_1D.main_simulation_loop()
 
-    print "Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2))  # Time taken to run simulation
+    print("Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2)))  # Time taken to run simulation

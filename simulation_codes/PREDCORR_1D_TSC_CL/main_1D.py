@@ -44,8 +44,8 @@ if __name__ == '__main__':
             pas.create_figure_and_save(pos, vel, E_int, B, q_dens, qq, DT, plot_iter)
 
         if (qq + 1)%25 == 0:
-            print 'Timestep {} of {} complete'.format(qq + 1, max_inc)
+            print('Timestep {} of {} complete'.format(qq + 1, max_inc))
 
         qq += 1
 
-    print "Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2))  # Time taken to run simulation
+    print("Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2)))  # Time taken to run simulation

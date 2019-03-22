@@ -16,20 +16,20 @@ from   simulation_parameters_1D import generate_data, generate_plots, drive, sav
 from   simulation_parameters_1D import idx_bounds, Nj, species, temp_type, dist_type, mass, charge, velocity, sim_repr, Tpar, Tper, gyfreq, gyperiod
 
 def manage_directories():
-    print 'Checking directories...'
+    print('Checking directories...')
     if (generate_data == 1 or generate_plots == 1) == True:
         if os.path.exists('%s/%s' % (drive, save_path)) == False:
             os.makedirs('%s/%s' % (drive, save_path))                        # Create master test series directory
-            print 'Master directory created'
+            print('Master directory created')
 
         path = ('%s/%s/run_%d' % (drive, save_path, const.run_num))          # Set root run path (for images)
 
         if os.path.exists(path) == False:
             os.makedirs(path)
-            print 'Run directory created'
+            print('Run directory created')
         else:
-            print 'Run directory already exists'
-            overwrite_flag = raw_input('Overwrite? (Y/N) \n')
+            print('Run directory already exists')
+            overwrite_flag = input('Overwrite? (Y/N) \n')
             if overwrite_flag.lower() == 'y':
                 rmtree(path)
                 os.makedirs(path)
@@ -211,7 +211,7 @@ def store_run_parameters(dt, data_dump_iter):
     with open(h_name, 'wb') as f:
         pickle.dump(params, f)
         f.close()
-        print 'Header file saved'
+        print('Header file saved')
 
     # Particle values: Array parameters
     p_file = os.path.join(d_path, 'p_data')

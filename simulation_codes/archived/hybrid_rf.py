@@ -13,7 +13,7 @@ def check_CFL():
     S = c * (DT / dx)
 
     if S > 1:
-        print 'Courant condition violated. Change space/time step.\nS = %d' % int(S)
+        print('Courant condition violated. Change space/time step.\nS = %d' % int(S))
     return
 
 def set_constants():
@@ -140,8 +140,8 @@ def set_timestep(part):
     if framegrab == 0:
         framegrab = 1
     
-    print '\nProton gyroperiod = %es' % gyperiod
-    print 'Timestep: %es, %d iterations total\n' % (DT, maxtime)
+    print('\nProton gyroperiod = %es' % gyperiod)
+    print('Timestep: %es, %d iterations total\n' % (DT, maxtime))
 
     return DT, maxtime, framegrab
     
@@ -367,7 +367,7 @@ def push_E(B, J_i, n_i, dt, qqq): # Based off big F(B, n, V) eqn on pg. 140 (eqn
     E_out[0, :]        = E_out[size - 2, :]
     E_out[size - 1, :] = E_out[1, :]
     
-    print 'Max JxB: %.0f' % np.max(J)    
+    print('Max JxB: %.0f' % np.max(J))    
     
     return E_out
 
@@ -465,7 +465,7 @@ def check_cell_distribution(part, node_number, j): #
         if (abs(part[0, ii] - x_node) <= 0.5*dx) and (part[8, ii] == j):       
             f = np.append(f, [part[0:6, ii]], axis=0)
             count += 1
-    print count
+    print(count)
 
     #Plot it
     rcParams.update({'text.color'   : 'k',
@@ -584,7 +584,7 @@ if __name__ == '__main__':
     generate_plots = 1  
     run_desc       = '''1D hybrid code reproduction of PIC code parameters from Jenkins et al. (2013).'''
     
-    print 'Initializing parameters...'
+    print('Initializing parameters...')
     set_constants()
     set_parameters()
     part, part_type, old_part = initialize_particles()
@@ -602,7 +602,7 @@ if __name__ == '__main__':
     for qq in range(0):
         if qq == 0:
 
-            print 'Simulation starting...'
+            print('Simulation starting...')
 
             W         = assign_weighting(part[0, :], part[6, :], 1)                     # Assign initial (E) weighting to particles
             dns       = collect_density(part[6, :], W, part[8, :])                      # Collect initial density   
@@ -681,7 +681,7 @@ if __name__ == '__main__':
             axby = plt.subplot2grid(fig_size, (1, 0), colspan=2, sharex=axbx)
             axbz = plt.subplot2grid(fig_size, (2, 0), colspan=2, sharex=axbx)
 
-            for ax, jj in zip([axbx, axby, axbz], range(3)):
+            for ax, jj in zip([axbx, axby, axbz], list(range(3))):
                 Bj = B[1:size-1, jj] / B0
                 ax.plot(x_cell_num, Bj, color='g')
                 ax.set_xlim(0, NX)
@@ -693,7 +693,7 @@ if __name__ == '__main__':
             axey = plt.subplot2grid(fig_size, (1, 2), colspan=2, sharex=axex)
             axez = plt.subplot2grid(fig_size, (2, 2), colspan=2, sharex=axex)
             
-            for ax, jj in zip([axex, axey, axez], range(3)):
+            for ax, jj in zip([axex, axey, axez], list(range(3))):
                 Ej = E[1:size-1, jj]
                 ax.plot(x_cell_num, Ej, color='magenta')
                 ax.set_xlim(0, NX)
@@ -724,7 +724,7 @@ if __name__ == '__main__':
 
                 if os.path.exists('%s%s' % (drive, save_path)) == False:
                     os.makedirs('%s%s' % (drive, save_path))              # Create master test series directory
-                    print 'Master directory created'
+                    print('Master directory created')
                     
                 num  = len(os.listdir('%s%s' % (drive, save_path)))        # Count number of existing runs. Set to run number manually for static save
 
@@ -733,14 +733,14 @@ if __name__ == '__main__':
                 
                 if os.path.exists(path) == False:
                     os.makedirs(path)
-                    print 'Run directory created'            
+                    print('Run directory created')            
             
             # Save Plots
             if generate_plots == 1:
                 filename = 'anim%05d.png' % r
                 fullpath = os.path.join(path, filename)
                 plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-                print 'Plot %d produced' % r
+                print('Plot %d produced' % r)
                 plt.close('all')
 
             # Save Data
@@ -773,18 +773,18 @@ if __name__ == '__main__':
                     with open(h_name, 'wb') as f:
                         pickle.dump(params, f)
                         f.close() 
-                        print 'Header file saved'
+                        print('Header file saved')
                     
                     p_file = os.path.join(d_path, 'p_data')
                     np.savez(p_file, partin=partin, partout=partout, part_type=part_type)       # Data file containing particle information
-                    print 'Particle data saved'
+                    print('Particle data saved')
 
                 d_filename = 'data%05d' % r
                 d_fullpath = os.path.join(d_path, d_filename)
                 np.savez(d_fullpath, part=part, Vi=Vi, dns=dns, E = E[:, 0:3], B = B[:, 0:3])   # Data file for each iteration
-                print 'Data saved'
+                print('Data saved')
     
     #%%        ----- PRINT RUNTIME -----
     # Print Time Elapsed
     elapsed = timer() - start_time
-    print "Time to execute program: {0:.2f} seconds".format(round(elapsed,2))
+    print("Time to execute program: {0:.2f} seconds".format(round(elapsed,2)))

@@ -14,14 +14,14 @@ import pdb
 def check_increment():
     h_name         = data_directory + 'Header.pckl'
     params         = pickle.load(open(h_name))
-    print 'Current increment is {}'.format(params['data_dump_iter'])
+    print('Current increment is {}'.format(params['data_dump_iter']))
     return
 
 
 def check_max():
     h_name         = data_directory + 'Header.pckl'
     params         = pickle.load(open(h_name))
-    print 'Current max_rev is {}'.format(params['max_rev'])
+    print('Current max_rev is {}'.format(params['max_rev']))
     return
 
 
@@ -33,7 +33,7 @@ def increase_increment(factor, delete=True, rename=True):
     if delete == True:
         for ii in range(len(current_files)):
             if ii%factor != 0:
-                print 'Deleting {}'.format(data_directory + current_files[ii])
+                print('Deleting {}'.format(data_directory + current_files[ii]))
                 os.remove(data_directory + current_files[ii])
         
         h_name                     = data_directory + 'Header.pckl'
@@ -50,7 +50,7 @@ def increase_increment(factor, delete=True, rename=True):
         pdb.set_trace()
         for ii in range(len(remaining_files)):
             new_name = 'data{:05}.npz'.format(ii)
-            print 'Renaming {} to {}'.format(remaining_files[ii], new_name)
+            print('Renaming {} to {}'.format(remaining_files[ii], new_name))
             os.rename(data_directory + remaining_files[ii], data_directory + new_name)
     return
 
@@ -74,7 +74,7 @@ def delete_if_over(gyperiod_limit):
     time.sleep(3)
     for ii in range(N_slices):    
         if gy_times[ii] > gyperiod_limit:
-            print 'Deleting {}'.format(data_directory + file_list[ii])
+            print('Deleting {}'.format(data_directory + file_list[ii]))
             os.remove(data_directory + file_list[ii])
     
     params['max_rev']  =  gyperiod_limit
@@ -94,7 +94,7 @@ if __name__ == '__main__':
     num_runs = 1#len(os.listdir(series_directory))
     
     for xx in range(num_runs):
-        print 'Examining run_{} directory...'.format(xx)
+        print('Examining run_{} directory...'.format(xx))
         time.sleep(3)
         
         data_directory   = series_directory + 'run_{}//data//'.format(xx)

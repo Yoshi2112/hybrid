@@ -9,11 +9,11 @@ import numba as nb
 
 import particles_1D as particles
 
-from simulation_parameters_1D import N, NX, Nj, n_contr, charge, mass, smooth_sources, do_parallel, q, ne, min_dens
+from simulation_parameters_1D import N, NX, Nj, n_contr, charge, mass, smooth_sources, q, ne, min_dens
 from fields_1D                import interpolate_to_center_cspline3D
 from auxilliary_1D            import cross_product
 
-@nb.njit(parallel=do_parallel)
+@nb.njit()
 def push_current(J, E, B, L, G, dt):
     '''Uses an MHD-like equation to advance the current with a moment method as 
     per Matthews (1994) CAM-CL method. Fills in ghost cells at edges (excluding very last one)
@@ -42,7 +42,7 @@ def push_current(J, E, B, L, G, dt):
     return J_out
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit()
 def deposit_both_moments(pos, vel, Ie, W_elec, idx):
     '''Collect number and velocity moments in each cell, weighted by their distance
     from cell nodes.
@@ -62,7 +62,7 @@ def deposit_both_moments(pos, vel, Ie, W_elec, idx):
     n_i       = np.zeros((size, Nj))
     nu_i      = np.zeros((size, Nj, 3))
     
-    for ii in nb.prange(pos.shape[0]):
+    for ii in np.arange(pos.shape[0]):
         I   = Ie[ ii]
         sp  = idx[ii]
     
@@ -80,7 +80,7 @@ def deposit_both_moments(pos, vel, Ie, W_elec, idx):
     return n_i, nu_i
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit()
 def deposit_velocity_moments(vel, Ie, W_elec, idx):
     '''Collect velocity moment in each cell, weighted by their distance
     from cell nodes.
@@ -110,7 +110,7 @@ def deposit_velocity_moments(vel, Ie, W_elec, idx):
     return nu_i
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit()
 def init_collect_moments(pos, vel, Ie, W_elec, idx, DT):
     '''Moment collection and position advance function. Specifically used at initialization or
     after timestep synchronization.
@@ -175,7 +175,7 @@ def init_collect_moments(pos, vel, Ie, W_elec, idx, DT):
     return pos, Ie, W_elec, rho_0, rho, J_plus, J_init, G, L
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit()
 def collect_moments(pos, vel, Ie, W_elec, idx, DT):
     '''
     Moment collection and position advance function.
@@ -234,14 +234,14 @@ def collect_moments(pos, vel, Ie, W_elec, idx, DT):
     return pos, Ie, W_elec, rho, J_plus, J_minus, G, L
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit()
 def smooth(function):
     '''Smoothing function: Applies Gaussian smoothing routine across adjacent cells. 
     Assummes no contribution from ghost cells.'''
     size         = function.shape[0]
     new_function = np.zeros(size)
 
-    for ii in nb.prange(1, size - 1):
+    for ii in np.arange(1, size - 1):
         new_function[ii - 1] = 0.25*function[ii] + new_function[ii - 1]
         new_function[ii]     = 0.50*function[ii] + new_function[ii]
         new_function[ii + 1] = 0.25*function[ii] + new_function[ii + 1]
@@ -256,7 +256,7 @@ def smooth(function):
     return new_function
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit()
 def manage_ghost_cells(arr):
     '''Deals with ghost cells: Moves their contributions and mirrors their counterparts.
        Works like a charm if spatial dimensions always come first in an array.'''

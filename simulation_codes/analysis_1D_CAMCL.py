@@ -62,7 +62,7 @@ def load_particles():
     
     n_contr    = density / (cellpart*sim_repr)                        # Species density contribution: Each macroparticle contributes this density to a cell
 
-    print 'Particle parameters loaded'
+    print('Particle parameters loaded')
     return
 
 
@@ -95,13 +95,13 @@ def load_header():
     freq_res        = obj['freq_res'] 
     run_desc        = obj['run_desc']
 
-    print 'Header file loaded.'
-    print 'dt = {}s\n'.format(dt)
+    print('Header file loaded.')
+    print('dt = {}s\n'.format(dt))
     return 
 
 
 def load_timestep(ii):
-    print 'Loading file {} of {}'.format(ii+1, num_files)
+    print('Loading file {} of {}'.format(ii+1, num_files))
     d_file     = 'data%05d.npz' % ii                # Define target file
     input_path = data_dir + d_file                  # File location
     data       = np.load(input_path)                # Load file
@@ -230,7 +230,7 @@ def get_array(component, tmin, tmax):
         check_path = temp_dir + component.lower() + '_array' + '_{}'.format(tmin) + '_{}'.format(tmax) + '.npy'
 
     if os.path.isfile(check_path) == True:
-        print 'Array file for {} loaded from memory...'.format(component.upper())
+        print('Array file for {} loaded from memory...'.format(component.upper()))
         arr = np.load(check_path)   
     else:
         for ii in range(tmin, tmax):
@@ -241,7 +241,7 @@ def get_array(component, tmin, tmax):
             elif component[0].upper() == 'E':
                 arr[ii] = E[1:-1, comp_idx]
                 
-        print 'Saving array file as {}'.format(check_path)
+        print('Saving array file as {}'.format(check_path))
         np.save(check_path, arr)
     return arr
 
@@ -324,12 +324,12 @@ def plot_kt(arr, norm, saveas='kt_plot'):
     fullpath = anal_dir + saveas + '.png'
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
     plt.close()
-    print 'K-T Plot saved'
+    print('K-T Plot saved')
     return
 
 
 def plot_wk(arr, norm, saveas='dispersion_relation'):
-    print 'Plotting dispersion relation...'
+    print('Plotting dispersion relation...')
     plt.ioff()
     num_times = arr.shape[0]
     
@@ -376,7 +376,7 @@ def plot_wk(arr, norm, saveas='dispersion_relation'):
     fullpath = anal_dir + saveas + '.png'
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
     plt.close()
-    print 'Dispersion Plot saved'
+    print('Dispersion Plot saved')
     return
 
 
@@ -500,7 +500,7 @@ def diagnostic_multiplot(qq):
         
     fullpath = path + filename
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-    print 'Plot saved'.format(ii)
+    print('Plot saved'.format(ii))
     plt.close('all')
     return
 
@@ -584,7 +584,7 @@ def plot_energies(ii, normalize=True):
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
         plt.close('all')
         
-        print 'Energy plot saved'
+        print('Energy plot saved')
     return
 
 

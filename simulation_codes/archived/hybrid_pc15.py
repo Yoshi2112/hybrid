@@ -150,8 +150,8 @@ def set_timestep(part):
     if framegrab == 0:
         framegrab = 1
     
-    print 'Proton gyroperiod = %.2fs' % gyperiod
-    print 'Timestep: %.4fs, %d iterations total' % (DT, maxtime)
+    print('Proton gyroperiod = %.2fs' % gyperiod)
+    print('Timestep: %.4fs, %d iterations total' % (DT, maxtime))
     return DT, maxtime, framegrab
 
 
@@ -159,7 +159,7 @@ def update_timestep(part, dt):
     if (dx / (2*np.max(part[3, :]))) < dt:
         dt  /= 2.
         timestep_history.append(qq)
-        print 'Timestep halved: DT = %.4fs' % dt
+        print('Timestep halved: DT = %.4fs' % dt)
 	
     if len(timestep_history) > 7:
 	sys.exit('Timestep less than 1% of initial. Consider parameter change.')
@@ -476,7 +476,7 @@ def check_cell_distribution(part, node_number, j): #
         if (abs(part[0, ii] - x_node) <= 0.5*dx) and (part[8, ii] == j):       
             f = np.append(f, [part[0:6, ii]], axis=0)
             count += 1
-    print count
+    print(count)
     #Plot it
     rcParams.update({'text.color'   : 'k',
             'axes.labelcolor'   : 'k',
@@ -595,7 +595,7 @@ if __name__ == '__main__':                         # Main program start
     generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
     run_desc = '''None'''
     
-    print 'Initializing parameters...'
+    print('Initializing parameters...')
     set_constants()
     set_parameters()
     part, part_type, old_part = initialize_particles()
@@ -614,7 +614,7 @@ if __name__ == '__main__':                         # Main program start
 
     for qq in range(maxtime):
         if qq == 0:
-            print 'Simulation starting...'
+            print('Simulation starting...')
             W           = assign_weighting(part[0, :], part[6, :], 1)                       # Assign initial (E) weighting to particles
             dns         = collect_density(part[6, :], W, part[8, :])                        # Collect initial density   
             Vi          = collect_flow(part, dns, W)                                        # Collect initial current
@@ -805,7 +805,7 @@ if __name__ == '__main__':                         # Main program start
 
                 if os.path.exists('%s/%s' % (drive, save_path)) == False:
                     os.makedirs('%s/%s' % (drive, save_path))              # Create master test series directory
-                    print 'Master directory created'
+                    print('Master directory created')
                     
                 num = len(os.listdir('%s/%s' % (drive, save_path)))        # Count number of existing runs. Set to run number manually for static save
 
@@ -814,14 +814,14 @@ if __name__ == '__main__':                         # Main program start
                 
                 if os.path.exists(path) == False:
                     os.makedirs(path)
-                    print 'Run directory created'            
+                    print('Run directory created')            
             
             # Save Plots
             if generate_plots == 1:
                 filename = 'anim%05d.png' % r
                 fullpath = os.path.join(path, filename)
                 plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-                print 'Plot %d produced' % r
+                print('Plot %d produced' % r)
                 plt.close('all')            
             
             # Save Data
@@ -853,20 +853,20 @@ if __name__ == '__main__':                         # Main program start
                     with open(h_name, 'wb') as f:
                         pickle.dump(params, f)
                         f.close() 
-                        print 'Header file saved'
+                        print('Header file saved')
                     
                     p_file = os.path.join(d_path, 'p_data')
                     np.savez(p_file, partin=partin, part_type=part_type)       # Data file containing particle information
-                    print 'Particle data saved'
+                    print('Particle data saved')
 
                 d_filename = 'data%05d' % r
                 d_fullpath = os.path.join(d_path, d_filename)
                 np.savez(d_fullpath, part=part, Vi=Vi, dns=dns, E = E[:, 0:3], B = B[:, 0:3])   # Data file for each iteration
-                print 'Data saved'
+                print('Data saved')
     
     #%%        ----- PRINT RUNTIME -----
     # Print Time Elapsed
     elapsed = timer() - start_time
-    print "Time to execute program: {0:.2f} seconds".format(round(elapsed,2))
+    print("Time to execute program: {0:.2f} seconds".format(round(elapsed,2)))
 
 

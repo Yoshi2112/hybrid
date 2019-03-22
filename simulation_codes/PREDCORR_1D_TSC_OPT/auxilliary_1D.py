@@ -124,7 +124,7 @@ def set_timestep(vel):
     else:
         data_iter = int(const.data_res*gyperiod / DT)
 
-    print 'Timestep: %.4fs, %d iterations total' % (DT, max_inc)
+    print('Timestep: %.4fs, %d iterations total' % (DT, max_inc))
 
     if const.generate_data == 1:
         pas.store_run_parameters(DT, data_iter)
@@ -172,7 +172,7 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, max_inc, data_iter, plot_iter, i
         if data_iter != None:
             data_iter *= 2
 
-        print 'Timestep halved. Syncing particle velocity with DT = {}'.format(DT)
+        print('Timestep halved. Syncing particle velocity with DT = {}'.format(DT))
 
     elif DT_part >= 4.0*DT and qq%2 == 0:
         particles.sync_velocities(pos, vel, idx, B, E, 0.5*DT)    # Re-sync vel/pos

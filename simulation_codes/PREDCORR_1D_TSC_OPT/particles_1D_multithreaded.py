@@ -266,10 +266,10 @@ if __name__ == '__main__':
 # =============================================================================
     from timeit import default_timer as timer
 
-    print 'Calling particle push'
+    print('Calling particle push')
 
     start_time = timer()
     test_call_function(pos_test, vel_test, dt_test, vec=False)
     end_time = timer()
 
-    print 'Execution time: {}s'.format(round(end_time - start_time, 3))
+    print('Execution time: {}s'.format(round(end_time - start_time, 3)))

@@ -98,10 +98,10 @@ wpiwci         = 1e4                                        # Desired plasma/cyc
 
 if ratio_override == 1:
     B0   = c * (1. / wpiwci) * np.sqrt(mu0 * mp * ne)
-    print '\n'
-    print '----------------------------------------------------------------'
-    print 'WARNING: RATIO OVERRIDE IN EFFECT - INPUT MAGNETIC FIELD IGNORED'
-    print '----------------------------------------------------------------'
+    print('\n')
+    print('----------------------------------------------------------------')
+    print('WARNING: RATIO OVERRIDE IN EFFECT - INPUT MAGNETIC FIELD IGNORED')
+    print('----------------------------------------------------------------')
     
 Te0        = B0 ** 2 * beta_e   / (2 * mu0 * ne * kB)    # Temperatures of species in Kelvin (used for particle velocity initialization)
 Tpar       = B0 ** 2 * beta_par / (2 * mu0 * ne * kB)
@@ -165,53 +165,53 @@ k_max      = np.pi / dx                                  # Maximum permissible w
 #%%### INPUT TESTS AND CHECKS
 sped_ratio = c / va
 
-print 'Speed ratio: {}'.format(sped_ratio)
-print 'Density: {}cc'.format(round(ne / 1e6, 2))
-print 'Background magnetic field: {}nT'.format(round(B0*1e9, 1))
-print 'Gyroperiod: {}s'.format(round(2. * np.pi / gyfreq, 2))
-print 'Maximum simulation time: {}s ({} gyroperiods)'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev)
+print('Speed ratio: {}'.format(sped_ratio))
+print('Density: {}cc'.format(round(ne / 1e6, 2)))
+print('Background magnetic field: {}nT'.format(round(B0*1e9, 1)))
+print('Gyroperiod: {}s'.format(round(2. * np.pi / gyfreq, 2)))
+print('Maximum simulation time: {}s ({} gyroperiods)'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev))
 
 python_version = sys.version.split()[0]
 operating_sys  = platform.system()
 if do_parallel == True and python_version[0] == '2' and operating_sys == 'Windows':
     do_parallel = False
-    print '\n'
-    print 'PYTHON VERSION {} DETECTED. PARALLEL PROCESSING ONLY WORKS IN PYTHON 3.x AND/OR LINUX'
-    print 'PARALLEL FLAG DISABLED'
+    print('\n')
+    print('PYTHON VERSION {} DETECTED. PARALLEL PROCESSING ONLY WORKS IN PYTHON 3.x AND/OR LINUX')
+    print('PARALLEL FLAG DISABLED')
     
 density_normal_sum = (charge / q) * (density / ne)
 
 if density_normal_sum.sum() != 1.0:
-    print '-------------------------------------------------------------------------'
-    print 'WARNING: ION DENSITIES DO NOT SUM TO 1.0. SIMULATION WILL NOT BE ACCURATE'
-    print '-------------------------------------------------------------------------'
-    print ''
-    print 'ABORTING...'
+    print('-------------------------------------------------------------------------')
+    print('WARNING: ION DENSITIES DO NOT SUM TO 1.0. SIMULATION WILL NOT BE ACCURATE')
+    print('-------------------------------------------------------------------------')
+    print('')
+    print('ABORTING...')
     sys.exit()
     
     
 if sim_repr.sum() != 1.0:
-    print '-----------------------------------------------------------------------------------'
-    print 'WARNING: MACROPARTICLE DENSITIES DO NOT SUM TO 1.0. SIMULATION WILL NOT BE ACCURATE'
-    print '-----------------------------------------------------------------------------------'
-    print ''
-    print 'ABORTING...'
+    print('-----------------------------------------------------------------------------------')
+    print('WARNING: MACROPARTICLE DENSITIES DO NOT SUM TO 1.0. SIMULATION WILL NOT BE ACCURATE')
+    print('-----------------------------------------------------------------------------------')
+    print('')
+    print('ABORTING...')
     sys.exit()
     
 simulated_density_per_cell = (n_contr * charge * cellpart * sim_repr).sum()
 real_density_per_cell      = ne*q
 
 if simulated_density_per_cell != real_density_per_cell:
-    print '--------------------------------------------------------------------------------'
-    print 'WARNING: DENSITY CALCULATION ISSUE: RECHECK HOW MACROPARTICLE CONTRIBUTIONS WORK'
-    print '--------------------------------------------------------------------------------'
-    print ''
-    print 'ABORTING...'
+    print('--------------------------------------------------------------------------------')
+    print('WARNING: DENSITY CALCULATION ISSUE: RECHECK HOW MACROPARTICLE CONTRIBUTIONS WORK')
+    print('--------------------------------------------------------------------------------')
+    print('')
+    print('ABORTING...')
     sys.exit()
 
 if subcycles == 0 or subcycles == 1:
-    print '-----------------------------------------------------------------------------'
-    print 'Subcycling DISABLED: Magnetic field will advance only once per half-timestep.'
-    print '-----------------------------------------------------------------------------'
+    print('-----------------------------------------------------------------------------')
+    print('Subcycling DISABLED: Magnetic field will advance only once per half-timestep.')
+    print('-----------------------------------------------------------------------------')
     subcycles = 1
     

@@ -34,4 +34,4 @@ if __name__ == '__main__':
     sample_number = 10
     
     final = while_loop(sample_number, 1)    
-    print 'Loop finished: {} iterations'.format(final)
+    print('Loop finished: {} iterations'.format(final))

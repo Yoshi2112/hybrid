@@ -41,8 +41,8 @@ def set_timestep(part):
     if framegrab == 0:
         framegrab = 1
     
-    print 'Proton gyroperiod = %.2fs' % gyperiod
-    print 'Timestep: %.4fs, %d iterations total' % (DT, maxtime)
+    print('Proton gyroperiod = %.2fs' % gyperiod)
+    print('Timestep: %.4fs, %d iterations total' % (DT, maxtime))
     return DT, maxtime, framegrab
 
 ## FIX THIS LATER ##
@@ -50,7 +50,7 @@ def update_timestep(part, dt):
     if dx/(2*np.max(part[3:6, :])) <= dt:
         #dt  /= 2.
         #ts_history.append(qq)
-        print 'Timestep halved: DT = %.5fs' % dt
+        print('Timestep halved: DT = %.5fs' % dt)
         #if len(ts_history) > 7:
             #sys.exit('Timestep less than 1%% of initial. Consider parameter revision')
     return dt

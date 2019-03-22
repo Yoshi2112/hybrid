@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 
-from simulation_parameters_1D  import N, dx, xmax, xmin, charge, mass, do_parallel, e_resis, q
+from simulation_parameters_1D  import N, dx, xmax, xmin, charge, mass, e_resis, q
 import auxilliary_1D as aux
 
 
@@ -19,7 +19,7 @@ def two_step_algorithm(v0, Bp, Ep, dt, idx):
     return v0
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit()
 def assign_weighting_TSC(pos, E_nodes=True):
     '''Triangular-Shaped Cloud (TSC) weighting scheme used to distribute particle densities to
     nodes and interpolate field values to particle positions.
@@ -30,9 +30,11 @@ def assign_weighting_TSC(pos, E_nodes=True):
         
     OUTPUT:
         weights -- 3xN array consisting of leftmost (to the nearest) node, and weights for -1, 0 TSC nodes
+        
+    NOTE: The addition of `epsilon' in left_node prevents banker's rounding in left_node due to precision limits.
     '''
     Np         = pos.shape[0]
-    
+    epsilon    = 1e-15
     left_node  = np.zeros(Np,      dtype=np.uint16)
     weights    = np.zeros((3, Np), dtype=np.float64)
     
@@ -41,9 +43,9 @@ def assign_weighting_TSC(pos, E_nodes=True):
     else:
         grid_offset   = 1.0
     
-    for ii in nb.prange(Np):
-        left_node[ii]  = int(round(pos[ii] / dx + grid_offset) - 1.0)
-        delta_left     = left_node[ii] - pos[ii] / dx - grid_offset
+    for ii in np.arange(Np):
+        left_node[ii]  = int(round(pos[ii] / dx + grid_offset + epsilon) - 1.0)
+        delta_left     = left_node[ii] - (pos[ii] + epsilon) / dx - grid_offset
     
         weights[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))
         weights[1, ii] = 0.75 - np.square(delta_left + 1.)
@@ -101,7 +103,7 @@ def interpolate_forces_to_particle(E, B, J, Ie, W_elec, Ib, W_mag, idx):
     return Ep, Bp
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit()
 def velocity_update(pos, vel, Ie, W_elec, idx, B, E, J, dt):
     '''
     Interpolates the fields to the particle positions using TSC weighting, then
@@ -120,14 +122,14 @@ def velocity_update(pos, vel, Ie, W_elec, idx, B, E, J, dt):
     '''
     Ib, W_mag = assign_weighting_TSC(pos, E_nodes=False)     # Magnetic field weighting
     
-    for ii in nb.prange(N):
+    for ii in np.arange(N):
         Ep, Bp     = interpolate_forces_to_particle(E, B, J, Ie[ii], W_elec[:, ii], Ib[ii], W_mag[:, ii], idx[ii])
         vel[:, ii] = boris_algorithm(   vel[:, ii], Bp, Ep, dt, idx[ii])
         #vel[:, ii] = two_step_algorithm(vel[:, ii], Bp, Ep, dt, idx[ii])
     return vel
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit()
 def position_update(pos, vel, dt):
     '''Updates the position of the particles using x = x0 + vt. 
     Also updates particle nearest node and weighting.
@@ -140,7 +142,7 @@ def position_update(pos, vel, dt):
         pos    -- Particle updated positions
         W_elec -- (0) Updated nearest E-field node value and (1-2) left/centre weights
     '''
-    for ii in nb.prange(pos.shape[0]):
+    for ii in np.arange(pos.shape[0]):
         pos[ii] += vel[0, ii] * dt
         
         if pos[ii] < xmin:

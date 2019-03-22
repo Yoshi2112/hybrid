@@ -114,6 +114,6 @@ def create_figure_and_save(pos, vel, E, B, qn, qq, DT, plot_iter):
         
     fullpath = path + filename
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-    print 'Plot saved'.format(r)
+    print('Plot saved'.format(r))
     plt.close('all')
     return

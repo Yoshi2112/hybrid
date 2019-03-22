@@ -131,15 +131,15 @@ def set_timestep(part):
     if framegrab == 0:
         framegrab = 1
 
-    print 'Proton gyroperiod = %.2fs' % gyperiod
-    print 'Timestep: %.4fs, %d iterations total' % (DT, maxtime)
+    print('Proton gyroperiod = %.2fs' % gyperiod)
+    print('Timestep: %.4fs, %d iterations total' % (DT, maxtime))
     return DT, maxtime, framegrab
 
 def update_timestep(part, dt):
     if dx/(2*np.max(part[3:6, :])) <= dt:
         #dt  /= 2.
         #ts_history.append(qq)
-        print 'Timestep halved: DT = %.5fs' % dt
+        print('Timestep halved: DT = %.5fs' % dt)
         #if len(ts_history) > 7:
             #sys.exit('Timestep less than 1%% of initial. Consider parameter revision')
     return dt
@@ -438,7 +438,7 @@ def check_cell_dist_2d(part, node, species):
 
             f = np.append(f, [part[0:6, ii]], axis=0)
             count += 1
-    print 'Node (%d, %d) recieving contributions from %d particles.' % (node[0], node[1], count)
+    print('Node (%d, %d) recieving contributions from %d particles.' % (node[0], node[1], count))
 
     plt.rc('grid', linestyle='dashed', color='black', alpha=0.3)
     
@@ -507,7 +507,7 @@ if __name__ == '__main__':                         # Main program start
     generate_plots = 1  ;   plt.ioff()             # Save plots, but don't draw them
     run_desc = '''2D Test: Recreation (hopefully) of Winske & Quest (1986) data (with better particle resolution)'''
     
-    print 'Initializing parameters...'
+    print('Initializing parameters...')
     set_constants()
     set_parameters()
     part, part_type, old_part     = initialize_particles()
@@ -517,7 +517,7 @@ if __name__ == '__main__':                         # Main program start
 
     for qq in range(maxtime):
         if qq == 0:
-            print 'Simulation starting...'
+            print('Simulation starting...')
             W            = assign_weighting(part[0:2, :], part[6:8, :], 1)                  # Assign initial (E) weighting to particles
             Wb           = assign_weighting(part[0:2, :], part[6:8, :], 0)                  # Magnetic field weighting (due to E/B grid displacement)
             dns          = collect_density(part, W)                                         # Collect initial density   
@@ -532,7 +532,7 @@ if __name__ == '__main__':                         # Main program start
 
         else:
             # N + 1/2
-            print 'Timestep %d' % qq
+            print('Timestep %d' % qq)
             
             DT = update_timestep(part, DT)
             part          = velocity_update(part, B[:, :, 0:3], E[:, :, 0:3], DT, W, Wb)    # Advance Velocity to N + 1/2
@@ -656,21 +656,21 @@ if __name__ == '__main__':                         # Main program start
 
                 if os.path.exists('%s/%s' % (drive, save_path)) == False:
                     os.makedirs('%s/%s' % (drive, save_path))              # Create master test series directory
-                    print 'Master directory created'
+                    print('Master directory created')
                     
                 num = len(os.listdir('%s%s' % (drive, save_path)))        # Count number of existing runs. Set to run number manually for static save
                 path = ('%s/%s/run_%d' % (drive, save_path, num))          # Set root run path (for images)
                 
                 if os.path.exists(path) == False:
                     os.makedirs(path)
-                    print 'Run directory created'            
+                    print('Run directory created')            
             
             # Save Plots
             if generate_plots == 1:
                 filename = 'anim%05d.png' % r
                 fullpath = os.path.join(path, filename)
                 plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-                print 'Plot %d produced' % r
+                print('Plot %d produced' % r)
                 plt.close('all')            
             
             # Save Data
@@ -709,19 +709,19 @@ if __name__ == '__main__':                         # Main program start
                     with open(h_name, 'wb') as fh:
                         pickle.dump(params, fh)
                         fh.close() 
-                        print 'Header file saved'
+                        print('Header file saved')
                     
                     p_file = os.path.join(d_path, 'p_data')
                     np.savez(p_file, partin=partin, part_type=part_type, ts_history=np.asarray(ts_history))       # Data file containing particle information
-                    print 'Particle data saved'
+                    print('Particle data saved')
 
                 d_filename = 'data%05d' % r
                 d_fullpath = os.path.join(d_path, d_filename)
                 np.savez(d_fullpath, part=part, Vi=Vi, dns=dns, E = E[:, :, 0:3], B = B[:, :, 0:3])   # Data file for each iteration
-                print 'Data saved'
+                print('Data saved')
     
     #%%        ----- PRINT RUNTIME -----
     # Print Time Elapsed
     elapsed = timer() - start_time
-    print "Time to execute program: {0:.2f} seconds".format(round(elapsed,2))
+    print("Time to execute program: {0:.2f} seconds".format(round(elapsed,2)))
 

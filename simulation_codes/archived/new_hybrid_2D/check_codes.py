@@ -27,7 +27,7 @@ def check_cell_dist_2d(part, node, species):
 
             f = np.append(f, [part[0:6, ii]], axis=0)
             count += 1
-    print 'Node (%d, %d) recieving contributions from %d particles.' % (node[0], node[1], count)
+    print('Node (%d, %d) recieving contributions from %d particles.' % (node[0], node[1], count))
 
     plt.rc('grid', linestyle='dashed', color='black', alpha=0.3)
     

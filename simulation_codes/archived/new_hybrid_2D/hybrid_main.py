@@ -19,7 +19,7 @@ import plot_and_save as pas
 if __name__ == '__main__':                         # Main program start
     start_time     = timer()                       # Start Timer
 
-    print 'Initializing parameters...'
+    print('Initializing parameters...')
     part                    = init.initialize_particles()
     B, E, Ji, dns, W, Wb    = init.initialize_fields()
     DT, maxtime, framegrab  = aux.set_timestep(part)
@@ -28,7 +28,7 @@ if __name__ == '__main__':                         # Main program start
     #maxtime   = 11
     for qq in range(maxtime):
         if qq == 0:
-            print 'Simulation starting...'
+            print('Simulation starting...')
             W            = sources.assign_weighting(part[0:2, :], part[6:8, :], 1)                  # Assign initial (E) weighting to particles
             Wb           = sources.assign_weighting(part[0:2, :], part[6:8, :], 0)                  # Magnetic field weighting (due to E/B grid displacement)
             dns          = sources.collect_density(part, W)                                         # Collect initial density   
@@ -77,7 +77,7 @@ if __name__ == '__main__':                         # Main program start
             part = old_part                                                                 # The stored densities at N + 1/2 before the PC method took place (previously held PC at N + 3/2)
             dns  = dns_old     
                  
-        print 'Iteration {} complete'.format(qq)
+        print('Iteration {} complete'.format(qq))
         
         if qq%framegrab == 0:                                                               # At a specified interval
             if generate_plots == 1:
@@ -85,6 +85,6 @@ if __name__ == '__main__':                         # Main program start
             if generate_data == 1:                                                          # Generate and save data, if flagged
                 pas.save_data(DT, framegrab, qq, part, Ji, E, B, dns)
                 
-    print "Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2))  # Time taken to run simulation
-    print "Time per iteration: {0:.4f} seconds".format(round((timer() - start_time) / (qq + 1), 4))
+    print("Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2)))  # Time taken to run simulation
+    print("Time per iteration: {0:.4f} seconds".format(round((timer() - start_time) / (qq + 1), 4)))
 
