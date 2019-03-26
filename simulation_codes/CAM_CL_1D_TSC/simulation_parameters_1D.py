@@ -9,18 +9,18 @@ import sys
 import platform
 
 ### RUN DESCRIPTION ###
-run_description = '''Test effect of changing theta.'''
+run_description = '''Test effect of changing theta. Changed code to correctly rotate velocities.'''
 
 ### RUN PARAMETERS ###
 drive           = 'G://MODEL_RUNS//Josh_Runs//' # Drive letter or path for portable HDD e.g. 'E:/'
 #drive           = '/media/yoshi/UNI_HD/'
 #drive           = 'F:'
-save_path       = 'runs/ev1_box_test_H_only/' # Series save dir   : Folder containing all runs of a series
-run_num         = 18                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path       = 'runs/varying_theta_v2/'    # Series save dir   : Folder containing all runs of a series 
+run_num         = 4                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 generate_data   = 1                           # Save data flag    : For later analysis
 generate_plots  = 0                           # Save plot flag    : To ensure hybrid is solving correctly during run
-seed            = 101                     # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [7]                   # Set CPU affinity for run. Must be list. Auto-assign: None.
+seed            = 101                         # RNG Seed          : Set to enable consistent results for parameter studies
+cpu_affin       = [run_num]                   # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 ### PHYSICAL CONSTANTS ###
@@ -36,17 +36,17 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 30                               # Simulation runtime, in multiples of the gyroperiod
+max_rev  = 20                               # Simulation runtime, in multiples of the gyroperiod
 
 dxm         = 1.0                           # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
 subcycles   = 4                             # Number of field subcycling steps for Cyclic Leapfrog
-cellpart    = 20000                          # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart    = 10000                         # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
-theta    = 0                               # Angle of B0 to x axis (in xy plane in units of degrees)
-nb       = 0.15
+theta    = 90                               # Angle of B0 to x axis (in xy plane in units of degrees)
+nb       = 0.10
 B0       = 160e-9                           # Unform initial magnetic field value (in T)
-ne       = 90e6                             # Electron density (in /m3, same as total ion density)
+ne       = 50e6                             # Electron density (in /m3, same as total ion density)
 
 LH_frac  = 0.0                              # Fraction of Lower Hybrid resonance: 
                                             # Used to calculate electron resistivity by setting "anomalous"
@@ -66,7 +66,7 @@ dist_type  = np.asarray([0, 0])                             # Particle distribut
 
 mass       = np.asarray([1.00, 1.00])                       # Species ion mass (proton mass units)
 charge     = np.asarray([1.00, 1.00])                       # Species ion charge (elementary charge units)
-density    = np.asarray([1.0-nb, nb])                        # Species charge density as normalized fraction (add to 1.0)
+density    = np.asarray([1.0-nb, nb])                       # Species charge density as normalized fraction (add to 1.0)
 velocity   = np.asarray([0.00, 0.00])                       # Species parallel bulk velocity (alfven velocity units)
 sim_repr   = np.asarray([0.50, 0.50])                       # Macroparticle weighting: Percentage of macroparticles assigned to each species
 
@@ -81,7 +81,7 @@ adaptive_timestep   = True                                  # Flag (True/False) 
 adaptive_subcycling = True                                  # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
 do_parallel         = False                                 # Flag (True/False) for auto-parallel using numba.njit()
 
-ratio_override = 0                                          # Flag to override magnetic field value for specific regime
+ratio_override = 1                                          # Flag to override magnetic field value for specific regime
 wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
 
 
@@ -122,9 +122,9 @@ xmax       = NX * dx                                     # Maximum simulation di
 
 N          = cellpart*NX                                 # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
 Bc         = np.zeros(3)                                 # Constant components of magnetic field based on theta and B0
-Bc[0]      = B0 * np.sin((90 - theta) * np.pi / 180 )    # Constant x-component of magnetic field (theta in degrees)
-Bc[1]      = B0 * np.cos((90 - theta) * np.pi / 180 )    # Constant y-component of magnetic field (theta in degrees)
-Bc[2]      = 0                                           # Assume Bzc = 0, orthogonal to field line direction
+Bc[0]      = B0 * np.cos(theta * np.pi / 180.)           # Constant x-component of magnetic field (theta in degrees)
+Bc[1]      = 0.                                          # Assume Bzc = 0, orthogonal to field line direction
+Bc[2]      = B0 * np.sin(theta * np.pi / 180.)           # Constant y-component of magnetic field (theta in degrees)
 
 density    = ne * (density / charge)                     # Density of each species per cell (in /m3)
 charge    *= q                                           # Cast species charge to Coulomb

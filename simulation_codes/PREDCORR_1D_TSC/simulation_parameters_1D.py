@@ -115,9 +115,9 @@ xmax       = NX * dx                                     # Maximum simulation di
 
 N          = cellpart*NX                                 # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
 Bc         = np.zeros(3)                                 # Constant components of magnetic field based on theta and B0
-Bc[0]      = B0 * np.sin((90 - theta) * np.pi / 180 )    # Constant x-component of magnetic field (theta in degrees)
-Bc[1]      = B0 * np.cos((90 - theta) * np.pi / 180 )    # Constant y-component of magnetic field (theta in degrees)
-Bc[2]      = 0                                           # Assume Bzc = 0, orthogonal to field line direction
+Bc[0]      = B0 * np.cos(theta * np.pi / 180.)           # Constant x-component of magnetic field (theta in degrees)
+Bc[1]      = 0.                                          # Assume Bzc = 0, orthogonal to field line direction
+Bc[2]      = B0 * np.sin(theta * np.pi / 180.)           # Constant y-component of magnetic field (theta in degrees)
 
 density    = ne * (density / charge)                     # Density of each species per cell (in /m3)
 charge    *= q                                           # Cast species charge to Coulomb

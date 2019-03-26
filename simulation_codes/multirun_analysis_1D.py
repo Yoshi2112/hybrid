@@ -4,6 +4,11 @@ Created on Wed Apr 27 11:56:34 2016
 
 @author: c3134027
 """
+import sys
+data_scripts_dir = 'C://Users//iarey//Documents//GitHub//hybrid//linear_theory//'
+sys.path.append(data_scripts_dir)
+
+from convective_growth_rate import calculate_growth_rate
 
 import numpy as np
 import matplotlib
@@ -15,7 +20,44 @@ import numba as nb
 from collections import OrderedDict
 from matplotlib.lines import Line2D
 import tabulate
-import pdb
+
+
+def get_cgr_from_sim():
+    cold_density = np.zeros(3)
+    warm_density = np.zeros(3)
+    cgr_ani      = np.zeros(3)
+    tempperp     = np.zeros(3)
+    anisotropies = Tper / Tpar - 1
+    
+    for ii in range(Nj):
+        if temp_type[ii] == 0:
+            if 'H^+'    in species_lbl[ii]:
+                cold_density[0] = density[ii] / 1e6
+            elif 'He^+' in species_lbl[ii]:
+                cold_density[1] = density[ii] / 1e6
+            elif 'O^+'  in species_lbl[ii]:
+                cold_density[2] = density[ii] / 1e6
+            else:
+                print('WARNING: UNKNOWN ION IN DENSITY MIX')
+                
+        if temp_type[ii] == 1:
+            if 'H^+'    in species_lbl[ii]:
+                warm_density[0] = density[ii] / 1e6
+                cgr_ani[0]      = anisotropies[ii]
+                tempperp[0]     = Tper[ii] / 11603.
+            elif 'He^+' in species_lbl[ii]:
+                warm_density[1] = density[ii] / 1e6
+                cgr_ani[1]      = anisotropies[ii]
+                tempperp[1]     = Tper[ii] / 11603.
+            elif 'O^+'  in species_lbl[ii]:
+                warm_density[2] = density[ii] / 1e6
+                cgr_ani[2]      = anisotropies[ii]
+                tempperp[2]     = Tper[ii] / 11603.
+            else:
+                print('WARNING: UNKNOWN ION IN DENSITY MIX')
+    
+    freqs, cgr, stop = calculate_growth_rate(B0*1e9, cold_density, warm_density, cgr_ani, temperp=tempperp)
+    return freqs, cgr, stop
 
 
 def manage_dirs(create_new=True):
@@ -70,40 +112,40 @@ def load_particles():
 
 
 def load_header():
-    global Nj, cellpart, data_dump_iter, ne, NX, dxm, seed, B0, dx, Te0, theta, dt, max_rev,\
-           ie, run_desc, seed, subcycles, LH_frac, orbit_res, freq_res, particle_shape, method_type, method_type
-    
+    global Nj, cellpart, data_dump_iter, ne, NX, dxm, seed, B0, dx, Te0, theta, dt_sim, max_rev,\
+           ie, run_desc, seed, subcycles, LH_frac, orbit_res, freq_res, method_type, particle_shape, dt_slice
+
     h_name = os.path.join(data_dir, 'Header.pckl')                      # Load header file
-    f      = open(h_name)                                               # Open header file
-    obj    = pickle.load(f)                                             # Load variables from header file into python object
+    f      = open(h_name, 'rb')                                         # Open header file
+    obj    = pickle.load(f, fix_imports=True, encoding='latin1')                           # Load variables from header file into python object
+
     f.close()                                                           # Close header file
-    
-    #pdb.set_trace()
+    seed            = obj['seed']
     Nj              = obj['Nj']
-    cellpart        = obj['cellpart']
-    data_dump_iter  = obj['data_dump_iter']
-    ne              = obj['ne']
+    dt_sim          = obj['dt']                                         # Simulation timestep (seconds)
     NX              = obj['NX']
     dxm             = obj['dxm']
-    seed            = obj['seed']
-    B0              = obj['B0']
     dx              = obj['dx']
+    cellpart        = obj['cellpart']
+    subcycles       = obj['subcycles']
+    B0              = obj['B0']
+    ne              = obj['ne']
     Te0             = obj['Te0']
-    theta           = obj['theta']
-    dt              = obj['dt']
-    max_rev         = obj['max_rev']
     ie              = obj['ie']
+    theta           = obj['theta']
+    data_dump_iter  = obj['data_dump_iter']
+    max_rev         = obj['max_rev']
+    LH_frac         = obj['LH_frac']
     orbit_res       = obj['orbit_res']
-    freq_res        = obj['freq_res'] 
+    freq_res        = obj['freq_res']
     run_desc        = obj['run_desc']
-    particle_shape  = obj['particle_shape']
-    method_type     = obj['method_type']
-    
-    if method_type == 'CAM_CL':
-        LH_frac         = obj['LH_frac']
-        subcycles       = obj['subcycles']
-    elif method_type == 'PREDCORR':
-        pass
+    method_type     = obj['method_type'] 
+    particle_shape  = obj['particle_shape'] 
+    dt_slice        = dt_sim * data_dump_iter                           # Time between data slices (seconds)
+
+    print('Header file loaded.')
+    print('dt = {}s\n'.format(dt_sim))
+    print('Data slices every {}s'.format(dt_slice))
     return 
 
 
@@ -270,7 +312,7 @@ def get_run_energies():
     '''
     
     energy_output    = np.zeros((4 + Nj, num_files))
-    time_gperiods    = np.array([ii * data_ts for ii in range(num_files)])  / gyperiod
+    time_gperiods    = np.array([ii * dt_slice for ii in range(num_files)])  / gyperiod
     energy_output[0] = time_gperiods        
     
     for ii in range(num_files):
@@ -326,6 +368,7 @@ def plot_energies(energy, ax, normalize=True):
     return
 
 
+
 def plot_growth_grid(plot_ratio=True, norm=False):
     '''
     Density on x axis
@@ -346,36 +389,40 @@ def plot_growth_grid(plot_ratio=True, norm=False):
     fig, ax = plt.subplots(figsize=(15,10))
     ax.scatter(max_field[0], max_field[1], color=colors)
     
-    if plot_ratio == True:
-        npts = 100
-        rat  = np.sqrt(e0 / mp)
-        
-        B_min  = 0e-9
-        B_max  = 300e-9
-        B_axis = np.linspace(B_min, B_max, npts)
-        
-        powers = list(range(1, 5))
-        for pwr in powers:
-            #sqrt_n = (rat * (10 ** pwr) * B_axis) / 1e3
-            n      = (rat * (10 ** pwr) * B_axis) ** 2 / 1e6
-            plt.plot(n, B_axis*1e9, label='$cv_A^{-1} = 10^%d$' % pwr)
+# =============================================================================
+#     if plot_ratio == True:
+#         npts = 100
+#         rat  = np.sqrt(e0 / mp)
+#         
+#         B_min  = 0e-9
+#         B_max  = 300e-9
+#         B_axis = np.linspace(B_min, B_max, npts)
+#         
+#         powers = list(range(1, 5))
+#         for pwr in powers:
+#             #sqrt_n = (rat * (10 ** pwr) * B_axis) / 1e3
+#             n      = (rat * (10 ** pwr) * B_axis) ** 2 / 1e6
+#             plt.plot(n, B_axis*1e9, label='$cv_A^{-1} = 10^%d$' % pwr)
+# =============================================================================
     
-    ## PLOT DATA POINTS ##
-    n_data = np.array([38, 160, 38, 160])
-    B_data = np.array([158, 158, 134, 134])
-    plt.scatter(n_data, B_data, label='Event Data Limits', marker='x')
-    plt.legend()
+# =============================================================================
+#     ## PLOT DATA POINTS ##
+#     n_data = np.array([38, 160, 38, 160])
+#     B_data = np.array([158, 158, 134, 134])
+#     plt.scatter(n_data, B_data, label='Event Data Limits', marker='x')
+#     plt.legend()
+# =============================================================================
     
     ## LABELS AND LIMITS ##
-    plt.xlim(0, 500)
-    plt.ylim(B_min*1e9, B_max*1e9)
+    #plt.xlim(0, 500)
+    #plt.ylim(B_min*1e9, B_max*1e9)
     
-    plt.xlabel(r'$n_0 ({cm^{-3}})$')
+    plt.xlabel(r'$n_b / n_0 ({cm^{-3}})$')
     plt.ylabel(r'$B_0 (nT)$')
     
 
         
-    plt.title('Event 1: Max |By|{} for varying B0, ne'.format(add))
+    plt.title('Event 1: Max |By|{} for varying nb'.format(add))
     
     # Optionally add a colorbar
     cax, _ = matplotlib.colorbar.make_axes(ax)
@@ -384,6 +431,56 @@ def plot_growth_grid(plot_ratio=True, norm=False):
     
     plt.show()
     return
+
+
+def get_kt_derivative(component='By'):
+    '''Calculates the maximum "growth rate" (temporal derivative) of whichever 
+    spatial mode grows the fastest in the simulation time.
+    '''
+    arr = get_array(component, 0, None)
+
+    ## Transform to k-t space: Take spatial FFT at each time
+    fft_matrix  = np.zeros(arr.shape, dtype='complex128')
+    for ii in range(arr.shape[0]):
+        fft_matrix[ii, :] = np.fft.fft(arr[ii, :] - arr[ii, :].mean())
+
+    ## Temporal derivative: For each k(t), calculate the highest rate of change
+    max_gamma = np.zeros(arr.shape[1])
+    for jj in range(arr.shape[1]):
+        max_gamma[jj] = abs(arr[1:, jj] - arr[:-1, jj]).max() / dt_slice      # SHOULDN'T be an abs here? What am I actually calculating?
+    
+# =============================================================================
+#     fig, ax = plt.subplots()
+#     ax.plot(max_gamma * 1e9)
+#     ax.set_title('Max temporal derivative at each k')
+#     ax.set_xlabel('k (mode)')
+#     ax.set_ylabel(r'$\gamma_k (\times 10^9)$')
+#     ax.set_xlim(0, NX)
+#     ax.set_ylim(0, None)
+#             
+#     fullpath = anal_dir + 'gamma_k_plot'
+#     fig.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+#     plt.close('all')
+# =============================================================================
+    return max_gamma.max()
+
+
+def get_wx_derivative(component='By'):
+    '''Calculates the maximum spatial "growth rate" (temporal derivative) of whichever 
+    temporal mode grows the fastest in the simulation time. (EQUIV to CGR? /cm?)
+    '''
+    arr = get_array(component, 0, None)
+
+    ## Transform to k-t space: Take spatial FFT at each time
+    fft_matrix  = np.zeros(arr.shape, dtype='complex128')
+    for ii in range(arr.shape[1]):
+        fft_matrix[:, ii] = np.fft.fft(arr[:, ii] - arr[:, ii].mean())
+
+    ## Temporal derivative: For each k(t), calculate the highest rate of change
+    max_gamma = np.zeros(arr.shape[0])
+    for jj in range(arr.shape[0]):
+        max_gamma[jj] = abs(arr[jj, 1:] - arr[jj, :-1]).max() / dx      # SHOULDN'T be an abs here? What am I actually calculating?
+    return max_gamma
 
 
 def examine_run_parameters():
@@ -424,42 +521,74 @@ def examine_run_parameters():
     print((tabulate.tabulate(run_dict, headers="keys")))
     return
 
+#%%
 if __name__ == '__main__':   
     plt.ioff()
     
-    plot_energy_comparison = False
+    plot_energy_comparison     = False
+    plot_grid_thing            = False
+    single_variable_comparison = True
     
-    drive      = 'F:'#'/media/yoshi/UNI_HD/'
-    series     = 'compare_two'                                  # Run identifier string 
+    drive      = 'G://MODEL_RUNS//Josh_Runs//'#'/media/yoshi/UNI_HD/'
+    series     = 'ev1_lowbeta'                                                    # Run identifier string 
     series_dir = '{}/runs//{}//'.format(drive, series)
     num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
+    max_field  = np.zeros((3, num_runs))                    # B0, n0, max_By
+    
     examine_run_parameters()
     
-    for run_num in range(num_runs):
-        manage_dirs()                                           # Initialize directories
-        load_constants()                                        # Load SI constants
-        load_header()                                           # Load simulation parameters
-        load_particles()                                        # Load particle parameters
-        num_files = len(os.listdir(data_dir)) - 2               # Number of timesteps to load
-        max_field  = np.zeros((3, num_runs))                        # B0, n0, max_By
+    
+    
+    if single_variable_comparison == True:
+        fig    = plt.figure(figsize=(15, 7))
+        ax_cgr = plt.subplot2grid((7, 7), (0, 0), colspan=6, rowspan=7)
+        ax_amp = ax_cgr.twinx()
 
-        BY = get_array('By', 0, None)
-        
-        max_field[0, run_num] = ne / 1e6                        # Density in cc
-        max_field[1, run_num] = B0 * 1e9                        # B0 in nT
-        max_field[2, run_num] = abs(BY).max() * 1e9             # Max abs(By) in nT
-        
-    plot_growth_grid(norm=True)
+        for run_num in [16, 17, 18]:
+            manage_dirs()                                           # Initialize directories
+            load_constants()                                        # Load SI constants
+            load_header()                                           # Load simulation parameters
+            load_particles()                                        # Load particle parameters
+            num_files = len(os.listdir(data_dir)) - 2               # Number of timesteps to load
+            
+            gmax            = get_kt_derivative()
+            FREQ, CGR, STOP = get_cgr_from_sim()
+            #BY              = get_array('By', 0, None)
+            hot_density     = density[1] / ne
+            
+            ax_cgr.scatter(hot_density, CGR.max()     , c='k', marker='x', s=100)
+            ax_cgr.set_ylabel('Convective Growth Rate (max)', color='k')
+            ax_cgr.tick_params(axis='y', labelcolor='k')
+            
+            ax_amp.scatter(hot_density, gmax * 1e9, c='r', s=50)
+            ax_amp.set_ylabel('Hybrid max $\gamma_k$', color='r')
+            ax_amp.tick_params(axis='y', labelcolor='r')   
+            
+            ax_cgr.set_xlabel(r'$n_i / n_0$')
+            
+        plt.title('EMIC Saturation amplitudes and max Growth rate vs. changing hot proton density.')
+        plt.show()
+    
+    
+    
+    
+    if plot_grid_thing == True:
+        for run_num in [16, 17, 18]:
+            manage_dirs()                                           # Initialize directories
+            load_constants()                                        # Load SI constants
+            load_header()                                           # Load simulation parameters
+            load_particles()                                        # Load particle parameters
+            num_files = len(os.listdir(data_dir)) - 2               # Number of timesteps to load
+            
+            BY = get_array('By', 0, None)
+            
+            max_field[0, run_num] = density[1] / ne#ne / 1e6                        # Density in cc
+            max_field[1, run_num] = B0 * 1e9                        # B0 in nT
+            max_field[2, run_num] = abs(BY).max() * 1e9             # Max abs(By) in nT
+            
+        plot_growth_grid(norm=False, plot_ratio=False)
 
-    
-    
-    
-    
-    
-    
-    
-    
     
     
     
@@ -469,15 +598,18 @@ if __name__ == '__main__':
     
 
     if plot_energy_comparison == True:
-        runs_to_analyse = [4, 5, 6, 7]                        # Run number
-        run_styles      = ['-' , '--', ':', '-.']
+        runs_to_analyse = [0, 1, 2, 3, 4]                        # Run number
+        run_styles      = ['-' , '--', ':', '-.', '-']
         
-        run_labels      = ['1k',
-                           '5k',
-                           '10k',
-                           '20k']
+        run_labels      = [ r'$0^{\circ}$',
+                           r'$30^{\circ}$',
+                           r'$45^{\circ}$',
+                           r'$60^{\circ}$',
+                           r'$90^{\circ}$']
         
-        energy_suffix = '_CAM_CL'
+        run_labels_raw  = ['0 deg', '30 deg', '45 deg', '60 deg', '90 deg']
+        
+        energy_suffix = '_vartheta_raw'
         
         total_energies  = np.zeros(len(runs_to_analyse))
         
@@ -499,15 +631,14 @@ if __name__ == '__main__':
             wpi       = np.sqrt(ne * q ** 2 / (mp * e0))            # Ion plasma frequency
             gyfreq    = q * B0 / mp                                 # Proton gyrofrequency (rad/s)
             gyperiod  = (mp * 2 * np.pi) / (q * B0)                 # Proton gyroperiod (s)
-            data_ts   = data_dump_iter * dt                         # Timestep between data records (seconds)
                    
             print('Analysing run {}'.format(run_num))
             energies = get_run_energies()
     
-            plot_energies(energies, ax)
+            plot_energies(energies, ax, normalize=False)
             
             total_energy_change = 100.*(energies[1, -1] - energies[1, -0]) / energies[1, 0]
-            plt.figtext(left, 0.475-ii*0.02, '{:>8} : {:>7}%'.format(method_type, round(total_energy_change, 2)),  fontsize=fsize,  fontname=fname)
+            plt.figtext(left, 0.475-ii*0.02, '{:>8} : {:>7}%'.format(run_labels_raw[ii], round(total_energy_change, 2)),  fontsize=fsize,  fontname=fname)
     
         fig.tight_layout()
         
@@ -523,3 +654,4 @@ if __name__ == '__main__':
         fig.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
         plt.close('all')
         
+
