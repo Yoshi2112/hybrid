@@ -12,18 +12,27 @@ from convective_growth_rate import calculate_growth_rate
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
 import os
 from numpy import pi
 import pickle
 import matplotlib.gridspec as gs
 import numba as nb
-
 import pdb
 
 
-def manage_dirs():
-    global run_dir, data_dir, anal_dir, temp_dir
+def env_growth_func(xi, Ai, wi, gi):
+    return Ai * np.exp(-1j*wi* xi).real * np.exp(gi*xi)
+
+
+def exp_func(x, a, b):
+    return a * np.exp(b * x)
+
+
+def manage_dirs(create_new=True):
+    global run_dir, data_dir, anal_dir, temp_dir, base_dir
     
+    base_dir = '{}/runs/{}/'.format(drive, series)                      # Main series directory, containing runs
     run_dir  = '{}/runs/{}/run_{}/'.format(drive, series, run_num)      # Main run directory
     data_dir = run_dir + 'data/'                                        # Directory containing .npz output files for the simulation run
     anal_dir = run_dir + 'analysis/'                                    # Output directory for all this analysis (each will probably have a subfolder)
@@ -120,6 +129,8 @@ def initialize_simulation_variables():
     time_seconds    = np.array([ii * dt_slice for ii in range(num_files)])
     time_gperiods   = time_seconds / gyperiod
     time_radperiods = time_seconds * gyfreq 
+    
+    extract_all_arrays()
     return
 
 
@@ -231,102 +242,70 @@ def collect_number_density(pos):
     INPUT:
         pos    -- position of each particle
     '''
-
-
     left_node, weights  = assign_weighting_TSC(pos, E_nodes=True) 
     idx                 = create_idx()
     den                 = collect_moments(left_node, weights, idx)   
     return den
 
 
-def get_array(component, tmin, tmax):
-    if component[-1].lower() == 'x':
-        comp_idx = 0
-    elif component[-1].lower() == 'y':
-        comp_idx = 1
-    elif component[-1].lower() == 'z':
-        comp_idx = 2
-
-    if tmax == None:
-        tmax = num_files
-
-    num_iter = tmax - tmin
-    arr      = np.zeros((num_iter, NX))
-
-    if tmin == 0 and tmax == num_files:
-        check_path = temp_dir + component.lower() + '_array' + '.npy'
-    else:
-        check_path = temp_dir + component.lower() + '_array' + '_{}'.format(tmin) + '_{}'.format(tmax) + '.npy'
+def get_array(component):
+    check_path = temp_dir + component.lower() + '_array' + '.npy'
 
     if os.path.isfile(check_path) == True:
         print('Array file for {} loaded from memory...'.format(component.upper()))
         arr = np.load(check_path)   
     else:
-        for ii in range(tmin, tmax):
-            B, E, Ve, Te, J, position, q_dns, velocity = load_timestep(ii)
-
-            if component[0].upper() == 'B':
-                arr[ii] = B[0:-1, comp_idx]
-            elif component[0].upper() == 'E':
-                arr[ii] = E[1:-1, comp_idx]
-                
-        print('Saving array file as {}'.format(check_path))
-        np.save(check_path, arr)
+        extract_all_arrays()
+        arr = np.load(check_path) 
     return arr
 
 
 def extract_all_arrays():
-    for comp in ['Bx', 'By', 'Bz', 'Ex', 'Ey', 'Ez']:
-        get_array(comp)
-    return
-
-
-def analyse_frequences(component='By'):
-    arr = get_array(component, 0, None)
-    
-    plt.ioff()
-    
-    f  = np.fft.fftfreq(arr.shape[0], d=dt_slice)
-    
-    ## Calculate temporal frequency for each x
-    fft_matrix  = np.zeros(arr.shape, dtype='complex128')
-    for ii in range(arr.shape[1]):
-        fft_matrix[:, ii] = np.fft.fft(arr[:, ii] - arr[:, ii].mean())
-
-    wx = (fft_matrix * np.conj(fft_matrix)).real
-    
-    f  = f[f >= 0]
-    wx = wx[:f.shape[0], :] * 2         # Fold negative frequencies into positive
-    
-    pdb.set_trace()
-    return
-
-def generate_wx_plot(component='By', tmin=0, tmax=None, plot=True, normalize=False):
-    ''' Create spatial frequency (Fourier mode) vs. time plot for times between tmin and tmax.
-
-    INPUT:
-        component -- field component to analyse. Loads from array file or data files if array file doesn't exist
-        plot      -- Boolean, create plot or only load/save field components
-        tmin      -- First iteration to load
-        tmax      -- Last  iteration to load
-    OUTPUT:
-        None
-
-    Note -- component keyword is not case sensitive, and should be one of Ex, Ey, Ez, Bx, By or Bz
     '''
-    arr = get_array(component, tmin, tmax)
+    Extracts and saves all arrays separate from the timestep slice files for easy
+    access. Note that magnetic field arrays exclude the last value due to periodic
+    boundary conditions. This may be changed later.
+    '''
+    bx_arr   = np.zeros((num_files, NX)); ex_arr  = np.zeros((num_files, NX))
+    by_arr   = np.zeros((num_files, NX)); ey_arr  = np.zeros((num_files, NX))
+    bz_arr   = np.zeros((num_files, NX)); ez_arr  = np.zeros((num_files, NX))
+    
+    # Check that all components are extracted
+    comps_missing = 0
+    for component in ['bx', 'by', 'bz', 'ex', 'ey', 'ez']:
+        check_path = temp_dir + component + '_array.npy'
+        if os.path.isfile(check_path) == False:
+            comps_missing += 1
+    
+    if comps_missing == 0:
+        print('Field component arrays already extracted.')
+        return
+    else:
+        for ii in range(num_files):
+            B, E, Ve, Te, J, position, q_dns, velocity = load_timestep(ii)
 
-    if plot == True:
-        plot_wx(arr, normalize, saveas='wx_plot_{}'.format(component.lower()))
+            bx_arr[ii, :] = B[:-1, 0]; ex_arr[ii, :] = E[:, 0]
+            by_arr[ii, :] = B[:-1, 1]; ey_arr[ii, :] = E[:, 1]
+            bz_arr[ii, :] = B[:-1, 2]; ez_arr[ii, :] = E[:, 2]
+
+        np.save(temp_dir + 'bx' +'_array.npy', bx_arr)
+        np.save(temp_dir + 'by' +'_array.npy', by_arr)
+        np.save(temp_dir + 'bz' +'_array.npy', bz_arr)
+        
+        np.save(temp_dir + 'ex' +'_array.npy', ex_arr)
+        np.save(temp_dir + 'ey' +'_array.npy', ey_arr)
+        np.save(temp_dir + 'ez' +'_array.npy', ez_arr)
+        print('Field component arrays saved in {}'.format(temp_dir))
     return
 
 
-def plot_wx(arr, norm, saveas='kt_plot', linear_overlay=True):
+
+def plot_wx(component='By', normalize=False, linear_overlay=False):
     plt.ioff()
+    arr = get_array(component)
     
     x  = np.arange(NX)
-    df = 1. / (num_files * dt_slice)
-    f  = [df * ii for ii in range(num_files)]
+    f  = np.fft.fftfreq(time_seconds.shape[0], d=dt_slice)
 
     proton_gyrofrequency = 1 / gyperiod
     helium_gyrofrequency = 0.25  * proton_gyrofrequency
@@ -360,7 +339,7 @@ def plot_wx(arr, norm, saveas='kt_plot', linear_overlay=True):
     ax.set_xlabel('x (cell)')
 
     plt.xlim(None, 32)
-    fullpath = anal_dir + saveas + '.png'
+    fullpath = anal_dir + 'wx_plot_{}'.format(component.lower()) + '.png'
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
     plt.close()
     print('w-x Plot saved')
@@ -380,7 +359,7 @@ def generate_wk_plot(component='By', plot=True, tmin=0, tmax=None, normalize=Fal
 
     Note -- component keywork is not case sensitive, and should be one of Ex, Ey, Ez, Bx, By or Bz
     '''
-    arr = get_array(component, tmin, tmax)
+    arr = get_array(component)
 
     if plot == True:
         plot_wk(arr, normalize, saveas='dispersion_relation_{}'.format(component.lower()))
@@ -400,7 +379,7 @@ def generate_kt_plot(component='By', tmin=0, tmax=None, plot=True, normalize=Fal
 
     Note -- component keyword is not case sensitive, and should be one of Ex, Ey, Ez, Bx, By or Bz
     '''
-    arr = get_array(component, tmin, tmax)
+    arr = get_array(component)
 
     if plot == True:
         plot_kt(arr, normalize, saveas='kt_plot_{}'.format(component.lower()))
@@ -705,10 +684,6 @@ def plot_energies(ii, normalize=True):
     return
 
 
-
-
-
-
 def get_cgr_from_sim():
     cold_density = np.zeros(3)
     warm_density = np.zeros(3)
@@ -747,6 +722,81 @@ def get_cgr_from_sim():
     return freqs, cgr, stop
 
 
+def get_derivative(arr):
+    ''' Caculates centered derivative for values in 'arr', with forward and backward differences applied
+    for boundary points'''
+    
+    deriv = np.zeros(arr.shape[0])
+    
+    deriv[0 ] = (-3*arr[ 0] + 4*arr[ 1] - arr[ 2]) / (2 * dt_slice)
+    deriv[-1] = ( 3*arr[-1] - 4*arr[-2] + arr[-3]) / (2 * dt_slice)
+    
+    for ii in np.arange(1, arr.shape[0] - 1):
+        deriv[ii] = (arr[ii + 1] - arr[ii - 1]) / (2 * dt_slice)
+    return deriv
+
+
+def get_growth_rate():
+    by  = get_array('By')
+    bz  = get_array('Bz')
+    bt  = np.sqrt(by ** 2 + bz ** 2)
+    
+    U_B = 0.5 * np.square(bt).sum(axis=1) * NX * dx / mu0
+    dU  = get_derivative(U_B)
+
+    linear_cutoff = np.where(dU == dU.max())[0][0]
+    
+    cut_idx  = linear_cutoff + 1
+    cell_idx = 10
+    
+    fft_matrix  = np.zeros(by.shape, dtype='complex128')
+    for ii in range(by.shape[1]):
+        fft_matrix[:, ii] = np.fft.fft(by[:, ii] - by[:, ii].mean())
+
+    fft_pwr = (fft_matrix[1:by.shape[0] // 2, :] * np.conj(fft_matrix[1:by.shape[0] // 2, :])).real
+    sum_pwr = fft_pwr.sum(axis=1)
+    max_freq= np.fft.fftfreq(by.shape[0], d=dt_slice)#[sum_pwr == sum_pwr.max()]
+    
+    pdb.set_trace()
+# =============================================================================
+#     ### FIT EXPONENTIAL TO LINEAR ENERGY TRANSFER ###
+#     popt, pcov = curve_fit(exp_func, time_seconds[:cut_idx], U_B[:cut_idx])
+#     eng_exp    = exp_func(time_seconds[:cut_idx], *popt)
+#     
+#     plt.figure()
+#     plt.plot(time_seconds[:cut_idx], U_B[:cut_idx], color='green', marker='o')
+#     plt.plot(time_seconds[:cut_idx], eng_exp, color='b')
+# =============================================================================
+    
+    ### FIT WAVE TO LINEAR BY/BZ FIELDS ###
+    #popt, pcov = curve_fit(env_growth_func, time_seconds[:cut_idx], by[:cut_idx, cell_idx])
+    #by_fit     = env_growth_func(time_seconds[:cut_idx], *popt)
+    
+# =============================================================================
+#     popt, pcov = curve_fit(env_growth_func, time_seconds[:cut_idx], bz[:cut_idx])
+#     bz_fit     = env_growth_func(time_seconds[:cut_idx], *popt)
+# =============================================================================
+    
+    #plt.figure()
+    #plt.plot(time_seconds[:cut_idx], by[:cut_idx, cell_idx])
+    #plt.plot(time_seconds[:cut_idx], by_fit)
+    #plt.plot(time_seconds[:cut_idx], bz_fit)
+    
+
+    
+    #plt.axvline(time_seconds[linear_cutoff])
+    #plt.show()
+    
+# =============================================================================
+#     popt, pcov = curve_fit(exp_func, time_seconds, yn, p0=[1.0, 0.5*wcyc, 0.0],
+#                                                bounds=(0, [10.0, wcyc, wcyc]))
+#     
+#     fit_wave   = exp_func(xdata, *popt)
+# =============================================================================
+    
+    return
+
+
 if __name__ == '__main__':   
     drive      = 'G://MODEL_RUNS//Josh_Runs//'
     series     = 'ev1_lowbeta'
@@ -762,12 +812,12 @@ if __name__ == '__main__':
         num_files   = len(os.listdir(data_dir)) - 2             # Number of timesteps to load
     
         initialize_simulation_variables()
-        
+
         mag_energy      = np.zeros(num_files)                   # Magnetic potential energy
         particle_energy = np.zeros((num_files, Nj))             # Particle kinetic energy
         electron_energy = np.zeros(num_files)                   # Electron pressure energy
         
-        analyse_frequences()
+        get_growth_rate()
         #generate_wx_plot(normalize=True)
         
         if False:
