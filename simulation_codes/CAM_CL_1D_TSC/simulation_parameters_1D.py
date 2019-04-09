@@ -7,6 +7,7 @@ Created on Fri Sep 22 11:00:58 2017
 import numpy as np
 import sys
 import platform
+import pdb
 
 ### RUN DESCRIPTION ###
 run_description = '''Test effect of changing theta. Changed code to correctly rotate velocities.'''
@@ -15,12 +16,13 @@ run_description = '''Test effect of changing theta. Changed code to correctly ro
 drive           = 'G://MODEL_RUNS//Josh_Runs//' # Drive letter or path for portable HDD e.g. 'E:/'
 #drive           = '/media/yoshi/UNI_HD/'
 #drive           = 'F:'
-save_path       = 'runs/varying_theta_v2/'    # Series save dir   : Folder containing all runs of a series 
-run_num         = 4                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 1                           # Save data flag    : For later analysis
+save_path       = 'runs/varying_density_better/'     # Series save dir   : Folder containing all runs of a series 
+run_num         = 0                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+generate_data   = 0                           # Save data flag    : For later analysis
 generate_plots  = 0                           # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                         # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin       = [run_num]                   # Set CPU affinity for run. Must be list. Auto-assign: None.
+
 
 
 ### PHYSICAL CONSTANTS ###
@@ -36,17 +38,18 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 20                               # Simulation runtime, in multiples of the gyroperiod
+max_rev  = 30                               # Simulation runtime, in multiples of the gyroperiod
 
 dxm         = 1.0                           # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
 subcycles   = 4                             # Number of field subcycling steps for Cyclic Leapfrog
-cellpart    = 10000                         # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart    = 20000                         # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
-theta    = 90                               # Angle of B0 to x axis (in xy plane in units of degrees)
+theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
 nb       = 0.10
-B0       = 160e-9                           # Unform initial magnetic field value (in T)
-ne       = 50e6                             # Electron density (in /m3, same as total ion density)
+B0       = 200e-9                           # Unform initial magnetic field value (in T)
+ne       = 10000000                          # Electron density (in /m3, same as total ion density (for singly charged ions))
+diag_file = drive + save_path + 'ne_{}_log.txt'.format(ne)
 
 LH_frac  = 0.0                              # Fraction of Lower Hybrid resonance: 
                                             # Used to calculate electron resistivity by setting "anomalous"
@@ -54,7 +57,7 @@ LH_frac  = 0.0                              # Fraction of Lower Hybrid resonance
 
 orbit_res= 0.1                              # Particle orbit resolution: Fraction of gyroperiod in seconds
 freq_res = 0.05                             # Frequency resolution: Fraction of inverse radian frequencies
-data_res = 0.25                             # Data capture resolution in gyroperiod fraction
+data_res = 0.20                             # Data capture resolution in gyroperiod fraction
 plot_res = 1.0                              # Plot capture resolution in gyroperiod fraction
 
 
@@ -72,7 +75,7 @@ sim_repr   = np.asarray([0.50, 0.50])                       # Macroparticle weig
 
 beta_e     = 1.0                                            # Electron beta
 beta_par   = np.array([1.0, 10.])                           # Ion species parallel beta
-beta_per   = np.array([1.0, 50.])                           # Ion species perpendicular beta
+beta_per   = np.array([1.0, 20.])                           # Ion species perpendicular beta
 
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
@@ -81,7 +84,7 @@ adaptive_timestep   = True                                  # Flag (True/False) 
 adaptive_subcycling = True                                  # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
 do_parallel         = False                                 # Flag (True/False) for auto-parallel using numba.njit()
 
-ratio_override = 1                                          # Flag to override magnetic field value for specific regime
+ratio_override = 0                                          # Flag to override magnetic field value for specific regime
 wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
 
 
@@ -148,7 +151,8 @@ LH_res     = 1. / np.sqrt(LH_res_is)                     # Lower Hybrid Resonanc
 
 e_resis    = (LH_frac * LH_res)  / (e0 * wpe ** 2)       # Electron resistivity (using intial conditions for wpi/wpe)
 
-
+print(density)
+print(n_contr)
 
 
 

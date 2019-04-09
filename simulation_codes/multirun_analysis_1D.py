@@ -20,7 +20,7 @@ import numba as nb
 from collections import OrderedDict
 from matplotlib.lines import Line2D
 import tabulate
-
+import pdb
 
 def get_cgr_from_sim():
     cold_density = np.zeros(3)
@@ -28,28 +28,28 @@ def get_cgr_from_sim():
     cgr_ani      = np.zeros(3)
     tempperp     = np.zeros(3)
     anisotropies = Tper / Tpar - 1
-    
+
     for ii in range(Nj):
         if temp_type[ii] == 0:
-            if 'H^+'    in species_lbl[ii]:
+            if 'H^+'    in species_lbl[ii].decode('ascii'):
                 cold_density[0] = density[ii] / 1e6
-            elif 'He^+' in species_lbl[ii]:
+            elif 'He^+' in species_lbl[ii].decode('ascii'):
                 cold_density[1] = density[ii] / 1e6
-            elif 'O^+'  in species_lbl[ii]:
+            elif 'O^+'  in species_lbl[ii].decode('ascii'):
                 cold_density[2] = density[ii] / 1e6
             else:
                 print('WARNING: UNKNOWN ION IN DENSITY MIX')
                 
         if temp_type[ii] == 1:
-            if 'H^+'    in species_lbl[ii]:
+            if 'H^+'    in species_lbl[ii].decode('ascii'):
                 warm_density[0] = density[ii] / 1e6
                 cgr_ani[0]      = anisotropies[ii]
                 tempperp[0]     = Tper[ii] / 11603.
-            elif 'He^+' in species_lbl[ii]:
+            elif 'He^+' in species_lbl[ii].decode('ascii'):
                 warm_density[1] = density[ii] / 1e6
                 cgr_ani[1]      = anisotropies[ii]
                 tempperp[1]     = Tper[ii] / 11603.
-            elif 'O^+'  in species_lbl[ii]:
+            elif 'O^+'  in species_lbl[ii].decode('ascii'):
                 warm_density[2] = density[ii] / 1e6
                 cgr_ani[2]      = anisotropies[ii]
                 tempperp[2]     = Tper[ii] / 11603.
@@ -348,12 +348,12 @@ def plot_energies(energy, ax, normalize=True):
             energy[kk, :] /= energy[kk, 0]
     
     ax.plot(energy[0], energy[1], label = r'$Total$', c='k', linestyle=run_styles[ii])
-    ax.plot(energy[0], energy[2], label = r'$U_B$', c='green', linestyle=run_styles[ii])
-    ax.plot(energy[0], energy[3], label = r'$U_e$', c='orange', linestyle=run_styles[ii])
+    ax.plot(energy[0], energy[2], label = r'$U_B$'  , c='green', linestyle=run_styles[ii])
+    ax.plot(energy[0], energy[3], label = r'$U_e$'  , c='orange', linestyle=run_styles[ii])
     
     for jj in range(Nj):
-        ax.plot(energy[0], energy[4 + jj], label='$K_E$ {}'.format(species_lbl[jj]), 
-                                 c=temp_color[jj], linestyle=run_styles[ii])
+        ax.plot(energy[0], energy[4 + jj], label='$K_E$ {}'.format(species_lbl[jj].decode('ascii')), 
+                                 c=temp_color[jj].decode('ascii'), linestyle=run_styles[ii])
 
     ax.set_xlabel('Time (Gyroperiods)')
     
@@ -487,19 +487,14 @@ def examine_run_parameters():
     '''
     Diagnostic information to compare runs at a glance. Values include
     
-    N
-    Nj
-    NX
-    B0
-    ne
+    cellpart, Nj, B0, ne, NX, num_files, Te0, max_rev, ie, theta, dxm
     
     number of files
     '''
     global run_num, num_files
     
     run_params = ['cellpart', 'Nj', 'B0', 'ne', 'NX', 'num_files', 'Te0', 'max_rev', 'ie', 'theta', 'dxm']
-    run_head   = []
-    run_dict = {}
+    run_dict = {'run_num' : []}
     for param in run_params:
         run_dict[param] = []
     
@@ -508,8 +503,7 @@ def examine_run_parameters():
         load_header()                                           # Load simulation parameters
         load_particles()                                        # Load particle parameters
         num_files = len(os.listdir(data_dir)) - 2               # Number of timesteps to load
-        run_head.append('Run {}'.format(run_num))
-        
+        run_dict['run_num'].append(run_num)
         for param in run_params:
             run_dict[param].append(globals()[param])
         
@@ -525,9 +519,9 @@ def examine_run_parameters():
 if __name__ == '__main__':   
     plt.ioff()
     
-    plot_energy_comparison     = False
+    plot_energy_comparison     = True
     plot_grid_thing            = False
-    single_variable_comparison = True
+    single_variable_comparison = False
     
     drive      = 'G://MODEL_RUNS//Josh_Runs//'#'/media/yoshi/UNI_HD/'
     series     = 'ev1_lowbeta'                                                    # Run identifier string 
@@ -545,7 +539,7 @@ if __name__ == '__main__':
         ax_cgr = plt.subplot2grid((7, 7), (0, 0), colspan=6, rowspan=7)
         ax_amp = ax_cgr.twinx()
 
-        for run_num in [16, 17, 18]:
+        for run_num in [0, 15, 14, 3]:
             manage_dirs()                                           # Initialize directories
             load_constants()                                        # Load SI constants
             load_header()                                           # Load simulation parameters
@@ -554,20 +548,20 @@ if __name__ == '__main__':
             
             gmax            = get_kt_derivative()
             FREQ, CGR, STOP = get_cgr_from_sim()
-            #BY              = get_array('By', 0, None)
-            hot_density     = density[1] / ne
+            #BY             = get_array('By', 0, None)
+            background_density     = ne
             
-            ax_cgr.scatter(hot_density, CGR.max()     , c='k', marker='x', s=100)
+            ax_cgr.scatter(background_density, CGR.max()     , c='k', marker='x', s=100)
             ax_cgr.set_ylabel('Convective Growth Rate (max)', color='k')
             ax_cgr.tick_params(axis='y', labelcolor='k')
             
-            ax_amp.scatter(hot_density, gmax * 1e9, c='r', s=50)
+            ax_amp.scatter(background_density, gmax * 1e9, c='r', s=50)
             ax_amp.set_ylabel('Hybrid max $\gamma_k$', color='r')
             ax_amp.tick_params(axis='y', labelcolor='r')   
             
-            ax_cgr.set_xlabel(r'$n_i / n_0$')
+            ax_cgr.set_xlabel(r'$n_e$')
             
-        plt.title('EMIC Saturation amplitudes and max Growth rate vs. changing hot proton density.')
+        plt.title('Linear and hybrid growth rates vs. $n_e$ for $B_0 = 100nT$')
         plt.show()
     
     
@@ -598,18 +592,18 @@ if __name__ == '__main__':
     
 
     if plot_energy_comparison == True:
-        runs_to_analyse = [0, 1, 2, 3, 4]                        # Run number
+        #runs_to_analyse = [0, 15, 14,  3]                        # Run number
+        #runs_to_analyse = [8,  4,  7, 13]                        # Run number
+        #runs_to_analyse = [9,  5,  6, 12]
+        runs_to_analyse = [1,  10,  11,  2]
+        
         run_styles      = ['-' , '--', ':', '-.', '-']
         
-        run_labels      = [ r'$0^{\circ}$',
-                           r'$30^{\circ}$',
-                           r'$45^{\circ}$',
-                           r'$60^{\circ}$',
-                           r'$90^{\circ}$']
+        this_B = 200
+        run_labels      = [ r'$20cc^{-1}$', r'$90cc^{-1}$', r'$160cc^{-1}$', r'$220cc^{-1}$']
+        run_labels_raw  = ['20/cc'        , '90/cc'       , '160/cc'       , '220/cc'       ] 
         
-        run_labels_raw  = ['0 deg', '30 deg', '45 deg', '60 deg', '90 deg']
-        
-        energy_suffix = '_vartheta_raw'
+        energy_suffix = '_B{}nT'.format(this_B)
         
         total_energies  = np.zeros(len(runs_to_analyse))
         
@@ -635,7 +629,7 @@ if __name__ == '__main__':
             print('Analysing run {}'.format(run_num))
             energies = get_run_energies()
     
-            plot_energies(energies, ax, normalize=False)
+            plot_energies(energies, ax, normalize=True)
             
             total_energy_change = 100.*(energies[1, -1] - energies[1, -0]) / energies[1, 0]
             plt.figtext(left, 0.475-ii*0.02, '{:>8} : {:>7}%'.format(run_labels_raw[ii], round(total_energy_change, 2)),  fontsize=fsize,  fontname=fname)
@@ -647,11 +641,13 @@ if __name__ == '__main__':
         ax.legend(list(by_label.values()), list(by_label.keys()), loc='center left', bbox_to_anchor=(1, 0.8))
     
         ax.add_artist(run_legend)
-    
+        #ax.set_ylim(0.85, 1.4)
+        #ax.set_xlim(0, 15)
+        
+    #%%
         fullpath = base_dir + 'energy_plot' + energy_suffix
-        ax.set_ylim(0.85, 1.4)
-        ax.set_xlim(0, 15)
-        fig.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+        
+        fig.savefig(fullpath)
         plt.close('all')
         
 

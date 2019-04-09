@@ -36,10 +36,10 @@ import matplotlib.pyplot as plt
 # Read,normalize
 normalize = 0
 # Print,' Frequency/H-cyclotron Freq.? [1=Yes, 0=No] : '
-normal = 1
+normal = 0
 # Print,'Enter the maximum normalized frequency for the calculation : '
 # Read,normal
-maxfreq = 0.5
+maxfreq = 1.0
 # Print,' Input magnetic flux density (nT) : '
 # read,field
 field = 300.0
@@ -209,6 +209,7 @@ else:
 plt.plot(x, growth)
 plt.xlabel('Frequency [Hz]')
 plt.ylabel('Growth Rate')
-        
-print 'Finished'
+plt.xlim(0, 3.5)
+plt.show()
+print('Finished')
 #end

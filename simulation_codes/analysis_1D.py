@@ -16,17 +16,10 @@ from scipy.optimize import curve_fit
 import os
 from numpy import pi
 import pickle
-import matplotlib.gridspec as gs
 import numba as nb
 import pdb
-
-
-def env_growth_func(xi, Ai, wi, gi):
-    return Ai * np.exp(-1j*wi* xi).real * np.exp(gi*xi)
-
-
-def exp_func(x, a, b):
-    return a * np.exp(b * x)
+from lmfit import Parameters, fit_report, minimize
+import tabulate
 
 
 def manage_dirs(create_new=True):
@@ -38,11 +31,54 @@ def manage_dirs(create_new=True):
     anal_dir = run_dir + 'analysis/'                                    # Output directory for all this analysis (each will probably have a subfolder)
     temp_dir = run_dir + 'temp/'                                        # Saving things like matrices so we only have to do them once
 
+   # Make Output folder if they don't exist
     for this_dir in [anal_dir, temp_dir]:
-        if os.path.exists(this_dir) == False:                           # Make Output folder if they don't exist
-            os.makedirs(this_dir)
+        if os.path.exists(run_dir) == True:
+            if os.path.exists(this_dir) == False:
+                os.makedirs(this_dir)
+        else:
+            raise IOError('Run {} does not exist for series {}. Check range argument.'.format(run_num, series))
     return
 
+
+# =============================================================================
+# def ax_add_run_params(ax):
+#     font    = 'monospace'
+#     top     = 1.07
+#     left    = 0.78
+#     h_space = 0.04
+#     
+#     ## Simulation Parameters ##
+#     
+#     ## Particle Parameters ##
+#     ax1.text(0.00, top - 0.02, '$B_0 = $variable'     , transform=ax1.transAxes, fontsize=10, fontname=font)
+#     ax1.text(0.00, top - 0.05, '$n_0 = $variable' % n0, transform=ax1.transAxes, fontsize=10, fontname=font)
+#     
+#     ax1.text(left + 0.06,  top, 'Cold'    , transform=ax1.transAxes, fontsize=10, fontname=font)
+#     ax1.text(left + 0.099, top, 'Warm'    , transform=ax1.transAxes, fontsize=10, fontname=font)
+#     ax1.text(left + 0.143, top, '$A_i$'   , transform=ax1.transAxes, fontsize=10, fontname=font)
+#     
+#     ax1.text(left + 0.192, top, r'$\beta_{\parallel}$'                    , transform=ax1.transAxes, fontsize=10, fontname=font)
+#     ax1.text(left + 4.2*h_space, top - 0.02, '{:>7.2f}'.format(betapar[0]), transform=ax1.transAxes, fontsize=10, fontname=font)
+#     ax1.text(left + 4.2*h_space, top - 0.04, '{:>7.2f}'.format(betapar[1]), transform=ax1.transAxes, fontsize=10, fontname=font)
+#     ax1.text(left + 4.2*h_space, top - 0.06, '{:>7.2f}'.format(betapar[2]), transform=ax1.transAxes, fontsize=10, fontname=font)
+# 
+#     ax1.text(left + 0.49*h_space, top - 0.02, ' H+:'                    , transform=ax1.transAxes, fontsize=10, fontname=font)
+#     ax1.text(left + 1*h_space, top - 0.02, '{:>7.3f}'.format(H_frac[0]), transform=ax1.transAxes, fontsize=10, fontname=font)
+#     ax1.text(left + 2*h_space, top - 0.02, '{:>7.3f}'.format(H_frac[1]), transform=ax1.transAxes, fontsize=10, fontname=font)
+#     ax1.text(left + 3*h_space, top - 0.02, '{:>7.2f}'.format(A[0]),      transform=ax1.transAxes, fontsize=10, fontname=font)
+#     
+#     ax1.text(left + 0.49*h_space, top - 0.04, 'He+:'                     , transform=ax1.transAxes, fontsize=10, fontname=font)
+#     ax1.text(left + 1*h_space, top - 0.04, '{:>7.3f}'.format(He_frac[0]), transform=ax1.transAxes, fontsize=10, fontname=font)
+#     ax1.text(left + 2*h_space, top - 0.04, '{:>7.3f}'.format(He_frac[1]), transform=ax1.transAxes, fontsize=10, fontname=font)
+#     ax1.text(left + 3*h_space, top - 0.04, '{:>7.2f}'.format(A[1])      , transform=ax1.transAxes, fontsize=10, fontname=font)
+#     
+#     ax1.text(left + 0.49*h_space, top - 0.06, ' O+:'                    , transform=ax1.transAxes, fontsize=10, fontname=font)
+#     ax1.text(left + 1*h_space, top - 0.06, '{:>7.3f}'.format(O_frac[0]), transform=ax1.transAxes, fontsize=10, fontname=font)
+#     ax1.text(left + 2*h_space, top - 0.06, '{:>7.3f}'.format(O_frac[1]), transform=ax1.transAxes, fontsize=10, fontname=font)
+#     ax1.text(left + 3*h_space, top - 0.06, '{:>7.2f}'.format(A[2])     , transform=ax1.transAxes, fontsize=10, fontname=font)
+#     return
+# =============================================================================
 
 def load_constants():
     global q, c, me, mp, e, mu0, kB, e0
@@ -58,7 +94,7 @@ def load_constants():
 
 
 def load_particles():
-    global density, dist_type, idx_bounds, charge, mass, Tper, sim_repr, temp_type, temp_color, velocity, Tpar, species_lbl, n_contr
+    global species_present, density, dist_type, idx_bounds, charge, mass, Tper, sim_repr, temp_type, temp_color, velocity, Tpar, species_lbl, n_contr
 
     p_path = os.path.join(data_dir, 'p_data.npz')                               # File location
     p_data = np.load(p_path)                                                    # Load file
@@ -76,7 +112,16 @@ def load_particles():
     Tpar       = p_data['Tpar']
     species_lbl= p_data['species_lbl']
 
-    n_contr    = density / (cellpart*sim_repr)                        # Species density contribution: Each macroparticle contributes this density to a cell
+    n_contr    = density / (cellpart*sim_repr)                                  # Species density contribution: Each macroparticle contributes this density to a cell
+    species_present = [False, False, False]                                     # Test for the presence of singly charged H, He, O
+        
+    for ii in range(Nj):
+        if 'H^+' in species_lbl[ii]:
+            species_present[0] = True
+        elif 'He^+' in species_lbl[ii]:
+            species_present[1] = True
+        elif 'O^+'  in species_lbl[ii]:
+            species_present[2] = True
 
     print('Particle parameters loaded')
     return
@@ -300,7 +345,7 @@ def extract_all_arrays():
 
 
 
-def plot_wx(component='By', normalize=False, linear_overlay=False):
+def plot_wx(component='By', linear_overlay=False):
     plt.ioff()
     arr = get_array(component)
     
@@ -359,10 +404,6 @@ def generate_wk_plot(component='By', plot=True, tmin=0, tmax=None, normalize=Fal
 
     Note -- component keywork is not case sensitive, and should be one of Ex, Ey, Ez, Bx, By or Bz
     '''
-    arr = get_array(component)
-
-    if plot == True:
-        plot_wk(arr, normalize, saveas='dispersion_relation_{}'.format(component.lower()))
     return
 
 
@@ -422,7 +463,9 @@ def plot_kt(arr, norm, saveas='kt_plot'):
     return
 
 
-def plot_wk(arr, norm, saveas='dispersion_relation'):
+def plot_wk(component='By'):
+    arr = get_array(component)
+    
     print('Plotting dispersion relation...')
     plt.ioff()
     num_times = arr.shape[0]
@@ -430,18 +473,11 @@ def plot_wk(arr, norm, saveas='dispersion_relation'):
     df = 1. / (num_times * dt_slice)
     dk = 1. / (NX * dx)
 
-    if norm == True:
-        f  = np.arange(0, 1. / (2*dt_slice), df) / gyfreq
-        k  = np.arange(0, 1. / (2*dx), dk) * c / wpi
+    f  = np.arange(0, 1. / (2*dt_slice), df)
+    k  = np.arange(0, 1. / (2*dx), dk) * 1e6
 
-        xlab = r'$kc/\omega_i$'
-        ylab = r'$\omega / \Omega_i$'
-    else:
-        f  = np.arange(0, 1. / (2*dt_slice), df)
-        k  = np.arange(0, 1. / (2*dx), dk) * 1e6
-
-        xlab = r'$k (\times 10^{-6}m^{-1})$'
-        ylab = r'f (Hz)'
+    xlab = r'$k (\times 10^{-6}m^{-1})$'
+    ylab = r'f (Hz)'
 
     fft_matrix  = np.zeros(arr.shape, dtype='complex128')
     fft_matrix2 = np.zeros(arr.shape, dtype='complex128')
@@ -458,18 +494,21 @@ def plot_wk(arr, norm, saveas='dispersion_relation'):
     ax  = fig.add_subplot(111)
 
     ax.pcolormesh(k[1:], f[1:], np.log10(dispersion_plot[1:, 1:].real), cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
-    #ax.pcolormesh(np.log10(dispersion_plot[1:, 1:].real), cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
 
-    ax.set_title(r'$\omega/k$ plot (Predictor-Corrector)', fontsize=14)
+    ax.set_title(r'$\omega/k$ Dispersion Plot for {}'.format(component), fontsize=14)
     ax.set_ylabel(ylab)
     ax.set_xlabel(xlab)
 
-    ax.set_xlim(0, 0.8)
-    ax.set_ylim(0, 0.4)
-
-    fullpath = anal_dir + saveas + '.png'
+    M    = np.array([1., 4., 16.])
+    cyc  = q * B0 / (2 * np.pi * mp * M)
+    for ii in range(3):
+        if species_present[ii] == True:
+            ax.axhline(cyc[ii], linestyle='--', c='k')
+            
+    filename ='{}_dispersion_relation'.format(component.upper())
+    fullpath = anal_dir + filename + '.png'
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-    plt.close()
+    plt.close('all')
     print('Dispersion Plot saved')
     return
 
@@ -684,7 +723,7 @@ def plot_energies(ii, normalize=True):
     return
 
 
-def get_cgr_from_sim():
+def get_cgr_from_sim(norm_flag=0):
     cold_density = np.zeros(3)
     warm_density = np.zeros(3)
     cgr_ani      = np.zeros(3)
@@ -718,7 +757,7 @@ def get_cgr_from_sim():
             else:
                 print('WARNING: UNKNOWN ION IN DENSITY MIX')
     
-    freqs, cgr, stop = calculate_growth_rate(B0*1e9, cold_density, warm_density, cgr_ani, temperp=tempperp)
+    freqs, cgr, stop = calculate_growth_rate(B0*1e9, cold_density, warm_density, cgr_ani, temperp=tempperp, norm_freq=norm_flag)
     return freqs, cgr, stop
 
 
@@ -736,74 +775,257 @@ def get_derivative(arr):
     return deriv
 
 
-def get_growth_rate():
-    by  = get_array('By')
-    bz  = get_array('Bz')
-    bt  = np.sqrt(by ** 2 + bz ** 2)
+def get_max_frequency(arr, plot=False):
+    '''
+    Calculates strongest frequency within a given field component across
+    the simulation space. Returns frequency and power axes and index of 
+    maximum frequency in axis.
+    '''
+    npts      = arr.shape[0]
+    fft_freqs = np.fft.fftfreq(npts, d=dt_slice)
+    f_pos     = fft_freqs[1:(npts + 1)//2]
     
+    # For each gridpoint, take temporal FFT
+    fft_matrix  = np.zeros((npts, NX), dtype='complex128')
+    for ii in range(NX):
+        fft_matrix[:, ii] = np.fft.fft(arr[:, ii] - arr[:, ii].mean())
+
+            
+    # Convert FFT output to power and normalize
+    fft_pwr   = (fft_matrix[1:(npts + 1)//2, :] * np.conj(fft_matrix[1:(npts + 1)//2, :])).real
+    fft_pwr  *= 4. / (npts ** 2)
+    fft_pwr   = fft_pwr.sum(axis=1)
+
+    max_idx = np.where(fft_pwr == fft_pwr.max())[0][0]
+    print('Maximum frequency at {}Hz\n'.format(f_pos[max_idx]))
+    
+    if plot == True:
+        plt.figure()
+        plt.plot(f_pos, fft_pwr)
+        plt.scatter(f_pos[max_idx], fft_pwr[max_idx], c='r')
+        plt.title('Frequencies across simulation domain')
+        plt.xlabel('Frequency (Hz)')
+        plt.ylabel('Power (nT^2 / Hz)')
+        plt.legend()
+    return f_pos, fft_pwr, max_idx
+
+
+
+def residual_grwave(pars, t, data=None):
+    vals   = pars.valuesdict()
+    amp    = vals['amp']
+    freq   = vals['freq']
+    growth = vals['growth']
+
+    model = amp * np.exp(1j*freq*t).imag * np.exp(growth*t)
+    
+    if data is None:
+        return model
+    else:
+        return model - data
+
+
+def fit_fied_component(arr, wi, component, cut_idx=None, plot=False, plot_cell=64):
+    '''
+    Calculates and returns parameters for growing sine wave function for each
+    gridpoint up to the linear cutoff time.
+    '''
+    print('Fitting field component')
+    time_fit  = time_seconds[:cut_idx]
+        
+    growth_rates = np.zeros(NX)
+    frequencies  = np.zeros(NX)
+    amplitudes   = np.zeros(NX)
+    
+    fit_params = Parameters()
+    fit_params.add('amp'   , value=1.0         , vary=True, min=-0.5*B0*1e9 , max=0.5*B0*1e9)
+    fit_params.add('freq'  , value=wi          , vary=True, min=-gyfreq     , max=gyfreq)
+    fit_params.add('growth', value=0.001*gyfreq, vary=True, min=0.0         , max=0.1*gyfreq)
+    
+    for cell_num in range(NX):
+        data_to_fit  = arr[:cut_idx, cell_num]
+        
+        fit_output      = minimize(residual_grwave, fit_params, args=(time_fit,), kws={'data': data_to_fit},
+                                   method='leastsq')
+        
+        fit_function    = residual_grwave(fit_output.params, time_fit)
+    
+        fit_dict        = fit_output.params.valuesdict()
+        
+        growth_rates[cell_num] = fit_dict['growth']
+        frequencies[ cell_num] = fit_dict['freq']
+        amplitudes[  cell_num] = fit_dict['amp']
+    
+        if plot != None and cell_num == plot_cell:
+            plt.figure()
+            plt.plot(time_fit, data_to_fit,  label='Magnetic field')
+            plt.plot(time_fit, fit_function, label='Fit')
+            plt.figtext(0.135, 0.73, r'$f = %.3fHz$' % (frequencies[cell_num] / (2 * np.pi)))
+            plt.figtext(0.135, 0.69, r'$\gamma = %.3fs^{-1}$' % (growth_rates[cell_num] / (2 * np.pi)))
+            plt.figtext(0.135, 0.65, r'$A_0 = %.3fnT$' % (amplitudes[cell_num] ))
+            plt.title('{} cell {}'.format(component, plot_cell))
+            plt.xlabel('Time (s)')
+            plt.ylabel('Amplitude (nT)')
+            plt.legend()
+            print(fit_report(fit_output))
+            
+            if plot == 'save':
+                save_path = anal_dir + '{}_envfit_{}.png'.format(component, plot_cell)
+                plt.savefig(save_path)
+                plt.close('all')
+            elif plot == 'show':
+                plt.show()
+            else:
+                pass
+            
+    return amplitudes, frequencies, growth_rates
+
+
+def residual_exp(pars, t, data=None):
+    vals   = pars.valuesdict()
+    amp    = vals['amp']
+    growth = vals['growth']
+
+    model  = amp * np.exp(growth*t)
+    
+    if data is None:
+        return model
+    else:
+        return model - data
+    
+
+def fit_magnetic_energy(by, bz, plot=False):
+    '''
+    Calculates an exponential growth rate based on transverse magnetic field
+    energy.
+    '''
+    print('Fitting magnetic energy')
+    bt  = np.sqrt(by ** 2 + bz ** 2) * 1e-9
     U_B = 0.5 * np.square(bt).sum(axis=1) * NX * dx / mu0
     dU  = get_derivative(U_B)
-
+    
     linear_cutoff = np.where(dU == dU.max())[0][0]
     
-    cut_idx  = linear_cutoff + 1
-    cell_idx = 10
-    
-    fft_matrix  = np.zeros(by.shape, dtype='complex128')
-    for ii in range(by.shape[1]):
-        fft_matrix[:, ii] = np.fft.fft(by[:, ii] - by[:, ii].mean())
+    time_fit = time_seconds[:linear_cutoff]
 
-    fft_pwr = (fft_matrix[1:by.shape[0] // 2, :] * np.conj(fft_matrix[1:by.shape[0] // 2, :])).real
-    sum_pwr = fft_pwr.sum(axis=1)
-    max_freq= np.fft.fftfreq(by.shape[0], d=dt_slice)#[sum_pwr == sum_pwr.max()]
+    fit_params = Parameters()
+    fit_params.add('amp'   , value=1.0         , min=None , max=None)
+    fit_params.add('growth', value=0.001*gyfreq, min=0.0  , max=None)
     
-    pdb.set_trace()
-# =============================================================================
-#     ### FIT EXPONENTIAL TO LINEAR ENERGY TRANSFER ###
-#     popt, pcov = curve_fit(exp_func, time_seconds[:cut_idx], U_B[:cut_idx])
-#     eng_exp    = exp_func(time_seconds[:cut_idx], *popt)
-#     
-#     plt.figure()
-#     plt.plot(time_seconds[:cut_idx], U_B[:cut_idx], color='green', marker='o')
-#     plt.plot(time_seconds[:cut_idx], eng_exp, color='b')
-# =============================================================================
-    
-    ### FIT WAVE TO LINEAR BY/BZ FIELDS ###
-    #popt, pcov = curve_fit(env_growth_func, time_seconds[:cut_idx], by[:cut_idx, cell_idx])
-    #by_fit     = env_growth_func(time_seconds[:cut_idx], *popt)
-    
-# =============================================================================
-#     popt, pcov = curve_fit(env_growth_func, time_seconds[:cut_idx], bz[:cut_idx])
-#     bz_fit     = env_growth_func(time_seconds[:cut_idx], *popt)
-# =============================================================================
-    
-    #plt.figure()
-    #plt.plot(time_seconds[:cut_idx], by[:cut_idx, cell_idx])
-    #plt.plot(time_seconds[:cut_idx], by_fit)
-    #plt.plot(time_seconds[:cut_idx], bz_fit)
-    
+    fit_output      = minimize(residual_exp, fit_params, args=(time_fit,), kws={'data': U_B[:linear_cutoff]},
+                               method='leastsq')
+    fit_function    = residual_exp(fit_output.params, time_fit)
 
+    fit_dict        = fit_output.params.valuesdict()
+
+    if plot != None:
+        plt.ioff()
+        plt.figure()
+        plt.plot(time_seconds[:linear_cutoff], U_B[:linear_cutoff], color='green', marker='o', label='Energy')
+        plt.plot(time_seconds[:linear_cutoff], fit_function, color='b', label='Exp. fit')
+        plt.figtext(0.135, 0.725, r'$\gamma = %.3fs^{-1}$' % (fit_dict['growth'] / (2 * np.pi)))
+        plt.title('Transverse magnetic field energy')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Energy (J)')
+        plt.legend()
+        
+        if plot == 'save':
+            save_path = anal_dir + 'magnetic_energy_expfit.png'
+            plt.savefig(save_path)
+            plt.close('all')
+        elif plot == 'show':
+            plt.show()
+        else:
+            pass
+        
+    return linear_cutoff, fit_dict['growth']
+
+
+def get_growth_rates(do_plot=None):
+    '''
+    Extract the magnetic linear wave growth rate from:
+        -- Fitting an exponential to the magnetic energy
+        -- Fitting a growing sine wave to the field components at each cell
     
-    #plt.axvline(time_seconds[linear_cutoff])
-    #plt.show()
+    The linear regime is calculated as all times before the maximum energy derivative,
+    i.e. the growth is assumed exponential until the rate of energy transfer decreases.
     
-# =============================================================================
-#     popt, pcov = curve_fit(exp_func, time_seconds, yn, p0=[1.0, 0.5*wcyc, 0.0],
-#                                                bounds=(0, [10.0, wcyc, wcyc]))
-#     
-#     fit_wave   = exp_func(xdata, *popt)
-# =============================================================================
+    One could also take the min/max (i.e. abs) of the field through time and 
+    fit an exponential to that, but it should be roughly equivalent to the energy fit.
     
+    INPUT:
+        -- do_plot : 'show', 'save' or 'None'. 'save' will also output growth rates to a text file.
+    '''
+    by  = get_array('By') * 1e9
+    bz  = get_array('Bz') * 1e9
+    
+    linear_cutoff, gr_rate_energy   = fit_magnetic_energy(by, bz, plot=do_plot)
+    freqs, power, max_idx           = get_max_frequency(by,       plot=do_plot)
+    
+    by_wamps, by_wfreqs, by_gr_rate = fit_fied_component(by, 2*np.pi*freqs[max_idx], 'By', linear_cutoff, plot=do_plot)
+    bz_wamps, bz_wfreqs, bz_gr_rate = fit_fied_component(bz, 2*np.pi*freqs[max_idx], 'Bz', linear_cutoff, plot=do_plot)
+    
+    if do_plot == 'save':
+        txt_path  = anal_dir + 'growth_rates.txt'
+        text_file = open(txt_path, 'w')
+    else:
+        text_file = None
+    
+    print('Energy growth rate: {}'.format(gr_rate_energy), file=text_file)
+    print('By av. growth rate: {}'.format(by_gr_rate.mean()), file=text_file)
+    print('Bz av. growth rate: {}'.format(bz_gr_rate.mean()), file=text_file)
+    print('By min growth rate: {}'.format(by_gr_rate.min()), file=text_file)
+    print('Bz min growth rate: {}'.format(bz_gr_rate.min()), file=text_file)
+    print('By max growth rate: {}'.format(by_gr_rate.max()), file=text_file)
+    print('Bz max growth rate: {}'.format(bz_gr_rate.max()), file=text_file)
+    return
+
+
+def examine_run_parameters(to_file=False):
+    '''
+    Diagnostic information to compare runs at a glance. Values include
+    
+    cellpart, Nj, B0, ne, NX, num_files, Te0, max_rev, ie, theta, dxm
+    
+    number of files
+    '''
+    global run_num, num_files
+    
+    run_params = ['cellpart', 'Nj', 'B0', 'ne', 'NX', 'num_files', 'Te0', 'max_rev', 'ie', 'theta', 'dxm']
+    run_dict = {'run_num' : []}
+    for param in run_params:
+        run_dict[param] = []
+    
+    for run_num in range(num_runs):
+        manage_dirs(create_new=False)
+        load_header()                                           # Load simulation parameters
+        load_particles()                                        # Load particle parameters
+        num_files = len(os.listdir(data_dir)) - 2               # Number of timesteps to load
+        run_dict['run_num'].append(run_num)
+        for param in run_params:
+            run_dict[param].append(globals()[param])
+        
+    if to_file == True:
+        txt_path  = base_dir + 'growth_rates.txt'
+        run_file = open(txt_path, 'w')
+    else:
+        run_file = None
+        
+    print('\n')
+    print('Simulation parameters for runs in series \'{}\':'.format(series), file=run_file)
+    print('\n')
+    print((tabulate.tabulate(run_dict, headers="keys")), file=run_file)
     return
 
 
 if __name__ == '__main__':   
     drive      = 'G://MODEL_RUNS//Josh_Runs//'
-    series     = 'ev1_lowbeta'
+    series     = 'varying_density_better'
     series_dir = '{}/runs//{}//'.format(drive, series)
     num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
+    examine_run_parameters(to_file=True)
 
-    for run_num in range(17, 18):
+    for run_num in range(num_runs):
         manage_dirs()                                           # Initialize directories
         load_constants()                                        # Load SI constants
         load_header()                                           # Load simulation parameters
@@ -817,10 +1039,10 @@ if __name__ == '__main__':
         particle_energy = np.zeros((num_files, Nj))             # Particle kinetic energy
         electron_energy = np.zeros(num_files)                   # Electron pressure energy
         
-        get_growth_rate()
-        #generate_wx_plot(normalize=True)
-        
-        if False:
+        get_growth_rates(do_plot='save')
+        plot_wx(linear_overlay=True)
+        plot_wk()
+        if True:
             if os.path.exists(anal_dir + 'norm_energy_plot.png') == False:
                 for ii in range(num_files):
                     B, E, Ve, Te, J, position, q_dns, velocity = load_timestep(ii)

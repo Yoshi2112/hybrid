@@ -27,6 +27,7 @@ if __name__ == '__main__':
 
     qq      = 0
     print('Starting loop...')
+    max_inc = 0
     while qq < max_inc:
         ############################
         ##### EXAMINE TIMESTEP #####

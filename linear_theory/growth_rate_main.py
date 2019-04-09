@@ -7,7 +7,7 @@ Created on Wed Mar 20 15:56:09 2019
 import sys
 data_scripts_dir = 'F://Google Drive//Uni//PhD 2017//Data//Scripts'
 sys.path.append(data_scripts_dir)
-
+import matplotlib.cm             as cm
 import numpy                     as np
 import matplotlib.pyplot         as plt
 import matplotlib.gridspec       as gs
@@ -85,10 +85,10 @@ def plot_CGR_space(plot_data_points=False, show_sample_points=False):
     grids  = gs.GridSpec(2, 2, width_ratios=[1, 0.02], height_ratios=[0.05, 1])
     ax1    = fig.add_subplot(grids[1, 0])
     
-    im1 = ax1.contourf(ni, B0, growth_max, 400, cmap='nipy_spectral')
+    im1 = ax1.contourf(n0, B0, growth_max, np.linspace(0, 8000, 401), cmap=cm.viridis)
     
-    ax1.set_xlim(ni_min, ni_max)
-    ax1.set_xlabel('Relative hot proton fraction, $n_i / n_0$')
+    ax1.set_xlim(n_min, n_max)
+    #ax1.set_xlabel('Relative hot proton fraction, $n_i / n_0$')
     ax1.set_ylim(B_min, B_max)
     ax1.set_ylabel('Background magnetic field, $B_0$ (nT)')
     ax1.set_title(r'Max. $S(\omega)$ for each $B_0$, $n_i$')
@@ -96,7 +96,7 @@ def plot_CGR_space(plot_data_points=False, show_sample_points=False):
     cax1 = fig.add_subplot(grids[1, 1])
     fig.colorbar(im1, cax=cax1, extend='both').set_label(r'Max. CGR ($\omega / V_g 10^{-7} cm^{-1}$)', rotation=90, fontsize=11)
     fig.subplots_adjust(wspace=0.02, hspace=0)
-    set_figure_text(ax1)
+    #set_figure_text(ax1)
 
     if plot_data_points == True:
         n_data = np.array([38, 160, 38, 160, 150, 150, 350, 350])
@@ -105,9 +105,9 @@ def plot_CGR_space(plot_data_points=False, show_sample_points=False):
         #plt.legend()
         
     if show_sample_points == True:
-        for ii in range(ni.shape[0]):
+        for ii in range(n0.shape[0]):
             for jj in range(B0.shape[0]):
-                ax1.scatter(ni[ii], B0[jj], c='k', marker='o', s=1, alpha=0.5)
+                ax1.scatter(n0[ii], B0[jj], c='k', marker='o', s=1, alpha=0.5)
     plt.show()
     return
 
@@ -122,30 +122,30 @@ if __name__ == '__main__':
     ni_min = 0.0   ; ni_max = 1.0     ; dni = 0.01
     
     B0           = np.arange(B_min , B_max  + db , db )
-    n0           = 180.#np.arange(n_min , n_max  + dn , dn )
-    ni           = np.arange(ni_min, ni_max + dni, dni)
+    n0           = np.arange(n_min , n_max  + dn , dn )
+    #ni           = np.arange(ni_min, ni_max + dni, dni)
     
-    growth_max   = np.zeros((B0.shape[0], ni.shape[0]))
+    growth_max   = np.zeros((B0.shape[0], n0.shape[0]))
     
-    #H_frac  = [0.9, 0.1]
-    He_frac = [0.0, 0.0]
-    O_frac  = [0.0, 0.0]
-    
+    H_frac  = np.array([0.874, 0.046])
+    He_frac = np.array([0.076, 0.004])
+    O_frac  = np.array([0.0 , 0.0])
+    print(H_frac.sum() + He_frac.sum() + O_frac.sum())
     for ii in range(B0.shape[0]):
-        for jj in range(ni.shape[0]):
+        for jj in range(n0.shape[0]):
             # Magnetic field flux in nT
             field   = B0[ii]           
               
             # Density of cold/warm species (number/cc)
             ndensc     = np.zeros(N)
-            ndensc[0]  = (1.0 - ni[jj])*n0                           
-            ndensc[1]  = He_frac[0]*n0  
-            ndensc[2]  = O_frac[ 0]*n0  
+            ndensc[0]  = H_frac[ 0]*n0[jj]                      
+            ndensc[1]  = He_frac[0]*n0[jj]  
+            ndensc[2]  = O_frac[ 0]*n0[jj]  
             
             ndensw     = np.zeros(N)
-            ndensw[0]  = (ni[jj])*n0 
-            ndensw[1]  = He_frac[1]*n0  
-            ndensw[2]  = O_frac[ 1]*n0  
+            ndensw[0]  = H_frac[ 1]*n0[jj] 
+            ndensw[1]  = He_frac[1]*n0[jj]  
+            ndensw[2]  = O_frac[ 1]*n0[jj]  
                 
             # Perpendicular temperature (ev)
             temperp = np.zeros(N)
@@ -158,13 +158,13 @@ if __name__ == '__main__':
             # Warm species parallel beta
             betapar = np.zeros(N)
             betapar[0] = 10.
-            betapar[1] = 0.
+            betapar[1] = 10.
             betapar[2] = 0.
             
             # Temperature anisotropy
             A    = np.zeros(N)
             A[0] = 2.                                         
-            A[1] = 0.
+            A[1] = 2.
             A[2] = 0.
         
             if beta_flag == 1:
@@ -174,9 +174,9 @@ if __name__ == '__main__':
                 FREQ, GR_RATE, STFLAG = conv.calculate_growth_rate(field, ndensc, ndensw, A, temperp=temperp, norm_freq=0, maxfreq=1.0)
                 betapar = None
             
-            growth_max[ii, jj] = GR_RATE.max()
-            
-plot_CGR_space(plot_data_points=False, show_sample_points=True)
+            growth_max[ii, jj] = GR_RATE[GR_RATE != np.inf].max()
+
+    plot_CGR_space(plot_data_points=False, show_sample_points=False)
 
 # =============================================================================
 #     plot_growth_rate(FREQ, GR_RATE, STFLAG, ax1)

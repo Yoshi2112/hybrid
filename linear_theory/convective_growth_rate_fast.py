@@ -24,8 +24,7 @@ Created on Wed Mar 20 15:56:09 2019
 # Made callable as a function: March, 2019
 
 import numpy as np
-import pdb
-
+import sys
 
 def plot_growth_rate(F, GR, ST, ax):
     ax.plot(F, GR)
@@ -35,7 +34,8 @@ def plot_growth_rate(F, GR, ST, ax):
     plt.show()
     return
 
-def calculate_growth_rate(field, ndensc, ndensw, ANI, temperp=None, beta=None, norm_ampl=0, norm_freq=0, NPTS=1000, maxfreq=1.0):
+
+def calculate_growth_rate(field, ndensc, ndensw, ANI, beta, norm_ampl=0, norm_freq=0, NPTS=500, maxfreq=1.0):
     '''
     Calculates the convective growth rate S as per eqn. 6 of Kozyra (1984). Plasma parameters passed as 
     length 3 numpy.ndarrays, one for each H+, He+, O+
@@ -59,17 +59,14 @@ def calculate_growth_rate(field, ndensc, ndensw, ANI, temperp=None, beta=None, n
     # Perform input checks 
     N   = ndensc.shape[0]
     
-    if temperp is None and beta is None:
-        raise ValueError('Either beta or tempperp must be defined.')
-    elif temperp is not None and beta is not None:
-        pdb.set_trace()
-        print('Both temperp and beta arrays defined, defaulting to temperp array values...')
-        beta = None
+    for ii in np.arange(N):
+        if ndensw[ii] != 0:
+            if beta[ii] == 0:
+                raise ValueError('Zero beta not allowed for warm components.')
         
     # CONSTANTS
     PMASS   = 1.673E-27
     MUNOT   = 1.25660E-6
-    EVJOULE = 6.242E18
     CHARGE  = 1.602E-19
     
     # OUTPUT PARAMS
@@ -93,33 +90,27 @@ def calculate_growth_rate(field, ndensc, ndensw, ANI, temperp=None, beta=None, n
     etaw    = NHOT  / NHOT[0]        # Here too
     numer   = M * (etac+etaw)
     
-    if beta is None:
-        TPERP   = temperp / EVJOULE
-        TPAR    = TPERP / (1.0 + ANI)
-        bet     = NHOT*TPAR / (FIELD*FIELD/(2.0*MUNOT))
-    else:
-        bet     = beta
-        TPAR    = np.zeros(N)
-        for ii in range(N):
-            if NHOT[ii] != 0:
-                TPAR[ii]    = (FIELD*FIELD/(2.0*MUNOT)) * bet[ii] / NHOT[ii]
+    TPAR    = np.zeros(N)
+    for ii in range(N):
+        if NHOT[ii] != 0:
+            TPAR[ii]    = (FIELD*FIELD/(2.0*MUNOT)) * beta[ii] / NHOT[ii]
         
     alpha = np.sqrt(2.0 * TPAR / PMASS)
 
-    for k in range(1, NPTS):
+    for k in np.arange(1, NPTS):
           x[k]   = k*step
           denom  = 1.0 - M*x[k]
           
           sum1  = 0.0
           prod2 = 1.0
           
-          for i in range(N):
+          for i in np.arange(N):
                prod2   *= denom[i]
                prod     = 1.0
                temp     = denom[i]
                denom[i] = numer[i]
                
-               for j in range(N):
+               for j in np.arange(N):
                    prod *= denom[j]
                
                sum1    += prod
@@ -136,26 +127,22 @@ def calculate_growth_rate(field, ndensc, ndensw, ANI, temperp=None, beta=None, n
              arg3 = arg4 / (x[k] ** 2)
              
              
-             for i in range(N):
+             for i in np.arange(N):
                 if (NHOT[i] > 1.0E-3):
                      arg1  = np.sqrt(np.pi) * etaw[i] / ((M[i]) ** 2 * alpha[i])       # Outside term
                      arg1 *= ((ANI[i] + 1.0) * (1.0 - M[i]*x[k]) - 1.0)                # Inside square brackets (multiply by outside)
-                     arg2  = (-etaw[i] / M[i]) * (M[i]*x[k] - 1.0) ** 2 / bet[i]*arg3
+                     arg2  = (-etaw[i] / M[i]) * (M[i]*x[k] - 1.0) ** 2 / beta[i]*arg3
                      
                      sum2 += arg1*np.exp(arg2)
              
-    
              growth[k] = sum2*arg3/2.0
     
     ###########################
     ### NORMALIZE AND CLEAN ###
     ###########################    
-    for ii in range(NPTS):
+    for ii in np.arange(NPTS):
         if (growth[ii] < 0.0):
             growth[ii] = 0.0
-            
-        if np.isnan(growth[ii]) == True:
-            growth[ii] = np.inf
           
     if (norm_freq == 0):
         cyclotron  = CHARGE*FIELD/(2.0*np.pi*PMASS)
@@ -168,41 +155,64 @@ def calculate_growth_rate(field, ndensc, ndensw, ANI, temperp=None, beta=None, n
     return x, growth, stop
 
 
-
 if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-    PMASS   = 1.673E-27
-    MUNOT   = 1.25660E-6
-    EVJOULE = 6.242E18
-    CHARGE  = 1.602E-19
-    
-    FIELD   = 300.
-    
-    cyclotron  = CHARGE*FIELD*1e-9/(2.0*np.pi*PMASS) # SI units
-    print(2 * np.pi * cyclotron)
-    
-    test_c = np.zeros(3)
-    test_c[0] = 196.
-    test_c[1] = 22.
-    test_c[2] = 2.
-    
-    test_w = np.zeros(3)
-    test_w[0] = 5.1
-    test_w[1] = 0.05
-    test_w[2] = 0.13
-    
-    test_tp = np.zeros(3)
-    test_tp[0] = 30000.         # Perpendicular temperature (ev)
-    test_tp[1] = 10000.
-    test_tp[2] = 10000.
 
-    test_A = np.zeros(3)
-    test_A[0] = 1.              # Temperature anisotropy
-    test_A[1] = 1.
-    test_A[2] = 1.
     
-    fr, gr, st = calculate_growth_rate(FIELD, test_c, test_w, test_A, temperp=test_tp)
+    N         = 3   # Number of species
     
-    fig = plt.figure()
-    ax1 = fig.add_subplot(111)
-    plot_growth_rate(fr, gr, st, ax1)
+    n_min   = 20.  ; n_max   = 420.   ; dn   = 5.
+    B_min   = 100. ; B_max   = 300.   ; db   = 5.
+    nhe_min = 0.0  ; nhe_max = 0.999  ; dnhe = 0.001
+    
+    hot_ion_frac = 0.05
+    
+    B0           = np.arange(B_min ,  B_max   + db  , db )
+    n0           = np.arange(n_min ,  n_max   + dn  , dn )
+    nhe          = np.arange(nhe_min, nhe_max + dnhe, dnhe)
+
+    growth_max   = np.zeros((B0.shape[0], n0.shape[0]))
+    
+    count   = 0
+    max_val = 0.0
+    for kk in np.arange(1, nhe.shape[0]):
+        print('Doing He = {}%'.format(100.*nhe[kk]))
+        for ii in np.arange(B0.shape[0]):
+            for jj in np.arange(n0.shape[0]):
+                # Magnetic field flux in nT
+                field   = B0[ii]     
+                
+                n_cold  = n0[jj]*(1 - hot_ion_frac)                 # Split density into cold
+                n_warm  = n0[jj]*hot_ion_frac                       # and warm components
+                
+                # Density of cold/warm species (number/cc)
+                ndensc     = np.zeros(N)
+                ndensc[0]  = (1 - nhe[kk]) * n_cold                          
+                ndensc[1]  = nhe[kk]       * n_cold 
+                ndensc[2]  = 0.0  
+                
+                ndensw     = np.zeros(N)
+                ndensw[0]  = (1 - nhe[kk]) * n_warm 
+                ndensw[1]  = nhe[kk]       * n_warm  
+                ndensw[2]  = 0.0  
+    
+                H_frac  = 100. * np.array([ndensc[0], ndensw[0]]) / n0[jj]
+                He_frac = 100. * np.array([ndensc[1], ndensw[1]]) / n0[jj]
+                O_frac  = 100. * np.array([ndensc[2], ndensw[2]]) / n0[jj]
+                
+                # Warm species parallel beta
+                betapar = np.zeros(N)
+                betapar[0] = 10.
+                betapar[1] = 10.
+                betapar[2] = 0.
+                
+                # Temperature anisotropy
+                A    = np.zeros(N)
+                A[0] = 2.                                         
+                A[1] = 2.
+                A[2] = 0.
+                
+                FREQ, GR_RATE, STFLAG = calculate_growth_rate(field, ndensc, ndensw, A, beta=betapar, norm_freq=0, maxfreq=1.0)
+                growth_max[ii, jj]    = GR_RATE.max()
+                
+                if GR_RATE.max() > max_val:
+                    max_val = GR_RATE.max()
