@@ -240,4 +240,4 @@ if __name__ == '__main__':
         if stop_band[ii] == 1:
             plt.axvspan(freq[ii], freq[ii + 1], color='k')            # PLOT STOP BAND
         
-        
+    plt.show()

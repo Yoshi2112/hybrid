@@ -89,7 +89,7 @@ if __name__ == '__main__':
     H_frac   = 0.70
     He_frac  = 0.20
     O_frac   = 0.10
-    RCH_frac = 0.01
+    RCH_frac = 0.90
 
     if round(H_frac + He_frac + O_frac, 8) != 1.0:
         raise ValueError('Ion fractions must sum to unity.')
