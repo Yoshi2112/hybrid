@@ -14,21 +14,24 @@ def geomagnetic_magnitude(L_shell, lat=0.):
         lat     : Geomagnetic latitude (MLAT) in degrees. Default value 0.
         
     OUPUT:
-        B_tot   : Magnetic field magnitude, in nT
+        B_tot   : Magnetic field magnitude, in T
     '''
     B_surf     = 3.12e-5
     r_loc      = L_shell * np.cos(np.pi * lat / 180.) ** 2
     B_tot      = B_surf / (r_loc ** 3) * np.sqrt(1. + 3.*np.sin(np.pi * lat / 180.) ** 2)
-    return B_tot * 1e9
+    return B_tot
 
 
 def sheely_plasmasphere(L, av=True):
+    '''
+    Returns density in /m3
+    '''
     mean = 1390* (3 / L) ** 4.83
     var  = 440 * (3 / L) ** 3.60
     if av == True:
-        return mean
+        return mean*1e6
     else:
-        return [mean - var, mean + var]
+        return np.array([mean - var, mean + var])*1e6
 
 
 def sheeley_trough(L, LT=0, av=True):
