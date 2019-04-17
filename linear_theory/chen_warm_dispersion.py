@@ -258,6 +258,9 @@ def plot_dispersion(k_vals, CPDR_solns, warm_solns, norm_k=False, norm_w=False, 
     '''
     species_colors      = ['r', 'b', 'g']
     
+    # Remember to remove this bit later on... maybe (or set it as some sort of option)
+    k_vals *= 1e6
+    
     if norm_w == True:
         f_max       = 1.0
         ysuff       = '$/\Omega_p$'
@@ -268,7 +271,7 @@ def plot_dispersion(k_vals, CPDR_solns, warm_solns, norm_k=False, norm_w=False, 
     if norm_k == True:
         xlab        = r'$kv_A / \Omega_p$'
     else:
-        xlab        = r'$k (m^{-1})$'
+        xlab        = r'$k (m^{-1}) \times 10^6$'
         
     plt.ioff()
     plt.figure()
@@ -311,14 +314,18 @@ def plot_dispersion(k_vals, CPDR_solns, warm_solns, norm_k=False, norm_w=False, 
     ax2.minorticks_on()
     
     if save == True:
-        path     = os.getcwd() + '\\'
+        if savepath == None:
+            path     = os.getcwd() + '\\'
         
-        vercount = 0
-        name     = 'dispersion_relation{}.png'.format(vercount)
-        while os.path.exists(path + name) == True:
-            vercount += 1
-            name     = 'dispersion_relation{}'.format(vercount)
-
+            vercount = 0
+            name     = 'dispersion_relation{}.png'.format(vercount)
+            while os.path.exists(path + name) == True:
+                vercount += 1
+                name     = 'dispersion_relation{}'.format(vercount)
+        else:
+            path = savepath
+            name = 'dispersion_relation.png'
+            
         plt.savefig(path + name)
     
     if plot == True:

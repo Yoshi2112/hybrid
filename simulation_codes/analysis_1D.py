@@ -389,67 +389,47 @@ def plot_wx(component='By', linear_overlay=False):
     return
 
 
-
-def generate_kt_plot(component='By', tmin=0, tmax=None, plot=True, normalize=False):
-    ''' Create spatial frequency (Fourier mode) vs. time plot for times between tmin and tmax.
-
-    INPUT:
-        component -- field component to analyse. Loads from array file or data files if array file doesn't exist
-        plot      -- Boolean, create plot or only load/save field components
-        tmin      -- First iteration to load
-        tmax      -- Last  iteration to load
-    OUTPUT:
-        None
-
-    Note -- component keyword is not case sensitive, and should be one of Ex, Ey, Ez, Bx, By or Bz
-    '''
+def plot_kt(component='By', saveas='kt_plot'):
     arr = get_array(component)
-
-    if plot == True:
-        plot_kt(arr, normalize, saveas='kt_plot_{}'.format(component.lower()))
-    return
-
-
-def plot_kt(arr, norm, saveas='kt_plot'):
+    
     plt.ioff()
+    
     k  = np.arange(NX)
 
-# =============================================================================
-#     if norm == True:
-#         k    = np.arange(0, 1. / (2*dx), dk) * c / wpi
-#         xlab = r'$kc/\omega_i$'
-#     else:
-#         k    = np.arange(0, 1. / (2*dx), dk) * 1e6
-#         xlab = r'$k (m^{-1})$'
-# =============================================================================
+    k         = np.fft.fftfreq(NX, dx)
+    k         = k[k>=0] * 1e6
 
     fft_matrix  = np.zeros(arr.shape, dtype='complex128')
     for ii in range(arr.shape[0]): # Take spatial FFT at each time
         fft_matrix[ii, :] = np.fft.fft(arr[ii, :] - arr[ii, :].mean())
 
-    kt = (fft_matrix[:, :arr.shape[1] // 2] * np.conj(fft_matrix[:, :arr.shape[1] // 2])).real
+    kt = (fft_matrix[:, :k.shape[0]] * np.conj(fft_matrix[:, :k.shape[0]])).real
 
     fig = plt.figure(1, figsize=(12, 8))
     ax  = fig.add_subplot(111)
     
-    ax.pcolormesh(k[:arr.shape[1] // 2], time_gperiods, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
-
+    im1 = ax.pcolormesh(k[:k.shape[0]], time_gperiods, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
+    fig.colorbar(im1)
     ax.set_title(r'k-t Plot', fontsize=14)
     ax.set_ylabel(r'$\Omega_i t$', rotation=0)
-    ax.set_xlabel('k (m-number)')
-
-    plt.xlim(None, 32)
+    ax.set_xlabel(r'$k (m^{-1}) \times 10^6$')
+    #ax.set_ylim(0, 15)
+    
     fullpath = anal_dir + saveas + '.png'
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-    plt.close()
+    plt.close(fig)
     print('K-T Plot saved')
     return
 
 
-def get_dispersion_from_sim(k):
+def get_dispersion_from_sim(k=None, plot=False, save=False):
     '''
     Still not sure how this will work for a H+, O+ mix, but H+-He+ should be fine
     '''
+    if k is None:
+        k         = np.fft.fftfreq(NX, dx)
+        k         = k[k>=0]
+    
     N_present    = species_present.count(True)
     cold_density = np.zeros(N_present)
     warm_density = np.zeros(N_present)
@@ -484,14 +464,18 @@ def get_dispersion_from_sim(k):
             else:
                 print('WARNING: UNKNOWN ION IN DENSITY MIX')
 
+    if save == True:
+        savepath = anal_dir
+    else:
+        savepath = None
     
     k_vals, CPDR_solns, warm_solns = get_dispersion_relation(B0, cold_density, warm_density, cgr_ani, tempperp,
-                                  norm_k=False, norm_w=False, kmin=k[0], kmax=k[-1], k_input_norm=0, plot=False)
+               norm_k=False, norm_w=False, kmin=k[0], kmax=k[-1], k_input_norm=0, plot=plot, save=save, savepath=savepath)
 
     return k_vals, CPDR_solns, warm_solns
 
 
-def plot_wk(component='By', dispersion_overlay=False, plot=True, save=False):
+def plot_wk(component='By', dispersion_overlay=False, plot=False, save=False):
     arr = get_array(component)
     
     print('Plotting dispersion relation...')
@@ -551,6 +535,7 @@ def plot_wk(component='By', dispersion_overlay=False, plot=True, save=False):
         fullpath = anal_dir + filename + '.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
         print('Dispersion Plot saved')
+        plt.close(fig)
     return
 
 
@@ -1135,13 +1120,13 @@ def examine_run_parameters(to_file=False):
 
 
 if __name__ == '__main__':   
-    drive      = 'G://MODEL_RUNS//Josh_Runs//'
+    drive      = 'E://MODEL_RUNS//Josh_Runs//'
     series     = 'varying_density_better'
     series_dir = '{}/runs//{}//'.format(drive, series)
     num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
     examine_run_parameters(to_file=True)
 
-    for run_num in [0]:#range(num_runs):
+    for run_num in range(num_runs):
         print('Run {}'.format(run_num))
         manage_dirs()                                           # Initialize directories
         load_constants()                                        # Load SI constants
@@ -1156,9 +1141,12 @@ if __name__ == '__main__':
         particle_energy = np.zeros((num_files, Nj))             # Particle kinetic energy
         electron_energy = np.zeros(num_files)                   # Electron pressure energy
                 
-        get_growth_rates()
+        #get_growth_rates()
+        plot_wk(dispersion_overlay=True, save=True)
+        #get_dispersion_from_sim(save=True)
+        #plot_kt()
         #plot_wx(linear_overlay=True)
-        #plot_wk(dispersion_overlay=True)
+        
         
         
         if False:
