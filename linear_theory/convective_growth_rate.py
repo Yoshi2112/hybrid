@@ -32,7 +32,6 @@ def plot_growth_rate(F, GR, ST, ax):
     for ii in range(ST.shape[0] - 1):
         if ST[ii] == 1:
             ax.axvspan(F[ii], F[ii + 1], color='k')            # PLOT STOP BAND
-    plt.show()
     return
 
 def calculate_growth_rate(field, ndensc, ndensw, ANI, temperp=None, beta=None, norm_ampl=0, norm_freq=0, NPTS=1000, maxfreq=1.0):
@@ -89,8 +88,8 @@ def calculate_growth_rate(field, ndensc, ndensw, ANI, temperp=None, beta=None, n
         
     NCOLD   = ndensc * 1.0E6
     NHOT    = ndensw * 1.0E6
-    etac    = NCOLD / NHOT[0]        # Needs a factor of Z ** 2?
-    etaw    = NHOT  / NHOT[0]        # Here too
+    etac    = NCOLD / NHOT[0]       
+    etaw    = NHOT  / NHOT[0] 
     numer   = M * (etac+etaw)
     
     if beta is None:
@@ -104,7 +103,7 @@ def calculate_growth_rate(field, ndensc, ndensw, ANI, temperp=None, beta=None, n
             if NHOT[ii] != 0:
                 TPAR[ii]    = (FIELD*FIELD/(2.0*MUNOT)) * bet[ii] / NHOT[ii]
         
-    alpha = np.sqrt(2.0 * TPAR / PMASS)
+    alpha = np.sqrt(2.0 * TPAR /  (M * PMASS))      # M added in denominator
 
     for k in range(1, NPTS):
           x[k]   = k*step
@@ -176,33 +175,55 @@ if __name__ == '__main__':
     EVJOULE = 6.242E18
     CHARGE  = 1.602E-19
     
-    FIELD   = 300.
+    test_FIELD   = 487.5#300.
     
-    cyclotron  = CHARGE*FIELD*1e-9/(2.0*np.pi*PMASS) # SI units
-    print(2 * np.pi * cyclotron)
-    
-    test_c = np.zeros(3)
-    test_c[0] = 196.
-    test_c[1] = 22.
-    test_c[2] = 2.
-    
-    test_w = np.zeros(3)
-    test_w[0] = 5.1
-    test_w[1] = 0.05
-    test_w[2] = 0.13
-    
-    test_tp = np.zeros(3)
-    test_tp[0] = 30000.         # Perpendicular temperature (ev)
-    test_tp[1] = 10000.
-    test_tp[2] = 10000.
+    cyclotron  = CHARGE*test_FIELD*1e-9/(2.0*np.pi*PMASS) # SI units
 
-    test_A = np.zeros(3)
+    test_c    = np.zeros(3)
+    test_c[0] = 10.
+    test_c[1] = 0.
+    test_c[2] = 0.
+    
+    test_w    = np.zeros(3)
+    test_w[0] = 5.
+    test_w[1] = 0.
+    test_w[2] = 0.0
+    
+    test_tp    = np.zeros(3)
+    test_tp[0] = 50000.         # Perpendicular temperature (ev)
+    test_tp[1] = 0.
+    test_tp[2] = 0.
+
+    test_A    = np.zeros(3)
     test_A[0] = 1.              # Temperature anisotropy
     test_A[1] = 1.
     test_A[2] = 1.
     
-    fr, gr, st = calculate_growth_rate(FIELD, test_c, test_w, test_A, temperp=test_tp)
+# =============================================================================
+#     test_c = np.zeros(3)
+#     test_c[0] = 196.
+#     test_c[1] = 22.
+#     test_c[2] = 2.
+#     
+#     test_w = np.zeros(3)
+#     test_w[0] = 5.1
+#     test_w[1] = 0.05
+#     test_w[2] = 0.13
+#     
+#     test_tp = np.zeros(3)
+#     test_tp[0] = 30000.         # Perpendicular temperature (ev)
+#     test_tp[1] = 10000.
+#     test_tp[2] = 10000.
+# 
+#     test_A = np.zeros(3)
+#     test_A[0] = 1.              # Temperature anisotropy
+#     test_A[1] = 1.
+#     test_A[2] = 1.
+# =============================================================================
+    
+    fr, gr, st = calculate_growth_rate(test_FIELD, test_c, test_w, test_A, temperp=test_tp, norm_freq=1, maxfreq=0.5)
     
     fig = plt.figure()
     ax1 = fig.add_subplot(111)
     plot_growth_rate(fr, gr, st, ax1)
+    plt.show()

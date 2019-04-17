@@ -95,7 +95,7 @@ def call_functions():
     group_vel   = np.zeros(NPTS)                         # Stop band flag (0, 1)
     stop        = np.zeros(NPTS)
     
-    step = 1.0 / NPTS
+    step = 0.5 / NPTS
                                       
     for ii in range(1, NPTS):
         x[ii]                     = ii*step
@@ -164,7 +164,8 @@ if __name__ == '__main__':
     w_pc2   = 4 * np.pi * ndensc * CHARGE ** 2 / mi
     w_pw2   = 4 * np.pi * ndensw * CHARGE ** 2 / mi
     
-    ion_cyclotron = CHARGE * FIELD / (2 * np.pi * mi * SPLIGHT)
+    ion_cyclotron = (CHARGE * FIELD / (2 * np.pi * mi * SPLIGHT))
+    ion_cyclotron/= ion_cyclotron[0]
     pcyc          = ion_cyclotron[0]
     
     etac    = M * (w_pc2 / w_pw2[0])
@@ -190,7 +191,7 @@ if __name__ == '__main__':
     #############################
     freq, wnum, mu, vg, stop_band = call_functions()
     
-    freq         *= ion_cyclotron[0]
+    #freq         *= ion_cyclotron[0]
     
     plt.figure()
     plt.plot(freq, wnum)
@@ -198,12 +199,14 @@ if __name__ == '__main__':
     plt.ylabel('k')
     plt.title('Wave Number (k)')
     
-    for f in ion_cyclotron:
-        plt.axvline(f, c='k')
-        
-    for ii in range(stop_band.shape[0] - 1):
-        if stop_band[ii] == 1:
-            plt.axvspan(freq[ii], freq[ii + 1], color='k')            # PLOT STOP BAND
+# =============================================================================
+#     for f in ion_cyclotron:
+#         plt.axvline(f, c='k')
+#         
+#     for ii in range(stop_band.shape[0] - 1):
+#         if stop_band[ii] == 1:
+#             plt.axvspan(freq[ii], freq[ii + 1], color='k')            # PLOT STOP BAND
+# =============================================================================
     
     plt.figure()
     plt.plot(freq, mu)

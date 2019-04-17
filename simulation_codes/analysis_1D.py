@@ -9,7 +9,7 @@ data_scripts_dir = 'C://Users//iarey//Documents//GitHub//hybrid//linear_theory//
 sys.path.append(data_scripts_dir)
 
 from convective_growth_rate import calculate_growth_rate
-
+from chen_warm_dispersion   import get_dispersion_relation
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
@@ -18,7 +18,7 @@ from numpy import pi
 import pickle
 import numba as nb
 import pdb
-from lmfit import Parameters, fit_report, minimize
+import lmfit as lmf
 import tabulate
 
 
@@ -159,9 +159,7 @@ def load_header():
     particle_shape  = obj['particle_shape'] 
     dt_slice        = dt_sim * data_dump_iter                           # Time between data slices (seconds)
 
-    print('Header file loaded.')
-    print('dt = {}s\n'.format(dt_sim))
-    print('Data slices every {}s'.format(dt_slice))
+    print('Simulation parameters loaded.')
     return 
 
 
@@ -351,18 +349,18 @@ def plot_wx(component='By', linear_overlay=False):
     
     x  = np.arange(NX)
     f  = np.fft.fftfreq(time_seconds.shape[0], d=dt_slice)
-
+    
     proton_gyrofrequency = 1 / gyperiod
     helium_gyrofrequency = 0.25  * proton_gyrofrequency
     oxygen_gyrofrequency = 0.125 * proton_gyrofrequency
-
+    
     ## CALCULATE IT
     fft_matrix  = np.zeros(arr.shape, dtype='complex128')
     for ii in range(arr.shape[1]):
         fft_matrix[:, ii] = np.fft.fft(arr[:, ii] - arr[:, ii].mean())
-
+    
     wx = (fft_matrix[1:arr.shape[0] // 2, :] * np.conj(fft_matrix[1:arr.shape[0] // 2, :])).real
-
+    
     ## PLOT IT
     fig = plt.figure(1, figsize=(15, 10))
     ax  = fig.add_subplot(111)
@@ -390,21 +388,6 @@ def plot_wx(component='By', linear_overlay=False):
     print('w-x Plot saved')
     return
 
-
-def generate_wk_plot(component='By', plot=True, tmin=0, tmax=None, normalize=False):
-    ''' Create w/k dispersion plot for times between tmin and tmax. STILL ISN'T WORKING GREAT....
-
-    INPUT:
-        component -- field component to analyse. Loads from array file or data files if array file doesn't exist
-        plot      -- Boolean, create plot or only load/save field components
-        tmin      -- First iteration to load
-        tmax      -- Last  iteration to load
-    OUTPUT:
-        None
-
-    Note -- component keywork is not case sensitive, and should be one of Ex, Ey, Ez, Bx, By or Bz
-    '''
-    return
 
 
 def generate_kt_plot(component='By', tmin=0, tmax=None, plot=True, normalize=False):
@@ -451,7 +434,7 @@ def plot_kt(arr, norm, saveas='kt_plot'):
     
     ax.pcolormesh(k[:arr.shape[1] // 2], time_gperiods, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
 
-    ax.set_title(r'k-t Plot (CAM-CL)', fontsize=14)
+    ax.set_title(r'k-t Plot', fontsize=14)
     ax.set_ylabel(r'$\Omega_i t$', rotation=0)
     ax.set_xlabel('k (m-number)')
 
@@ -463,7 +446,52 @@ def plot_kt(arr, norm, saveas='kt_plot'):
     return
 
 
-def plot_wk(component='By'):
+def get_dispersion_from_sim(k):
+    '''
+    Still not sure how this will work for a H+, O+ mix, but H+-He+ should be fine
+    '''
+    N_present    = species_present.count(True)
+    cold_density = np.zeros(N_present)
+    warm_density = np.zeros(N_present)
+    cgr_ani      = np.zeros(N_present)
+    tempperp     = np.zeros(N_present)
+    anisotropies = Tper / Tpar - 1
+    
+    for ii in range(Nj):
+        if temp_type[ii] == 0:
+            if 'H^+'    in species_lbl[ii]:
+                cold_density[0] = density[ii]
+            elif 'He^+' in species_lbl[ii]:
+                cold_density[1] = density[ii]
+            elif 'O^+'  in species_lbl[ii]:
+                cold_density[2] = density[ii]
+            else:
+                print('WARNING: UNKNOWN ION IN DENSITY MIX')
+                
+        if temp_type[ii] == 1:
+            if 'H^+'    in species_lbl[ii]:
+                warm_density[0] = density[ii]
+                cgr_ani[0]      = anisotropies[ii]
+                tempperp[0]     = Tper[ii] / 11603.
+            elif 'He^+' in species_lbl[ii]:
+                warm_density[1] = density[ii]
+                cgr_ani[1]      = anisotropies[ii]
+                tempperp[1]     = Tper[ii] / 11603
+            elif 'O^+'  in species_lbl[ii]:
+                warm_density[2] = density[ii]
+                cgr_ani[2]      = anisotropies[ii]
+                tempperp[2]     = Tper[ii] / 11603
+            else:
+                print('WARNING: UNKNOWN ION IN DENSITY MIX')
+
+    
+    k_vals, CPDR_solns, warm_solns = get_dispersion_relation(B0, cold_density, warm_density, cgr_ani, tempperp,
+                                  norm_k=False, norm_w=False, kmin=k[0], kmax=k[-1], k_input_norm=0, plot=False)
+
+    return k_vals, CPDR_solns, warm_solns
+
+
+def plot_wk(component='By', dispersion_overlay=False, plot=True, save=False):
     arr = get_array(component)
     
     print('Plotting dispersion relation...')
@@ -474,7 +502,7 @@ def plot_wk(component='By'):
     dk = 1. / (NX * dx)
 
     f  = np.arange(0, 1. / (2*dt_slice), df)
-    k  = np.arange(0, 1. / (2*dx), dk) * 1e6
+    k  = np.arange(0, 1. / (2*dx), dk)
 
     xlab = r'$k (\times 10^{-6}m^{-1})$'
     ylab = r'f (Hz)'
@@ -504,12 +532,25 @@ def plot_wk(component='By'):
     for ii in range(3):
         if species_present[ii] == True:
             ax.axhline(cyc[ii], linestyle='--', c='k')
-            
-    filename ='{}_dispersion_relation'.format(component.upper())
-    fullpath = anal_dir + filename + '.png'
-    plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-    plt.close('all')
-    print('Dispersion Plot saved')
+    
+    if dispersion_overlay == True:
+        '''
+        Some weird factor of about 2pi inaccuracy? Is this inherent to the sim? Or a problem
+        with linear theory? Or problem with the analysis?
+        '''
+        k_vals, CPDR_solns, warm_solns = get_dispersion_from_sim(k)
+        for ii in range(CPDR_solns.shape[1]):
+            ax.plot(k_vals, CPDR_solns[:, ii]*2*np.pi,      c='k', linestyle='--')
+            ax.plot(k_vals, warm_solns[:, ii].real*2*np.pi, c='k', linestyle='-')
+    
+    if plot == True:
+        plt.show()
+    
+    if save == True:
+        filename ='{}_dispersion_relation'.format(component.upper())
+        fullpath = anal_dir + filename + '.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        print('Dispersion Plot saved')
     return
 
 
@@ -783,7 +824,7 @@ def get_max_frequency(arr, plot=False):
     '''
     npts      = arr.shape[0]
     fft_freqs = np.fft.fftfreq(npts, d=dt_slice)
-    f_pos     = fft_freqs[1:(npts + 1)//2]
+    fft_freqs = fft_freqs[fft_freqs >= 0]
     
     # For each gridpoint, take temporal FFT
     fft_matrix  = np.zeros((npts, NX), dtype='complex128')
@@ -792,63 +833,67 @@ def get_max_frequency(arr, plot=False):
 
             
     # Convert FFT output to power and normalize
-    fft_pwr   = (fft_matrix[1:(npts + 1)//2, :] * np.conj(fft_matrix[1:(npts + 1)//2, :])).real
+    fft_pwr   = (fft_matrix[:fft_freqs.shape[0], :] * np.conj(fft_matrix[:fft_freqs.shape[0], :])).real
     fft_pwr  *= 4. / (npts ** 2)
     fft_pwr   = fft_pwr.sum(axis=1)
 
     max_idx = np.where(fft_pwr == fft_pwr.max())[0][0]
-    print('Maximum frequency at {}Hz\n'.format(f_pos[max_idx]))
+    print('Maximum frequency at {}Hz\n'.format(fft_freqs[max_idx]))
     
     if plot == True:
         plt.figure()
-        plt.plot(f_pos, fft_pwr)
-        plt.scatter(f_pos[max_idx], fft_pwr[max_idx], c='r')
+        plt.plot(fft_freqs, fft_pwr)
+        plt.scatter(fft_freqs[max_idx], fft_pwr[max_idx], c='r')
         plt.title('Frequencies across simulation domain')
         plt.xlabel('Frequency (Hz)')
         plt.ylabel('Power (nT^2 / Hz)')
         plt.legend()
-    return f_pos, fft_pwr, max_idx
+        plt.show()
+    return fft_freqs, fft_pwr, max_idx
 
 
-
-def residual_grwave(pars, t, data=None):
+def growing_sine(pars, t, data=None):
     vals   = pars.valuesdict()
     amp    = vals['amp']
     freq   = vals['freq']
     growth = vals['growth']
 
-    model = amp * np.exp(1j*freq*t).imag * np.exp(growth*t)
+    model = amp * np.exp(1j*2*np.pi*freq*t).imag * np.exp(growth*t)
     
     if data is None:
         return model
     else:
         return model - data
+    
 
 
-def fit_fied_component(arr, wi, component, cut_idx=None, plot=False, plot_cell=64):
+
+
+def fit_fied_component(arr, fi, component, cut_idx=None, plot=False, plot_cell=64):
     '''
     Calculates and returns parameters for growing sine wave function for each
     gridpoint up to the linear cutoff time.
     '''
     print('Fitting field component')
     time_fit  = time_seconds[:cut_idx]
-        
+    gyfreq_hz = gyfreq/(2*np.pi)    
+    
     growth_rates = np.zeros(NX)
     frequencies  = np.zeros(NX)
     amplitudes   = np.zeros(NX)
     
-    fit_params = Parameters()
+    fit_params = lmf.Parameters()
     fit_params.add('amp'   , value=1.0         , vary=True, min=-0.5*B0*1e9 , max=0.5*B0*1e9)
-    fit_params.add('freq'  , value=wi          , vary=True, min=-gyfreq     , max=gyfreq)
-    fit_params.add('growth', value=0.001*gyfreq, vary=True, min=0.0         , max=0.1*gyfreq)
+    fit_params.add('freq'  , value=fi          , vary=True, min=-gyfreq_hz     , max=gyfreq_hz)
+    fit_params.add('growth', value=0.001*gyfreq, vary=True, min=0.0         , max=0.1*gyfreq_hz)
     
     for cell_num in range(NX):
         data_to_fit  = arr[:cut_idx, cell_num]
         
-        fit_output      = minimize(residual_grwave, fit_params, args=(time_fit,), kws={'data': data_to_fit},
+        fit_output      = lmf.minimize(growing_sine, fit_params, args=(time_fit,), kws={'data': data_to_fit},
                                    method='leastsq')
         
-        fit_function    = residual_grwave(fit_output.params, time_fit)
+        fit_function    = growing_sine(fit_output.params, time_fit)
     
         fit_dict        = fit_output.params.valuesdict()
         
@@ -867,7 +912,7 @@ def fit_fied_component(arr, wi, component, cut_idx=None, plot=False, plot_cell=6
             plt.xlabel('Time (s)')
             plt.ylabel('Amplitude (nT)')
             plt.legend()
-            print(fit_report(fit_output))
+            print(lmf.fit_report(fit_output))
             
             if plot == 'save':
                 save_path = anal_dir + '{}_envfit_{}.png'.format(component, plot_cell)
@@ -908,11 +953,11 @@ def fit_magnetic_energy(by, bz, plot=False):
     
     time_fit = time_seconds[:linear_cutoff]
 
-    fit_params = Parameters()
+    fit_params = lmf.Parameters()
     fit_params.add('amp'   , value=1.0         , min=None , max=None)
     fit_params.add('growth', value=0.001*gyfreq, min=0.0  , max=None)
     
-    fit_output      = minimize(residual_exp, fit_params, args=(time_fit,), kws={'data': U_B[:linear_cutoff]},
+    fit_output      = lmf.minimize(residual_exp, fit_params, args=(time_fit,), kws={'data': U_B[:linear_cutoff]},
                                method='leastsq')
     fit_function    = residual_exp(fit_output.params, time_fit)
 
@@ -929,6 +974,11 @@ def fit_magnetic_energy(by, bz, plot=False):
         plt.ylabel('Energy (J)')
         plt.legend()
         
+# =============================================================================
+#         plt.figure()
+#         plt.plot(time_seconds[:linear_cutoff], dU[:linear_cutoff])
+# =============================================================================
+        
         if plot == 'save':
             save_path = anal_dir + 'magnetic_energy_expfit.png'
             plt.savefig(save_path)
@@ -939,6 +989,65 @@ def fit_magnetic_energy(by, bz, plot=False):
             pass
         
     return linear_cutoff, fit_dict['growth']
+
+
+def exponential_sine(t, amp, freq, growth, phase):
+    return amp * np.sin(2*np.pi*freq*t + phase) * np.exp(growth*t)
+
+
+def growth_rate_kt(arr, cut_idx, fi, saveas='kt_growth'):
+    plt.ioff()
+
+    time_fit  = time_seconds[:cut_idx]
+    k         = np.fft.fftfreq(NX, dx)
+    k         = k[k>=0]
+
+    # Take spatial FFT at each time
+    mode_matrix  = np.zeros(arr.shape, dtype='complex128')
+    for ii in range(arr.shape[0]):
+        mode_matrix[ii, :] = np.fft.fft(arr[ii, :] - arr[ii, :].mean())
+
+    # Cut off imaginary bits
+    mode_matrix = 2*mode_matrix[:, :k.shape[0]]
+    
+    gmodel = lmf.Model(exponential_sine, nan_policy='propagate')
+    
+    gmodel.set_param_hint('amp',    value=1.0, min=0.0,     max=abs(mode_matrix).max())
+    gmodel.set_param_hint('freq',   value=fi, min=-2*fi,    max=2*fi)
+    gmodel.set_param_hint('growth', value=0.05, min=0.0,    max=0.5*fi)
+    gmodel.set_param_hint('phase',  value=0.0, vary=False)
+    
+    for mode_num in [1]:#range(1, k.shape[0]):
+        data_to_fit = mode_matrix[:cut_idx, mode_num].real
+    
+        result      = gmodel.fit(data_to_fit, t=time_fit, method='leastsq')
+
+        plt.plot(time_fit, data_to_fit, 'ko', label='data')
+        plt.plot(time_fit, result.best_fit, 'r-', label='lmfit')
+
+        popt, pcov = curve_fit(exponential_sine, time_fit, data_to_fit, maxfev=1000000000)
+        plt.plot(time_fit, exponential_sine(time_fit, *popt), label='curve_fit')
+        plt.legend()
+        print(popt)
+# =============================================================================
+#         fit_output      = minimize(exponential_sine, fit_params, args=(time_fit,), kws={'data': data_to_fit},
+#                                    method='leastsq')
+#         
+#         fit_function    = exponential_sine(fit_output.params, time_fit)
+# 
+#         fit_dict        = fit_output.params.valuesdict()
+#         
+#         growth_rates[mode_num] = fit_dict['growth']
+#         frequencies[ mode_num] = fit_dict['freq']
+#         amplitudes[  mode_num] = fit_dict['amp']
+#     
+#         plt.plot(time_fit, data_to_fit)
+#         plt.plot(time_fit, fit_function)
+# =============================================================================
+
+    plt.show()
+
+    return
 
 
 def get_growth_rates(do_plot=None):
@@ -962,22 +1071,29 @@ def get_growth_rates(do_plot=None):
     linear_cutoff, gr_rate_energy   = fit_magnetic_energy(by, bz, plot=do_plot)
     freqs, power, max_idx           = get_max_frequency(by,       plot=do_plot)
     
-    by_wamps, by_wfreqs, by_gr_rate = fit_fied_component(by, 2*np.pi*freqs[max_idx], 'By', linear_cutoff, plot=do_plot)
-    bz_wamps, bz_wfreqs, bz_gr_rate = fit_fied_component(bz, 2*np.pi*freqs[max_idx], 'Bz', linear_cutoff, plot=do_plot)
+    growth_rate_kt(by, linear_cutoff, freqs[max_idx])
     
-    if do_plot == 'save':
-        txt_path  = anal_dir + 'growth_rates.txt'
-        text_file = open(txt_path, 'w')
-    else:
-        text_file = None
-    
-    print('Energy growth rate: {}'.format(gr_rate_energy), file=text_file)
-    print('By av. growth rate: {}'.format(by_gr_rate.mean()), file=text_file)
-    print('Bz av. growth rate: {}'.format(bz_gr_rate.mean()), file=text_file)
-    print('By min growth rate: {}'.format(by_gr_rate.min()), file=text_file)
-    print('Bz min growth rate: {}'.format(bz_gr_rate.min()), file=text_file)
-    print('By max growth rate: {}'.format(by_gr_rate.max()), file=text_file)
-    print('Bz max growth rate: {}'.format(bz_gr_rate.max()), file=text_file)
+# =============================================================================
+#     
+#     
+#     by_wamps, by_wfreqs, by_gr_rate = fit_fied_component(by, freqs[max_idx], 'By', linear_cutoff, plot=do_plot)
+#     bz_wamps, bz_wfreqs, bz_gr_rate = fit_fied_component(bz, freqs[max_idx], 'Bz', linear_cutoff, plot=do_plot)
+#     
+#     
+#     if do_plot == 'save':
+#         txt_path  = anal_dir + 'growth_rates.txt'
+#         text_file = open(txt_path, 'w')
+#     else:
+#         text_file = None
+#     
+#     print('Energy growth rate: {}'.format(gr_rate_energy), file=text_file)
+#     print('By av. growth rate: {}'.format(by_gr_rate.mean()), file=text_file)
+#     print('Bz av. growth rate: {}'.format(bz_gr_rate.mean()), file=text_file)
+#     print('By min growth rate: {}'.format(by_gr_rate.min()), file=text_file)
+#     print('Bz min growth rate: {}'.format(bz_gr_rate.min()), file=text_file)
+#     print('By max growth rate: {}'.format(by_gr_rate.max()), file=text_file)
+#     print('Bz max growth rate: {}'.format(bz_gr_rate.max()), file=text_file)
+# =============================================================================
     return
 
 
@@ -1025,7 +1141,8 @@ if __name__ == '__main__':
     num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
     examine_run_parameters(to_file=True)
 
-    for run_num in range(num_runs):
+    for run_num in [0]:#range(num_runs):
+        print('Run {}'.format(run_num))
         manage_dirs()                                           # Initialize directories
         load_constants()                                        # Load SI constants
         load_header()                                           # Load simulation parameters
@@ -1038,11 +1155,13 @@ if __name__ == '__main__':
         mag_energy      = np.zeros(num_files)                   # Magnetic potential energy
         particle_energy = np.zeros((num_files, Nj))             # Particle kinetic energy
         electron_energy = np.zeros(num_files)                   # Electron pressure energy
+                
+        get_growth_rates()
+        #plot_wx(linear_overlay=True)
+        #plot_wk(dispersion_overlay=True)
         
-        get_growth_rates(do_plot='save')
-        plot_wx(linear_overlay=True)
-        plot_wk()
-        if True:
+        
+        if False:
             if os.path.exists(anal_dir + 'norm_energy_plot.png') == False:
                 for ii in range(num_files):
                     B, E, Ve, Te, J, position, q_dns, velocity = load_timestep(ii)
