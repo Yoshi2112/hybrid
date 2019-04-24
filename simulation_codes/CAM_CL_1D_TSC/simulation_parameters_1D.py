@@ -7,10 +7,10 @@ Created on Fri Sep 22 11:00:58 2017
 import numpy as np
 import sys
 import platform
-import pdb
 
 ### RUN DESCRIPTION ###
-run_description = '''Test effect of changing theta. Changed code to correctly rotate velocities.'''
+run_description = '''Test EMIC wave generation along field line (~L=4)'''
+
 
 ### RUN PARAMETERS ###
 #drive           = 'G://MODEL_RUNS//Josh_Runs//' # Drive letter or path for portable HDD e.g. 'E:/'
@@ -18,8 +18,8 @@ run_description = '''Test effect of changing theta. Changed code to correctly ro
 drive           = 'F:/'
 save_path       = 'runs/large_simulation_space/'     # Series save dir   : Folder containing all runs of a series 
 run_num         = 0                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 1                           # Save data flag    : For later analysis
-generate_plots  = 0                           # Save plot flag    : To ensure hybrid is solving correctly during run
+save_particles  = 1                           # Save data flag    : For later analysis
+save_fields     = 1                           # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                         # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin       = [run_num, run_num + 1]      # Set CPU affinity for run. Must be list. Auto-assign: None.
 
@@ -37,28 +37,24 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 2048                             # Number of cells - doesn't include ghost cells
-max_rev  = 30                               # Simulation runtime, in multiples of the gyroperiod
+NX       = 128                              # Number of cells - doesn't include ghost cells
+max_rev  = 50                               # Simulation runtime, in multiples of the gyroperiod
 
 dxm         = 1.0                           # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
 subcycles   = 4                             # Number of field subcycling steps for Cyclic Leapfrog
-cellpart    = 20000                         # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart    = 100                           # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
 nb       = 0.10
 B0       = 200e-9                           # Unform initial magnetic field value (in T)
-ne       = 10000000                          # Electron density (in /m3, same as total ion density (for singly charged ions))
-diag_file = drive + save_path + 'ne_{}_log.txt'.format(ne)
+ne       = 2006                             # Electron density (in /m3, same as total ion density (for singly charged ions))
 
-LH_frac  = 0.0                              # Fraction of Lower Hybrid resonance: 
-                                            # Used to calculate electron resistivity by setting "anomalous"
-                                            # electron/ion collision as some multiple of the LHF. 0 disables e_resis.
 
-orbit_res= 0.1                              # Particle orbit resolution: Fraction of gyroperiod in seconds
-freq_res = 0.05                             # Frequency resolution: Fraction of inverse radian frequencies
-data_res = 0.20                             # Data capture resolution in gyroperiod fraction
-plot_res = 1.0                              # Plot capture resolution in gyroperiod fraction
+orbit_res = 0.1                             # Particle orbit resolution: Fraction of gyroperiod in seconds
+freq_res  = 0.05                            # Frequency resolution: Fraction of inverse radian frequencies
+part_res  = 0.50                            # Data capture resolution in gyroperiod fraction: Particle information
+field_res = 0.10                            # Data capture resolution in gyroperiod fraction: Field information
 
 
 ### PARTICLE PARAMETERS ###
@@ -146,13 +142,16 @@ gyfreq     = q*B0/mp                                     # Proton   Gyrofrequenc
 e_gyfreq   = q*B0/me                                     # Electron Gyrofrequency (rad/s)
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 
+
+diag_file = drive + save_path + 'ne_{}_log.txt'.format(ne)
+
+LH_frac  = 0.0                                           # Fraction of Lower Hybrid resonance: 
+                                                         # Used to calculate electron resistivity by setting "anomalous"
+                                                         # electron/ion collision as some multiple of the LHF. 0 disables e_resis.
 LH_res_is  = 1. / (gyfreq * e_gyfreq) + 1. / wpi ** 2    # Lower Hybrid Resonance frequency, inverse squared
-LH_res     = 1. / np.sqrt(LH_res_is)                     # Lower Hybrid Resonance frequency
+LH_res     = 1. / np.sqrt(LH_res_is)                     # Lower Hybrid Resonance frequency: DID I CHECK THIS???
 
 e_resis    = (LH_frac * LH_res)  / (e0 * wpe ** 2)       # Electron resistivity (using intial conditions for wpi/wpe)
-
-print(density)
-print(n_contr)
 
 
 
@@ -187,7 +186,7 @@ sped_ratio = c / va
 
 print('Speed ratio: {}'.format(sped_ratio))
 print('Density: {}cc'.format(round(ne / 1e6, 2)))
-print('Background magnetic field: {}nT'.format(round(B0*1e9, 1)))
+print('Background magnetic field: {}nT'.format(round(B0*1e9, 2)))
 print('Gyroperiod: {}s'.format(round(2. * np.pi / gyfreq, 2)))
 print('Maximum simulation time: {}s ({} gyroperiods)'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev))
 print('\n{} particles per cell, {} cells'.format(cellpart, NX))

@@ -107,15 +107,15 @@ def set_timestep(vel):
     max_time = const.max_rev * gyperiod               # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1                 # Total number of time steps
 
-    if const.plot_res == 0:                           # Decide plot and data increments (if enabled)
-        plot_iter = 1
+    if const.part_res == 0:
+        part_save_iter = 1
     else:
-        plot_iter = int(const.plot_res*gyperiod / DT)
+        part_save_iter = int(const.part_res*gyperiod / DT)
 
-    if const.data_res == 0:
-        data_iter = 1
+    if const.field_res == 0:
+        field_save_iter = 1
     else:
-        data_iter = int(const.data_res*gyperiod / DT)
+        field_save_iter = int(const.field_res*gyperiod / DT)
     
     print('Timestep: %.4fs, %d iterations total' % (DT, max_inc))
     
@@ -129,17 +129,16 @@ def set_timestep(vel):
         subcycles = const.subcycles
         print('Number of subcycles set at default: {}'.format(subcycles))
     
-    if const.generate_data == 1:
-        pas.store_run_parameters(DT, data_iter)
+    if const.save_fields or const.save_particles == 1:
+        pas.store_run_parameters(DT, part_save_iter, field_save_iter)
         
-    return DT, max_inc, data_iter, plot_iter, subcycles
+    return DT, max_inc, part_save_iter, field_save_iter, subcycles
 
 
-def check_timestep(qq, DT, pos, vel, B, E, dns, max_inc, data_iter, plot_iter, subcycles):
+def check_timestep(qq, DT, pos, vel, B, E, dns, max_inc, part_save_iter, field_save_iter, subcycles):
     max_Vx          = np.max(vel[0, :])
     max_V           = np.max(vel)
-    k_max           = np.pi / const.dx
-
+    
     B_cent          = interpolate_to_center_cspline3D(B)
     B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
     high_rat        = (const.charge/const.mass).max()
@@ -153,43 +152,36 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, max_inc, data_iter, plot_iter, s
     else:
         freq_ts = ion_ts
     
-    vel_ts          = 0.75*const.dx / max_Vx                                   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
+    vel_ts          = 0.75*const.dx / max_Vx                             # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
     DT_part         = min(freq_ts, vel_ts, ion_ts)                       # Smallest of the particle conditions
 
-    change_flag = 0
+    # Reduce timestep
     if DT_part < 0.9*DT:
-        pos, Ie, W_elec = particles.position_update(pos, vel, -0.5*DT)           # Roll back particle position before halving timestep
+        pos, Ie, W_elec = particles.position_update(pos, vel, -0.5*DT)
         
-        change_flag = 1
-        DT         *= 0.5
-        max_inc    *= 2
-        qq         *= 2
+        change_flag      = 1
+        DT              *= 0.5
+        max_inc         *= 2
+        qq              *= 2
+        part_save_iter  *= 2
+        field_save_iter *= 2
+    
+    # Increase timestep (only if previously decreased, or everything's even - saves wonky cuts)
+    elif DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0:
+        pos, Ie, W_elec = particles.position_update(pos, vel, -0.5*DT)
         
-        if plot_iter != None:
-            plot_iter *= 2
-            
-        if data_iter != None:
-            data_iter *= 2
-            
-    elif DT_part >= 4.0*DT and qq%2 == 0 and data_iter%2 == 0 and max_inc%2 == 0:
-        pos, Ie, W_elec = particles.position_update(pos, vel, -0.5*DT)          # Roll back particle position before halving timestep
-        
-        change_flag  = 2
-        DT          *= 2.0
-        max_inc      = max_inc // 2
-        qq         //= 2
-        
-        if plot_iter == None or plot_iter == 1:
-            plot_iter   = 1
-        else:
-            plot_iter //= 2
-        
-        if data_iter == None or data_iter == 1:
-            data_iter   = 1
-        else:
-            data_iter //= 2
+        change_flag       = 2
+        DT               *= 2.0
+        max_inc         //= 2
+        qq              //= 2
+        part_save_iter  //= 2
+        field_save_iter //= 2
+    else:
+        change_flag       = 0
+
 
     if const.adaptive_subcycling == True:
+        k_max           = np.pi / const.dx
         dispfreq        = (k_max ** 2) * (B_tot / (const.mu0 * dns)).max()             # Dispersion frequency
         dt_sc           = const.freq_res * 1./dispfreq
         new_subcycles   = int(DT / dt_sc + 1)
@@ -205,10 +197,10 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, max_inc, data_iter, plot_iter, s
         if subcycles > 1000:
             const.adaptive_subcycling = False
             subcycles = 1000
-    else:
-        pass
+            print('Maxmimum number of subcycles reached - potentially unstable solutions...')
 
-    return pos, qq, DT, max_inc, data_iter, plot_iter, change_flag, subcycles
+
+    return pos, qq, DT, max_inc, part_save_iter, field_save_iter, change_flag, subcycles
 
 
 

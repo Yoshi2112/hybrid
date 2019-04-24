@@ -11,7 +11,7 @@ import plot_and_save as pas
 
 #import diagnostics   as diag
 
-from simulation_parameters_1D import generate_data, generate_plots, adaptive_timestep
+from simulation_parameters_1D import adaptive_timestep, save_particles, save_fields
 
 
 if __name__ == '__main__':
@@ -20,20 +20,19 @@ if __name__ == '__main__':
     pos, vel, Ie, W_elec, idx = init.initialize_particles()
     B, E                      = init.initialize_fields()
 
-    DT, max_inc, data_iter, plot_iter, subcycles = aux.set_timestep(vel)
+    DT, max_inc, part_save_iter, field_save_iter, subcycles = aux.set_timestep(vel)
 
     print('Loading initial state...\n')
     pos, Ie, W_elec, dns_int, dns_half, J_plus, J_minus, G, L   = sources.init_collect_moments(pos, vel, Ie, W_elec, idx, 0.5*DT)
 
     qq      = 0
     print('Starting loop...')
-    max_inc = 0
     while qq < max_inc:
         ############################
         ##### EXAMINE TIMESTEP #####
         ############################
         if adaptive_timestep == 1:
-            pos, qq, DT, max_inc, data_iter, plot_iter, change_flag, subcycles = aux.check_timestep(qq, DT, pos, vel, B, E, dns_int, max_inc, data_iter, plot_iter, subcycles)
+            pos, qq, DT, max_inc, part_save_iter, field_save_iter, change_flag, subcycles = aux.check_timestep(qq, DT, pos, vel, B, E, dns_int, max_inc, part_save_iter, field_save_iter, subcycles)
     
             if change_flag == 1:
                 print('Timestep halved. Syncing particle velocity/position with DT = {}'.format(DT))
@@ -41,6 +40,7 @@ if __name__ == '__main__':
             elif change_flag == 2:
                 print('Timestep doubled. Syncing particle velocity/position with DT = {}'.format(DT))
                 pos, Ie, W_elec, dns_int, dns_half, J_plus, J_minus, G, L   = sources.init_collect_moments(pos, vel, Ie, W_elec, idx, 0.5*DT)
+        
         
         #######################
         ###### MAIN LOOP ######
@@ -62,14 +62,15 @@ if __name__ == '__main__':
         B           = fields.cyclic_leapfrog(B, dns_int, J, DT, subcycles)
         E, Ve, Te   = fields.calculate_E(B, J, dns_int)                                     # This one's just for output
 
-        ####################################
-        ##### OUTPUT DATA AND/OR PLOTS #####
-        ####################################
-        if qq%data_iter == 0 and generate_data == 1:                                   # Save data, if flagged
-            pas.save_data(DT, data_iter, qq, pos, vel, J, E, B, Ve, Te, dns_int)
 
-        if qq%plot_iter == 0 and generate_plots == 1:                                  # Generate and save plots, if flagged
-            pas.create_figure_and_save(pos, vel, J, B, dns_int, qq, DT, plot_iter)
+        ########################
+        ##### OUTPUT DATA  #####
+        ########################
+        if qq%part_save_iter == 0 and save_particles == 1:                                   # Save data, if flagged
+            pas.save_particle_data(DT, part_save_iter, qq, pos, vel)
+
+        if qq%field_save_iter == 0 and save_fields == 1:                                   # Save data, if flagged
+            pas.save_field_data(DT, field_save_iter, qq, J, E, B, Ve, Te, dns_int)
 
         if (qq + 1)%25 == 0:
             print('Timestep {} of {} complete'.format(qq + 1, max_inc))
