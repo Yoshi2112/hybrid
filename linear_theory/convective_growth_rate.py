@@ -53,7 +53,8 @@ def calculate_growth_rate(field, ndensc, ndensw, ANI, temperp=None, beta=None, n
         NPTS      -- Number of sample points up to maxfreq. Default 500
         maxfreq   -- Maximum frequency to calculate for in proton cyclotron units. Default 1.0
         
-    NOTE: At least one of temperp or beta must be defined.
+    NOTE: At least one of temperp or beta must be defined. Still seems to give inf values for values of 
+    the cyclotron frequency, even when those densities are zero.
     '''
     # Perform input checks 
     N   = ndensc.shape[0]
