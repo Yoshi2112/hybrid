@@ -9,19 +9,19 @@ import sys
 import platform
 
 ### RUN DESCRIPTION ###
-run_description = '''Test EMIC wave generation along field line (~L=4)'''
+run_description = '''Look at effect of changing c/va ratio. Winske parameters with more particles'''
 
 
 ### RUN PARAMETERS ###
 #drive           = 'G://MODEL_RUNS//Josh_Runs//' # Drive letter or path for portable HDD e.g. 'E:/'
 #drive           = '/media/yoshi/UNI_HD/'
 drive           = 'F:/'
-save_path       = 'runs/large_simulation_space/'     # Series save dir   : Folder containing all runs of a series 
-run_num         = 0                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path       = 'runs/power_test/'          # Series save dir   : Folder containing all runs of a series 
+run_num         = 5                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles  = 1                           # Save data flag    : For later analysis
 save_fields     = 1                           # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                         # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [0, 1]                      # Set CPU affinity for run. Must be list. Auto-assign: None.
+cpu_affin       = [run_num]                   # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 
@@ -37,40 +37,40 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 2048                             # Number of cells - doesn't include ghost cells
+NX       = 128                              # Number of cells - doesn't include ghost cells
 max_rev  = 50                               # Simulation runtime, in multiples of the gyroperiod
 
 dxm         = 1.0                           # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
 subcycles   = 4                             # Number of field subcycling steps for Cyclic Leapfrog
-cellpart    = 6000                          # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart    = 1000                          # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
 B0       = 200e-9                           # Unform initial magnetic field value (in T)
-ne       = 200e6                            # Electron density (in /m3, same as total ion density (for singly charged ions))
+ne       = 50e6                             # Electron density (in /m3, same as total ion density (for singly charged ions))
 
 
 orbit_res = 0.1                             # Particle orbit resolution: Fraction of gyroperiod in seconds
 freq_res  = 0.05                            # Frequency resolution: Fraction of inverse radian frequencies
-part_res  = 0.50                            # Data capture resolution in gyroperiod fraction: Particle information
+part_res  = 0.25                            # Data capture resolution in gyroperiod fraction: Particle information
 field_res = 0.10                            # Data capture resolution in gyroperiod fraction: Field information
 
 
 ### PARTICLE PARAMETERS ###
 species_lbl= [r'$H^+$ hot', r'$H^+$ cold']                  # Species name/labels        : Used for plotting
 temp_color = ['r', 'b']
-temp_type  = np.asarray([1, 0])                       # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-dist_type  = np.asarray([0, 0])                       # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+temp_type  = np.asarray([1, 0])                       		# Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.asarray([0, 0])                             # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
 
-mass       = np.asarray([1.00, 1.00])          # Species ion mass (proton mass units)
-charge     = np.asarray([1.00, 1.00])          # Species ion charge (elementary charge units)
-density    = np.asarray([0.10, 0.90])          # Species charge density as normalized fraction (add to 1.0)
-velocity   = np.asarray([0.00, 0.00])          # Species parallel bulk velocity (alfven velocity units)
-sim_repr   = np.asarray([0.50, 0.50])          # Macroparticle weighting: Percentage of macroparticles assigned to each species
+mass       = np.asarray([1.00, 1.00])          				# Species ion mass (proton mass units)
+charge     = np.asarray([1.00, 1.00])          				# Species ion charge (elementary charge units)
+density    = np.asarray([0.10, 0.90])          				# Species charge density as normalized fraction (add to 1.0)
+velocity   = np.asarray([0.00, 0.00])          				# Species parallel bulk velocity (alfven velocity units)
+sim_repr   = np.asarray([0.50, 0.50])          				# Macroparticle weighting: Percentage of macroparticles assigned to each species
 
 beta_e     = 1.0                                            # Electron beta
-beta_par   = np.array([10., 0.1])                 # Ion species parallel beta
-beta_per   = np.array([25., 0.1])                 # Ion species perpendicular beta
+beta_par   = np.array([10., 1.0])                 			# Ion species parallel beta
+beta_per   = np.array([50., 1.0])                 			# Ion species perpendicular beta
 
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
@@ -79,8 +79,8 @@ adaptive_timestep   = True                                  # Flag (True/False) 
 adaptive_subcycling = True                                  # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
 do_parallel         = False                                 # Flag (True/False) for auto-parallel using numba.njit()
 
-ratio_override = 0                                          # Flag to override magnetic field value for specific regime
-wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
+ratio_override = 1                                          # Flag to override magnetic field value for specific regime
+wpiwci         = 1e7                                        # Desired plasma/cyclotron frequency ratio for override
 
 
 
