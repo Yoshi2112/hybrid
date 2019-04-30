@@ -9,16 +9,16 @@ import sys
 import platform
 
 ### RUN DESCRIPTION ###
-run_description = '''Look at effect of changing c/va ratio. Winske parameters with more particles'''
+run_description = '''Looking for packeting with large simulation space, like I saw back in the day'''
 
 
 ### RUN PARAMETERS ###
 #drive           = 'G://MODEL_RUNS//Josh_Runs//' # Drive letter or path for portable HDD e.g. 'E:/'
 #drive           = '/media/yoshi/UNI_HD/'
 drive           = 'F:/'
-save_path       = 'runs/power_test/'          # Series save dir   : Folder containing all runs of a series 
-run_num         = 5                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles  = 1                           # Save data flag    : For later analysis
+save_path       = 'runs/packeting_test/'      # Series save dir   : Folder containing all runs of a series 
+run_num         = 0                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_particles  = 0                           # Save data flag    : For later analysis
 save_fields     = 1                           # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                         # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin       = [run_num]                   # Set CPU affinity for run. Must be list. Auto-assign: None.
@@ -65,7 +65,7 @@ dist_type  = np.asarray([0, 0])                             # Particle distribut
 mass       = np.asarray([1.00, 1.00])          				# Species ion mass (proton mass units)
 charge     = np.asarray([1.00, 1.00])          				# Species ion charge (elementary charge units)
 density    = np.asarray([0.10, 0.90])          				# Species charge density as normalized fraction (add to 1.0)
-velocity   = np.asarray([0.00, 0.00])          				# Species parallel bulk velocity (alfven velocity units)
+drift_v    = np.asarray([0.00, 0.00])          				# Species parallel bulk velocity (alfven velocity units)
 sim_repr   = np.asarray([0.50, 0.50])          				# Macroparticle weighting: Percentage of macroparticles assigned to each species
 
 beta_e     = 1.0                                            # Electron beta
@@ -80,7 +80,7 @@ adaptive_subcycling = True                                  # Flag (True/False) 
 do_parallel         = False                                 # Flag (True/False) for auto-parallel using numba.njit()
 
 ratio_override = 1                                          # Flag to override magnetic field value for specific regime
-wpiwci         = 1e7                                        # Desired plasma/cyclotron frequency ratio for override
+wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
 
 
 
@@ -127,7 +127,7 @@ Bc[2]      = B0 * np.sin(theta * np.pi / 180.)           # Constant y-component 
 density    = ne * (density / charge)                     # Density of each species per cell (in /m3)
 charge    *= q                                           # Cast species charge to Coulomb
 mass      *= mp                                          # Cast species mass to kg
-velocity  *= va                                          # Cast species velocity to m/s
+drift_v   *= va                                          # Cast species velocity to m/s
 
 Nj         = len(mass)                                   # Number of species
 N_species  = np.round(N * sim_repr).astype(int)          # Number of sim particles for each species, total

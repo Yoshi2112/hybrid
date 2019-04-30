@@ -60,6 +60,48 @@ def basic_S(arr, k=5, h=1.5):
     return S1_peaks, S2_peaks, S3_peaks
 
 
+def S4(dat, k=5, h=1.5, w=None):
+    
+    if w is None:
+        w = k
+    
+    def entropy(arr):
+        M  = arr.shape[0]
+        Hw = 0
+        
+        for ii in range(M):
+            
+            if ii + w < M:
+                aiw = arr[ii + w]
+            else:
+                aiw = arr[-1]
+                
+            pw = 1. / (M * (arr[ii] - aiw))
+            K_sum = 0
+            for jj in range(M):
+                K_arg = (arr[ii] - arr[jj]) / abs(arr[ii] - aiw)
+                
+                if abs(K_arg) < 1:
+                    Kx = 0.75 * (1 - K_arg ** 2)
+                else:
+                    Kx = 0
+                    
+                K_sum += Kx
+                
+            pw *= K_sum
+            Hw += -pw * np.log10(pw)
+        return Hw
+    
+    peak_function = np.zeros(dat.shape[0])
+    for ii in range(dat.shape[0]):
+        N_full = dat
+        N_miss = np.concatenate((dat[:ii]), dat[ii+1:])
+        peak_function[ii] = entropy(N_miss) - entropy(N_full)
+        
+    return
+
+
+
 if __name__ == '__main__':
     test_txt = 'F://Google Drive//Uni//PhD 2017//Data//SUNSPOT.txt'
     
