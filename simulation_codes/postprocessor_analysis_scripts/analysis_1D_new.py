@@ -11,9 +11,8 @@ sys.path.append(data_scripts_dir)
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-import pdb
+import analysis_backend as bk
 
-from scipy.signal           import fftconvolve
 from convective_growth_rate import calculate_growth_rate
 from chen_warm_dispersion   import get_dispersion_relation
 from scipy.optimize         import curve_fit
@@ -1174,15 +1173,7 @@ def basic_S(arr, k=5, h=1.0):
 
 
 def helical_waterfall():
-    By = get_array('By')
-    Bz = get_array('Bz')
-    
-    Bt_pos = np.zeros(By.shape, dtype=np.complex128)
-    Bt_neg = np.zeros(By.shape, dtype=np.complex128)
-    
-    for ii in range(By.shape[0]):
-        print('Analysing time step {}'.format(ii))
-        Bt_pos[ii, :], Bt_neg[ii, :] = get_helical_components(By[ii], Bz[ii])
+    Bt_pos, Bt_neg = get_helical_components()
 
     By_pos = Bt_pos.real
     By_neg = Bt_neg.real
@@ -1227,7 +1218,30 @@ def helical_waterfall():
     plt.show()
     return
 
-def get_helical_components(By, Bz):
+
+def get_helical_components():
+    if os.path.exists(temp_dir + 'B_positive_helicity.npy') == False:
+        By = get_array('By')
+        Bz = get_array('Bz')
+        
+        Bt_pos = np.zeros(By.shape, dtype=np.complex128)
+        Bt_neg = np.zeros(By.shape, dtype=np.complex128)
+        
+        for ii in range(By.shape[0]):
+            print('Analysing time step {}'.format(ii))
+            Bt_pos[ii, :], Bt_neg[ii, :] = calculate_helicity(By[ii], Bz[ii])
+        
+        print('Saving helicities to file...')
+        np.save(temp_dir + 'B_positive_helicity.npy', Bt_pos)
+        np.save(temp_dir + 'B_negative_helicity.npy', Bt_neg)
+    else:
+        print('Loading helicities from file...')
+        Bt_pos = np.load(temp_dir + 'B_positive_helicity.npy')
+        Bt_neg = np.load(temp_dir + 'B_negative_helicity.npy')
+    return Bt_pos, Bt_neg
+
+
+def calculate_helicity(By, Bz):
     '''
     Could potentially contain a few signage issues, need to double check
     the maths of this when I have internet. But basic structure is there.
@@ -1236,39 +1250,30 @@ def get_helical_components(By, Bz):
     directions.
     (How to construct that from 2 transverse series?)
     '''
-    if os.path.exists(temp_dir + 'B_positive_helicity.npy') == False:
-        x       = np.arange(0, NX*dx, dx)
-        
-        k_modes = np.fft.rfftfreq(x.shape[0], d=dx)
-        By_fft  = np.fft.rfft(By)
-        Bz_fft  = np.fft.rfft(Bz)
-        
-        # Four fourier coefficients from FFT (since real inputs give symmetric outputs)
-        # Check this is correct. Also, potential signage issue?
-        By_cos = By_fft.real
-        By_sin = By_fft.imag
-        Bz_cos = Bz_fft.real
-        Bz_sin = Bz_fft.imag
-        
-        # Construct spiral mode k-coefficients
-        Bk_pos = 0.5 * ( (By_cos + Bz_sin) + 1j * (Bz_cos - By_sin ) )
-        Bk_neg = 0.5 * ( (By_cos - Bz_sin) + 1j * (Bz_cos + By_sin ) )
-        
-        # Construct spiral mode timeseries
-        Bt_pos = np.zeros(x.shape[0], dtype=np.complex128)
-        Bt_neg = np.zeros(x.shape[0], dtype=np.complex128)
+    x       = np.arange(0, NX*dx, dx)
     
-        for ii in range(k_modes.shape[0]):
-            Bt_pos += Bk_pos[ii] * np.exp(-1j*k_modes[ii]*x)
-            Bt_neg += Bk_neg[ii] * np.exp( 1j*k_modes[ii]*x)
-        
-        print('Saving helicities to file...')
-        np.save(temp_dir + 'B_positive_helicity.npy', Bt_pos)
-        np.save(temp_dir + 'B_negative_helicity.npy', Bt_neg)    
-    else:
-        print('Loading helicities from file...')
-        Bt_pos = np.load(temp_dir + 'B_positive_helicity.npy')
-        Bt_neg = np.load(temp_dir + 'B_negative_helicity.npy')
+    k_modes = np.fft.rfftfreq(x.shape[0], d=dx)
+    By_fft  = np.fft.rfft(By)
+    Bz_fft  = np.fft.rfft(Bz)
+    
+    # Four fourier coefficients from FFT (since real inputs give symmetric outputs)
+    # Check this is correct. Also, potential signage issue?
+    By_cos = By_fft.real
+    By_sin = By_fft.imag
+    Bz_cos = Bz_fft.real
+    Bz_sin = Bz_fft.imag
+    
+    # Construct spiral mode k-coefficients
+    Bk_pos = 0.5 * ( (By_cos + Bz_sin) + 1j * (Bz_cos - By_sin ) )
+    Bk_neg = 0.5 * ( (By_cos - Bz_sin) + 1j * (Bz_cos + By_sin ) )
+    
+    # Construct spiral mode timeseries
+    Bt_pos = np.zeros(x.shape[0], dtype=np.complex128)
+    Bt_neg = np.zeros(x.shape[0], dtype=np.complex128)
+
+    for ii in range(k_modes.shape[0]):
+        Bt_pos += Bk_pos[ii] * np.exp(-1j*k_modes[ii]*x)
+        Bt_neg += Bk_neg[ii] * np.exp( 1j*k_modes[ii]*x)
     return Bt_pos, Bt_neg
 
 
@@ -1307,34 +1312,22 @@ if __name__ == '__main__':
     num_particle_steps = len(os.listdir(particle_dir))      # Number of particle time slices
     
     initialize_simulation_variables()
-    
-    By = get_array('By')
-    Bz = get_array('Bz')
-    
-    Bt_pos = np.zeros(By.shape, dtype=np.complex128)
-    Bt_neg = np.zeros(By.shape, dtype=np.complex128)
-    
-    for ii in range(By.shape[0]):
-        print('Analysing time step {}'.format(ii))
-        Bt_pos[ii, :], Bt_neg[ii, :] = get_helical_components(By[ii], Bz[ii])
-    
-    By_pos = Bt_pos.real
-    By_neg = Bt_neg.real
-    Bz_pos = Bt_pos.imag
-    Bz_neg = Bt_neg.imag
-    
+    get_helical_components()
+        
     #%%
-    idx1 = 200
-    idx2 = 205
-    
-    lag_axis = np.arange(-By_pos.shape[1]+1, By_pos.shape[1])
-    Byp_conv = fftconvolve(1e9*By_pos[idx1, :], 1e9*By_pos[idx2, :])
-    
-    pt1, pt2, pt3 = basic_S(Byp_conv, k=50)
-    
-    sample_cell = 1013
-    max_lag_idx = np.where(Byp_conv == Byp_conv.max())[0]
-    lag         = lag_axis[max_lag_idx]
+# =============================================================================
+#     idx1 = 200
+#     idx2 = 205
+#     
+#     lag_axis = np.arange(-By_pos.shape[1]+1, By_pos.shape[1])
+#     Byp_conv = fftconvolve(1e9*By_pos[idx1, :], 1e9*By_pos[idx2, :])
+#     
+#     pt1, pt2, pt3 = basic_S(Byp_conv, k=50)
+#     
+#     sample_cell = 1013
+#     max_lag_idx = np.where(Byp_conv == Byp_conv.max())[0]
+#     lag         = lag_axis[max_lag_idx]
+# =============================================================================
     
 # =============================================================================
 #     plt.figure()
@@ -1345,12 +1338,14 @@ if __name__ == '__main__':
 #     plt.scatter(sample_cell + lag, 1e9*By_pos[idx2, sample_cell + lag], c='r', marker='x')
 # =============================================================================
 #%%
-    plt.figure()
-    plt.plot(lag_axis, Byp_conv)
-    plt.scatter(lag_axis[pt1], Byp_conv[pt1], c='r')
-    plt.scatter(lag_axis[pt2], Byp_conv[pt2], c='r')
-    plt.scatter(lag_axis[pt3], Byp_conv[pt3], c='r')
-    plt.axvline(0, c='k')
+# =============================================================================
+#     plt.figure()
+#     plt.plot(lag_axis, Byp_conv)
+#     plt.scatter(lag_axis[pt1], Byp_conv[pt1], c='r')
+#     plt.scatter(lag_axis[pt2], Byp_conv[pt2], c='r')
+#     plt.scatter(lag_axis[pt3], Byp_conv[pt3], c='r')
+#     plt.axvline(0, c='k')
+# =============================================================================
     
     #helical_waterfall()
     #waterfall_plot(get_array('By'), component_label='raw $B_y$')
