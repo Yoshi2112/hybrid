@@ -8,16 +8,19 @@ import sys
 data_scripts_dir = 'C://Users//iarey//Documents//GitHub//hybrid//linear_theory//'
 sys.path.append(data_scripts_dir)
 
-from convective_growth_rate import calculate_growth_rate
-from chen_warm_dispersion   import get_dispersion_relation
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.optimize import curve_fit
 import os
+import pdb
+
+from scipy.signal           import fftconvolve
+from convective_growth_rate import calculate_growth_rate
+from chen_warm_dispersion   import get_dispersion_relation
+from scipy.optimize         import curve_fit
+
 from numpy import pi
 import pickle
 import numba as nb
-import pdb
 import lmfit as lmf
 import tabulate
 
@@ -535,19 +538,21 @@ def plot_wk(component='By', dispersion_overlay=False, plot=False, save=False):
     return
 
 
-def waterfall_plot(component='By'):
+def waterfall_plot(arr, component_label):
     plt.ioff()
 
-    arr   = get_array(component)
-    amp   = 100.                 # Amplitude multiplier of waves:
+    amp   = 10.                 # Amplitude multiplier of waves:
 
     cells  = np.arange(NX)
 
+    plt.figure()
     for ii in np.arange(num_field_steps):
-        plt.plot(cells, amp*(arr[ii] / arr.max()) + 10*ii, c='k', alpha=0.25)
+        plt.plot(cells, amp*(arr[ii] / arr.max()) + ii, c='k', alpha=0.25)
 
+    plt.title('Run %s : %s Waterfall plot' % (run_num, component_label))
     plt.xlim(0, NX)
     plt.ylim(0, None)
+    plt.xlabel('Cell Number')
     plt.show()
     return
 
@@ -1116,18 +1121,183 @@ def examine_run_parameters(to_file=False):
     return
 
 
+def basic_S(arr, k=5, h=1.0):
+    N = arr.shape[0]
+    S1 = np.zeros(N)
+    S2 = np.zeros(N)
+    S3 = np.zeros(N)
+    
+    for ii in range(N):
+        if ii < k:
+            left_vals = arr[:ii]
+            right_vals = arr[ii + 1:ii + k + 1]
+        elif ii >= N - k:
+            left_vals  = arr[ii - k: ii]
+            right_vals = arr[ii + 1:]
+        else:
+            left_vals  = arr[ii - k: ii]
+            right_vals = arr[ii + 1:ii + k + 1]
+
+        left_dist  = arr[ii] - left_vals
+        right_dist = arr[ii] - right_vals
+        
+        if left_dist.shape[0] == 0:
+            left_dist = np.append(left_dist, 0)
+        elif right_dist.shape[0] == 0:
+            right_dist = np.append(right_dist, 0)
+        
+        S1[ii] = 0.5 * (left_dist.max()     + right_dist.max()    )
+        S2[ii] = 0.5 * (left_dist.sum() / k + right_dist.sum() / k)
+        S3[ii] = 0.5 * ((arr[ii] - left_vals.sum() / k) + (arr[ii] - right_vals.sum() / k))
+        
+    S_ispeak = np.zeros((N, 3))
+    
+    for S, xx in zip([S1, S2, S3], np.arange(3)):
+        for ii in range(N):
+            if S[ii] > 0 and (S[ii] - S.mean()) > (h * S.std()):
+                S_ispeak[ii, xx] = 1
+
+    for xx in range(3):
+        for ii in range(N):
+            for jj in range(N):
+                if ii != jj and S_ispeak[ii, xx] == 1 and S_ispeak[jj, xx] == 1:
+                    if abs(jj - ii) <= k:
+                        if arr[ii] < arr[jj]:
+                            S_ispeak[ii, xx] = 0
+                        else:
+                            S_ispeak[jj, xx] = 0
+                            
+    S1_peaks = np.arange(N)[S_ispeak[:, 0] == 1]
+    S2_peaks = np.arange(N)[S_ispeak[:, 1] == 1]
+    S3_peaks = np.arange(N)[S_ispeak[:, 2] == 1]
+    return S1_peaks, S2_peaks, S3_peaks
+
+
+def helical_waterfall():
+    By = get_array('By')
+    Bz = get_array('Bz')
+    
+    Bt_pos = np.zeros(By.shape, dtype=np.complex128)
+    Bt_neg = np.zeros(By.shape, dtype=np.complex128)
+    
+    for ii in range(By.shape[0]):
+        print('Analysing time step {}'.format(ii))
+        Bt_pos[ii, :], Bt_neg[ii, :] = get_helical_components(By[ii], Bz[ii])
+
+    By_pos = Bt_pos.real
+    By_neg = Bt_neg.real
+    Bz_pos = Bt_pos.imag
+    Bz_neg = Bt_neg.imag
+        
+    amp    = 10.                 # Amplitude multiplier of waves:
+    cells  = np.arange(NX)
+
+    plt.figure()
+    ax1 = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
+    ax2 = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
+    
+    for ii in np.arange(num_field_steps):
+        ax1.plot(cells, amp*(By_pos[ii] / By_pos.max()) + ii, c='k', alpha=0.25)
+        ax2.plot(cells, amp*(By_neg[ii] / By_neg.max()) + ii, c='k', alpha=0.25)
+
+    ax1.set_title('By: +ve Helicity')
+    ax2.set_title('By: -ve Helicity')
+    
+    for ax in [ax1, ax2]:
+        ax.set_xlim(0, NX)
+        ax.set_ylim(0, None)
+        ax.set_xlabel('Cell Number')
+
+    plt.figure()
+    ax3 = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
+    ax4 = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
+    
+    for ii in np.arange(num_field_steps):
+        ax3.plot(cells, amp*(Bz_pos[ii] / Bz_pos.max()) + ii, c='k', alpha=0.25)
+        ax4.plot(cells, amp*(Bz_neg[ii] / Bz_neg.max()) + ii, c='k', alpha=0.25)
+
+    ax3.set_title('Bz: +ve Helicity')
+    ax4.set_title('Bz: -ve Helicity')
+    
+    for ax in [ax3, ax4]:
+        ax.set_xlim(0, NX)
+        ax.set_ylim(0, None)
+        ax.set_xlabel('Cell Number')
+        
+    plt.show()
+    return
+
+def get_helical_components(By, Bz):
+    '''
+    Could potentially contain a few signage issues, need to double check
+    the maths of this when I have internet. But basic structure is there.
+    
+    Test on Left and Right-Hand polarised waves travelling in each +x and -x
+    directions.
+    (How to construct that from 2 transverse series?)
+    '''
+    if os.path.exists(temp_dir + 'B_positive_helicity.npy') == False:
+        x       = np.arange(0, NX*dx, dx)
+        
+        k_modes = np.fft.rfftfreq(x.shape[0], d=dx)
+        By_fft  = np.fft.rfft(By)
+        Bz_fft  = np.fft.rfft(Bz)
+        
+        # Four fourier coefficients from FFT (since real inputs give symmetric outputs)
+        # Check this is correct. Also, potential signage issue?
+        By_cos = By_fft.real
+        By_sin = By_fft.imag
+        Bz_cos = Bz_fft.real
+        Bz_sin = Bz_fft.imag
+        
+        # Construct spiral mode k-coefficients
+        Bk_pos = 0.5 * ( (By_cos + Bz_sin) + 1j * (Bz_cos - By_sin ) )
+        Bk_neg = 0.5 * ( (By_cos - Bz_sin) + 1j * (Bz_cos + By_sin ) )
+        
+        # Construct spiral mode timeseries
+        Bt_pos = np.zeros(x.shape[0], dtype=np.complex128)
+        Bt_neg = np.zeros(x.shape[0], dtype=np.complex128)
+    
+        for ii in range(k_modes.shape[0]):
+            Bt_pos += Bk_pos[ii] * np.exp(-1j*k_modes[ii]*x)
+            Bt_neg += Bk_neg[ii] * np.exp( 1j*k_modes[ii]*x)
+        
+        print('Saving helicities to file...')
+        np.save(temp_dir + 'B_positive_helicity.npy', Bt_pos)
+        np.save(temp_dir + 'B_negative_helicity.npy', Bt_neg)    
+    else:
+        print('Loading helicities from file...')
+        Bt_pos = np.load(temp_dir + 'B_positive_helicity.npy')
+        Bt_neg = np.load(temp_dir + 'B_negative_helicity.npy')
+    return Bt_pos, Bt_neg
+
+
+def find_peaks(dat, x_thres=5, y_thres=1e-5):
+    deriv = np.zeros(dat.shape[0])
+    
+    for ii in range(1, dat.shape[0] - 1):
+        deriv[ii] = dat[ii + 1] - dat[ii - 1]
+        
+    plt.figure()
+    plt.plot(dat, marker='o', c='b')
+    plt.plot(deriv, marker='x', c='r')
+    plt.axhline(0, c='k')
+    plt.show()
+    return
+#%%
+
 if __name__ == '__main__':   
     #drive      = 'E://MODEL_RUNS//Josh_Runs//'
     drive      = 'F://'
     series     = 'large_simulation_space'
     series_dir = '{}/runs//{}//'.format(drive, series)
     num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
-    examine_run_parameters(to_file=True)
-
-    #for run_num in range(num_runs):
-    #    print('Run {}'.format(run_num))
+    #examine_run_parameters(to_file=True)
     
+    #for run_num in range(num_runs):
     run_num = 0
+    print('Run {}'.format(run_num))
+
     manage_dirs()                                           # Initialize directories
     load_constants()                                        # Load SI constants
     load_header()                                           # Load simulation parameters
@@ -1137,9 +1307,54 @@ if __name__ == '__main__':
     num_particle_steps = len(os.listdir(particle_dir))      # Number of particle time slices
     
     initialize_simulation_variables()
-     
-    waterfall_plot()
     
+    By = get_array('By')
+    Bz = get_array('Bz')
+    
+    Bt_pos = np.zeros(By.shape, dtype=np.complex128)
+    Bt_neg = np.zeros(By.shape, dtype=np.complex128)
+    
+    for ii in range(By.shape[0]):
+        print('Analysing time step {}'.format(ii))
+        Bt_pos[ii, :], Bt_neg[ii, :] = get_helical_components(By[ii], Bz[ii])
+    
+    By_pos = Bt_pos.real
+    By_neg = Bt_neg.real
+    Bz_pos = Bt_pos.imag
+    Bz_neg = Bt_neg.imag
+    
+    #%%
+    idx1 = 200
+    idx2 = 205
+    
+    lag_axis = np.arange(-By_pos.shape[1]+1, By_pos.shape[1])
+    Byp_conv = fftconvolve(1e9*By_pos[idx1, :], 1e9*By_pos[idx2, :])
+    
+    pt1, pt2, pt3 = basic_S(Byp_conv, k=50)
+    
+    sample_cell = 1013
+    max_lag_idx = np.where(Byp_conv == Byp_conv.max())[0]
+    lag         = lag_axis[max_lag_idx]
+    
+# =============================================================================
+#     plt.figure()
+#     plt.plot(1e9*By_pos[idx1, :])
+#     plt.scatter(sample_cell, 1e9*By_pos[idx1, sample_cell], c='r')
+#     
+#     plt.plot(1e9*By_pos[idx2, :])
+#     plt.scatter(sample_cell + lag, 1e9*By_pos[idx2, sample_cell + lag], c='r', marker='x')
+# =============================================================================
+#%%
+    plt.figure()
+    plt.plot(lag_axis, Byp_conv)
+    plt.scatter(lag_axis[pt1], Byp_conv[pt1], c='r')
+    plt.scatter(lag_axis[pt2], Byp_conv[pt2], c='r')
+    plt.scatter(lag_axis[pt3], Byp_conv[pt3], c='r')
+    plt.axvline(0, c='k')
+    
+    #helical_waterfall()
+    #waterfall_plot(get_array('By'), component_label='raw $B_y$')
+
     # These all only require field properties       
     #get_growth_rates()
     #plot_wk(dispersion_overlay=True, save=True)

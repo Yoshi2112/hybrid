@@ -129,7 +129,7 @@ def load_particles():
 
 def load_header():
     global Nj, cellpart, data_dump_iter, ne, NX, dxm, seed, B0, dx, Te0, theta, dt_sim, max_rev,\
-           ie, run_desc, seed, subcycles, LH_frac, orbit_res, freq_res, method_type, particle_shape, dt_slice
+           ie, run_desc, seed, LH_frac, orbit_res, freq_res, method_type, particle_shape, dt_slice
 
     h_name = os.path.join(data_dir, 'Header.pckl')                      # Load header file
     f      = open(h_name, 'rb')                                         # Open header file
@@ -143,7 +143,6 @@ def load_header():
     dxm             = obj['dxm']
     dx              = obj['dx']
     cellpart        = obj['cellpart']
-    subcycles       = obj['subcycles']
     B0              = obj['B0']
     ne              = obj['ne']
     Te0             = obj['Te0']
@@ -151,7 +150,7 @@ def load_header():
     theta           = obj['theta']
     data_dump_iter  = obj['data_dump_iter']
     max_rev         = obj['max_rev']
-    LH_frac         = obj['LH_frac']
+    #LH_frac         = obj['LH_frac']
     orbit_res       = obj['orbit_res']
     freq_res        = obj['freq_res']
     run_desc        = obj['run_desc']
@@ -191,7 +190,7 @@ def load_timestep(ii):
     tpos             = data['pos']
     tdns             = data['dns']
     tvel             = data['vel']
-
+    pdb.set_trace()
     try:
         global real_time
         real_time = data['real_time'][0]
@@ -1107,7 +1106,7 @@ def examine_run_parameters(to_file=False):
             run_dict[param].append(globals()[param])
         
     if to_file == True:
-        txt_path  = base_dir + 'growth_rates.txt'
+        txt_path  = base_dir + 'series_parameters.txt'
         run_file = open(txt_path, 'w')
     else:
         run_file = None
@@ -1122,43 +1121,44 @@ def examine_run_parameters(to_file=False):
 if __name__ == '__main__':   
     #drive      = 'E://MODEL_RUNS//Josh_Runs//'
     drive      = 'F://'
-    series     = 'large_simulation_space'
+    series     = 'power_test_PREDCORR'
     series_dir = '{}/runs//{}//'.format(drive, series)
     num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
     examine_run_parameters(to_file=True)
-
-# =============================================================================
-#     for run_num in range(num_runs):
-#         print('Run {}'.format(run_num))
-#         manage_dirs()                                           # Initialize directories
-#         load_constants()                                        # Load SI constants
-#         load_header()                                           # Load simulation parameters
-#         load_particles()                                        # Load particle parameters
-#         
-#         num_files   = len(os.listdir(data_dir)) - 2             # Number of timesteps to load
-#     
-#         initialize_simulation_variables()
-# 
-#         mag_energy      = np.zeros(num_files)                   # Magnetic potential energy
-#         particle_energy = np.zeros((num_files, Nj))             # Particle kinetic energy
-#         electron_energy = np.zeros(num_files)                   # Electron pressure energy
-#                 
-#         #get_growth_rates()
-#         #plot_wk(dispersion_overlay=True, save=True)
-#         #get_dispersion_from_sim(save=True)
-#         #plot_kt()
-#         #plot_wx(linear_overlay=True)
-#         
-#         
-#         
-#         if False:
-#             if os.path.exists(anal_dir + 'norm_energy_plot.png') == False:
-#                 for ii in range(num_files):
-#                     B, E, Ve, Te, J, position, q_dns, velocity = load_timestep(ii)
-#                     #dns                                        = collect_number_density(position)
-#                     plot_energies(ii, normalize=True)
-# =============================================================================
-        
-        
-
     
+    
+    for run_num in [1]:#range(num_runs):
+        print('Run {}'.format(run_num))
+        manage_dirs()                                           # Initialize directories
+        load_constants()                                        # Load SI constants
+        load_header()                                           # Load simulation parameters
+        load_particles()                                        # Load particle parameters
+        
+        num_files   = len(os.listdir(data_dir)) - 2             # Number of timesteps to load
+    
+        initialize_simulation_variables()
+    
+        mag_energy      = np.zeros(num_files)                   # Magnetic potential energy
+        particle_energy = np.zeros((num_files, Nj))             # Particle kinetic energy
+        electron_energy = np.zeros(num_files)                   # Electron pressure energy
+                
+        #get_growth_rates()
+        #plot_wk(dispersion_overlay=True, save=True)
+        #get_dispersion_from_sim(save=True)
+        #plot_kt()
+        #plot_wx(linear_overlay=True)
+        
+        By = get_array('By')
+        print(By.max()/B0)
+        
+        if False:
+            if os.path.exists(anal_dir + 'norm_energy_plot.png') == False:
+                for ii in range(num_files):
+                    B, E, Ve, Te, J, position, q_dns, velocity = load_timestep(ii)
+                    #dns                                        = collect_number_density(position)
+                    plot_energies(ii, normalize=True)
+            
+            
+    
+        
+

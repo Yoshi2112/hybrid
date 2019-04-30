@@ -13,11 +13,11 @@ run_description = '''Check of ev1_H_only (run 8) with less particles. Saturation
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs/compare_two/'           # Series save dir   : Folder containing all runs of a series
-run_num         = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 1                             # Save data flag    : For later analysis
+save_path       = 'runs/power_test_PREDCORR/'   # Series save dir   : Folder containing all runs of a series
+run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+generate_data   = 0                             # Save data flag    : For later analysis
 seed            = 101                           # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [None]                        # Set CPU affinity for run. Must be list. Auto-assign: None.
+cpu_affin       = [run_num]                     # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 ### PHYSICAL CONSTANTS ###
@@ -33,15 +33,15 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 11                               # Simulation runtime, in multiples of the gyroperiod
+max_rev  = 25                               # Simulation runtime, in multiples of the gyroperiod
 
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
-cellpart = 10000                            # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart = 1000                             # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
 B0       = 130e-9                           # Unform initial magnetic field value (in T)
-ne       = 20e6                             # Electron density (in /m3, same as total ion density)
+ne       = 50e6                             # Electron density (in /m3, same as total ion density)
 
 orbit_res= 0.1                              # Particle orbit resolution: Fraction of gyroperiod in seconds
 freq_res = 0.05                             # Frequency resolution: Fraction of inverse radian frequencies
@@ -72,8 +72,8 @@ dispersion_allowance   = 1.                                 # Multiple of how mu
 adaptive_timestep      = True                               # Flag (True/False) for adaptive timestep based on particle and field parameters
 do_parallel            = False                              # Flag (True/False) for auto-parallel using numba.njit()
 
-ratio_override = 0                                          # Flag to override magnetic field value for specific regime
-wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
+ratio_override = 1                                          # Flag to override magnetic field value for specific regime
+wpiwci         = 1e3                                        # Desired plasma/cyclotron frequency ratio for override
 
 
 ## DIAGNOSTIC PLOT FUNCTIONS: NOT ALWAYS COMPATIBLE WITH NJIT()
