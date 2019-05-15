@@ -211,24 +211,28 @@ def plot_energies(normalize=True):
 
 
 
-def helical_waterfall():
+def helical_waterfall(save=False, show=False):
     Bt_pos, Bt_neg = bk.get_helical_components()
 
     By_pos = Bt_pos.real
     By_neg = Bt_neg.real
     Bz_pos = Bt_pos.imag
     Bz_neg = Bt_neg.imag
-        
-    amp    = 10.                 # Amplitude multiplier of waves:
+    
+    sig_fig = 3
+    
+    amp    = 2.                 # Amplitude multiplier of waves:
+    sep    = 1.
+    dark   = 0.5
     cells  = np.arange(cf.NX)
 
-    plt.figure()
-    ax1 = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
-    ax2 = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
+    fig1 = plt.figure(figsize=(18, 10))
+    ax1  = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
+    ax2  = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
     
     for ii in np.arange(cf.num_field_steps):
-        ax1.plot(cells, amp*(By_pos[ii] / By_pos.max()) + ii, c='k', alpha=0.25)
-        ax2.plot(cells, amp*(By_neg[ii] / By_neg.max()) + ii, c='k', alpha=0.25)
+        ax1.plot(cells, amp*(By_pos[ii] / By_pos.max()) + sep*ii, c='k', alpha=dark)
+        ax2.plot(cells, amp*(By_neg[ii] / By_neg.max()) + sep*ii, c='k', alpha=dark)
 
     ax1.set_title('By: +ve Helicity')
     ax2.set_title('By: -ve Helicity')
@@ -237,14 +241,15 @@ def helical_waterfall():
         ax.set_xlim(0, cells.shape[0])
         ax.set_ylim(0, None)
         ax.set_xlabel('Cell Number')
-
-    plt.figure()
+    ax1.set_ylabel('Time slice, dt = {:g}s'.format(float('{:.{p}g}'.format(cf.dt_field, p=sig_fig))))
+        
+    fig2 = plt.figure(figsize=(18, 10))
     ax3 = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
     ax4 = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
-    
+
     for ii in np.arange(cf.num_field_steps):
-        ax3.plot(cells, amp*(Bz_pos[ii] / Bz_pos.max()) + ii, c='k', alpha=0.25)
-        ax4.plot(cells, amp*(Bz_neg[ii] / Bz_neg.max()) + ii, c='k', alpha=0.25)
+        ax3.plot(cells, amp*(Bz_pos[ii] / Bz_pos.max()) + sep*ii, c='k', alpha=dark)
+        ax4.plot(cells, amp*(Bz_neg[ii] / Bz_neg.max()) + sep*ii, c='k', alpha=dark)
 
     ax3.set_title('Bz: +ve Helicity')
     ax4.set_title('Bz: -ve Helicity')
@@ -253,8 +258,23 @@ def helical_waterfall():
         ax.set_xlim(0, cells.shape[0])
         ax.set_ylim(0, None)
         ax.set_xlabel('Cell Number')
+    ax3.set_ylabel('Time slice, dt = {:g}s'.format(float('{:.{p}g}'.format(cf.dt_field, p=sig_fig))))
+    
+    if save == True:
+        fig1.subplots_adjust(bottom=0.07, top=0.96, left=0.04)
+        fig1.subplots_adjust(wspace=0.05)
+        ax2.set_yticklabels([])
+        fig1.savefig(cf.anal_dir + 'by_helicity_plot.png', facecolor=fig1.get_facecolor(), edgecolor='none')
         
-    plt.show()
+        fig2.subplots_adjust(bottom=0.07, top=0.96, left=0.04)
+        fig2.subplots_adjust(wspace=0.05)
+        ax4.set_yticklabels([])
+        fig2.savefig(cf.anal_dir + 'bz_helicity_plot.png', facecolor=fig2.get_facecolor(), edgecolor='none')
+        
+    if show == True:
+        plt.show()
+    else:
+        plt.close('all')
     return
 
 
@@ -272,45 +292,69 @@ def find_peaks(dat, x_thres=5, y_thres=1e-5):
     return
 
 
+def analyse_helicity():
+    By_raw         = cf.get_array('By')
+    Bz_raw         = cf.get_array('Bz')
+    Bt_pos, Bt_neg = bk.get_helical_components()
+
+    By_pos = Bt_pos.real
+    By_neg = Bt_neg.real
+    Bz_pos = Bt_pos.imag
+    Bz_neg = Bt_neg.imag
+    
+    t_idx1 = 200
+    t_idx2 = 205
+    x_idx  = 1014
+    
+    if False:
+        ## Total transverse field at each time should be equal: True!
+        hel_tot = np.sqrt(np.square(By_pos + By_neg) + np.square(Bz_pos + Bz_neg))
+        raw_tot = np.sqrt(np.square(By_raw) + np.square(Bz_raw))
+    
+        plt.figure()
+        plt.plot(raw_tot[t_idx1, :], label='raw B')
+        plt.plot(hel_tot[t_idx1, :], label='helicty B')
+        plt.legend()
+    
+    if False:
+        peaks1 = bk.basic_S(By_pos[t_idx1, :], k=100)
+        peaks2 = bk.basic_S(By_pos[t_idx2, :], k=100)
+        
+        plt.plot(1e9*By_pos[t_idx1, :])
+        plt.scatter(peaks1, 1e9*By_pos[t_idx1, peaks1])
+        
+        plt.plot(1e9*By_pos[t_idx2, :])
+        plt.scatter(peaks2, 1e9*By_pos[t_idx2, peaks2])
+
+    if True:
+        plt.figure()
+        plt.plot(cf.time_seconds_field, 1e9*By_raw[:, x_idx], label='Raw By')
+        plt.plot(cf.time_seconds_field, 1e9*By_pos[:, x_idx], label='By+')
+        plt.plot(cf.time_seconds_field, 1e9*By_neg[:, x_idx], label='By-')
+        
+        plt.title('Time-series at cell {}'.format(x_idx))
+        plt.xlabel('Time (s)')
+        plt.ylabel('By (nT)')
+        plt.xlim(0, cf.time_seconds_field[-1])
+        
+        plt.legend()
+    plt.show()
+    #waterfall_plot(cf.get_array('By'), component_label='raw $B_y$')
+    return
+
 
 #%%
 
 if __name__ == '__main__':
-    drive      = 'F://'     # 'E://MODEL_RUNS//Josh_Runs//'
+    drive      = 'G://MODEL_RUNS//Josh_Runs//'
     series     = 'large_simulation_space'
     series_dir = '{}/runs//{}//'.format(drive, series)
     num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [0]:
+    for run_num in [2]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
-        #helical_waterfall()
+        analyse_helicity()
+        #helical_waterfall(save=True)
         
-        By_raw         = cf.get_array('By')
-        Bt_pos, Bt_neg = bk.get_helical_components()
-
-        By_pos = Bt_pos.real
-        By_neg = Bt_neg.real
-        Bz_pos = Bt_pos.imag
-        Bz_neg = Bt_neg.imag
-
-        t_idx1 = 200
-        t_idx2 = 205
-        sample_cell = 1014
-
-        #peaks1 = bk.basic_S(By_pos[t_idx1, :], k=100)
-        #peaks2 = bk.basic_S(By_pos[t_idx2, :], k=100)
         
-        #%%
-        plt.figure()
-        plt.plot(By_raw[t_idx1, :])
-        plt.plot(By_raw[t_idx2, :])
-        #plt.plot(1e9*By_pos[t_idx1, :])
-        #plt.scatter(peaks1, 1e9*By_pos[t_idx1, peaks1])
-        
-        #plt.plot(1e9*By_pos[t_idx2, :])
-        #plt.scatter(peaks2, 1e9*By_pos[t_idx2, peaks2])
-
-    
-    #helical_waterfall()
-    #waterfall_plot(get_array('By'), component_label='raw $B_y$')

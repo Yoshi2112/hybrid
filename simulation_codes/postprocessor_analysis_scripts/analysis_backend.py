@@ -94,21 +94,18 @@ def get_helical_components():
 
 def calculate_helicity(By, Bz, NX, dx):
     '''
-    Could potentially contain a few signage issues, need to double check
-    the maths of this when I have internet. But basic structure is there.
+    For a single snapshot in time, calculate the positive and negative helicity
+    components from the y, z components of a field.
     
-    Test on Left and Right-Hand polarised waves travelling in each +x and -x
-    directions.
-    (How to construct that from 2 transverse series?)
+    Note: I think I have to normalize that FFT.
     '''
     x       = np.arange(0, NX*dx, dx)
     
     k_modes = np.fft.rfftfreq(x.shape[0], d=dx)
-    By_fft  = np.fft.rfft(By)
-    Bz_fft  = np.fft.rfft(Bz)
+    By_fft  = (1 / k_modes.shape[0]) * np.fft.rfft(By)
+    Bz_fft  = (1 / k_modes.shape[0]) * np.fft.rfft(Bz)
     
     # Four fourier coefficients from FFT (since real inputs give symmetric outputs)
-    # Check this is correct. Also, potential signage issue?
     By_cos = By_fft.real
     By_sin = By_fft.imag
     Bz_cos = Bz_fft.real
@@ -123,8 +120,8 @@ def calculate_helicity(By, Bz, NX, dx):
     Bt_neg = np.zeros(x.shape[0], dtype=np.complex128)
 
     for ii in range(k_modes.shape[0]):
-        Bt_pos += Bk_pos[ii] * np.exp(-1j*k_modes[ii]*x)
-        Bt_neg += Bk_neg[ii] * np.exp( 1j*k_modes[ii]*x)
+        Bt_pos += Bk_pos[ii] * np.exp(-2j*np.pi*k_modes[ii]*x)
+        Bt_neg += Bk_neg[ii] * np.exp( 2j*np.pi*k_modes[ii]*x)
     return Bt_pos, Bt_neg
 
 
