@@ -12,7 +12,6 @@ import analysis_backend as bk
 import analysis_config  as cf
 import dispersions      as disp
 
-from scipy.signal import fftconvolve
 
 q   = 1.602e-19               # Elementary charge (C)
 c   = 3e8                     # Speed of light (m/s)
@@ -211,7 +210,10 @@ def plot_energies(normalize=True):
 
 
 
-def helical_waterfall(save=False, show=False):
+def plot_helical_waterfall(save=False, show=False):
+    By_raw         = cf.get_array('By')
+    Bz_raw         = cf.get_array('Bz')
+    
     Bt_pos, Bt_neg = bk.get_helical_components()
 
     By_pos = Bt_pos.real
@@ -221,9 +223,9 @@ def helical_waterfall(save=False, show=False):
     
     sig_fig = 3
     
-    amp    = 2.                 # Amplitude multiplier of waves:
+    amp    = 5.                 # Amplitude multiplier of waves:
     sep    = 1.
-    dark   = 0.5
+    dark   = 1.0
     cells  = np.arange(cf.NX)
 
     fig1 = plt.figure(figsize=(18, 10))
@@ -260,6 +262,23 @@ def helical_waterfall(save=False, show=False):
         ax.set_xlabel('Cell Number')
     ax3.set_ylabel('Time slice, dt = {:g}s'.format(float('{:.{p}g}'.format(cf.dt_field, p=sig_fig))))
     
+    fig3 = plt.figure(figsize=(18, 10))
+    ax5  = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
+    ax6  = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
+
+    for ii in np.arange(cf.num_field_steps):
+        ax5.plot(cells, amp*(By_raw[ii] / By_raw.max()) + sep*ii, c='k', alpha=dark)
+        ax6.plot(cells, amp*(Bz_raw[ii] / Bz_raw.max()) + sep*ii, c='k', alpha=dark)
+
+    ax5.set_title('By: Raw Magnetic Field')
+    ax6.set_title('Bz: Raw Magnetic Field')
+    
+    for ax in [ax5, ax6]:
+        ax.set_xlim(0, cells.shape[0])
+        ax.set_ylim(0, None)
+        ax.set_xlabel('Cell Number')
+    ax3.set_ylabel('Time slice, dt = {:g}s'.format(float('{:.{p}g}'.format(cf.dt_field, p=sig_fig))))
+    
     if save == True:
         fig1.subplots_adjust(bottom=0.07, top=0.96, left=0.04)
         fig1.subplots_adjust(wspace=0.05)
@@ -270,6 +289,11 @@ def helical_waterfall(save=False, show=False):
         fig2.subplots_adjust(wspace=0.05)
         ax4.set_yticklabels([])
         fig2.savefig(cf.anal_dir + 'bz_helicity_plot.png', facecolor=fig2.get_facecolor(), edgecolor='none')
+        
+        fig3.subplots_adjust(bottom=0.07, top=0.96, left=0.04)
+        fig3.subplots_adjust(wspace=0.05)
+        ax6.set_yticklabels([])
+        fig3.savefig(cf.anal_dir + 'bxy_raw_magnetic_plot.png', facecolor=fig3.get_facecolor(), edgecolor='none')
         
     if show == True:
         plt.show()
@@ -346,15 +370,16 @@ def analyse_helicity():
 #%%
 
 if __name__ == '__main__':
-    drive      = 'G://MODEL_RUNS//Josh_Runs//'
-    series     = 'large_simulation_space'
+    #drive      = 'G://MODEL_RUNS//Josh_Runs//'
+    drive      = 'F://'
+    series     = 'helicity_tests'
     series_dir = '{}/runs//{}//'.format(drive, series)
     num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [2]:#range(num_runs):
+    for run_num in [0]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
-        analyse_helicity()
-        #helical_waterfall(save=True)
+        #analyse_helicity()
+        plot_helical_waterfall(save=True)
         
         

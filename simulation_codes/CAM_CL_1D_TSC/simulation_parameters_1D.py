@@ -9,19 +9,19 @@ import sys
 import platform
 
 ### RUN DESCRIPTION ###
-run_description = '''Looking for packeting with large simulation space, like I saw back in the day'''
+run_description = '''Winske (1993) helicity tests: Anisotropy instability'''
 
 
 ### RUN PARAMETERS ###
 #drive           = 'G://MODEL_RUNS//Josh_Runs//' # Drive letter or path for portable HDD e.g. 'E:/'
 #drive           = '/media/yoshi/UNI_HD/'
 drive           = 'F:/'
-save_path       = 'runs/packeting_test/'      # Series save dir   : Folder containing all runs of a series 
-run_num         = 0                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles  = 0                           # Save data flag    : For later analysis
+save_path       = 'runs/helicity_tests/'      # Series save dir   : Folder containing all runs of a series 
+run_num         = 2                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_particles  = 1                           # Save data flag    : For later analysis
 save_fields     = 1                           # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                         # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [run_num]                   # Set CPU affinity for run. Must be list. Auto-assign: None.
+cpu_affin       = [0]                         # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 
@@ -38,19 +38,19 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 50                               # Simulation runtime, in multiples of the gyroperiod
+max_rev  = 10                               # Simulation runtime, in multiples of the gyroperiod
 
 dxm         = 1.0                           # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
 subcycles   = 4                             # Number of field subcycling steps for Cyclic Leapfrog
 cellpart    = 1000                          # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
-ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
+ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
-B0       = 200e-9                           # Unform initial magnetic field value (in T)
-ne       = 50e6                             # Electron density (in /m3, same as total ion density (for singly charged ions))
+B0       = 4e-9                             # Unform initial magnetic field value (in T)
+ne       = 8.48e6                           # Electron density (in /m3, same as total ion density (for singly charged ions))
 
 
-orbit_res = 0.1                             # Particle orbit resolution: Fraction of gyroperiod in seconds
+orbit_res = 0.10                            # Particle orbit resolution: Fraction of gyroperiod in seconds
 freq_res  = 0.05                            # Frequency resolution: Fraction of inverse radian frequencies
 part_res  = 0.25                            # Data capture resolution in gyroperiod fraction: Particle information
 field_res = 0.10                            # Data capture resolution in gyroperiod fraction: Field information
@@ -64,13 +64,13 @@ dist_type  = np.asarray([0, 0])                             # Particle distribut
 
 mass       = np.asarray([1.00, 1.00])          				# Species ion mass (proton mass units)
 charge     = np.asarray([1.00, 1.00])          				# Species ion charge (elementary charge units)
-density    = np.asarray([0.10, 0.90])          				# Species charge density as normalized fraction (add to 1.0)
-drift_v    = np.asarray([0.00, 0.00])          				# Species parallel bulk velocity (alfven velocity units)
+density    = np.asarray([0.10, 0.90])          			    # Species charge density as normalized fraction (add to 1.0)
+drift_v    = np.asarray([0.90,-0.10])          			    # Species parallel bulk velocity (alfven velocity units)
 sim_repr   = np.asarray([0.50, 0.50])          				# Macroparticle weighting: Percentage of macroparticles assigned to each species
 
 beta_e     = 1.0                                            # Electron beta
-beta_par   = np.array([10., 1.0])                 			# Ion species parallel beta
-beta_per   = np.array([50., 1.0])                 			# Ion species perpendicular beta
+beta_par   = np.array([10.0, 1.0])                 			# Ion species parallel beta
+beta_per   = np.array([50.0, 1.0])                 			# Ion species perpendicular beta
 
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
@@ -211,7 +211,7 @@ if do_parallel == True and python_version[0] == '2' and operating_sys == 'Window
     
 density_normal_sum = (charge / q) * (density / ne)
 
-if False:#density_normal_sum.sum() != 1.0:
+if round(density_normal_sum.sum(), 5) != 1.0:
     print('-------------------------------------------------------------------------')
     print('WARNING: ION DENSITIES DO NOT SUM TO 1.0. SIMULATION WILL NOT BE ACCURATE')
     print('-------------------------------------------------------------------------')
@@ -220,22 +220,22 @@ if False:#density_normal_sum.sum() != 1.0:
     sys.exit()
     
     
-if sim_repr.sum() != 1.0:
+if round(sim_repr.sum(), 5) != 1.0:
     print('-----------------------------------------------------------------------------------')
     print('WARNING: MACROPARTICLE DENSITIES DO NOT SUM TO 1.0. SIMULATION WILL NOT BE ACCURATE')
     print('-----------------------------------------------------------------------------------')
-    print('')
+    print('sum_dens = {}'.format(sim_repr.sum()))
     print('ABORTING...')
     sys.exit()
     
 simulated_density_per_cell = (n_contr * charge * cellpart * sim_repr).sum()
 real_density_per_cell      = ne*q
 
-if False:#simulated_density_per_cell != real_density_per_cell:
+if round(simulated_density_per_cell, 3) != round(real_density_per_cell, 3):
     print('--------------------------------------------------------------------------------')
     print('WARNING: DENSITY CALCULATION ISSUE: RECHECK HOW MACROPARTICLE CONTRIBUTIONS WORK')
     print('--------------------------------------------------------------------------------')
-    print('')
+    print('{} != {}'.format(simulated_density_per_cell, real_density_per_cell))
     print('ABORTING...')
     sys.exit()
 

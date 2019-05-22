@@ -97,7 +97,8 @@ def calculate_helicity(By, Bz, NX, dx):
     For a single snapshot in time, calculate the positive and negative helicity
     components from the y, z components of a field.
     
-    Note: I think I have to normalize that FFT.
+    This code has been checked by comparing the transverse field magnitude of the inputs and outputs,
+    as this should be conserved (and it is).
     '''
     x       = np.arange(0, NX*dx, dx)
     
@@ -106,6 +107,7 @@ def calculate_helicity(By, Bz, NX, dx):
     Bz_fft  = (1 / k_modes.shape[0]) * np.fft.rfft(Bz)
     
     # Four fourier coefficients from FFT (since real inputs give symmetric outputs)
+    # If there are any sign issues, it'll be with the sin components, here
     By_cos = By_fft.real
     By_sin = By_fft.imag
     Bz_cos = Bz_fft.real
@@ -118,7 +120,8 @@ def calculate_helicity(By, Bz, NX, dx):
     # Construct spiral mode timeseries
     Bt_pos = np.zeros(x.shape[0], dtype=np.complex128)
     Bt_neg = np.zeros(x.shape[0], dtype=np.complex128)
-
+    
+    # The sign of the exponential may also be another issue, should check.
     for ii in range(k_modes.shape[0]):
         Bt_pos += Bk_pos[ii] * np.exp(-2j*np.pi*k_modes[ii]*x)
         Bt_neg += Bk_neg[ii] * np.exp( 2j*np.pi*k_modes[ii]*x)
@@ -195,3 +198,23 @@ def get_derivative(arr):
 def get_envelope(arr):
     signal_envelope = analytic_signal(arr, dt=cf.dx)
     return signal_envelope
+
+
+if __name__ == '__main__':
+    import matplotlib.pyplot as plt
+    
+    f0    = 0.4 # Hz
+    t_max = 10000
+    dt    = 0.1
+    t     = np.arange(0, t_max, dt)
+    
+    signal = np.sin(2 * np.pi * f0 * t)
+    sfft   = 2 / t.shape[0] * np.fft.rfft(signal)
+    freqs  = np.fft.rfftfreq(t.shape[0], d=dt)
+    
+    plt.plot(freqs, sfft.real)
+    plt.plot(freqs, sfft.imag)
+    #plt.xlim(0, 0.5)
+    
+    
+    

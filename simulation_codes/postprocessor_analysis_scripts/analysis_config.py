@@ -45,11 +45,12 @@ def manage_dirs(drive, series, run_num, create_new=True):
     return
 
 def load_species_params():
-    global species_present, density, dist_type, idx_bounds, charge, mass, Tper, sim_repr, temp_type, temp_color, velocity, Tpar, species_lbl, n_contr
+    global species_present, density, dist_type, idx_bounds, charge, mass, Tper, \
+           sim_repr, temp_type, temp_color, velocity, Tpar, species_lbl, n_contr, drift_v
 
     p_path = os.path.join(data_dir, 'particle_parameters.npz')                  # File location
     p_data = np.load(p_path)                                                    # Load file
-    
+
     density    = p_data['density']
     idx_bounds = p_data['idx_bounds']
     charge     = p_data['charge']
@@ -59,10 +60,15 @@ def load_species_params():
     temp_type  = p_data['temp_type']
     temp_color = p_data['temp_color']
     dist_type  = p_data['dist_type']
-    velocity   = p_data['velocity']
     Tpar       = p_data['Tpar']
     species_lbl= p_data['species_lbl']
-
+    
+    # Changed it without checking, either should work now (but velocity is a bad name)
+    try:
+        velocity   = p_data['velocity']
+    except:
+        drift_v    = p_data['drift_v']
+        
     n_contr    = density / (cellpart*sim_repr)                                  # Species density contribution: Each macroparticle contributes this density to a cell
     species_present = [False, False, False]                                     # Test for the presence of singly charged H, He, O
         
