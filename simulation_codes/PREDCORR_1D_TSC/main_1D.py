@@ -1,6 +1,7 @@
 ## PYTHON MODULES ##
 from timeit import default_timer as timer
 import numpy as np
+
 ## HYBRID MODULES ##
 import init_1D       as init
 import auxilliary_1D as aux
@@ -8,7 +9,6 @@ import particles_1D  as particles
 import fields_1D     as fields
 import sources_1D    as sources
 import save_routines as save
-import pdb
 
 from simulation_parameters_1D import generate_data
 
@@ -24,16 +24,13 @@ if __name__ == '__main__':
     if generate_data == 1:
         save.store_run_parameters(DT, data_iter)
     
-    q_dens, Ji    = sources.collect_moments(vel, Ie, W_elec, idx)
-    E_int, Ve, Te = fields.calculate_E(B, Ji, q_dens)
+    q_dens, Ji    = sources.collect_moments(vel, Ie, W_elec, idx)    
+    E_int, Ve, Te = fields.calculate_E(B, Ji, q_dens)    
     vel           = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E_int, -0.5*DT)
 
     qq      = 0
+    print('Starting loop...')
     while qq < max_inc:
-        '''
-        Some sort of weird thing going on for certain values of c/va... check it out
-        at some point. But it's weird. And intermittent. And hard to track.
-        '''
         # Check timestep
         vel, qq, DT, max_inc, data_iter, ch_flag \
         = aux.check_timestep(qq, DT, pos, vel, B, E_int, q_dens, Ie, W_elec, max_inc, data_iter, idx)
@@ -52,9 +49,6 @@ if __name__ == '__main__':
         
         # Predictor-Corrector: Advance fields to start of next timestep
         E_int, B = fields.predictor_corrector(B, E_int, E_half, pos, vel, q_dens_adv, Ie, W_elec, idx, DT)
-
-        if any(np.isnan(B) == True):
-            pdb.set_trace()
             
         if generate_data == 1:
             if qq%data_iter == 0:

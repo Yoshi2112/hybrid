@@ -8,7 +8,7 @@ import numba as nb
 import numpy as np
 from particles_1D             import assign_weighting_TSC
 from simulation_parameters_1D import dx, NX, cellpart, N, kB, Bc, Nj, dist_type, sim_repr, idx_bounds,    \
-                                     seed, Tpar, Tper, mass, velocity, theta
+                                     seed, Tpar, Tper, mass, drift_v, theta
 
 
 @nb.njit()
@@ -76,7 +76,7 @@ def gaussian_distribution(ppc):
         acc = 0                  # Species accumulator
         for ii in range(NX):
             n_particles = ppc[jj, ii]
-            dist[0, (idx_bounds[jj, 0] + acc): ( idx_bounds[jj, 0] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tpar[jj]) /  mass[jj]), n_particles) +  velocity[jj]
+            dist[0, (idx_bounds[jj, 0] + acc): ( idx_bounds[jj, 0] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tpar[jj]) /  mass[jj]), n_particles) +  drift_v[jj]
             dist[1, (idx_bounds[jj, 0] + acc): ( idx_bounds[jj, 0] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tper[jj]) /  mass[jj]), n_particles)
             dist[2, (idx_bounds[jj, 0] + acc): ( idx_bounds[jj, 0] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tper[jj]) /  mass[jj]), n_particles)
             acc += n_particles
@@ -87,7 +87,7 @@ def gaussian_distribution(ppc):
     return dist
 
 
-@nb.njit()
+#@nb.njit()
 def initialize_particles():
     '''Initializes particle arrays.
     

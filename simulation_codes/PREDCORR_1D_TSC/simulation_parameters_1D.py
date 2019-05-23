@@ -9,15 +9,15 @@ import sys
 import platform
 
 ### RUN DESCRIPTION ###
-run_description = '''Check of ev1_H_only (run 8) with less particles. Saturation amplitudes seem a bit weird.'''
+run_description = '''Helicity tests: But with PREDCORR code (to check CAM-CL results) - Anisotropy'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs/power_test_PREDCORR/'   # Series save dir   : Folder containing all runs of a series
-run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 0                             # Save data flag    : For later analysis
-seed            = 101                           # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [run_num]                     # Set CPU affinity for run. Must be list. Auto-assign: None.
+save_path       = 'runs/helicity_tests_PC/'     # Series save dir   : Folder containing all runs of a series
+run_num         = 2                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+generate_data   = 1                             # Save data flag    : For later analysis
+seed            = 54154                         # RNG Seed          : Set to enable consistent results for parameter studies
+cpu_affin       = [6]                     # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 ### PHYSICAL CONSTANTS ###
@@ -33,17 +33,17 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 25                               # Simulation runtime, in multiples of the gyroperiod
+max_rev  = 8                               # Simulation runtime, in multiples of the gyroperiod
 
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
-cellpart = 1000                             # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart = 5000                             # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
-ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
+ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
 B0       = 130e-9                           # Unform initial magnetic field value (in T)
-ne       = 50e6                             # Electron density (in /m3, same as total ion density)
+ne       = 8.48e6                           # Electron density (in /m3, same as total ion density)
 
-orbit_res= 0.1                              # Particle orbit resolution: Fraction of gyroperiod in seconds
+orbit_res= 0.05                             # Particle orbit resolution: Fraction of gyroperiod in seconds
 freq_res = 0.05                             # Frequency resolution: Fraction of inverse radian frequencies
 data_res = 0.05                             # Data capture resolution in gyroperiod fraction
 
@@ -57,7 +57,7 @@ dist_type  = np.asarray([0, 0])                             # Particle distribut
 mass       = np.asarray([1.00, 1.00])                       # Species ion mass (proton mass units)
 charge     = np.asarray([1.00, 1.00])                       # Species ion charge (elementary charge units)
 density    = np.asarray([0.90, 0.10])                       # Species charge density as normalized fraction (add to 1.0)
-velocity   = np.asarray([0.00, 0.00])                       # Species parallel bulk velocity (alfven velocity units)
+drift_v    = np.asarray([-0.1, 0.90])                       # Species parallel bulk velocity (alfven velocity units)
 sim_repr   = np.asarray([0.50, 0.50])                       # Macroparticle weighting: Percentage of macroparticles assigned to each species
 
 beta_e     = 1.                                             # Electron beta
@@ -73,7 +73,7 @@ adaptive_timestep      = True                               # Flag (True/False) 
 do_parallel            = False                              # Flag (True/False) for auto-parallel using numba.njit()
 
 ratio_override = 1                                          # Flag to override magnetic field value for specific regime
-wpiwci         = 1e3                                        # Desired plasma/cyclotron frequency ratio for override
+wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
 
 
 ## DIAGNOSTIC PLOT FUNCTIONS: NOT ALWAYS COMPATIBLE WITH NJIT()
@@ -122,7 +122,7 @@ Bc[2]      = B0 * np.sin(theta * np.pi / 180.)           # Constant y-component 
 density    = ne * (density / charge)                     # Density of each species per cell (in /m3)
 charge    *= q                                           # Cast species charge to Coulomb
 mass      *= mp                                          # Cast species mass to kg
-velocity  *= va                                          # Cast species velocity to m/s
+drift_v   *= va                                          # Cast species velocity to m/s
 
 Nj         = len(mass)                                   # Number of species
 N_species  = np.round(N * sim_repr).astype(int)          # Number of sim particles for each species, total

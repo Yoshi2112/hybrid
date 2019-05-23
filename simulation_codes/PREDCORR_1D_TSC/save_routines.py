@@ -12,7 +12,7 @@ import sys
 from shutil import rmtree
 import simulation_parameters_1D as const
 from   simulation_parameters_1D import generate_data, generate_plots, drive, save_path, NX, ne, density
-from   simulation_parameters_1D import idx_bounds, Nj, species_lbl, temp_type, dist_type, mass, charge, velocity, sim_repr, Tpar, Tper, temp_color
+from   simulation_parameters_1D import idx_bounds, Nj, species_lbl, temp_type, dist_type, mass, charge, drift_v, sim_repr, Tpar, Tper, temp_color
 
 
 def manage_directories():
@@ -86,7 +86,7 @@ def store_run_parameters(dt, data_dump_iter):
                      dist_type   = dist_type,
                      mass        = mass,
                      charge      = charge,
-                     velocity    = velocity,
+                     drift_v     = drift_v,
                      density     = density,
                      sim_repr    = sim_repr,
                      Tpar        = Tpar,
