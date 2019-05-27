@@ -166,75 +166,144 @@ import pdb
 # =============================================================================
 
 
-def winske_stackplot(qq, tt):
-#----- Prepare some values for plotting
-    x_cell_num  = np.arange(nx)                                         # Numerical cell numbering: x-axis
-    phi         = np.arctan2(Bz[2:nx2], By[2:nx2]) + np.pi              # Wave magnetic phase angle
-    
-#----- Create plots
-    plt.ioff()
-    fig    = plt.figure(1, figsize=(8.27, 11.69))                       # Initialize figure
-    grids  = gs.GridSpec(5, 1)                                          # Create gridspace
-    fig.patch.set_facecolor('w')                                        # Set figure face color
+# =============================================================================
+# def winske_stackplot(qq, tt):
+# #----- Prepare some values for plotting
+#     x_cell_num  = np.arange(nx)                                         # Numerical cell numbering: x-axis
+#     phi         = np.arctan2(Bz[2:nx2], By[2:nx2]) + np.pi              # Wave magnetic phase angle
+#     
+# #----- Create plots
+#     plt.ioff()
+#     fig    = plt.figure(1, figsize=(8.27, 11.69))                       # Initialize figure
+#     grids  = gs.GridSpec(5, 1)                                          # Create gridspace
+#     fig.patch.set_facecolor('w')                                        # Set figure face color
+# 
+#     ax_vx   = fig.add_subplot(grids[0, 0]) 
+#     ax_vy   = fig.add_subplot(grids[1, 0]) 
+#     ax_den  = fig.add_subplot(grids[2, 0])                              # Initialize axes
+#     ax_by   = fig.add_subplot(grids[3, 0]) 
+#     ax_phi  = fig.add_subplot(grids[4, 0]) 
+# 
+#     ax_vx.scatter(x[1:, 1], 1e3*vx[1:, 1], s=1, c='k', lw=0)            # Beam velocity, x
+#     ax_vy.scatter(x[1:, 1], 1e3*vy[1:, 1], s=1, c='k', lw=0)            # Beam velocity, y
+#     
+#     ax_den.plot(x_cell_num, dns[2:nx2, 1]  , c='k')                     # Beam density
+#     ax_by.plot(x_cell_num, 10*By[2:nx2] / Bxc, c='k')
+#     ax_phi.plot(x_cell_num, phi, c='k')
+# 
+#     ## SET YLIMS
+#     ax_vx.set_ylim(- 1.41 , 1.41) 
+#     ax_vy.set_ylim(- 1.41 , 1.41) 
+#     ax_den.set_ylim( 0.71 , 1.39)
+#     ax_by.set_ylim(- 5.99 , 4.55) 
+#     ax_phi.set_ylim( 0.01 , 6.24) 
+# 
+#     ## LABEL TICKS
+#     ax_vx.set_yticks( [-1.41, -0.71, 0.00, 0.71, 1.41])
+#     ax_vy.set_yticks( [-1.41, -0.71, 0.00, 0.71, 1.41])
+#     ax_den.set_yticks([0.71, 0.88, 1.05, 1.22, 1.39])
+#     ax_by.set_yticks( [-5.99, -3.36, -0.72, 1.91, 4.55])
+#     ax_phi.set_yticks([0.01, 1.57, 3.13, 4.68, 6.24])
+# 
+#     # LABEL AXES
+#     ax_vx.set_ylabel('VX ($x 10^{-3}$)', rotation=90)
+#     ax_vy.set_ylabel('VY ($x 10^{-3}$)', rotation=90)
+#     ax_den.set_ylabel('DNB', rotation=90)
+#     ax_by.set_ylabel('BY ($x 10^{-1}$)', rotation=90)
+#     ax_phi.set_ylabel('PHI', rotation=90)
+# 
+#     ax_phi.set_xlim(0, 128)
+#     ax_phi.set_xlabel('X (CELL)')
+# 
+#     plt.setp(ax_vx.get_xticklabels(), visible=False)
+# 
+#     for ax in [ax_vx, ax_vy, ax_den, ax_by]:
+#         plt.setp(ax.get_xticklabels(), visible=False)
+#         ax.set_xlim(0, 128)
+# 
+# #----- Plot adjustments
+#     fig.text(0.42, 0.045, 'IT = %d'  % qq, fontsize=13)    
+#     fig.text(0.58, 0.045, 'T = %.2f' % tt, fontsize=13)
+#     
+#     fig.subplots_adjust(hspace=0.1)
+# 
+# #----- Save plots
+#     save_path = 'F://runs//winske_anisotropy_test//vanilla_winske//stackplots//'
+#     filename  = 'stackplot%05d.png' % qq
+#         
+#     fullpath = save_path + filename
+#     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+#     plt.close('all')
+#     return
+# =============================================================================
 
-    ax_vx   = fig.add_subplot(grids[0, 0]) 
-    ax_vy   = fig.add_subplot(grids[1, 0]) 
-    ax_den  = fig.add_subplot(grids[2, 0])                              # Initialize axes
-    ax_by   = fig.add_subplot(grids[3, 0]) 
-    ax_phi  = fig.add_subplot(grids[4, 0]) 
-
-    ax_vx.scatter(x[1:, 1], 1e3*vx[1:, 1], s=1, c='k', lw=0)            # Beam velocity, x
-    ax_vy.scatter(x[1:, 1], 1e3*vy[1:, 1], s=1, c='k', lw=0)            # Beam velocity, y
-    
-    ax_den.plot(x_cell_num, dns[2:nx2, 1]  , c='k')                     # Beam density
-    ax_by.plot(x_cell_num, 10*By[2:nx2] / Bxc, c='k')
-    ax_phi.plot(x_cell_num, phi, c='k')
-
-    ## SET YLIMS
-    ax_vx.set_ylim(- 1.41 , 1.41) 
-    ax_vy.set_ylim(- 1.41 , 1.41) 
-    ax_den.set_ylim( 0.71 , 1.39)
-    ax_by.set_ylim(- 5.99 , 4.55) 
-    ax_phi.set_ylim( 0.01 , 6.24) 
-
-    ## LABEL TICKS
-    ax_vx.set_yticks( [-1.41, -0.71, 0.00, 0.71, 1.41])
-    ax_vy.set_yticks( [-1.41, -0.71, 0.00, 0.71, 1.41])
-    ax_den.set_yticks([0.71, 0.88, 1.05, 1.22, 1.39])
-    ax_by.set_yticks( [-5.99, -3.36, -0.72, 1.91, 4.55])
-    ax_phi.set_yticks([0.01, 1.57, 3.13, 4.68, 6.24])
-
-    # LABEL AXES
-    ax_vx.set_ylabel('VX ($x 10^{-3}$)', rotation=90)
-    ax_vy.set_ylabel('VY ($x 10^{-3}$)', rotation=90)
-    ax_den.set_ylabel('DNB', rotation=90)
-    ax_by.set_ylabel('BY ($x 10^{-1}$)', rotation=90)
-    ax_phi.set_ylabel('PHI', rotation=90)
-
-    ax_phi.set_xlim(0, 128)
-    ax_phi.set_xlabel('X (CELL)')
-
-    plt.setp(ax_vx.get_xticklabels(), visible=False)
-
-    for ax in [ax_vx, ax_vy, ax_den, ax_by]:
-        plt.setp(ax.get_xticklabels(), visible=False)
-        ax.set_xlim(0, 128)
-
-#----- Plot adjustments
-    fig.text(0.42, 0.045, 'IT = %d'  % qq, fontsize=13)    
-    fig.text(0.58, 0.045, 'T = %.2f' % tt, fontsize=13)
-    
-    fig.subplots_adjust(hspace=0.1)
-
-#----- Save plots
-    save_path = 'F://runs//winske_anisotropy_test//vanilla_winske//stackplots//'
-    filename  = 'stackplot%05d.png' % qq
-        
-    fullpath = save_path + filename
-    plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-    plt.close('all')
-    return
-
+# =============================================================================
+# def winske_stackplot(qq, time):
+# #----- Prepare some values for plotting
+#     x_cell_num  = np.arange(nx)                                         # Numerical cell numbering: x-axis
+#     phi         = np.arctan2(Bz[2:nx2], By[2:nx2]) + np.pi              # Wave magnetic phase angle
+#     
+# #----- Create plots
+#     plt.ioff()
+#     fig    = plt.figure(1, figsize=(8.27, 11.69))                       # Initialize figure
+#     grids  = gs.GridSpec(5, 1)                                          # Create gridspace
+#     fig.patch.set_facecolor('w')                                        # Set figure face color
+# 
+#     ax_vx   = fig.add_subplot(grids[0, 0]) 
+#     ax_vy   = fig.add_subplot(grids[1, 0]) 
+#     ax_den  = fig.add_subplot(grids[2, 0])                              # Initialize axes
+#     ax_by   = fig.add_subplot(grids[3, 0]) 
+#     ax_phi  = fig.add_subplot(grids[4, 0]) 
+# 
+#     ax_vx.scatter(x[:, 1], vx[:, 1]*1e3, s=1, c='k', lw=0)              # Hot population
+#     ax_vy.scatter(x[:, 1], vy[:, 1]*1e3, s=1, c='k', lw=0)              # 'Other' population
+#     
+#     ax_den.plot(x_cell_num, dns[2:nx2, 1], c='k')                       # Create overlayed plots for densities of each species
+#     ax_by.plot(x_cell_num, 10*By[2:nx2]/Bxc, c='k')
+#     ax_phi.plot(x_cell_num, phi, c='k')
+# 
+#     ax_vx.set_ylim(- 1.41 , 1.41) 
+#     ax_vy.set_ylim(- 1.41 , 1.41) 
+#     ax_den.set_ylim( 0.71 , 1.39)                                       # Initialize axes
+#     ax_by.set_ylim(- 5.99 , 4.55) 
+#     ax_phi.set_ylim( 0.01 , 6.24) 
+# 
+#     ax_vx.set_yticks( [-1.41, -0.71, 0.00, 0.71, 1.41])
+#     ax_vy.set_yticks( [-1.41, -0.71, 0.00, 0.71, 1.41])
+#     ax_den.set_yticks([0.71, 0.88, 1.05, 1.22, 1.39])
+#     ax_by.set_yticks( [-5.99, -3.36, -0.72, 1.91, 4.55])
+#     ax_phi.set_yticks([0.01, 1.57, 3.13, 4.68, 6.24])
+# 
+#     ax_vx.set_ylabel('VX ($x 10^{-3}$)', rotation=90)
+#     ax_vy.set_ylabel('VY ($x 10^{-3}$)', rotation=90)
+#     ax_den.set_ylabel('DNB', rotation=90)
+#     ax_by.set_ylabel('BY ($x 10^{-1}$)', rotation=90)
+#     ax_phi.set_ylabel('PHI', rotation=90)
+# 
+#     ax_phi.set_xlim(0, 128)
+#     ax_phi.set_xlabel('X (CELL)')
+# 
+#     plt.setp(ax_vx.get_xticklabels(), visible=False)
+#     #ax_vx.set_yticks(ax_vx.get_yticks()[1:])
+# 
+#     for ax in [ax_vx, ax_vy, ax_den, ax_by]:
+#         plt.setp(ax.get_xticklabels(), visible=False)
+#         #ax.set_yticks(ax.get_yticks()[1:])
+#         ax.set_xlim(0, 128)
+# 
+#     #plt.tight_layout(pad=1.0, w_pad=1.8)
+#     fig.subplots_adjust(hspace=0.1)
+# 
+#     fig.text(0.42, 0.045, 'IT = {}'.format(qq), fontsize=13)    
+#     fig.text(0.58, 0.045, 'T = %.2f' % (time), fontsize=13)
+#     
+# #----- Save plots
+#     filename = 'stackplot%05d.png' % qq
+#     fullpath = save_path + '/stackplot/' + filename
+#     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+#     plt.close('all')
+#     return
+# =============================================================================
 
 def trans():
     '''Collects the densities and the currents'''
@@ -623,80 +692,17 @@ def field():
     return
 
 
-def winske_stackplot(qq, time):
-#----- Prepare some values for plotting
-    x_cell_num  = np.arange(nx)                                         # Numerical cell numbering: x-axis
-    phi         = np.arctan2(Bz[2:nx2], By[2:nx2]) + np.pi              # Wave magnetic phase angle
-    
-#----- Create plots
-    plt.ioff()
-    fig    = plt.figure(1, figsize=(8.27, 11.69))                       # Initialize figure
-    grids  = gs.GridSpec(5, 1)                                          # Create gridspace
-    fig.patch.set_facecolor('w')                                        # Set figure face color
 
-    ax_vx   = fig.add_subplot(grids[0, 0]) 
-    ax_vy   = fig.add_subplot(grids[1, 0]) 
-    ax_den  = fig.add_subplot(grids[2, 0])                              # Initialize axes
-    ax_by   = fig.add_subplot(grids[3, 0]) 
-    ax_phi  = fig.add_subplot(grids[4, 0]) 
-
-    ax_vx.scatter(x[:, 1], vx[:, 1]*1e3, s=1, c='k', lw=0)              # Hot population
-    ax_vy.scatter(x[:, 1], vy[:, 1]*1e3, s=1, c='k', lw=0)              # 'Other' population
-    
-    ax_den.plot(x_cell_num, dns[2:nx2, 1], c='k')                       # Create overlayed plots for densities of each species
-    ax_by.plot(x_cell_num, 10*By[2:nx2]/Bxc, c='k')
-    ax_phi.plot(x_cell_num, phi, c='k')
-
-    ax_vx.set_ylim(- 1.41 , 1.41) 
-    ax_vy.set_ylim(- 1.41 , 1.41) 
-    ax_den.set_ylim( 0.71 , 1.39)                                       # Initialize axes
-    ax_by.set_ylim(- 5.99 , 4.55) 
-    ax_phi.set_ylim( 0.01 , 6.24) 
-
-    ax_vx.set_yticks( [-1.41, -0.71, 0.00, 0.71, 1.41])
-    ax_vy.set_yticks( [-1.41, -0.71, 0.00, 0.71, 1.41])
-    ax_den.set_yticks([0.71, 0.88, 1.05, 1.22, 1.39])
-    ax_by.set_yticks( [-5.99, -3.36, -0.72, 1.91, 4.55])
-    ax_phi.set_yticks([0.01, 1.57, 3.13, 4.68, 6.24])
-
-    ax_vx.set_ylabel('VX ($x 10^{-3}$)', rotation=90)
-    ax_vy.set_ylabel('VY ($x 10^{-3}$)', rotation=90)
-    ax_den.set_ylabel('DNB', rotation=90)
-    ax_by.set_ylabel('BY ($x 10^{-1}$)', rotation=90)
-    ax_phi.set_ylabel('PHI', rotation=90)
-
-    ax_phi.set_xlim(0, 128)
-    ax_phi.set_xlabel('X (CELL)')
-
-    plt.setp(ax_vx.get_xticklabels(), visible=False)
-    #ax_vx.set_yticks(ax_vx.get_yticks()[1:])
-
-    for ax in [ax_vx, ax_vy, ax_den, ax_by]:
-        plt.setp(ax.get_xticklabels(), visible=False)
-        #ax.set_yticks(ax.get_yticks()[1:])
-        ax.set_xlim(0, 128)
-
-    #plt.tight_layout(pad=1.0, w_pad=1.8)
-    fig.subplots_adjust(hspace=0.1)
-
-    fig.text(0.42, 0.045, 'IT = {}'.format(qq), fontsize=13)    
-    fig.text(0.58, 0.045, 'T = %.2f' % (time), fontsize=13)
-    
-#----- Save plots
-    filename = 'stackplot%05d.png' % qq
-    fullpath = save_path + '/stackplot/' + filename
-    plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-    plt.close('all')
-    return
 
 
 if __name__ == '__main__':
 ### DEFINE INPUT VARIABLES
     # General
     np.random.seed(101)
+    run_num = 2
     
-    ntimes    = 2001           # time steps
-    dtwci     = 0.05           # dt in wci units
+    ntimes    = 5001           # time steps
+    dtwci     = 0.01           # dt in wci units
     nx        = 128            # no of computational cells (not including two ghost cells)
     xmax      = 128.           # system length in c/wpi units
     wpiwci    = 10000.         # ratio of wpi/wci
@@ -704,12 +710,12 @@ if __name__ == '__main__':
     
     # Ions
     nsp       = 2
-    nspec     = [5120,5120]    # No of simulation particles of each species
-    vbspec    = [0.90,-0.10]   # Velocity for each species in alfven speed units (va^2=B0^2/(4*pi*no*mo) see pg 120)
-    dnspec    = [0.10,0.900]   # Total density of each species
-    btspec    = [10.,1.0]      # Plasma beta for each species
-    anspec    = [5.0,1.]       # Anisotropy: T-perp/T-parallel for each species (?? see original code and pg 121?)
-    wspec     = [1.,1.]        # Mass of each species in proton mass units
+    nspec     = [10240, 10240] # No of simulation particles of each species
+    vbspec    = [0.90 ,  -0.1] # Velocity for each species in alfven speed units (va^2=B0^2/(4*pi*no*mo) see pg 120)
+    dnspec    = [0.100, 0.900] # Total density of each species
+    btspec    = [10.0,1.0]     # Plasma beta for each species
+    anspec    = [5.0,1.0]      # Anisotropy: T-perp/T-parallel for each species (?? see original code and pg 121?)
+    wspec     = [1.0,1.0]      # Mass of each species in proton mass units
     
     # Electrons
     iemod     = 0              # Electron model (0 for Te constant, 1 for adiabatic)
@@ -883,16 +889,18 @@ if __name__ == '__main__':
         ey_save[it-1, :] = Ey[2:nx2]
         ez_save[it-1, :] = Ez[2:nx2]
         
-        xb_save[it-1, :] = x[1:, 1]
-        xc_save[it-1, :] = x[1:, 2]
-        
-        vb_save[it-1, 0, :] = vx[1:, 1]
-        vb_save[it-1, 1, :] = vy[1:, 1]
-        vb_save[it-1, 2, :] = vz[1:, 1]
-        
-        vc_save[it-1, 0, :] = vx[1:, 2]
-        vc_save[it-1, 1, :] = vy[1:, 2]
-        vc_save[it-1, 2, :] = vz[1:, 2]
+# =============================================================================
+#         xb_save[it-1, :] = x[1:, 1]
+#         xc_save[it-1, :] = x[1:, 2]
+#         
+#         vb_save[it-1, 0, :] = vx[1:, 1]
+#         vb_save[it-1, 1, :] = vy[1:, 1]
+#         vb_save[it-1, 2, :] = vz[1:, 1]
+#         
+#         vc_save[it-1, 0, :] = vx[1:, 2]
+#         vc_save[it-1, 1, :] = vy[1:, 2]
+#         vc_save[it-1, 2, :] = vz[1:, 2]
+# =============================================================================
         
 # =============================================================================
 #         if round(t%1, 1) == 0:
@@ -904,11 +912,15 @@ if __name__ == '__main__':
         field()
 
         t += dtwci
-        print('Iteration {}, time = {}'.format(it, t))
+        
+        if it%25 == 0:
+            print('Iteration {}/{}, time = {}'.format(it, ntimes, t))
     
 #%%        
+    
+        
     print('Saving run data...')
-    field_path = 'E://runs//winske_anisotropy_test//vanilla_winske//save_data//'
+    field_path = 'F://runs//helicity_tests_winske_port//run_{}//fields//'.format(run_num)
     np.save(field_path + 'BYS', by_save)
     np.save(field_path + 'BZS', bz_save)
     
@@ -916,11 +928,13 @@ if __name__ == '__main__':
     np.save(field_path + 'EYS', ey_save)
     np.save(field_path + 'EZS', ez_save)
     
-    np.save(field_path + 'XB', xb_save)
-    np.save(field_path + 'XC', xc_save)
-    
-    np.save(field_path + 'VB', vb_save)
-    np.save(field_path + 'VC', vc_save)
+# =============================================================================
+#     np.save(field_path + 'XB', xb_save)
+#     np.save(field_path + 'XC', xc_save)
+#     
+#     np.save(field_path + 'VB', vb_save)
+#     np.save(field_path + 'VC', vc_save)
+# =============================================================================
     
     print('Run complete.')
     
