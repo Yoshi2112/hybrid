@@ -9,15 +9,16 @@ import sys
 import platform
 
 ### RUN DESCRIPTION ###
-run_description = '''Test of electron resistance with Winske parameters (more particles)'''
+run_description = '''Event 2 with 2mil particles, low cold beta and realistic anisotropy. Variable ion percentage'''
 
 ### RUN PARAMETERS ###
-drive           = 'F:/'                     # Drive letter or path for portable HDD e.g. 'E:/'
-save_path       = 'runs/test_electron_resis/' # Series save dir   : Folder containing all runs of a series
-run_num         = 9                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 1                         # Save data flag    : For later analysis
-generate_plots  = 1                         # Save plot flag    : To ensure hybrid is solving correctly during run
-seed            = 101                       # RNG Seed          : Set to enable consistent results for parameter studies
+drive           = 'F:'#'/media/yoshi/UNI_HD/' # Drive letter or path for portable HDD e.g. 'E:/'
+save_path       = 'runs/ev2_lowbeta_varion/'  # Series save dir   : Folder containing all runs of a series
+run_num         = 7                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+generate_data   = 1                           # Save data flag    : For later analysis
+generate_plots  = 0                           # Save plot flag    : To ensure hybrid is solving correctly during run
+seed            = 101                         # RNG Seed          : Set to enable consistent results for parameter studies
+cpu_affin       = [run_num]                   # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 ### PHYSICAL CONSTANTS ###
@@ -33,24 +34,25 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 50                               # Simulation runtime, in multiples of the gyroperiod
+max_rev  = 25                               # Simulation runtime, in multiples of the gyroperiod
 
 dxm         = 1.0                           # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
-subcycles   = 12                            # Number of field subcycling steps for Cyclic Leapfrog
-cellpart    = 250                           # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+subcycles   = 4                             # Number of field subcycling steps for Cyclic Leapfrog
+cellpart    = 20000                         # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
-ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
+ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
-B0       = 200e-9                           # Unform initial magnetic field value (in T)
-ne       = 50e6                             # Electron density (in /m3, same as total ion density)
+nb       = 0.10
+B0       = 215e-9                           # Unform initial magnetic field value (in T)
+ne       = 250e6                            # Electron density (in /m3, same as total ion density)
 
-LH_frac  = 20.0                             # Fraction of Lower Hybrid resonance: 
+LH_frac  = 0.0                              # Fraction of Lower Hybrid resonance: 
                                             # Used to calculate electron resistivity by setting "anomalous"
                                             # electron/ion collision as some multiple of the LHF. 0 disables e_resis.
 
 orbit_res= 0.1                              # Particle orbit resolution: Fraction of gyroperiod in seconds
 freq_res = 0.05                             # Frequency resolution: Fraction of inverse radian frequencies
-data_res = 0.1                              # Data capture resolution in gyroperiod fraction
+data_res = 0.25                             # Data capture resolution in gyroperiod fraction
 plot_res = 1.0                              # Plot capture resolution in gyroperiod fraction
 
 
@@ -62,13 +64,13 @@ dist_type  = np.asarray([0, 0])                             # Particle distribut
 
 mass       = np.asarray([1.00, 1.00])                       # Species ion mass (proton mass units)
 charge     = np.asarray([1.00, 1.00])                       # Species ion charge (elementary charge units)
-density    = np.asarray([0.90, 0.10])                       # Species charge density as normalized fraction (add to 1.0)
+density    = np.asarray([1.-nb, nb])                        # Species charge density as normalized fraction (add to 1.0)
 velocity   = np.asarray([0.00, 0.00])                       # Species parallel bulk velocity (alfven velocity units)
 sim_repr   = np.asarray([0.50, 0.50])                       # Macroparticle weighting: Percentage of macroparticles assigned to each species
 
-beta_e     = 1.                                             # Electron beta
-beta_par   = np.array([1., 10.])                            # Ion species parallel beta
-beta_per   = np.array([1., 50.])                            # Ion species perpendicular beta
+beta_e     = 0.1                                            # Electron beta
+beta_par   = np.array([0.1, 10.])                           # Ion species parallel beta
+beta_per   = np.array([0.1, 20.])                           # Ion species perpendicular beta
 
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
@@ -77,7 +79,7 @@ adaptive_timestep   = True                                  # Flag (True/False) 
 adaptive_subcycling = True                                  # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
 do_parallel         = False                                 # Flag (True/False) for auto-parallel using numba.njit()
 
-ratio_override = 1                                          # Flag to override magnetic field value for specific regime
+ratio_override = 0                                          # Flag to override magnetic field value for specific regime
 wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
 
 
@@ -182,6 +184,18 @@ print 'Density: {}cc'.format(round(ne / 1e6, 2))
 print 'Background magnetic field: {}nT'.format(round(B0*1e9, 1))
 print 'Gyroperiod: {}s'.format(round(2. * np.pi / gyfreq, 2))
 print 'Maximum simulation time: {}s ({} gyroperiods)'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev)
+print '\n{} particles per cell, {} cells'.format(cellpart, NX)
+print '{} particles total'.format(cellpart * NX)
+
+if None not in cpu_affin:
+    import psutil
+    run_proc = psutil.Process()
+    run_proc.cpu_affinity(cpu_affin)
+    if len(cpu_affin) == 1:
+        print '\nCPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0])
+    else:
+        print '\nCPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity())))
+
 
 python_version = sys.version.split()[0]
 operating_sys  = platform.system()
@@ -213,7 +227,7 @@ if sim_repr.sum() != 1.0:
 simulated_density_per_cell = (n_contr * charge * cellpart * sim_repr).sum()
 real_density_per_cell      = ne*q
 
-if simulated_density_per_cell != real_density_per_cell:
+if False:#simulated_density_per_cell != real_density_per_cell:
     print '--------------------------------------------------------------------------------'
     print 'WARNING: DENSITY CALCULATION ISSUE: RECHECK HOW MACROPARTICLE CONTRIBUTIONS WORK'
     print '--------------------------------------------------------------------------------'

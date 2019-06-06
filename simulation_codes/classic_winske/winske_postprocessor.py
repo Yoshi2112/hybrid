@@ -167,11 +167,11 @@ def calculate_helicity(By, Bz, NX, dx):
 
 
 if __name__ == '__main__':
-    run       = 0
+    run       = 2
     data_path = 'F://runs//helicity_tests_winske_port//run_{}//fields//'.format(run)
     by        = np.load(data_path + 'BYS' + '.npy')
     bz        = np.load(data_path + 'BZS' + '.npy')
-        
+    
 # =============================================================================
 #     xb         = np.load(data_path + 'XB'  + '.npy')
 #     xc         = np.load(data_path + 'XC'  + '.npy')
@@ -225,12 +225,33 @@ if __name__ == '__main__':
     
     sig_fig = 3
     
-    skip   = 100
-    amp    = 500.                 # Amplitude multiplier of waves:
+    skip   = 30
+    amp    = 250.                 # Amplitude multiplier of waves:
     sep    = 1.
-    dark   = 1.0
+    dark   = 0.9
     cells  = np.arange(nx)
+    title  = 'Winske Implicit, Beam Anisotropy Instability (Fig. 5.21)'
+    
+    # Raw field
+    fig0 = plt.figure(figsize=(18, 10))
+    axy  = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
+    axz  = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
+    
+    for ii in np.arange(By_pos.shape[0]):
+        if ii%skip == 0:
+            axy.plot(cells, amp*(by[ii] / by.max()) + sep*ii, c='k', alpha=dark)
+            axz.plot(cells, amp*(bz[ii] / bz.max()) + sep*ii, c='k', alpha=dark)
 
+    axy.set_title('By Raw')
+    axz.set_title('Bz Raw')
+    
+    for ax in [axy, axz]:
+        ax.set_xlim(0, cells.shape[0])
+        ax.set_ylim(0, None)
+        ax.set_xlabel('Cell Number')
+    plt.suptitle(title)
+    
+    # By
     fig1 = plt.figure(figsize=(18, 10))
     ax1  = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
     ax2  = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
@@ -247,5 +268,25 @@ if __name__ == '__main__':
         ax.set_xlim(0, cells.shape[0])
         ax.set_ylim(0, None)
         ax.set_xlabel('Cell Number')
+    plt.suptitle(title)
+    
+    # Bz
+    fig2 = plt.figure(figsize=(18, 10))
+    ax3  = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
+    ax4  = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
+    
+    for ii in np.arange(Bz_pos.shape[0]):
+        if ii%skip == 0:
+            ax3.plot(cells, amp*(Bz_pos[ii] / Bz_pos.max()) + sep*ii, c='k', alpha=dark)
+            ax4.plot(cells, amp*(Bz_neg[ii] / Bz_neg.max()) + sep*ii, c='k', alpha=dark)
+
+    ax3.set_title('Bz: +ve Helicity')
+    ax4.set_title('Bz: -ve Helicity')
+    
+    for ax in [ax3, ax4]:
+        ax.set_xlim(0, cells.shape[0])
+        ax.set_ylim(0, None)
+        ax.set_xlabel('Cell Number')
         
+    plt.suptitle(title)
     plt.show()

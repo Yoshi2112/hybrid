@@ -26,7 +26,7 @@ e0  = 8.854e-12               # Epsilon naught - permittivity of free space
 Aim: To populate this script with plotting routines ONLY. Separate out the 
 processing/loading/calculation steps into other modules that can be called.
 '''
-def plot_wx(component='By', linear_overlay=False):
+def plot_wx(component='By', saveas='wx_plot', linear_overlay=False):
     plt.ioff()
     wx = disp.get_wx(component)
     
@@ -58,7 +58,7 @@ def plot_wx(component='By', linear_overlay=False):
     ax.set_xlabel('x (cell)')
 
     plt.xlim(None, 32)
-    fullpath = cf.anal_dir + 'wx_plot_{}'.format(component.lower()) + '.png'
+    fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
     plt.close()
     print('w-x Plot saved')
@@ -82,14 +82,14 @@ def plot_kt(component='By', saveas='kt_plot'):
     ax.set_xlabel(r'$k (m^{-1}) \times 10^6$')
     #ax.set_ylim(0, 15)
     
-    fullpath = cf.anal_dir + saveas + '.png'
+    fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
     plt.close(fig)
     print('K-T Plot saved')
     return
 
 
-def plot_wk(component='By', dispersion_overlay=False, plot=False, save=False):
+def plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=False, plot=False, save=False):
     plt.ioff()
     
     k, f, wk = disp.get_wk(component)
@@ -126,8 +126,7 @@ def plot_wk(component='By', dispersion_overlay=False, plot=False, save=False):
         plt.show()
     
     if save == True:
-        filename ='{}_dispersion_relation'.format(component.upper())
-        fullpath = cf.anal_dir + filename + '.png'
+        fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
         print('Dispersion Plot saved')
         plt.close(fig)
@@ -210,11 +209,14 @@ def plot_energies(normalize=True):
 
 
 
-def plot_helical_waterfall(save=False, show=False):
+def plot_helical_waterfall(title='', save=False, show=False, overwrite=False, it_max=None):
     By_raw         = cf.get_array('By')
     Bz_raw         = cf.get_array('Bz')
     
-    Bt_pos, Bt_neg = bk.get_helical_components()
+    if it_max is None:
+        it_max = By_raw.shape[0]
+    
+    Bt_pos, Bt_neg = bk.get_helical_components(overwrite)
 
     By_pos = Bt_pos.real
     By_neg = Bt_neg.real
@@ -223,21 +225,27 @@ def plot_helical_waterfall(save=False, show=False):
     
     sig_fig = 3
     
-    amp    = 5.                 # Amplitude multiplier of waves:
+    # R: 2, 20 -- NR: 1, 15 -- 
+    skip   = 10
+    amp    = 50.                 # Amplitude multiplier of waves:
+    
     sep    = 1.
     dark   = 1.0
     cells  = np.arange(cf.NX)
 
+    plt.ioff()
     fig1 = plt.figure(figsize=(18, 10))
     ax1  = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
     ax2  = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
     
-    for ii in np.arange(cf.num_field_steps):
-        ax1.plot(cells, amp*(By_pos[ii] / By_pos.max()) + sep*ii, c='k', alpha=dark)
-        ax2.plot(cells, amp*(By_neg[ii] / By_neg.max()) + sep*ii, c='k', alpha=dark)
+    for ii in np.arange(cf.num_field_steps, it_max):
+        if ii%skip == 0:
+            ax1.plot(cells, amp*(By_pos[ii] / By_pos.max()) + sep*ii, c='k', alpha=dark)
+            ax2.plot(cells, amp*(By_neg[ii] / By_neg.max()) + sep*ii, c='k', alpha=dark)
 
     ax1.set_title('By: +ve Helicity')
     ax2.set_title('By: -ve Helicity')
+    plt.suptitle(title)
     
     for ax in [ax1, ax2]:
         ax.set_xlim(0, cells.shape[0])
@@ -249,12 +257,14 @@ def plot_helical_waterfall(save=False, show=False):
     ax3 = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
     ax4 = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
 
-    for ii in np.arange(cf.num_field_steps):
-        ax3.plot(cells, amp*(Bz_pos[ii] / Bz_pos.max()) + sep*ii, c='k', alpha=dark)
-        ax4.plot(cells, amp*(Bz_neg[ii] / Bz_neg.max()) + sep*ii, c='k', alpha=dark)
+    for ii in np.arange(cf.num_field_steps, it_max):
+        if ii%skip == 0:
+            ax3.plot(cells, amp*(Bz_pos[ii] / Bz_pos.max()) + sep*ii, c='k', alpha=dark)
+            ax4.plot(cells, amp*(Bz_neg[ii] / Bz_neg.max()) + sep*ii, c='k', alpha=dark)
 
     ax3.set_title('Bz: +ve Helicity')
     ax4.set_title('Bz: -ve Helicity')
+    plt.suptitle(title)
     
     for ax in [ax3, ax4]:
         ax.set_xlim(0, cells.shape[0])
@@ -266,12 +276,14 @@ def plot_helical_waterfall(save=False, show=False):
     ax5  = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
     ax6  = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
 
-    for ii in np.arange(cf.num_field_steps):
-        ax5.plot(cells, amp*(By_raw[ii] / By_raw.max()) + sep*ii, c='k', alpha=dark)
-        ax6.plot(cells, amp*(Bz_raw[ii] / Bz_raw.max()) + sep*ii, c='k', alpha=dark)
+    for ii in np.arange(cf.num_field_steps, it_max):
+        if ii%skip == 0:
+            ax5.plot(cells, amp*(By_raw[ii] / By_raw.max()) + sep*ii, c='k', alpha=dark)
+            ax6.plot(cells, amp*(Bz_raw[ii] / Bz_raw.max()) + sep*ii, c='k', alpha=dark)
 
-    ax5.set_title('By: Raw Magnetic Field')
-    ax6.set_title('Bz: Raw Magnetic Field')
+    ax5.set_title('By Raw')
+    ax6.set_title('Bz Raw')
+    plt.suptitle(title)
     
     for ax in [ax5, ax6]:
         ax.set_xlim(0, cells.shape[0])
@@ -283,17 +295,17 @@ def plot_helical_waterfall(save=False, show=False):
         fig1.subplots_adjust(bottom=0.07, top=0.96, left=0.04)
         fig1.subplots_adjust(wspace=0.05)
         ax2.set_yticklabels([])
-        fig1.savefig(cf.anal_dir + 'by_helicity_plot.png', facecolor=fig1.get_facecolor(), edgecolor='none')
+        fig1.savefig(cf.anal_dir + 'by_helicity_t{}.png'.format(it_max), facecolor=fig1.get_facecolor(), edgecolor='none')
         
         fig2.subplots_adjust(bottom=0.07, top=0.96, left=0.04)
         fig2.subplots_adjust(wspace=0.05)
         ax4.set_yticklabels([])
-        fig2.savefig(cf.anal_dir + 'bz_helicity_plot.png', facecolor=fig2.get_facecolor(), edgecolor='none')
+        fig2.savefig(cf.anal_dir + 'bz_helicity.png_t{}'.format(it_max), facecolor=fig2.get_facecolor(), edgecolor='none')
         
         fig3.subplots_adjust(bottom=0.07, top=0.96, left=0.04)
         fig3.subplots_adjust(wspace=0.05)
         ax6.set_yticklabels([])
-        fig3.savefig(cf.anal_dir + 'bxy_raw_magnetic_plot.png', facecolor=fig3.get_facecolor(), edgecolor='none')
+        fig3.savefig(cf.anal_dir + 'raw_fields.png_t{}'.format(it_max), facecolor=fig3.get_facecolor(), edgecolor='none')
         
     if show == True:
         plt.show()
@@ -316,10 +328,135 @@ def find_peaks(dat, x_thres=5, y_thres=1e-5):
     return
 
 
-def analyse_helicity():
+def animate_fields():
+    '''
+    Animates the fields in a dynamic plot. 
+    
+    Need to find some way to speed this up - how to update plot data without
+    removing axes labels and ticks?
+    '''
+    Bx_raw         = 1e9 * (cf.get_array('Bx')  - cf.B0)
+    By_raw         = 1e9 *  cf.get_array('By')
+    Bz_raw         = 1e9 *  cf.get_array('Bz')
+    
+    Ex_raw         = cf.get_array('Ex') * 1e3
+    Ey_raw         = cf.get_array('Ey') * 1e3
+    Ez_raw         = cf.get_array('Ez') * 1e3
+    
+    max_B = max(abs(By_raw).max(), abs(Bz_raw).max())
+    max_E = max(abs(Ey_raw).max(), abs(Ez_raw).max(), abs(Ex_raw).max())
+    
+    xticks = np.arange(0, cf.NX, cf.NX/4)
+    lpad   = 20
+    sf     = 3
+    
+    fig, [[ax1, ax2], [ax3, ax4], [ax5, ax6]] = plt.subplots(nrows=3, ncols=2)
+    fig.subplots_adjust(wspace=0, hspace=0)
+    figManager = plt.get_current_fig_manager()
+    figManager.window.showMaximized()
+    
+    for ii in range(Bx_raw.shape[0]):
+        for ax in [ax1, ax2, ax3, ax4, ax5, ax6]:
+            ax.clear()
+            ax.set_xticks(xticks)
+            
+        ax1.plot(Bz_raw[ii])
+        ax3.plot(By_raw[ii])
+        ax5.plot(Bx_raw[ii])
+        
+        ax1.set_ylabel(r'$\delta B_z$ (nT)', rotation=0, labelpad=lpad)
+        ax3.set_ylabel(r'$\delta B_y$ (nT)', rotation=0, labelpad=lpad)
+        ax5.set_ylabel(r'$\delta B_x$ (nT)', rotation=0, labelpad=lpad)
+        
+        ax2.plot(Ez_raw[ii])
+        ax4.plot(Ey_raw[ii])
+        ax6.plot(Ex_raw[ii])
+        
+        ax2.set_ylabel(r'$\delta E_z$ (mV/m)', rotation=0, labelpad=1.5*lpad)
+        ax4.set_ylabel(r'$\delta E_y$ (mV/m)', rotation=0, labelpad=1.5*lpad)
+        ax6.set_ylabel(r'$\delta E_x$ (mV/m)', rotation=0, labelpad=1.5*lpad)
+        
+        # B-field side
+        for ax in [ax1, ax3, ax5]:
+            ax.set_xlim(0, cf.NX-1)
+            ax.set_ylim(-max_B, max_B)
+        
+        # E-field side
+        for ax in [ax2, ax4, ax6]:
+            ax.yaxis.tick_right()
+            ax.yaxis.set_label_position('right')
+            ax.set_xlim(0, cf.NX-1)
+            ax.set_ylim(-max_E, max_E)
+            
+        for ax in [ax1, ax2, ax3, ax4]:
+            ax.set_xticklabels([])
+            
+        for ax in [ax5, ax6]:
+            ax.set_label('Cell Number')
+        
+        ax5.text(0.0, -0.15, 'it = {}, t = {:.{p}g}s'.format(ii, cf.time_seconds_field[ii], p=sf), transform=ax5.transAxes)
+        
+        plt.suptitle('Perturbed fields')
+        
+        plt.pause(0.05)
+    return
+
+
+def plot_spatially_averaged_fields():
+    '''
+    Recreates Omidi et al. (2010) Figure 2
+    
+    Field arrays are shaped like (time, space)
+    '''
+    Bx_raw         = 1e9 * (cf.get_array('Bx')  - cf.B0)
+    By_raw         = 1e9 *  cf.get_array('By')
+    Bz_raw         = 1e9 *  cf.get_array('Bz')
+      
+    lpad   = 20
+    
+    plt.ioff()
+    fig, [[ax1, ax2], [ax3, ax4], [ax5, ax6]] = plt.subplots(figsize=(18, 10), nrows=3, ncols=2)
+    fig.subplots_adjust(wspace=0, hspace=0)
+    #figManager = plt.get_current_fig_manager()
+    #figManager.window.showMaximized()
+    
+    ax1.plot(cf.time_radperiods, abs(Bz_raw).mean(axis=1))
+    ax3.plot(cf.time_radperiods, abs(By_raw).mean(axis=1))
+    ax5.plot(cf.time_radperiods, abs(Bx_raw).mean(axis=1))
+    
+    ax2.plot(cf.time_radperiods, abs(Bz_raw).mean(axis=1))
+    ax4.plot(cf.time_radperiods, abs(By_raw).mean(axis=1))
+    ax6.plot(cf.time_radperiods, abs(Bx_raw).mean(axis=1))
+    
+    ax1.set_ylabel(r'$\overline{|\delta B_z|}$ (nT)', rotation=0, labelpad=lpad)
+    ax3.set_ylabel(r'$\overline{|\delta B_y|}$ (nT)', rotation=0, labelpad=lpad)
+    ax5.set_ylabel(r'$\overline{|\delta B_x|}$ (nT)', rotation=0, labelpad=lpad)
+    
+    for ax in [ax1, ax2, ax3, ax4]:
+        ax.set_xticklabels([])
+                
+    for ax in [ax1, ax3, ax5]:
+        ax.set_xlim(0, 600)
+        ax.set_ylim(0, 1.7)
+        
+    for ax in [ax2, ax4, ax6]:
+        ax.set_xlim(0, cf.time_radperiods[-1])
+        ax.set_ylim(0, 1.7)
+        ax.set_yticklabels([])
+            
+    for ax in [ax5, ax6]:
+        ax.set_label(r'Time $(\Omega^{-1})$')
+            
+    ax1.set_title('CAM_CL_1D : Omidi et al. (2010) parameters.')
+    plt.figtext(0.125, 0.05, 'Total time: {:.{p}g}s'.format(cf.time_seconds_field[-1], p=6), fontweight='bold')
+    fig.savefig(cf.anal_dir + 'sp_av_fields.png', facecolor=fig.get_facecolor(), edgecolor='none')
+    return
+
+
+def analyse_helicity(overwrite=False):
     By_raw         = cf.get_array('By')
     Bz_raw         = cf.get_array('Bz')
-    Bt_pos, Bt_neg = bk.get_helical_components()
+    Bt_pos, Bt_neg = bk.get_helical_components(overwrite)
 
     By_pos = Bt_pos.real
     By_neg = Bt_neg.real
@@ -328,10 +465,13 @@ def analyse_helicity():
     
     t_idx1 = 200
     t_idx2 = 205
-    x_idx  = 1014
+    x_idx  = 768
+    
     
     if False:
-        ## Total transverse field at each time should be equal: True!
+        '''
+        Check that helicity preserves transverse amplitude on transformation : Affirmative
+        '''
         hel_tot = np.sqrt(np.square(By_pos + By_neg) + np.square(Bz_pos + Bz_neg))
         raw_tot = np.sqrt(np.square(By_raw) + np.square(Bz_raw))
     
@@ -341,6 +481,9 @@ def analyse_helicity():
         plt.legend()
     
     if False:
+        '''
+        Peak finder I was going to use for velocity
+        '''
         peaks1 = bk.basic_S(By_pos[t_idx1, :], k=100)
         peaks2 = bk.basic_S(By_pos[t_idx2, :], k=100)
         
@@ -351,6 +494,9 @@ def analyse_helicity():
         plt.scatter(peaks2, 1e9*By_pos[t_idx2, peaks2])
 
     if True:
+        '''
+        Plot timeseries for raw, +ve, -ve helicities at single point
+        '''
         plt.figure()
         plt.plot(cf.time_seconds_field, 1e9*By_raw[:, x_idx], label='Raw By')
         plt.plot(cf.time_seconds_field, 1e9*By_pos[:, x_idx], label='By+')
@@ -363,23 +509,34 @@ def analyse_helicity():
         
         plt.legend()
     plt.show()
-    #waterfall_plot(cf.get_array('By'), component_label='raw $B_y$')
     return
 
+
+def standard_analysis_package():
+    for comp in ['Bx', 'By', 'Bz', 'Ex', 'Ey', 'Ez']:
+        plot_wx(component=comp, linear_overlay=False)
+        plot_kt(component=comp, saveas='kt_plot')
+        plot_wk(component=comp, dispersion_overlay=False, plot=False, save=False)
+    
+    plot_energies(normalize=True)
+    plot_helical_waterfall(title='', save=False, show=False, overwrite=False, it_max=None)
+    plot_spatially_averaged_fields()
+    return
 
 #%%
 
 if __name__ == '__main__':
     #drive      = 'G://MODEL_RUNS//Josh_Runs//'
     drive      = 'F://'
-    series     = 'helicity_tests'
+    series     = 'omidi_1D'
     series_dir = '{}/runs//{}//'.format(drive, series)
     num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [0]:#range(num_runs):
+    for run_num in [0]:
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
         #analyse_helicity()
-        plot_helical_waterfall(save=True)
+        #plot_helical_waterfall(title='Series \'long_large_run\' : Run {}'.format(run_num), save=False)
+        plot_spatially_averaged_fields()
         
         

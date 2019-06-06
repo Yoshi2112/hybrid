@@ -6,8 +6,8 @@ Created on Fri Sep 22 17:27:33 2017
 """
 import numpy as np
 from particles_1D             import assign_weighting_TSC
-from simulation_parameters_1D import dx, NX, cellpart, N, kB, Bc, Nj, dist_type, sim_repr, idx_bounds,    \
-                                     seed, Tpar, Tper, mass, velocity, theta
+from simulation_parameters_1D import dx, NX, NY, cellpart, N, kB, Bc, Nj, dist_type, sim_repr, idx_bounds,    \
+                                     seed, Tpar, Tper, mass, drift_v, theta
 
 def particles_per_cell():
     '''
@@ -20,11 +20,11 @@ def particles_per_cell():
     OUTPUT:
         ppc -- Number of particles per cell per species for each cell in simulation domain. NjxNX ndarray.
     '''
-    ppc = np.zeros((Nj, NX), dtype=int)
+    ppc = np.zeros((Nj, NX, NY), dtype=int)
 
     for ii in range(Nj):
         if dist_type[ii] == 0:
-            ppc[ii, :] = cellpart * sim_repr[ii]
+            ppc[ii, :, :] = cellpart * sim_repr[ii]
     return ppc
 
 
@@ -44,12 +44,13 @@ def uniform_distribution(ppc):
         acc = 0
         idx[idx_bounds[jj, 0]: idx_bounds[jj, 1]] = jj
         
-        for ii in range(NX):                # For each cell
-            n_particles = ppc[jj, ii]
-
-            for kk in range(n_particles):   # For each particle in that cell
-                dist[idx_bounds[jj, 0] + acc + kk] = dx*(float(kk) / n_particles + ii)
-            acc += n_particles
+        for xx in range(NX):                # For each cell
+            for yy in range(NY):
+                n_particles = ppc[jj, xx, yy]
+    
+                for kk in range(n_particles):   # For each particle in that cell
+                    dist[idx_bounds[jj, 0] + acc + kk] = dx*(float(kk) / n_particles + xx)
+                acc += n_particles
 
     return dist, idx
 
@@ -71,7 +72,7 @@ def gaussian_distribution(ppc):
         acc = 0                  # Species accumulator
         for ii in range(NX):
             n_particles = ppc[jj, ii]
-            dist[0, (idx_bounds[jj, 0] + acc): ( idx_bounds[jj, 0] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tpar[jj]) /  mass[jj]), n_particles) +  velocity[jj]
+            dist[0, (idx_bounds[jj, 0] + acc): ( idx_bounds[jj, 0] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tpar[jj]) /  mass[jj]), n_particles) +  drift_v[jj]
             dist[1, (idx_bounds[jj, 0] + acc): ( idx_bounds[jj, 0] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tper[jj]) /  mass[jj]), n_particles)
             dist[2, (idx_bounds[jj, 0] + acc): ( idx_bounds[jj, 0] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tper[jj]) /  mass[jj]), n_particles)
             acc += n_particles

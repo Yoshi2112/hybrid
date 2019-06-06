@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:54:19 2017
 import numpy as np
 import numba as nb
 
-from auxilliary_1D            import cross_product, interpolate_to_center_cspline3D, interpolate_to_center_cspline1D
+from auxilliary_1D            import cross_product, interpolate_to_center_cspline3D, interpolate_to_center_cspline1D, interpolate_to_center_linear_1D
 from simulation_parameters_1D import NX, dx, Te0, ne, q, mu0, kB, ie, e_resis
 
 
@@ -30,7 +30,7 @@ def get_curl_B(field, DX=dx):
     '''
     curl = np.zeros(field.shape)
     
-    for ii in nb.prange(1, field.shape[0]):
+    for ii in np.arange(1, field.shape[0]):
         curl[ii - 1, 1] = - (field[ii, 2] - field[ii - 1, 2])
         curl[ii - 1, 2] =    field[ii, 1] - field[ii - 1, 1]
     
@@ -60,19 +60,11 @@ def get_curl_E(field, DX=dx):
     '''
     curl = np.zeros(field.shape)
     
-    for ii in nb.prange(1, field.shape[0]):
+    for ii in np.arange(1, field.shape[0]):
         curl[ii, 1] = - (field[ii, 2] - field[ii - 1, 2])
         curl[ii, 2] =    field[ii, 1] - field[ii - 1, 1]
 
     curl = set_periodic_boundaries(curl)
-# =============================================================================
-#     end_bit                  = 0.5*(curl[1] + curl[field.shape[0] - 2])
-#     curl[1]                  = end_bit
-#     curl[field.shape[0] - 2] = end_bit
-#     
-#     curl[0] = curl[field.shape[0] - 3]
-#     curl[field.shape[0] - 1] = curl[2]
-# =============================================================================
     return curl / DX
 
 
@@ -106,26 +98,24 @@ def get_grad_P(qn, te, DX=dx, inter_type=1):
     B-grid. Moving it back to the E-grid requires an interpolation. Cubic spline is desired due to its smooth
     derivatives and its higher order weighting (without the polynomial craziness)
     '''
-    
     grad_pe_B     = np.zeros(qn.shape[0])
     grad_P        = np.zeros(qn.shape[0])
     Pe            = qn * kB * te / q
 
-    for ii in nb.prange(1, qn.shape[0]):
+    for ii in np.arange(1, qn.shape[0]):
         grad_pe_B[ii] = (Pe[ii] - Pe[ii - 1])  / DX
         
-    grad_pe_B[0] = grad_pe_B[NX]
+    grad_pe_B[0] = grad_pe_B[qn.shape[0] - 3]
     
     # Re-interpolate to E-grid
     if inter_type == 0:
-        for ii in nb.prange(0, qn.shape[0] - 1):
-            grad_P[ii]    = 0.5*(grad_pe_B[ii] + grad_pe_B[ii + 1])            
+        grad_P = interpolate_to_center_linear_1D(grad_pe_B)           
     elif inter_type == 1:
         grad_P = interpolate_to_center_cspline1D(grad_pe_B, DX=DX)
-    
-    grad_P[0]      = grad_P[NX]
-    grad_P[NX + 1] = grad_P[1]
-    grad_P[NX + 2] = grad_P[2] 
+
+    grad_P[0]               = grad_P[qn.shape[0] - 3]
+    grad_P[qn.shape[0] - 2] = grad_P[1]
+    grad_P[qn.shape[0] - 1] = grad_P[2] 
     return grad_P
 
 
@@ -239,7 +229,7 @@ def calculate_E(B, J, qn, DX=dx):
 
 
 #%% DEPRECATED OR UNTESTED
-@nb.njit()
+#@nb.njit()
 def calculate_E_old(B, J, qn, DX=dx):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,

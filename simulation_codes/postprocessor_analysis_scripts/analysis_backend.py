@@ -68,10 +68,10 @@ def get_energies(normalize=False):
     return mag_energy, electron_energy, particle_energy, total_energy
 
 
-def get_helical_components():
+def get_helical_components(overwrite):
     temp_dir = cf.temp_dir
 
-    if os.path.exists(temp_dir + 'B_positive_helicity.npy') == False:
+    if os.path.exists(temp_dir + 'B_positive_helicity.npy') == False or overwrite == True:
         By = cf.get_array('By')
         Bz = cf.get_array('Bz')
         
