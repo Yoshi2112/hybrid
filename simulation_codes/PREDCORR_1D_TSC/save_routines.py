@@ -11,13 +11,13 @@ import os
 import sys
 from shutil import rmtree
 import simulation_parameters_1D as const
-from   simulation_parameters_1D import generate_data, generate_plots, drive, save_path, NX, ne, density
+from   simulation_parameters_1D import drive, save_path, NX, ne, density, save_particles, save_fields
 from   simulation_parameters_1D import idx_bounds, Nj, species_lbl, temp_type, dist_type, mass, charge, drift_v, sim_repr, Tpar, Tper, temp_color
 
 
 def manage_directories():
     print('Checking directories...')
-    if (generate_data == 1 or generate_plots == 1) == True:
+    if (save_particles == 1 or save_fields == 1) == True:
         if os.path.exists('%s/%s' % (drive, save_path)) == False:
             os.makedirs('%s/%s' % (drive, save_path))                        # Create master test series directory
             print('Master directory created')
@@ -40,13 +40,16 @@ def manage_directories():
     return
 
 
-def store_run_parameters(dt, data_dump_iter):
-    d_path = ('%s/%s/run_%d/data' % (drive, save_path, const.run_num))    # Set path for data
-
+def store_run_parameters(dt, part_save_iter, field_save_iter):
+    d_path = ('%s/%s/run_%d/data/' % (drive, save_path, const.run_num))    # Set path for data
+    f_path = d_path + '/fields/'
+    p_path = d_path + '/particles/'
+    
     manage_directories()
 
-    if os.path.exists(d_path) == False:                                   # Create data directory
-        os.makedirs(d_path)
+    for folder in [d_path, f_path, p_path]:
+        if os.path.exists(folder) == False:                               # Create data directories
+            os.makedirs(folder)
 
     # Single parameters
     params = dict([('seed', const.seed),
@@ -61,7 +64,8 @@ def store_run_parameters(dt, data_dump_iter):
                    ('Te0', const.Te0),
                    ('ie', const.ie),
                    ('theta', const.theta),
-                   ('data_dump_iter', data_dump_iter),
+                   ('part_save_iter', part_save_iter),
+                   ('field_save_iter', field_save_iter),
                    ('max_rev', const.max_rev),
                    ('orbit_res', const.orbit_res),
                    ('freq_res', const.freq_res),
@@ -70,15 +74,13 @@ def store_run_parameters(dt, data_dump_iter):
                    ('particle_shape', 'TSC')
                    ])
 
-    h_name = os.path.join(d_path, 'Header.pckl')            # Data file containing dictionary of variables used in run
-
-    with open(h_name, 'wb') as f:
+    with open(d_path + 'simulation_parameters.pckl', 'wb') as f:
         pickle.dump(params, f)
         f.close()
-        print('Header file saved')
+        print('Simulation parameters saved')
         
     # Particle values: Array parameters
-    p_file = os.path.join(d_path, 'p_data')
+    p_file = d_path + 'particle_parameters'
     np.savez(p_file, idx_bounds  = idx_bounds,
                      species_lbl = species_lbl,
                      temp_color  = temp_color,
@@ -94,13 +96,21 @@ def store_run_parameters(dt, data_dump_iter):
     print('Particle data saved')
     return
 
+    
+def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns):
+    d_path = '%s/%s/run_%d/data/fields/' % (drive, save_path, const.run_num)
+    r      = qq / field_save_iter
 
-def save_data(dt, data_iter, qq, pos, vel, Ji, E, B, Ve, Te, dns):
-    d_path = ('%s/%s/run_%d/data' % (drive, save_path, const.run_num))  # Set path for data
-    r      = qq / data_iter                                             # Capture number
-
-    d_filename = 'data%05d' % r
-    d_fullpath = os.path.join(d_path, d_filename)
-    np.savez(d_fullpath, pos = pos, vel = vel, E = E[1:NX+1, 0:3], B = B[1:NX+2, 0:3], J = Ji[1:NX+1],
+    d_fullpath = d_path + 'data%05d' % r
+    
+    np.savez(d_fullpath, E = E[1:NX+1, 0:3], B = B[1:NX+2, 0:3], J = Ji[1:NX+1],
                          dns = dns[1:NX+1], Ve = Ve[1:NX+1], Te = Te[1:NX+1])   # Data file for each iteration
-    print('Data saved'.format(qq))
+    
+    
+def save_particle_data(dt, part_save_iter, qq, pos, vel):
+    d_path = '%s/%s/run_%d/data/particles/' % (drive, save_path, const.run_num)
+    r      = qq / part_save_iter                                          # Capture number
+
+    d_fullpath = d_path + 'data%05d' % r
+    
+    np.savez(d_fullpath, pos = pos, vel = vel)

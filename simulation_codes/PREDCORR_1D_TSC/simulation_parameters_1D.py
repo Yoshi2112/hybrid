@@ -9,15 +9,16 @@ import sys
 import platform
 
 ### RUN DESCRIPTION ###
-run_description = '''Helicity tests: But with PREDCORR code (to check CAM-CL results) - Anisotropy'''
+run_description = '''Omidi (2010) reproduction in 1D'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs/helicity_tests_PC/'     # Series save dir   : Folder containing all runs of a series
+save_path       = 'runs//omidi_1D'        # Series save dir   : Folder containing all runs of a series
 run_num         = 2                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 1                             # Save data flag    : For later analysis
-seed            = 54154                         # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [6]                     # Set CPU affinity for run. Must be list. Auto-assign: None.
+save_particles  = 1                             # Save data flag    : For later analysis
+save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
+seed            = 15401                         # RNG Seed          : Set to enable consistent results for parameter studies
+cpu_affin       = [6, 7]                        # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 ### PHYSICAL CONSTANTS ###
@@ -32,37 +33,43 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 8                               # Simulation runtime, in multiples of the gyroperiod
+NX       = 64                               # Number of cells - doesn't include ghost cells
+max_rev  = 5325                             # Simulation runtime, in multiples of the gyroperiod
 
-dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
-cellpart = 5000                             # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+dxm      = 2.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
+cellpart = 900                              # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
 ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
-B0       = 130e-9                           # Unform initial magnetic field value (in T)
-ne       = 8.48e6                           # Electron density (in /m3, same as total ion density)
+B0       = 43e-9                            # Unform initial magnetic field value (in T)
+ne       = 5.0e6                            # Electron density (in /m3, same as total ion density)
 
-orbit_res= 0.05                             # Particle orbit resolution: Fraction of gyroperiod in seconds
-freq_res = 0.05                             # Frequency resolution: Fraction of inverse radian frequencies
-data_res = 0.05                             # Data capture resolution in gyroperiod fraction
+orbit_res = 0.10                            # Particle orbit resolution: Fraction of gyroperiod in seconds
+freq_res  = 0.05                            # Frequency resolution: Fraction of inverse radian frequencies
+part_res  = 0.5                             # Data capture resolution in gyroperiod fraction: Particle information
+field_res = 0.10                            # Data capture resolution in gyroperiod fraction: Field information
 
 
 ### PARTICLE PARAMETERS ###
-species_lbl= [r'$H^+$ cold', r'$H^+$ hot']                  # Species name/labels        : Used for plotting
-temp_color = ['b', 'r']
-temp_type  = np.asarray([0, 1])                             # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-dist_type  = np.asarray([0, 0])                             # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+species_lbl= [r'$H^+$ hot', r'$H^+$ cold', r'$He^+$ cold']  # Species name/labels        : Used for plotting
+temp_color = ['r', 'b', 'purple']
+temp_type  = np.asarray([1, 0, 0])                      	# Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.asarray([0, 0, 0])                          # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
 
-mass       = np.asarray([1.00, 1.00])                       # Species ion mass (proton mass units)
-charge     = np.asarray([1.00, 1.00])                       # Species ion charge (elementary charge units)
-density    = np.asarray([0.90, 0.10])                       # Species charge density as normalized fraction (add to 1.0)
-drift_v    = np.asarray([-0.1, 0.90])                       # Species parallel bulk velocity (alfven velocity units)
-sim_repr   = np.asarray([0.50, 0.50])                       # Macroparticle weighting: Percentage of macroparticles assigned to each species
+mass       = np.asarray([1.000, 1.000, 4.000])    			# Species ion mass (proton mass units)
+charge     = np.asarray([1.000, 1.000, 1.000])    			# Species ion charge (elementary charge units)
+density    = np.asarray([0.060, 0.932, 0.008])              # Species charge density as normalized fraction (add to 1.0)
+drift_v    = np.asarray([0.000, 0.000, 0.000])              # Species parallel bulk velocity (alfven velocity units)
+sim_repr   = np.asarray([1/3  , 1/3  , 1/3  ])          	# Macroparticle weighting: Percentage of macroparticles assigned to each species
 
+beta       = False                                          # Flag: Specify temperatures by beta (True) or energy in eV (False)
 beta_e     = 1.                                             # Electron beta
 beta_par   = np.array([1., 10.])                            # Ion species parallel beta (10)
 beta_per   = np.array([1., 50.])                            # Ion species perpendicular beta (50)
+
+E_e        = 0.01
+E_par      = np.array([1.3e3, 30, 20])
+E_per      = np.array([5.2e3, 10, 3])
 
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
@@ -72,15 +79,8 @@ dispersion_allowance   = 1.                                 # Multiple of how mu
 adaptive_timestep      = True                               # Flag (True/False) for adaptive timestep based on particle and field parameters
 do_parallel            = False                              # Flag (True/False) for auto-parallel using numba.njit()
 
-ratio_override = 1                                          # Flag to override magnetic field value for specific regime
+ratio_override = 0                                          # Flag to override magnetic field value for specific regime
 wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
-
-
-## DIAGNOSTIC PLOT FUNCTIONS: NOT ALWAYS COMPATIBLE WITH NJIT()
-plot_res       = 1.0                                        # Plot capture resolution in gyroperiod fraction
-generate_plots = 0                                          # Save plot flag    : To ensure hybrid is solving correctly during run
-
-
 
 
 
@@ -101,9 +101,14 @@ if ratio_override == 1:
     print('WARNING: RATIO OVERRIDE IN EFFECT - INPUT MAGNETIC FIELD IGNORED')
     print('----------------------------------------------------------------')
     
-Te0        = B0 ** 2 * beta_e   / (2 * mu0 * ne * kB)    # Temperatures of species in Kelvin (used for particle velocity initialization)
-Tpar       = B0 ** 2 * beta_par / (2 * mu0 * ne * kB)
-Tper       = B0 ** 2 * beta_per / (2 * mu0 * ne * kB)
+if beta == True:
+    Te0        = B0 ** 2 * beta_e   / (2 * mu0 * ne * kB)    # Temperatures of species in Kelvin (used for particle velocity initialization)
+    Tpar       = B0 ** 2 * beta_par / (2 * mu0 * ne * kB)
+    Tper       = B0 ** 2 * beta_per / (2 * mu0 * ne * kB)
+else:
+    Te0        = E_e   * 11603.
+    Tpar       = E_par * 11603.
+    Tper       = E_per * 11603.
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 wpe        = np.sqrt(ne * q ** 2 / (me * e0))            # Proton   Plasma Frequency, wpi (rad/s)
@@ -164,32 +169,41 @@ high_rat   = np.divide(charge, mass).max()
 
 sped_ratio = c / va
 
-print('Speed ratio: {}'.format(sped_ratio))
-print('Density: {}cc'.format(round(ne / 1e6, 2)))
-print('Background magnetic field: {}nT'.format(round(B0*1e9, 1)))
-print('Gyroperiod: {}s'.format(round(2. * np.pi / gyfreq, 2)))
-print('Maximum simulation time: {}s ({} gyroperiods)'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev))
+print('Run Started')
+print('Run Series         : {}'.format(save_path.split('//')[-1]))
+print('Run Number         : {}'.format(run_num))
+print('Field save flag    : {}'.format(save_fields))
+print('Particle save flag : {}\n'.format(save_particles))
+
+print('Speed ratio        : {}'.format(sped_ratio))
+print('Density            : {}cc'.format(round(ne / 1e6, 2)))
+print('Background B-field : {}nT'.format(round(B0*1e9, 1)))
+print('Gyroperiod         : {}s'.format(round(2. * np.pi / gyfreq, 2)))
+print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 2)))
+print('Maximum sim time   : {}s ({} gyroperiods)'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev))
+
+print('\n{} particles per cell, {} cells'.format(cellpart, NX))
+print('{} particles total\n'.format(cellpart * NX))
 
 if None not in cpu_affin:
     import psutil
     run_proc = psutil.Process()
     run_proc.cpu_affinity(cpu_affin)
     if len(cpu_affin) == 1:
-        print('\nCPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
+        print('CPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
     else:
-        print('\nCPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
+        print('CPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
 
 python_version = sys.version.split()[0]
 operating_sys  = platform.system()
 if do_parallel == True and python_version[0] == '2' and operating_sys == 'Windows':
     do_parallel = False
-    print('\n')
     print('PYTHON VERSION {} DETECTED. PARALLEL PROCESSING ONLY WORKS IN PYTHON 3.x AND/OR LINUX')
     print('PARALLEL FLAG DISABLED')
     
 density_normal_sum = (charge / q) * (density / ne)
 
-if density_normal_sum.sum() != 1.0:
+if round(density_normal_sum.sum(), 5) != 1.0:
     print('-------------------------------------------------------------------------')
     print('WARNING: ION DENSITIES DO NOT SUM TO 1.0. SIMULATION WILL NOT BE ACCURATE')
     print('-------------------------------------------------------------------------')
@@ -198,11 +212,11 @@ if density_normal_sum.sum() != 1.0:
     sys.exit()
     
     
-if sim_repr.sum() != 1.0:
+if round(sim_repr.sum(), 5) != 1.0:
     print('-----------------------------------------------------------------------------------')
     print('WARNING: MACROPARTICLE DENSITIES DO NOT SUM TO 1.0. SIMULATION WILL NOT BE ACCURATE')
     print('-----------------------------------------------------------------------------------')
-    print('')
+    print('sum_dens = {}'.format(sim_repr.sum()))
     print('ABORTING...')
     sys.exit()
     

@@ -9,6 +9,7 @@ import numpy as np
 
 import particles_1D as particles
 import simulation_parameters_1D as const
+import save_routines as save
 
 
 @nb.njit()
@@ -97,7 +98,6 @@ def interpolate_to_center_linear_1D(val):
     return center
 
 
-@nb.njit()
 def set_timestep(vel):
     gyperiod = (2*np.pi) / const.gyfreq               # Gyroperiod within uniform field (s)         
     k_max    = np.pi / const.dx
@@ -114,18 +114,24 @@ def set_timestep(vel):
     max_time = const.max_rev * gyperiod               # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1                 # Total number of time steps
 
-    if const.generate_data == 0:
-        data_iter = 0
-    elif const.data_res == 0:
-        data_iter = 1
+    if const.part_res == 0:
+        part_save_iter = 1
     else:
-        data_iter = int(const.data_res*gyperiod / DT)
+        part_save_iter = int(const.part_res*gyperiod / DT)
 
-    return DT, max_inc, data_iter
+    if const.field_res == 0:
+        field_save_iter = 1
+    else:
+        field_save_iter = int(const.field_res*gyperiod / DT)
+
+    if const.save_fields == 1 or const.save_particles == 1:
+        save.store_run_parameters(DT, part_save_iter, field_save_iter)
+        
+    return DT, max_inc, part_save_iter, field_save_iter
 
 
 @nb.njit()
-def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, idx):
+def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, part_save_iter, field_save_iter, idx):
     max_Vx          = np.max(vel[0, :])
     max_V           = np.max(vel)
     k_max           = np.pi / const.dx
@@ -159,23 +165,22 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, data_iter, 
         qq         *= 2
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, -0.5*DT)   # De-sync vel/pos 
 
-        data_iter  *= 2
+        part_save_iter *= 2
+        field_save_iter *= 2
             
         ch_flag = 1
 
             
-    elif DT_part >= 4.0*DT and qq%2 == 0:
+    elif DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0:
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, 0.5*DT)    # Re-sync vel/pos          
         DT         *= 2.0
-        max_inc     = (max_inc + 1) / 2
+        max_inc    /= 2
         qq         /= 2
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, -0.5*DT)   # De-sync vel/pos 
 
-        if data_iter == 1:
-            data_iter = 1
-        else:
-            data_iter /= 2
+        part_save_iter  /= 2
+        field_save_iter /= 2
         
         ch_flag = 2
 
-    return vel, qq, DT, max_inc, data_iter, ch_flag
+    return vel, qq, DT, max_inc, part_save_iter, field_save_iter, ch_flag

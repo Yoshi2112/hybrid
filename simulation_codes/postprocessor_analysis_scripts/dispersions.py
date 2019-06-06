@@ -113,11 +113,16 @@ def get_linear_dispersion_from_sim(k=None, plot=False, save=False):
 def get_wx(component):
     arr = cf.get_array(component)
     
-    fft_matrix  = np.zeros(arr.shape, dtype='complex128')
-    for ii in range(arr.shape[1]):
-        fft_matrix[:, ii] = np.fft.fft(arr[:, ii] - arr[:, ii].mean())
     
-    wx = (fft_matrix[:arr.shape[0] // 2, :] * np.conj(fft_matrix[:arr.shape[0] // 2, :])).real
+    if arr.shape[0]%2 == 0:
+        fft_matrix  = np.zeros((arr.shape[0]//2+1, cf.NX), dtype='complex128')
+    else:
+        fft_matrix  = np.zeros(((arr.shape[0]+1)//2, cf.NX), dtype='complex128')
+        
+    for ii in range(arr.shape[1]):
+        fft_matrix[:, ii] = np.fft.rfft(arr[:, ii] - arr[:, ii].mean())
+    
+    wx = (fft_matrix * np.conj(fft_matrix)).real
     return wx
 
 

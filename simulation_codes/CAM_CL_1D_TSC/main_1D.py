@@ -7,7 +7,7 @@ import auxilliary_1D as aux
 import particles_1D  as particles
 import fields_1D     as fields
 import sources_1D    as sources
-import plot_and_save as pas
+import save_routines as save
 
 #import diagnostics   as diag
 
@@ -67,10 +67,10 @@ if __name__ == '__main__':
         ##### OUTPUT DATA  #####
         ########################
         if qq%part_save_iter == 0 and save_particles == 1:                                   # Save data, if flagged
-            pas.save_particle_data(DT, part_save_iter, qq, pos, vel)
+            save.save_particle_data(DT, part_save_iter, qq, pos, vel)
 
         if qq%field_save_iter == 0 and save_fields == 1:                                   # Save data, if flagged
-            pas.save_field_data(DT, field_save_iter, qq, J, E, B, Ve, Te, dns_int)
+            save.save_field_data(DT, field_save_iter, qq, J, E, B, Ve, Te, dns_int)
 
         if (qq + 1)%25 == 0:
             print('Timestep {} of {} complete'.format(qq + 1, max_inc))

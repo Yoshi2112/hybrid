@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:15:59 2017
 import numba as nb
 import numpy as np
 
-import plot_and_save as pas
+import save_routines as save
 import particles_1D as particles
 import simulation_parameters_1D as const
 
@@ -129,8 +129,8 @@ def set_timestep(vel):
         subcycles = const.subcycles
         print('Number of subcycles set at default: {}'.format(subcycles))
     
-    if const.save_fields or const.save_particles == 1:
-        pas.store_run_parameters(DT, part_save_iter, field_save_iter)
+    if const.save_fields == 1 or const.save_particles == 1:
+        save.store_run_parameters(DT, part_save_iter, field_save_iter)
         
     return DT, max_inc, part_save_iter, field_save_iter, subcycles
 

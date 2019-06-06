@@ -120,7 +120,8 @@ def load_simulation_params():
     return 
 
 def initialize_simulation_variables():
-    global wpi, gyfreq, gyperiod, time_gperiods, time_radperiods, time_seconds_field, time_seconds_particle
+    global wpi, gyfreq, gyperiod, time_seconds_field, time_seconds_particle, \
+           time_gperiods_field, time_gperiods_particle, time_radperiods_field, time_radperiods_particle
     q   = 1.602e-19               # Elementary charge (C)
     mp  = 1.67e-27                # Mass of proton (kg)
     e0  = 8.854e-12               # Epsilon naught - permittivity of free space
@@ -131,11 +132,14 @@ def initialize_simulation_variables():
     gyfreq    = q * B0 / mp                                 # Proton gyrofrequency (rad/s)
     gyperiod  = (mp * 2 * np.pi) / (q * B0)                 # Proton gyroperiod (s)
     
-    time_seconds_field    = np.array([ii * dt_field for ii in range(num_field_steps)])
-    time_seconds_particle = np.array([ii * dt_field for ii in range(num_particle_steps)])
+    time_seconds_field    = np.array([ii * dt_field    for ii in range(num_field_steps)])
+    time_seconds_particle = np.array([ii * dt_particle for ii in range(num_particle_steps)])
     
-    time_gperiods   = time_seconds_field / gyperiod
-    time_radperiods = time_seconds_field * gyfreq 
+    time_gperiods_field   = time_seconds_field    / gyperiod
+    time_gperiods_particle= time_seconds_particle / gyperiod
+    
+    time_radperiods_field    = time_seconds_field    * gyfreq 
+    time_radperiods_particle = time_seconds_particle * gyfreq
     return
 
 def load_fields(ii):    
@@ -152,12 +156,16 @@ def load_fields(ii):
     return tB, tE, tVe, tTe, tJ, tdns
 
 def load_particles(ii):    
-    part_file = 'data%05d.npz' % ii              # Define target file
+    part_file  = 'data%05d.npz' % ii             # Define target file
     input_path = particle_dir + part_file        # File location
     data       = np.load(input_path)             # Load file
-
-    tx               = data['position']
-    tv               = data['velocity']
+    
+    try:
+        tx               = data['pos']
+        tv               = data['vel']
+    except:
+        tx               = data['position']
+        tv               = data['velocity']
     return tx, tv
 
 def extract_all_arrays():

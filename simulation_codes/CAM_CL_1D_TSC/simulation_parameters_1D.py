@@ -199,23 +199,22 @@ print('Gyroperiod: {}s'.format(round(2. * np.pi / gyfreq, 2)))
 print('Inverse radian gyrofreqcy: {}s'.format(round(1 / gyfreq, 2)))
 print('Maximum simulation time: {}s ({} gyroperiods)'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev))
 print('\n{} particles per cell, {} cells'.format(cellpart, NX))
-print('{} particles total'.format(cellpart * NX))
+print('{} particles total\n'.format(cellpart * NX))
 
 if None not in cpu_affin:
     import psutil
     run_proc = psutil.Process()
     run_proc.cpu_affinity(cpu_affin)
     if len(cpu_affin) == 1:
-        print('\nCPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
+        print('CPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
     else:
-        print('\nCPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
+        print('CPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
 
 
 python_version = sys.version.split()[0]
 operating_sys  = platform.system()
 if do_parallel == True and python_version[0] == '2' and operating_sys == 'Windows':
     do_parallel = False
-    print('\n')
     print('PYTHON VERSION {} DETECTED. PARALLEL PROCESSING ONLY WORKS IN PYTHON 3.x AND/OR LINUX')
     print('PARALLEL FLAG DISABLED')
     

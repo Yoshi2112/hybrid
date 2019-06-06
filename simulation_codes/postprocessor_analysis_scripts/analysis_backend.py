@@ -35,24 +35,29 @@ def get_energies(normalize=False):
     
         mag_energy      = np.zeros( num_field_steps)
         electron_energy = np.zeros( num_field_steps)
-        particle_energy = np.zeros((num_particle_steps, Nj))
+        particle_energy = np.zeros((num_particle_steps, Nj, 2))
         
         for ii in range(num_field_steps):
+            print('Loading field file {}'.format(ii))
             B, E, Ve, Te, J, q_dns = cf.load_fields(ii)
             
             mag_energy[ii]      = (0.5 / mu0) * np.square(B[1:-2]).sum() * NX * dx
             electron_energy[ii] = 1.5 * (kB * Te * q_dns / q).sum() * NX * dx
     
         for ii in range(num_particle_steps):
+            print('Loading particle file {}'.format(ii))
             pos, vel = cf.load_particles(ii)
             for jj in range(Nj):
-                vp2 = vel[0, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2 \
-                    + vel[1, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2 \
-                    + vel[2, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2
+                '''
+                Only works properly for theta = 0 : Fix later
+                '''
+                vpp2 = vel[0, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2
+                vpx2 = vel[1, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2 + vel[2, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2
         
-            particle_energy[ii, jj] = 0.5 * mass[jj] * vp2.sum() * n_contr[jj] * NX * dx
+                particle_energy[ii, jj, 0] = 0.5 * mass[jj] * vpp2.sum() * n_contr[jj] * NX * dx
+                particle_energy[ii, jj, 1] = 0.5 * mass[jj] * vpx2.sum() * n_contr[jj] * NX * dx
         
-        total_energy = np.zeros(cf.num_field_steps)                             # Placeholder until I interpolate this
+        total_energy = np.zeros(cf.num_field_steps)   # Placeholder until I interpolate this
         
         print('Saving energies to file...')
         np.savez(energy_file, mag_energy      = mag_energy,
@@ -60,6 +65,7 @@ def get_energies(normalize=False):
                               particle_energy = particle_energy,
                               total_energy    = total_energy)
     else:
+        print('Loading energies from file...')
         energies        = np.load(energy_file) 
         mag_energy      = energies['mag_energy']
         electron_energy = energies['electron_energy']

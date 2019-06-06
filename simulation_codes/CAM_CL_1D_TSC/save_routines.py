@@ -63,7 +63,6 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                    ('Te0', const.Te0),
                    ('ie', const.ie),
                    ('theta', const.theta),
-                   ('data_dump_iter', 1),
                    ('part_save_iter', part_save_iter),
                    ('field_save_iter', field_save_iter),
                    ('max_rev', const.max_rev),
@@ -108,7 +107,6 @@ def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns):
     
     np.savez(d_fullpath, E = E[1:NX+1, 0:3], B = B[1:NX+2, 0:3], J = Ji[1:NX+1],
                          dns = dns[1:NX+1], Ve = Ve[1:NX+1], Te = Te[1:NX+1])   # Data file for each iteration
-    #print('Field data saved')
     
     
 def save_particle_data(dt, part_save_iter, qq, pos, vel):
@@ -118,4 +116,3 @@ def save_particle_data(dt, part_save_iter, qq, pos, vel):
     d_filename = 'data%05d' % r
     d_fullpath = os.path.join(d_path, d_filename)
     np.savez(d_fullpath, pos = pos, vel = vel)
-    #print('Particle data saved'.format(qq))
