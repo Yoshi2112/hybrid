@@ -27,12 +27,12 @@ e0  = 8.854e-12               # Epsilon naught - permittivity of free space
 Aim: To populate this script with plotting routines ONLY. Separate out the 
 processing/loading/calculation steps into other modules that can be called.
 '''
-def plot_tx(component='By', saveas='tx_plot', plot=False, save=False):
+def plot_tx(component='By', saveas='tx_plot', plot=False, save=False, tmax=600):
     plt.ioff()
 
     tx = cf.get_array(component)
     x  = np.arange(cf.NX) * cf.dx
-    t  = cf.time_seconds_field
+    t  = cf.time_radperiods_field
     
     if component[0] == 'B':
         tx *= 1e9
@@ -52,7 +52,7 @@ def plot_tx(component='By', saveas='tx_plot', plot=False, save=False):
         cb.set_label('mV/m', rotation=0)
 
     ax.set_title('t-x Plot for {}'.format(component), fontsize=14)
-    ax.set_ylabel('t (s)', rotation=0, labelpad=15)
+    ax.set_ylabel(r't $(\Omega^{-1})$', rotation=0, labelpad=15)
     ax.set_xlabel('x (m)')
     
     if plot == True:
@@ -89,10 +89,13 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, plot=False, 
             ax.axhline(cyc[ii], linestyle='--', c=clr[ii], label=lbl[ii])
     
     if linear_overlay == True:
-        freqs, cgr, stop = disp.get_cgr_from_sim()
-        max_idx          = np.where(cgr == cgr.max())
-        max_lin_freq     = freqs[max_idx]
-        plt.axhline(max_lin_freq, c='green', linestyle='--', label='CGR')
+        try:
+            freqs, cgr, stop = disp.get_cgr_from_sim()
+            max_idx          = np.where(cgr == cgr.max())
+            max_lin_freq     = freqs[max_idx]
+            plt.axhline(max_lin_freq, c='green', linestyle='--', label='CGR')
+        except:
+            pass
 
     ax.set_title(r'w-x Plot', fontsize=14)
     ax.set_ylabel(r'f (Hz)', rotation=0, labelpad=15)
@@ -181,11 +184,14 @@ def plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=False, plot=Fa
         Some weird factor of about 2pi inaccuracy? Is this inherent to the sim? Or a problem
         with linear theory? Or problem with the analysis?
         '''
-        k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k)
-        for ii in range(CPDR_solns.shape[1]):
-            ax.plot(k_vals, CPDR_solns[:, ii]*2*np.pi,      c='k', linestyle='--', label='CPDR')
-            ax.plot(k_vals, warm_solns[:, ii].real*2*np.pi, c='k', linestyle='-',  label='WPDR')
-    
+        try:
+            k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k)
+            for ii in range(CPDR_solns.shape[1]):
+                ax.plot(k_vals, CPDR_solns[:, ii]*2*np.pi,      c='k', linestyle='--', label='CPDR')
+                ax.plot(k_vals, warm_solns[:, ii].real*2*np.pi, c='k', linestyle='-',  label='WPDR')
+        except:
+            pass
+        
     ax.legend(loc=2, facecolor='grey')
     
     if plot == True:
@@ -278,7 +284,7 @@ def plot_energies(normalize=True, save=False):
     return
 
 
-def plot_ion_energy_components(normalize=True, save=False):
+def plot_ion_energy_components(normalize=True, save=False, tmax=600):
     mag_energy, electron_energy, particle_energy, total_energy = bk.get_energies()
     
     if normalize == True:
@@ -305,7 +311,7 @@ def plot_ion_energy_components(normalize=True, save=False):
             ax.set_xticklabels([])
                     
         for ax in [ax1, ax3]:
-            ax.set_xlim(0, 400)
+            ax.set_xlim(0, tmax)
             
         for ax in [ax2, ax4]:
             ax.set_xlim(0, cf.time_radperiods_field[-1])
@@ -512,7 +518,7 @@ def animate_fields():
     return
 
 
-def plot_spatially_averaged_fields():
+def plot_spatially_averaged_fields(plot=False, save=True, tmax=600):
     '''
     Recreates Omidi et al. (2010) Figure 2
     
@@ -527,8 +533,7 @@ def plot_spatially_averaged_fields():
     plt.ioff()
     fig, [[ax1, ax2], [ax3, ax4], [ax5, ax6]] = plt.subplots(figsize=(18, 10), nrows=3, ncols=2)
     fig.subplots_adjust(wspace=0, hspace=0)
-    #figManager = plt.get_current_fig_manager()
-    #figManager.window.showMaximized()
+    
     
     ax1.plot(cf.time_radperiods_field, abs(Bz_raw).mean(axis=1))
     ax3.plot(cf.time_radperiods_field, abs(By_raw).mean(axis=1))
@@ -546,7 +551,7 @@ def plot_spatially_averaged_fields():
         ax.set_xticklabels([])
                 
     for ax in [ax1, ax3, ax5]:
-        ax.set_xlim(0, 600)
+        ax.set_xlim(0, tmax)
         ax.set_ylim(0, 1.7)
         
     for ax in [ax2, ax4, ax6]:
@@ -556,10 +561,16 @@ def plot_spatially_averaged_fields():
             
     for ax in [ax5, ax6]:
         ax.set_xlabel(r'Time $(\Omega^{-1})$')
-            
-    ax1.set_title('CAM_CL_1D : Omidi et al. (2010) parameters.')
+      
+    ax1.set_title('{}_1D : Omidi et al. (2010) parameters.'.format(cf.method_type))
     plt.figtext(0.125, 0.05, 'Total time: {:.{p}g}s'.format(cf.time_seconds_field[-1], p=6), fontweight='bold')
-    fig.savefig(cf.anal_dir + 'sp_av_fields.png', facecolor=fig.get_facecolor(), edgecolor='none')
+    
+    if save == True:
+        fig.savefig(cf.anal_dir + 'sp_av_fields.png', facecolor=fig.get_facecolor(), edgecolor='none')
+        
+    if plot == True:
+        figManager = plt.get_current_fig_manager()
+        figManager.window.showMaximized()
     return
 
 
@@ -608,7 +619,7 @@ def analyse_helicity(overwrite=False, plot=False, save=True):
         Plot timeseries for raw, +ve, -ve helicities at single point
         '''
         plt.ioff()
-        for x_idx in [256, 512, 768]:
+        for x_idx in [15, 32, 50]:
             fig = plt.figure(figsize=(18, 10))
             ax1 = plt.subplot2grid((2, 2), (0, 0), colspan=2)
             ax2 = plt.subplot2grid((2, 2), (1, 0), colspan=2)
@@ -644,16 +655,15 @@ def standard_analysis_package():
     if os.path.exists(cf.anal_dir + wk_folder) == False:
         os.makedirs(cf.anal_dir + wk_folder)
         
-# =============================================================================
-#     for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
-#         plot_tx(component=comp, saveas=wk_folder + 'tx_plot', save=True)
-#         plot_wx(component=comp, saveas=wk_folder + 'wx_plot', save=True, linear_overlay=True, pcyc_mult=1.1)
-#         plot_wk(component=comp, saveas=wk_folder + 'wk_plot', save=True, dispersion_overlay=True, pcyc_mult=1.1)
-#         plot_kt(component=comp, saveas=wk_folder + 'kt_plot', save=True)
-# =============================================================================
+    for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
+        plot_tx(component=comp, saveas=wk_folder + 'tx_plot', save=True)
+        plot_wx(component=comp, saveas=wk_folder + 'wx_plot', save=True, linear_overlay=True,     pcyc_mult=1.1)
+        plot_wk(component=comp, saveas=wk_folder + 'wk_plot', save=True, dispersion_overlay=True, pcyc_mult=1.1)
+        plot_kt(component=comp, saveas=wk_folder + 'kt_plot', save=True)
         
     plot_energies(normalize=True, save=True)
-    #plot_helical_waterfall(title='', save=True)
+    plot_ion_energy_components(save=True)
+    plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
     return
 
 #%%
@@ -661,16 +671,13 @@ def standard_analysis_package():
 if __name__ == '__main__':
     #drive      = 'G://MODEL_RUNS//Josh_Runs//'
     drive      = 'F://'
-    series     = 'long_large_run'
+    series     = 'omidi_1D'
     series_dir = '{}/runs//{}//'.format(drive, series)
     num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [0]:
+    for run_num in [2]:
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
-        #analyse_helicity()
-        #plot_helical_waterfall(title='Series \'long_large_run\' : Run {}'.format(run_num), save=False)
-        #plot_spatially_averaged_fields()
-        #standard_analysis_package()     
-        plot_ion_energy_components(save=True)
-        
+        standard_analysis_package()   
+        plot_spatially_averaged_fields()
+        analyse_helicity()

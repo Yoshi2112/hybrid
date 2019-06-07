@@ -98,14 +98,12 @@ def load_simulation_params():
     dxm             = obj['dxm']
     dx              = obj['dx']
     cellpart        = obj['cellpart']
-    subcycles       = obj['subcycles']
     B0              = obj['B0']
     ne              = obj['ne']
     Te0             = obj['Te0']
     ie              = obj['ie']
     theta           = obj['theta']
     max_rev         = obj['max_rev']
-    LH_frac         = obj['LH_frac']
     orbit_res       = obj['orbit_res']
     freq_res        = obj['freq_res']
     run_desc        = obj['run_desc']
@@ -114,6 +112,12 @@ def load_simulation_params():
     
     part_save_iter  = obj['part_save_iter']
     field_save_iter = obj['field_save_iter']
+    
+    if method_type == 'CAM_CL':
+        subcycles   = obj['subcycles']
+        LH_frac     = obj['LH_frac']
+    else:
+        pass
     
     dt_field        = dt_sim * field_save_iter                         # Time between data slices (seconds)
     dt_particle     = dt_sim * part_save_iter
@@ -186,9 +190,12 @@ def extract_all_arrays():
             comps_missing += 1
     
     if comps_missing == 0:
+        print('Field components already extracted.')
         return
     else:
+        print('Extracting fields...')
         for ii in range(num_field_steps):
+            print('Extracting field timestep {}'.format(ii))
             B, E, Ve, Te, J, q_dns = load_fields(ii)
             bx_arr[ii, :] = B[:-1, 0]; ex_arr[ii, :] = E[:, 0]
             by_arr[ii, :] = B[:-1, 1]; ey_arr[ii, :] = E[:, 1]
