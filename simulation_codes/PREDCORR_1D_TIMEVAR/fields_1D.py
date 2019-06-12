@@ -13,7 +13,7 @@ from simulation_parameters_1D import NX, dx, Te0, ne, q, mu0, kB, ie, HM_amplitu
 
 
 @nb.njit()
-def predictor_corrector(B, E_int, E_half, pos, vel, q_dens, Ie, W_elec, idx, DT):
+def predictor_corrector(B, E_int, E_half, pos, vel, q_dens, Ie, W_elec, idx, DT, qq):
     '''
     Isolated predictor-corrector method for easy debugging/coding. Predicts the
     electric and magnetic fields at the full timestep by using a pretend push of
@@ -38,16 +38,16 @@ def predictor_corrector(B, E_int, E_half, pos, vel, q_dens, Ie, W_elec, idx, DT)
     values, they must be copied and restored in order to ensure they don't actually move.
     '''
     E_pred          = 2.0*E_half - 1.0*E_int
-    B_pred          = push_B(B, E_pred, DT)
+    B_pred          = push_B(B, E_pred, DT, qq, half_flag=0)   # "Predicted" B
 
     P, V, I, W, Q, J= advance_particles_and_moments(pos.copy(), vel.copy(), Ie.copy(), W_elec.copy(), idx, B_pred, E_pred, DT)
     
     q_dens          = 0.5*(q_dens + Q)
-    B_pred          = push_B(B_pred, E_pred, DT)
+    B_pred          = push_B(B_pred, E_pred, DT, qq + 1, half_flag=1)   # Predict B again (N = 3/2)
     E_pred, Ve, Te  = calculate_E(B_pred, J, q_dens)
     
     E_corr          = 0.5*(E_half + E_pred)
-    B_corr          = push_B(B, E_corr, DT)
+    B_corr          = push_B(B, E_corr, DT, qq, half_flag=0)  # Advance the original B
     return E_corr, B_corr
 
 
@@ -74,19 +74,19 @@ def get_curl_E(field, DX=dx):
         curl[ii, 1] = - (field[ii, 2] - field[ii - 1, 2])
         curl[ii, 2] =    field[ii, 1] - field[ii - 1, 1]
 
-    curl = set_periodic_boundaries(curl)
+    set_periodic_boundaries(curl)
     return curl / DX
 
 
-def time_varying_background(T):
-    # Subtract background
-    # Advance using curl
-    # Add new background
-    return HM_amplitude * np.sin(2 * np.pi * HM_frequency * T)
+@nb.njit()
+def uniform_time_varying_background(T):
+    bt         = np.zeros((NX + 3, 3))
+    bt[:, 0]   = HM_amplitude * np.sin(2 * np.pi * HM_frequency * T)
+    return bt 
 
 
 @nb.njit()
-def push_B(B, E, DT):
+def push_B(B, E, DT, qq, half_flag=1):
     '''
     Updated to allow time-varying background field
     
@@ -96,10 +96,19 @@ def push_B(B, E, DT):
     B  -- Magnetic field array
     E  -- Electric field array
     DT -- Timestep size, in seconds
-    T  -- Current simulation time, in seconds
+    qq  -- Current timestep, as an integer (such that qq*DT is the current simulation time in seconds)
+    half_flag -- Flag to signify if pushing to a half step (e.g. 1/2 or 3/2) (1) to a full step (N + 1) (0)
+    
+    The half_flag can be thought of as 'not having done the full timestep yet' for N + 1/2, so 0.5*DT is
+    subtracted from the "full" timestep time
     '''
-    B_out = B.copy() - 0.5 * DT * get_curl_E(E)
-    B_out = set_periodic_boundaries(B_out) 
+    time      = (qq - 0.5*half_flag) * DT                      # Current simulation time (pushing to)
+    B_out     = B.copy()
+    B_out    -= uniform_time_varying_background(time - 0.5*DT) # Subtract previous HM field
+    B_out    += -0.5 * DT * get_curl_E(E)                      # Advance using curl
+    B_out    += uniform_time_varying_background(time)          # Add new  HM field
+    
+    set_periodic_boundaries(B) 
     return B_out
 
 
@@ -111,24 +120,24 @@ def push_B_old(B, E, DT):
     value of E (rather than cycling with the source terms)
     '''
     B_out = B.copy() - 0.5 * DT * get_curl_E(E)
-    B_out = set_periodic_boundaries(B_out) 
+    set_periodic_boundaries(B_out) 
     return B_out
 
 
 @nb.njit()
-def set_periodic_boundaries(B):
+def set_periodic_boundaries(arr):
     ''' 
     Set boundary conditions for the magnetic field (or values on the B-grid, i.e. curl[E]): 
      -- Average "end" values and assign to first and last grid point
-     -- Set ghost cell values so TSC weighting works
+     -- Set ghost (guard) cell values so TSC weighting works
     '''
-    end_bit = 0.5*(B[1] + B[NX+1])                              # Average end values (for periodic boundary condition)
-    B[1]      = end_bit
-    B[NX+1]   = end_bit
+    end_bit     = 0.5*(arr[1] + arr[NX+1])     # Average end values (for periodic boundary condition)
+    arr[1]      = end_bit
+    arr[NX+1]   = end_bit
     
-    B[0]      = B[NX]
-    B[NX+2]   = B[2]
-    return B
+    arr[0]      = arr[NX]
+    arr[NX+2]   = arr[2]
+    return
 
 
 @nb.njit()

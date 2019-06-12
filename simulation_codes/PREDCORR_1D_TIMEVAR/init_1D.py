@@ -7,9 +7,9 @@ Created on Fri Sep 22 17:27:33 2017
 import numba as nb
 import numpy as np
 from particles_1D             import assign_weighting_TSC
-from simulation_parameters_1D import dx, NX, cellpart, N, kB, Bc, Nj, dist_type, sim_repr, idx_bounds,    \
+from simulation_parameters_1D import dx, NX, cellpart, N, kB, B0, Nj, dist_type, sim_repr, idx_bounds,    \
                                      seed, Tpar, Tper, mass, drift_v, theta
-
+from fields_1D import uniform_time_varying_background
 
 @nb.njit()
 def particles_per_cell():
@@ -121,10 +121,17 @@ def initialize_fields():
     Note: Each field is initialized with one array value extra due to TSC trying to access it when a 
     particle is located exactly on 
     '''
+    Bc         = np.zeros(3)                                 # Constant components of magnetic field based on theta and B0
+    Bc[0]      = B0 * np.cos(theta * np.pi / 180.)           # Constant x-component of magnetic field (theta in degrees)
+    Bc[1]      = 0.                                          # Assume Bzc = 0, orthogonal to field line direction
+    Bc[2]      = B0 * np.sin(theta * np.pi / 180.)           # Constant y-component of magnetic field (theta in degrees)
+    
     B = np.zeros((NX + 3, 3), dtype=nb.float64)
     E = np.zeros((NX + 3, 3), dtype=nb.float64)
 
     B[:, 0] = Bc[0]      # Set Bx initial
     B[:, 1] = Bc[1]      # Set By initial
     B[:, 2] = Bc[2]      # Set Bz initial
+    
+    B      += uniform_time_varying_background(0)         # Add time-varying field at t=0
     return B, E

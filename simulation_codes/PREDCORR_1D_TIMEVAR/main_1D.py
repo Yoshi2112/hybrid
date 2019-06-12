@@ -32,24 +32,19 @@ if __name__ == '__main__':
         ############################
         ##### EXAMINE TIMESTEP #####
         ############################
-        vel, qq, DT, max_inc, part_save_iter, field_save_iter, ch_flag \
+        vel, qq, DT, max_inc, part_save_iter, field_save_iter \
         = aux.check_timestep(qq, DT, pos, vel, B, E_int, q_dens, Ie, W_elec, max_inc, part_save_iter, field_save_iter, idx)
-        
-        if ch_flag == 1:
-            print('Timestep halved. Syncing particle velocity with DT = {}'.format(DT))
-        elif ch_flag == 2:
-            print('Timestep Doubled. Syncing particle velocity with DT = {}'.format(DT))
-        
+
         #######################
         ###### MAIN LOOP ######
         #######################
         pos, vel, Ie, W_elec, q_dens_adv, Ji = particles.advance_particles_and_moments(pos, vel, Ie, W_elec, idx, B, E_int, DT)
         q_dens                               = 0.5 * (q_dens + q_dens_adv)
-        B                                    = fields.push_B(B, E_int, DT)
+        B                                    = fields.push_B(B, E_int, DT, qq, half_flag=1)
         E_half, Ve, Te                       = fields.calculate_E(B, Ji, q_dens)
         q_dens                               = q_dens_adv.copy()
         
-        E_int, B = fields.predictor_corrector(B, E_int, E_half, pos, vel, q_dens_adv, Ie, W_elec, idx, DT)
+        E_int, B = fields.predictor_corrector(B, E_int, E_half, pos, vel, q_dens_adv, Ie, W_elec, idx, DT, qq)
 
         ########################
         ##### OUTPUT DATA  #####

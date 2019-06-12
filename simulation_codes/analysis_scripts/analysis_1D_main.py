@@ -669,15 +669,15 @@ def standard_analysis_package():
 #%%
 
 if __name__ == '__main__':
-    #drive      = 'G://MODEL_RUNS//Josh_Runs//'
-    drive      = 'F://'
-    series     = 'omidi_1D'
+    drive      = 'G://MODEL_RUNS//Josh_Runs//'
+    series     = 'large_simulation_space'
     series_dir = '{}/runs//{}//'.format(drive, series)
     num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [2]:
+    for run_num in [0]:
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
-        standard_analysis_package()   
-        plot_spatially_averaged_fields()
-        analyse_helicity()
+        print(cf.method_type)
+        #standard_analysis_package()   
+        #plot_spatially_averaged_fields()
+        #analyse_helicity()

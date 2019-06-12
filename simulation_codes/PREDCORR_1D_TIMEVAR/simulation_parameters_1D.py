@@ -14,11 +14,11 @@ run_description = '''Basic test of homogenous, uniform, time-varying background 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path       = 'runs//uniform_time_varying'  # Series save dir   : Folder containing all runs of a series
-run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles  = 0                             # Save data flag    : For later analysis
-save_fields     = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
+run_num         = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_particles  = 1                             # Save data flag    : For later analysis
+save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 15401                         # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [2, 3]                        # Set CPU affinity for run. Must be list. Auto-assign: None.
+cpu_affin       = [6, 7]                        # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 ### PHYSICAL CONSTANTS ###
@@ -37,7 +37,7 @@ NX       = 128                              # Number of cells - doesn't include 
 max_rev  = 1000                             # Simulation runtime, in multiples of the gyroperiod
 
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
-cellpart = 1000                             # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart = 2000                             # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
 ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
@@ -53,19 +53,19 @@ field_res = 0.10                            # Data capture resolution in gyroper
 ### PARTICLE PARAMETERS ###
 species_lbl= [r'$H^+$ hot', r'$H^+$ cold']  # Species name/labels        : Used for plotting
 temp_color = ['r', 'b']
-temp_type  = np.asarray([1, 0])             # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-dist_type  = np.asarray([0, 0])             # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+temp_type  = np.asarray([1, 0])                   	# Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.asarray([0, 0])                     # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
 
-mass       = np.asarray([1.000, 1.000])    	# Species ion mass (proton mass units)
-charge     = np.asarray([1.000, 1.000])    	# Species ion charge (elementary charge units)
-density    = np.asarray([0.100, 0.900])     # Species charge density as normalized fraction (add to 1.0)
-drift_v    = np.asarray([0.000, 0.000])     # Species parallel bulk velocity (alfven velocity units)
-sim_repr   = np.asarray([0.500, 0.500])     # Macroparticle weighting: Percentage of macroparticles assigned to each species
+mass       = np.asarray([1.000, 1.000])    			# Species ion mass (proton mass units)
+charge     = np.asarray([1.000, 1.000])    			# Species ion charge (elementary charge units)
+density    = np.asarray([0.100, 0.900])             # Species charge density as normalized fraction (add to 1.0)
+drift_v    = np.asarray([0.000, 0.000])             # Species parallel bulk velocity (alfven velocity units)
+sim_repr   = np.asarray([0.500, 0.500])          	# Macroparticle weighting: Percentage of macroparticles assigned to each species
 
-beta       = True                           # Flag: Specify temperatures by beta (True) or energy in eV (False)
-beta_e     = 1.                             # Electron beta
-beta_par   = np.array([10., 1.])            # Ion species parallel beta (10)
-beta_per   = np.array([20., 1.])            # Ion species perpendicular beta (50)
+beta       = True                                           # Flag: Specify temperatures by beta (True) or energy in eV (False)
+beta_e     = 1.                                             # Electron beta
+beta_par   = np.array([10., 1.])                            # Ion species parallel beta (10)
+beta_per   = np.array([20., 1.])                            # Ion species perpendicular beta (50)
 
 E_e        = 0.01
 E_par      = np.array([1.3e3, 30, 20])
@@ -79,7 +79,7 @@ dispersion_allowance   = 1.                                 # Multiple of how mu
 adaptive_timestep      = True                               # Flag (True/False) for adaptive timestep based on particle and field parameters
 do_parallel            = False                              # Flag (True/False) for auto-parallel using numba.njit()
 
-HM_amplitude   = 0                                          # Driven wave amplitude in T
+HM_amplitude   = 50e-9                                      # Driven wave amplitude in T
 HM_frequency   = 0.02                                       # Driven wave in Hz
 ratio_override = 0                                          # Flag to override magnetic field value for specific regime
 wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
@@ -113,7 +113,6 @@ else:
     Tper       = E_per * 11603.
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
-wpe        = np.sqrt(ne * q ** 2 / (me * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B0 / np.sqrt(mu0*ne*mp)                     # Alfven speed: Assuming pure proton plasma
 
 dx         = dxm * c / wpi                               # Spatial cadence, based on ion inertial length
@@ -121,10 +120,6 @@ xmin       = 0                                           # Minimum simulation di
 xmax       = NX * dx                                     # Maximum simulation dimension
 
 N          = cellpart*NX                                 # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
-Bc         = np.zeros(3)                                 # Constant components of magnetic field based on theta and B0
-Bc[0]      = B0 * np.cos(theta * np.pi / 180.)           # Constant x-component of magnetic field (theta in degrees)
-Bc[1]      = 0.                                          # Assume Bzc = 0, orthogonal to field line direction
-Bc[2]      = B0 * np.sin(theta * np.pi / 180.)           # Constant y-component of magnetic field (theta in degrees)
 
 density    = ne * (density / charge)                     # Density of each species per cell (in /m3)
 charge    *= q                                           # Cast species charge to Coulomb
@@ -168,18 +163,17 @@ high_rat   = np.divide(charge, mass).max()
 #%%
 #%%
 #%%### INPUT TESTS AND CHECKS
-
-sped_ratio = c / va
-
 print('Run Started')
 print('Run Series         : {}'.format(save_path.split('//')[-1]))
 print('Run Number         : {}'.format(run_num))
 print('Field save flag    : {}'.format(save_fields))
 print('Particle save flag : {}\n'.format(save_particles))
 
-print('Speed ratio        : {}'.format(sped_ratio))
 print('Density            : {}cc'.format(round(ne / 1e6, 2)))
 print('Background B-field : {}nT'.format(round(B0*1e9, 1)))
+print('HM amplitude       : {}nT'.format(HM_amplitude*1e9))
+print('HM frequency       : {}mHz\n'.format(HM_frequency*1e3))
+
 print('Gyroperiod         : {}s'.format(round(2. * np.pi / gyfreq, 2)))
 print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 2)))
 print('Maximum sim time   : {}s ({} gyroperiods)'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev))
