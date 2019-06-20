@@ -58,7 +58,7 @@ if __name__ == '__main__':
             save.save_particle_data(DT, part_save_iter, qq, pos, vel)
 
         if qq%field_save_iter == 0 and save_fields == 1:
-            save.save_field_data(DT, field_save_iter, qq, q_dens, E_int, B, Ve, Te, q_dens)
+            save.save_field_data(DT, field_save_iter, qq, Ji, E_int, B, Ve, Te, q_dens)
             
         if (qq + 1)%25 == 0:
             print('Timestep {} of {} complete'.format(qq + 1, max_inc))

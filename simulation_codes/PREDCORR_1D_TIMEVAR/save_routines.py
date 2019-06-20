@@ -73,7 +73,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                    ('orbit_res', const.orbit_res),
                    ('freq_res', const.freq_res),
                    ('run_desc', const.run_description),
-                   ('method_type', 'PREDCORR'),
+                   ('method_type', 'PREDCORR_HM'),
                    ('particle_shape', 'TSC')
                    ])
 
@@ -99,21 +99,23 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
     print('Particle data saved')
     return
 
-    
+
 def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns):
-    d_path = '%s/%s/run_%d/data/fields/' % (drive, save_path, const.run_num)
-    r      = qq / field_save_iter
+    sim_time = np.array([qq*dt])    # Timestamp: Useful for debugging
+    d_path   = '%s/%s/run_%d/data/fields/' % (drive, save_path, const.run_num)
+    r        = qq / field_save_iter
 
     d_fullpath = d_path + 'data%05d' % r
     
-    np.savez(d_fullpath, E = E[1:NX+1, 0:3], B = B[1:NX+2, 0:3], J = Ji[1:NX+1],
-                         dns = dns[1:NX+1], Ve = Ve[1:NX+1], Te = Te[1:NX+1])   # Data file for each iteration
+    np.savez(d_fullpath, E = E[1:NX+1, 0:3], B = B[1:NX+2, 0:3],   J = Ji[1:NX+1, 0:3],
+                       dns = dns[1:NX+1],   Ve = Ve[1:NX+1, 0:3], Te = Te[1:NX+1], sim_time = sim_time)
     
     
 def save_particle_data(dt, part_save_iter, qq, pos, vel):
-    d_path = '%s/%s/run_%d/data/particles/' % (drive, save_path, const.run_num)
-    r      = qq / part_save_iter                                          # Capture number
+    sim_time = np.array([qq*dt])    # Timestamp: Useful for debugging
+    d_path   = '%s/%s/run_%d/data/particles/' % (drive, save_path, const.run_num)
+    r        = qq / part_save_iter
 
     d_fullpath = d_path + 'data%05d' % r
     
-    np.savez(d_fullpath, pos = pos, vel = vel)
+    np.savez(d_fullpath, pos = pos, vel = vel, sim_time = sim_time)

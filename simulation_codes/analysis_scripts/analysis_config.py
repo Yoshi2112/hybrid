@@ -2,6 +2,7 @@ import os
 import numpy as np
 import numba as nb
 import pickle
+import pdb
 '''
 Used to initialise values for a run
 e.g. directories, simulation/particle parameters, derived quantities, etc.
@@ -14,6 +15,8 @@ clogging up its namespace - i.e. run-specific parameters are called by
 using e.g. cf.B0
 '''
 def load_run(drive, series, run_num):
+    global missing_t0_offset
+    missing_t0_offset = 1                   # Flag for when I thought having a t=0 save file wasn't needed. I was wrong.
     manage_dirs(drive, series, run_num)
     load_simulation_params()
     load_species_params()
@@ -84,7 +87,8 @@ def load_species_params():
 def load_simulation_params():
     global Nj, cellpart, ne, NX, dxm, seed, B0, dx, Te0, theta, dt_sim, max_rev,\
            ie, run_desc, seed, subcycles, LH_frac, orbit_res, freq_res, method_type,\
-           particle_shape, part_save_iter, field_save_iter, dt_field, dt_particle
+           particle_shape, part_save_iter, field_save_iter, dt_field, dt_particle, \
+           HM_amplitude, HM_frequency 
 
     h_name = os.path.join(data_dir, 'simulation_parameters.pckl')       # Load header file
     f      = open(h_name, 'rb')                                         # Open header file
@@ -119,6 +123,13 @@ def load_simulation_params():
     else:
         pass
     
+    try:
+        HM_amplitude = obj['HM_amplitude']
+        HM_frequency = obj['HM_frequency']
+    except:
+        HM_amplitude = 0
+        HM_frequency = 0
+    
     dt_field        = dt_sim * field_save_iter                         # Time between data slices (seconds)
     dt_particle     = dt_sim * part_save_iter
     return 
@@ -136,8 +147,8 @@ def initialize_simulation_variables():
     gyfreq    = q * B0 / mp                                 # Proton gyrofrequency (rad/s)
     gyperiod  = (mp * 2 * np.pi) / (q * B0)                 # Proton gyroperiod (s)
     
-    time_seconds_field    = np.array([ii * dt_field    for ii in range(num_field_steps)])
-    time_seconds_particle = np.array([ii * dt_particle for ii in range(num_particle_steps)])
+    time_seconds_field    = np.array([ii * dt_field    for ii in range(missing_t0_offset, num_field_steps + missing_t0_offset)])
+    time_seconds_particle = np.array([ii * dt_particle for ii in range(missing_t0_offset, num_particle_steps + missing_t0_offset)])
     
     time_gperiods_field   = time_seconds_field    / gyperiod
     time_gperiods_particle= time_seconds_particle / gyperiod
@@ -146,7 +157,7 @@ def initialize_simulation_variables():
     time_radperiods_particle = time_seconds_particle * gyfreq
     return
 
-def load_fields(ii):    
+def load_fields(ii):
     field_file = 'data%05d.npz' % ii             # Define target file
     input_path = field_dir + field_file          # File location
     data       = np.load(input_path)             # Load file
@@ -178,9 +189,11 @@ def extract_all_arrays():
     access. Note that magnetic field arrays exclude the last value due to periodic
     boundary conditions. This may be changed later.
     '''
-    bx_arr   = np.zeros((num_field_steps, NX)); ex_arr  = np.zeros((num_field_steps, NX))
-    by_arr   = np.zeros((num_field_steps, NX)); ey_arr  = np.zeros((num_field_steps, NX))
-    bz_arr   = np.zeros((num_field_steps, NX)); ez_arr  = np.zeros((num_field_steps, NX))
+    
+    '''
+    GET RID OF THIS -- JUST CREATES A SINGLE ARRAY AND ASSIGNS ACCESS TO 14 VARIABLES. THIS IS REALLY DUMB.
+    '''
+    bx_arr,ex_arr,by_arr,ey_arr,bz_arr,ez_arr,vex_arr,jx_arr,vey_arr,jy_arr,vez_arr,jz_arr,te_arr,qdns_arr = [np.zeros((num_field_steps, NX))]*14
     
     # Check that all components are extracted
     comps_missing = 0
@@ -188,7 +201,7 @@ def extract_all_arrays():
         check_path = temp_dir + component + '_array.npy'
         if os.path.isfile(check_path) == False:
             comps_missing += 1
-    
+        
     if comps_missing == 0:
         print('Field components already extracted.')
         return
@@ -196,26 +209,103 @@ def extract_all_arrays():
         print('Extracting fields...')
         for ii in range(num_field_steps):
             print('Extracting field timestep {}'.format(ii))
-            B, E, Ve, Te, J, q_dns = load_fields(ii)
-            bx_arr[ii, :] = B[:-1, 0]; ex_arr[ii, :] = E[:, 0]
-            by_arr[ii, :] = B[:-1, 1]; ey_arr[ii, :] = E[:, 1]
-            bz_arr[ii, :] = B[:-1, 2]; ez_arr[ii, :] = E[:, 2]
-
-        np.save(temp_dir + 'bx' +'_array.npy', bx_arr)
-        np.save(temp_dir + 'by' +'_array.npy', by_arr)
-        np.save(temp_dir + 'bz' +'_array.npy', bz_arr)
-        
-        np.save(temp_dir + 'ex' +'_array.npy', ex_arr)
-        np.save(temp_dir + 'ey' +'_array.npy', ey_arr)
-        np.save(temp_dir + 'ez' +'_array.npy', ez_arr)
-        print('Field component arrays saved in {}'.format(temp_dir))
+            
+            B, E, Ve, Te, J, q_dns = load_fields(ii + missing_t0_offset)
+            
+            bx_arr[ii, :] = B[:-1, 0]
+            by_arr[ii, :] = B[:-1, 1]
+            pdb.set_trace()
+            #bz_arr[ii, :] = B[:-1, 2]
+            
+            
+            
+# =============================================================================
+#             ex_arr[ii, :] = E[:, 0]
+#             ey_arr[ii, :] = E[:, 1]
+#             ez_arr[ii, :] = E[:, 2]
+# =============================================================================
+            
+# =============================================================================
+#             try:
+#                 jx_arr[ii, :] = J[:, 0]
+#                 jy_arr[ii, :] = J[:, 1]
+#                 jz_arr[ii, :] = J[:, 2]
+#             except:
+#                 '''
+#                 Catch for some model runs where I was saving charge density in place of current density
+#                 'Cause I am dumb
+#                 Will just return a zero array instead, no harm (just missing data)
+#                 '''
+#                 jx_arr[ii, :] = np.zeros(NX)
+#                 jy_arr[ii, :] = np.zeros(NX)
+#                 jz_arr[ii, :] = np.zeros(NX)
+# =============================================================================
+            
+# =============================================================================
+#             vex_arr[ii, :] = Ve[:, 0]
+#             vey_arr[ii, :] = Ve[:, 1]
+#             vez_arr[ii, :] = Ve[:, 2]
+#             
+#             te_arr[  ii, :] = Te
+#             qdns_arr[ii, :] = q_dns
+#         
+#         np.save(temp_dir + 'bx' +'_array.npy', bx_arr)
+#         np.save(temp_dir + 'by' +'_array.npy', by_arr)
+#         np.save(temp_dir + 'bz' +'_array.npy', bz_arr)
+#         
+#         np.save(temp_dir + 'ex' +'_array.npy', ex_arr)
+#         np.save(temp_dir + 'ey' +'_array.npy', ey_arr)
+#         np.save(temp_dir + 'ez' +'_array.npy', ez_arr)
+#         
+#         np.save(temp_dir + 'jx' +'_array.npy', jx_arr)
+#         np.save(temp_dir + 'jy' +'_array.npy', jy_arr)
+#         np.save(temp_dir + 'jz' +'_array.npy', jz_arr)
+#         
+#         np.save(temp_dir + 'vex' +'_array.npy', vex_arr)
+#         np.save(temp_dir + 'vey' +'_array.npy', vey_arr)
+#         np.save(temp_dir + 'vez' +'_array.npy', vez_arr)
+#         
+#         np.save(temp_dir + 'te'    +'_array.npy', te_arr)
+#         np.save(temp_dir + 'qdens' +'_array.npy', qdns_arr)
+#         
+#         print('Field component arrays saved in {}'.format(temp_dir))
+# =============================================================================
     return
 
-def get_array(component):
-    arr_path = temp_dir + component.lower() + '_array' + '.npy'
-    arr      = np.load(arr_path) 
-    return arr
 
+def get_array(component='by', get_all=False):
+    '''
+    Input  : Array Component
+    Output : Array as np.ndarray
+    
+    Components:
+        3D (x, y, z) -- B, E, J, Ve
+        1D           -- qdens, Te
+    '''
+    if get_all == False:
+        arr_path = temp_dir + component.lower() + '_array' + '.npy'
+        arr      = np.load(arr_path)
+        return arr
+    else:
+        bx = np.load(temp_dir + 'bx' +'_array.npy')
+        by = np.load(temp_dir + 'by' +'_array.npy')
+        bz = np.load(temp_dir + 'bz' +'_array.npy')
+        
+        ex = np.load(temp_dir + 'ex' +'_array.npy')
+        ey = np.load(temp_dir + 'ey' +'_array.npy')
+        ez = np.load(temp_dir + 'ez' +'_array.npy')
+        
+        jx = np.load(temp_dir + 'jx' +'_array.npy')
+        jy = np.load(temp_dir + 'jy' +'_array.npy')
+        jz = np.load(temp_dir + 'jz' +'_array.npy')
+        
+        vex = np.load(temp_dir + 'vex' +'_array.npy')
+        vey = np.load(temp_dir + 'vey' +'_array.npy')
+        vez = np.load(temp_dir + 'vez' +'_array.npy')
+        
+        te    = np.load(temp_dir + 'te' +'_array.npy')
+        qdens = np.load(temp_dir + 'qdens' +'_array.npy')
+        return bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens
 
 
 @nb.njit()
