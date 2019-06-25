@@ -62,6 +62,7 @@ density    = np.asarray([0.100, 0.900])             # Species charge density as 
 drift_v    = np.asarray([0.000, 0.000])             # Species parallel bulk velocity (alfven velocity units)
 sim_repr   = np.asarray([0.500, 0.500])          	# Macroparticle weighting: Percentage of macroparticles assigned to each species
 
+### CHECK THESE BEFORE YOU USE THEM AGAIN!!! ##
 beta       = True                                           # Flag: Specify temperatures by beta (True) or energy in eV (False)
 beta_e     = 1.                                             # Electron beta
 beta_par   = np.array([10., 1.])                            # Ion species parallel beta (10)
@@ -102,7 +103,7 @@ if ratio_override == 1:
     print('----------------------------------------------------------------')
     print('WARNING: RATIO OVERRIDE IN EFFECT - INPUT MAGNETIC FIELD IGNORED')
     print('----------------------------------------------------------------')
-    
+
 if beta == True:
     Te0        = B0 ** 2 * beta_e   / (2 * mu0 * ne * kB)    # Temperatures of species in Kelvin (used for particle velocity initialization)
     Tpar       = B0 ** 2 * beta_par / (2 * mu0 * ne * kB)

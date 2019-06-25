@@ -11,7 +11,7 @@ import os
 import analysis_backend as bk
 import analysis_config  as cf
 import dispersions      as disp
-
+import pdb
 
 q   = 1.602e-19               # Elementary charge (C)
 c   = 3e8                     # Speed of light (m/s)
@@ -642,11 +642,11 @@ def interpolate_fields_to_particle_time():
     '''
     bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens = cf.get_array(get_all=True)
 
-    
     time_particles = cf.time_seconds_particle
     time_fields    = cf.time_seconds_field
     
-    pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens = [np.zeros((time_particles.shape[0], cf.NX))]*14
+    pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens = \
+    [np.zeros((time_particles.shape[0], cf.NX)) for _ in range(14)]
     
     for ii in range(time_particles.shape[0]):
         this_time    = time_particles[ii]                   # Target interpolant
@@ -678,10 +678,13 @@ def interpolate_fields_to_particle_time():
         for arr_out, arr_in in zip([pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens], 
                                    [bx,  by,  bz,  ex,  ey,  ez,  vex,  vey,  vez,  te,  jx,  jy,  jz,  qdens]):
             arr_out[ii] = lfac*arr_in[lidx] + ufac*arr_in[uidx]
-    
-    test_cell = cf.NX//2
-    plt.plot(time_fields, by[:, test_cell], c='b', marker='o')
-    plt.scatter(time_particles, pby[:, test_cell], c='r', marker='x')
+
+# =============================================================================
+#     test_cell = cf.NX//2
+#     plt.plot(time_fields, by[:, test_cell], c='b', marker='o')
+#     plt.scatter(time_particles, pby[:, test_cell], c='r', marker='x')
+#     plt.show()
+# =============================================================================
     return pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens
 
 
@@ -730,22 +733,18 @@ def summary_plots():
     Plot summary plot of raw values for each particle timestep
     Field values are interpolated to this point
     '''
-    import pdb
     plt.ioff()
     pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens = interpolate_fields_to_particle_time()
-    pdb.set_trace()
-    va         = cf.B0 / np.sqrt(mu0*cf.ne*mp)                                  # Alfven speed: Assuming pure proton plasma
     qdens_norm = pqdens / (cf.density*cf.charge).sum()                          # Normalized change density
     for ii in range(cf.num_particle_steps):
         print('Creating summary plot for particle timestep {}'.format(ii))
         fig_size = 4, 7                                                             # Set figure grid dimensions
         fig = plt.figure(figsize=(20,10))                                           # Initialize Figure Space
-        fig.patch.set_facecolor('w')  
-
+        fig.patch.set_facecolor('w')   
         xp, vp = cf.load_particles(ii + cf.missing_t0_offset)
         
         pos       = xp / cf.dx                                                   # Cell particle position
-        vel       = vp / va                                                      # Normalized velocity
+        vel       = vp / cf.va                                                      # Normalized velocity
     
         ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
         ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
@@ -770,24 +769,26 @@ def summary_plots():
         ax_den.plot(qdens_norm[ii], color='green')
                 
         ax_den.set_title('Charge Density and Fields')
-        ax_den.set_ylabel(r'$\rho_c$', fontsize=14, rotation=0, labelpad=5)
+        ax_den.set_ylabel(r'$\frac{\rho_c}{\rho_{c0}}$', fontsize=14, rotation=0, labelpad=20)
         ax_den.set_ylim(0.5, 1.5)
 
 
         ax_Ex   = plt.subplot2grid(fig_size, (1, 3), colspan=3, sharex=ax_den)
-        ax_Ex.plot(pex[ii]*1e6, color='red',   label=r'$E_x$')
-        ax_Ex.plot(pey[ii]*1e6, color='cyan',  label=r'$E_y$')
-        ax_Ex.plot(pez[ii]*1e6, color='black', label=r'$E_z$')
-        ax_Ex.set_ylabel(r'$E (\mu V/m)$', labelpad=25, rotation=0, fontsize=14)
-        ax_Ex.set_ylim(-200, 200)
+        ax_Ex.plot(pex[ii]*1e3, color='red',   label=r'$E_x$')
+        ax_Ex.plot(pey[ii]*1e3, color='cyan',  label=r'$E_y$')
+        ax_Ex.plot(pez[ii]*1e3, color='black', label=r'$E_z$')
+        ax_Ex.set_ylabel(r'$E (mV/m)$', labelpad=25, rotation=0, fontsize=14)
+        ax_Ex.set_ylim(-30, 30)
+        ax_Ex.legend(loc=4, ncol=3)
         
         ax_By  = plt.subplot2grid(fig_size, (2, 3), colspan=3, sharex=ax_den)
         ax_B   = plt.subplot2grid(fig_size, (3, 3), colspan=3, sharex=ax_den)
         mag_B  = np.sqrt(pby[ii] ** 2 + pbz[ii] ** 2)
     
         ax_B.plot( mag_B*1e9, color='g')
-        ax_By.plot(pby[ii]*1e9, color='g') 
-        #ax_By.plot(pbz[ii]*1e9, color='b') 
+        ax_By.plot(pby[ii]*1e9, color='g',   label=r'$B_y$') 
+        ax_By.plot(pbz[ii]*1e9, color='b',   label=r'$B_z$') 
+        ax_By.legend(loc=4, ncol=2)
         
         ax_B.set_ylim(0, cf.B0*1e9)
         ax_By.set_ylim(-cf.B0*1e9, cf.B0*1e9)
@@ -795,19 +796,83 @@ def summary_plots():
         ax_B.set_ylabel( r'$B_\perp (nT)$', rotation=0, labelpad=30, fontsize=14)
         ax_By.set_ylabel(r'$B_{y,z} (nT)$', rotation=0, labelpad=20, fontsize=14)
         ax_B.set_xlabel('Cell Number')
+        
+        
+        ax_HM = ax_B.twinx()
+        ax_HM.plot(np.ones(cf.NX) * cf.HM_amplitude * 1e9 * np.sin(2 * np.pi * cf.HM_frequency * cf.time_seconds_particle[ii]), c='red')
+        ax_HM.set_ylabel(r'$B_{HM} (nT)$', rotation=0, labelpad=30, fontsize=14, color='r')
+        
+        if cf.HM_amplitude != 0:
+            ax_HM.set_ylim(-cf.HM_amplitude, cf.HM_amplitude)
+        else:
+            ax_HM.set_ylim(-5, 5)
     
         for ax in [ax_den, ax_Ex, ax_By]:
             plt.setp(ax.get_xticklabels(), visible=False)
             ax.set_yticks(ax.get_yticks()[1:])
             
         for ax in [ax_den, ax_Ex, ax_By, ax_B]:
-            qrt = cf.NX / (4.)
+            grad = cf.NX / (4.)
             ax.set_xlim(0,  cf.NX)
-            ax.set_xticks(np.arange(0, cf.NX + qrt, qrt))
+            ax.set_xticks(np.arange(0, cf.NX + grad, grad))
             ax.grid()
         
         plt.tight_layout(pad=1.0, w_pad=1.8)
         fig.subplots_adjust(hspace=0)
+        
+        ###################
+        ### FIGURE TEXT ###
+        ###################
+        anisotropy = (cf.Tper / cf.Tpar - 1).round(1)
+        beta_per   = (2*(4e-7*np.pi)*(1.381e-23)*cf.Tper*cf.density / (cf.B0**2))
+        beta_e     = round((2*(4e-7*np.pi)*(1.381e-23)*cf.Te0*cf.ne  / (cf.B0**2)), 2)
+        rdens      = (cf.density / cf.ne).round(2)
+        pdb.set_trace()
+        try:
+            vdrift     = (cf.velocity / cf.va).round(1)
+        except:
+            vdrift     = (cf.drift_v / cf.va).round(1)
+        
+        if cf.ie == 0:
+            estring = 'Isothermal electrons (Constant Te)'
+        elif cf.ie == 1:
+            estring = 'Adiabatic electrons'
+        else:
+            'Electron relation unknown'
+                    
+        top  = 0.95
+        gap  = 0.025
+        fontsize = 12
+        plt.figtext(0.855, top        , 'Simulation Parameters', fontsize=fontsize, family='monospace', fontweight='bold')
+        plt.figtext(0.855, top - 1*gap, '{}[{}]'.format(series, run_num), fontsize=fontsize, family='monospace')
+        plt.figtext(0.855, top - 2*gap, '{} cells'.format(cf.NX), fontsize=fontsize, family='monospace')
+        plt.figtext(0.855, top - 3*gap, '{} particles/cell'.format(cf.cellpart), fontsize=fontsize, family='monospace')
+        plt.figtext(0.855, top - 4*gap, '{}'.format(estring), fontsize=fontsize, family='monospace')
+        plt.figtext(0.855, top - 5*gap, '', fontsize=fontsize, family='monospace')
+        
+        plt.figtext(0.855, top - 6*gap, 'B0      : {}nT'.format(cf.B0*1e9), fontsize=fontsize, family='monospace')
+        plt.figtext(0.855, top - 7*gap, 'n0      : {}cc'.format(cf.ne/1e6), fontsize=fontsize, family='monospace')
+        plt.figtext(0.855, top - 8*gap, 'HM_amp  : {}nT'.format(cf.HM_amplitude*1e9), fontsize=fontsize, family='monospace')
+        plt.figtext(0.855, top - 9*gap, 'HM_freq : {}mHz'.format(cf.HM_frequency*1e3), fontsize=fontsize, family='monospace')
+        plt.figtext(0.855, top - 10*gap, '', fontsize=fontsize, family='monospace')
+        
+        plt.figtext(0.855, top - 11*gap, r'$\theta$       : %d deg' % cf.theta, fontsize=fontsize, family='monospace')
+        plt.figtext(0.855, top - 12*gap, r'$\beta_e$      : %.2f' % beta_e, fontsize=fontsize, family='monospace')
+        plt.figtext(0.855, top - 13*gap, 'dx      : {}km'.format(round(cf.dx/1e3, 2)), fontsize=fontsize, family='monospace')
+        plt.figtext(0.855, top - 14*gap, '', fontsize=fontsize, family='monospace')
+        
+        ptop = top - 15*gap
+        plt.figtext(0.855, ptop, 'Particle Parameters', fontsize=fontsize, family='monospace', fontweight='bold')
+        plt.figtext(0.855, ptop - gap, 'SPECIES   ANI  XBET VDR  RDNS', fontsize=fontsize-2, family='monospace')
+        for jj in range(cf.Nj):
+            plt.figtext(0.855       , ptop - (jj + 2)*gap, '{:>10}  {}  {}  {}  {}'.format(
+                    cf.species_lbl[jj], anisotropy[jj], beta_per[jj], vdrift[jj], rdens[jj]),
+                    fontsize=fontsize-2, family='monospace')
+ 
+        time_top = 0.1
+        plt.figtext(0.87, time_top - 0*gap, 't_seconds   : {:>10}'.format(round(cf.time_seconds_particle[jj], 3))   , fontsize=fontsize, family='monospace')
+        plt.figtext(0.87, time_top - 1*gap, 't_gperiod   : {:>10}'.format(round(cf.time_gperiods_particle[jj], 3))  , fontsize=fontsize, family='monospace')
+        plt.figtext(0.87, time_top - 2*gap, 't_radperiod : {:>10}'.format(round(cf.time_radperiods_particle[jj], 3)), fontsize=fontsize, family='monospace')
     
         filename = 'summ%05d.png' % ii
         path     = cf.anal_dir + '/summary_plots/'
@@ -849,7 +914,6 @@ def standard_analysis_package():
     return
 
 #%%
-
 if __name__ == '__main__':
     drive      = 'G://MODEL_RUNS//Josh_Runs//'
     series     = 'uniform_time_varying'
@@ -859,13 +923,7 @@ if __name__ == '__main__':
     for run_num in [0]:
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
-        #standard_analysis_package()
-        #summary_plots()
         
-# =============================================================================
-#     bx = np.load('G://MODEL_RUNS//Josh_Runs//runs//uniform_time_varying//run_0//extracted//' + 'bx' +'_array.npy')
-#     by = np.load('G://MODEL_RUNS//Josh_Runs//runs//uniform_time_varying//run_0//extracted//' + 'by' +'_array.npy')
-#     print(bx)
-#     print((bx - by).max())
-# =============================================================================
+        #standard_analysis_package()
+        summary_plots()
 

@@ -136,16 +136,18 @@ def load_simulation_params():
 
 def initialize_simulation_variables():
     global wpi, gyfreq, gyperiod, time_seconds_field, time_seconds_particle, \
-           time_gperiods_field, time_gperiods_particle, time_radperiods_field, time_radperiods_particle
+           time_gperiods_field, time_gperiods_particle, time_radperiods_field, time_radperiods_particle, va
     q   = 1.602e-19               # Elementary charge (C)
     mp  = 1.67e-27                # Mass of proton (kg)
     e0  = 8.854e-12               # Epsilon naught - permittivity of free space
-    
+    mu0 = (4e-7) * np.pi          # Magnetic Permeability of Free Space (SI units)
+
     extract_all_arrays()
     
     wpi       = np.sqrt(ne * q ** 2 / (mp * e0))            # Ion plasma frequency
     gyfreq    = q * B0 / mp                                 # Proton gyrofrequency (rad/s)
     gyperiod  = (mp * 2 * np.pi) / (q * B0)                 # Proton gyroperiod (s)
+    va         = B0 / np.sqrt(mu0*ne*mp)                    # Alfven speed: Assuming pure proton plasma
     
     time_seconds_field    = np.array([ii * dt_field    for ii in range(missing_t0_offset, num_field_steps + missing_t0_offset)])
     time_seconds_particle = np.array([ii * dt_particle for ii in range(missing_t0_offset, num_particle_steps + missing_t0_offset)])
@@ -193,8 +195,9 @@ def extract_all_arrays():
     '''
     GET RID OF THIS -- JUST CREATES A SINGLE ARRAY AND ASSIGNS ACCESS TO 14 VARIABLES. THIS IS REALLY DUMB.
     '''
-    bx_arr,ex_arr,by_arr,ey_arr,bz_arr,ez_arr,vex_arr,jx_arr,vey_arr,jy_arr,vez_arr,jz_arr,te_arr,qdns_arr = [np.zeros((num_field_steps, NX))]*14
-    
+    bx_arr,ex_arr,by_arr,ey_arr,bz_arr,ez_arr,vex_arr,jx_arr,vey_arr,jy_arr,vez_arr,jz_arr,te_arr,qdns_arr\
+    = [np.zeros((num_field_steps, NX)) for _ in range(14)]
+
     # Check that all components are extracted
     comps_missing = 0
     for component in ['bx', 'by', 'bz', 'ex', 'ey', 'ez']:
@@ -214,62 +217,51 @@ def extract_all_arrays():
             
             bx_arr[ii, :] = B[:-1, 0]
             by_arr[ii, :] = B[:-1, 1]
-            pdb.set_trace()
-            #bz_arr[ii, :] = B[:-1, 2]
+            bz_arr[ii, :] = B[:-1, 2]
             
+            ex_arr[ii, :] = E[:, 0]
+            ey_arr[ii, :] = E[:, 1]
+            ez_arr[ii, :] = E[:, 2]
             
+            try:
+                jx_arr[ii, :] = J[:, 0]
+                jy_arr[ii, :] = J[:, 1]
+                jz_arr[ii, :] = J[:, 2]
+            except:
+                '''
+                Catch for some model runs where I was saving charge density in place of current density
+                'Cause I am dumb
+                Will just return a zero array instead, no harm (just missing data)
+                '''
+                pass
             
-# =============================================================================
-#             ex_arr[ii, :] = E[:, 0]
-#             ey_arr[ii, :] = E[:, 1]
-#             ez_arr[ii, :] = E[:, 2]
-# =============================================================================
+            vex_arr[ii, :] = Ve[:, 0]
+            vey_arr[ii, :] = Ve[:, 1]
+            vez_arr[ii, :] = Ve[:, 2]
             
-# =============================================================================
-#             try:
-#                 jx_arr[ii, :] = J[:, 0]
-#                 jy_arr[ii, :] = J[:, 1]
-#                 jz_arr[ii, :] = J[:, 2]
-#             except:
-#                 '''
-#                 Catch for some model runs where I was saving charge density in place of current density
-#                 'Cause I am dumb
-#                 Will just return a zero array instead, no harm (just missing data)
-#                 '''
-#                 jx_arr[ii, :] = np.zeros(NX)
-#                 jy_arr[ii, :] = np.zeros(NX)
-#                 jz_arr[ii, :] = np.zeros(NX)
-# =============================================================================
-            
-# =============================================================================
-#             vex_arr[ii, :] = Ve[:, 0]
-#             vey_arr[ii, :] = Ve[:, 1]
-#             vez_arr[ii, :] = Ve[:, 2]
-#             
-#             te_arr[  ii, :] = Te
-#             qdns_arr[ii, :] = q_dns
-#         
-#         np.save(temp_dir + 'bx' +'_array.npy', bx_arr)
-#         np.save(temp_dir + 'by' +'_array.npy', by_arr)
-#         np.save(temp_dir + 'bz' +'_array.npy', bz_arr)
-#         
-#         np.save(temp_dir + 'ex' +'_array.npy', ex_arr)
-#         np.save(temp_dir + 'ey' +'_array.npy', ey_arr)
-#         np.save(temp_dir + 'ez' +'_array.npy', ez_arr)
-#         
-#         np.save(temp_dir + 'jx' +'_array.npy', jx_arr)
-#         np.save(temp_dir + 'jy' +'_array.npy', jy_arr)
-#         np.save(temp_dir + 'jz' +'_array.npy', jz_arr)
-#         
-#         np.save(temp_dir + 'vex' +'_array.npy', vex_arr)
-#         np.save(temp_dir + 'vey' +'_array.npy', vey_arr)
-#         np.save(temp_dir + 'vez' +'_array.npy', vez_arr)
-#         
-#         np.save(temp_dir + 'te'    +'_array.npy', te_arr)
-#         np.save(temp_dir + 'qdens' +'_array.npy', qdns_arr)
-#         
-#         print('Field component arrays saved in {}'.format(temp_dir))
-# =============================================================================
+            te_arr[  ii, :] = Te
+            qdns_arr[ii, :] = q_dns
+        
+        np.save(temp_dir + 'bx' +'_array.npy', bx_arr)
+        np.save(temp_dir + 'by' +'_array.npy', by_arr)
+        np.save(temp_dir + 'bz' +'_array.npy', bz_arr)
+        
+        np.save(temp_dir + 'ex' +'_array.npy', ex_arr)
+        np.save(temp_dir + 'ey' +'_array.npy', ey_arr)
+        np.save(temp_dir + 'ez' +'_array.npy', ez_arr)
+        
+        np.save(temp_dir + 'jx' +'_array.npy', jx_arr)
+        np.save(temp_dir + 'jy' +'_array.npy', jy_arr)
+        np.save(temp_dir + 'jz' +'_array.npy', jz_arr)
+        
+        np.save(temp_dir + 'vex' +'_array.npy', vex_arr)
+        np.save(temp_dir + 'vey' +'_array.npy', vey_arr)
+        np.save(temp_dir + 'vez' +'_array.npy', vez_arr)
+        
+        np.save(temp_dir + 'te'    +'_array.npy', te_arr)
+        np.save(temp_dir + 'qdens' +'_array.npy', qdns_arr)
+        
+        print('Field component arrays saved in {}'.format(temp_dir))
     return
 
 
