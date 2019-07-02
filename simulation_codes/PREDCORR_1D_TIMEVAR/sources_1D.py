@@ -7,9 +7,9 @@ Created on Fri Sep 22 17:55:15 2017
 import numpy as np
 import numba as nb
 
-from simulation_parameters_1D import NX, Nj, n_contr, charge, smooth_sources, do_parallel, q, ne, min_dens
+from simulation_parameters_1D import NX, Nj, n_contr, charge, smooth_sources, q, ne, min_dens
 
-@nb.njit(parallel=do_parallel)
+@nb.njit()
 def deposit_both_moments(vel, Ie, W_elec, idx):
     '''Collect number and velocity moments in each cell, weighted by their distance
     from cell nodes.
@@ -88,7 +88,7 @@ def collect_moments(vel, Ie, W_elec, idx):
     return q_dens, Ji
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit()
 def smooth(function):
     '''Smoothing function: Applies Gaussian smoothing routine across adjacent cells. 
     Assummes no contribution from ghost cells.'''

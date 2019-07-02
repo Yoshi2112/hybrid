@@ -9,7 +9,7 @@ import numba as nb
 
 from particles_1D             import advance_particles_and_moments
 from auxilliary_1D            import cross_product, interpolate_to_center_cspline3D, interpolate_to_center_cspline1D, interpolate_to_center_linear_1D
-from simulation_parameters_1D import NX, dx, Te0, ne, q, mu0, kB, ie, HM_amplitude, HM_frequency
+from simulation_parameters_1D import NX, dx, Te0, ne, q, mu0, kB, ie
 
 
 @nb.njit()
@@ -76,13 +76,6 @@ def get_curl_E(field, DX=dx):
 
     curl = set_periodic_boundaries(curl)
     return curl / DX
-
-
-def time_varying_background(T):
-    # Subtract background
-    # Advance using curl
-    # Add new background
-    return HM_amplitude * np.sin(2 * np.pi * HM_frequency * T)
 
 
 @nb.njit()

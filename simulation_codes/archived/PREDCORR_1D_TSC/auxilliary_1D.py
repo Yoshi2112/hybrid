@@ -157,7 +157,6 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, part_save_i
     vel_ts          = 0.80 * const.dx / max_Vx                                   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
     DT_part         = min(Eacc_ts, vel_ts, ion_ts, disp_ts)                      # Smallest of the allowable timesteps
 
-    ch_flag = 0
     if DT_part < 0.9*DT:
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, 0.5*DT)    # Re-sync vel/pos       
         DT         *= 0.5
@@ -168,19 +167,19 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, part_save_i
         part_save_iter *= 2
         field_save_iter *= 2
             
-        ch_flag = 1
+        #print('Timestep halved. Syncing particle velocity with DT = {}'.format(DT))
 
             
     elif DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0:
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, 0.5*DT)    # Re-sync vel/pos          
         DT         *= 2.0
-        max_inc    /= 2
-        qq         /= 2
+        max_inc   //= 2
+        qq        //= 2
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, -0.5*DT)   # De-sync vel/pos 
 
-        part_save_iter  /= 2
-        field_save_iter /= 2
+        part_save_iter  //= 2
+        field_save_iter //= 2
         
-        ch_flag = 2
-
-    return vel, qq, DT, max_inc, part_save_iter, field_save_iter, ch_flag
+        #print('Timestep Doubled. Syncing particle velocity with DT = {}'.format(DT))
+            
+    return vel, qq, DT, max_inc, part_save_iter, field_save_iter

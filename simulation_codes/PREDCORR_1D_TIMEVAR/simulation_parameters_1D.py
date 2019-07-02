@@ -9,16 +9,16 @@ import sys
 import platform
 
 ### RUN DESCRIPTION ###
-run_description = '''Basic test of homogenous, uniform, time-varying background field with predictor-corrector'''
+run_description = '''Testing old PREDCORR against PREDCORR_TIMEVAR to see if identical for HM_amplitude = 0'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs//uniform_time_varying'  # Series save dir   : Folder containing all runs of a series
-run_num         = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path       = 'runs//test_HM_similarity'  # Series save dir   : Folder containing all runs of a series
+run_num         = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles  = 1                             # Save data flag    : For later analysis
 save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 15401                         # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [6, 7]                        # Set CPU affinity for run. Must be list. Auto-assign: None.
+cpu_affin       = [2*run_num, 2*run_num+1]      # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 ### PHYSICAL CONSTANTS ###
@@ -34,24 +34,24 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 1000                             # Simulation runtime, in multiples of the gyroperiod
+max_rev  = 20                               # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 
-dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
-cellpart = 2000                             # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+nsp_ppc  = 500                              # Number of particles per cell, per species - i.e. each species has equal representation
+dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 
 ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
 B0       = 200e-9                           # Unform initial magnetic field value (in T)
-ne       = 200e6                            # Electron density (in /m3, same as total ion density)
+ne       = 200e6                            # Electron charge/number density (in /m3, same as total ion charge density)
 
 orbit_res = 0.10                            # Particle orbit resolution: Fraction of gyroperiod in seconds
-freq_res  = 0.05                            # Frequency resolution: Fraction of inverse radian frequencies
+freq_res  = 0.05                            # Frequency resolution     : Fraction of inverse radian cyclotron frequency
 part_res  = 0.25                            # Data capture resolution in gyroperiod fraction: Particle information
 field_res = 0.10                            # Data capture resolution in gyroperiod fraction: Field information
 
 
 ### PARTICLE PARAMETERS ###
-species_lbl= [r'$H^+$ hot', r'$H^+$ cold']  # Species name/labels        : Used for plotting
+species_lbl= [r'$H^+$ hot', r'$H^+$ cold']  # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
 temp_color = ['r', 'b']
 temp_type  = np.asarray([1, 0])                   	# Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
 dist_type  = np.asarray([0, 0])                     # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
@@ -62,11 +62,10 @@ density    = np.asarray([0.100, 0.900])             # Species charge density as 
 drift_v    = np.asarray([0.000, 0.000])             # Species parallel bulk velocity (alfven velocity units)
 sim_repr   = np.asarray([0.500, 0.500])          	# Macroparticle weighting: Percentage of macroparticles assigned to each species
 
-### CHECK THESE BEFORE YOU USE THEM AGAIN!!! ##
 beta       = True                                           # Flag: Specify temperatures by beta (True) or energy in eV (False)
 beta_e     = 1.                                             # Electron beta
 beta_par   = np.array([10., 1.])                            # Ion species parallel beta (10)
-beta_per   = np.array([20., 1.])                            # Ion species perpendicular beta (50)
+beta_per   = np.array([50., 1.])                            # Ion species perpendicular beta (50)
 
 E_e        = 0.01
 E_par      = np.array([1.3e3, 30, 20])
@@ -78,9 +77,8 @@ min_dens       = 0.05                                       # Allowable minimum 
 account_for_dispersion = False                              # Flag (True/False) whether or not to reduce timestep to prevent dispersion getting too high
 dispersion_allowance   = 1.                                 # Multiple of how much past frac*wD^-1 is allowed: Used to stop dispersion from slowing down sim too much  
 adaptive_timestep      = True                               # Flag (True/False) for adaptive timestep based on particle and field parameters
-do_parallel            = False                              # Flag (True/False) for auto-parallel using numba.njit()
 
-HM_amplitude   = 50e-9                                      # Driven wave amplitude in T
+HM_amplitude   = 0e-9                                       # Driven wave amplitude in T
 HM_frequency   = 0.02                                       # Driven wave in Hz
 ratio_override = 0                                          # Flag to override magnetic field value for specific regime
 wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
@@ -120,7 +118,6 @@ dx         = dxm * c / wpi                               # Spatial cadence, base
 xmin       = 0                                           # Minimum simulation dimension
 xmax       = NX * dx                                     # Maximum simulation dimension
 
-N          = cellpart*NX                                 # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
 
 density    = ne * (density / charge)                     # Density of each species per cell (in /m3)
 charge    *= q                                           # Cast species charge to Coulomb
@@ -128,6 +125,9 @@ mass      *= mp                                          # Cast species mass to 
 drift_v   *= va                                          # Cast species velocity to m/s
 
 Nj         = len(mass)                                   # Number of species
+cellpart   = nsp_ppc * Nj                                # Number of Particles per cell.
+N          = cellpart*NX                                 # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
+
 N_species  = np.round(N * sim_repr).astype(int)          # Number of sim particles for each species, total
 n_contr    = density / (cellpart*sim_repr)               # Species density contribution: Each macroparticle contributes this density to a cell
 

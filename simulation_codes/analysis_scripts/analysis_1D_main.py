@@ -550,12 +550,12 @@ def plot_spatially_averaged_fields(plot=False, save=True, tmax=600):
         ax.set_xticklabels([])
                 
     for ax in [ax1, ax3, ax5]:
-        ax.set_xlim(0, tmax)
-        ax.set_ylim(0, 1.7)
+        ax.set_xlim(0, cf.time_radperiods_field[-1]/5)
+        ax.set_ylim(0, None)
         
     for ax in [ax2, ax4, ax6]:
         ax.set_xlim(0, cf.time_radperiods_field[-1])
-        ax.set_ylim(0, 1.7)
+        ax.set_ylim(0, None)
         ax.set_yticklabels([])
             
     for ax in [ax5, ax6]:
@@ -570,6 +570,7 @@ def plot_spatially_averaged_fields(plot=False, save=True, tmax=600):
     if plot == True:
         figManager = plt.get_current_fig_manager()
         figManager.window.showMaximized()
+    print('Spatially averaged B-fields plotted.')
     return
 
 
@@ -583,7 +584,7 @@ def plot_gyrophase():
     return
 
 
-def single_point_timeseries(cells=None, overwrite=False, save=True):
+def single_point_helicity_timeseries(cells=None, overwrite=False, save=True):
     '''
     Plot timeseries for raw, +ve, -ve helicities at single point
     
@@ -593,7 +594,7 @@ def single_point_timeseries(cells=None, overwrite=False, save=True):
     if cells is None:
         cells = np.arange(cf.NX)
     
-    ts_folder = cf.anal_dir + '//single_point//'
+    ts_folder = cf.anal_dir + '//single_point_helicity//'
     
     if os.path.exists(ts_folder) == False:
         os.makedirs(ts_folder)
@@ -614,9 +615,9 @@ def single_point_timeseries(cells=None, overwrite=False, save=True):
             ax1 = plt.subplot2grid((2, 2), (0, 0), colspan=2)
             ax2 = plt.subplot2grid((2, 2), (1, 0), colspan=2)
             
-            ax1.plot(cf.time_seconds_field, 1e9*By_raw[:, x_idx], label='Raw B{}'.format(component), c='blue')
-            ax2.plot(cf.time_seconds_field, 1e9*By_pos[:, x_idx], label='B{}+'.format(component), c='green')
-            ax2.plot(cf.time_seconds_field, 1e9*By_neg[:, x_idx], label='B{}-'.format(component), c='orange')
+            ax1.plot(cf.time_seconds_field, 1e9*raw[:, x_idx], label='Raw B{}'.format(component), c='blue')
+            ax2.plot(cf.time_seconds_field, 1e9*pos[:, x_idx], label='B{}+'.format(component), c='green')
+            ax2.plot(cf.time_seconds_field, 1e9*neg[:, x_idx], label='B{}-'.format(component), c='orange')
             
             ax1.set_title('Time-series at cell {}'.format(x_idx))
             ax2.set_xlabel('Time (s)')
@@ -634,6 +635,76 @@ def single_point_timeseries(cells=None, overwrite=False, save=True):
             if save==True:
                 fig.savefig(ts_folder + 'single_point_field_B{}_{}.png'.format(component, x_idx), edgecolor='none')
     return
+
+
+def single_point_field_timeseries(cells=None, overwrite=False, save=True, maxtime=None):
+    '''
+    Plot timeseries for raw fields at specified cells
+    
+    maxtime=time in seconds for endpoint (defaults to total runtime)
+    '''
+    
+    if cells is None:
+        cells = np.arange(cf.NX)
+    
+    ts_folder = cf.anal_dir + '//single_point_fields//'
+    
+    if os.path.exists(ts_folder) == False:
+        os.makedirs(ts_folder)
+    
+    bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens = cf.get_array(get_all=True)
+    
+    plt.ioff()
+    for x_idx in cells:
+        fig  = plt.figure(figsize=(18, 10))
+        
+        ## MAGNETIC FIELDS ##
+        axbx = plt.subplot2grid((3, 2), (0, 0))
+        axby = plt.subplot2grid((3, 2), (1, 0))
+        axbz = plt.subplot2grid((3, 2), (2, 0))
+        
+        axbx.plot(cf.time_seconds_field, 1e9*bx[:, x_idx])
+        axbx.set_ylabel('$B_x (nT)$')
+        
+        axby.plot(cf.time_seconds_field, 1e9*by[:, x_idx])
+        axby.set_ylabel('$B_y (nT)$')
+        
+        axbz.plot(cf.time_seconds_field, 1e9*bz[:, x_idx])
+        axbz.set_ylabel('$B_z (nT)$')
+        
+        axbx.set_title('B-field at cell {}'.format(x_idx))
+        axbz.set_xlabel('Time (s)')
+        
+        ## ELECTRIC FIELDS ##
+        axex = plt.subplot2grid((3, 2), (0, 1))
+        axey = plt.subplot2grid((3, 2), (1, 1))
+        axez = plt.subplot2grid((3, 2), (2, 1))
+        
+        axex.plot(cf.time_seconds_field, 1e6*bx[:, x_idx])
+        axex.set_ylabel(r'$E_x (\mu V/m)$')
+        
+        axey.plot(cf.time_seconds_field, 1e6*by[:, x_idx])
+        axey.set_ylabel(r'$E_y (\mu V/m)$')
+        
+        axez.plot(cf.time_seconds_field, 1e6*bz[:, x_idx])
+        axez.set_ylabel(r'$E_z (\mu V/m)$')
+        
+        axex.set_title('E-field at cell {}'.format(x_idx))
+        axez.set_xlabel('Time (s)')
+        
+        if maxtime is None:
+            maxtime = cf.time_seconds_field[-1]
+            
+        for ax in [axbx, axby, axbz, axex, axey, axez]:
+            ax.set_xlim(0, maxtime)
+        
+        fig.tight_layout()
+        fig.subplots_adjust(hspace=0)
+        
+        if save==True:
+            fig.savefig(ts_folder + 'single_point_field_{}.png'.format(x_idx), edgecolor='none')
+    return
+
 
 
 def interpolate_fields_to_particle_time():
@@ -728,16 +799,28 @@ def analyse_helicity(overwrite=False, plot=False, save=True):
     return
 
 
-def summary_plots():
+def summary_plots(save=True):
     '''
     Plot summary plot of raw values for each particle timestep
     Field values are interpolated to this point
-    '''
+    '''    
+    path = cf.anal_dir + '/summary_plots/'
+        
+    if os.path.exists(path) == False:                                   # Create data directory
+        os.makedirs(path)
+            
     plt.ioff()
     pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens = interpolate_fields_to_particle_time()
     qdens_norm = pqdens / (cf.density*cf.charge).sum()                          # Normalized change density
     for ii in range(cf.num_particle_steps):
-        print('Creating summary plot for particle timestep {}'.format(ii))
+        filename = 'summ%05d.png' % ii
+        fullpath = path + filename
+        
+        if os.path.exists(fullpath):
+            print('Summary plot already present for timestep [{}]{}'.format(run_num, ii))
+            continue
+        
+        print('Creating summary plot for particle timestep [{}]{}'.format(run_num, ii))
         fig_size = 4, 7                                                             # Set figure grid dimensions
         fig = plt.figure(figsize=(20,10))                                           # Initialize Figure Space
         fig.patch.set_facecolor('w')   
@@ -798,14 +881,15 @@ def summary_plots():
         ax_B.set_xlabel('Cell Number')
         
         
-        ax_HM = ax_B.twinx()
-        ax_HM.plot(np.ones(cf.NX) * cf.HM_amplitude * 1e9 * np.sin(2 * np.pi * cf.HM_frequency * cf.time_seconds_particle[ii]), c='red')
-        ax_HM.set_ylabel(r'$B_{HM} (nT)$', rotation=0, labelpad=30, fontsize=14, color='r')
+        ax_HM    = ax_B.twinx()
+        
+        ax_HM.plot(pbx[ii]*1e9, c='red')
+        ax_HM.set_ylabel(r'$B_x (nT)$', rotation=0, labelpad=30, fontsize=14, color='r')
         
         if cf.HM_amplitude != 0:
-            ax_HM.set_ylim(-cf.HM_amplitude, cf.HM_amplitude)
+            ax_HM.set_ylim((cf.B0 - cf.HM_amplitude)*1e9, (cf.B0 + cf.HM_amplitude)*1e9)
         else:
-            ax_HM.set_ylim(-5, 5)
+            ax_HM.set_ylim(cf.B0*1e9 - 1, cf.B0*1e9 + 1)
     
         for ax in [ax_den, ax_Ex, ax_By]:
             plt.setp(ax.get_xticklabels(), visible=False)
@@ -824,17 +908,17 @@ def summary_plots():
         ### FIGURE TEXT ###
         ###################
         anisotropy = (cf.Tper / cf.Tpar - 1).round(1)
-        beta_per   = (2*(4e-7*np.pi)*(1.381e-23)*cf.Tper*cf.density / (cf.B0**2))
+        beta_per   = (2*(4e-7*np.pi)*(1.381e-23)*cf.Tper*cf.ne / (cf.B0**2)).round(2)
         beta_e     = round((2*(4e-7*np.pi)*(1.381e-23)*cf.Te0*cf.ne  / (cf.B0**2)), 2)
         rdens      = (cf.density / cf.ne).round(2)
-        pdb.set_trace()
+
         try:
             vdrift     = (cf.velocity / cf.va).round(1)
         except:
             vdrift     = (cf.drift_v / cf.va).round(1)
         
         if cf.ie == 0:
-            estring = 'Isothermal electrons (Constant Te)'
+            estring = 'Isothermal electrons'
         elif cf.ie == 1:
             estring = 'Adiabatic electrons'
         else:
@@ -870,21 +954,13 @@ def summary_plots():
                     fontsize=fontsize-2, family='monospace')
  
         time_top = 0.1
-        plt.figtext(0.87, time_top - 0*gap, 't_seconds   : {:>10}'.format(round(cf.time_seconds_particle[jj], 3))   , fontsize=fontsize, family='monospace')
-        plt.figtext(0.87, time_top - 1*gap, 't_gperiod   : {:>10}'.format(round(cf.time_gperiods_particle[jj], 3))  , fontsize=fontsize, family='monospace')
-        plt.figtext(0.87, time_top - 2*gap, 't_radperiod : {:>10}'.format(round(cf.time_radperiods_particle[jj], 3)), fontsize=fontsize, family='monospace')
+        plt.figtext(0.875, time_top - 0*gap, 't_seconds   : {:>10}'.format(round(cf.time_seconds_particle[ii], 3))   , fontsize=fontsize, family='monospace')
+        plt.figtext(0.875, time_top - 1*gap, 't_gperiod   : {:>10}'.format(round(cf.time_gperiods_particle[ii], 3))  , fontsize=fontsize, family='monospace')
+        plt.figtext(0.875, time_top - 2*gap, 't_radperiod : {:>10}'.format(round(cf.time_radperiods_particle[ii], 3)), fontsize=fontsize, family='monospace')
     
-        filename = 'summ%05d.png' % ii
-        path     = cf.anal_dir + '/summary_plots/'
-        
-        if os.path.exists(path) == False:                                   # Create data directory
-            os.makedirs(path)
-    
-        fullpath = path + filename
-        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-        print('Plot saved'.format(ii))
+        if save == True:
+            plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
         plt.close('all')
-        break
     return
 
 
@@ -910,20 +986,47 @@ def standard_analysis_package():
     plot_energies(normalize=True, save=True)
     plot_ion_energy_components(save=True)
     plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
-    single_point_timeseries()
+    single_point_helicity_timeseries()
+    single_point_field_timeseries()
+    return
+
+
+def compare_two(component='by'):
+    runs       = [0, 1]
+    test_arr   = []
+    
+    for run in runs:
+        cf.load_run(drive, series, run)
+        test_arr.append(cf.get_array(component))
+    
+    x_idx = cf.NX // 4
+    plt.figure()
+    plt.title('Two runs: Raw {}'.format(component))
+    plt.plot(test_arr[0][:, x_idx], label='Run {}'.format(runs[0]))
+    plt.plot(test_arr[1][:, x_idx], label='Run {}'.format(runs[1]))
+    plt.legend()
+    plt.show()
+    
+    total_diffs = (test_arr[0] - test_arr[0]).sum()
+    print('Total difference between {} arrays = {}'.format(component, total_diffs))
     return
 
 #%%
 if __name__ == '__main__':
-    drive      = 'G://MODEL_RUNS//Josh_Runs//'
-    series     = 'uniform_time_varying'
+    #drive      = 'G://MODEL_RUNS//Josh_Runs//'
+    drive      = 'F://'
+    series     = 'test_HM_similarity'
     series_dir = '{}/runs//{}//'.format(drive, series)
     num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [0]:
-        print('Run {}'.format(run_num))
-        cf.load_run(drive, series, run_num)
+# =============================================================================
+#     for run_num in range(num_runs):
+#         print('Run {}'.format(run_num))
+#         cf.load_run(drive, series, run_num)
+#         #standard_analysis_package()
+#         #summary_plots()
+#         #plot_spatially_averaged_fields()
+#         #single_point_field_timeseries()
+# =============================================================================
         
-        #standard_analysis_package()
-        summary_plots()
-
+    compare_two('bz')

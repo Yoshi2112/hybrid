@@ -14,9 +14,9 @@ The global calls allow variables to be accessed in the main script without
 clogging up its namespace - i.e. run-specific parameters are called by
 using e.g. cf.B0
 '''
-def load_run(drive, series, run_num):
+def load_run(drive, series, run_num, lmissing_t0_offset=0):
     global missing_t0_offset
-    missing_t0_offset = 1                   # Flag for when I thought having a t=0 save file wasn't needed. I was wrong.
+    missing_t0_offset = lmissing_t0_offset   # Flag for when I thought having a t=0 save file wasn't needed. I was wrong.
     manage_dirs(drive, series, run_num)
     load_simulation_params()
     load_species_params()

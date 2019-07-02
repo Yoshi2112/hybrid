@@ -9,16 +9,16 @@ import sys
 import platform
 
 ### RUN DESCRIPTION ###
-run_description = '''Basic test of homogenous, uniform, time-varying background field with predictor-corrector'''
+run_description = '''Testing old PREDCORR against PREDCORR_TIMEVAR to see if identical for HM_amplitude = 0'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs//uniform_time_varying'  # Series save dir   : Folder containing all runs of a series
+save_path       = 'runs//test_HM_similarity'    # Series save dir   : Folder containing all runs of a series
 run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles  = 0                             # Save data flag    : For later analysis
-save_fields     = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
+save_particles  = 1                             # Save data flag    : For later analysis
+save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 15401                         # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [2, 3]                        # Set CPU affinity for run. Must be list. Auto-assign: None.
+cpu_affin       = [2*run_num, 2*run_num+1]      # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 ### PHYSICAL CONSTANTS ###
@@ -34,7 +34,7 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 1000                             # Simulation runtime, in multiples of the gyroperiod
+max_rev  = 20                               # Simulation runtime, in multiples of the gyroperiod
 
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
 cellpart = 1000                             # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
@@ -65,7 +65,7 @@ sim_repr   = np.asarray([0.500, 0.500])     # Macroparticle weighting: Percentag
 beta       = True                           # Flag: Specify temperatures by beta (True) or energy in eV (False)
 beta_e     = 1.                             # Electron beta
 beta_par   = np.array([10., 1.])            # Ion species parallel beta (10)
-beta_per   = np.array([20., 1.])            # Ion species perpendicular beta (50)
+beta_per   = np.array([50., 1.])            # Ion species perpendicular beta (50)
 
 E_e        = 0.01
 E_par      = np.array([1.3e3, 30, 20])
@@ -79,8 +79,6 @@ dispersion_allowance   = 1.                                 # Multiple of how mu
 adaptive_timestep      = True                               # Flag (True/False) for adaptive timestep based on particle and field parameters
 do_parallel            = False                              # Flag (True/False) for auto-parallel using numba.njit()
 
-HM_amplitude   = 0                                          # Driven wave amplitude in T
-HM_frequency   = 0.02                                       # Driven wave in Hz
 ratio_override = 0                                          # Flag to override magnetic field value for specific regime
 wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
 
@@ -177,7 +175,7 @@ print('Run Number         : {}'.format(run_num))
 print('Field save flag    : {}'.format(save_fields))
 print('Particle save flag : {}\n'.format(save_particles))
 
-print('Speed ratio        : {}'.format(sped_ratio))
+#print('Speed ratio        : {}'.format(sped_ratio))
 print('Density            : {}cc'.format(round(ne / 1e6, 2)))
 print('Background B-field : {}nT'.format(round(B0*1e9, 1)))
 print('Gyroperiod         : {}s'.format(round(2. * np.pi / gyfreq, 2)))

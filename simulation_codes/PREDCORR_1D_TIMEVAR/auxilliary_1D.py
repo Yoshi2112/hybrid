@@ -8,6 +8,7 @@ import numba as nb
 import numpy as np
 
 import particles_1D as particles
+import fields_1D as fields
 import simulation_parameters_1D as const
 import save_routines as save
 
@@ -31,7 +32,7 @@ def cross_product_single(A, B):
     return output
 
 
-@nb.njit(parallel=const.do_parallel)
+@nb.njit()
 def cross_product(A, B):
     '''
     Vector (cross) product between two vectors, A and B of same dimensions.
@@ -52,7 +53,7 @@ def cross_product(A, B):
 
 
 
-@nb.njit(parallel=const.do_parallel)
+@nb.njit()
 def interpolate_to_center_cspline1D(arr, DX=const.dx):
     ''' 
     Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
@@ -70,7 +71,7 @@ def interpolate_to_center_cspline1D(arr, DX=const.dx):
     return interp
 
 
-@nb.njit(parallel=const.do_parallel)
+@nb.njit()
 def interpolate_to_center_cspline3D(arr, DX=const.dx):
     ''' 
     Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
@@ -85,7 +86,7 @@ def interpolate_to_center_cspline3D(arr, DX=const.dx):
     return interp
 
 
-@nb.njit(parallel=const.do_parallel)
+@nb.njit()
 def interpolate_to_center_linear_1D(val):
     ''' 
     Interpolates vector cell edge values (i.e. B-grid quantities) to cell centers (i.e. E-grid quantities)
@@ -112,7 +113,7 @@ def set_timestep(vel):
 
     DT       = min(ion_ts, vel_ts, disp_ts)
     max_time = const.max_rev * gyperiod               # Total runtime in seconds
-    max_inc  = int(max_time / DT) + 1                 # Total number of time steps
+    max_inc  = (max_time / DT) + 1                 # Total number of time steps
 
     if const.part_res == 0:
         part_save_iter = 1
@@ -126,7 +127,9 @@ def set_timestep(vel):
 
     if const.save_fields == 1 or const.save_particles == 1:
         save.store_run_parameters(DT, part_save_iter, field_save_iter)
-        
+    
+    print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))
+    
     return DT, max_inc, part_save_iter, field_save_iter
 
 
@@ -167,19 +170,39 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, part_save_i
         part_save_iter *= 2
         field_save_iter *= 2
             
-        #print('Timestep halved. Syncing particle velocity with DT = {}'.format(DT))
+        print('Timestep halved. Syncing particle velocity with DT = {}'.format(DT))
 
             
     elif DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0:
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, 0.5*DT)    # Re-sync vel/pos          
         DT         *= 2.0
-        max_inc    /= 2
-        qq         /= 2
+        max_inc   //= 2
+        qq        //= 2
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, -0.5*DT)   # De-sync vel/pos 
 
-        part_save_iter  /= 2
-        field_save_iter /= 2
+        part_save_iter  //= 2
+        field_save_iter //= 2
         
-        #print('Timestep Doubled. Syncing particle velocity with DT = {}'.format(DT))
+        print('Timestep Doubled. Syncing particle velocity with DT = {}'.format(DT))
 
     return vel, qq, DT, max_inc, part_save_iter, field_save_iter
+
+
+def main_loop():
+    ############################
+    ##### EXAMINE TIMESTEP #####
+    ############################
+    vel, qq, DT, max_inc, part_save_iter, field_save_iter \
+    = check_timestep(qq, DT, pos, vel, B, E_int, q_dens, Ie, W_elec, max_inc, part_save_iter, field_save_iter, idx)
+
+    #######################
+    ###### MAIN LOOP ######
+    #######################
+    pos, vel, Ie, W_elec, q_dens_adv, Ji = particles.advance_particles_and_moments(pos, vel, Ie, W_elec, idx, B, E_int, DT)
+    q_dens                               = 0.5 * (q_dens + q_dens_adv)
+    B                                    = fields.push_B(B, E_int, DT, qq, half_flag=1)
+    E_half, Ve, Te                       = fields.calculate_E(B, Ji, q_dens)
+    q_dens                               = q_dens_adv.copy()
+    
+    E_int, B = fields.predictor_corrector(B, E_int, E_half, pos, vel, q_dens_adv, Ie, W_elec, idx, DT, qq)
+    return

@@ -21,24 +21,22 @@ if __name__ == '__main__':
     DT, max_inc, part_save_iter, field_save_iter = aux.set_timestep(vel)
     print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))
     
-    
     q_dens, Ji    = sources.collect_moments(vel, Ie, W_elec, idx)    
     E_int, Ve, Te = fields.calculate_E(B, Ji, q_dens)    
     vel           = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E_int, -0.5*DT)
 
+    # Save for t = 0 (fields); -1/2 (particles)
+    save.save_particle_data(DT, part_save_iter, 0, pos, vel)
+    save.save_field_data(DT, field_save_iter, 0, Ji, E_int, B, Ve, Te, q_dens)
+    
     qq      = 1
     print('Starting main loop...')
     while qq < max_inc:
         ############################
         ##### EXAMINE TIMESTEP #####
         ############################
-        vel, qq, DT, max_inc, part_save_iter, field_save_iter, ch_flag \
+        vel, qq, DT, max_inc, part_save_iter, field_save_iter \
         = aux.check_timestep(qq, DT, pos, vel, B, E_int, q_dens, Ie, W_elec, max_inc, part_save_iter, field_save_iter, idx)
-        
-        if ch_flag == 1:
-            print('Timestep halved. Syncing particle velocity with DT = {}'.format(DT))
-        elif ch_flag == 2:
-            print('Timestep Doubled. Syncing particle velocity with DT = {}'.format(DT))
         
         #######################
         ###### MAIN LOOP ######
@@ -60,8 +58,8 @@ if __name__ == '__main__':
         if qq%field_save_iter == 0 and save_fields == 1:
             save.save_field_data(DT, field_save_iter, qq, Ji, E_int, B, Ve, Te, q_dens)
             
-        if (qq + 1)%25 == 0:
-            print('Timestep {} of {} complete'.format(qq + 1, max_inc))
+        if qq%25 == 0:
+            print('Timestep {} of {} complete'.format(qq, max_inc))
 
         qq += 1
     print("Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2)))
