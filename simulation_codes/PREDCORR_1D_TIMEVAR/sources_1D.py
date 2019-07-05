@@ -10,7 +10,7 @@ import numba as nb
 from simulation_parameters_1D import NX, Nj, n_contr, charge, smooth_sources, q, ne, min_dens
 
 @nb.njit()
-def deposit_both_moments(vel, Ie, W_elec, idx):
+def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
     '''Collect number and velocity moments in each cell, weighted by their distance
     from cell nodes.
 
@@ -21,33 +21,29 @@ def deposit_both_moments(vel, Ie, W_elec, idx):
         idx    -- Particle species identifier
 
     OUTPUT:
-        n_i    -- Species number moment array(size, Nj)
-        nu_i   -- Species velocity moment array (size, Nj)
+        ni     -- Species number moment array(size, Nj)
+        nui    -- Species velocity moment array (size, Nj)
     '''
-    size      = NX + 3
-    n_i       = np.zeros((size, Nj))
-    nu_i      = np.zeros((size, Nj, 3))
-    
     for ii in nb.prange(vel.shape[1]):
-        I   = Ie[ ii]
+        I   = Ie[ii]
         sp  = idx[ii]
     
         for kk in range(3):
-            nu_i[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
-            nu_i[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
-            nu_i[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
+            nu[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
+            nu[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
+            nu[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
         
-        n_i[I,     sp] += W_elec[0, ii]
-        n_i[I + 1, sp] += W_elec[1, ii]
-        n_i[I + 2, sp] += W_elec[2, ii]
+        ni[I,     sp] += W_elec[0, ii]
+        ni[I + 1, sp] += W_elec[1, ii]
+        ni[I + 2, sp] += W_elec[2, ii]
 
-    n_i   = manage_ghost_cells(n_i)
-    nu_i  = manage_ghost_cells(nu_i)
-    return n_i, nu_i
+    manage_ghost_cells(ni)
+    manage_ghost_cells(nu)
+    return
 
 
 @nb.njit()
-def collect_moments(vel, Ie, W_elec, idx):
+def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D):
     '''
     Moment (charge/current) collection function.
 
@@ -61,53 +57,61 @@ def collect_moments(vel, Ie, W_elec, idx):
         rho_c  -- Charge  density
         Ji     -- Current density
     '''
-    size    = NX + 3
+    # Zero source arrays: Test methods for speed later
+    q_dens *= 0.
+    Ji     *= 0.
+    ni     *= 0.
+    nu     *= 0.
     
-    q_dens  = np.zeros(size)    
-    Ji      = np.zeros((size, 3))
+    deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu)
 
-    ni, nu  = deposit_both_moments(vel, Ie, W_elec, idx)
-    
     if smooth_sources == 1:
         for jj in range(Nj):
-            ni[:, jj]  = smooth(ni[:, jj])
-        
+            smooth(ni[:, jj], temp1D)
+            
             for kk in range(3):
-                nu[ :, jj, kk] = smooth(nu[:,  jj, kk])
-    
+                smooth(nu[:,  jj, kk], temp1D)
+
     for jj in range(Nj):
         q_dens  += ni[:, jj] * n_contr[jj] * charge[jj]
 
         for kk in range(3):
             Ji[:, kk] += nu[:, jj, kk] * n_contr[jj] * charge[jj]
-        
-    for ii in range(size):
+
+    for ii in range(NX + 3):
         if q_dens[ii] < min_dens * ne * q:
             q_dens[ii] = min_dens * ne * q
-            
-    return q_dens, Ji
+    return
 
 
 @nb.njit()
-def smooth(function):
+def smooth(arr, temp1D):
     '''Smoothing function: Applies Gaussian smoothing routine across adjacent cells. 
-    Assummes no contribution from ghost cells.'''
-    size         = function.shape[0]
-    new_function = np.zeros(size)
-
+    Assummes no contribution from ghost cells.
+    
+    Some weird stuff going on with memory management: Does it create a new numpy array
+    or not? Or new numpy instance pointing to same memory locations? Passing
+    slices as function arguments seems weird. But the function works, it just might not be efficient.
+    '''
+    size         = arr.shape[0]
+    temp1D      *= 0
+             
     for ii in nb.prange(1, size - 1):
-        new_function[ii - 1] = 0.25*function[ii] + new_function[ii - 1]
-        new_function[ii]     = 0.50*function[ii] + new_function[ii]
-        new_function[ii + 1] = 0.25*function[ii] + new_function[ii + 1]
+        temp1D[ii - 1] += 0.25*arr[ii]
+        temp1D[ii]     += 0.50*arr[ii]
+        temp1D[ii + 1] += 0.25*arr[ii]
 
     # Move Ghost Cell Contributions: Periodic Boundary Condition
-    new_function[1]        += new_function[size - 1]
-    new_function[size - 2] += new_function[0]
+    temp1D[1]        += temp1D[size - 1]
+    temp1D[size - 2] += temp1D[0]
 
     # Set ghost cell values to mirror corresponding real cell
-    new_function[0]        = new_function[size - 2]
-    new_function[size - 1] = new_function[1]
-    return new_function
+    temp1D[0]        = temp1D[size - 2]
+    temp1D[size - 1] = temp1D[1]
+    
+    # Output smoothed array
+    arr[:] = temp1D[:]
+    return
 
 
 @nb.njit()
@@ -122,4 +126,4 @@ def manage_ghost_cells(arr):
     arr[0]       = arr[NX]                # Fill ghost cell: Start
     
     arr[NX + 2]  = arr[2]                 # This one doesn't get used, but prevents nasty nan's from being in array.
-    return arr
+    return

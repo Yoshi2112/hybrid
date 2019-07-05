@@ -6,6 +6,7 @@ Created on Fri Sep 22 17:55:15 2017
 """
 import numpy as np
 import numba as nb
+import pdb
 
 from simulation_parameters_1D import NX, Nj, n_contr, charge, smooth_sources, do_parallel, q, ne, min_dens
 
@@ -84,7 +85,7 @@ def collect_moments(vel, Ie, W_elec, idx):
     for ii in range(size):
         if q_dens[ii] < min_dens * ne * q:
             q_dens[ii] = min_dens * ne * q
-            
+
     return q_dens, Ji
 
 

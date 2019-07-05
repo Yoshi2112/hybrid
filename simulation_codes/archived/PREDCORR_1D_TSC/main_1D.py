@@ -11,6 +11,7 @@ import save_routines as save
 
 from simulation_parameters_1D import save_particles, save_fields
 
+import pdb
 
 if __name__ == '__main__':
     start_time = timer()
@@ -21,14 +22,18 @@ if __name__ == '__main__':
     DT, max_inc, part_save_iter, field_save_iter = aux.set_timestep(vel)
     print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))
     
+    # Collect initial moments and save initial state
     q_dens, Ji    = sources.collect_moments(vel, Ie, W_elec, idx)    
-    E_int, Ve, Te = fields.calculate_E(B, Ji, q_dens)    
-    vel           = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E_int, -0.5*DT)
-
-    # Save for t = 0 (fields); -1/2 (particles)
-    save.save_particle_data(DT, part_save_iter, 0, pos, vel)
-    save.save_field_data(DT, field_save_iter, 0, Ji, E_int, B, Ve, Te, q_dens)
+    E_int, Ve, Te = fields.calculate_E(B, Ji, q_dens)   
     
+    if save_particles == 1:
+        save.save_particle_data(DT, part_save_iter, 0, pos, vel)
+        
+    if save_fields == 1:
+        save.save_field_data(DT, field_save_iter, 0, Ji, E_int, B, Ve, Te, q_dens)
+        
+    vel           = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E_int, -0.5*DT)
+   
     qq      = 1
     print('Starting main loop...')
     while qq < max_inc:
@@ -43,12 +48,15 @@ if __name__ == '__main__':
         #######################
         pos, vel, Ie, W_elec, q_dens_adv, Ji = particles.advance_particles_and_moments(pos, vel, Ie, W_elec, idx, B, E_int, DT)
         q_dens                               = 0.5 * (q_dens + q_dens_adv)
-        B                                    = fields.push_B(B, E_int, DT)
-        E_half, Ve, Te                       = fields.calculate_E(B, Ji, q_dens)
-        q_dens                               = q_dens_adv.copy()
         
-        E_int, B = fields.predictor_corrector(B, E_int, E_half, pos, vel, q_dens_adv, Ie, W_elec, idx, DT)
+        B                                    = fields.push_B(B, E_int, DT)
+        
+        E_half, Ve, Te                       = fields.calculate_E(B, Ji, q_dens)
+        
+        q_dens                               = q_dens_adv.copy()
 
+        E_int, B = fields.predictor_corrector(B, E_int, E_half, pos, vel, q_dens_adv, Ie, W_elec, idx, DT)
+        pdb.set_trace()
         ########################
         ##### OUTPUT DATA  #####
         ########################
