@@ -6,13 +6,13 @@ Created on Fri Sep 22 17:23:44 2017
 """
 import numba as nb
 import numpy as np
-
+import pdb
 from simulation_parameters_1D  import N, dx, xmax, xmin, charge, mass, do_parallel
 import auxilliary_1D as aux
 from sources_1D import collect_moments
 
 
-@nb.njit()
+#@nb.njit()
 def advance_particles_and_moments(pos, vel, Ie, W_elec, idx, B, E, DT):
     '''
     Helper function to group the particle advance and moment collection functions
@@ -74,14 +74,16 @@ def boris_algorithm(v0, Bp, Ep, dt, idx):
         
     Note: Designed for single particle call (doesn't use array-specific operations)
     '''
-    T = (charge[idx] * Bp / mass[idx]) * dt / 2.                        # Boris variable
+    qmi = 0.5 * dt * charge[idx] / mass[idx]
+    
+    T = qmi * Bp                                                        # Boris variable
     S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Boris variable
 
-    v_minus    = v0 + charge[idx] * Ep * dt / (2. * mass[idx])
+    v_minus    = v0 + qmi * Ep 
     v_prime    = v_minus + aux.cross_product_single(v_minus, T)
     v_plus     = v_minus + aux.cross_product_single(v_prime, S)
  
-    v0         = v_plus + charge[idx] * Ep * dt / (2. * mass[idx])
+    v0         = v_plus + qmi * Ep
     return v0
 
 
@@ -109,7 +111,7 @@ def interpolate_forces_to_particle(E, B, Ie, W_elec, Ib, W_mag, idx):
     return Ep, Bp
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit()
 def velocity_update(pos, vel, Ie, W_elec, idx, B, E, dt):
     '''
     Interpolates the fields to the particle positions using TSC weighting, then
@@ -127,14 +129,14 @@ def velocity_update(pos, vel, Ie, W_elec, idx, B, E, dt):
         None -- vel array is mutable (I/O array)
     '''
     Ib, W_mag = assign_weighting_TSC(pos, E_nodes=False)     # Magnetic field weighting
-    
+
     for ii in nb.prange(N):
         Ep, Bp     = interpolate_forces_to_particle(E, B, Ie[ii], W_elec[:, ii], Ib[ii], W_mag[:, ii], idx[ii])
         vel[:, ii] = boris_algorithm(vel[:, ii], Bp, Ep, dt, idx[ii])
     return vel
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit()
 def position_update(pos, vel, dt):
     '''Updates the position of the particles using x = x0 + vt. 
     Also updates particle nearest node and weighting.

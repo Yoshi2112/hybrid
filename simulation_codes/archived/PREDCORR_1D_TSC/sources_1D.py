@@ -6,11 +6,11 @@ Created on Fri Sep 22 17:55:15 2017
 """
 import numpy as np
 import numba as nb
-import pdb
 
 from simulation_parameters_1D import NX, Nj, n_contr, charge, smooth_sources, do_parallel, q, ne, min_dens
+import pdb
 
-@nb.njit(parallel=do_parallel)
+#@nb.njit()
 def deposit_both_moments(vel, Ie, W_elec, idx):
     '''Collect number and velocity moments in each cell, weighted by their distance
     from cell nodes.
@@ -44,10 +44,24 @@ def deposit_both_moments(vel, Ie, W_elec, idx):
 
     n_i   = manage_ghost_cells(n_i)
     nu_i  = manage_ghost_cells(nu_i)
+# =============================================================================
+#     #### DELETE
+#     main_folder = 'F:\\runs\\test_optimization2\\raw_dump\\run_0\\'
+#     np.savetxt(main_folder + 'nu_x.txt', nu_i[:, :, 0])
+#     np.savetxt(main_folder + 'nu_y.txt', nu_i[:, :, 1])
+#     np.savetxt(main_folder + 'nu_z.txt', nu_i[:, :, 2])
+#     np.savetxt(main_folder + 'Wex.txt'  , W_elec[0, :].T)
+#     np.savetxt(main_folder + 'Wey.txt'  , W_elec[1, :].T)
+#     np.savetxt(main_folder + 'Wez.txt'  , W_elec[2, :].T)
+#     np.savetxt(main_folder + 'vx.txt' , vel[0, :].T)
+#     np.savetxt(main_folder + 'vy.txt' , vel[1, :].T)
+#     np.savetxt(main_folder + 'vz.txt' , vel[2, :].T)
+#     pdb.set_trace()
+# =============================================================================
     return n_i, nu_i
 
 
-@nb.njit()
+#@nb.njit()
 def collect_moments(vel, Ie, W_elec, idx):
     '''
     Moment (charge/current) collection function.

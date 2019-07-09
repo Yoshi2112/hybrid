@@ -10,7 +10,7 @@ import numpy as np
 import particles_1D as particles
 import simulation_parameters_1D as const
 import save_routines as save
-
+import pdb
 
 @nb.njit()
 def cross_product_single(A, B):
@@ -158,16 +158,20 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, part_save_i
     DT_part         = min(Eacc_ts, vel_ts, ion_ts, disp_ts)                      # Smallest of the allowable timesteps
 
     if DT_part < 0.9*DT:
+        #pdb.set_trace()
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, 0.5*DT)    # Re-sync vel/pos       
+        #pdb.set_trace()
         DT         *= 0.5
         max_inc    *= 2
         qq         *= 2
-        vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, -0.5*DT)   # De-sync vel/pos 
 
-        part_save_iter *= 2
         field_save_iter *= 2
+        part_save_iter *= 2
             
-        #print('Timestep halved. Syncing particle velocity with DT = {}'.format(DT))
+        #pdb.set_trace()
+        vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, -0.5*DT)   # De-sync vel/pos 
+        #pdb.set_trace()
+        print('Timestep halved. Syncing particle velocity...')
 
             
     elif DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0:
@@ -177,9 +181,9 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, part_save_i
         qq        //= 2
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, -0.5*DT)   # De-sync vel/pos 
 
-        part_save_iter  //= 2
         field_save_iter //= 2
+        part_save_iter //= 2
         
-        #print('Timestep Doubled. Syncing particle velocity with DT = {}'.format(DT))
+        print('Timestep Doubled. Syncing particle velocity...')
             
     return vel, qq, DT, max_inc, part_save_iter, field_save_iter

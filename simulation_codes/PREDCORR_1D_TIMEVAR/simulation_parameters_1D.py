@@ -12,7 +12,7 @@ run_description = '''Testing old PREDCORR against PREDCORR_TIMEVAR to see if opt
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs//test_optimization'     # Series save dir   : Folder containing all runs of a series
+save_path       = 'runs//test_optimization2'     # Series save dir   : Folder containing all runs of a series
 run_num         = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles  = 0                             # Save data flag    : For later analysis
 save_fields     = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
@@ -45,8 +45,8 @@ ne       = 200e6                            # Electron charge/number density (in
 
 orbit_res = 0.10                            # Particle orbit resolution: Fraction of gyroperiod in seconds
 freq_res  = 0.05                            # Frequency resolution     : Fraction of inverse radian cyclotron frequency
-part_res  = 0.25                            # Data capture resolution in gyroperiod fraction: Particle information
-field_res = 0.10                            # Data capture resolution in gyroperiod fraction: Field information
+part_res  = 0                            # Data capture resolution in gyroperiod fraction: Particle information
+field_res = 0                            # Data capture resolution in gyroperiod fraction: Field information
 
 
 ### PARTICLE PARAMETERS ###
@@ -70,7 +70,7 @@ E_e        = 0.01
 E_par      = np.array([1.3e3, 30, 20])
 E_per      = np.array([5.2e3, 10, 3])
 
-smooth_sources = 1                                          # Flag for source smoothing: Gaussian
+smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
 
 account_for_dispersion = False                              # Flag (True/False) whether or not to reduce timestep to prevent dispersion getting too high
@@ -79,7 +79,7 @@ adaptive_timestep      = True                               # Flag (True/False) 
 
 HM_amplitude   = 0e-9                                       # Driven wave amplitude in T
 HM_frequency   = 0.02                                       # Driven wave in Hz
-ratio_override = 0                                          # Flag to override magnetic field value for specific regime
+ratio_override = 1                                          # Flag to override magnetic field value for specific regime
 wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
 
 

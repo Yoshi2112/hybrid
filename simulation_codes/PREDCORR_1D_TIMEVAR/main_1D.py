@@ -11,7 +11,6 @@ import save_routines as save
 
 from simulation_parameters_1D import save_particles, save_fields
 
-import pdb
 
 if __name__ == '__main__':
     start_time = timer()
@@ -34,12 +33,13 @@ if __name__ == '__main__':
     if save_fields == 1:
         save.save_field_data(DT, field_save_iter, 0, Ji, E_int, B, Ve, Te, q_dens)
     
-    particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT)
+    particles.assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
+    
+    particles.velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT)
     
     qq      = 1
     print('Starting main loop...')
     while qq < max_inc:
-        
         qq, DT, max_inc, part_save_iter, field_save_iter =               \
         aux.main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,              \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \

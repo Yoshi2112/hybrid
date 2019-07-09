@@ -6,17 +6,18 @@ Created on Fri Sep 22 17:23:44 2017
 """
 import numba as nb
 import numpy as np
-
-from   simulation_parameters_1D  import N, dx, xmax, xmin, charge, mass
+import pdb
+from   simulation_parameters_1D  import dx, xmax, xmin, charge, mass
 from   sources_1D                import collect_moments
 
-@nb.njit()
+#@nb.njit()
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
                                   B, E, DT, q_dens_adv, Ji, ni, nu, temp1D):
     '''
     Helper function to group the particle advance and moment collection functions
     '''
-    velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT)
+    assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
+    velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT)
     position_update(pos, vel, DT, Ie, W_elec)    
     collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, ni, nu, temp1D)
     return
@@ -55,7 +56,7 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
 
 
 @nb.njit()
-def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
+def velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     '''
     Interpolates the fields to the particle positions using TSC weighting, then
     updates velocities using a Boris particle pusher.
@@ -76,9 +77,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     Removed the "cross product" and "field interpolation" functions because I'm
     not convinced they helped.
     '''
-    assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
-    
-    for ii in nb.prange(N):
+    for ii in nb.prange(vel.shape[1]):
         qmi = 0.5 * dt * charge[idx[ii]] / mass[idx[ii]]                    # Charge-to-mass ration for ion of species idx[ii]
         
         Ep = E[Ie[ii]    , 0:3] * W_elec[0, ii]                             \
@@ -88,7 +87,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
         Bp = B[Ib[ii]    , 0:3] * W_mag[0, ii]                              \
            + B[Ib[ii] + 1, 0:3] * W_mag[1, ii]                              \
            + B[Ib[ii] + 2, 0:3] * W_mag[2, ii]                              # Vector B-field at particle location
-           
+
         T = qmi * Bp                                                        # Vector Boris variable
         S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable
 

@@ -10,7 +10,6 @@ import sources_1D    as sources
 import save_routines as save
 
 from simulation_parameters_1D import save_particles, save_fields
-
 import pdb
 
 if __name__ == '__main__':
@@ -33,16 +32,17 @@ if __name__ == '__main__':
         save.save_field_data(DT, field_save_iter, 0, Ji, E_int, B, Ve, Te, q_dens)
         
     vel           = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E_int, -0.5*DT)
-   
+    
     qq      = 1
     print('Starting main loop...')
     while qq < max_inc:
         ############################
         ##### EXAMINE TIMESTEP #####
         ############################
+
         vel, qq, DT, max_inc, part_save_iter, field_save_iter \
         = aux.check_timestep(qq, DT, pos, vel, B, E_int, q_dens, Ie, W_elec, max_inc, part_save_iter, field_save_iter, idx)
-        
+
         #######################
         ###### MAIN LOOP ######
         #######################
@@ -56,7 +56,7 @@ if __name__ == '__main__':
         q_dens                               = q_dens_adv.copy()
 
         E_int, B = fields.predictor_corrector(B, E_int, E_half, pos, vel, q_dens_adv, Ie, W_elec, idx, DT)
-        pdb.set_trace()
+        
         ########################
         ##### OUTPUT DATA  #####
         ########################

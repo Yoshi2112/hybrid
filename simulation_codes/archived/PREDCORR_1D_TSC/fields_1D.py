@@ -6,12 +6,11 @@ Created on Fri Sep 22 17:54:19 2017
 """
 import numpy as np
 import numba as nb
-import pdb
 
 from particles_1D             import advance_particles_and_moments
 from auxilliary_1D            import cross_product, interpolate_to_center_cspline3D, interpolate_to_center_cspline1D, interpolate_to_center_linear_1D
 from simulation_parameters_1D import NX, dx, Te0, ne, q, mu0, kB, ie
-
+import pdb
 
 #@nb.njit()
 def predictor_corrector(B, E_int, E_half, pos, vel, q_dens, Ie, W_elec, idx, DT):
@@ -40,7 +39,14 @@ def predictor_corrector(B, E_int, E_half, pos, vel, q_dens, Ie, W_elec, idx, DT)
     '''
     E_pred          = 2.0*E_half - 1.0*E_int
     B_pred          = push_B(B, E_pred, DT)
-
+    
+    #### DELETE
+    main_folder = 'F:\\runs\\test_optimization2\\raw_dump\\run_0\\'
+    np.savetxt(main_folder + 'E.txt', E_pred)
+    np.savetxt(main_folder + 'B.txt', B_pred)
+    pdb.set_trace()
+    ###########
+    
     P, V, I, W, Q, J= advance_particles_and_moments(pos.copy(), vel.copy(), Ie.copy(), W_elec.copy(), idx, B_pred, E_pred, DT)
 
     q_dens          = 0.5*(q_dens + Q)

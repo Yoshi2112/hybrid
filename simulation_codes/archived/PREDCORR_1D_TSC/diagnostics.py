@@ -122,17 +122,15 @@ def check_velocity_distribution(vel):
 def test_particle_orbit():
     
     def eval_E(pos):
-        coeff = 1 / (100. * np.sqrt(pos[0] ** 2 + pos[1] ** 2) ** 3)
-        
-        Ex = coeff * pos[0]
-        Ey = coeff * pos[1]
-        Ez = 0.
+        Ex = 0.0
+        Ey = 0.0
+        Ez = 0.0
         return np.array([Ex, Ey, Ez])
 
     def eval_B(pos, B0):
-        Bx = 0.0
+        Bx = B0
         By = 0.0
-        Bz = B0*np.sqrt(pos[0] ** 2 + pos[1] ** 2)
+        Bz = 0.0
         return np.array([Bx, By, Bz])
 
     def position_update(pos, vel, DT):
@@ -145,8 +143,8 @@ def test_particle_orbit():
     rL    = (const.mass[0] * vp[1]) / (abs(const.charge[0] ) * B0)
     xp    = np.array([-rL, 0., 0.]) 
 
-    resolution = 20
-    num_rev    = 10
+    resolution = 10
+    num_rev    = 5000
     maxtime    = int(resolution*num_rev)
     gyperiod   = (2 * np.pi * const.mass[0]) / (const.charge[0] * B0) 
     dt         = gyperiod / resolution 
@@ -164,17 +162,19 @@ def test_particle_orbit():
     Ec  = eval_E(xp)
     vp  = particles.boris_algorithm(vp, Bc, Ec, -0.5*dt, 0)
     for ii in range(maxtime+1):
-        xy[ii, 0] = xp[0]
-        xy[ii, 1] = xp[1]
+        xy[ii, 0] = xp[1]
+        xy[ii, 1] = xp[2]
 
         Bc  = eval_B(xp, B0)
         Ec  = eval_E(xp)
 
         xp = position_update(xp, vp, dt)
         vp = particles.boris_algorithm(vp, Bc, Ec, dt, 0)
-        
-    plt.plot(xy[:, 0], xy[:, 1])
-    plt.axis('equal')
+    
+    print(xp)
+    print(vp)
+    #plt.plot(xy[:, 0], xy[:, 1])
+    #plt.axis('equal')
     return
 
 
@@ -1123,11 +1123,11 @@ if __name__ == '__main__':
     #test_curl_E()
     #test_grad_P_varying_qn()
     #test_cross_product()
-    test_cspline_interpolation()
+    #test_cspline_interpolation()
     #test_E_convective()
     #test_E_hall()
     #test_interp_cross_manual()
     #test_CAM_CL()
     #test_current_push()
     #test_E_convective_exelectron()
-    
+    test_particle_orbit()

@@ -98,19 +98,22 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
 
     
 def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns):
+    sim_time = np.array([qq*dt])    # Timestamp: Useful for debugging
     d_path = '%s/%s/run_%d/data/fields/' % (drive, save_path, const.run_num)
     r      = qq / field_save_iter
 
     d_fullpath = d_path + 'data%05d' % r
     
     np.savez(d_fullpath, E = E[1:NX+1, 0:3], B = B[1:NX+2, 0:3], J = Ji[1:NX+1],
-                         dns = dns[1:NX+1], Ve = Ve[1:NX+1], Te = Te[1:NX+1])   # Data file for each iteration
-    
+                         dns = dns[1:NX+1], Ve = Ve[1:NX+1], Te = Te[1:NX+1], sim_time = sim_time)   # Data file for each iteration
+    print('Field data saved')
     
 def save_particle_data(dt, part_save_iter, qq, pos, vel):
+    sim_time = np.array([qq*dt])    # Timestamp: Useful for debugging
     d_path = '%s/%s/run_%d/data/particles/' % (drive, save_path, const.run_num)
     r      = qq / part_save_iter                                          # Capture number
 
     d_fullpath = d_path + 'data%05d' % r
     
-    np.savez(d_fullpath, pos = pos, vel = vel)
+    np.savez(d_fullpath, pos = pos, vel = vel, sim_time = sim_time)
+    print('Particle data saved')

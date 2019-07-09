@@ -11,7 +11,6 @@ import os
 import analysis_backend as bk
 import analysis_config  as cf
 import dispersions      as disp
-import pdb
 
 q   = 1.602e-19               # Elementary charge (C)
 c   = 3e8                     # Speed of light (m/s)
@@ -991,34 +990,81 @@ def standard_analysis_package():
     return
 
 
-def compare_two(component='by'):
+def compare_two_fields():
     runs       = [0, 1]
-    test_arr   = []
+    lbx, lby, lbz, lex, ley, lez, lvex, lvey, lvez, lte, ljx, ljy, ljz, lqdens = [[] for _ in range(14)]
     
     for run in runs:
         cf.load_run(drive, series, run)
-        test_arr.append(cf.get_array(component))
+        
+        tbx, tby, tbz, tex, tey, tez, tvex, tvey, tvez, tte, tjx, tjy, tjz,\
+        tqdens = cf.get_array(get_all=True)
+        
+        lbx.append(tbx)
+        lby.append(tby)
+        lbz.append(tbz)
+        lex.append(tex)
+        ley.append(tey)
+        lez.append(tez)
+        lvex.append(tvex)
+        lvey.append(tvey)
+        lvez.append(tvez)
+        lte.append(tte)
+        ljx.append(tjx)
+        ljy.append(tjy)
+        ljz.append(tjz)
+        lqdens.append(tqdens)
+          
+    return lbx, lby, lbz, lex, ley, lez, lvex, lvey, lvez, lte, ljx, ljy, ljz, lqdens
+
+
+def compare_two_particles():
     
-    x_idx = cf.NX // 4
-    plt.figure()
-    plt.title('Two runs: Raw {}'.format(component))
-    plt.plot(test_arr[0][:, x_idx], label='Run {}'.format(runs[0]))
-    plt.plot(test_arr[1][:, x_idx], label='Run {}'.format(runs[1]))
-    plt.legend()
-    plt.show()
-    
-    total_diffs = (test_arr[0] - test_arr[0]).sum()
-    print('Total difference between {} arrays = {}'.format(component, total_diffs))
+    main_folder = series_dir + 'particle_differences//'
+        
+    for ii in range(2312):
+        print('Loading particle timestep {}'.format(ii))
+        ts_folder = main_folder + 'ts{:04}//'.format(ii)
+        os.makedirs(ts_folder)
+        
+        cf.load_run(drive, series, 0, extract_arrays=False)
+        pos0, vel0 = cf.load_particles(ii)
+        
+        cf.load_run(drive, series, 1, extract_arrays=False)
+        pos1, vel1 = cf.load_particles(ii)
+
+        x_diff  = pos0 - pos1
+        vx_diff = vel0[0, :] - vel1[0, :]
+        vy_diff = vel0[1, :] - vel1[1, :]
+        vz_diff = vel0[2, :] - vel1[2, :]
+        
+        np.savetxt(ts_folder + 'x_diff_{}.txt'.format( ii),  x_diff)
+        np.savetxt(ts_folder + 'vx_diff_{}.txt'.format(ii), vx_diff)
+        np.savetxt(ts_folder + 'vy_diff_{}.txt'.format(ii), vy_diff)
+        np.savetxt(ts_folder + 'vz_diff_{}.txt'.format(ii), vz_diff)
     return
+
+
+# =============================================================================
+# def output_ascii_values():
+#     logfile = cf.anal_dir + 'field_dumps'
+#     runs       = [0, 1]
+#     field_arr  = []  
+#     
+#     for run in runs:
+#         cf.load_run(drive, series, run)
+#         field_arr.append(cf.get_array(component))
+#     return
+# =============================================================================
 
 #%%
 if __name__ == '__main__':
     #drive      = 'G://MODEL_RUNS//Josh_Runs//'
     drive      = 'F://'
-    series     = 'test_HM_similarity'
+    series     = 'test_optimization2'
     series_dir = '{}/runs//{}//'.format(drive, series)
     num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
-    
+    #compare_two_particles()
 # =============================================================================
 #     for run_num in range(num_runs):
 #         print('Run {}'.format(run_num))
@@ -1029,4 +1075,29 @@ if __name__ == '__main__':
 #         #single_point_field_timeseries()
 # =============================================================================
         
-    compare_two('bz')
+    bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens = compare_two_fields()
+    
+# =============================================================================
+# #%%
+#     x_idx = 32
+#     plt.plot(by[0][:, x_idx])
+#     plt.plot(by[1][:, x_idx])
+# =============================================================================
+
+#%%
+    for component_arr in [vey]:
+        
+        r1 = component_arr[0]; r2 = component_arr[1]
+        
+        diff = np.zeros(r1.shape)
+        for ii in range(r1.shape[0]):
+            for jj in range(r1.shape[1]):
+                base_val     = r1[ii, jj]
+                element_diff = abs(r1[ii, jj] - r2[ii, jj])
+                
+                if element_diff == 0 and base_val == 0:
+                    diff[ii, jj] = 0
+                elif element_diff != 0 and base_val == 0:
+                    diff[ii, jj] = np.inf
+                else:
+                    diff[ii, jj] = (element_diff / base_val) * 100

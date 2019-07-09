@@ -14,13 +14,16 @@ The global calls allow variables to be accessed in the main script without
 clogging up its namespace - i.e. run-specific parameters are called by
 using e.g. cf.B0
 '''
-def load_run(drive, series, run_num, lmissing_t0_offset=0):
+def load_run(drive, series, run_num, lmissing_t0_offset=0, extract_arrays=True):
     global missing_t0_offset
     missing_t0_offset = lmissing_t0_offset   # Flag for when I thought having a t=0 save file wasn't needed. I was wrong.
     manage_dirs(drive, series, run_num)
     load_simulation_params()
     load_species_params()
     initialize_simulation_variables()
+    
+    if extract_arrays == True:
+        extract_all_arrays()
     return
 
 def manage_dirs(drive, series, run_num, create_new=True):
@@ -141,8 +144,6 @@ def initialize_simulation_variables():
     mp  = 1.67e-27                # Mass of proton (kg)
     e0  = 8.854e-12               # Epsilon naught - permittivity of free space
     mu0 = (4e-7) * np.pi          # Magnetic Permeability of Free Space (SI units)
-
-    extract_all_arrays()
     
     wpi       = np.sqrt(ne * q ** 2 / (mp * e0))            # Ion plasma frequency
     gyfreq    = q * B0 / mp                                 # Proton gyrofrequency (rad/s)

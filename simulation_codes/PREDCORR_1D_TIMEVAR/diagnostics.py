@@ -120,38 +120,37 @@ def check_velocity_distribution(vel):
 
 
 def test_particle_orbit():
-    
-    def eval_E(pos):
-        coeff = 1 / (100. * np.sqrt(pos[0] ** 2 + pos[1] ** 2) ** 3)
-        
-        Ex = coeff * pos[0]
-        Ey = coeff * pos[1]
-        Ez = 0.
-        return np.array([Ex, Ey, Ez])
-
-    def eval_B(pos, B0):
-        Bx = 0.0
-        By = 0.0
-        Bz = B0*np.sqrt(pos[0] ** 2 + pos[1] ** 2)
-        return np.array([Bx, By, Bz])
-
     def position_update(pos, vel, DT):
-        pos += vel * DT
+        for ii in range(3):
+            pos[ii] += vel[ii, 0] * dt
         return pos
     
-    v0    = 1e5
+    NX    = 64
     B0    = 0.01
-    vp    = np.array([0., v0, 0.]) 
-    rL    = (const.mass[0] * vp[1]) / (abs(const.charge[0] ) * B0)
-    xp    = np.array([-rL, 0., 0.]) 
-
-    resolution = 20
-    num_rev    = 10
+    v0    = 1e5
+    mi    = 1.672622e-27                          # Mass of proton (kg)
+    qi    = 1.602177e-19                          # Elementary charge (C)
+    
+    resolution = 10
+    num_rev    = 5000
     maxtime    = int(resolution*num_rev)
-    gyperiod   = (2 * np.pi * const.mass[0]) / (const.charge[0] * B0) 
+    gyperiod   = (2 * np.pi * mi) / (qi * B0) 
     dt         = gyperiod / resolution 
-
-    xy         = np.zeros((maxtime+1, 2))
+    
+    B     = np.zeros((NX + 3, 3), dtype=np.float64)
+    E     = np.zeros((NX + 3, 3), dtype=np.float64)
+    B[:, 0] +=  B0
+    
+    Ie    = np.array([NX // 2])   ; Ib    = np.array([NX // 2])
+    We    = np.array([0., 1., 0.]).reshape((3, 1))
+    Wb    = np.array([0., 1., 0.]).reshape((3, 1))
+    idx   = np.array([0])
+    
+    vp    = np.array([[0.], [v0], [0.]])
+    rL    = (mi * vp[1][0]) / (qi * B0)
+    
+    xp    = np.array([-rL, 0., 0.]) 
+    
     print('\nNumber of revolutions: {}'.format(num_rev))
     print('Points per revolution: {}'.format(resolution))
     print('Total number of points: {}'.format(maxtime))
@@ -160,21 +159,20 @@ def test_particle_orbit():
     print('Gyroperiod: {}s'.format(round(gyperiod, 2)))
     print('Timestep: {}s'.format(round(dt, 3)))
     
-    Bc  = eval_B(xp, B0)
-    Ec  = eval_E(xp)
-    vp  = particles.boris_algorithm(vp, Bc, Ec, -0.5*dt, 0)
+    particles.velocity_update(vp, Ie, We, Ib, Wb, idx, B, E, -0.5*dt)
+    
+    xy    = np.zeros((maxtime+1, 2))
+    
     for ii in range(maxtime+1):
-        xy[ii, 0] = xp[0]
-        xy[ii, 1] = xp[1]
+        xy[ii, 0] = xp[1]
+        xy[ii, 1] = xp[2]
 
-        Bc  = eval_B(xp, B0)
-        Ec  = eval_E(xp)
-
-        xp = position_update(xp, vp, dt)
-        vp = particles.boris_algorithm(vp, Bc, Ec, dt, 0)
-        
-    plt.plot(xy[:, 0], xy[:, 1])
-    plt.axis('equal')
+        position_update(xp, vp, dt)
+        particles.velocity_update(vp, Ie, We, Ib, Wb, idx, B, E, dt)
+    print(xp)
+    print(vp)  
+    #plt.plot(xy[:, 0], xy[:, 1])
+    #plt.axis('equal')
     return
 
 
@@ -1031,34 +1029,6 @@ def test_interp_cross_manual():
     return
 
 
-def test_CAM_CL():
-    
-    grids  = [16, 32, 64, 128, 256, 512, 1024]
-    errors = np.zeros(len(grids))
-    
-    NX   = 32      #const.NX
-    xmin = 0.0     #const.xmin
-    xmax = 2*np.pi #const.xmax
-    k    = 1.0
-    marker_size = 20
-    
-    #for NX, ii in zip(grids, range(len(grids))):
-    dx      = xmax / NX
-    x       = np.arange(xmin, xmax, dx/100.)
-    E_nodes = (np.arange(NX + 3) - 0.5) * dx
-    B_nodes = (np.arange(NX + 3) - 1.0) * dx
-        
-    B       = np.zeros((NX + 3, 3))
-    n_i     = np.ones((NX + 3)) 
-    J_i     = np.ones((NX + 3, 3))
-    
-    DT        = 1.0
-    subcycles = 25
-    
-    new_B = fields.cyclic_leapfrog(B, n_i, J_i, DT, subcycles)
-    
-    return
-
 
 def test_current_push():
     NX   = 32      #const.NX
@@ -1180,6 +1150,7 @@ def test_push_B_w_varying_background():
 
 if __name__ == '__main__':
     #animate_moving_weight()
+    test_particle_orbit()
     #test_curl_E()
     #test_grad_P_varying_qn()
     #test_cross_product()
@@ -1191,5 +1162,5 @@ if __name__ == '__main__':
     #test_current_push()
     #test_E_convective_exelectron()
     #test_varying_background_function()
-    test_push_B_w_varying_background()
+    #test_push_B_w_varying_background()
     
