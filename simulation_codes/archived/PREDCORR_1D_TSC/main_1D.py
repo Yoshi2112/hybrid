@@ -10,7 +10,7 @@ import sources_1D    as sources
 import save_routines as save
 
 from simulation_parameters_1D import save_particles, save_fields
-import pdb
+
 
 if __name__ == '__main__':
     start_time = timer()
@@ -39,7 +39,6 @@ if __name__ == '__main__':
         ############################
         ##### EXAMINE TIMESTEP #####
         ############################
-
         vel, qq, DT, max_inc, part_save_iter, field_save_iter \
         = aux.check_timestep(qq, DT, pos, vel, B, E_int, q_dens, Ie, W_elec, max_inc, part_save_iter, field_save_iter, idx)
 
@@ -56,6 +55,23 @@ if __name__ == '__main__':
         q_dens                               = q_dens_adv.copy()
 
         E_int, B = fields.predictor_corrector(B, E_int, E_half, pos, vel, q_dens_adv, Ie, W_elec, idx, DT)
+        
+# =============================================================================
+#         main_folder = 'F:\\runs\\test_optimization2\\raw_dump\\run_0\\'
+#         np.savetxt(main_folder + 'E.txt', E_int)
+#         np.savetxt(main_folder + 'B.txt', B)
+#         np.savetxt(main_folder + 'Ji.txt', Ji)
+#         np.savetxt(main_folder + 'q_dens.txt', q_dens)
+#         np.savetxt(main_folder + 'Ve.txt', Ve)
+#         np.savetxt(main_folder + 'Te.txt', Te)
+#         
+#         np.savetxt(main_folder + 'pos.txt', pos)
+#         np.savetxt(main_folder + 'vel_x.txt', vel[0, :])
+#         np.savetxt(main_folder + 'vel_y.txt', vel[1, :])
+#         np.savetxt(main_folder + 'vel_z.txt', vel[2, :])
+#         pdb.set_trace()
+# =============================================================================
+        
         
         ########################
         ##### OUTPUT DATA  #####

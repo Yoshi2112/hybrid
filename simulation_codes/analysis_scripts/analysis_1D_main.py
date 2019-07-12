@@ -1061,7 +1061,7 @@ def compare_two_particles():
 if __name__ == '__main__':
     #drive      = 'G://MODEL_RUNS//Josh_Runs//'
     drive      = 'F://'
-    series     = 'test_optimization2'
+    series     = 'test_optimization3'
     series_dir = '{}/runs//{}//'.format(drive, series)
     num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
     #compare_two_particles()
@@ -1077,27 +1077,27 @@ if __name__ == '__main__':
         
     bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens = compare_two_fields()
     
-# =============================================================================
-# #%%
-#     x_idx = 32
-#     plt.plot(by[0][:, x_idx])
-#     plt.plot(by[1][:, x_idx])
-# =============================================================================
+#%%
+    x_idx = 32
+    plt.plot(by[0][:, x_idx])
+    plt.plot(by[1][:, x_idx])
 
 #%%
-    for component_arr in [vey]:
-        
-        r1 = component_arr[0]; r2 = component_arr[1]
-        
-        diff = np.zeros(r1.shape)
-        for ii in range(r1.shape[0]):
-            for jj in range(r1.shape[1]):
-                base_val     = r1[ii, jj]
-                element_diff = abs(r1[ii, jj] - r2[ii, jj])
-                
-                if element_diff == 0 and base_val == 0:
-                    diff[ii, jj] = 0
-                elif element_diff != 0 and base_val == 0:
-                    diff[ii, jj] = np.inf
-                else:
-                    diff[ii, jj] = (element_diff / base_val) * 100
+# =============================================================================
+#     for component_arr in [vey]:
+#         
+#         r1 = component_arr[0]; r2 = component_arr[1]
+#         
+#         diff = np.zeros(r1.shape)
+#         for ii in range(r1.shape[0]):
+#             for jj in range(r1.shape[1]):
+#                 base_val     = r1[ii, jj]
+#                 element_diff = abs(r1[ii, jj] - r2[ii, jj])
+#                 
+#                 if element_diff == 0 and base_val == 0:
+#                     diff[ii, jj] = 0
+#                 elif element_diff != 0 and base_val == 0:
+#                     diff[ii, jj] = np.inf
+#                 else:
+#                     diff[ii, jj] = (element_diff / base_val) * 100
+# =============================================================================

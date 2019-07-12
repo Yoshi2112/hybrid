@@ -10,7 +10,7 @@ import numpy as np
 import particles_1D as particles
 import fields_1D as fields
 import simulation_parameters_1D as const
-import pdb
+
 
 @nb.njit()
 def cross_product(A, B, C):
@@ -133,7 +133,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
     return qq, DT, max_inc, part_save_iter, field_save_iter
 
 
-#@nb.njit()
+@nb.njit()
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
               Ve, Te, temp3D, temp3D2, temp1D, old_particles, old_fields,\
@@ -150,7 +150,6 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     If no saves, steps_to_go = max_inc
     '''
     # Check timestep
-
     qq, DT, max_inc, part_save_iter, field_save_iter \
     = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3D, \
                      qq, DT, max_inc, part_save_iter, field_save_iter, idx)
@@ -169,9 +168,11 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     # Calculate E at N + 1/2
     fields.calculate_E(B, Ji, q_dens, E_half, Ve, Te, temp3D, temp3D2, temp1D)
     
+    
     ###################################
     ### PREDICTOR CORRECTOR SECTION ###
     ###################################
+
     # Store old values
     old_particles[0  , :] = pos
     old_particles[1:4, :] = vel
@@ -189,23 +190,16 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     
     fields.push_B(B, E_int, temp3D, DT, qq, half_flag=0)
 
-    #### DELETE
-    main_folder = 'F:\\runs\\test_optimization2\\raw_dump\\run_1\\'
-    np.savetxt(main_folder + 'E.txt', E_int)
-    np.savetxt(main_folder + 'B.txt', B)
-    pdb.set_trace()
-    ###########
-
     # Advance particles to obtain source terms at N + 3/2
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
-                                            B, E_int, DT, q_dens, Ji, ni, nu, temp1D)
-
+                                            B, E_int, DT, q_dens, Ji, ni, nu, temp1D, pc=1)
+    
     q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
-
+    
     # Compute predicted fields at N + 3/2
     fields.push_B(B, E_int, temp3D, DT, qq + 1, half_flag=1)
     fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, temp3D, temp3D2, temp1D)
-
+    
     # Determine corrected fields at N + 1 
     E_int *= 0.5;    E_int += 0.5 * E_half
 

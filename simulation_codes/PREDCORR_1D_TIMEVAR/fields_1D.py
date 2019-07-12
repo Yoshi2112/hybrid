@@ -117,7 +117,6 @@ def curl_B_term(B, curl):
     curl[0] = curl[B.shape[0] - 3]
     
     curl /= (dx * mu0)
-    
     return 
 
 
@@ -128,10 +127,10 @@ def get_electron_temp(qn, Te):
     and the treatment of electrons: i.e. isothermal (ie=0) or adiabatic (ie=1)
     '''
     if ie == 0:
-        Te[:]     = np.ones(qn.shape[0]) * Te0
+        Te[:] = np.ones(qn.shape[0]) * Te0
     elif ie == 1:
         gamma_e = 5./3. - 1.
-        Te[:]     = Te0 * np.power(qn / (q*ne), gamma_e)
+        Te[:] = Te0 * np.power(qn / (q*ne), gamma_e)
     return
 
 
@@ -168,7 +167,7 @@ def get_grad_P(qn, te, grad_P, temp):
 
 
 @nb.njit()
-def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3D, temp3D2, temp1D):
+def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3D, temp3D2, temp1D, qq=0):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
     and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
@@ -184,8 +183,7 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3D, temp3D2, temp1D):
         Te  -- Electron temperature
     
     arr3D, arr1D are tertiary arrays used for intermediary computations
-    '''
-
+    '''    
     curl_B_term(B, temp3D)                                   # temp3D is now curl B term
 
     Ve[:, 0] = (Ji[:, 0] - temp3D[:, 0]) / q_dens
@@ -203,7 +201,7 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3D, temp3D2, temp1D):
     E[:, 0]  = - temp3D[:, 0] - temp1D[:] / q_dens[:]
     E[:, 1]  = - temp3D[:, 1]
     E[:, 2]  = - temp3D[:, 2]
-    
+
     E[0]                = E[Ji.shape[0] - 3]
     E[Ji.shape[0] - 2]  = E[1]
     E[Ji.shape[0] - 1]  = E[2]

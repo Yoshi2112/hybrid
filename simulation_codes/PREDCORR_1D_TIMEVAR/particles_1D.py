@@ -6,19 +6,19 @@ Created on Fri Sep 22 17:23:44 2017
 """
 import numba as nb
 import numpy as np
-import pdb
+
 from   simulation_parameters_1D  import dx, xmax, xmin, charge, mass
 from   sources_1D                import collect_moments
 
-#@nb.njit()
+@nb.njit()
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
-                                  B, E, DT, q_dens_adv, Ji, ni, nu, temp1D):
+                                  B, E, DT, q_dens_adv, Ji, ni, nu, temp1D, pc=0):
     '''
     Helper function to group the particle advance and moment collection functions
-    '''
+    ''' 
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
     velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT)
-    position_update(pos, vel, DT, Ie, W_elec)    
+    position_update(pos, vel, DT, Ie, W_elec)  
     collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, ni, nu, temp1D)
     return
 
@@ -87,7 +87,7 @@ def velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
         Bp = B[Ib[ii]    , 0:3] * W_mag[0, ii]                              \
            + B[Ib[ii] + 1, 0:3] * W_mag[1, ii]                              \
            + B[Ib[ii] + 2, 0:3] * W_mag[2, ii]                              # Vector B-field at particle location
-
+        
         T = qmi * Bp                                                        # Vector Boris variable
         S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable
 
@@ -102,7 +102,7 @@ def velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
         v_plus[0]  = v_minus[0] + v_prime[1] * S[2] - v_prime[2] * S[1]
         v_plus[1]  = v_minus[1] + v_prime[2] * S[0] - v_prime[0] * S[2]
         v_plus[2]  = v_minus[2] + v_prime[0] * S[1] - v_prime[1] * S[0]
- 
+
         vel[:, ii] = v_plus +  qmi * Ep
     return
 

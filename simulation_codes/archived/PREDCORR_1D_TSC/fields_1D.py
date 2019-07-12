@@ -10,9 +10,9 @@ import numba as nb
 from particles_1D             import advance_particles_and_moments
 from auxilliary_1D            import cross_product, interpolate_to_center_cspline3D, interpolate_to_center_cspline1D, interpolate_to_center_linear_1D
 from simulation_parameters_1D import NX, dx, Te0, ne, q, mu0, kB, ie
-import pdb
 
-#@nb.njit()
+
+@nb.njit()
 def predictor_corrector(B, E_int, E_half, pos, vel, q_dens, Ie, W_elec, idx, DT):
     '''
     Isolated predictor-corrector method for easy debugging/coding. Predicts the
@@ -36,27 +36,19 @@ def predictor_corrector(B, E_int, E_half, pos, vel, q_dens, Ie, W_elec, idx, DT)
         
     Note: Because position and velocity advance subroutines depend on directly modifying previous
     values, they must be copied and restored in order to ensure they don't actually move.
-    '''
+    '''    
     E_pred          = 2.0*E_half - 1.0*E_int
     B_pred          = push_B(B, E_pred, DT)
     
-    #### DELETE
-    main_folder = 'F:\\runs\\test_optimization2\\raw_dump\\run_0\\'
-    np.savetxt(main_folder + 'E.txt', E_pred)
-    np.savetxt(main_folder + 'B.txt', B_pred)
-    pdb.set_trace()
-    ###########
-    
-    P, V, I, W, Q, J= advance_particles_and_moments(pos.copy(), vel.copy(), Ie.copy(), W_elec.copy(), idx, B_pred, E_pred, DT)
+    P, V, I, W, Q, J= advance_particles_and_moments(pos.copy(), vel.copy(), Ie.copy(), W_elec.copy(), idx, B_pred, E_pred, DT, pc=1)
 
     q_dens          = 0.5*(q_dens + Q)
-
+    
     B_pred          = push_B(B_pred, E_pred, DT)
     E_pred, Ve, Te  = calculate_E(B_pred, J, q_dens)
 
     E_corr          = 0.5*(E_half + E_pred)
     B_corr          = push_B(B, E_corr, DT)
-
     return E_corr, B_corr
 
 
@@ -228,27 +220,26 @@ def calculate_E(B, J, qn, DX=dx):
     OUTPUT:
         E_out -- Updated electric field array
     '''
-
     curlB    = get_curl_B(B, DX=DX) / mu0
     
     Ve       = np.zeros((J.shape[0], 3)) 
     Ve[:, 0] = (J[:, 0] - curlB[:, 0]) / qn
     Ve[:, 1] = (J[:, 1] - curlB[:, 1]) / qn
     Ve[:, 2] = (J[:, 2] - curlB[:, 2]) / qn
-
+    
     Te       = get_electron_temp(qn)
 
     del_p    = get_grad_P(qn, Te)
     
     B_center = interpolate_to_center_cspline3D(B, DX=DX)
-    
+        
     VexB     = cross_product(Ve, B_center)    
-
+        
     E        = np.zeros((J.shape[0], 3))                 
     E[:, 0]  = - VexB[:, 0] - del_p / qn
     E[:, 1]  = - VexB[:, 1]
     E[:, 2]  = - VexB[:, 2]
-
+        
     E[0]                = E[J.shape[0] - 3]
     E[J.shape[0] - 2]   = E[1]
     E[J.shape[0] - 1]   = E[2]

@@ -6,19 +6,19 @@ Created on Fri Sep 22 17:23:44 2017
 """
 import numba as nb
 import numpy as np
-import pdb
+
 from simulation_parameters_1D  import N, dx, xmax, xmin, charge, mass, do_parallel
 import auxilliary_1D as aux
 from sources_1D import collect_moments
 
 
-#@nb.njit()
-def advance_particles_and_moments(pos, vel, Ie, W_elec, idx, B, E, DT):
+@nb.njit()
+def advance_particles_and_moments(pos, vel, Ie, W_elec, idx, B, E, DT, pc=0):
     '''
     Helper function to group the particle advance and moment collection functions
     '''
     vel             = velocity_update(pos, vel, Ie, W_elec, idx, B, E, DT)
-    pos, Ie, W_elec = position_update(pos, vel, DT)    
+    pos, Ie, W_elec = position_update(pos, vel, DT)
     q_dens, Ji      = collect_moments(vel, Ie, W_elec, idx)
     return pos, vel, Ie, W_elec, q_dens, Ji
 
@@ -80,9 +80,17 @@ def boris_algorithm(v0, Bp, Ep, dt, idx):
     S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Boris variable
 
     v_minus    = v0 + qmi * Ep 
-    v_prime    = v_minus + aux.cross_product_single(v_minus, T)
-    v_plus     = v_minus + aux.cross_product_single(v_prime, S)
- 
+    
+    v_prime    = np.zeros(3)
+    v_prime[0] = v_minus[0] + v_minus[1] * T[2] - v_minus[2] * T[1]
+    v_prime[1] = v_minus[1] + v_minus[2] * T[0] - v_minus[0] * T[2]
+    v_prime[2] = v_minus[2] + v_minus[0] * T[1] - v_minus[1] * T[0]
+    
+    v_plus     = np.zeros(3)
+    v_plus[0]  = v_minus[0] + v_prime[1] * S[2] - v_prime[2] * S[1]
+    v_plus[1]  = v_minus[1] + v_prime[2] * S[0] - v_prime[0] * S[2]
+    v_plus[2]  = v_minus[2] + v_prime[0] * S[1] - v_prime[1] * S[0]
+    
     v0         = v_plus + qmi * Ep
     return v0
 

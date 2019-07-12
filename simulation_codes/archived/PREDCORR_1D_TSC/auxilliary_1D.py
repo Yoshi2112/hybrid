@@ -12,24 +12,6 @@ import simulation_parameters_1D as const
 import save_routines as save
 import pdb
 
-@nb.njit()
-def cross_product_single(A, B):
-    '''
-    Vector (cross) product between 3-vectors, A and B of same dimensions.
-
-    INPUT:
-        A, B -- 3-vectors (single values)
-
-    OUTPUT:
-        output -- The resultant cross product as a 3-vector
-    '''
-    output = np.zeros(A.shape)
-
-    output[0] = A[1] * B[2] - A[2] * B[1]
-    output[1] = A[2] * B[0] - A[0] * B[2]
-    output[2] = A[0] * B[1] - A[1] * B[0]
-    return output
-
 
 @nb.njit(parallel=const.do_parallel)
 def cross_product(A, B):
@@ -158,9 +140,9 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, part_save_i
     DT_part         = min(Eacc_ts, vel_ts, ion_ts, disp_ts)                      # Smallest of the allowable timesteps
 
     if DT_part < 0.9*DT:
-        #pdb.set_trace()
+
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, 0.5*DT)    # Re-sync vel/pos       
-        #pdb.set_trace()
+
         DT         *= 0.5
         max_inc    *= 2
         qq         *= 2
@@ -168,9 +150,8 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, Ie, W_elec, max_inc, part_save_i
         field_save_iter *= 2
         part_save_iter *= 2
             
-        #pdb.set_trace()
         vel         = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, -0.5*DT)   # De-sync vel/pos 
-        #pdb.set_trace()
+
         print('Timestep halved. Syncing particle velocity...')
 
             

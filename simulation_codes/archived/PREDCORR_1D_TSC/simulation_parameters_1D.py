@@ -13,10 +13,10 @@ run_description = '''Testing old PREDCORR against PREDCORR_TIMEVAR to see if opt
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs//test_optimization2'    # Series save dir   : Folder containing all runs of a series
+save_path       = 'runs//test_optimization3'    # Series save dir   : Folder containing all runs of a series
 run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles  = 0                             # Save data flag    : For later analysis
-save_fields     = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
+save_particles  = 1                             # Save data flag    : For later analysis
+save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 15401                         # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin       = [2*run_num, 2*run_num+1]      # Set CPU affinity for run. Must be list. Auto-assign: None.
 
