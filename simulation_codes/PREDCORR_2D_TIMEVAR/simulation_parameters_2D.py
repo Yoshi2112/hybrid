@@ -8,16 +8,16 @@ import numpy as np
 import sys
 
 ### RUN DESCRIPTION ###
-run_description = '''Testing old PREDCORR against PREDCORR_TIMEVAR to see if optimizations broke anything. Assumes PREDCORR is correct'''
+run_description = '''Pushed PREDCORR_1D_TIMEVAR to 2D. Test to see if it works.'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs//uniform_time_varying_more_stable'     # Series save dir   : Folder containing all runs of a series
-run_num         = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles  = 1                             # Save data flag    : For later analysis
-save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
+save_path       = 'runs//2D_test'               # Series save dir   : Folder containing all runs of a series
+run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_particles  = 0                             # Save data flag    : For later analysis
+save_fields     = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 15401                         # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [(2*run_num)%8, (2*run_num + 1)%8]      # Set CPU affinity for run. Must be list. Auto-assign: None.
+cpu_affin       = [None]                        # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 ### PHYSICAL CONSTANTS ###
@@ -32,11 +32,12 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 500                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
-
-nsp_ppc  = 1000                             # Number of particles per cell, per species - i.e. each species has equal representation
+NX       = 10                               # Number of cells - doesn't include ghost cells
+NY       = 8
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
+dym      = 1.0
+max_rev  = 10                               # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+nsp_ppc  = 50                               # Number of particles per cell, per species - i.e. each species has equal representation
 
 ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
@@ -44,41 +45,40 @@ B0       = 200e-9                           # Unform initial magnetic field valu
 ne       = 200e6                            # Electron charge/number density (in /m3, same as total ion charge density)
 
 orbit_res = 0.10                            # Particle orbit resolution: Fraction of gyroperiod in seconds
-freq_res  = 0.02                            # Frequency resolution     : Fraction of inverse radian cyclotron frequency
+freq_res  = 0.05                            # Frequency resolution     : Fraction of inverse radian cyclotron frequency
 part_res  = 0.5                             # Data capture resolution in gyroperiod fraction: Particle information
 field_res = 0.1                             # Data capture resolution in gyroperiod fraction: Field information
 
 
 ### PARTICLE PARAMETERS ###
-species_lbl= [r'$H^+$ hot', r'$H^+$ cold', r'$He^+$ cold']  # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
-temp_color = ['r', 'b', 'purple']
-temp_type  = np.asarray([1, 0, 0])                   	# Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-dist_type  = np.asarray([0, 0, 0])                     # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+species_lbl= [r'$H^+$ hot', r'$H^+$ cold']  # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
+temp_color = ['r', 'b']
+temp_type  = np.asarray([1, 0])                   	# Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.asarray([0, 0])                     # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
 
-mass       = np.asarray([1.000, 1.000, 4.000])    			# Species ion mass (proton mass units)
-charge     = np.asarray([1.000, 1.000, 1.000])    			# Species ion charge (elementary charge units)
-density    = np.asarray([0.050, 0.850, 0.100])             # Species charge density as normalized fraction (add to 1.0)
-drift_v    = np.asarray([0.000, 0.000, 0.000])             # Species parallel bulk velocity (alfven velocity units)
-sim_repr   = np.asarray([1/3  , 1/3  , 1/3  ])          	# Macroparticle weighting (redundant?): Percentage of macroparticles assigned to each species
+mass       = np.asarray([1.000, 1.000])    			# Species ion mass (proton mass units)
+charge     = np.asarray([1.000, 1.000])    			# Species ion charge (elementary charge units)
+density    = np.asarray([0.010, 0.990])             # Species charge density as normalized fraction (add to 1.0)
+drift_v    = np.asarray([0.000, 0.000])             # Species parallel bulk velocity (alfven velocity units)
 
-beta       = True                                             # Flag: Specify temperatures by beta (True) or energy in eV (False)
-beta_e     = 0.1                                              # Electron beta
-beta_par   = np.array([10., 0.1, 0.1])                        # Ion species parallel beta (10)
-beta_per   = np.array([20., 0.1, 0.1])                        # Ion species perpendicular beta (50)
+beta       = True                                           # Flag: Specify temperatures by beta (True) or energy in eV (False)
+beta_e     = 1.                                             # Electron beta
+beta_par   = np.array([1., 1.])                            # Ion species parallel beta (10)
+beta_per   = np.array([1., 1.])                            # Ion species perpendicular beta (50)
 
 E_e        = 0.01
-E_par      = np.array([1.3e3, 30, 20])
-E_per      = np.array([5.2e3, 10, 3])
+E_par      = np.array([1.3e3, 30])
+E_per      = np.array([5.2e3, 10])
 
-smooth_sources = 0                                          # Flag for source smoothing: Gaussian
-min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
+min_dens       = 0.00                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
 
+HM_amplitude   = 0e-9                                       # Driven wave amplitude in T
+HM_frequency   = 0.02                                       # Driven wave in Hz
+
+adaptive_timestep      = True                               # Flag (True/False) for adaptive timestep based on particle and field parameters
 account_for_dispersion = False                              # Flag (True/False) whether or not to reduce timestep to prevent dispersion getting too high
 dispersion_allowance   = 1.                                 # Multiple of how much past frac*wD^-1 is allowed: Used to stop dispersion from slowing down sim too much  
-adaptive_timestep      = True                               # Flag (True/False) for adaptive timestep based on particle and field parameters
 
-HM_amplitude   = 100e-9                                       # Driven wave amplitude in T
-HM_frequency   = 0.02                                       # Driven wave in Hz
 ratio_override = False                                      # Flag to override magnetic field value in favor of specific c/va ratio
 wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
 
@@ -114,21 +114,20 @@ wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequ
 va         = B0 / np.sqrt(mu0*ne*mp)                     # Alfven speed: Assuming pure proton plasma
 
 dx         = dxm * c / wpi                               # Spatial cadence, based on ion inertial length
+dy         = dym * c / wpi
 xmin       = 0                                           # Minimum simulation dimension
 xmax       = NX * dx                                     # Maximum simulation dimension
+ymin       = 0
+ymax       = NY * dy
 
-
-density    = ne * (density / charge)                     # Density of each species per cell (in /m3)
+density   *= ne / charge                                 # Density of each species per cell (in /m3)
 charge    *= q                                           # Cast species charge to Coulomb
 mass      *= mp                                          # Cast species mass to kg
 drift_v   *= va                                          # Cast species velocity to m/s
 
 Nj         = len(mass)                                   # Number of species
-cellpart   = nsp_ppc * Nj                                # Number of Particles per cell.
-N          = cellpart*NX                                 # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
-
-N_species  = np.round(N * sim_repr).astype(int)          # Number of sim particles for each species, total
-n_contr    = density / (cellpart*sim_repr)               # Species density contribution: Each macroparticle contributes this density to a cell
+N_species  = np.ones(Nj, dtype=int) * nsp_ppc * NX * NY  # Number of particles per species
+n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
@@ -178,8 +177,9 @@ print('Gyroperiod         : {}s'.format(round(2. * np.pi / gyfreq, 2)))
 print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 2)))
 print('Maximum sim time   : {}s ({} gyroperiods)'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev))
 
-print('\n{} particles per cell, {} cells'.format(cellpart, NX))
-print('{} particles total\n'.format(cellpart * NX))
+print('\n{}x{} ({}) cells'.format(NX, NY, NX * NY))
+print('{} macroparticles per cell'.format(nsp_ppc * Nj))
+print('{} macroparticles total\n'.format(nsp_ppc * Nj * NX * NY))
 
 if None not in cpu_affin:
     import psutil
@@ -199,24 +199,18 @@ if round(density_normal_sum.sum(), 5) != 1.0:
     print('')
     print('ABORTING...')
     sys.exit()
-    
-    
-if round(sim_repr.sum(), 5) != 1.0:
-    print('-----------------------------------------------------------------------------------')
-    print('WARNING: MACROPARTICLE DENSITIES DO NOT SUM TO 1.0. SIMULATION WILL NOT BE ACCURATE')
-    print('-----------------------------------------------------------------------------------')
-    print('sum_dens = {}'.format(sim_repr.sum()))
-    print('ABORTING...')
-    sys.exit()
-    
-simulated_density_per_cell = (n_contr * charge * cellpart * sim_repr).sum()
-real_density_per_cell      = ne*q
 
-if abs(simulated_density_per_cell - real_density_per_cell) / real_density_per_cell > 1e-10:
-    print('--------------------------------------------------------------------------------')
-    print('WARNING: DENSITY CALCULATION ISSUE: RECHECK HOW MACROPARTICLE CONTRIBUTIONS WORK')
-    print('--------------------------------------------------------------------------------')
-    print('')
-    print('ABORTING...')
-    sys.exit()
+    
+# =============================================================================
+# simulated_density_per_cell = (n_contr * charge * cellpart * sim_repr).sum()
+# real_density_per_cell      = ne*q
+# 
+# if abs(simulated_density_per_cell - real_density_per_cell) / real_density_per_cell > 1e-10:
+#     print('--------------------------------------------------------------------------------')
+#     print('WARNING: DENSITY CALCULATION ISSUE: RECHECK HOW MACROPARTICLE CONTRIBUTIONS WORK')
+#     print('--------------------------------------------------------------------------------')
+#     print('')
+#     print('ABORTING...')
+#     sys.exit()
+# =============================================================================
 

@@ -25,7 +25,7 @@ module, i.e. get_growth_rates
 def get_energies(normalize=False): 
     from analysis_config import NX, dx, idx_bounds, Nj, n_contr, mass,\
                                 num_field_steps, num_particle_steps
-    
+    miss = cf.missing_t0_offset
     energy_file = cf.temp_dir + 'energies.npz'
     
     if os.path.exists(energy_file) == False:
@@ -37,14 +37,14 @@ def get_energies(normalize=False):
         electron_energy = np.zeros( num_field_steps)
         particle_energy = np.zeros((num_particle_steps, Nj, 2))
         
-        for ii in range(num_field_steps):
+        for ii in range(miss, num_field_steps + miss):
             print('Loading field file {}'.format(ii))
             B, E, Ve, Te, J, q_dns = cf.load_fields(ii)
             
-            mag_energy[ii]      = (0.5 / mu0) * np.square(B[1:-2]).sum() * NX * dx
-            electron_energy[ii] = 1.5 * (kB * Te * q_dns / q).sum() * NX * dx
+            mag_energy[ii - miss]      = (0.5 / mu0) * np.square(B[1:-2]).sum() * NX * dx
+            electron_energy[ii - miss] = 1.5 * (kB * Te * q_dns / q).sum() * NX * dx
     
-        for ii in range(num_particle_steps):
+        for ii in range(miss, num_particle_steps + miss):
             print('Loading particle file {}'.format(ii))
             pos, vel = cf.load_particles(ii)
             for jj in range(Nj):
@@ -54,8 +54,8 @@ def get_energies(normalize=False):
                 vpp2 = vel[0, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2
                 vpx2 = vel[1, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2 + vel[2, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2
         
-                particle_energy[ii, jj, 0] = 0.5 * mass[jj] * vpp2.sum() * n_contr[jj] * NX * dx
-                particle_energy[ii, jj, 1] = 0.5 * mass[jj] * vpx2.sum() * n_contr[jj] * NX * dx
+                particle_energy[ii - miss, jj, 0] = 0.5 * mass[jj] * vpp2.sum() * n_contr[jj] * NX * dx
+                particle_energy[ii - miss, jj, 1] = 0.5 * mass[jj] * vpx2.sum() * n_contr[jj] * NX * dx
         
         total_energy = np.zeros(cf.num_field_steps)   # Placeholder until I interpolate this
         

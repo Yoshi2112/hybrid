@@ -23,7 +23,7 @@ def uniform_HM_field_value(T):
 
 
 @nb.njit()
-def get_curl_E(field, curl):
+def get_curl_E(field, curl, DX=dx):
     ''' Returns a vector quantity for the curl of a field valid at the positions 
     between its gridpoints (i.e. curl(E) -> B-grid, etc.)
     
@@ -45,7 +45,7 @@ def get_curl_E(field, curl):
         curl[ii, 2] =    field[ii, 1] - field[ii - 1, 1]
 
     set_periodic_boundaries(curl)
-    curl /= dx
+    curl /= DX
     return 
 
 
@@ -167,7 +167,7 @@ def get_grad_P(qn, te, grad_P, temp):
 
 
 @nb.njit()
-def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3D, temp3D2, temp1D):
+def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3D, temp3D2, temp1D, qq=0):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
     and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).

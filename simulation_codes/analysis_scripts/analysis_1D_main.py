@@ -25,7 +25,7 @@ e0  = 8.854e-12               # Epsilon naught - permittivity of free space
 Aim: To populate this script with plotting routines ONLY. Separate out the 
 processing/loading/calculation steps into other modules that can be called.
 '''
-def plot_tx(component='By', saveas='tx_plot', plot=False, save=False, tmax=600):
+def plot_tx(component='By', saveas='tx_plot', save=False, tmax=600):
     plt.ioff()
 
     tx = cf.get_array(component)
@@ -52,19 +52,16 @@ def plot_tx(component='By', saveas='tx_plot', plot=False, save=False, tmax=600):
     ax.set_title('t-x Plot for {}'.format(component), fontsize=14)
     ax.set_ylabel(r't $(\Omega^{-1})$', rotation=0, labelpad=15)
     ax.set_xlabel('x (m)')
-    
-    if plot == True:
-        plt.show()
-    
+        
     if save == True:
         fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
         print('t-x Plot saved')
-        plt.close()
+        plt.close('all')
     return
 
 
-def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, plot=False, save=False, pcyc_mult=None):
+def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, pcyc_mult=None):
     plt.ioff()
     wx = disp.get_wx(component)
     
@@ -106,18 +103,15 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, plot=False, 
         
     ax.legend(loc=2, facecolor='grey')
     
-    if plot == True:
-        plt.show()
-    
     if save == True:
         fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
         print('w-x Plot saved')
-        plt.close()
+        plt.close('all')
     return
 
 
-def plot_kt(component='By', saveas='kt_plot', plot=False, save=False):
+def plot_kt(component='By', saveas='kt_plot', save=False):
     plt.ioff()
     kt = disp.get_kt(component)
     
@@ -134,18 +128,15 @@ def plot_kt(component='By', saveas='kt_plot', plot=False, save=False):
     ax.set_xlabel(r'$k (m^{-1}) \times 10^6$')
     #ax.set_ylim(0, 15)
     
-    if plot == True:
-        plt.show()
-    
     if save == True:
         fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-        plt.close(fig)
+        plt.close('all')
         print('k-t Plot saved')
     return
 
 
-def plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=False, plot=False, save=False, pcyc_mult=None):
+def plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=False, save=False, pcyc_mult=None):
     plt.ioff()
     
     k, f, wk = disp.get_wk(component)
@@ -191,33 +182,12 @@ def plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=False, plot=Fa
             pass
         
     ax.legend(loc=2, facecolor='grey')
-    
-    if plot == True:
-        plt.show()
-    
+        
     if save == True:
         fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
         print('w-k saved')
-        plt.close(fig)
-    return
-
-
-def waterfall_plot(arr, component_label):
-    plt.ioff()
-
-    amp   = 10.                 # Amplitude multiplier of waves:
-    cells = np.arange(cf.NX)
-
-    plt.figure()
-    for ii in np.arange(cf.num_field_steps):
-        plt.plot(cells, amp*(arr[ii] / arr.max()) + ii, c='k', alpha=0.25)
-
-    plt.title('Run %s : %s Waterfall plot' % (run_num, component_label))
-    plt.xlim(0, cf.NX)
-    plt.ylim(0, None)
-    plt.xlabel('Cell Number')
-    plt.show()
+        plt.close('all')
     return
 
 
@@ -276,13 +246,13 @@ def plot_energies(normalize=True, save=False):
 
     if save == True:
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-        plt.close('all')
     
+    plt.close('all')
     print('Energy plot saved')
     return
 
 
-def plot_ion_energy_components(normalize=True, save=False, tmax=600):
+def plot_ion_energy_components(normalize=True, save=True, tmax=600):
     mag_energy, electron_energy, particle_energy, total_energy = bk.get_energies()
     
     if normalize == True:
@@ -320,10 +290,10 @@ def plot_ion_energy_components(normalize=True, save=False, tmax=600):
         plt.suptitle('{} ions'.format(cf.species_lbl[jj]), fontsize=20, x=0.5, y=.93)
         plt.figtext(0.125, 0.05, 'Total time: {:.{p}g}s'.format(cf.time_seconds_field[-1], p=6), fontweight='bold')
         fig.savefig(cf.anal_dir + 'ion_energy_species_{}.png'.format(jj), facecolor=fig.get_facecolor(), edgecolor='none')
-    
+        plt.close('all')
     return
 
-def plot_helical_waterfall(title='', save=False, show=False, overwrite=False, it_max=None):
+def plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None):
     By_raw         = cf.get_array('By')
     Bz_raw         = cf.get_array('Bz')
     
@@ -420,11 +390,8 @@ def plot_helical_waterfall(title='', save=False, show=False, overwrite=False, it
         fig3.subplots_adjust(wspace=0.05)
         ax6.set_yticklabels([])
         fig3.savefig(cf.anal_dir + 'raw_fields_t{}.png'.format(it_max), facecolor=fig3.get_facecolor(), edgecolor='none')
-        
-    if show == True:
-        plt.show()
-    else:
-        plt.close('all')
+
+    plt.close('all')
     return
 
 
@@ -516,15 +483,15 @@ def animate_fields():
     return
 
 
-def plot_spatially_averaged_fields(plot=False, save=True, tmax=600):
+def plot_spatially_averaged_fields(save=True, tmax=None):
     '''
     Recreates Omidi et al. (2010) Figure 2
     
     Field arrays are shaped like (time, space)
     '''
-    Bx_raw         = 1e9 * (cf.get_array('Bx')  - cf.B0)
-    By_raw         = 1e9 *  cf.get_array('By')
-    Bz_raw         = 1e9 *  cf.get_array('Bz')
+    Bx_raw = 1e9 * (cf.get_array('Bx')  - cf.B0)
+    By_raw = 1e9 *  cf.get_array('By')
+    Bz_raw = 1e9 *  cf.get_array('Bz')
       
     lpad   = 20
     
@@ -532,14 +499,13 @@ def plot_spatially_averaged_fields(plot=False, save=True, tmax=600):
     fig, [[ax1, ax2], [ax3, ax4], [ax5, ax6]] = plt.subplots(figsize=(18, 10), nrows=3, ncols=2)
     fig.subplots_adjust(wspace=0, hspace=0)
     
+    ax1.plot(cf.time_seconds_field, abs(Bz_raw).mean(axis=1))
+    ax3.plot(cf.time_seconds_field, abs(By_raw).mean(axis=1))
+    ax5.plot(cf.time_seconds_field, abs(Bx_raw).mean(axis=1))
     
-    ax1.plot(cf.time_radperiods_field, abs(Bz_raw).mean(axis=1))
-    ax3.plot(cf.time_radperiods_field, abs(By_raw).mean(axis=1))
-    ax5.plot(cf.time_radperiods_field, abs(Bx_raw).mean(axis=1))
-    
-    ax2.plot(cf.time_radperiods_field, abs(Bz_raw).mean(axis=1))
-    ax4.plot(cf.time_radperiods_field, abs(By_raw).mean(axis=1))
-    ax6.plot(cf.time_radperiods_field, abs(Bx_raw).mean(axis=1))
+    ax2.plot(cf.time_seconds_field, abs(Bz_raw).mean(axis=1))
+    ax4.plot(cf.time_seconds_field, abs(By_raw).mean(axis=1))
+    ax6.plot(cf.time_seconds_field, abs(Bx_raw).mean(axis=1))
     
     ax1.set_ylabel(r'$\overline{|\delta B_z|}$ (nT)', rotation=0, labelpad=lpad)
     ax3.set_ylabel(r'$\overline{|\delta B_y|}$ (nT)', rotation=0, labelpad=lpad)
@@ -547,29 +513,29 @@ def plot_spatially_averaged_fields(plot=False, save=True, tmax=600):
     
     for ax in [ax1, ax2, ax3, ax4]:
         ax.set_xticklabels([])
-                
-    for ax in [ax1, ax3, ax5]:
-        ax.set_xlim(0, cf.time_radperiods_field[-1]/5)
-        ax.set_ylim(0, None)
-        
+    
     for ax in [ax2, ax4, ax6]:
-        ax.set_xlim(0, cf.time_radperiods_field[-1])
+        ax.set_xlim(0, cf.time_seconds_field[-1])
         ax.set_ylim(0, None)
         ax.set_yticklabels([])
+        
+    for ax in [ax1, ax3, ax5]:
+        if tmax is None:
+            ax.set_xlim(0, cf.time_seconds_field[-1]/5)
+        else:
+            ax.set_xlim(0, tmax)
             
+        ax.set_ylim(0, None)
+                    
     for ax in [ax5, ax6]:
-        ax.set_xlabel(r'Time $(\Omega^{-1})$')
+        ax.set_xlabel(r'Time (s)')
       
-    ax1.set_title('{}_1D : Omidi et al. (2010) parameters.'.format(cf.method_type))
-    plt.figtext(0.125, 0.05, 'Total time: {:.{p}g}s'.format(cf.time_seconds_field[-1], p=6), fontweight='bold')
+    ax1.set_title('Spatially averaged fields'.format(cf.method_type))
     
     if save == True:
         fig.savefig(cf.anal_dir + 'sp_av_fields.png', facecolor=fig.get_facecolor(), edgecolor='none')
-        
-    if plot == True:
-        figManager = plt.get_current_fig_manager()
-        figManager.window.showMaximized()
-    print('Spatially averaged B-fields plotted.')
+        print('Spatially averaged B-field plot saved for run {}'.format(run_num))
+    plt.close('all')
     return
 
 
@@ -578,7 +544,6 @@ def plot_gyrophase():
     Either do just for particles or just for fields. To look at relationship between the two,
     need to interpolate and/or find times that the two coincide.
     '''
-    
     
     return
 
@@ -633,31 +598,42 @@ def single_point_helicity_timeseries(cells=None, overwrite=False, save=True):
             
             if save==True:
                 fig.savefig(ts_folder + 'single_point_field_B{}_{}.png'.format(component, x_idx), edgecolor='none')
+            plt.close('all')
     return
 
 
-def single_point_field_timeseries(cells=None, overwrite=False, save=True, maxtime=None):
+def single_point_field_timeseries(cells=None, overwrite=False, save=True, tmax=None):
     '''
     Plot timeseries for raw fields at specified cells
     
     maxtime=time in seconds for endpoint (defaults to total runtime)
     '''
-    
+    print('Plotting single-point fields...')
     if cells is None:
         cells = np.arange(cf.NX)
     
-    ts_folder = cf.anal_dir + '//single_point_fields//'
+    ts_folder_B = cf.anal_dir + '//single_point_fields//magnetic//'
+    ts_folder_E = cf.anal_dir + '//single_point_fields//electric//'
     
-    if os.path.exists(ts_folder) == False:
-        os.makedirs(ts_folder)
+    if os.path.exists(ts_folder_B) == False:
+        os.makedirs(ts_folder_B)
+        
+    if os.path.exists(ts_folder_E) == False:
+        os.makedirs(ts_folder_E)
     
     bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens = cf.get_array(get_all=True)
     
     plt.ioff()
     for x_idx in cells:
-        fig  = plt.figure(figsize=(18, 10))
+        print('Cell {}...'.format(x_idx))
+        figB  = plt.figure(figsize=(18, 10))
         
-        ## MAGNETIC FIELDS ##
+        ######################
+        ### MAGNETIC FIELD ### Could loop this but I'm lazy
+        ######################
+        figB  = plt.figure(figsize=(18, 10))
+        
+        ## FIELDS: One period ##
         axbx = plt.subplot2grid((3, 2), (0, 0))
         axby = plt.subplot2grid((3, 2), (1, 0))
         axbz = plt.subplot2grid((3, 2), (2, 0))
@@ -670,38 +646,104 @@ def single_point_field_timeseries(cells=None, overwrite=False, save=True, maxtim
         
         axbz.plot(cf.time_seconds_field, 1e9*bz[:, x_idx])
         axbz.set_ylabel('$B_z (nT)$')
-        
-        axbx.set_title('B-field at cell {}'.format(x_idx))
         axbz.set_xlabel('Time (s)')
         
-        ## ELECTRIC FIELDS ##
-        axex = plt.subplot2grid((3, 2), (0, 1))
-        axey = plt.subplot2grid((3, 2), (1, 1))
-        axez = plt.subplot2grid((3, 2), (2, 1))
+        ## FIELDS: Full time ##
+        axbx_full = plt.subplot2grid((3, 2), (0, 1))
+        axby_full = plt.subplot2grid((3, 2), (1, 1))
+        axbz_full = plt.subplot2grid((3, 2), (2, 1))
         
-        axex.plot(cf.time_seconds_field, 1e6*bx[:, x_idx])
-        axex.set_ylabel(r'$E_x (\mu V/m)$')
+        axbx_full.set_title('B-field at cell {}: Total time'.format(x_idx))
+        axbx_full.plot(cf.time_seconds_field, 1e9*bx[:, x_idx])
+        axby_full.plot(cf.time_seconds_field, 1e9*by[:, x_idx])
+        axbz_full.plot(cf.time_seconds_field, 1e9*bz[:, x_idx])
+        axbz_full.set_xlabel('Time (s)')
         
-        axey.plot(cf.time_seconds_field, 1e6*by[:, x_idx])
-        axey.set_ylabel(r'$E_y (\mu V/m)$')
-        
-        axez.plot(cf.time_seconds_field, 1e6*bz[:, x_idx])
-        axez.set_ylabel(r'$E_z (\mu V/m)$')
-        
-        axex.set_title('E-field at cell {}'.format(x_idx))
-        axez.set_xlabel('Time (s)')
-        
-        if maxtime is None:
-            maxtime = cf.time_seconds_field[-1]
+        if tmax is None:
+            # Set it at 20% full runtime, just to get a bit better resolution
+            tmax = cf.time_seconds_field[-1] / 5
+            axbx.set_title('B-field at cell {}: 1/5 total time'.format(x_idx))
+        else:
+            axbx.set_title('B-field at cell {}: One period'.format(x_idx))
             
-        for ax in [axbx, axby, axbz, axex, axey, axez]:
-            ax.set_xlim(0, maxtime)
+        for ax in [axbx, axby, axbz]:
+            ax.set_xlim(0, tmax)
+            
+        for ax in [axbx_full, axby_full, axbz_full]:
+            ax.set_xlim(0, cf.time_seconds_field[-1])
+            ax.set_yticklabels([])
+            
+        for ax in [axbx, axby, axbx_full, axby_full]:
+            ax.set_xticklabels([])
+            
+        axbx.set_ylim(axbx_full.get_ylim())
+        axby.set_ylim(axby_full.get_ylim())
+        axbz.set_ylim(axbz_full.get_ylim())
         
-        fig.tight_layout()
-        fig.subplots_adjust(hspace=0)
+        figB.tight_layout()
+        figB.subplots_adjust(hspace=0, wspace=0.02)
         
         if save==True:
-            fig.savefig(ts_folder + 'single_point_field_{}.png'.format(x_idx), edgecolor='none')
+            figB.savefig(ts_folder_B + 'single_point_Bfield_{}.png'.format(x_idx), edgecolor='none')
+   
+    
+        ######################
+        ### ELECTRIC FIELD ###
+        ######################
+        figE  = plt.figure(figsize=(18, 10))
+        ## FIELDS: One period ##
+        axex = plt.subplot2grid((3, 2), (0, 0))
+        axey = plt.subplot2grid((3, 2), (1, 0))
+        axez = plt.subplot2grid((3, 2), (2, 0))
+        
+        axex.plot(cf.time_seconds_field, 1e3*ex[:, x_idx])
+        axex.set_ylabel('$E_x (mV/m)$')
+        
+        axey.plot(cf.time_seconds_field, 1e3*ey[:, x_idx])
+        axey.set_ylabel('$E_y (mV/m)$')
+        
+        axez.plot(cf.time_seconds_field, 1e3*ez[:, x_idx])
+        axez.set_ylabel('$E_z (mV/m)$')
+        axez.set_xlabel('Time (s)')
+        
+        ## FIELDS: Full time ##
+        axex_full = plt.subplot2grid((3, 2), (0, 1))
+        axey_full = plt.subplot2grid((3, 2), (1, 1))
+        axez_full = plt.subplot2grid((3, 2), (2, 1))
+        
+        axex_full.set_title('E-field at cell {}: Total time'.format(x_idx))
+        axex_full.plot(cf.time_seconds_field, 1e3*ex[:, x_idx])
+        axey_full.plot(cf.time_seconds_field, 1e3*ey[:, x_idx])
+        axez_full.plot(cf.time_seconds_field, 1e3*ez[:, x_idx])
+        axez_full.set_xlabel('Time (s)')
+        
+        if tmax is None:
+            # Set it at 20% full runtime, just to get a bit better resolution
+            tmax = cf.time_seconds_field[-1] / 5
+            axbx.set_title('E-field at cell {}: 1/5 total time'.format(x_idx))
+        else:
+            axbx.set_title('E-field at cell {}: One period'.format(x_idx))
+            
+        for ax in [axex, axey, axez]:
+            ax.set_xlim(0, tmax)
+            
+        for ax in [axex_full, axey_full, axez_full]:
+            ax.set_xlim(0, cf.time_seconds_field[-1])
+            ax.set_yticklabels([])
+            
+        for ax in [axex, axey, axex_full, axey_full]:
+            ax.set_xticklabels([])
+            
+        axex.set_ylim(axex_full.get_ylim())
+        axey.set_ylim(axey_full.get_ylim())
+        axez.set_ylim(axez_full.get_ylim())
+        
+        figE.tight_layout()
+        figE.subplots_adjust(hspace=0, wspace=0.02)
+        
+        if save==True:
+            figE.savefig(ts_folder_E + 'single_point_Efield_{}.png'.format(x_idx), edgecolor='none')
+        plt.close('all')
     return
 
 
@@ -749,16 +791,10 @@ def interpolate_fields_to_particle_time():
                                    [bx,  by,  bz,  ex,  ey,  ez,  vex,  vey,  vez,  te,  jx,  jy,  jz,  qdens]):
             arr_out[ii] = lfac*arr_in[lidx] + ufac*arr_in[uidx]
 
-# =============================================================================
-#     test_cell = cf.NX//2
-#     plt.plot(time_fields, by[:, test_cell], c='b', marker='o')
-#     plt.scatter(time_particles, pby[:, test_cell], c='r', marker='x')
-#     plt.show()
-# =============================================================================
     return pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens
 
 
-def analyse_helicity(overwrite=False, plot=False, save=True):
+def analyse_helicity(overwrite=False, save=True):
     By_raw         = cf.get_array('By')
     Bz_raw         = cf.get_array('Bz')
     Bt_pos, Bt_neg = bk.get_helical_components(overwrite)
@@ -811,7 +847,7 @@ def summary_plots(save=True):
     plt.ioff()
     pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens = interpolate_fields_to_particle_time()
     qdens_norm = pqdens / (cf.density*cf.charge).sum()                          # Normalized change density
-    for ii in range(cf.num_particle_steps):
+    for ii in range(dumb_offset, cf.num_particle_steps+dumb_offset):
         filename = 'summ%05d.png' % ii
         fullpath = path + filename
         
@@ -907,7 +943,7 @@ def summary_plots(save=True):
         ### FIGURE TEXT ###
         ###################
         anisotropy = (cf.Tper / cf.Tpar - 1).round(1)
-        beta_per   = (2*(4e-7*np.pi)*(1.381e-23)*cf.Tper*cf.ne / (cf.B0**2)).round(2)
+        beta_per   = (2*(4e-7*np.pi)*(1.381e-23)*cf.Tper*cf.ne / (cf.B0**2)).round(1)
         beta_e     = round((2*(4e-7*np.pi)*(1.381e-23)*cf.Te0*cf.ne  / (cf.B0**2)), 2)
         rdens      = (cf.density / cf.ne).round(2)
 
@@ -946,16 +982,16 @@ def summary_plots(save=True):
         
         ptop = top - 15*gap
         plt.figtext(0.855, ptop, 'Particle Parameters', fontsize=fontsize, family='monospace', fontweight='bold')
-        plt.figtext(0.855, ptop - gap, 'SPECIES   ANI  XBET VDR  RDNS', fontsize=fontsize-2, family='monospace')
+        plt.figtext(0.855, ptop - gap, ' SPECIES  ANI  XBET   VDR  RDNS', fontsize=fontsize-2, family='monospace')
         for jj in range(cf.Nj):
-            plt.figtext(0.855       , ptop - (jj + 2)*gap, '{:>10}  {}  {}  {}  {}'.format(
+            plt.figtext(0.855       , ptop - (jj + 2)*gap, '{:>10}  {:>3}  {:>4}  {:>4}  {:<5}'.format(
                     cf.species_lbl[jj], anisotropy[jj], beta_per[jj], vdrift[jj], rdens[jj]),
                     fontsize=fontsize-2, family='monospace')
  
         time_top = 0.1
-        plt.figtext(0.875, time_top - 0*gap, 't_seconds   : {:>10}'.format(round(cf.time_seconds_particle[ii], 3))   , fontsize=fontsize, family='monospace')
-        plt.figtext(0.875, time_top - 1*gap, 't_gperiod   : {:>10}'.format(round(cf.time_gperiods_particle[ii], 3))  , fontsize=fontsize, family='monospace')
-        plt.figtext(0.875, time_top - 2*gap, 't_radperiod : {:>10}'.format(round(cf.time_radperiods_particle[ii], 3)), fontsize=fontsize, family='monospace')
+        plt.figtext(0.88, time_top - 0*gap, 't_seconds   : {:>10}'.format(round(cf.time_seconds_particle[ii], 3))   , fontsize=fontsize, family='monospace')
+        plt.figtext(0.88, time_top - 1*gap, 't_gperiod   : {:>10}'.format(round(cf.time_gperiods_particle[ii], 3))  , fontsize=fontsize, family='monospace')
+        plt.figtext(0.88, time_top - 2*gap, 't_radperiod : {:>10}'.format(round(cf.time_radperiods_particle[ii], 3)), fontsize=fontsize, family='monospace')
     
         if save == True:
             plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
@@ -979,125 +1015,35 @@ def standard_analysis_package():
     for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
         plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True)
         plot_wx(component=comp, saveas=disp_folder + 'wx_plot', save=True, linear_overlay=False,     pcyc_mult=1.1)
-        plot_wk(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=True, pcyc_mult=1.1)
+        plot_wk(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=False, pcyc_mult=1.1)
         plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
         
     plot_energies(normalize=True, save=True)
-    plot_ion_energy_components(save=True)
+    plot_ion_energy_components(save=True, tmax=1./cf.HM_frequency)
     plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
     single_point_helicity_timeseries()
-    single_point_field_timeseries()
+    plot_spatially_averaged_fields()
+    single_point_field_timeseries(tmax=1./cf.HM_frequency)
     return
 
 
-def compare_two_fields():
-    runs       = [0, 1]
-    lbx, lby, lbz, lex, ley, lez, lvex, lvey, lvez, lte, ljx, ljy, ljz, lqdens = [[] for _ in range(14)]
-    
-    for run in runs:
-        cf.load_run(drive, series, run)
-        
-        tbx, tby, tbz, tex, tey, tez, tvex, tvey, tvez, tte, tjx, tjy, tjz,\
-        tqdens = cf.get_array(get_all=True)
-        
-        lbx.append(tbx)
-        lby.append(tby)
-        lbz.append(tbz)
-        lex.append(tex)
-        ley.append(tey)
-        lez.append(tez)
-        lvex.append(tvex)
-        lvey.append(tvey)
-        lvez.append(tvez)
-        lte.append(tte)
-        ljx.append(tjx)
-        ljy.append(tjy)
-        ljz.append(tjz)
-        lqdens.append(tqdens)
-          
-    return lbx, lby, lbz, lex, ley, lez, lvex, lvey, lvez, lte, ljx, ljy, ljz, lqdens
 
-
-def compare_two_particles():
-    
-    main_folder = series_dir + 'particle_differences//'
-        
-    for ii in range(2312):
-        print('Loading particle timestep {}'.format(ii))
-        ts_folder = main_folder + 'ts{:04}//'.format(ii)
-        os.makedirs(ts_folder)
-        
-        cf.load_run(drive, series, 0, extract_arrays=False)
-        pos0, vel0 = cf.load_particles(ii)
-        
-        cf.load_run(drive, series, 1, extract_arrays=False)
-        pos1, vel1 = cf.load_particles(ii)
-
-        x_diff  = pos0 - pos1
-        vx_diff = vel0[0, :] - vel1[0, :]
-        vy_diff = vel0[1, :] - vel1[1, :]
-        vz_diff = vel0[2, :] - vel1[2, :]
-        
-        np.savetxt(ts_folder + 'x_diff_{}.txt'.format( ii),  x_diff)
-        np.savetxt(ts_folder + 'vx_diff_{}.txt'.format(ii), vx_diff)
-        np.savetxt(ts_folder + 'vy_diff_{}.txt'.format(ii), vy_diff)
-        np.savetxt(ts_folder + 'vz_diff_{}.txt'.format(ii), vz_diff)
-    return
-
-
-# =============================================================================
-# def output_ascii_values():
-#     logfile = cf.anal_dir + 'field_dumps'
-#     runs       = [0, 1]
-#     field_arr  = []  
-#     
-#     for run in runs:
-#         cf.load_run(drive, series, run)
-#         field_arr.append(cf.get_array(component))
-#     return
-# =============================================================================
 
 #%%
 if __name__ == '__main__':
-    #drive      = 'G://MODEL_RUNS//Josh_Runs//'
-    drive      = 'F://'
-    series     = 'test_optimization3'
+    drive      = 'G://MODEL_RUNS//Josh_Runs//'
+    #drive      = 'F://'
+    series     = 'uniform_time_varying_He'
     series_dir = '{}/runs//{}//'.format(drive, series)
     num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
-    #compare_two_particles()
-# =============================================================================
-#     for run_num in range(num_runs):
-#         print('Run {}'.format(run_num))
-#         cf.load_run(drive, series, run_num)
-#         #standard_analysis_package()
-#         #summary_plots()
-#         #plot_spatially_averaged_fields()
-#         #single_point_field_timeseries()
-# =============================================================================
-        
-    bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens = compare_two_fields()
-    
-#%%
-    x_idx = 32
-    plt.plot(by[0][:, x_idx])
-    plt.plot(by[1][:, x_idx])
+    dumb_offset = 0
 
-#%%
-# =============================================================================
-#     for component_arr in [vey]:
-#         
-#         r1 = component_arr[0]; r2 = component_arr[1]
-#         
-#         diff = np.zeros(r1.shape)
-#         for ii in range(r1.shape[0]):
-#             for jj in range(r1.shape[1]):
-#                 base_val     = r1[ii, jj]
-#                 element_diff = abs(r1[ii, jj] - r2[ii, jj])
-#                 
-#                 if element_diff == 0 and base_val == 0:
-#                     diff[ii, jj] = 0
-#                 elif element_diff != 0 and base_val == 0:
-#                     diff[ii, jj] = np.inf
-#                 else:
-#                     diff[ii, jj] = (element_diff / base_val) * 100
-# =============================================================================
+    for run_num in range(num_runs):
+        print('Run {}'.format(run_num))
+        cf.load_run(drive, series, run_num, lmissing_t0_offset=dumb_offset)
+        single_point_field_timeseries(tmax=1./cf.HM_frequency)
+        plot_spatially_averaged_fields()
+        #standard_analysis_package()
+        #summary_plots()
+        
+
