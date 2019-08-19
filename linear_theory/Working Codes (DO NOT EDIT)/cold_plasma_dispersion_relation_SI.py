@@ -18,8 +18,6 @@ def cold_plasma_dispersion_function(w, k):
         cold_sum += w_pi2[ii] / (w * (w - ion_cyc[ii]))     # Add each ion species
     return 1 - cold_sum - (c * k / w) ** 2
 
-
-
     
 
 if __name__ == '__main__':

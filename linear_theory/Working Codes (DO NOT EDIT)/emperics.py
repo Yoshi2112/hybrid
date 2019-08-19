@@ -3,6 +3,9 @@
 Created on Mon Apr  8 21:42:40 2019
 
 @author: Yoshi
+
+Emperical quantities derived from models, such as the Sheely density models
+and the dipole magnetic field magnitude
 """
 import numpy as np
 

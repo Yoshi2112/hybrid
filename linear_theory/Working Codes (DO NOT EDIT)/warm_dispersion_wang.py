@@ -14,64 +14,11 @@ from matplotlib.lines    import Line2D
 import os
 import pdb
 '''
-Equations from Wang et al. 2016. Is for cold species of warm dispersion
-relation simplify for alpha = 0 under the asymptotic expansion of the plasma
-dispersion function. Though Wang was fairly inconsistent with the placing of
-his signs.
+Equations from Wang et al. 2016. 
+I_s for cold species in warm dispersion relation simplify for alpha = 0,
+under the asymptotic expansion of the plasma dispersion function.
+Wang was fairly inconsistent with the placing of his signs.
 '''
-def test_warm_solutions(filename='warm_solution_tests', plot=False):
-    dwk_store = np.zeros((warm_solns.shape[0], warm_solns.shape[1]), dtype=np.complex128)
-    
-    if os.path.exists(log_dir + filename + '.txt') == True:
-        os.remove(log_dir + filename + '.txt')
-    
-    text_file = open(log_dir + filename + '.txt', 'a')
-    print('{:<10}{:>26}{:>26}{:>26}'.format('WAVENUMBER', 'COMPLEX_FREQUENCY', 'RESIDUAL_OUTPUT_D(w, k)', 'PDF_ARGUMENT'), file=text_file)
-    for jj in range(warm_solns.shape[1]):
-        print('', file=text_file)
-        for ii in range(1, warm_solns.shape[0]):
-            dwk, zeta = warm_plasma_dispersion_relation(warm_solns[ii, jj], k_vals[ii], test_output=True)
-            wc = warm_solns[ii, jj, 0] + 1j*warm_solns[ii, jj, 1]
-            dwk_out = dwk[0]+1j*dwk[1]
-            dwk_store[ii, jj] = dwk_out
-            print('{:<10.3e}{:>26.3e}{:>26.3e}{:>26.3e}'.format(k_vals[ii], wc, dwk_out, zeta), file=text_file)
-    text_file.close()
-
-    if plot == True:
-        figpath = log_dir + filename + '_Error_plot.png'
-        for jj in range(N):
-            fig = plt.figure(figsize=(15,10))
-            ax1 = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
-            ax2 = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
-            
-            ax1.set_title('Dispersion Relation Absolute Error')
-            ax1.plot(k_vals, dwk_store[:, jj].real, c=species_colors[jj])
-            ax1.set_xlabel('$k (m^{-1})$')
-            ax1.set_ylabel('Error')
-            
-            ax2.set_title('Growth Rate Absolute Error')
-            ax2.plot(k_vals, dwk_store[:, jj].imag, c=species_colors[jj])
-            ax2.set_xlabel('$k (m^{-1})$')
-            ax2.set_ylabel('Error')
-            fig.savefig(figpath)
-            plt.close('all')
-    return
-
-
-def test_Z():
-    N_test       = 5
-    x_test       = np.round(np.random.rand(N_test) * 10., decimals=1)
-    y_test       = np.round(np.random.rand(N_test) * 10., decimals=1)
-    test_vals    = x_test - 1j * y_test
-    
-    log_file = open(log_dir + 'disp_function_test.txt', 'a')
-    
-    for ii in range(N_test):
-        test_result = Z(test_vals[ii])
-        print('y: {} \t x: {} \t ReZ: {} \t ImZ: {}'.format(y_test[ii], x_test[ii], test_result.real, test_result.imag), file=log_file)
-    log_file.close()
-    return
-
 
 def create_band_legend(fn_ax, labels, colors):
     legend_elements = []
@@ -312,8 +259,6 @@ if __name__ == '__main__':
     warm_solns     = estimate_first_and_complexify(warm_solns)
     group_velocity = calculate_group_velocity(warm_solns) 
     
-    if log_output == True:
-        test_warm_solutions(plot=True)
         
     ###############
     ## NORMALIZE ##
@@ -376,12 +321,5 @@ if __name__ == '__main__':
     
     figManager = plt.get_current_fig_manager()
     figManager.window.showMaximized()
-    
-# =============================================================================
-#     
-#     plt.figure()
-#     for ii in range(3):
-#         ax1.plot(k_vals[1:], group_velocity[1:, ii],      c=species_colors[ii], linestyle='--', label='Cold')
-# =============================================================================
     
     plt.show()

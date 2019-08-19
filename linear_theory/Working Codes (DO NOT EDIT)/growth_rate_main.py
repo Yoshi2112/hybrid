@@ -3,7 +3,11 @@
 Created on Wed Mar 20 15:56:09 2019
 
 @author: Yoshi
+
+"MAIN" function to call kozyra convective_growth_rate function and plot it.
+Separates out the CGR calculation from the plotting.
 """
+
 import numpy as np
 import matplotlib.pyplot as plt
 import convective_growth_rate as conv

@@ -11,8 +11,6 @@ from   scipy.special     import wofz
 from emperics            import geomagnetic_magnitude, sheely_plasmasphere
 from matplotlib.lines    import Line2D
 import os
-
-
 '''
 Equations from Wang et al. 2016. Is for cold species of warm dispersion
 relation simplify for alpha = 0 under the asymptotic expansion of the plasma
@@ -146,6 +144,15 @@ def get_dispersion_relation(field, ndensc, ndensw, A, t_perp, norm_k=False, norm
     kmax   -- Maximum k-value, in units of p_cyc/vA
     plot   -- Flag: Plot output
     save   -- Flag: Save output to directory kwarg 'savepath'
+    
+    OUTPUT:
+        k_vals     -- Wavenumbers solved for 
+        CPDR_solns -- Cold plasma dispersion relation: w(k) for each k in k_vals
+        warm_solns -- Warm plasma dispersion relation: w(k) for each k in k_vals
+    
+    Note:
+        warm_solns is np.complex128 array: Real component is the dispersion relation, 
+        Imaginary component is the growth rate at that k.
     '''
     global c, k_vals
     mp    = 1.673E-27                           # kg
@@ -324,29 +331,29 @@ if __name__ == '__main__':
     Nn       = 3                                # Number of species
     L_shell  = 4                                # L-shell at which magnetic field and density are calculated
     n0       = sheely_plasmasphere(L_shell)     # /m3
-    tfield   = geomagnetic_magnitude(L_shell)   # T
+    _field   = geomagnetic_magnitude(L_shell)   # T
     
-    tndensc    = np.zeros(Nn)
-    tndensc[0] = 0.1*n0
-    tndensc[1] = 0.2*n0
-    tndensc[2] = 0.1*n0
+    _ndensc    = np.zeros(Nn)
+    _ndensc[0] = 0.1*n0     # Cold Hydrogen
+    _ndensc[1] = 0.2*n0     # Cold Helium
+    _ndensc[2] = 0.1*n0     # Cold Oxygen
 
     # Density of warm species (same order as cold) (number/cc)
-    tndensw    = np.zeros(Nn)
-    tndensw[0] = 0.6*n0
-    tndensw[1] = 0.0*n0
-    tndensw[2] = 0.0*n0
+    _ndensw    = np.zeros(Nn)
+    _ndensw[0] = 0.6*n0     # Warm Hydrogen
+    _ndensw[1] = 0.0*n0     # Warm Helium
+    _ndensw[2] = 0.0*n0     # Warm Oxygen
 
     # Input the perpendicular temperature (ev)
-    tt_perp    = np.zeros(Nn)
-    tt_perp[0] = 50000.
-    tt_perp[1] = 00000.
-    tt_perp[2] = 00000.
+    _t_perp    = np.zeros(Nn)
+    _t_perp[0] = 50000.
+    _t_perp[1] = 00000.
+    _t_perp[2] = 00000.
 
     # Input the parallel temperature (ev)
-    tA = np.zeros(Nn)
-    tA[0] = 1.
-    tA[1] = 0.
-    tA[2] = 0.
+    _A    = np.zeros(Nn)
+    _A[0] = 1.
+    _A[1] = 0.
+    _A[2] = 0.
 
-    get_dispersion_relation(tfield, tndensc, tndensw, tA, tt_perp, norm_k = True, norm_w=True, plot=True)    
+    get_dispersion_relation(_field, _ndensc, _ndensw, _A, _t_perp, norm_k=True, norm_w=True, plot=True)    
