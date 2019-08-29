@@ -6,14 +6,18 @@ Created on Tues Aug 19 20:26:09 2019
 
 Script Function:
 """
-import warnings
-import pdb
+import sys
+sys.path.append('F://Google Drive//Uni//PhD 2017//Data//Scripts//')
+
 import numpy as np
 import matplotlib.pyplot as plt
 
-from plasma_lib.emperics    import geomagnetic_magnitude, sheely_plasmasphere
+import rbsp_file_readers as rfr
+
+from plasma_lib.emperics               import geomagnetic_magnitude, sheely_plasmasphere
 from plasma_lib.convective_growth_rate import calculate_growth_rate
-from plasma_lib.warm_dispersion_chen   import get_dispersion_relation, plot_dispersion, create_type_legend, create_band_legend
+from plasma_lib.warm_dispersion_chen   import get_dispersion_relation, create_type_legend, create_band_legend
+
 '''
 Kozyra calculate_growth_rate function: Returns freqs, CGR, stop band. Takes /cm3 and nT
 Chen get_dispersion_relation function: Returns k, CPDR, WPDR (complex). Takes /m3 and T
@@ -36,12 +40,6 @@ def get_and_plot_dispersion(save=False):
         - Label cyclotron frequencies (or remove with flag for varying B0)
         - Work out how to display it for multiple values
         - Do some investigating : Adjust ion composition parameter space with constant field (for marginal instability)
-        
-    -- Two figures
-      - First figure: Chen modified code - HOPE + RBSPICE + COLD densities. Set for arbitrary number of species.
-      - Second figure: Kozyra CGR - Only does one hot population, try one with HOPE (top), one with RBSPICE (bottom)
-      
-    Time axis: Maybe use alpha? Do for all points or if >10, pick 5 roughly equally spaced?
     '''
     ###################################
     ### CALL FUNCTIONS, INIT VALUES ###
@@ -60,14 +58,14 @@ def get_and_plot_dispersion(save=False):
     ax2 = plt.subplot2grid((2, 2), (1, 0))
     ax3 = plt.subplot2grid((2, 2), (1, 1))
     
-    #####################################
-    ### TOP PLOT: DISPERSION RELATION ###
-    #####################################
+    ######################################
+    ### TOP PLOT: DISPERSION RELATIONS ###
+    ######################################
     for ii in range(3):
         ax1.plot(k_vals[1:], cpdr[1:, ii],      c=species_colors[ii], linestyle='--', label='Cold')
         ax1.plot(k_vals[1:], wpdr[1:, ii].real, c=species_colors[ii], linestyle='-',  label='Warm')
         ax1.axhline(species_cyc[ii], c='k', linestyle=':')
-        
+
     ax1.set_title('Dispersion Relation')
     ax1.set_xlabel(r'k ($\times 10^{-6} m^{-1}$)')
     ax1.set_ylabel(r'$\omega$ (Hz)')
@@ -85,9 +83,10 @@ def get_and_plot_dispersion(save=False):
     band_legend = create_band_legend(ax3, band_labels, species_colors)
     ax3.add_artist(band_legend)
     
-    #################################
-    ### SECOND PLOTS: GROWTH RATE ###
-    #################################
+    ##################################
+    ### BOTTOM PLOTS: GROWTH RATES ###
+    ##################################
+    
     # Convective
     ax2.plot(freqs, cgr)
     for ii in range(stop.shape[0] - 1):
@@ -129,29 +128,54 @@ def get_and_plot_dispersion(save=False):
 
 if __name__ == '__main__':
     #warnings.filterwarnings('error')
+    
+    # Get energetic densities from HOPE/SPICE for each population, along with T_perp and Anisotropy
+    # Assume cold density from WAVES density
+    # Cold composition... any HOPE data <30eV useful? Use this to set minimum limits? Start by assuming only cold protons initially.
+    # Magnetic field from EMFISIS **or** maybe in one of the CDFs
+    # Probably going to need to modify the function calls to allow two sets of "warm" components
+    # Possible with Chen warm dispersion code, not so much with Kozyra code.
+    # Do 2x1 dispersion/growth for Chen, then 2x1 HOPE/SPICE as warm components for Kozyra
+    # Start with cold density and subtract HOPE and SPICE densities.
+    
+    rbsp_path = 'G://DATA//RBSP//'
+    probe     = 'a'
+        
+    time_start = np.datetime64('2015-12-21T22:00:00')
+    time_end   = np.datetime64('2015-12-22T00:30:00')
+    pad        = 0
+    
     save_path = None
     
-    Nn       = 3                                    # Number of species
-    L_shell  = 4                                    # L-shell at which magnetic field and density are calculated
-    n0       = sheely_plasmasphere(L_shell)*1e-6    # /cc
-    field    = geomagnetic_magnitude(L_shell)*1e9   # nT
-    
-    f_max    = 7.0
+    f_max    = 5.0
     q        = 1.602e-19
     mp       = 1.673e-27
-    
+
+    itime, etime, pdict, perr  = rfr.retrieve_RBSP_hope_moment_data(     rbsp_path, time_start, time_end, padding=pad, probe=probe)
+    den_times, edens, dens_err = rfr.retrieve_RBSP_electron_density_data(rbsp_path, time_start, time_end, probe, pad=pad)
+
+    for product, spec in zip(['TOFxEH', 'TOFxEHe', 'TOFxEO'], ['P', 'He', 'O']):
+        spice_time , spice_dict    = rfr.retrieve_RBSPICE_data(rbsp_path, time_start, time_end, product , padding=pad, probe=probe)
+        n_spice = spice_dict['F{}DU_Density'.format(spec)]
+        
+        kB      = 1.381e-23; q = 1.602e-19
+        t_perpK = 1e-9*spice_dict['F{}DU_PerpPressure'.format(spec)] / (kB*1e6*spice_dict['F{}DU_Density'.format(spec)])
+        t_paraK = 1e-9*spice_dict['F{}DU_ParaPressure'.format(spec)] / (kB*1e6*spice_dict['F{}DU_Density'.format(spec)])
+        
+        t_perp  = 1e-3 * kB * t_perpK / q  # Convert to keV
+        t_para  = 1e-3 * kB * t_paraK / q  # Convert to keV
+
+
+
+
+
+
     cold_dens = np.zeros(Nn)
     cold_dens[0] = 0.6*n0     # Cold Hydrogen
     cold_dens[1] = 0.2*n0     # Cold Helium
     cold_dens[2] = 0.1*n0     # Cold Oxygen
 
     # Density of warm species (same order as cold) (number/cc)
-    warm_dens    = np.zeros(Nn)
-    warm_dens[0] = 0.1*n0     # Warm Hydrogen
-    warm_dens[1] = 0.0*n0     # Warm Helium
-    warm_dens[2] = 0.0*n0     # Warm Oxygen
-    
-    # Density of warmer species (same order as cold) (number/cc)
     warm_dens    = np.zeros(Nn)
     warm_dens[0] = 0.1*n0     # Warm Hydrogen
     warm_dens[1] = 0.0*n0     # Warm Helium
