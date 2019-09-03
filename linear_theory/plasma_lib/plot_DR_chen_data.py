@@ -12,11 +12,14 @@ import os
 import numpy                        as np
 import matplotlib.pyplot            as plt
 import matplotlib.gridspec          as gs
+import matplotlib.dates             as mdates
 import extract_parameters_from_data as data
 import calculate_DR_chen_data       as cdr
+import RBSP_fields_loader           as rfl
 from   matplotlib.lines         import Line2D
 from   statistics               import mode
 from   rbsp_file_readers        import get_pearl_times
+
 
 def create_band_legend(fn_ax, labels, colors):
     legend_elements = []
@@ -308,7 +311,7 @@ def plot_all_DRs(param_dict, all_k, all_CPDR, all_WPDR):
     return
 
 
-def plot_growth_rate_with_time(times, k_vals, growth_rate, per_tol=70, save=False):
+def plot_growth_rate_with_time(times, k_vals, growth_rate, per_tol=70, output='none', short=False):
     Nt    = times.shape[0]
     max_k = np.zeros((Nt, 3))
     max_g = np.zeros((Nt, 3))
@@ -340,7 +343,7 @@ def plot_growth_rate_with_time(times, k_vals, growth_rate, per_tol=70, save=Fals
     ax1    = fig.add_subplot(grid[0, 0])
     
     for ii in range(3):
-        ax1.plot(times, max_g[:, ii], color=species_colors[ii], label=band_labels[ii])
+        ax1.plot(times, max_g[:, ii], color=species_colors[ii], label=band_labels[ii], marker='o')
     
     ax1.set_xlabel('Time (UT)')
     ax1.set_ylabel('Temporal Growth Rate ($s^{-1}$)')
@@ -350,18 +353,109 @@ def plot_growth_rate_with_time(times, k_vals, growth_rate, per_tol=70, save=Fals
     for ii in range(pearl_times.shape[0]):
         ax1.axvline(pearl_times[ii], c='k', linestyle='--', alpha=0.4)
     
-        
-    if save == True:
+    if short == True:
+        ax1.set_xlim(np.datetime64('2013-07-25T21:25:00'), np.datetime64('2013-07-25T21:45:00'))
+        figsave_path = save_dir + '_LT_timeseries_CC_{:03}_{:03}_{:03}_{}_short.png'.format(cmp[0], cmp[1], cmp[2], save_string)
+    else:
+        ax1.set_xlim(time_start, time_end)
         figsave_path = save_dir + '_LT_timeseries_CC_{:03}_{:03}_{:03}_{}.png'.format(cmp[0], cmp[1], cmp[2], save_string)
+
+        
+    if output.lower() == 'save':
         print('Saving {}'.format(figsave_path))
         fig.savefig(figsave_path)
         plt.close('all')
-    else:
+    elif output.lower() == 'show':
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S.%f'))
+        fig.autofmt_xdate()
         figManager = plt.get_current_fig_manager()
         figManager.window.showMaximized()
         plt.show()
+    else:
+        plt.close('all')
     return max_k, max_g
 
+
+def stackplot_with_parameters(param_dict, max_k, max_g, output='show'):
+    plt.ioff()
+    fig, ax = plt.subplots(10, 1, figsize=(8.27, 11.69))
+    
+    mag_times, B_mag, dt = rfl.load_magnetic_field('G://DATA//RBSP//', time_start, time_end, probe=probe,
+                                                    wave_HP=250, wave_LP=700, get_gyfreqs=False)
+    trans_mag            = np.sqrt(B_mag[:, 0] ** 2 + B_mag[:, 1] ** 2 + B_mag[:, 2] ** 2)
+    
+    ax[0].plot(param_dict['times'], param_dict['field'])
+    ax[0].set_ylabel('$|B|$\n(nT)', rotation=0, labelpad=25)
+    ax[0].legend(bbox_to_anchor=(1.0, 0), loc=3, borderaxespad=0.)
+    
+    ax0b = ax[0].twinx()
+    ax0b.plot(mag_times, trans_mag)
+    ax0b.set_ylabel('$B_{EMIC}$\n(nT)', rotation=0, labelpad=25)
+    
+    
+    for jj in range(3):
+        ax[1].plot(param_dict['times'], param_dict['ndensc'][jj, :], label=band_labels[jj], color=species_colors[jj])
+        ax[1].set_ylabel('$n_c$\n$(cm^{-3})$', rotation=0, labelpad=25)
+        ax[1].legend(bbox_to_anchor=(1.0, 0), loc=3, borderaxespad=0.)
+        
+        ax[2].plot(param_dict['times'], param_dict['ndensw'][jj, :], label=band_labels[jj], color=species_colors[jj])
+        ax[2].set_ylabel('$n_{h1}$\n$(cm^{-3})$', rotation=0, labelpad=25)
+        
+        ax[3].plot(param_dict['times'], param_dict['temp_perp'][jj, :]*1e-3, label=band_labels[jj], color=species_colors[jj])
+        ax[3].set_ylabel('$T_{\perp1}$\n(keV)', rotation=0, labelpad=25)
+        
+        ax[4].plot(param_dict['times'], param_dict['A'][jj, :], label=band_labels[jj], color=species_colors[jj])
+        ax[4].set_ylabel('$A_{h1}$', rotation=0, labelpad=25)
+        
+        ax[5].plot(param_dict['times'], param_dict['ndensw2'][jj, :], label=band_labels[jj], color=species_colors[jj])
+        ax[5].set_ylabel('$n_{h2}$\n$(cm^{-3})$', rotation=0, labelpad=25)
+        
+        ax[6].plot(param_dict['times'], param_dict['temp_perp2'][jj, :]*1e-3, label=band_labels[jj], color=species_colors[jj])
+        ax[6].set_ylabel('$T_{\perp2}$\n(keV)', rotation=0, labelpad=25)
+        
+        ax[7].plot(param_dict['times'], param_dict['A2'][jj, :], label=band_labels[jj], color=species_colors[jj])
+        ax[7].set_ylabel('$A_{h2}$', rotation=0, labelpad=25)
+        
+        ax[8].plot(param_dict['times'], max_k[:, jj], label=band_labels[jj], color=species_colors[jj])
+        ax[8].set_ylabel('$k_m$', rotation=0, labelpad=25)
+        
+        ax[9].plot(param_dict['times'], max_g[:, jj], label=band_labels[jj], color=species_colors[jj])
+        ax[9].set_ylabel('$\gamma_m$', rotation=0, labelpad=25)
+    
+    for _ax in ax:
+        if False:
+            _ax.set_xlim(time_start, time_end)
+            ax0b.set_xlim(time_start, time_end)
+            figsave_path = save_dir + '_LT_stackplot_CC_{:03}_{:03}_{:03}_{}.png'.format(cmp[0], cmp[1], cmp[2], save_string)
+        else:
+            figsave_path = save_dir + '_LT_stackplot_CC_{:03}_{:03}_{:03}_{}_shortest2.png'.format(cmp[0], cmp[1], cmp[2], save_string)
+            _ax.set_xlim(np.datetime64('2013-07-25T21:32:00'), np.datetime64('2013-07-25T21:40:00'))
+            ax0b.set_xlim(np.datetime64('2013-07-25T21:32:00'), np.datetime64('2013-07-25T21:40:00'))
+        
+        if _ax is not ax[-1]:
+            _ax.set_xticklabels([])
+    
+    ax[0].set_title('LINEAR THEORY INPUT STACKPLOT: RBSP-{} {}'.format(probe.upper(), date_string))
+    
+    fig.tight_layout()
+    
+    ax[-1].xaxis.set_major_locator(mdates.MinuteLocator(interval=2))
+    ax[-1].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    
+    fig.subplots_adjust(hspace=0)
+    fig.align_ylabels()
+    fig.autofmt_xdate()
+
+    if output.lower() == 'save':
+        print('Saving {}'.format(figsave_path))
+        fig.savefig(figsave_path)
+        plt.close('all')
+    elif output.lower() == 'show':
+        #figManager = plt.get_current_fig_manager()
+        #figManager.window.showMaximized()
+        plt.show()
+    else:
+        return
 
 if __name__ == '__main__':
     from pandas.plotting import register_matplotlib_converters
@@ -384,7 +478,7 @@ if __name__ == '__main__':
     band_labels    = [r'$H^+$', r'$He^+$', r'$O^+$']
     
     #cmp            = np.array([60, 30, 10])
-    for cmp in [np.array([60, 30, 10]), np.array([70, 20, 10]), np.array([70, 30, 0]), np.array([80, 20, 0])]:
+    for cmp in [np.array([80, 18, 2])]:
         save_dir    = 'G://EVENTS//event_{}//LINEAR_THEORY_CC_{:03}_{:03}_{:03}//'.format(date_string, cmp[0], cmp[1], cmp[2])
         data_path   = save_dir + '_chen_dispersion_{:03}_{:03}_{:03}_{}.npz'.format(cmp[0], cmp[1], cmp[2], save_string)
         
@@ -392,5 +486,27 @@ if __name__ == '__main__':
             os.makedirs(save_dir)
         
         _all_CPDR, _all_WPDR, _all_k, _param_dict = get_all_DRs()
-        plot_all_DRs(_param_dict, _all_k, _all_CPDR, _all_WPDR)
-        _max_k, _max_g = plot_growth_rate_with_time(_param_dict['times'], _all_k, _all_WPDR.imag, save=True)
+        #plot_all_DRs(_param_dict, _all_k, _all_CPDR, _all_WPDR)
+        _max_k, _max_g = plot_growth_rate_with_time(_param_dict['times'], _all_k, _all_WPDR.imag, output='save')
+
+        #stackplot_with_parameters(_param_dict, _max_k, _max_g, output='save')
+
+
+
+
+# =============================================================================
+#         ii = 351
+#         field     = param_dict['field'][ii]
+#         ndensc    = param_dict['ndensc'][:, ii]
+#         ndensw    = param_dict['ndensw'][:, ii]
+#         temp_perp = param_dict['temp_perp'][:, ii]
+#         A         = param_dict['A'][:, ii]
+#         ndensw2   = param_dict['ndensw2'][:, ii]
+#         temp_perp2= param_dict['temp_perp2'][:, ii]
+#         A2        = param_dict['A2'][:, ii]
+#         
+#         n0         = (ndensc + ndensw + ndensw2).sum()
+#         c_percent  = ndensc.sum() / n0 * 100.
+#         w_percent  = ndensw.sum() / n0 * 100.
+#         w2_percent = ndensw2.sum() / n0 * 100.
+# =============================================================================
