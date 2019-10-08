@@ -17,44 +17,17 @@ using e.g. cf.B0
 def load_run(drive, series, run_num, lmissing_t0_offset=0, extract_arrays=True):
     global missing_t0_offset
     missing_t0_offset = lmissing_t0_offset   # Flag for when I thought having a t=0 save file wasn't needed. I was wrong.
-    manage_dirs(drive, series, run_num)
     load_simulation_params()
     load_species_params()
     initialize_simulation_variables()
-    
-    if extract_arrays == True:
-        extract_all_arrays()
     return
 
-def manage_dirs(drive, series, run_num, create_new=True):
-    global run_dir, data_dir, anal_dir, temp_dir, base_dir, field_dir, particle_dir, num_field_steps, num_particle_steps
-    
-    base_dir = '{}/runs/{}/'.format(drive, series)                      # Main series directory, containing runs
-    run_dir  = '{}/runs/{}/run_{}/'.format(drive, series, run_num)      # Main run directory
-    data_dir = run_dir + 'data/'                                        # Directory containing .npz output files for the simulation run
-    anal_dir = run_dir + 'analysis/'                                    # Output directory for all this analysis (each will probably have a subfolder)
-    temp_dir = run_dir + 'extracted/'                                   # Saving things like matrices so we only have to do them once
 
-    field_dir    = data_dir + '/fields/'
-    particle_dir = data_dir + '/particles/'
-    
-    num_field_steps    = len(os.listdir(field_dir))                    # Number of field    time slices
-    num_particle_steps = len(os.listdir(particle_dir))                 # Number of particle time slices
-    
-   # Make Output folders if they don't exist
-    for this_dir in [anal_dir, temp_dir]:
-        if os.path.exists(run_dir) == True:
-            if os.path.exists(this_dir) == False:
-                os.makedirs(this_dir)
-        else:
-            raise IOError('Run {} does not exist for series {}. Check range argument.'.format(run_num, series))
-    return
-
-def load_species_params():
+def load_species_params(_data_dir):
     global species_present, density, dist_type, idx_bounds, charge, mass, Tper, \
            sim_repr, temp_type, temp_color, velocity, Tpar, species_lbl, n_contr, drift_v
 
-    p_path = os.path.join(data_dir, 'particle_parameters.npz')                  # File location
+    p_path = os.path.join(_data_dir, 'particle_parameters.npz')                 # File location
     p_data = np.load(p_path)                                                    # Load file
 
     density    = p_data['density']
@@ -62,7 +35,7 @@ def load_species_params():
     charge     = p_data['charge']
     mass       = p_data['mass']
     Tper       = p_data['Tper']
-    
+    sim_repr   = p_data['sim_repr']
     temp_type  = p_data['temp_type']
     temp_color = p_data['temp_color']
     dist_type  = p_data['dist_type']
@@ -75,16 +48,7 @@ def load_species_params():
     except:
         drift_v    = p_data['drift_v']
         
-    try:
-        sim_repr   = p_data['sim_repr']
-    except:
-        pass
-        
-    try:
-        n_contr    = density / (cellpart*sim_repr)                              # Species density contribution: Each macroparticle contributes this density to a cell
-    except:
-        n_contr    = density / nsp_ppc                                          # Species density contribution: Each macroparticle contributes this density to a cell
-
+    n_contr    = density / (cellpart*sim_repr)                                  # Species density contribution: Each macroparticle contributes this density to a cell
     species_present = [False, False, False]                                     # Test for the presence of singly charged H, He, O
         
     for ii in range(Nj):
@@ -96,13 +60,13 @@ def load_species_params():
             species_present[2] = True
     return
 
-def load_simulation_params():
+def load_simulation_params(_data_dir):
     global Nj, cellpart, ne, NX, dxm, seed, B0, dx, Te0, theta, dt_sim, max_rev,\
            ie, run_desc, seed, subcycles, LH_frac, orbit_res, freq_res, method_type,\
            particle_shape, part_save_iter, field_save_iter, dt_field, dt_particle, \
-           HM_amplitude, HM_frequency, nsp_ppc
+           HM_amplitude, HM_frequency 
 
-    h_name = os.path.join(data_dir, 'simulation_parameters.pckl')       # Load header file
+    h_name = os.path.join(_data_dir, 'simulation_parameters.pckl')      # Load header file
     f      = open(h_name, 'rb')                                         # Open header file
     obj    = pickle.load(f)                                             # Load variables from header file into python object
     f.close()                                                           # Close header file
@@ -138,19 +102,23 @@ def load_simulation_params():
     try:
         HM_amplitude = obj['HM_amplitude']
         HM_frequency = obj['HM_frequency']
-        nsp_ppc      = obj['nsp_ppc']
     except:
         HM_amplitude = 0
         HM_frequency = 0
-        nsp_ppc      = 0
     
     dt_field        = dt_sim * field_save_iter                         # Time between data slices (seconds)
     dt_particle     = dt_sim * part_save_iter
     return 
 
-def initialize_simulation_variables():
+def initialize_simulation_variables(_data_dir):
     global wpi, gyfreq, gyperiod, time_seconds_field, time_seconds_particle, \
            time_gperiods_field, time_gperiods_particle, time_radperiods_field, time_radperiods_particle, va
+    missing_t0_offset = 0
+    load_simulation_params(_data_dir)
+    
+    num_field_steps    = len(os.listdir(_data_dir + '/fields/'))
+    num_particle_steps = len(os.listdir(_data_dir + '/particles/'))
+    
     q   = 1.602e-19               # Elementary charge (C)
     mp  = 1.67e-27                # Mass of proton (kg)
     e0  = 8.854e-12               # Epsilon naught - permittivity of free space
@@ -171,20 +139,8 @@ def initialize_simulation_variables():
     time_radperiods_particle = time_seconds_particle * gyfreq
     return
 
-def load_fields(ii):
-    field_file = 'data%05d.npz' % ii             # Define target file
-    input_path = field_dir + field_file          # File location
-    data       = np.load(input_path)             # Load file
 
-    tB               = data['B']
-    tE               = data['E']
-    tVe              = data['Ve']
-    tTe              = data['Te']
-    tJ               = data['J']
-    tdns             = data['dns']
-    return tB, tE, tVe, tTe, tJ, tdns
-
-def load_particles(ii):    
+def load_particles(particle_dir, ii):    
     part_file  = 'data%05d.npz' % ii             # Define target file
     input_path = particle_dir + part_file        # File location
     data       = np.load(input_path)             # Load file
@@ -197,87 +153,8 @@ def load_particles(ii):
         tv               = data['velocity']
     return tx, tv
 
-def extract_all_arrays():
-    '''
-    Extracts and saves all field arrays separate from the timestep slice files for easy
-    access. Note that magnetic field arrays exclude the last value due to periodic
-    boundary conditions. This may be changed later.
-    '''
-    
-    '''
-    GET RID OF THIS -- JUST CREATES A SINGLE ARRAY AND ASSIGNS ACCESS TO 14 VARIABLES. THIS IS REALLY DUMB.
-    '''
-    bx_arr,ex_arr,by_arr,ey_arr,bz_arr,ez_arr,vex_arr,jx_arr,vey_arr,jy_arr,vez_arr,jz_arr,te_arr,qdns_arr\
-    = [np.zeros((num_field_steps, NX)) for _ in range(14)]
 
-    # Check that all components are extracted
-    comps_missing = 0
-    for component in ['bx', 'by', 'bz', 'ex', 'ey', 'ez']:
-        check_path = temp_dir + component + '_array.npy'
-        if os.path.isfile(check_path) == False:
-            comps_missing += 1
-        
-    if comps_missing == 0:
-        print('Field components already extracted.')
-        return
-    else:
-        print('Extracting fields...')
-        for ii in range(num_field_steps):
-            print('Extracting field timestep {}'.format(ii))
-            
-            B, E, Ve, Te, J, q_dns = load_fields(ii + missing_t0_offset)
-            
-            bx_arr[ii, :] = B[:-1, 0]
-            by_arr[ii, :] = B[:-1, 1]
-            bz_arr[ii, :] = B[:-1, 2]
-            
-            ex_arr[ii, :] = E[:, 0]
-            ey_arr[ii, :] = E[:, 1]
-            ez_arr[ii, :] = E[:, 2]
-            
-            try:
-                jx_arr[ii, :] = J[:, 0]
-                jy_arr[ii, :] = J[:, 1]
-                jz_arr[ii, :] = J[:, 2]
-            except:
-                '''
-                Catch for some model runs where I was saving charge density in place of current density
-                'Cause I am dumb
-                Will just return a zero array instead, no harm (just missing data)
-                '''
-                pass
-            
-            vex_arr[ii, :] = Ve[:, 0]
-            vey_arr[ii, :] = Ve[:, 1]
-            vez_arr[ii, :] = Ve[:, 2]
-            
-            te_arr[  ii, :] = Te
-            qdns_arr[ii, :] = q_dns
-        
-        np.save(temp_dir + 'bx' +'_array.npy', bx_arr)
-        np.save(temp_dir + 'by' +'_array.npy', by_arr)
-        np.save(temp_dir + 'bz' +'_array.npy', bz_arr)
-        
-        np.save(temp_dir + 'ex' +'_array.npy', ex_arr)
-        np.save(temp_dir + 'ey' +'_array.npy', ey_arr)
-        np.save(temp_dir + 'ez' +'_array.npy', ez_arr)
-        
-        np.save(temp_dir + 'jx' +'_array.npy', jx_arr)
-        np.save(temp_dir + 'jy' +'_array.npy', jy_arr)
-        np.save(temp_dir + 'jz' +'_array.npy', jz_arr)
-        
-        np.save(temp_dir + 'vex' +'_array.npy', vex_arr)
-        np.save(temp_dir + 'vey' +'_array.npy', vey_arr)
-        np.save(temp_dir + 'vez' +'_array.npy', vez_arr)
-        
-        np.save(temp_dir + 'te'    +'_array.npy', te_arr)
-        np.save(temp_dir + 'qdens' +'_array.npy', qdns_arr)
-        
-        print('Field component arrays saved in {}'.format(temp_dir))
-    return
-
-
-def get_array(component='by', get_all=False):
+def get_array(temp_dir, component='by', get_all=False):
     '''
     Input  : Array Component
     Output : Array as np.ndarray

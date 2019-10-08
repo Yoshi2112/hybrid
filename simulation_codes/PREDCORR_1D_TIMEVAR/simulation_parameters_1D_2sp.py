@@ -8,14 +8,14 @@ import numpy as np
 import sys
 
 ### RUN DESCRIPTION ###
-run_description = '''Marginal instability test for 25/07/2013 event -- Minimum growth paramters (no growth expected)'''
+run_description = '''Testing old PREDCORR against PREDCORR_TIMEVAR to see if optimizations broke anything. Assumes PREDCORR is correct'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs//july_25_lingrowth_v2'  # Series save dir   : Folder containing all runs of a series
+save_path       = 'runs//quiet_start_test'      # Series save dir   : Folder containing all runs of a series
 run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles  = 1                             # Save data flag    : For later analysis
-save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
+save_particles  = 0                             # Save data flag    : For later analysis
+save_fields     = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 15401                         # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin       = [(2*run_num)%8, (2*run_num + 1)%8]      # Set CPU affinity for run. Must be list. Auto-assign: None.
 
@@ -33,70 +33,44 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 100                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+max_rev  = 200                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 
-nsp_ppc  = 3000                             # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+nsp_ppc  = 10000                            # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
-B0       = 229.687e-9                       # Unform initial magnetic field value (in T)
+B0       = 200e-9                           # Unform initial magnetic field value (in T)
 
 orbit_res = 0.10                            # Particle orbit resolution: Fraction of gyroperiod in seconds
 freq_res  = 0.02                            # Frequency resolution     : Fraction of inverse radian cyclotron frequency
-part_res  = 0.20                            # Data capture resolution in gyroperiod fraction: Particle information
+part_res  = 0.25                            # Data capture resolution in gyroperiod fraction: Particle information
 field_res = 0.1                             # Data capture resolution in gyroperiod fraction: Field information
 
 
 ### PARTICLE PARAMETERS ###
-species_lbl= [r'$H^+$ cold', r'$He^+$ cold', r'$O^+$ cold',
-              r'$H^+$ warm', r'$He^+$ warm', r'$O^+$ warm',
-              r'$H^+$ hot' , r'$He^+$ hot' , r'$O^+$ hot']  # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
+species_lbl= [r'$H^+$ warm', r'$H^+$ cold', r'$He^+$ cold']  # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
+temp_color = ['red'        , 'blue'       , 'purple']
 
-temp_color = ['red'      , 'navy'    , 'purple',
-              'firebrick', 'darkblue', 'violet',
-              'rosybrown', 'blue'    , 'plum']
+temp_type  = np.asarray([1 , 0 , 0 ])                 	     # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.asarray([0 , 0 , 0 ])                        # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+mass       = np.asarray([1., 1., 4.])    			         # Species ion mass (proton mass units)
+charge     = np.asarray([1., 1., 1.])    			         # Species ion charge (elementary charge units)
 
-temp_type  = np.asarray([0, 0, 0,
-                         1, 1, 1,
-                         1, 1, 1])                   	    # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+drift_v    = np.asarray([0., 0., 0.])                        # Species parallel bulk velocity (alfven velocity units)
 
-dist_type  = np.asarray([0, 0, 0,
-                         0, 0, 0,
-                         0, 0, 0])                          # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-
-mass       = np.asarray([1., 4., 16.,
-                         1., 4., 16.,
-                         1., 4., 16.])    			        # Species ion mass (proton mass units)
-
-charge     = np.asarray([1., 1., 1.,
-                         1., 1., 1.,
-                         1., 1., 1.])    			        # Species ion charge (elementary charge units)
-
-drift_v    = np.asarray([0., 0., 0.,
-                         0., 0., 0.,
-                         0., 0., 0.])                       # Species parallel bulk velocity (alfven velocity units)
-
-density    = np.asarray([183.713 , 52.4894   , 26.2447   ,
-                         1.65869 , 1.22296   , 0.607384  ,
-                         0.703036, 0.00767027, 0.00345888]) * 1e6
-
-E_per      = np.array([5.0    , 5.0    , 5.0,
-                       12577.1, 1175.91, 5708.11,
-                       53241.3, 99147.2, 159715])
-
-anisotropy = np.array([0.0     , 0.0     , 0.0      ,
-                       0.199287, 0.131676, 0.0602039,
-                       0.422189, 0.924996, 0.467508])
+density    = np.array([200.   , 50. , 25.]) * 1e6           # Species density (/cc -> /m3)
+E_per      = np.array([25000. , 5.0 , 5.0])                 # Species perpendicular energy (eV)
+anisotropy = np.array([5.0    , 0.0 , 0.0])                 # Species anisotropy (T_perp/T_parallel - 1)
 
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
-E_e            = 200.0                                      # Electron energy (eV)
+E_e            = 0.01                                       # Electron energy (eV)
 
 account_for_dispersion = False                              # Flag (True/False) whether or not to reduce timestep to prevent dispersion getting too high
 dispersion_allowance   = 1.                                 # Multiple of how much past frac*wD^-1 is allowed: Used to stop dispersion from slowing down sim too much  
 adaptive_timestep      = True                               # Flag (True/False) for adaptive timestep based on particle and field parameters
-renew_particles        = False                              # Re-energise particles when they cross simulation boundaries. Used for open boundaries.
+renew_particles        = True                               # Re-energise particles when they cross simulation boundaries. Used for open boundaries.
 
 HM_amplitude   = 0e-9                                       # Driven wave amplitude in T
 HM_frequency   = 0.02                                       # Driven wave in Hz
@@ -106,8 +80,8 @@ HM_frequency   = 0.02                                       # Driven wave in Hz
 
 
 #%%### DERIVED SIMULATION PARAMETERS
-ne         = density.sum()
-E_par      = E_per / (anisotropy + 1)
+ne    = density.sum()
+E_par = E_per / (anisotropy + 1)
     
 Te0        = E_e   * 11603.
 Tpar       = E_par * 11603.

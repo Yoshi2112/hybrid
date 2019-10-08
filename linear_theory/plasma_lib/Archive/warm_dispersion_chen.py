@@ -4,6 +4,8 @@ Created on Mon Apr  8 12:29:15 2019
 
 @author: Yoshi
 """
+import sys
+sys.path.append('../')
 import numpy as np
 import matplotlib.pyplot as plt
 from   scipy.optimize    import fsolve
@@ -11,6 +13,7 @@ from   scipy.special     import wofz
 from emperics import geomagnetic_magnitude, sheely_plasmasphere
 from matplotlib.lines    import Line2D
 import os
+import pdb
 '''
 Equations from Wang et al. 2016. Is for cold species of warm dispersion
 relation simplify for alpha = 0 under the asymptotic expansion of the plasma
@@ -184,6 +187,7 @@ def get_dispersion_relation(field, ndensc, ndensw, A, t_perp, k_isnormalized=Fal
     global t_par, ndens, w_pc2, w_pw2, w_ps2, w_pe2, w_cyc, p_cyc, e_cyc, alpha_par, alpha_perp
     
     t_par   = t_perp / (A + 1)
+    pdb.set_trace()
     ndens   = ndensc + ndensw
     
     w_pc2   = ndensc      * qi ** 2 / (mi * e0)  # Cold      ion plasma frequencies (rad/s)
@@ -203,7 +207,7 @@ def get_dispersion_relation(field, ndensc, ndensw, A, t_perp, k_isnormalized=Fal
     
     alpha_par  = np.sqrt(2.0 * t_par  / mi)      # Thermal velocity in m/s (make relativistic?)
     alpha_perp = np.sqrt(2.0 * t_perp / mi)      # Thermal velocity in m/s (make relativistic?)
-
+    pdb.set_trace()
     ######################
     ### SOLVE AND TEST ###
     ######################
@@ -362,7 +366,7 @@ if __name__ == '__main__':
 
     # Input the parallel temperature (ev)
     _A    = np.zeros(Nn)
-    _A[0] = 3.
+    _A[0] = 1.
     _A[1] = 0.
     _A[2] = 0.
 

@@ -86,8 +86,8 @@ def get_growth_rates(do_plot=None):
     
     growth_rate_kt(by, linear_cutoff, freqs[max_idx])
     
-    by_wamps, by_wfreqs, by_gr_rate = fit_fied_component(by, freqs[max_idx], 'By', linear_cutoff, plot=do_plot)
-    bz_wamps, bz_wfreqs, bz_gr_rate = fit_fied_component(bz, freqs[max_idx], 'Bz', linear_cutoff, plot=do_plot)
+    by_wamps, by_wfreqs, by_gr_rate = fit_field_component(by, freqs[max_idx], 'By', linear_cutoff, plot=do_plot)
+    bz_wamps, bz_wfreqs, bz_gr_rate = fit_field_component(bz, freqs[max_idx], 'Bz', linear_cutoff, plot=do_plot)
     
     if do_plot == 'save':
         txt_path  = cf.anal_dir + 'growth_rates.txt'
@@ -105,7 +105,7 @@ def get_growth_rates(do_plot=None):
     return
 
 
-def fit_fied_component(arr, fi, component, cut_idx=None, plot=False, plot_cell=64):
+def fit_field_component(arr, fi, component, cut_idx=None, plot=False, plot_cell=64):
     '''
     Calculates and returns parameters for growing sine wave function for each
     gridpoint up to the linear cutoff time.
@@ -285,4 +285,63 @@ def growth_rate_kt(arr, cut_idx, fi, saveas='kt_growth'):
 
     plt.show()
 
+    return
+
+    
+def get_linear_growth(by, bz, plot=False):
+    '''
+    Calculates an exponential growth rate based on transverse magnetic field
+    energy.
+    '''
+    import pdb
+    mu0 = (4e-7) * np.pi             # Magnetic Permeability of Free Space (SI units)
+    
+    print('Fitting magnetic energy')
+    bt  = np.sqrt(by ** 2 + bz ** 2)
+    U_B = np.square(bt[:, 0])#.sum(axis=1)# * cf.NX * cf.dx / mu0 * 0.5
+    #dU  = bk.get_derivative(U_B)
+    
+    #linear_cutoff = np.where(dU == dU.max())[0][0]
+    
+    #time_fit = cf.time_seconds_field[:linear_cutoff]
+    plt.plot(cf.time_radperiods_field, by, marker='o')
+    plt.xlim(0, 200)
+# =============================================================================
+#     fit_params = lmf.Parameters()
+#     fit_params.add('amp'   , value=1.0            , min=None , max=None)
+#     fit_params.add('growth', value=0.001*cf.gyfreq, min=0.0  , max=None)
+#     
+#     fit_output      = lmf.minimize(residual_exp, fit_params, args=(time_fit,), kws={'data': U_B[:linear_cutoff]},
+#                                method='leastsq')
+#     fit_function    = residual_exp(fit_output.params, time_fit)
+# 
+#     fit_dict        = fit_output.params.valuesdict()
+# =============================================================================
+
+# =============================================================================
+#     if plot == True:
+#         plt.ioff()
+#         plt.figure()
+#         plt.plot(cf.time_seconds_field[:linear_cutoff], U_B[:linear_cutoff], color='green', marker='o', label='Energy')
+#         plt.plot(cf.time_seconds_field[:linear_cutoff], fit_function, color='b', label='Exp. fit')
+#         plt.figtext(0.135, 0.725, r'$\gamma = %.3fs^{-1}$' % (fit_dict['growth'] / (2 * np.pi)))
+#         plt.title('Transverse magnetic field energy')
+#         plt.xlabel('Time (s)')
+#         plt.ylabel('Energy (J)')
+#         plt.legend()
+#         
+# # =============================================================================
+# #         plt.figure()
+# #         plt.plot(time_seconds[:linear_cutoff], dU[:linear_cutoff])
+# # =============================================================================
+#         
+#         if plot == 'save':
+#             save_path = cf.anal_dir + 'magnetic_energy_expfit.png'
+#             plt.savefig(save_path)
+#             plt.close('all')
+#         elif plot == 'show':
+#             plt.show()
+#         else:
+#             pass
+# =============================================================================
     return

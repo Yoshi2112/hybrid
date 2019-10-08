@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 
-from   simulation_parameters_1D  import dx, xmax, xmin, charge, mass
+from   simulation_parameters_1D  import dx, xmax, xmin, charge, mass, kB, Tpar, Tper, drift_v, renew_particles
 from   sources_1D                import collect_moments
 
 @nb.njit()
@@ -18,7 +18,7 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
     ''' 
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
     velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT)
-    position_update(pos, vel, DT, Ie, W_elec)  
+    position_update(pos, vel, idx, DT, Ie, W_elec)  
     collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, ni, nu, temp1D)
     return
 
@@ -108,7 +108,7 @@ def velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
 
 
 @nb.njit()
-def position_update(pos, vel, dt, Ie, W_elec):
+def position_update(pos, vel, idx, dt, Ie, W_elec):
     '''Updates the position of the particles using x = x0 + vt. 
     Also updates particle nearest node and weighting.
 
@@ -125,9 +125,20 @@ def position_update(pos, vel, dt, Ie, W_elec):
         
         if pos[ii] < xmin:
             pos[ii] += xmax
+            new_flag = 1
 
         if pos[ii] > xmax:
             pos[ii] -= xmax
+            new_flag = 1
+            
+        if new_flag == 1 and renew_particles == True:
+            # Re-initialize temperature. "New" particle. 
+            # Should be able to disable this functionality by replacing
+            # if statement with "False"
+            sp         = idx[ii]
+            vel[0, ii] = np.random.normal(0, np.sqrt(kB *  Tpar[sp] /  mass[sp]) +  drift_v[sp])
+            vel[1, ii] = np.random.normal(0, np.sqrt(kB *  Tper[sp] /  mass[sp]))
+            vel[2, ii] = np.random.normal(0, np.sqrt(kB *  Tper[sp] /  mass[sp]))
             
     assign_weighting_TSC(pos, Ie, W_elec)
     return

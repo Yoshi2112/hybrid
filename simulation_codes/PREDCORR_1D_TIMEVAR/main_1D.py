@@ -9,6 +9,7 @@ import fields_1D     as fields
 import sources_1D    as sources
 import save_routines as save
 
+import pdb
 from simulation_parameters_1D import save_particles, save_fields
 
 
@@ -35,7 +36,7 @@ if __name__ == '__main__':
     
     particles.assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
     particles.velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT)
-    
+
     qq      = 1
     print('Starting main loop...')
     while qq < max_inc:
@@ -45,7 +46,6 @@ if __name__ == '__main__':
               Ve, Te, temp3D, temp3D2, temp1D, old_particles, old_fields,\
               qq, DT, max_inc, part_save_iter, field_save_iter)
        
-        
         if qq%part_save_iter == 0 and save_particles == 1:
             save.save_particle_data(DT, part_save_iter, qq, pos, vel)
             
@@ -58,3 +58,4 @@ if __name__ == '__main__':
         qq += 1
         
     print("Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2)))
+

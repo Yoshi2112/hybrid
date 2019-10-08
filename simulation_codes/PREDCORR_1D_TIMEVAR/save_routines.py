@@ -13,7 +13,7 @@ from shutil import rmtree
 import simulation_parameters_1D as const
 from   simulation_parameters_1D import drive, save_path, NX, ne, density, save_particles, save_fields
 from   simulation_parameters_1D import idx_bounds, Nj, species_lbl, temp_type, dist_type, mass, charge,\
-                                       drift_v, sim_repr, Tpar, Tper, temp_color, HM_amplitude, HM_frequency
+                                       drift_v, Tpar, Tper, temp_color, HM_amplitude, HM_frequency, nsp_ppc
 
 
 def manage_directories():
@@ -54,6 +54,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
 
     # Single parameters
     params = dict([('seed', const.seed),
+                   ('nsp_ppc', nsp_ppc),
                    ('Nj', Nj),
                    ('dt', dt),
                    ('NX', NX),
@@ -93,7 +94,6 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                      charge      = charge,
                      drift_v     = drift_v,
                      density     = density,
-                     sim_repr    = sim_repr,
                      Tpar        = Tpar,
                      Tper        = Tper)
     print('Particle data saved')

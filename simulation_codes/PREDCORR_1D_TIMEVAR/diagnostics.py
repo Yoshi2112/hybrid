@@ -25,40 +25,40 @@ def r_squared(data, model):
     return r_sq
 
 
-def check_cell_velocity_distribution(part, node_number, j): #
+def check_cell_velocity_distribution(pos, vel, node_number=const.NX // 2, j=0): #
     '''Checks the velocity distribution of a particle species within a specified cell
     '''
     x_node = (node_number - 0.5) * const.dx   # Position of E-field node
-    f = np.zeros((1, 6))
+    f = np.zeros((1, 3))
     count = 0
 
     for ii in np.arange(const.idx_bounds[j, 0], const.idx_bounds[j, 1]):
-        if (abs(part[0, ii] - x_node) <= 0.5*const.dx):
-            f = np.append(f, [part[0:6, ii]], axis=0)
+        if (abs(pos[ii] - x_node) <= 0.5*const.dx):
+            f = np.append(f, [vel[0:3, ii]], axis=0)
             count += 1
             
     fig = plt.figure(figsize=(12,10))
     fig.suptitle('Particle velocity distribution of species {} in cell {}'.format(j, node_number))
     fig.patch.set_facecolor('w')
-    #num_bins = None
+    num_bins = const.nsp_ppc // 20
 
     ax_x = plt.subplot2grid((2, 3), (0,0), colspan=2, rowspan=2)
     ax_y = plt.subplot2grid((2, 3), (0,2))
     ax_z = plt.subplot2grid((2, 3), (1,2))
 
-    xs, BinEdgesx = np.histogram((f[:, 3] - const.velocity[j]) / const.va)
+    xs, BinEdgesx = np.histogram((f[:, 0] - const.drift_v[j]) / const.va, bins=num_bins)
     bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
     ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
     ax_x.set_xlabel(r'$v_x / v_A$')
     #ax_x.set_xlim(-2, 2)
 
-    ys, BinEdgesy = np.histogram(f[:, 4] / const.va)
+    ys, BinEdgesy = np.histogram(f[:, 1] / const.va, bins=num_bins)
     by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
     ax_y.plot(by, ys, '-', c='c', drawstyle='steps')
     ax_y.set_xlabel(r'$v_y / v_A$')
     #ax_y.set_xlim(-2, 2)
 
-    zs, BinEdgesz = np.histogram(f[:, 5] / const.va)
+    zs, BinEdgesz = np.histogram(f[:, 2] / const.va, bins=num_bins)
     bz = 0.5 * (BinEdgesz[1:] + BinEdgesz[:-1])
     ax_z.plot(bz, zs, '-', c='c', drawstyle='steps')
     ax_z.set_xlabel(r'$v_z / v_A$')
@@ -94,7 +94,7 @@ def check_velocity_distribution(vel):
         fig = plt.figure(figsize=(12,10))
         fig.suptitle('Velocity distribution of species {} in simulation domain'.format(j))
         fig.patch.set_facecolor('w')
-        num_bins = const.cellpart / 5
+        num_bins = const.nsp_ppc // 5
     
         ax_x = plt.subplot2grid((2, 3), (0,0), colspan=2, rowspan=2)
         ax_y = plt.subplot2grid((2, 3), (0,2))
@@ -1149,13 +1149,14 @@ def test_push_B_w_varying_background():
 
 
 if __name__ == '__main__':
+    #check_position_distribution()
     #animate_moving_weight()
-    test_particle_orbit()
+    #test_particle_orbit()
     #test_curl_E()
     #test_grad_P_varying_qn()
     #test_cross_product()
     #test_cspline_interpolation()
-    #test_E_convective()
+    test_E_convective()
     #test_E_hall()
     #test_interp_cross_manual()
     #test_CAM_CL()

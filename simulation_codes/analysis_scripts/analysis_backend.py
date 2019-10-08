@@ -22,7 +22,10 @@ script is shorter and less painful to work with
 If a method requires more than a few functions, it will be split into its own 
 module, i.e. get_growth_rates
 '''
-def get_energies(normalize=False): 
+def get_energies(): 
+    '''
+    Computes and saves field and particle energies at each field/particle timestep.
+    '''
     from analysis_config import NX, dx, idx_bounds, Nj, n_contr, mass,\
                                 num_field_steps, num_particle_steps
     miss = cf.missing_t0_offset

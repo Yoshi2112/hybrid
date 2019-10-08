@@ -53,3 +53,7 @@ def sheeley_trough(L, LT=0, av=True):
         return mean
     else:
         return [mean - var, mean + var]
+    
+if __name__ == '__main__':
+    print(sheely_plasmasphere(4) / 1e6)
+    print(geomagnetic_magnitude(4))

@@ -11,6 +11,7 @@ import os
 import analysis_backend as bk
 import analysis_config  as cf
 import dispersions      as disp
+import get_growth_rates as ggg
 
 q   = 1.602e-19               # Elementary charge (C)
 c   = 3e8                     # Speed of light (m/s)
@@ -292,6 +293,7 @@ def plot_ion_energy_components(normalize=True, save=True, tmax=600):
         fig.savefig(cf.anal_dir + 'ion_energy_species_{}.png'.format(jj), facecolor=fig.get_facecolor(), edgecolor='none')
         plt.close('all')
     return
+
 
 def plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None):
     By_raw         = cf.get_array('By')
@@ -751,6 +753,8 @@ def single_point_field_timeseries(cells=None, overwrite=False, save=True, tmax=N
 def interpolate_fields_to_particle_time():
     '''
     For each particle timestep, interpolate field values
+    
+    RECODE THIS TO USE NP.INTERPOLATE()
     '''
     bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens = cf.get_array(get_all=True)
 
@@ -1032,18 +1036,40 @@ def standard_analysis_package():
 #%%
 if __name__ == '__main__':
     drive      = 'G://MODEL_RUNS//Josh_Runs//'
-    #drive      = 'F://'
-    series     = 'uniform_time_varying_He'
-    series_dir = '{}/runs//{}//'.format(drive, series)
-    num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
+    #drive       = 'F://'
+    series      = 'july_25_lingrowth_v2'
+    series_dir  = '{}/runs//{}//'.format(drive, series)
+    num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     dumb_offset = 0
-
+    
+    
+    
     for run_num in range(num_runs):
         print('Run {}'.format(run_num))
-        cf.load_run(drive, series, run_num, lmissing_t0_offset=dumb_offset)
-        single_point_field_timeseries(tmax=1./cf.HM_frequency)
-        plot_spatially_averaged_fields()
-        #standard_analysis_package()
-        #summary_plots()
+        cf.load_run(drive, series, run_num)
+        
+        #By_raw         = cf.get_array('By') * 1e9
+        #Bz_raw         = cf.get_array('Bz') * 1e9
+        #ggg.get_linear_growth(By_raw, Bz_raw)
+        
+        try:
+            single_point_field_timeseries()
+        except:
+            pass
+        
+        try:
+            plot_spatially_averaged_fields()
+        except:
+            pass
+        
+        try:
+            standard_analysis_package()
+        except:
+            pass
+        
+        try:
+            plot_energies(normalize=True, save=True)
+        except:
+            pass
         
 
