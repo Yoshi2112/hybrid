@@ -192,6 +192,15 @@ def plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=False, save=Fa
     return
 
 
+def plot_dynamic_spectra(component='By', saveas='power_spectra', save=False, ymax=None):
+    plt.ioff()
+    
+    freqs, times, powers = disp.get_PSD_scipy(component, overlap=0.9, df=50)
+    
+    
+    return
+
+
 def plot_energies(normalize=True, save=False):
     mag_energy, electron_energy, particle_energy, total_energy = bk.get_energies()
 
@@ -1035,41 +1044,43 @@ def standard_analysis_package():
 
 #%%
 if __name__ == '__main__':
-    drive      = 'G://MODEL_RUNS//Josh_Runs//'
+    drive      = 'E://MODEL_RUNS//Josh_Runs//'
     #drive       = 'F://'
-    series      = 'july_25_lingrowth_v2'
+    series      = 'uniform_time_varying_He'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     dumb_offset = 0
     
     
     
-    for run_num in range(num_runs):
+    for run_num in [0]:# range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
-        
+        plot_dynamic_spectra()
         #By_raw         = cf.get_array('By') * 1e9
         #Bz_raw         = cf.get_array('Bz') * 1e9
         #ggg.get_linear_growth(By_raw, Bz_raw)
         
-        try:
-            single_point_field_timeseries()
-        except:
-            pass
-        
-        try:
-            plot_spatially_averaged_fields()
-        except:
-            pass
-        
-        try:
-            standard_analysis_package()
-        except:
-            pass
-        
-        try:
-            plot_energies(normalize=True, save=True)
-        except:
-            pass
+# =============================================================================
+#         try:
+#             single_point_field_timeseries()
+#         except:
+#             pass
+#         
+#         try:
+#             plot_spatially_averaged_fields()
+#         except:
+#             pass
+#         
+#         try:
+#             standard_analysis_package()
+#         except:
+#             pass
+#         
+#         try:
+#             plot_energies(normalize=True, save=True)
+#         except:
+#             pass
+# =============================================================================
         
 
