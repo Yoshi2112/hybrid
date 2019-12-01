@@ -192,12 +192,47 @@ def plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=False, save=Fa
     return
 
 
-def plot_dynamic_spectra(component='By', saveas='power_spectra', save=False, ymax=None):
+def plot_dynamic_spectra(component='By', saveas='power_spectra', save=False, ymax=None, cell=None,
+                         overlap=0.99, win_idx=None, slide_idx=None, df=50):
+    
+    if ymax is None:
+        dynspec_folderpath = cf.anal_dir + '//field_dynamic_spectra//{}//'.format(component.upper())
+    else:
+        dynspec_folderpath = cf.anal_dir + '//field_dynamic_spectra//{}_ymax{}//'.format(component.upper(), ymax)
+    
+    if os.path.exists(dynspec_folderpath) == False:
+        os.makedirs(dynspec_folderpath)
+        
+    if cell is None:
+        cell = cf.NX // 2
+        
     plt.ioff()
     
-    freqs, times, powers = disp.get_PSD_scipy(component, overlap=0.9, df=50)
+    powers, times, freqs = disp.autopower_spectra(component=component, overlap=overlap, win_idx=win_idx,
+                                                  slide_idx=slide_idx, df=df, cell_idx=cell)
     
+    fig = plt.figure(1, figsize=(15, 10))
+    ax  = fig.add_subplot(111)
+
+    im1 = ax.pcolormesh(times, freqs, powers.T,
+                          cmap='jet')
     
+    fig.colorbar(im1)
+    ax.set_title(r'{} Dynamic Spectra :: Cell {}'.format(component.upper(), cell), fontsize=14)
+    ax.set_ylabel(r'Frequency (Hz)', rotation=90)
+    ax.set_xlabel(r'Time (s)')
+    ax.set_ylim(0, ymax)
+    
+    if save == True:
+        fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
+        
+        fig.savefig(dynspec_folderpath + 'dynamic_spectra_{}_{}.png'.format(component.lower(), cell), edgecolor='none')
+        
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        plt.close('all')
+        print('Dynamic spectrum (field {}, cell {}) saved'.format(component.upper(), cell))
+    else:
+        plt.show()
     return
 
 
@@ -1040,27 +1075,32 @@ def standard_analysis_package():
     return
 
 
-
+def do_all_dynamic_spectra(ymax=None):
+    
+    for component in ['Bx', 'By', 'Bz', 'Ex', 'Ey', 'Ez']:
+        for cell in np.arange(cf.NX):
+            plot_dynamic_spectra(component=component, ymax=ymax, save=True, cell=cell)
+    return
 
 #%%
 if __name__ == '__main__':
-    drive      = 'E://MODEL_RUNS//Josh_Runs//'
-    #drive       = 'F://'
+    drive      = 'G://MODEL_RUNS//Josh_Runs//'
     series      = 'uniform_time_varying_He'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     dumb_offset = 0
     
-    
-    
-    for run_num in [0]:# range(num_runs):
+    for run_num in range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
-        plot_dynamic_spectra()
+        
+        do_all_dynamic_spectra(ymax=1.0)
+        do_all_dynamic_spectra(ymax=None)
+        
         #By_raw         = cf.get_array('By') * 1e9
         #Bz_raw         = cf.get_array('Bz') * 1e9
         #ggg.get_linear_growth(By_raw, Bz_raw)
-        
+
 # =============================================================================
 #         try:
 #             single_point_field_timeseries()

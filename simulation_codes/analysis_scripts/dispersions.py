@@ -162,14 +162,55 @@ def get_wk(component):
     wk = fft_matrix2[:f.shape[0], :k.shape[0]] * np.conj(fft_matrix2[:f.shape[0], :k.shape[0]])
     return k, f, wk
 
-
-import pdb
-def get_PSD_scipy(component, overlap=0.99, win_idx=None, slide_idx=None, df=50):
-    arr = cf.get_array(component)
     
+def do_stft(dat, win_len, slide, num_slides):
+    '''
+    Model version of the STFT that was used for RBSP analysis. Changed so 
+    it FFTs the entire run starting from index zero.
+    '''
+    if len(dat.shape) > 1:
+        dat = dat.reshape(dat.shape[0])
+
+    temp_in    = pyfftw.empty_aligned(win_len, dtype='complex128')              # Set aside some memory for input data
+    temp_out   = pyfftw.empty_aligned(win_len, dtype='complex128')              # And the corresponding output
+    fft_object = pyfftw.FFTW(temp_in, temp_out, flags=('FFTW_MEASURE', 'FFTW_DESTROY_INPUT'))                                 # Function to call that will perform FFT
+        
+    window     = np.hanning(win_len)                                            # Hanning window
+    out_mem    = np.zeros((num_slides, win_len), dtype=np.complex128)           # Allocate empty memory for STFT output
+    
+    import pdb; pdb.set_trace
+    
+    for ii in range(num_slides):
+        try:
+            temp_in[:]     = np.multiply(dat[ii*slide: 
+                                             ii*slide + win_len],               
+                                             window)                            # Apply FFT windowing function to windowed data and store in FFT input memory address
+            out_mem[ii, :] = fft_object()                                       # Call FFT and store result in output array (involves implicit copy)        
+        except Exception as inst:
+            print(type(inst))     # the exception instance
+            print(inst.args)      # arguments stored in .args
+            print(inst)           # __str__ allows args to be printed directly
+            sys.exit('STFT error')
+            
+    out_mem /=  win_len                                                         # Normalize
+
+    return 2. * out_mem[:, :win_len//2 + 1]                                  # Return only positive frequencies
+
+
+def autopower_spectra(component='By', overlap=0.5, win_idx=None, slide_idx=None, df=50, cell_idx=None):
+    if 'B' in component.upper(): 
+        y_arr = cf.get_array(component)[:, cell_idx]*1e9                                # Field component in nT
+    elif 'E' in component.upper():
+        y_arr = cf.get_array(component)[:, cell_idx]*1e6                                # Field component in mV/m
+    else:
+        sys.exit('Field loading error for kwarg: component={}'.format(component))
+   
+    dt    = cf.dt_field
+
     if win_idx is None:
         t_win   = 1000. / df                                                        # Window length (in seconds) for desired frequency resolution
         win_idx = int(np.ceil(t_win / cf.dt_field))                                 # Window size in indexes
+        hlen    = (win_idx - 1) // 2                                                # Index of first mid-window, starting from idx 0. After this, displaced by slide_idx.
         
     if win_idx%2 == 0:
         win_idx += 1                                                                # Force window length to be odd number (for window-halving in FFT: Center values are always center values)
@@ -177,97 +218,14 @@ def get_PSD_scipy(component, overlap=0.99, win_idx=None, slide_idx=None, df=50):
     if slide_idx is None:
         if overlap > 100:
             overlap /= 100.                                                         # Check for accidental percentage instead of decimal overlap
-        slide_idx    = int(win_idx * (1. - overlap))                                # Calculate slide length in index values from overlap percentage
-    
-    fs = 1 / cf.dt_field
-    #pdb.set_trace()
-    freqs, times, powers = signal.spectrogram(arr, fs, window=('tukey', 1.0), 
-                                              nperseg=win_idx, noverlap=int(overlap*win_idx),
-                                              detrend='constant')
-    
-    return freqs, times, powers
+        slide_idx = int(win_idx * (1. - overlap))                                   # Calculate slide length in index values from overlap percentage
 
-# =============================================================================
-# def get_wt_dynamic(component, win_):
-#     arr = cf.get_array(component)
-#     
-#     num_times = arr.shape[0]
-# 
-#     df = 1. / (num_times * cf.dt_field)
-#     dk = 1. / (cf.NX * cf.dx)
-# 
-#     f  = np.arange(0, 1. / (2*cf.dt_field), df)
-#     k  = np.arange(0, 1. / (2*cf.dx), dk)
-#     
-#     fft_matrix  = np.zeros(arr.shape, dtype='complex128')
-#     fft_matrix2 = np.zeros(arr.shape, dtype='complex128')
-# 
-#     for ii in range(arr.shape[0]): # Take spatial FFT at each time
-#         fft_matrix[ii, :] = np.fft.fft(arr[ii, :] - arr[ii, :].mean())
-# 
-#     for ii in range(arr.shape[1]):
-#         fft_matrix2[:, ii] = np.fft.fft(fft_matrix[:, ii] - fft_matrix[:, ii].mean())
-# 
-#     wk = fft_matrix2[:f.shape[0], :k.shape[0]] * np.conj(fft_matrix2[:f.shape[0], :k.shape[0]])
-#     return k, f, wk
-# =============================================================================
-# =============================================================================
-# def do_stft(dat, win_len, slide, num_slides, positive_only=True):
-#     if len(dat.shape) > 1:
-#         dat = dat.reshape(dat.shape[0])
-# 
-#     temp_in    = pyfftw.empty_aligned(win_len, dtype='complex128')              # Set aside some memory for input data
-#     temp_out   = pyfftw.empty_aligned(win_len, dtype='complex128')              # And the corresponding output
-#     fft_object = pyfftw.FFTW(temp_in, temp_out, flags=('FFTW_MEASURE', 'FFTW_DESTROY_INPUT'))                                 # Function to call that will perform FFT
-#         
-#     window  = np.hanning(win_len)                                               # Hanning window
-#     out_mem = np.zeros((num_slides, win_len), dtype=np.complex128)              # Allocate empty memory for STFT output
-#         
-#     for ii in range(num_slides):
-#         try:
-#             temp_in[:]     = np.multiply(dat[ii*slide: 
-#                                              ii*slide + win_len + 1],               # Do we still need the +1?
-#                                              window)                                # Apply FFT windowing function to windowed data and store in FFT input memory address
-#             out_mem[ii, :] = fft_object()                                           # Call FFT and store result in output array (involves implicit copy)        
-#         except Exception as inst:
-#             print(type(inst))     # the exception instance
-#             print(inst.args)      # arguments stored in .args
-#             print(inst)           # __str__ allows args to be printed directly
-#             sys.exit('STFT error')
-#             
-#     out_mem /=  win_len                                                         # Normalize
-#     
-#     if positive_only == True:
-#         return 2. * out_mem[:, :win_len//2 + 1]                                  # Return only positive frequencies
-#     else:
-#         return out_mem 
-# =============================================================================
-# =============================================================================
-# def autopower_spectra(times, y_arr, time_start, time_end, overlap=0.5, win_idx=None, slide_idx=None, df=0.05):
-#     if times.shape[0] != y_arr.shape[0]:
-#         raise IndexError('x, y arrays must have the same length.')
-#     
-#     if win_idx is None:
-#         t_win   = 1000. / df                                                        # Window length (in seconds) for desired frequency resolution
-#         win_idx = int(np.ceil(t_win / cf.dt_field))                                 # Window size in indexes
-#         
-#     if win_idx%2 == 0:
-#         win_idx += 1                                                                # Force window length to be odd number (for window-halving in FFT: Center values are always center values)
-# 
-#     if slide_idx is None:
-#         if overlap > 100:
-#             overlap /= 100.                                                         # Check for accidental percentage instead of decimal overlap
-#         slide_idx    = int(win_idx * (1. - overlap))                                # Calculate slide length in index values from overlap percentage
-#     
-#     idx_length   = y_arr.shape[0]                                              # Number of indexes between start/end times (exclusive of half-windows on either side)
-#     
-#     num_slides   = idx_length // slide_idx + 1                                      # Count number of slides required. Unless multiple of idx_length, last value will not explicitly be computed
-#     
-#     FFT_output   = do_stft(y_arr, win_idx, slide_idx, num_slides, idx_start)        # Do dynamic FFT
-#     FFT_times    = np.asarray([times[idx_start + ii*slide_idx] for ii in range(num_slides)])    # Collect times for each FFT slice
-# 
-#     df           = 1./(win_idx * cf.dt_field)                                        # Frequency increment (in mHz)
-#     freq         = np.asarray([df * jj for jj in range(win_idx//2 + 1)])             # Frequency array up to Nyquist
-#     power        = np.real(FFT_output * np.conj(FFT_output))
-#     return power, FFT_times, freq
-# =============================================================================
+    num_slides   = (y_arr.shape[0] - win_idx) // slide_idx                          # Count number of slides required. Unless multiple of idx_length, last value will not explicitly be computed
+
+    FFT_output   = do_stft(y_arr, win_idx, slide_idx, num_slides)                   # Do dynamic FFT
+    FFT_times    = (np.arange(num_slides) * slide_idx + hlen) * dt                  # Collect times for each FFT slice
+    
+    df           = 1./(win_idx * cf.dt_field)                                       # Frequency increment (in mHz)
+    freq         = np.asarray([df * jj for jj in range(win_idx//2 + 1)])            # Frequency array up to Nyquist
+    power        = np.real(FFT_output * np.conj(FFT_output))
+    return power, FFT_times, freq
