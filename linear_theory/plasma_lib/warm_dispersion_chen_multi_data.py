@@ -418,7 +418,7 @@ def set_figure_text(ax, ii, param_dict):
 
 
 def get_all_DRs():
-    param_dict   = data.load_and_interpolate_plasma_params(time_start, time_end, probe, pad, cold_composition=cmp)
+    param_dict   = data.load_and_interpolate_plasma_params(time_start, time_end, probe, pad, cold_composition=cmp, rbsp_path=rbsp_path)
 
     if os.path.exists(data_path) == True:
         print('Save file found: Loading...')
@@ -551,9 +551,11 @@ def plot_all_DRs(param_dict, all_k, all_CPDR, all_WPDR):
 
 
 if __name__ == '__main__':
+    rbsp_path = 'E://DATA//RBSP//'
+    
     _Nk       = 5000
     output    = 'save'
-    overwrite = False
+    overwrite = True
     figtext   = True
     
     time_start  = np.datetime64('2013-07-25T21:00:00')
@@ -565,11 +567,14 @@ if __name__ == '__main__':
     
     date_string = time_start.astype(object).strftime('%Y%m%d')
     save_string = time_start.astype(object).strftime('%Y%m%d_%H%M')
-    save_dir    = 'G://EVENTS//event_{}//LINEAR_THEORY_CC_{:03}_{:03}_{:03}//'.format(date_string, cmp[0], cmp[1], cmp[2])
+    save_dir    = 'E://EVENTS//event_{}//LINEAR_THEORY//LINEAR_THEORY_CC_{:03}_{:03}_{:03}//'.format(date_string, cmp[0], cmp[1], cmp[2])
     data_path   = save_dir + '_chen_dispersion_{:03}_{:03}_{:03}_{}.npz'.format(cmp[0], cmp[1], cmp[2], save_string)
     
     if os.path.exists(save_dir) == False:
         os.makedirs(save_dir)
+    
+    plot_start = np.datetime64('2013-07-25T21:00:00')
+    plot_end   = np.datetime64('2013-07-25T22:00:00')
     
     _all_CPDR, _all_WPDR, _all_k, _param_dict = get_all_DRs()
     plot_all_DRs(_param_dict, _all_k, _all_CPDR, _all_WPDR)

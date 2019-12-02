@@ -5,6 +5,7 @@ Created on Wed Apr 27 11:56:34 2016
 @author: c3134027
 """
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import os
 
@@ -128,6 +129,52 @@ def plot_spatially_averaged_fields(save=True, tmax=None):
         
         if save == True and ii == (num_runs - 1):
             fig.savefig(series_dir + 'sp_av_fields.png', facecolor=fig.get_facecolor(), edgecolor='none')
+            print('Spatially averaged B-field plot saved')
+    return
+
+
+def AGU_plot_spatially_averaged_fields(save=True, tmax=None):
+    '''
+    Field arrays are shaped like (time, space)
+    '''
+    tick_label_size = 14
+    mpl.rcParams['xtick.labelsize'] = tick_label_size 
+    
+    fontsize = 18
+    
+    plt.ioff()
+    fig, [ax1, ax2] = plt.subplots(2, figsize=(13, 6))
+    fig.subplots_adjust(wspace=0, hspace=0)
+        
+    for ii, lbl in zip(range(num_runs), ['High Growth Case', 'Low Growth Case']):
+        cf.initialize_simulation_variables(series_dir  + 'run_{}/data/'.format(ii))
+        arr_dir = series_dir  + 'run_{}/extracted/'.format(ii)
+
+        By_raw = 1e9 *  cf.get_array(arr_dir, component='By')
+        Bz_raw = 1e9 *  cf.get_array(arr_dir, component='Bz')
+          
+        lpad   = 24
+        
+        ax1.plot(cf.time_seconds_field, abs(By_raw).mean(axis=1), label=lbl, c=run_colors[ii])
+        ax2.plot(cf.time_seconds_field, abs(Bz_raw).mean(axis=1), label=lbl, c=run_colors[ii])
+
+        ax1.set_ylabel('$\overline{|\delta B_y|}$\n (nT)', rotation=0, labelpad=lpad, fontsize=fontsize)
+        ax2.set_ylabel('$\overline{|\delta B_z|}$\n (nT)', rotation=0, labelpad=lpad, fontsize=fontsize)
+        
+        ax1.legend(loc='lower right', prop={'size': fontsize}) 
+        
+        for ax in [ax1]:
+            ax.set_xticklabels([])
+        
+        for ax in [ax1, ax2]:
+            ax.set_xlim(0, cf.time_seconds_field[-1])
+            ax.set_ylim(0, None)
+        
+        ax1.set_title('Spatially Averaged Fields :: Low/High Growth Parameters', fontsize=fontsize+4)
+        ax2.set_xlabel(r'Time (s)', fontsize=fontsize)
+          
+        if save == True and ii == (num_runs - 1):
+            fig.savefig(series_dir + 'AGU_sp_av_fields.png', facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
             print('Spatially averaged B-field plot saved')
     return
 
@@ -424,8 +471,8 @@ def analyse_helicity(overwrite=False, save=True):
 
 #%%
 if __name__ == '__main__':
-    #drive      = 'G://MODEL_RUNS//Josh_Runs//'
-    drive       = 'F://'
+    drive      = 'E://MODEL_RUNS//Josh_Runs//'
+    #drive       = 'F://'
     series      = 'july_25_lingrowth'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
@@ -433,7 +480,7 @@ if __name__ == '__main__':
 
     run_colors  = ['blue', 'red']
 
-    plot_spatially_averaged_fields()
+    AGU_plot_spatially_averaged_fields()
         
 # =============================================================================
 #         try:

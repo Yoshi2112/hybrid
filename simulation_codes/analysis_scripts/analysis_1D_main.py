@@ -5,6 +5,7 @@ Created on Wed Apr 27 11:56:34 2016
 @author: c3134027
 """
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import os
 
@@ -585,15 +586,6 @@ def plot_spatially_averaged_fields(save=True, tmax=None):
     return
 
 
-def plot_gyrophase():
-    '''
-    Either do just for particles or just for fields. To look at relationship between the two,
-    need to interpolate and/or find times that the two coincide.
-    '''
-    
-    return
-
-
 def single_point_helicity_timeseries(cells=None, overwrite=False, save=True):
     '''
     Plot timeseries for raw, +ve, -ve helicities at single point
@@ -792,6 +784,61 @@ def single_point_field_timeseries(cells=None, overwrite=False, save=True, tmax=N
         plt.close('all')
     return
 
+
+def single_point_both_fields_AGU(cell=None, save=True):
+    '''
+    Plot timeseries for raw fields at specified cells
+    
+    maxtime=time in seconds for endpoint (defaults to total runtime)
+    '''
+    print('Plotting single-point fields...')
+    
+    tick_label_size = 14
+    mpl.rcParams['xtick.labelsize'] = tick_label_size 
+    
+    fontsize = 18
+    
+    if cell is None:
+        cells = np.arange(cf.NX)
+    
+    ts_folder_BE = cf.anal_dir + '//single_point_fields//both//'
+    
+    if os.path.exists(ts_folder_BE) == False:
+        os.makedirs(ts_folder_BE)
+
+    bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens = cf.get_array(get_all=True)
+    
+    plt.ioff()
+    for x_idx in cells:
+        print('Cell {}...'.format(x_idx))
+        fig, axes  = plt.subplots(3, figsize=(12, 8))
+        
+        axes[0].set_title('Fields at cell {}'.format(x_idx), fontsize=fontsize+4)
+        
+        axes[0].plot(cf.time_seconds_field, 1e9*bx[:, x_idx])
+        axes[1].plot(cf.time_seconds_field, 1e3*ez[:, x_idx])
+        axes[2].plot(cf.time_seconds_field, 1e9*by[:, x_idx])
+        
+        for ax in axes:
+            ax.set_xlim(0, cf.time_seconds_field[-1])
+            
+        for ax in axes[:-1]:
+            ax.set_xticklabels([])
+        
+        lpad=24
+        
+        axes[0].set_ylabel('$B_x$\n(nT)',   fontsize=fontsize, rotation=0, labelpad=lpad)
+        axes[1].set_ylabel('$E_z$\n(mV/m)', fontsize=fontsize, rotation=0, labelpad=lpad)
+        axes[2].set_ylabel('$B_y$\n(nT)',   fontsize=fontsize, rotation=0, labelpad=lpad)
+        axes[-1].set_xlabel('Time (s)',     fontsize=fontsize, rotation=0)
+
+        fig.tight_layout()
+        fig.subplots_adjust(hspace=0)
+        
+        if save==True:
+            fig.savefig(ts_folder_BE + 'single_point_BEfields_{}.png'.format(x_idx), edgecolor='none', bbox_inches='tight')
+            plt.close('all')
+    return
 
 
 def interpolate_fields_to_particle_time():
@@ -1084,18 +1131,20 @@ def do_all_dynamic_spectra(ymax=None):
 
 #%%
 if __name__ == '__main__':
-    drive      = 'G://MODEL_RUNS//Josh_Runs//'
+    drive      = 'E://MODEL_RUNS//Josh_Runs//'
     series      = 'uniform_time_varying_He'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     dumb_offset = 0
     
-    for run_num in range(num_runs):
+    for run_num in [19]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
         
-        do_all_dynamic_spectra(ymax=1.0)
-        do_all_dynamic_spectra(ymax=None)
+        single_point_both_fields_AGU()
+        
+        #do_all_dynamic_spectra(ymax=1.0)
+        #do_all_dynamic_spectra(ymax=None)
         
         #By_raw         = cf.get_array('By') * 1e9
         #Bz_raw         = cf.get_array('Bz') * 1e9
@@ -1106,12 +1155,16 @@ if __name__ == '__main__':
 #             single_point_field_timeseries()
 #         except:
 #             pass
-#         
+# =============================================================================
+        
+# =============================================================================
 #         try:
 #             plot_spatially_averaged_fields()
 #         except:
 #             pass
-#         
+# =============================================================================
+        
+# =============================================================================
 #         try:
 #             standard_analysis_package()
 #         except:

@@ -5,17 +5,18 @@ Created on Mon Apr  8 12:29:15 2019
 @author: Yoshi
 """
 import sys
-sys.path.append('F://Google Drive//Uni//PhD 2017//Data//Scripts//')
+sys.path.append('D://Google Drive//Uni//PhD 2017//Data//Scripts//')
 
 import pdb
 import os
 import numpy                        as np
+import matplotlib                   as mpl
 import matplotlib.pyplot            as plt
 import matplotlib.gridspec          as gs
 import matplotlib.dates             as mdates
 import extract_parameters_from_data as data
 import calculate_DR_chen_data       as cdr
-import RBSP_fields_loader           as rfl
+import rbsp_fields_loader           as rfl
 from   matplotlib.lines         import Line2D
 from   statistics               import mode
 from   rbsp_file_readers        import get_pearl_times
@@ -178,7 +179,7 @@ def set_figure_text(ax, ii, param_dict):
 
 
 def get_all_DRs():
-    param_dict   = data.load_and_interpolate_plasma_params(time_start, time_end, probe, pad, cold_composition=cmp)
+    param_dict   = data.load_and_interpolate_plasma_params(time_start, time_end, probe, pad, cold_composition=cmp, rbsp_path=rbsp_path)
 
     if os.path.exists(data_path) == True:
         print('Save file found: Loading...')
@@ -311,7 +312,12 @@ def plot_all_DRs(param_dict, all_k, all_CPDR, all_WPDR):
     return
 
 
-def plot_growth_rate_with_time(times, k_vals, growth_rate, per_tol=70, output='none', short=False):
+def plot_growth_rate_with_time(times, k_vals, growth_rate, per_tol=50, output='none', short=False):
+    tick_label_size = 14
+    mpl.rcParams['xtick.labelsize'] = tick_label_size 
+    
+    fontsize = 18
+    
     Nt    = times.shape[0]
     max_k = np.zeros((Nt, 3))
     max_g = np.zeros((Nt, 3))
@@ -335,20 +341,23 @@ def plot_growth_rate_with_time(times, k_vals, growth_rate, per_tol=70, output='n
                 except:
                     pdb.set_trace()
     
-    pearl_times, pex = get_pearl_times(time_start)
+    pearl_idx, pearl_times, pex = get_pearl_times(time_start, gdrive=gdrive)
     
     plt.ioff()
-    fig    = plt.figure(figsize=(16, 10))
+    fig    = plt.figure(figsize=(13, 6))
     grid   = gs.GridSpec(1, 1)
     ax1    = fig.add_subplot(grid[0, 0])
     
     for ii in range(3):
-        ax1.plot(times, max_g[:, ii], color=species_colors[ii], label=band_labels[ii], marker='o')
+        ax1.plot(times, 1e3*max_g[:, ii], color=species_colors[ii], label=band_labels[ii], marker='o')
     
-    ax1.set_xlabel('Time (UT)')
-    ax1.set_ylabel('Temporal Growth Rate ($s^{-1}$)')
-    ax1.set_title('Growth rates (per band) with Cold Plasma Composition [{}, {}, {}]'.format(*cmp))
-    ax1.legend(loc='upper right') 
+    ax1.set_xlabel('Time (UT)', fontsize=fontsize)
+    ax1.set_ylabel(r'Temporal Growth Rate ($\times 10^{-3} s^{-1}$)', fontsize=fontsize)
+    ax1.set_title('EMIC Temporal Growth Rate :: RBSP-A Instruments'.format(*cmp), fontsize=fontsize+4)
+    ax1.legend(loc='upper left', prop={'size': fontsize}) 
+    
+    ax1.xaxis.set_major_locator(mdates.MinuteLocator(interval=5))
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
     
     for ii in range(pearl_times.shape[0]):
         ax1.axvline(pearl_times[ii], c='k', linestyle='--', alpha=0.4)
@@ -363,7 +372,7 @@ def plot_growth_rate_with_time(times, k_vals, growth_rate, per_tol=70, output='n
         
     if output.lower() == 'save':
         print('Saving {}'.format(figsave_path))
-        fig.savefig(figsave_path)
+        fig.savefig(figsave_path, bbox_inches='tight')
         plt.close('all')
     elif output.lower() == 'show':
         ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S.%f'))
@@ -451,15 +460,19 @@ def stackplot_with_parameters(param_dict, max_k, max_g, output='show'):
         fig.savefig(figsave_path)
         plt.close('all')
     elif output.lower() == 'show':
-        #figManager = plt.get_current_fig_manager()
-        #figManager.window.showMaximized()
         plt.show()
     else:
         return
 
 if __name__ == '__main__':
+    '''
+    DESPERATELY NEED TO CONSOLIDATE ALL MY LT CODES!!
+    '''
     from pandas.plotting import register_matplotlib_converters
     register_matplotlib_converters()
+
+    rbsp_path = 'E://DATA//RBSP//'
+    gdrive    = 'D://Google Drive//'
 
     _Nk       = 5000
     output    = 'save'
@@ -478,8 +491,8 @@ if __name__ == '__main__':
     band_labels    = [r'$H^+$', r'$He^+$', r'$O^+$']
     
     #cmp            = np.array([60, 30, 10])
-    for cmp in [np.array([80, 18, 2])]:
-        save_dir    = 'G://EVENTS//event_{}//LINEAR_THEORY_CC_{:03}_{:03}_{:03}//'.format(date_string, cmp[0], cmp[1], cmp[2])
+    for cmp in [np.array([70, 20, 10])]:
+        save_dir    = 'E://EVENTS//event_{}//LINEAR_THEORY//LINEAR_THEORY_CC_{:03}_{:03}_{:03}//'.format(date_string, cmp[0], cmp[1], cmp[2])
         data_path   = save_dir + '_chen_dispersion_{:03}_{:03}_{:03}_{}.npz'.format(cmp[0], cmp[1], cmp[2], save_string)
         
         if os.path.exists(save_dir) == False:
@@ -487,7 +500,7 @@ if __name__ == '__main__':
         
         _all_CPDR, _all_WPDR, _all_k, _param_dict = get_all_DRs()
         #plot_all_DRs(_param_dict, _all_k, _all_CPDR, _all_WPDR)
-        _max_k, _max_g = plot_growth_rate_with_time(_param_dict['times'], _all_k, _all_WPDR.imag, output='save')
+        _max_k, _max_g = plot_growth_rate_with_time(_param_dict['times'], _all_k, _all_WPDR.imag, output='save', short=True)
 
         #stackplot_with_parameters(_param_dict, _max_k, _max_g, output='save')
 

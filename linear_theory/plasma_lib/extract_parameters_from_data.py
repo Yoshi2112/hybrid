@@ -6,12 +6,12 @@ Created on Mon Aug 26 15:42:27 2019
 """
 
 import sys
-sys.path.append('F://Google Drive//Uni//PhD 2017//Data//Scripts//')
+sys.path.append('D://Google Drive//Uni//PhD 2017//Data//Scripts//')
 import pdb
 import os
 import numpy as np
 import rbsp_file_readers   as rfr
-import RBSP_fields_loader  as rfl
+import rbsp_fields_loader  as rfl
 
 
 def interpolate_to_edens(edens_time, data_time, data_array_dens, data_array_temp, data_array_anis):
@@ -104,7 +104,7 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_pa
 
 
 if __name__ == '__main__':
-    _rbsp_path  = 'G://DATA//RBSP//'
+    _rbsp_path  = 'E://DATA//RBSP//'
     _time_start = np.datetime64('2013-07-25T21:00:00')
     _time_end   = np.datetime64('2013-07-25T22:00:00')
     _probe      = 'a'
