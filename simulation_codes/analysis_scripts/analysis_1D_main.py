@@ -210,13 +210,13 @@ def plot_wk_AGU(component='By', saveas='wk_plot' , dispersion_overlay=False, sav
     ax  = fig.add_subplot(111)
     
     im1 = ax.pcolormesh(1e6*k[1:], f[1:], np.log10(wk[1:, 1:].real), cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
-    fig.colorbar(im1).set_label(r'$log_{10}$ $\left( \frac{nT^2}{Hz} \right)$', rotation=90, fontsize=fontsize)
+    fig.colorbar(im1).set_label(r'$log_{10}$(Power)', rotation=90, fontsize=fontsize)
     ax.set_title(r'$\omega/k$ Dispersion Plot for {}'.format(component), fontsize=fontsize+4)
     ax.set_ylabel(ylab, fontsize=fontsize)
     ax.set_xlabel(xlab, fontsize=fontsize)
     
-    clr  = ['white', 'yellow', 'red'] 
-    lbl  = [r'$\f{H^+}$', r'$\f{He^+}$', r'$\f{O^+}$']
+    clr  = ['black', 'green', 'red'] 
+    lbl  = [r'$f_{H^+}$', r'$f_{He^+}$', r'$f_{O^+}$']
     M    = np.array([1., 4., 16.])
     cyc  = q * cf.B0 / (2 * np.pi * mp * M)
     for ii in range(3):
@@ -243,7 +243,7 @@ def plot_wk_AGU(component='By', saveas='wk_plot' , dispersion_overlay=False, sav
         except:
             pass
         
-    ax.legend(loc=2, facecolor='grey', prop={'size': fontsize})
+    ax.legend(loc=2, facecolor='white', prop={'size': fontsize})
         
     if save == True:
         fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
@@ -1192,13 +1192,13 @@ def do_all_dynamic_spectra(ymax=None):
 
 #%%
 if __name__ == '__main__':
-    drive      = 'E://MODEL_RUNS//Josh_Runs//'
+    drive      = 'G://MODEL_RUNS//Josh_Runs//'
     series      = 'july_25_lingrowth'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     dumb_offset = 0
     
-    for run_num in [1]:#range(num_runs):
+    for run_num in range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
         
