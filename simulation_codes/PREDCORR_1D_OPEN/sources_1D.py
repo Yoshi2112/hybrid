@@ -118,7 +118,11 @@ def smooth(arr, temp1D):
 @nb.njit()
 def manage_ghost_cells(arr):
     '''Deals with ghost cells: Moves their contributions and mirrors their counterparts.
-       Works like a charm if spatial dimensions always come first in an array.'''
+       Works like a charm if spatial dimensions always come first in an array.
+       
+       DO WE EVEN NEED THIS WITH ABC's? NO, BECAUSE CONTRIBUTIONS AREN'T PERIODIC
+       DAMPING HAPPENS INSIDE FIELD UPDATE EQUATIONS? NOT A SEPARATE FUNCTION?
+       MAYBE REPLACE THIS WITH A DAMPING THING I CAN CALL FROM THE E/B UPDATE'''
 
     arr[NX]     += arr[0]                 # Move contribution: Start to end
     arr[1]      += arr[NX + 1]            # Move contribution: End to start

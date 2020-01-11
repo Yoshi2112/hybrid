@@ -11,7 +11,7 @@ import os
 import sys
 from shutil import rmtree
 import simulation_parameters_1D as const
-from   simulation_parameters_1D import drive, save_path, NX, ne, density, save_particles, save_fields
+from   simulation_parameters_1D import drive, save_path, NX, ND, r_damp, ne, density, save_particles, save_fields
 from   simulation_parameters_1D import idx_bounds, Nj, species_lbl, temp_type, dist_type, mass, charge,\
                                        drift_v, Tpar, Tper, temp_color, HM_amplitude, HM_frequency, nsp_ppc
 
@@ -58,12 +58,14 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                    ('Nj', Nj),
                    ('dt', dt),
                    ('NX', NX),
+                   ('ND', ND),
                    ('dxm', const.dxm),
                    ('dx', const.dx),
                    ('cellpart', const.cellpart),
                    ('B0', const.B0),
                    ('HM_amplitude', HM_amplitude),
                    ('HM_frequency', HM_frequency),
+                   ('r_damp', r_damp),
                    ('ne', ne),
                    ('Te0', const.Te0),
                    ('ie', const.ie),
@@ -76,6 +78,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                    ('run_desc', const.run_description),
                    ('method_type', 'PREDCORR_HM'),
                    ('particle_shape', 'TSC')
+                   ('boundary_type', 'periodic')
                    ])
 
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:
@@ -106,9 +109,9 @@ def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns):
     r        = qq / field_save_iter
 
     d_fullpath = d_path + 'data%05d' % r
-    
-    np.savez(d_fullpath, E = E[1:NX+1, 0:3], B = B[1:NX+2, 0:3],   J = Ji[1:NX+1, 0:3],
-                       dns = dns[1:NX+1],   Ve = Ve[1:NX+1, 0:3], Te = Te[1:NX+1], sim_time = sim_time)
+    # Which parts should be saved? Or just save all
+    np.savez(d_fullpath, E = E[:, 0:3], B = B[:, 0:3],   J = Ji[:, 0:3],
+                       dns = dns,      Ve = Ve[:, 0:3], Te = Te, sim_time = sim_time)
     print('Field data saved')
     
 def save_particle_data(dt, part_save_iter, qq, pos, vel):

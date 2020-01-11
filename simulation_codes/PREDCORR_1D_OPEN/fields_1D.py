@@ -50,7 +50,7 @@ def get_curl_E(field, curl):
 
 
 @nb.njit()
-def push_B(B, E, temp3D, DT, qq, half_flag=1):
+def push_B(B, E, temp3D, DT, qq, damping_array, half_flag=1):
     '''
     Updated to allow time-varying background field
     
@@ -72,6 +72,9 @@ def push_B(B, E, temp3D, DT, qq, half_flag=1):
     B[:, 0] -= uniform_HM_field_value(time - 0.5*DT)     # Subtract previous HM field
     B       -= 0.5 * DT * temp3D                         # Advance using curl
     B[:, 0] += uniform_HM_field_value(time)              # Add new  HM field 
+    
+    for ii in nb.prange(3):                              # Apply damping
+        B[:, ii] *= damping_array                        # Not sure if this needs to modified for half steps?
     return
 
 

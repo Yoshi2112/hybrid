@@ -137,7 +137,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
               Ve, Te, temp3D, temp3D2, temp1D, old_particles, old_fields,\
-              qq, DT, max_inc, part_save_iter, field_save_iter):
+              damping_array, qq, DT, max_inc, part_save_iter, field_save_iter):
     '''
     Main loop separated from __main__ function, since this is the actual computation bit.
     Could probably be optimized further, but I wanted to njit() it.
@@ -163,7 +163,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     q_dens += 0.5 * q_dens_adv
     
     # Push B from N to N + 1/2
-    fields.push_B(B, E_int, temp3D, DT, qq, half_flag=1)
+    fields.push_B(B, E_int, temp3D, DT, qq, damping_array, half_flag=1)
     
     # Calculate E at N + 1/2
     fields.calculate_E(B, Ji, q_dens, E_half, Ve, Te, temp3D, temp3D2, temp1D)
@@ -188,7 +188,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     E_int *= -1.0
     E_int +=  2.0 * E_half
     
-    fields.push_B(B, E_int, temp3D, DT, qq, half_flag=0)
+    fields.push_B(B, E_int, temp3D, DT, qq, damping_array, half_flag=0)
 
     # Advance particles to obtain source terms at N + 3/2
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
@@ -197,7 +197,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
     
     # Compute predicted fields at N + 3/2
-    fields.push_B(B, E_int, temp3D, DT, qq + 1, half_flag=1)
+    fields.push_B(B, E_int, temp3D, DT, qq + 1, damping_array, half_flag=1)
     fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, temp3D, temp3D2, temp1D)
     
     # Determine corrected fields at N + 1 
@@ -213,7 +213,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     Ve[:]     = old_fields[:, 6:9]
     Te[:]     = old_fields[:,   9]
     
-    fields.push_B(B, E_int, temp3D, DT, qq, half_flag=0)                           # Advance the original B
+    fields.push_B(B, E_int, temp3D, DT, qq, damping_array, half_flag=0)                           # Advance the original B
 
     q_dens[:] = q_dens_adv
 

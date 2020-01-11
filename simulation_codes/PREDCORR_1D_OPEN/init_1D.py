@@ -10,8 +10,9 @@ import simulation_parameters_1D as const
 import save_routines as save
 
 from particles_1D             import assign_weighting_TSC
-from simulation_parameters_1D import dx, NX, N, kB, B0, Nj, dist_type, nsp_ppc, idx_bounds,    \
-                                     seed, Tpar, Tper, mass, drift_v, theta
+from simulation_parameters_1D import dx, NX, ND, N, kB, B0, Nj, dist_type, nsp_ppc,      \
+                                     idx_bounds, seed, Tpar, Tper, mass, drift_v, theta, \
+                                     r_damp
 from fields_1D                import uniform_HM_field_value
 
 @nb.njit()
@@ -47,7 +48,7 @@ def uniform_gaussian_distribution_quiet(ppc):
     pos = np.zeros(N)
     vel = np.zeros((3, N))      # Initialize array
     idx = np.zeros(N, dtype=np.uint8)
-    np.random.seed(seed)         # Random seed
+    np.random.seed(seed)        # Random seed
 
     for jj in range(Nj):                    # For each species
         acc = 0
@@ -108,6 +109,37 @@ def initialize_particles():
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
     return pos, vel, Ie, W_elec, Ib, W_mag, idx
 
+#import matplotlib.pyplot as plt; import sys
+@nb.njit()
+def create_damping_array():
+    '''Create masking array for magnetic field damping used to apply open
+    boundaries. Based on applcation by Shoji et al. (2011) and
+    Umeda et al. (2001)
+    
+    Shoji's application multiplies by the resulting field before it 
+    is returned at each timestep (or each time called?), but Umeda's variant 
+    includes a damping on the increment as well as the solution, with a
+    different r for each (one damps, one changes the phase velocity and
+    increases the "effective damping length").
+    
+    Also, using Shoji's parameters, mask at most damps 98.7% at end grid 
+    points. Relying on lots of time spend there? Or some sort of error?
+    Can just play with r value/damping region length once it doesn't explode.
+    '''
+    damping_array = np.ones((NX + 2*ND))                # Blank damping array
+    midpoint      = 0.5*(NX + 2*ND - 1)
+    array_nums    = np.arange(NX + 2*ND)
+    
+    dist_from_mp  = np.abs(array_nums - midpoint)
+    
+    for ii in range(NX + 2*ND):
+        if dist_from_mp[ii] > 0.5*NX:
+            damping_array[ii] = 1. - r_damp * ((dist_from_mp[ii] - 0.5*NX) / ND) ** 2 
+    
+    #plt.plot(array_nums, damping_array)
+    #sys.exit()
+    return damping_array
+
 
 @nb.njit()
 def initialize_fields():
@@ -131,9 +163,9 @@ def initialize_fields():
     Bc[1]      = 0.                                          # Assume Bzc = 0, orthogonal to field line direction
     Bc[2]      = B0 * np.sin(theta * np.pi / 180.)           # Constant y-component of magnetic field (theta in degrees)
     
-    B      = np.zeros((NX + 3, 3), dtype=nb.float64)
-    E_int  = np.zeros((NX + 3, 3), dtype=nb.float64)
-    E_half = np.zeros((NX + 3, 3), dtype=nb.float64)
+    B      = np.zeros((NX + 2*ND, 3), dtype=np.float64)
+    E_int  = np.zeros((NX + 2*ND, 3), dtype=np.float64)
+    E_half = np.zeros((NX + 2*ND, 3), dtype=np.float64)
 
     B[:, 0] = Bc[0]      # Set Bx initial
     B[:, 1] = Bc[1]      # Set By initial
@@ -141,10 +173,12 @@ def initialize_fields():
     
     B[:, 0]+= uniform_HM_field_value(0)             # Add initial HM field at t = 0
     
-    Ve      = np.zeros((NX + 3, 3), dtype=nb.float64)
-    Te      = np.zeros(NX + 3,      dtype=nb.float64)
+    Ve      = np.zeros((NX + 2*ND, 3), dtype=np.float64)
+    Te      = np.zeros(NX + 2*ND,      dtype=np.float64)
     
-    return B, E_int, E_half, Ve, Te
+    fd_mask = create_damping_array()
+    
+    return B, E_int, E_half, Ve, Te, fd_mask
 
 
 @nb.njit()
@@ -161,11 +195,11 @@ def initialize_source_arrays():
         ni      -- Ion number density per species
         nu      -- Ion velocity "density" per species
     '''
-    q_dens  = np.zeros(NX + 3,          dtype=nb.float64)    
-    q_dens2 = np.zeros(NX + 3,          dtype=nb.float64) 
-    Ji      = np.zeros((NX + 3, 3),     dtype=nb.float64)
-    ni      = np.zeros((NX + 3, Nj),    dtype=nb.float64)
-    nu      = np.zeros((NX + 3, Nj, 3), dtype=nb.float64)
+    q_dens  = np.zeros(NX + 2*ND,          dtype=nb.float64)    
+    q_dens2 = np.zeros(NX + 2*ND,          dtype=nb.float64) 
+    Ji      = np.zeros((NX + 2*ND, 3),     dtype=nb.float64)
+    ni      = np.zeros((NX + 2*ND, Nj),    dtype=nb.float64)
+    nu      = np.zeros((NX + 2*ND, Nj, 3), dtype=nb.float64)
     return q_dens, q_dens2, Ji, ni, nu
 
 
@@ -184,11 +218,13 @@ def initialize_tertiary_arrays():
                          as part of predictor-corrector routine
         old_fields   -- Location to store old B, Ji, Ve, Te field values for predictor-corrector routine
     '''
-    temp3D        = np.zeros((NX + 3, 3), dtype=nb.float64)
-    temp3D2       = np.zeros((NX + 3, 3), dtype=nb.float64)
-    temp1D        = np.zeros(NX + 3,      dtype=nb.float64) 
-    old_particles = np.zeros((8, N),      dtype=nb.float64)
-    old_fields    = np.zeros((NX + 3, 10), dtype=nb.float64)
+    temp3D        = np.zeros((NX + 2*ND, 3),  dtype=nb.float64)
+    temp3D2       = np.zeros((NX + 2*ND, 3),  dtype=nb.float64)
+    temp1D        = np.zeros( NX + 2*ND,      dtype=nb.float64) 
+    old_fields    = np.zeros((NX + 2*ND, 10), dtype=nb.float64)
+    
+    old_particles = np.zeros((8, N),          dtype=nb.float64)
+    
     return old_particles, old_fields, temp3D, temp3D2, temp1D
 
 

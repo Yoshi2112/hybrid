@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 
-from   simulation_parameters_1D  import dx, xmax, xmin, charge, mass, kB, Tpar, Tper, drift_v, renew_particles
+from   simulation_parameters_1D  import ND, dx, xmax, xmin, charge, mass, kB, Tpar, Tper, drift_v, renew_particles
 from   sources_1D                import collect_moments
 
 @nb.njit()
@@ -26,16 +26,22 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
 @nb.njit()
 def assign_weighting_TSC(pos, I, W, E_nodes=True):
     '''Triangular-Shaped Cloud (TSC) weighting scheme used to distribute particle densities to
-    nodes and interpolate field values to particle positions.
+    nodes and interpolate field values to particle positions. Ref. Lipatov? Or Birdsall & Langdon?
 
     INPUT:
-        pos  -- particle positions (x)
-        BE   -- Flag: Weighting factor for Magnetic (0) or Electric (1) field node
-        
-    OUTPUT:
-        weights -- 3xN array consisting of leftmost (to the nearest) node, and weights for -1, 0 TSC nodes
-        
-    NOTE: The addition of `epsilon' in left_node prevents banker's rounding in left_node due to precision limits.
+        pos     -- particle positions (x)
+        I       -- Leftmost (to nearest) nodes. Output array
+        W       -- TSC weights, 3xN array starting at respective I
+        E_nodes -- True/False flag for calculating values at electric field
+                   nodes (grid centres) or not (magnetic field, edges)
+    
+    The maths effectively converts a particle position into multiples of dx (i.e. nodes),
+    rounded (to get nearest node) and then offset to account for E/B grid staggering and 
+    to get the leftmost node. This is then offset by the damping number of nodes, ND. The
+    calculation for weighting (dependent on delta_left).
+    
+    NOTE: The addition of `epsilon' prevents banker's rounding due to precision limits. This
+          is the easiest way to get around it.
     '''
     Np         = pos.shape[0]
     epsilon    = 1e-15
@@ -43,11 +49,11 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
     if E_nodes == True:
         grid_offset   = 0.5
     else:
-        grid_offset   = 1.0
+        grid_offset   = 0.0
     
     for ii in np.arange(Np):
-        I[ii]       = int(round(pos[ii] / dx + grid_offset + epsilon) - 1.0)
-        delta_left  = I[ii] - (pos[ii] + epsilon) / dx - grid_offset
+        I[ii]       = int(round(pos[ii] / dx - grid_offset + epsilon) - 1.0) + ND
+        delta_left  = I[ii] - (pos[ii] + epsilon) / dx + grid_offset - ND
     
         W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))
         W[1, ii] = 0.75 - np.square(delta_left + 1.)
@@ -119,26 +125,40 @@ def position_update(pos, vel, idx, dt, Ie, W_elec):
     OUTPUT:
         pos    -- Particle updated positions
         W_elec -- (0) Updated nearest E-field node value and (1-2) left/centre weights
+        
+    Need to work out where I want these new particles to enter the simulation space
+    ATM they're just swapping ends, but I probably want them to go back into the middle
+    Screw it, let's just do that change.
     '''
     for ii in nb.prange(pos.shape[0]):
         pos[ii] += vel[0, ii] * dt
         
         if pos[ii] < xmin:
-            pos[ii] += xmax
-            new_flag = 1
-
-        if pos[ii] > xmax:
-            pos[ii] -= xmax
+            #pos[ii] += xmax
             new_flag = 1
             
+        if pos[ii] > xmax:
+            #pos[ii] -= xmax
+            new_flag = 1
+
         if new_flag == 1 and renew_particles == True:
             # Re-initialize temperature. "New" particle. 
             # Should be able to disable this functionality by replacing
             # if statement with "False"
+            pos[ii]    = xmax / 2.          # This might give me crazy density errors at some point
+            
             sp         = idx[ii]
             vel[0, ii] = np.random.normal(0, np.sqrt(kB *  Tpar[sp] /  mass[sp]) +  drift_v[sp])
             vel[1, ii] = np.random.normal(0, np.sqrt(kB *  Tper[sp] /  mass[sp]))
             vel[2, ii] = np.random.normal(0, np.sqrt(kB *  Tper[sp] /  mass[sp]))
+        elif new_flag == 1 and renew_particles == False:
+            # Terribly inefficient. Maybe I can use the idx flag with a -1 to indicate particles
+            # that have been "turned off"? Their species probably doesn't matter too much after
+            # they've left the simulation space. Also, might this screw with node calc. equations?
+            pos[ii]    = - xmax
+            vel[0, ii] = 0.
+            vel[1, ii] = 0.
+            vel[2, ii] = 0.
             
     assign_weighting_TSC(pos, Ie, W_elec)
     return

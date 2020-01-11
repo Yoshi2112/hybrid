@@ -181,44 +181,61 @@ def test_weight_conservation():
     Plots the normalized weight for a single particle at 1e5 points along simulation
     domain. Should remain at 1 the whole time.
     '''
-    nspace        = 100000
+    nspace        = 10000
     xmax          = const.NX*const.dx
     
-    positions     = np.linspace(0, xmax, nspace)
-    normal_weight = np.zeros(nspace)
+    positions     = np.linspace(0, xmax, nspace, endpoint=True)
+    normal_weight = np.zeros(positions.shape[0])
+    left_nodes    = np.zeros(positions.shape[0], dtype=int)
+    weights       = np.zeros((3, positions.shape[0]))
     
-    for ii, x in zip(np.arange(nspace), positions):
-        left_nodes, weights = particles.assign_weighting_TSC(np.array([x]))
-        normal_weight[ii]   = weights.sum()
+    particles.assign_weighting_TSC(positions, left_nodes, weights, E_nodes=False)
+    
+    for ii in range(positions.shape[0]):
+        normal_weight[ii] = weights[:, ii].sum()
 
-    plt.plot(positions/const.dx, normal_weight)
-    plt.xlim(0., const.NX)
+    #plt.plot(positions, normal_weight)
+    #plt.xlim(0., xmax)
     return
 
 
 def test_weight_shape():
     plt.ion()
     
-    E_nodes = (np.arange(const.NX + 3) - 0.5) #* const.dx
-    B_nodes = (np.arange(const.NX + 3) - 1.0) #* const.dx
-    dns_test  = np.zeros(const.NX + 3) 
+    XMIN = 0
+    XMAX = const.NX * const.dx
     
-    positions = np.array([0.0]) * const.dx
-    left_nodes, weights = particles.assign_weighting_TSC(positions)
-
-    for jj in range(3):
-        dns_test[left_nodes + jj] = weights[jj]
+    #positions     = np.array([80, 205, 340, 360])
+    positions     = np.array([350])
+    
+    E_nodes  = (np.arange(const.NX + 2*const.ND) - const.ND  + 0.5) * const.dx
+    B_nodes  = (np.arange(const.NX + 2*const.ND) - const.ND  - 0.0) * const.dx
+    dns_test =  np.zeros( const.NX + 2*const.ND) 
+    
+    left_nodes    = np.zeros(positions.shape[0], dtype=int)
+    weights       = np.zeros((3, positions.shape[0]))
+    
+    particles.assign_weighting_TSC(positions, left_nodes, weights, E_nodes=True)
+    
+    plt.figure()
+    for ii in range(positions.shape[0]):
+        plt.axvline(positions[ii], linestyle='-', c='k', alpha=0.2)
+        for jj in range(3):
+            xx = left_nodes[ii] + jj
+            
+            plt.axvline(positions[ii], linestyle='-', c='k', alpha=0.2)
+            plt.axvline(E_nodes[  xx], linestyle='-', c='r', alpha=1.0)
+            
+            dns_test[xx] = weights[jj, ii]
 
     plt.plot(E_nodes, dns_test, marker='o')
 
-    for ii in range(const.NX + 3):
+    for ii in range(E_nodes.shape[0]):
         plt.axvline(E_nodes[ii], linestyle='--', c='r', alpha=0.2)
         plt.axvline(B_nodes[ii], linestyle='--', c='b', alpha=0.2)
-        
-    plt.axvline(const.xmin/const.dx, linestyle='-', c='k', alpha=0.2)
-    plt.axvline(const.xmax/const.dx, linestyle='-', c='k', alpha=0.2)
     
-    plt.xlim(-1.5, const.NX + 2)
+    plt.axvline(XMIN, linestyle=':', c='k', alpha=0.5)
+    plt.axvline(XMAX, linestyle=':', c='k', alpha=0.5)
     return
 
 
@@ -1156,7 +1173,7 @@ if __name__ == '__main__':
     #test_grad_P_varying_qn()
     #test_cross_product()
     #test_cspline_interpolation()
-    test_E_convective()
+    #test_E_convective()
     #test_E_hall()
     #test_interp_cross_manual()
     #test_CAM_CL()
@@ -1164,4 +1181,6 @@ if __name__ == '__main__':
     #test_E_convective_exelectron()
     #test_varying_background_function()
     #test_push_B_w_varying_background()
+    #test_weight_conservation()
+    test_weight_shape()
     

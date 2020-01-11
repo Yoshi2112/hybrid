@@ -8,14 +8,14 @@ import numpy as np
 import sys
 
 ### RUN DESCRIPTION ###
-run_description = '''Marginal instability test for 25/07/2013 event -- Maximum growth paramters (high growth expected)'''
+run_description = '''Testing to see if I can get this open boundary thing to work'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs//july_25_lingrowth_v2'  # Series save dir   : Folder containing all runs of a series
+save_path       = 'runs//open_boundary_test'    # Series save dir   : Folder containing all runs of a series
 run_num         = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles  = 1                             # Save data flag    : For later analysis
-save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
+save_particles  = 0                             # Save data flag    : For later analysis
+save_fields     = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 15401                         # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin       = [(2*run_num)%8, (2*run_num + 1)%8]      # Set CPU affinity for run. Must be list. Auto-assign: None.
 
@@ -32,10 +32,10 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 128                              # Number of cells - doesn't include ghost cells
-ND       = 2 * NX                           # Damping region length: Multiple of NX (on each side of simulation domain)
+NX       = 4096                             # Number of cells - doesn't include ghost cells
+ND       = 1024                             # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev  = 100                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
-r_damp   = 0.5                              # Damping strength
+r_damp   = 0.0129                           # Damping strength
 
 nsp_ppc  = 1000                             # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
@@ -90,7 +90,7 @@ Tper       = E_per * 11603.
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B0 / np.sqrt(mu0*ne*mp)                     # Alfven speed: Assuming pure proton plasma
 
-dx         = dxm * c / wpi                               # Spatial cadence, based on ion inertial length
+dx         = 100#dxm * c / wpi                               # Spatial cadence, based on ion inertial length
 xmin       = 0                                           # Minimum simulation dimension
 xmax       = NX * dx                                     # Maximum simulation dimension
 
