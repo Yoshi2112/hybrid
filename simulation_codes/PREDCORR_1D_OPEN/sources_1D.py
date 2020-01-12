@@ -37,8 +37,8 @@ def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
         ni[I + 1, sp] += W_elec[1, ii]
         ni[I + 2, sp] += W_elec[2, ii]
 
-    manage_ghost_cells(ni)
-    manage_ghost_cells(nu)
+    #manage_ghost_cells(ni)
+    #manage_ghost_cells(nu)
     return
 
 
@@ -102,13 +102,15 @@ def smooth(arr, temp1D):
         temp1D[ii]     += 0.50*arr[ii]
         temp1D[ii + 1] += 0.25*arr[ii]
 
-    # Move Ghost Cell Contributions: Periodic Boundary Condition
-    temp1D[1]        += temp1D[size - 1]
-    temp1D[size - 2] += temp1D[0]
-
-    # Set ghost cell values to mirror corresponding real cell
-    temp1D[0]        = temp1D[size - 2]
-    temp1D[size - 1] = temp1D[1]
+# =============================================================================
+#     # Move Ghost Cell Contributions: Periodic Boundary Condition
+#     temp1D[1]        += temp1D[size - 1]
+#     temp1D[size - 2] += temp1D[0]
+# 
+#     # Set ghost cell values to mirror corresponding real cell
+#     temp1D[0]        = temp1D[size - 2]
+#     temp1D[size - 1] = temp1D[1]
+# =============================================================================
     
     # Output smoothed array
     arr[:] = temp1D[:]

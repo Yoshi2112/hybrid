@@ -34,17 +34,18 @@ def get_curl_E(field, curl):
                  
     OUTPUT:
         curl  -- Finite-differenced solution for the curl of the input field.
-        
-    NOTE: This function will only work with this specific 1D hybrid code due to both 
-          E and B fields having the same number of nodes (due to TSC weighting) and
-         the lack of derivatives in y, z
     '''
     curl[:, 0] *= 0
+    
+    # Forward difference first cell: WAIT HOW DOES THIS WORK WITH STAGGERED GRIDS?
+    curl[0, 1] = -3*field[0, 2] + 4*field[1, 2] - field[2, 2]
+    curl[0, 2] = -3*field[0, 1] + 4*field[1, 1] - field[2, 1]
+    
+    # Central difference middle cells. Magnetic field offset to lower numbers, dump in +1 arr higher
     for ii in nb.prange(1, field.shape[0]):
         curl[ii, 1] = - (field[ii, 2] - field[ii - 1, 2])
         curl[ii, 2] =    field[ii, 1] - field[ii - 1, 1]
 
-    set_periodic_boundaries(curl)
     curl /= dx
     return 
 
@@ -114,10 +115,9 @@ def curl_B_term(B, curl):
         curl[ii - 1, 1] = - (B[ii, 2] - B[ii - 1, 2])
         curl[ii - 1, 2] =    B[ii, 1] - B[ii - 1, 1]
     
-    # Assign ghost cell values
-    curl[B.shape[0] - 1] = curl[2]
-    curl[B.shape[0] - 2] = curl[1]
-    curl[0] = curl[B.shape[0] - 3]
+    # Backwards difference for last gridpoint
+    curl[B.shape[0] - 1, 1] = - (B[ii, 2] - B[ii - 1, 2])
+    curl[B.shape[0] - 1, 2] =    B[ii, 1] - B[ii - 1, 1]
     
     curl /= (dx * mu0)
     return 

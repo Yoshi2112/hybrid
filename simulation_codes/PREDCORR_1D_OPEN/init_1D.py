@@ -171,7 +171,7 @@ def initialize_fields():
     B[:, 1] = Bc[1]      # Set By initial
     B[:, 2] = Bc[2]      # Set Bz initial
     
-    B[:, 0]+= uniform_HM_field_value(0)             # Add initial HM field at t = 0
+    B[:, 0]+= uniform_HM_field_value(0)                      # Add initial HM field at t = 0
     
     Ve      = np.zeros((NX + 2*ND, 3), dtype=np.float64)
     Te      = np.zeros(NX + 2*ND,      dtype=np.float64)
