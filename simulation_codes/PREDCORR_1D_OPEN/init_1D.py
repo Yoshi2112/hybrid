@@ -10,11 +10,10 @@ import simulation_parameters_1D as const
 import save_routines as save
 
 from particles_1D             import assign_weighting_TSC
-from simulation_parameters_1D import dx, NX, ND, N, kB, B0, Nj, dist_type, nsp_ppc,      \
+from simulation_parameters_1D import dx, NX, ND, NC, N, kB, B0, Nj, dist_type, nsp_ppc,      \
                                      idx_bounds, seed, Tpar, Tper, mass, drift_v, theta, \
                                      r_damp
-from fields_1D                import uniform_HM_field_value
-
+                                     
 @nb.njit()
 def particles_per_cell():
     '''
@@ -126,9 +125,9 @@ def create_damping_array():
     points. Relying on lots of time spend there? Or some sort of error?
     Can just play with r value/damping region length once it doesn't explode.
     '''
-    damping_array = np.ones((NX + 2*ND))                # Blank damping array
-    midpoint      = 0.5*(NX + 2*ND - 1)
-    array_nums    = np.arange(NX + 2*ND)
+    damping_array = np.ones(NC + 1)                # Blank damping array
+    midpoint      = 0.5*(NC - 1)
+    array_nums    = np.arange(NC)
     
     dist_from_mp  = np.abs(array_nums - midpoint)
     
@@ -150,35 +149,31 @@ def initialize_fields():
         <NONE>
 
     OUTPUT:
-        B      -- Magnetic field array: (NX + 3) Node locations on cell edges/vertices (each cell +1 end boundary +2 guard cells)
-        E_int  -- Electric field array: (NX + 3) Node locations in cell centres (each cell plus 1+2 guard cells)
-        E_half -- Electric field array: (NX + 3) Node locations in cell centres (each cell plus 1+2 guard cells)
+        B      -- Magnetic field array: Node locations on cell edges/vertices
+        E_int  -- Electric field array: Node locations in cell centres
+        E_half -- Electric field array: Node locations in cell centres
         Ve     -- Electron fluid velocity moment: Calculated as part of E-field update equation
         Te     -- Electron temperature          : Calculated as part of E-field update equation          
-    Note: Each field is initialized with one array value extra due to TSC
-    trying to access it when a particle is located exactly on xmax.
     '''
-    Bc         = np.zeros(3)                                 # Constant components of magnetic field based on theta and B0
-    Bc[0]      = B0 * np.cos(theta * np.pi / 180.)           # Constant x-component of magnetic field (theta in degrees)
-    Bc[1]      = 0.                                          # Assume Bzc = 0, orthogonal to field line direction
-    Bc[2]      = B0 * np.sin(theta * np.pi / 180.)           # Constant y-component of magnetic field (theta in degrees)
+    Bc      = np.zeros(3)                                 # Constant components of magnetic field based on theta and B0
+    Bc[0]   = B0 * np.cos(theta * np.pi / 180.)           # Constant x-component of magnetic field (theta in degrees)
+    Bc[1]   = 0.                                          # Assume Bzc = 0, orthogonal to field line direction
+    Bc[2]   = B0 * np.sin(theta * np.pi / 180.)           # Constant y-component of magnetic field (theta in degrees)
     
-    B      = np.zeros((NX + 2*ND, 3), dtype=np.float64)
-    E_int  = np.zeros((NX + 2*ND, 3), dtype=np.float64)
-    E_half = np.zeros((NX + 2*ND, 3), dtype=np.float64)
+    B       = np.zeros((NC + 1, 3), dtype=np.float64)
+    E_int   = np.zeros((NC    , 3), dtype=np.float64)
+    E_half  = np.zeros((NC    , 3), dtype=np.float64)
 
     B[:, 0] = Bc[0]      # Set Bx initial
     B[:, 1] = Bc[1]      # Set By initial
     B[:, 2] = Bc[2]      # Set Bz initial
     
-    B[:, 0]+= uniform_HM_field_value(0)                      # Add initial HM field at t = 0
+    Ve      = np.zeros((NC, 3), dtype=np.float64)
+    Te      = np.zeros( NC,     dtype=np.float64)
     
-    Ve      = np.zeros((NX + 2*ND, 3), dtype=np.float64)
-    Te      = np.zeros(NX + 2*ND,      dtype=np.float64)
+    damping_array = create_damping_array()
     
-    fd_mask = create_damping_array()
-    
-    return B, E_int, E_half, Ve, Te, fd_mask
+    return B, E_int, E_half, Ve, Te, damping_array
 
 
 @nb.njit()
@@ -195,11 +190,11 @@ def initialize_source_arrays():
         ni      -- Ion number density per species
         nu      -- Ion velocity "density" per species
     '''
-    q_dens  = np.zeros(NX + 2*ND,          dtype=nb.float64)    
-    q_dens2 = np.zeros(NX + 2*ND,          dtype=nb.float64) 
-    Ji      = np.zeros((NX + 2*ND, 3),     dtype=nb.float64)
-    ni      = np.zeros((NX + 2*ND, Nj),    dtype=nb.float64)
-    nu      = np.zeros((NX + 2*ND, Nj, 3), dtype=nb.float64)
+    q_dens  = np.zeros( NC,          dtype=nb.float64)    
+    q_dens2 = np.zeros( NC,          dtype=nb.float64) 
+    Ji      = np.zeros((NC, 3),     dtype=nb.float64)
+    ni      = np.zeros((NC, Nj),    dtype=nb.float64)
+    nu      = np.zeros((NC, Nj, 3), dtype=nb.float64)
     return q_dens, q_dens2, Ji, ni, nu
 
 
@@ -211,21 +206,21 @@ def initialize_tertiary_arrays():
         <NONE>
         
     OUTPUT:
-        temp3D        -- Swap-file vector array with grid dimensions
-        temp3D2       -- Swap-file vector array with grid dimensions
-        temp1D        -- Swap-file scalar array with grid dimensions
+        temp3Db       -- Swap-file vector array with B-grid dimensions
+        temp3De       -- Swap-file vector array with E-grid dimensions
+        temp1D        -- Swap-file scalar array with E-grid dimensions
         old_particles -- Location to store old particle values (positions, velocities, weights)
                          as part of predictor-corrector routine
         old_fields   -- Location to store old B, Ji, Ve, Te field values for predictor-corrector routine
     '''
-    temp3D        = np.zeros((NX + 2*ND, 3),  dtype=nb.float64)
-    temp3D2       = np.zeros((NX + 2*ND, 3),  dtype=nb.float64)
-    temp1D        = np.zeros( NX + 2*ND,      dtype=nb.float64) 
-    old_fields    = np.zeros((NX + 2*ND, 10), dtype=nb.float64)
+    temp3Db       = np.zeros((NC + 1, 3),  dtype=nb.float64)
+    temp3De       = np.zeros((NC    , 3),  dtype=nb.float64)
+    temp1D        = np.zeros( NC    ,      dtype=nb.float64) 
+    old_fields    = np.zeros((NC + 1, 10), dtype=nb.float64)
     
     old_particles = np.zeros((8, N),          dtype=nb.float64)
     
-    return old_particles, old_fields, temp3D, temp3D2, temp1D
+    return old_particles, old_fields, temp3Db, temp3De, temp1D
 
 
 def set_timestep(vel):
@@ -265,6 +260,3 @@ def set_timestep(vel):
     
     print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))
     return DT, max_inc, part_save_iter, field_save_iter
-
-
-

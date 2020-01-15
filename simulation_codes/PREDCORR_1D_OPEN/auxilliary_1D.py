@@ -9,7 +9,9 @@ import numpy as np
 
 import particles_1D as particles
 import fields_1D as fields
-import simulation_parameters_1D as const
+
+from simulation_parameters_1D import dx, mu0, NC, high_rat, orbit_res, freq_res, \
+                                     account_for_dispersion, dispersion_allowance
 
 
 @nb.njit()
@@ -33,47 +35,39 @@ def cross_product(A, B, C):
     return
 
 
-
 @nb.njit()
-def interpolate_to_center_cspline1D(arr, interp):
-    ''' 
-    Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
-    1D array (e.g. grad_P)
-    '''
-    for ii in nb.prange(1, arr.shape[0] - 2):                       
-        interp[ii] = 0.5 * (arr[ii] + arr[ii + 1]) \
-                 - 1./16 * (arr[ii + 2] - arr[ii + 1] - arr[ii] + arr[ii - 1])
-         
-    interp[0]                = interp[arr.shape[0] - 3]
-    interp[arr.shape[0] - 2] = interp[1]
-    interp[arr.shape[0] - 1] = interp[2]
-    return
-
-
-@nb.njit()
-def interpolate_to_center_cspline3D(arr, interp):
+def interpolate_edges_to_center(B, interp, zero_boundaries=False):
     ''' 
     Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
     with a 3D array (e.g. B)
+    
+    Need to rejig this for open boundaries. First and last (one or two) points 
+    will be an issue. Also need to check the alignment on this.
+    
+    interp_coeffs = splrep(e_times, V12)
+    V12_out    = splev(new_times, coeffs_V12)
     '''
-    for jj in range(arr.shape[1]):
-        for ii in range(1, arr.shape[0] - 2):                       
-            interp[ii, jj] = 0.5 * (arr[ii, jj] + arr[ii + 1, jj]) \
-                     - 1./16 * (arr[ii + 2, jj] - arr[ii + 1, jj] - arr[ii, jj] + arr[ii - 1, jj])
-             
-        interp[0, jj]                = interp[arr.shape[0] - 3, jj]
-        interp[arr.shape[0] - 2, jj] = interp[1, jj]
-        interp[arr.shape[0] - 1, jj] = interp[2, jj]
-    return
-
-
-@nb.njit()
-def interpolate_to_center_linear_1D(val, center):
-    ''' 
-    Interpolates vector cell edge values (i.e. B-grid quantities) to cell centers (i.e. E-grid quantities)
-    Note: First and last (two) array values return zero due to ghost cell values
-    '''
-    center[1:const.NX + 1] = 0.5*(val[1: const.NX + 1] + val[2:const.NX + 2])
+    y2 = np.zeros(B.shape)
+    
+    # Calculate second derivative
+    for jj in range(B.shape[1]):
+        
+        # Interior points, Centered difference
+        for ii in range(1, NC - 1):
+            y2[ii, jj] = B[ii + 1, jj] - 2*B[ii, jj] + B[ii - 1, jj]
+            
+        # Edge points, Forwards/Backwards difference
+        if zero_boundaries == True:
+            y2[0,      jj] = 0.
+            y2[NC - 1, jj] = 0.
+        else:
+            y2[0,      jj] = 2*B[ii,     jj] - 5*B[ii + 1, jj] + 4*B[ii + 2, jj] - B[ii + 3, jj]
+            y2[NC - 1, jj] = 2*B[NC - 1, jj] - 5*B[NC - 2, jj] + 4*B[NC - 3, jj] - B[NC - 4, jj]
+        
+    # Do spline interpolation: E[ii] is bracketed by B[ii], B[ii + 1]
+    for jj in range(B.shape[1]):
+        for ii in range(NC - 1):
+            interp[ii, jj] = 0.5 * (B[ii, jj] + B[ii + 1, jj] + (1/6) * (y2[ii, jj] + y2[ii + 1, jj]))
     return
 
 
@@ -81,25 +75,25 @@ def interpolate_to_center_linear_1D(val, center):
 def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
                      qq, DT, max_inc, part_save_iter, field_save_iter, idx):
     
-    interpolate_to_center_cspline3D(B, B_cent)
+    interpolate_edges_to_center(B, B_cent)
     B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
 
-    dispfreq        = ((np.pi / const.dx) ** 2) * (B_tot / (const.mu0 * q_dens)).max()           # Dispersion frequency
-    gyfreq          = const.high_rat  * np.abs(B_tot).max() / (2 * np.pi)      
-    ion_ts          = const.orbit_res * 1./gyfreq
+    dispfreq        = ((np.pi / dx) ** 2) * (B_tot / (mu0 * q_dens)).max()           # Dispersion frequency
+    gyfreq          = high_rat  * np.abs(B_tot).max() / (2 * np.pi)      
+    ion_ts          = orbit_res * 1./gyfreq
     
     if E[:, 0].max() != 0:
-        elecfreq        = const.high_rat*(np.abs(E[:, 0] / vel.max()).max())               # Electron acceleration "frequency"
-        Eacc_ts         = const.freq_res / elecfreq                            
+        elecfreq        = high_rat*(np.abs(E[:, 0] / vel.max()).max())               # Electron acceleration "frequency"
+        Eacc_ts         = freq_res / elecfreq                            
     else:
         Eacc_ts = ion_ts
     
-    if const.account_for_dispersion == True:
-        disp_ts     = const.dispersion_allowance * const.freq_res / dispfreq     # Making this a little bigger so it doesn't wreck everything
+    if account_for_dispersion == True:
+        disp_ts     = dispersion_allowance * freq_res / dispfreq     # Making this a little bigger so it doesn't wreck everything
     else:
         disp_ts     = ion_ts
 
-    vel_ts          = 0.80 * const.dx / vel[0, :].max()                          # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
+    vel_ts          = 0.80 * dx / vel[0, :].max()                          # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
     DT_part         = min(Eacc_ts, vel_ts, ion_ts, disp_ts)                      # Smallest of the allowable timesteps
     
     if DT_part < 0.9*DT:
@@ -136,7 +130,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
 @nb.njit()
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
-              Ve, Te, temp3D, temp3D2, temp1D, old_particles, old_fields,\
+              Ve, Te, temp3Db, temp3De, temp1D, old_particles, old_fields,\
               damping_array, qq, DT, max_inc, part_save_iter, field_save_iter):
     '''
     Main loop separated from __main__ function, since this is the actual computation bit.
@@ -151,7 +145,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     '''
     # Check timestep
     qq, DT, max_inc, part_save_iter, field_save_iter \
-    = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3D, \
+    = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, \
                      qq, DT, max_inc, part_save_iter, field_save_iter, idx)
     
     # Move particles, collect moments
@@ -163,10 +157,10 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     q_dens += 0.5 * q_dens_adv
     
     # Push B from N to N + 1/2
-    fields.push_B(B, E_int, temp3D, DT, qq, damping_array, half_flag=1)
+    fields.push_B(B, E_int, temp3Db, DT, qq, damping_array, half_flag=1)
     
     # Calculate E at N + 1/2
-    fields.calculate_E(B, Ji, q_dens, E_half, Ve, Te, temp3D, temp3D2, temp1D)
+    fields.calculate_E(B, Ji, q_dens, E_half, Ve, Te, temp3De, temp3Db, temp1D)
     
     
     ###################################
@@ -179,16 +173,16 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     old_particles[4  , :] = Ie
     old_particles[5:8, :] = W_elec
     
-    old_fields[:, 0:3]    = B
-    old_fields[:, 3:6]    = Ji
-    old_fields[:, 6:9]    = Ve
-    old_fields[:,   9]    = Te
+    old_fields[:,   0:3]  = B
+    old_fields[:NC, 3:6]  = Ji
+    old_fields[:NC, 6:9]  = Ve
+    old_fields[:NC,   9]  = Te
     
     # Predict fields
     E_int *= -1.0
     E_int +=  2.0 * E_half
     
-    fields.push_B(B, E_int, temp3D, DT, qq, damping_array, half_flag=0)
+    fields.push_B(B, E_int, temp3Db, DT, qq, damping_array, half_flag=0)
 
     # Advance particles to obtain source terms at N + 3/2
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
@@ -197,8 +191,8 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
     
     # Compute predicted fields at N + 3/2
-    fields.push_B(B, E_int, temp3D, DT, qq + 1, damping_array, half_flag=1)
-    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, temp3D, temp3D2, temp1D)
+    fields.push_B(B, E_int, temp3Db, DT, qq + 1, damping_array, half_flag=1)
+    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D)
     
     # Determine corrected fields at N + 1 
     E_int *= 0.5;    E_int += 0.5 * E_half
@@ -208,12 +202,12 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     vel[:]    = old_particles[1:4, :]
     Ie[:]     = old_particles[4  , :]
     W_elec[:] = old_particles[5:8, :]
-    B[:]      = old_fields[:, 0:3]
-    Ji[:]     = old_fields[:, 3:6]
-    Ve[:]     = old_fields[:, 6:9]
-    Te[:]     = old_fields[:,   9]
+    B[:]      = old_fields[:,   0:3]
+    Ji[:]     = old_fields[:NC, 3:6]
+    Ve[:]     = old_fields[:NC, 6:9]
+    Te[:]     = old_fields[:NC,   9]
     
-    fields.push_B(B, E_int, temp3D, DT, qq, damping_array, half_flag=0)                           # Advance the original B
+    fields.push_B(B, E_int, temp3Db, DT, qq, damping_array, half_flag=0)   # Advance the original B
 
     q_dens[:] = q_dens_adv
 

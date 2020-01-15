@@ -13,10 +13,10 @@ run_description = '''Testing to see if I can get this open boundary thing to wor
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path       = 'runs//open_boundary_test'    # Series save dir   : Folder containing all runs of a series
-run_num         = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles  = 0                             # Save data flag    : For later analysis
 save_fields     = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
-seed            = 15401                         # RNG Seed          : Set to enable consistent results for parameter studies
+seed            = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin       = [(2*run_num)%8, (2*run_num + 1)%8]      # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
@@ -32,8 +32,8 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 4096                             # Number of cells - doesn't include ghost cells
-ND       = 1024                             # Damping region length: Multiple of NX (on each side of simulation domain)
+NX       = 512                              # Number of cells - doesn't include ghost cells
+ND       = 128                              # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev  = 100                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 r_damp   = 0.0129                           # Damping strength
 
@@ -80,6 +80,7 @@ HM_frequency   = 0.02                                       # Driven wave in Hz
 
 
 #%%### DERIVED SIMULATION PARAMETERS
+NC         = NX + 2*ND
 ne         = density.sum()
 E_par      = E_per / (anisotropy + 1)
     

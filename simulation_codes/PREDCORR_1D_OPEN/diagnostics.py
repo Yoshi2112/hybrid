@@ -422,63 +422,46 @@ def test_force_interpolation():
 
 
 def test_curl_B():
+    NX   = 50     
+    ND   = 10
+    NC   = NX + 2*ND
+    xmin = 0.0    
+    xmax = 2*np.pi
     
-    #errors = np.zeros(4)
-    #grids  = [16, 32, 64, 128]
-    
-    #for NX, ii in zip(grids, range(len(grids))):
-    NX   = 50     #const.NX
-    xmin = 0.0    #const.xmin
-    xmax = 2*np.pi#const.xmax
-    
-    dx   = xmax / NX #const.dx
-    x    = np.arange(xmin, xmax, dx/100.)              # Simulation domain space 0,NX (normalized to grid)
-    k    = 1.0
+    dx   = xmax / NX
+    k    = 2.0
 
     # Physical location of nodes
-    E_nodes = (np.arange(NX + 3) - 0.5) * dx
-    B_nodes = (np.arange(NX + 3) - 1.0) * dx
-
-    Bx         =            np.cos(1.0*k*B_nodes)
-    By         =            np.cos(1.5*k*B_nodes)
-    Bz         =            np.cos(2.0*k*B_nodes)
-    dBy        = -1.5 * k * np.sin(1.5*k*E_nodes)
-    dBz        = -2.0 * k * np.sin(2.0*k*E_nodes)
+    E_nodes  = (np.arange(NC) - ND  + 0.5) * dx
+    B_nodes  = (np.arange(NC) - ND  - 0.0) * dx
     
-    B_input       = np.zeros((NX + 3, 3))
-    B_input[:, 0] = Bx
-    B_input[:, 1] = By
-    B_input[:, 2] = Bz
-
-    curl_B_FD   = fields.get_curl_B(B_input, DX=dx)
-    curl_B_anal = np.zeros((NX + 3, 3))
-    curl_B_anal[:, 1] = -dBz
-    curl_B_anal[:, 2] =  dBy
-        
-# =============================================================================
-#         By_error = 100.*(curl_B[:, 1] - By_anal) / By_anal
-#         Bz_error = 100.*(curl_B[:, 2] - Bz_anal) / Bz_anal
-# 
-#         errors[ii] = abs(By_error).max()
-#     
-#     power = np.log(errors[2] / errors[3]) / np.log(2)
-#     print power
-# =============================================================================
+    # Inputs and analytic solutions
+    B_input       = np.zeros((NC, 3))
+    B_input[:, 0] = np.cos(1.0*k*B_nodes)
+    B_input[:, 1] = np.cos(1.5*k*B_nodes)
+    B_input[:, 2] = np.cos(2.0*k*B_nodes)
+    
+    curl_B_anal       = np.zeros((NC, 3))
+    curl_B_anal[:, 1] = -1.5 * k * np.sin(1.5*k*E_nodes) / dx
+    curl_B_anal[:, 2] = -2.0 * k * np.sin(2.0*k*E_nodes) / dx
+    
+    curl_B_FD = np.zeros((NC, 3))
+    fields.curl_B_term(B_input, curl_B_FD, DX=dx)
     
     ## DO THE PLOTTING ##
     plt.figure(figsize=(15, 15))
     marker_size = None
     
     #plt.plot(x, -deriv, linestyle=':', c='b', label='By Analytic Solution')
-    plt.scatter(E_nodes, curl_B_anal[:, 1], marker='o', c='k', s=marker_size, label='By Node Solution')
+    #plt.scatter(E_nodes, curl_B_anal[:, 1], marker='o', c='k', s=marker_size, label='By Node Solution')
     plt.scatter(E_nodes, curl_B_FD[:, 1], marker='x', c='b', s=marker_size, label='By Finite Difference')
     
     #plt.plot(x, deriv, linestyle=':', c='r', label='Bz Analytic Solution')   
-    plt.scatter(E_nodes, curl_B_anal[:, 2], marker='o', c='k', s=marker_size, label='Bz Node Solution')
+    #plt.scatter(E_nodes, curl_B_anal[:, 2], marker='o', c='k', s=marker_size, label='Bz Node Solution')
     plt.scatter(E_nodes, curl_B_FD[:, 2], marker='x', c='r', s=marker_size, label='Bz Finite Difference')   
     plt.title(r'Test of $\nabla \times B$')
 
-    for kk in range(NX + 3):
+    for kk in range(NC):
         plt.axvline(E_nodes[kk], linestyle='--', c='r', alpha=0.2)
         plt.axvline(B_nodes[kk], linestyle='--', c='b', alpha=0.2)
         
@@ -491,48 +474,47 @@ def test_curl_B():
 
 
 def test_curl_E():
-    NX   = 32   #const.NX
-
-    xmin = 0.0  #const.xmin
-    xmax = 2*np.pi#const.xmax
+    NX   = 50     
+    ND   = 10
+    NC   = NX + 2*ND
+    xmin = 0.0    
+    xmax = 2*np.pi
     
     dx   = xmax / NX
-    x    = np.arange(xmin, xmax, dx/100.)              # Simulation domain space 0,NX (normalized to grid)
-    k    = 1.0
+    k    = 2.0
 
     # Physical location of nodes
-    E_nodes = (np.arange(NX + 3) - 0.5) * dx
-    B_nodes = (np.arange(NX + 3) - 1.0) * dx
-
-    Ex         =            np.cos(1.0*k*E_nodes)
-    Ey         =            np.cos(1.5*k*E_nodes)
-    Ez         =            np.cos(2.0*k*E_nodes)
-    dEy        = -1.5 * k * np.sin(1.5*k*B_nodes)
-    dEz        = -2.0 * k * np.sin(2.0*k*B_nodes)
+    E_nodes  = (np.arange(NC) - ND  + 0.5) * dx
+    B_nodes  = (np.arange(NC) - ND  - 0.0) * dx
     
-    E_input       = np.zeros((NX + 3, 3))
-    E_input[:, 0] = Ex
-    E_input[:, 1] = Ey
-    E_input[:, 2] = Ez
+    E_input       = np.zeros((NC, 3))
+    E_input[:, 0]         =            np.cos(1.0*k*E_nodes)
+    E_input[:, 1]         =            np.cos(1.5*k*E_nodes)
+    E_input[:, 2]         =            np.cos(2.0*k*E_nodes)
 
-    curl_E_FD   = fields.get_curl_E(E_input, DX=dx)
-    curl_E_anal = np.zeros((NX + 3, 3))
-    curl_E_anal[:, 1] = -dEz
-    curl_E_anal[:, 2] =  dEy
+    curl_E_FD = np.zeros((NC, 3))
+    fields.get_curl_E(E_input, curl_E_FD, DX=1)
     
+    curl_E_anal       = np.zeros((NC, 3))
+    curl_E_anal[:, 1] =  2.0 * k * np.sin(2.0*k*B_nodes)
+    curl_E_anal[:, 2] = -1.5 * k * np.sin(1.5*k*B_nodes)
+    
+    
+    
+    ## PLOT
     plt.figure(figsize=(15, 15))
     marker_size = None
 
     #plt.plot(x, -deriv, linestyle=':', c='b', label='By Analytic Solution')
-    plt.scatter(B_nodes, curl_E_anal[:, 1], marker='o', c='k', s=marker_size, label='By Node Solution')
+    #plt.scatter(B_nodes, curl_E_anal[:, 1], marker='o', c='k', s=marker_size, label='By Node Solution')
     plt.scatter(B_nodes, curl_E_FD[:, 1], marker='x', c='b', s=marker_size, label='By Finite Difference')
     
     #plt.plot(x, deriv, linestyle=':', c='r', label='Bz Analytic Solution')   
-    plt.scatter(B_nodes, curl_E_anal[:, 2], marker='o', c='k', s=marker_size, label='Bz Node Solution')
+    #plt.scatter(B_nodes, curl_E_anal[:, 2], marker='o', c='k', s=marker_size, label='Bz Node Solution')
     plt.scatter(B_nodes, curl_E_FD[:, 2], marker='x', c='r', s=marker_size, label='Bz Finite Difference')   
     plt.title(r'Test of $\nabla \times E$')
 
-    for kk in range(NX + 3):
+    for kk in range(NC):
         plt.axvline(E_nodes[kk], linestyle='--', c='r', alpha=0.2)
         plt.axvline(B_nodes[kk], linestyle='--', c='b', alpha=0.2)
         
@@ -1169,7 +1151,8 @@ if __name__ == '__main__':
     #check_position_distribution()
     #animate_moving_weight()
     #test_particle_orbit()
-    #test_curl_E()
+    test_curl_B()
+    test_curl_E()
     #test_grad_P_varying_qn()
     #test_cross_product()
     #test_cspline_interpolation()
@@ -1182,5 +1165,5 @@ if __name__ == '__main__':
     #test_varying_background_function()
     #test_push_B_w_varying_background()
     #test_weight_conservation()
-    test_weight_shape()
+    #test_weight_shape()
     
