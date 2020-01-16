@@ -4,7 +4,6 @@ Created on Fri Sep 22 17:55:15 2017
 
 @author: iarey
 """
-import numpy as np
 import numba as nb
 
 from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, smooth_sources, q, ne, min_dens

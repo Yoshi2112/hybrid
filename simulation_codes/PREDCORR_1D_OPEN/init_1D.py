@@ -12,7 +12,7 @@ import save_routines as save
 from particles_1D             import assign_weighting_TSC
 from simulation_parameters_1D import dx, NX, ND, NC, N, kB, B0, Nj, dist_type, nsp_ppc,      \
                                      idx_bounds, seed, Tpar, Tper, mass, drift_v, theta, \
-                                     r_damp
+                                     r_damp, Bc
                                      
 @nb.njit()
 def particles_per_cell():
@@ -152,18 +152,13 @@ def initialize_fields():
         Ve     -- Electron fluid velocity moment: Calculated as part of E-field update equation
         Te     -- Electron temperature          : Calculated as part of E-field update equation          
     '''
-    Bc      = np.zeros(3)                                 # Constant components of magnetic field based on theta and B0
-    Bc[0]   = B0 * np.cos(theta * np.pi / 180.)           # Constant x-component of magnetic field (theta in degrees)
-    Bc[1]   = 0.                                          # Assume Bzc = 0, orthogonal to field line direction
-    Bc[2]   = B0 * np.sin(theta * np.pi / 180.)           # Constant y-component of magnetic field (theta in degrees)
-    
     B       = np.zeros((NC + 1, 3), dtype=np.float64)
     E_int   = np.zeros((NC    , 3), dtype=np.float64)
     E_half  = np.zeros((NC    , 3), dtype=np.float64)
 
-    B[:, 0] = Bc[0]      # Set Bx initial
-    B[:, 1] = Bc[1]      # Set By initial
-    B[:, 2] = Bc[2]      # Set Bz initial
+    B[:, 0] = Bc[:, 0]      # Set Bx initial
+    B[:, 1] = Bc[:, 1]      # Set By initial
+    B[:, 2] = Bc[:, 2]      # Set Bz initial
     
     Ve      = np.zeros((NC, 3), dtype=np.float64)
     Te      = np.zeros( NC,     dtype=np.float64)

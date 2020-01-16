@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 
-from   simulation_parameters_1D  import ND, dx, xmax, xmin, charge, mass, kB, Tpar, Tper, drift_v, renew_particles
+from   simulation_parameters_1D  import ND, dx, xmax, xmin, charge, mass, kB, Tpar, Tper, drift_v, particle_boundary
 from   sources_1D                import collect_moments
 
 @nb.njit()
@@ -131,6 +131,7 @@ def position_update(pos, vel, idx, dt, Ie, W_elec):
     Screw it, let's just do that change.
     '''
     for ii in nb.prange(pos.shape[0]):
+        new_flag = 0
         pos[ii] += vel[0, ii] * dt
         
         if pos[ii] < xmin:
@@ -139,26 +140,32 @@ def position_update(pos, vel, idx, dt, Ie, W_elec):
             
         if pos[ii] > xmax:
             #pos[ii] -= xmax
-            new_flag = 1
+            new_flag = 2
 
-        if new_flag == 1 and renew_particles == True:
-            # Re-initialize temperature. "New" particle. 
-            # Should be able to disable this functionality by replacing
-            # if statement with "False"
-            pos[ii]    = xmax / 2.          # This might give me crazy density errors at some point
+        if new_flag > 0:
             
-            sp         = idx[ii]
-            vel[0, ii] = np.random.normal(0, np.sqrt(kB *  Tpar[sp] /  mass[sp]) +  drift_v[sp])
-            vel[1, ii] = np.random.normal(0, np.sqrt(kB *  Tper[sp] /  mass[sp]))
-            vel[2, ii] = np.random.normal(0, np.sqrt(kB *  Tper[sp] /  mass[sp]))
-        elif new_flag == 1 and renew_particles == False:
-            # Terribly inefficient. Maybe I can use the idx flag with a -1 to indicate particles
-            # that have been "turned off"? Their species probably doesn't matter too much after
-            # they've left the simulation space. Also, might this screw with node calc. equations?
-            pos[ii]    = - xmax
-            vel[0, ii] = 0.
-            vel[1, ii] = 0.
-            vel[2, ii] = 0.
+            if particle_boundary == 'renew':
+                # Re-initialize temperature. "New" particle. 
+                # Should be able to disable this functionality by replacing
+                # if statement with "False"
+                pos[ii]    = xmax / 2.          # This might give me crazy density errors at some point
+                
+                sp         = idx[ii]
+                vel[0, ii] = np.random.normal(0, np.sqrt(kB *  Tpar[sp] /  mass[sp]) +  drift_v[sp])
+                vel[1, ii] = np.random.normal(0, np.sqrt(kB *  Tper[sp] /  mass[sp]))
+                vel[2, ii] = np.random.normal(0, np.sqrt(kB *  Tper[sp] /  mass[sp]))
+            elif particle_boundary == 'reflect':
+                # Probably the least problematic? Except could cause weird things... maybe?
+                vel[0, ii] *= -1.                   # Reflect velocity
+                pos[ii]    += vel[0, ii] * dt       # Get particle back in simulation space
+            else:
+                # Terribly inefficient. Maybe I can use the idx flag with a -1 to indicate particles
+                # that have been "turned off"? Their species probably doesn't matter too much after
+                # they've left the simulation space. Also, might this screw with node calc. equations?
+                pos[ii]    = - xmax
+                vel[0, ii] = 0.
+                vel[1, ii] = 0.
+                vel[2, ii] = 0.
             
     assign_weighting_TSC(pos, Ie, W_elec)
     return

@@ -1,5 +1,6 @@
 ## PYTHON MODULES ##
 from timeit import default_timer as timer
+import pdb
 
 ## HYBRID MODULES ##
 import init_1D       as init
@@ -13,7 +14,7 @@ import diagnostics   as diag
 
 from simulation_parameters_1D import save_particles, save_fields
 
-
+# Explodes. Why?
 if __name__ == '__main__':
     start_time = timer()
     
@@ -22,7 +23,7 @@ if __name__ == '__main__':
     B, E_int, E_half, Ve, Te, damping_array             = init.initialize_fields()
     q_dens, q_dens_adv, Ji, ni, nu                      = init.initialize_source_arrays()
     old_particles, old_fields, temp3De, temp3Db, temp1D = init.initialize_tertiary_arrays()
-    
+
     DT, max_inc, part_save_iter, field_save_iter        = init.set_timestep(vel)
     
     # Collect initial moments and save initial state
@@ -38,7 +39,9 @@ if __name__ == '__main__':
     particles.assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
     particles.velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT)
 
-    qq      = 1
+    qq       = 1
+    sim_time = 0
+    diag.save_diagnostic_plots(qq, pos, vel, B, E_int, q_dens, Ji, sim_time, DT)
     print('Starting main loop...')
     while qq < max_inc:
         qq, DT, max_inc, part_save_iter, field_save_iter =               \
@@ -53,9 +56,11 @@ if __name__ == '__main__':
         if qq%field_save_iter == 0 and save_fields == 1:
             save.save_field_data(DT, field_save_iter, qq, Ji, E_int, B, Ve, Te, q_dens)
             
-        if qq%25 == 0:
-            print('Timestep {} of {} complete'.format(qq, max_inc))
-
-        qq += 1
+        if qq%10 == 0:
+            diag.save_diagnostic_plots(qq, pos, vel, B, E_int, q_dens, Ji, sim_time, DT)
+            
+        print('Timestep {} of {} complete'.format(qq, max_inc))
+        qq       += 1
+        sim_time += DT
         
     print("Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2)))

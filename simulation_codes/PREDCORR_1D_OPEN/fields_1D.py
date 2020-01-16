@@ -8,7 +8,7 @@ import numpy as np
 import numba as nb
 
 import auxilliary_1D as aux
-from simulation_parameters_1D import dx, Te0, ne, q, mu0, kB, ie
+from simulation_parameters_1D import dx, Te0, ne, q, mu0, kB, ie, Bc
 
 
 @nb.njit()
@@ -69,10 +69,13 @@ def push_B(B, E, curlE, DT, qq, damping_array, half_flag=1):
     '''
     get_curl_E(E, curlE)
 
+    B       -= Bc
     B       -= 0.5 * DT * curlE                          # Advance using curl (apply retarding factor here?)
     
     for ii in nb.prange(3):                              # Apply damping
         B[:, ii] *= damping_array                        # Not sure if this needs to modified for half steps?
+    
+    B       += Bc
     return
 
 

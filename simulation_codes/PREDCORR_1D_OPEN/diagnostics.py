@@ -6,6 +6,7 @@ Created on Fri Sep 22 10:42:13 2017
 """
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 import pdb
 
 import simulation_parameters_1D as const
@@ -1182,6 +1183,117 @@ def test_push_B_w_varying_background():
 # =============================================================================
         
         qq += 1
+    return
+
+
+def save_diagnostic_plots(qq, pos, vel, B, E, q_dens, Ji, sim_time, DT):
+    
+    plt.ioff()
+
+    fig_size = 4, 7                                                             # Set figure grid dimensions
+    fig = plt.figure(figsize=(20,10))                                           # Initialize Figure Space
+    fig.patch.set_facecolor('w')                                                # Set figure face color
+
+    npos       = pos / const.dx + const.ND                                      # Cell particle position
+    nvel       = vel / const.va                                                 # Normalized velocity
+
+    qdens_norm = q_dens / (const.density*const.charge).sum()                    # Normalized change density
+     
+#----- Velocity (x, y) Plots: Hot Species
+    ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
+    ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
+
+    for jj in range(const.Nj):
+        ax_vx.scatter(npos[const.idx_bounds[jj, 0]: const.idx_bounds[jj, 1]], nvel[0, const.idx_bounds[jj, 0]: const.idx_bounds[jj, 1]], s=3, c=const.temp_color[jj], lw=0, label=const.species_lbl[jj])
+        ax_vy.scatter(npos[const.idx_bounds[jj, 0]: const.idx_bounds[jj, 1]], nvel[1, const.idx_bounds[jj, 0]: const.idx_bounds[jj, 1]], s=3, c=const.temp_color[jj], lw=0)
+
+    ax_vx.legend()
+    ax_vx.set_title(r'Particle velocities vs. Position (x)')
+    ax_vy.set_xlabel(r'Cell', labelpad=10)
+
+    ax_vx.set_ylabel(r'$\frac{v_x}{vA}$', rotation=90)
+    ax_vy.set_ylabel(r'$\frac{v_y}{vA}$', rotation=90)
+
+    plt.setp(ax_vx.get_xticklabels(), visible=False)
+    ax_vx.set_yticks(ax_vx.get_yticks()[1:])
+
+    for ax in [ax_vy, ax_vx]:
+        ax.set_xlim(const.ND, const.NX + const.ND)
+        ax.set_ylim(-20, 20)
+
+#----- Density Plot
+    ax_den = plt.subplot2grid((fig_size), (0, 3), colspan=3)                     # Initialize axes
+    
+    ax_den.plot(qdens_norm, color='green')                                       # Create overlayed plots for densities of each species
+
+    for jj in range(const.Nj):
+        ax_den.plot(qdens_norm, color=const.temp_color[jj])
+        
+    ax_den.set_title('Normalized Densities and Fields')                          # Axes title (For all, since density plot is on top
+    ax_den.set_ylabel(r'$\frac{n_i}{n_0}$', fontsize=14, rotation=0, labelpad=5) # Axis (y) label for this specific axes
+    ax_den.set_ylim(0, 2)
+    
+#----- E-field (Ex) Plot
+    ax_Ex = plt.subplot2grid(fig_size, (1, 3), colspan=3, sharex=ax_den)
+
+    ax_Ex.plot(E[:, 0], color='red', label=r'$E_x$')
+    ax_Ex.plot(E[:, 1], color='cyan', label=r'$E_x$')
+    ax_Ex.plot(E[:, 2], color='black', label=r'$E_x$')
+
+    ax_Ex.set_xlim(0, const.NC)
+
+    #ax_Jx.set_yticks(np.arange(-200e-5, 201e-5, 50e-5))
+    #ax_Jx.set_yticklabels(np.arange(-150, 201, 50))
+    ax_Ex.set_ylabel(r'$E$', labelpad=25, rotation=0, fontsize=14)
+
+#----- Magnetic Field (By) and Magnitude (|B|) Plots
+    ax_By = plt.subplot2grid((fig_size), (2, 3), colspan=3, sharex=ax_den)
+    ax_B  = plt.subplot2grid((fig_size), (3, 3), colspan=3, sharex=ax_den)
+
+    mag_B  = (np.sqrt(B[:, 0] ** 2 + B[:, 1] ** 2 + B[:, 2] ** 2)) / const.B0
+    B_norm = B / const.B0                                                           
+
+    ax_B.plot(mag_B, color='g')
+    ax_By.plot(B_norm[:, 1], color='g') 
+    ax_By.plot(B_norm[:, 2], color='b') 
+
+    ax_B.set_xlim(0,  const.NC + 1)
+    ax_By.set_xlim(0, const.NC + 1)
+
+    ax_B.set_ylim(0, 2)
+    ax_By.set_ylim(-1, 1)
+
+    ax_B.set_ylabel( r'$|B|$', rotation=0, labelpad=20, fontsize=14)
+    ax_By.set_ylabel(r'$\frac{B_{y,z}}{B_0}$', rotation=0, labelpad=10, fontsize=14)
+    ax_B.set_xlabel('Cell Number')
+
+    for ax in [ax_den, ax_Ex, ax_By]:
+        plt.setp(ax.get_xticklabels(), visible=False)
+        ax.set_yticks(ax.get_yticks()[1:])
+
+    for ax in [ax_den, ax_Ex, ax_By, ax_B]:
+        qrt = const.NC / (4.)
+        ax.set_xticks(np.arange(0, const.NC + qrt, qrt))
+        ax.grid()
+
+#----- Plot Adjustments
+    plt.tight_layout(pad=1.0, w_pad=1.8)
+    fig.subplots_adjust(hspace=0)
+    
+    plt.figtext(0.855, 0.94, 'Step : {:>7d}     '.format( qq     ), fontname='monospace', fontsize=14)
+    plt.figtext(0.855, 0.90, 'Time : {:>7.3f} s '.format(sim_time), fontname='monospace', fontsize=14)
+    plt.figtext(0.855, 0.86, 'DT   : {:>7.3f} ms'.format(DT * 1e3), fontname='monospace', fontsize=14)
+
+    filename = 'diag%05d.png' % qq
+    path     = const.drive + '//' + const.save_path + '//run_{}'.format(const.run_num) + '//diagnostic_plots//'
+
+    if os.path.exists(path) == False:                                   # Create data directory
+        os.makedirs(path)
+
+    fullpath = path + filename
+    plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+    print('Plot saved'.format(qq))
+    plt.close('all')
     return
 
 
