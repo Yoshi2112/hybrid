@@ -37,7 +37,7 @@ ND       = 128                              # Damping region length: Multiple of
 max_rev  = 100                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 r_damp   = 0.0129                           # Damping strength
 
-nsp_ppc  = 1000                             # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+nsp_ppc  = 200                              # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
@@ -59,9 +59,9 @@ dist_type  = np.asarray([0, 0])                             # Particle distribut
 mass       = np.asarray([1., 1.])    			            # Species ion mass (proton mass units)
 charge     = np.asarray([1., 1.])    			            # Species ion charge (elementary charge units)
 drift_v    = np.asarray([0., 0.])                           # Species parallel bulk velocity (alfven velocity units)
-density    = np.asarray([95. , 100.]) * 1e6                 # Species density in /cc (cast to /m3)
-E_per      = np.array([5.0, 50000.0])
-anisotropy = np.array([0.0, 4.0])
+density    = np.asarray([180. , 20.]) * 1e6                 # Species density in /cc (cast to /m3)
+E_per      = np.array([5.0, 60000.0])
+anisotropy = np.array([0.0, 5.0])
 
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
@@ -91,7 +91,7 @@ Tper       = E_per * 11603.
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B0 / np.sqrt(mu0*ne*mp)                     # Alfven speed: Assuming pure proton plasma
 
-dx         = 100#dxm * c / wpi                               # Spatial cadence, based on ion inertial length
+dx         = dxm * c / wpi                               # Spatial cadence, based on ion inertial length
 xmin       = 0                                           # Minimum simulation dimension
 xmax       = NX * dx                                     # Maximum simulation dimension
 
@@ -113,7 +113,7 @@ idx_bounds = np.stack((idx_start, idx_end)).transpose()                         
 gyfreq     = q*B0/mp                                     # Proton   Gyrofrequency (rad/s) (since this will be the highest of all ion species)
 e_gyfreq   = q*B0/me                                     # Electron Gyrofrequency (rad/s)
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
-high_rat   = np.divide(charge, mass).max()
+high_rat   = np.divide(charge, mass).max()               # Largest q/m ratio for species
 
 
 
@@ -154,7 +154,9 @@ print('Gyroperiod         : {}s'.format(round(2. * np.pi / gyfreq, 2)))
 print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 2)))
 print('Maximum sim time   : {}s ({} gyroperiods)'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev))
 
-print('\n{} particles per cell, {} cells'.format(cellpart, NX))
+print('\n{} particles per cell'.format(cellpart))
+print('{} spatial cells, 2x{} damped cells'.format(NX, ND))
+print('{} cells total'.format(NC))
 print('{} particles total\n'.format(cellpart * NX))
 
 if None not in cpu_affin:

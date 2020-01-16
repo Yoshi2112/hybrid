@@ -69,7 +69,7 @@ def push_B(B, E, curlE, DT, qq, damping_array, half_flag=1):
     '''
     get_curl_E(E, curlE)
 
-    B       -= 0.5 * DT * curlE                          # Advance using curl
+    B       -= 0.5 * DT * curlE                          # Advance using curl (apply retarding factor here?)
     
     for ii in nb.prange(3):                              # Apply damping
         B[:, ii] *= damping_array                        # Not sure if this needs to modified for half steps?
@@ -121,12 +121,9 @@ def get_grad_P(qn, te, grad_P, temp):
         temp   -- intermediary array used to store electron pressure, since both
                   density and temperature may vary (with adiabatic approx.)
         
-    NOTE: Interpolation is needed because the finite differencing causes the result to be deposited on the 
-    B-grid. Moving it back to the E-grid requires an interpolation. Cubic spline is desired due to its smooth
-    derivatives and its higher order weighting (without the polynomial craziness)
-    
-    Alternatively, do forwards/backwards differencing for the edge cells, and central difference
-    over 2dx instead of dx like here. This is probably easier for now.
+    Forwards/backwards differencing for the edge cells, and central difference
+    over 2dx instead of dx, since everything's on the E-grid. No point in doing
+    a differencing onto B, then having to interpolate back.
     '''
     nc        = qn.shape[0]
     grad_P[:] = qn * kB * te / q       # Not actually grad P, just using this array to store Pe
@@ -141,11 +138,13 @@ def get_grad_P(qn, te, grad_P, temp):
     temp[0]      = -3*grad_P[0]      + 4*grad_P[1]      - grad_P[2]
     temp[nc - 1] =  3*grad_P[nc - 1] - 4*grad_P[nc - 2] + grad_P[nc - 3]
     temp        /= (2*dx)
+    
+    # Return value
     grad_P[:]    = temp[:nc]
     return
 
 
-#@nb.njit()
+@nb.njit()
 def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,

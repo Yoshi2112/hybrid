@@ -108,7 +108,7 @@ def initialize_particles():
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
     return pos, vel, Ie, W_elec, Ib, W_mag, idx
 
-#import matplotlib.pyplot as plt; import sys
+#import matplotlib.pyplot as plt; import sys; import pdb
 @nb.njit()
 def create_damping_array():
     '''Create masking array for magnetic field damping used to apply open
@@ -125,18 +125,15 @@ def create_damping_array():
     points. Relying on lots of time spend there? Or some sort of error?
     Can just play with r value/damping region length once it doesn't explode.
     '''
-    damping_array = np.ones(NC + 1)                # Blank damping array
-    midpoint      = 0.5*(NC - 1)
-    array_nums    = np.arange(NC)
+    damping_array = np.ones(NC + 1)                  # Blank damping array
+    array_nums    = np.arange(NC + 1)                # Array numbers
+    midpoint      = 0.5*NC                           # Midpoint value
+    dist_from_mp  = np.abs(array_nums - midpoint)    # Distance of each B-node from midpoint
     
-    dist_from_mp  = np.abs(array_nums - midpoint)
-    
-    for ii in range(NX + 2*ND):
+    for ii in range(NC + 1):
         if dist_from_mp[ii] > 0.5*NX:
             damping_array[ii] = 1. - r_damp * ((dist_from_mp[ii] - 0.5*NX) / ND) ** 2 
     
-    #plt.plot(array_nums, damping_array)
-    #sys.exit()
     return damping_array
 
 
@@ -220,7 +217,7 @@ def initialize_tertiary_arrays():
     
     old_particles = np.zeros((8, N),          dtype=nb.float64)
     
-    return old_particles, old_fields, temp3Db, temp3De, temp1D
+    return old_particles, old_fields, temp3De, temp3Db, temp1D
 
 
 def set_timestep(vel):
@@ -257,6 +254,22 @@ def set_timestep(vel):
 
     if const.save_fields == 1 or const.save_particles == 1:
         save.store_run_parameters(DT, part_save_iter, field_save_iter)
-    
+
     print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))
     return DT, max_inc, part_save_iter, field_save_iter
+
+
+
+# =============================================================================
+# if __name__ == '__main__':
+#     # TEST DAMPING ARRAY
+#     # 10 REAL CELLS, 5 DAMPED ON EITHER SIDE
+#     # 20 CELLS MEAN 21 B-GRID POINTS
+#     # NEED TO DAMP FOR ALL THESE
+#     NX = 5
+#     ND = 20
+#     NC = 2*ND + NX
+#     r_damp = 0.5
+#     
+#     create_damping_array()
+# =============================================================================

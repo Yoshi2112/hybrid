@@ -58,7 +58,6 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D):
     '''
     NC = q_dens.shape[0]
     
-    # Zero source arrays: Test methods for speed later
     q_dens *= 0.
     Ji     *= 0.
     ni     *= 0.
@@ -78,15 +77,24 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D):
 
         for kk in range(3):
             Ji[:, kk] += nu[:, jj, kk] * n_contr[jj] * charge[jj]
+    
+    # Mirror source term contributions at edge back into domain: Simulates having
+    # some sort of source on the outside of the physical space boundary.
+    # Is this going to cause "rippling" when particles disappear from simulation domain?
+    q_dens[ND]          += q_dens[ND - 1]
+    q_dens[ND + NX - 1] += q_dens[ND + NX]
 
     # Set damping cell source values
     q_dens[:ND]    = q_dens[ND]
     q_dens[ND+NX:] = q_dens[ND+NX-1]
     
     for ii in range(3):
-        Ji[:ND, ii] = Ji[:ND, ii]
-        Ji[ND+NX:]  = Ji[ND+NX-1]
+        Ji[ND, ii]          += Ji[ND - 1, ii]
+        Ji[ND + NX - 1, ii] += Ji[ND + NX, ii]
     
+        Ji[:ND, ii] = Ji[ND, ii]
+        Ji[ND+NX:]  = Ji[ND+NX-1]
+        
     # Set density minimum
     for ii in range(NC):
         if q_dens[ii] < min_dens * ne * q:

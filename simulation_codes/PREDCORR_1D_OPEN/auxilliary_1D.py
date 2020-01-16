@@ -130,7 +130,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
 @nb.njit()
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
-              Ve, Te, temp3Db, temp3De, temp1D, old_particles, old_fields,\
+              Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,\
               damping_array, qq, DT, max_inc, part_save_iter, field_save_iter):
     '''
     Main loop separated from __main__ function, since this is the actual computation bit.

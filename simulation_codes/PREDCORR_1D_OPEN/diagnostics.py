@@ -25,7 +25,7 @@ def r_squared(data, model):
     return r_sq
 
 
-def check_cell_velocity_distribution(pos, vel, node_number=const.NX // 2, j=0): #
+def check_cell_velocity_distribution(pos, vel, node_number=const.NC // 2, j=0): #
     '''Checks the velocity distribution of a particle species within a specified cell
     '''
     x_node = (node_number - 0.5) * const.dx   # Position of E-field node
@@ -36,7 +36,8 @@ def check_cell_velocity_distribution(pos, vel, node_number=const.NX // 2, j=0): 
         if (abs(pos[ii] - x_node) <= 0.5*const.dx):
             f = np.append(f, [vel[0:3, ii]], axis=0)
             count += 1
-            
+    
+    print('{} particles counted for diagnostic'.format(count))
     fig = plt.figure(figsize=(12,10))
     fig.suptitle('Particle velocity distribution of species {} in cell {}'.format(j, node_number))
     fig.patch.set_facecolor('w')
@@ -236,6 +237,43 @@ def test_weight_shape():
     
     plt.axvline(XMIN, linestyle=':', c='k', alpha=0.5)
     plt.axvline(XMAX, linestyle=':', c='k', alpha=0.5)
+    return
+
+
+def check_source_term_boundaries(qn, ji):
+    E_nodes  = (np.arange(const.NX + 2*const.ND    ) - const.ND  + 0.5) * const.dx / 1e3
+    B_nodes  = (np.arange(const.NX + 2*const.ND + 1) - const.ND  - 0.0) * const.dx / 1e3
+    
+    plt.figure()
+    plt.plot(E_nodes, qn, marker='o')
+
+    for ii in range(E_nodes.shape[0]):
+        plt.axvline(E_nodes[ii], linestyle='--', c='r', alpha=0.2)
+        plt.axvline(B_nodes[ii], linestyle='--', c='b', alpha=0.2)
+     
+    plt.axvline(B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
+    
+    plt.axvline(const.xmin / 1e3, linestyle=':', c='k', alpha=0.5)
+    plt.axvline(const.xmax / 1e3, linestyle=':', c='k', alpha=0.5)
+    plt.ylabel('Charge density')
+    plt.xlabel('x (km)')
+    
+    plt.figure()
+    plt.plot(E_nodes, ji, marker='o')
+
+    for ii in range(E_nodes.shape[0]):
+        plt.axvline(E_nodes[ii], linestyle='--', c='r', alpha=0.2)
+        plt.axvline(B_nodes[ii], linestyle='--', c='b', alpha=0.2)
+     
+    plt.axvline(B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
+    
+    plt.axvline(const.xmin / 1e3, linestyle=':', c='k', alpha=0.5)
+    plt.axvline(const.xmax / 1e3, linestyle=':', c='k', alpha=0.5)
+    plt.ylabel('Current density')
+    plt.xlabel('x (km)')
+    
     return
 
 
