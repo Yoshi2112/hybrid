@@ -14,7 +14,7 @@ import diagnostics   as diag
 
 from simulation_parameters_1D import save_particles, save_fields
 
-# Explodes. Why?
+
 if __name__ == '__main__':
     start_time = timer()
     
@@ -31,17 +31,18 @@ if __name__ == '__main__':
     fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D)  
     
     if save_particles == 1:
-        save.save_particle_data(DT, part_save_iter, 0, pos, vel)
+        save.save_particle_data(0, DT, part_save_iter, 0, pos, vel)
         
     if save_fields == 1:
-        save.save_field_data(DT, field_save_iter, 0, Ji, E_int, B, Ve, Te, q_dens)
+        save.save_field_data(0, DT, field_save_iter, 0, Ji, E_int, B, Ve, Te, q_dens)
     
+    diag.save_diagnostic_plots(0, pos, vel, B, E_int, q_dens, Ji, 0, DT)
+    
+    # Retard velocity
     particles.assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
     particles.velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT)
 
-    qq       = 1
-    sim_time = 0
-    diag.save_diagnostic_plots(qq, pos, vel, B, E_int, q_dens, Ji, sim_time, DT)
+    qq       = 1;    sim_time = DT
     print('Starting main loop...')
     while qq < max_inc:
         qq, DT, max_inc, part_save_iter, field_save_iter =               \
@@ -51,12 +52,12 @@ if __name__ == '__main__':
               damping_array, qq, DT, max_inc, part_save_iter, field_save_iter)
        
         if qq%part_save_iter == 0 and save_particles == 1:
-            save.save_particle_data(DT, part_save_iter, qq, pos, vel)
+            save.save_particle_data(sim_time, DT, part_save_iter, qq, pos, vel)
             
         if qq%field_save_iter == 0 and save_fields == 1:
-            save.save_field_data(DT, field_save_iter, qq, Ji, E_int, B, Ve, Te, q_dens)
+            save.save_field_data(sim_time, DT, field_save_iter, qq, Ji, E_int, B, Ve, Te, q_dens)
             
-        if qq%10 == 0:
+        if qq%20 == 0:
             diag.save_diagnostic_plots(qq, pos, vel, B, E_int, q_dens, Ji, sim_time, DT)
             
         print('Timestep {} of {} complete'.format(qq, max_inc))

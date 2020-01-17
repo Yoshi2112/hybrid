@@ -13,9 +13,9 @@ run_description = '''Testing to see if I can get this open boundary thing to wor
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path       = 'runs//open_boundary_test'    # Series save dir   : Folder containing all runs of a series
-run_num         = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles  = 1                             # Save data flag    : For later analysis
-save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
+run_num         = 2                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_particles  = 0                             # Save data flag    : For later analysis
+save_fields     = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin       = [(2*run_num)%8, (2*run_num + 1)%8]      # Set CPU affinity for run. Must be list. Auto-assign: None.
 
@@ -32,12 +32,12 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 512                              # Number of cells - doesn't include ghost cells
-ND       = 128                              # Damping region length: Multiple of NX (on each side of simulation domain)
+NX       = 128                              # Number of cells - doesn't include ghost cells
+ND       = 32                               # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev  = 100                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 r_damp   = 0.0129                           # Damping strength
 
-nsp_ppc  = 2000                             # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+nsp_ppc  = 200                              # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
@@ -60,7 +60,7 @@ mass       = np.asarray([1., 1.])    			            # Species ion mass (proton m
 charge     = np.asarray([1., 1.])    			            # Species ion charge (elementary charge units)
 drift_v    = np.asarray([0., 0.])                           # Species parallel bulk velocity (alfven velocity units)
 density    = np.asarray([180. , 20.]) * 1e6                 # Species density in /cc (cast to /m3)
-E_per      = np.array([5.0, 60000.0])
+E_per      = np.array([5.0, 30000.0])
 anisotropy = np.array([0.0, 4.0])
 
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
@@ -70,7 +70,6 @@ E_e            = 200.0                                      # Electron energy (e
 account_for_dispersion = False                              # Flag (True/False) whether or not to reduce timestep to prevent dispersion getting too high
 dispersion_allowance   = 1.                                 # Multiple of how much past frac*wD^-1 is allowed: Used to stop dispersion from slowing down sim too much  
 adaptive_timestep      = True                               # Flag (True/False) for adaptive timestep based on particle and field parameters
-particle_boundary      = 'reflect'                          # Renew (at cell center), Reflect (off boundary), or None (Or anything else, particles leave simulation space)
 
 HM_amplitude   = 0e-9                                       # Driven wave amplitude in T
 HM_frequency   = 0.02                                       # Driven wave in Hz

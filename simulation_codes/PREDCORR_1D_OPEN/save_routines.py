@@ -13,7 +13,7 @@ from shutil import rmtree
 import simulation_parameters_1D as const
 from   simulation_parameters_1D import drive, save_path, NX, ND, NC, r_damp, ne, density, save_particles, save_fields
 from   simulation_parameters_1D import idx_bounds, Nj, species_lbl, temp_type, dist_type, mass, charge,\
-                                       drift_v, Tpar, Tper, temp_color, nsp_ppc, particle_boundary, Bc
+                                       drift_v, Tpar, Tper, temp_color, nsp_ppc, Bc
 
 
 def manage_directories():
@@ -78,7 +78,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                    ('method_type', 'PREDCORR_HM'),
                    ('particle_shape', 'TSC'),
                    ('boundary_type', 'damped'),
-                   ('particle_boundary', particle_boundary),
+                   ('particle_boundary', 'reflective'),
                    ])
 
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:
@@ -104,8 +104,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
     return
 
 
-def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns):
-    sim_time = np.array([qq*dt])    # Timestamp: Useful for debugging
+def save_field_data(sim_time, dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns):
     d_path   = '%s/%s/run_%d/data/fields/' % (drive, save_path, const.run_num)
     r        = qq / field_save_iter
 
@@ -116,8 +115,7 @@ def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns):
     print('Field data saved')
     
     
-def save_particle_data(dt, part_save_iter, qq, pos, vel):
-    sim_time = np.array([qq*dt])    # Timestamp: Useful for debugging
+def save_particle_data(sim_time, dt, part_save_iter, qq, pos, vel):
     d_path   = '%s/%s/run_%d/data/particles/' % (drive, save_path, const.run_num)
     r        = qq / part_save_iter
 

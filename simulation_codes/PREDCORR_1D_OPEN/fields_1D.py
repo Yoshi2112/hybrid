@@ -30,7 +30,7 @@ def get_curl_E(E, dE, DX=dx):
     dE[:, :] *= 0
     
     # Central difference middle cells. Magnetic field offset to lower numbers, dump in +1 arr higher
-    for ii in nb.prange(NC - 2):
+    for ii in nb.prange(NC - 1):
         dE[ii + 1, 1] = - (E[ii + 1, 2] - E[ii, 2])
         dE[ii + 1, 2] =    E[ii + 1, 1] - E[ii, 1]
 
@@ -38,15 +38,15 @@ def get_curl_E(E, dE, DX=dx):
     dE[0, 1] = -(-3*E[0, 2] + 4*E[1, 2] - E[2, 2]) / 2
     dE[0, 2] =  (-3*E[0, 1] + 4*E[1, 1] - E[2, 1]) / 2
     
-    dE[NC, 1] = -(3*E[NC - 1, 2] - 4*E[NC - 2, 2] - E[NC - 3, 2]) / 2
-    dE[NC, 2] =  (3*E[NC - 1, 1] - 4*E[NC - 2, 1] - E[NC - 3, 1]) / 2
+    dE[NC, 1] = -(3*E[NC - 1, 2] - 4*E[NC - 2, 2] + E[NC - 3, 2]) / 2
+    dE[NC, 2] =  (3*E[NC - 1, 1] - 4*E[NC - 2, 1] + E[NC - 3, 1]) / 2
     
     # Linearly extrapolate to endpoints
-    dE[0, 1]  = dE[1, 1]      - dE[0, 1]
-    dE[0, 2]  = dE[1, 2]      - dE[0, 2]
+    dE[0, 1]      -= 2*(dE[1, 1] - dE[0, 1])
+    dE[0, 2]      -= 2*(dE[1, 2] - dE[0, 2])
     
-    dE[NC, 1] = dE[NC - 1, 1] + dE[NC, 1]
-    dE[NC, 1] = dE[NC - 1, 1] + dE[NC, 1]
+    dE[NC, 1]     += 2*(dE[NC, 1] - dE[NC - 1, 1])
+    dE[NC, 2]     += 2*(dE[NC, 2] - dE[NC - 1, 2])
     
     dE /= dx
     return 
@@ -80,7 +80,7 @@ def push_B(B, E, curlE, DT, qq, damping_array, half_flag=1):
 
 
 @nb.njit()
-def curl_B_term(B, curlB, DX=dx):
+def curl_B_term(B, curlB):
     ''' Returns a vector quantity for the curl of a field valid at the positions 
     between its gridpoints (i.e. curl(B) -> E-grid, etc.)
     
@@ -129,9 +129,7 @@ def get_grad_P(qn, te, grad_P, temp):
     a differencing onto B, then having to interpolate back.
     '''
     nc        = qn.shape[0]
-    grad_P[:] = qn * kB * te / q       # Not actually grad P, just using this array to store Pe
-                                       # Putting [:] after array points to memory locations,
-                                       # and prevents deferencing
+    grad_P[:] = qn * kB * te / q       # Store Pe in grad_P array for calculation
 
     # Central differencing, internal points
     for ii in nb.prange(1, nc - 1):
@@ -177,7 +175,7 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P):
 
     aux.interpolate_edges_to_center(B, temp3Db)              # temp3d2 is now B_center
 
-    aux.cross_product(Ve, temp3Db, temp3De)                  # temp3D is now Ve x B term
+    aux.cross_product(Ve, temp3Db, temp3De)                  # temp3De is now Ve x B term
 
     E[:, 0]  = - temp3De[:, 0] - grad_P[:] / q_dens[:]
     E[:, 1]  = - temp3De[:, 1]

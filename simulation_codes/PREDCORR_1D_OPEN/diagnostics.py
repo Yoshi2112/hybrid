@@ -461,6 +461,9 @@ def test_force_interpolation():
 
 
 def test_curl_B():
+    '''
+    Confirmed
+    '''
     NX   = 50     
     ND   = 10
     NC   = NX + 2*ND
@@ -468,51 +471,54 @@ def test_curl_B():
     xmax = 2*np.pi
     
     dx   = xmax / NX
-    k    = 2.0
+    k    = 1.0
 
-    # Physical location of nodes
-    E_nodes  = (np.arange(NC) - ND  + 0.5) * dx
-    B_nodes  = (np.arange(NC) - ND  - 0.0) * dx
-    
+    E_nodes  = (np.arange(NC    ) - ND  + 0.5) * dx
+    B_nodes  = (np.arange(NC + 1) - ND  - 0.0) * dx
+
     # Inputs and analytic solutions
-    B_input       = np.zeros((NC, 3))
+    B_input       = np.zeros((NC + 1, 3))
     B_input[:, 0] = np.cos(1.0*k*B_nodes)
     B_input[:, 1] = np.cos(1.5*k*B_nodes)
     B_input[:, 2] = np.cos(2.0*k*B_nodes)
     
     curl_B_anal       = np.zeros((NC, 3))
-    curl_B_anal[:, 1] = -1.5 * k * np.sin(1.5*k*E_nodes) / dx
-    curl_B_anal[:, 2] = -2.0 * k * np.sin(2.0*k*E_nodes) / dx
+    curl_B_anal[:, 1] =  2.0 * k * np.sin(2.0*k*E_nodes) * dx
+    curl_B_anal[:, 2] = -1.5 * k * np.sin(1.5*k*E_nodes) * dx
     
     curl_B_FD = np.zeros((NC, 3))
-    fields.curl_B_term(B_input, curl_B_FD, DX=dx)
+    fields.curl_B_term(B_input, curl_B_FD)
     
     ## DO THE PLOTTING ##
     plt.figure(figsize=(15, 15))
     marker_size = None
-    
-    #plt.plot(x, -deriv, linestyle=':', c='b', label='By Analytic Solution')
-    #plt.scatter(E_nodes, curl_B_anal[:, 1], marker='o', c='k', s=marker_size, label='By Node Solution')
-    plt.scatter(E_nodes, curl_B_FD[:, 1], marker='x', c='b', s=marker_size, label='By Finite Difference')
-    
-    #plt.plot(x, deriv, linestyle=':', c='r', label='Bz Analytic Solution')   
-    #plt.scatter(E_nodes, curl_B_anal[:, 2], marker='o', c='k', s=marker_size, label='Bz Node Solution')
-    plt.scatter(E_nodes, curl_B_FD[:, 2], marker='x', c='r', s=marker_size, label='Bz Finite Difference')   
+        
+    plt.scatter(E_nodes, curl_B_anal[:, 1], marker='o', c='k', s=marker_size, label='By Node Solution')
+    plt.scatter(E_nodes, curl_B_FD[  :, 1], marker='x', c='b', s=marker_size,   label='By Finite Difference')
+      
+    plt.scatter(E_nodes, curl_B_anal[:, 2], marker='o', c='k', s=marker_size, label='Bz Node Solution')
+    plt.scatter(E_nodes, curl_B_FD[  :, 2], marker='x', c='r', s=marker_size,   label='Bz Finite Difference')   
     plt.title(r'Test of $\nabla \times B$')
 
-    for kk in range(NC):
-        plt.axvline(E_nodes[kk], linestyle='--', c='r', alpha=0.2)
-        plt.axvline(B_nodes[kk], linestyle='--', c='b', alpha=0.2)
-        
-        plt.axvline(xmin, linestyle='-', c='k', alpha=0.2)
-        plt.axvline(xmax, linestyle='-', c='k', alpha=0.2)
+    for ii in range(E_nodes.shape[0]):
+        plt.axvline(E_nodes[ii], linestyle='--', c='r', alpha=0.2)
+        plt.axvline(B_nodes[ii], linestyle='--', c='b', alpha=0.2)
+     
+    plt.axvline(B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
     
-    plt.xlim(xmin - 1.5*dx, xmax + 2*dx)
+    plt.axvline(xmin, linestyle=':', c='k', alpha=0.5)
+    plt.axvline(xmax, linestyle=':', c='k', alpha=0.5)
+    plt.xlabel('x (km)')
+    
     plt.legend()
     return
 
 
 def test_curl_E():
+    '''
+    Confirmed
+    '''
     NX   = 50     
     ND   = 10
     NC   = NX + 2*ND
@@ -520,99 +526,88 @@ def test_curl_E():
     xmax = 2*np.pi
     
     dx   = xmax / NX
-    k    = 2.0
+    k    = 1.0
 
-    # Physical location of nodes
-    E_nodes  = (np.arange(NC) - ND  + 0.5) * dx
-    B_nodes  = (np.arange(NC) - ND  - 0.0) * dx
-    
+    E_nodes  = (np.arange(NC    ) - ND  + 0.5) * dx
+    B_nodes  = (np.arange(NC + 1) - ND  - 0.0) * dx
+
+    # Inputs and analytic solutions
     E_input       = np.zeros((NC, 3))
-    E_input[:, 0]         =            np.cos(1.0*k*E_nodes)
-    E_input[:, 1]         =            np.cos(1.5*k*E_nodes)
-    E_input[:, 2]         =            np.cos(2.0*k*E_nodes)
+    E_input[:, 0] = np.cos(1.0*k*E_nodes)
+    E_input[:, 1] = np.cos(1.5*k*E_nodes)
+    E_input[:, 2] = np.cos(2.0*k*E_nodes)
 
-    curl_E_FD = np.zeros((NC, 3))
+    curl_E_FD = np.zeros((NC + 1, 3))
     fields.get_curl_E(E_input, curl_E_FD, DX=1)
     
-    curl_E_anal       = np.zeros((NC, 3))
-    curl_E_anal[:, 1] =  2.0 * k * np.sin(2.0*k*B_nodes)
-    curl_E_anal[:, 2] = -1.5 * k * np.sin(1.5*k*B_nodes)
-    
+    curl_E_anal       = np.zeros((NC + 1, 3))
+    curl_E_anal[:, 1] =  2.0 * k * np.sin(2.0*k*B_nodes) * dx
+    curl_E_anal[:, 2] = -1.5 * k * np.sin(1.5*k*B_nodes) * dx
     
     
     ## PLOT
     plt.figure(figsize=(15, 15))
     marker_size = None
 
-    #plt.plot(x, -deriv, linestyle=':', c='b', label='By Analytic Solution')
-    #plt.scatter(B_nodes, curl_E_anal[:, 1], marker='o', c='k', s=marker_size, label='By Node Solution')
-    plt.scatter(B_nodes, curl_E_FD[:, 1], marker='x', c='b', s=marker_size, label='By Finite Difference')
-    
-    #plt.plot(x, deriv, linestyle=':', c='r', label='Bz Analytic Solution')   
-    #plt.scatter(B_nodes, curl_E_anal[:, 2], marker='o', c='k', s=marker_size, label='Bz Node Solution')
-    plt.scatter(B_nodes, curl_E_FD[:, 2], marker='x', c='r', s=marker_size, label='Bz Finite Difference')   
+    plt.scatter(B_nodes, curl_E_anal[:, 1], marker='o', c='k', s=marker_size, label='By Node Solution')
+    plt.scatter(B_nodes, curl_E_FD[  :, 1], marker='x', c='b', s=marker_size, label='By Finite Difference')
+      
+    plt.scatter(B_nodes, curl_E_anal[:, 2], marker='o', c='k', s=marker_size, label='Bz Node Solution')
+    plt.scatter(B_nodes, curl_E_FD[  :, 2], marker='x', c='r', s=marker_size, label='Bz Finite Difference')   
     plt.title(r'Test of $\nabla \times E$')
 
     for kk in range(NC):
         plt.axvline(E_nodes[kk], linestyle='--', c='r', alpha=0.2)
         plt.axvline(B_nodes[kk], linestyle='--', c='b', alpha=0.2)
-        
-        plt.axvline(xmin, linestyle='-', c='k', alpha=0.2)
-        plt.axvline(xmax, linestyle='-', c='k', alpha=0.2)
     
-    plt.xlim(xmin - 1.5*dx, xmax + 2*dx)
+    plt.axvline(B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
+    
+    plt.axvline(xmin, linestyle='-', c='k', alpha=0.2)
+    plt.axvline(xmax, linestyle='-', c='k', alpha=0.2)
+    
     plt.legend()
     return
 
 
 def test_grad_P_varying_qn():
-    NX   = 32      #const.NX
-    xmin = 0.0     #const.xmin
-    xmax = 2*np.pi #const.xmax
-    
-    dx   = xmax / NX
-    x    = np.arange(xmin, xmax, dx/100.)             # Simulation domain space 0,NX (normalized to grid)
     k    = 2.0
-    
-    # Physical location of nodes
-    E_nodes = (np.arange(NX + 3) - 0.5) * dx
-    B_nodes = (np.arange(NX + 3) - 1.0) * dx
+
+    E_nodes  = (np.arange(const.NC    ) - const.ND  + 0.5) * const.dx
+    B_nodes  = (np.arange(const.NC + 1) - const.ND  - 0.0) * const.dx
 
     # Set analytic solutions (input/output)
-    qn_input   = const.q*(np.sin(k*E_nodes) + 1)                    # Analytic input at node points (number density varying)
-    te_input   = np.ones(NX + 3)*const.Te0
+    qn_input   = np.cos(  2 * np.pi * k * E_nodes / const.xmax)  * const.q * const.ne
+    te_input   = np.ones( const.NC)*const.Te0
+    gp_diff    = np.zeros(const.NC)
+    temp       = np.zeros(const.NC + 1)
     
-    pe_anal    = const.kB * const.Te0 * k*np.cos(k*B_nodes)         # Analytic solution at nodes 
-    grad_P_anal= const.kB * const.Te0 * k*np.cos(k*x)               # Highly sampled output (derivative)
+    dne_anal   = -2 * np.pi * k * np.sin(2 * np.pi*k*E_nodes / const.xmax) * const.ne / const.xmax / const.dx
+    gp_anal    = const.kB * const.Te0 * dne_anal * const.dx          # Analytic solution at nodes 
 
     # Finite differences
-    grad_PB, grad_P     = fields.get_grad_P(qn_input, te_input, DX=dx)
-    
-    r2 = r_squared(grad_P[1:-2], pe_anal[1:-2])
-    
+    fields.get_grad_P(qn_input, te_input, gp_diff, temp)
+
     ## PLOT ##
-    plot = False
-    if plot == True:
-        plt.figure(figsize=(15, 15))
-        marker_size = None
+    plt.figure(figsize=(15, 15))
+    marker_size = None
+
+    plt.scatter(E_nodes, gp_anal*1e13, marker='o', c='k', s=marker_size, label='Node Solution')
+    plt.scatter(E_nodes, gp_diff*1e13, marker='x', c='r', s=marker_size, label='Finite Difference')
     
-        plt.plot(x, grad_P_anal, linestyle=':', c='b', label='Analytic Solution')
-        plt.scatter(B_nodes, pe_anal, marker='o', c='k', s=marker_size, label='Node Solution')
-        plt.scatter(B_nodes, grad_PB, marker='x', c='b', s=marker_size, label='Finite Difference (on B)')
-        plt.scatter(E_nodes, grad_P, marker='x', c='r', s=marker_size, label='Finite Difference (on E)')
-        
-        plt.title(r'Test of $\nabla p_e$')
+    plt.title(r'Test of $\nabla p_e$')
+
+    for kk in range(const.NC):
+        plt.axvline(E_nodes[kk], linestyle='--', c='r', alpha=0.2)
+        plt.axvline(B_nodes[kk], linestyle='--', c='b', alpha=0.2)
     
-        for kk in range(NX + 3):
-            plt.axvline(E_nodes[kk], linestyle='--', c='r', alpha=0.2)
-            plt.axvline(B_nodes[kk], linestyle='--', c='b', alpha=0.2)
-            
-            plt.axvline(xmin, linestyle='-', c='k', alpha=0.2)
-            plt.axvline(xmax, linestyle='-', c='k', alpha=0.2)
-        
-        plt.gcf().text(0.15, 0.93, '$R^2 = %.4f$' % r2)
-        plt.xlim(xmin - 1.5*dx, xmax + 2*dx)
-        plt.legend()
+    plt.axvline(B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
+    
+    plt.axvline(const.xmin, linestyle='-', c='k', alpha=0.2)
+    plt.axvline(const.xmax, linestyle='-', c='k', alpha=0.2)
+    
+    plt.legend()
     return
 
 
@@ -1301,9 +1296,9 @@ if __name__ == '__main__':
     #check_position_distribution()
     #animate_moving_weight()
     #test_particle_orbit()
-    test_curl_B()
-    test_curl_E()
-    #test_grad_P_varying_qn()
+    #test_curl_B()
+    #test_curl_E()
+    test_grad_P_varying_qn()
     #test_cross_product()
     #test_cspline_interpolation()
     #test_E_convective()
