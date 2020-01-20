@@ -39,42 +39,44 @@ def cross_product(A, B, C):
 def interpolate_edges_to_center(B, interp, zero_boundaries=False):
     ''' 
     Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
-    with a 3D array (e.g. B)
+    with a 3D array (e.g. B). Second derivative y2 is calculated on the B-grid, with
+    forwards/backwards difference used for endpoints.
     
-    Need to rejig this for open boundaries. First and last (one or two) points 
-    will be an issue. Also need to check the alignment on this.
+    interp has one more gridpoint than required just because of the array used. interp[-1]
+    should remain zero.
     
-    interp_coeffs = splrep(e_times, V12)
-    V12_out    = splev(new_times, coeffs_V12)
+    This might be able to be done without the intermediate y2 array since the interpolated
+    points don't require previous point values.
     '''
-    y2 = np.zeros(B.shape)
+    y2      = np.zeros(B.shape, dtype=nb.float64)
+    interp *= 0.
     
     # Calculate second derivative
     for jj in range(B.shape[1]):
         
-        # Interior points, Centered difference
-        for ii in range(1, NC - 1):
+        # Interior B-nodes, Centered difference
+        for ii in range(1, NC):
             y2[ii, jj] = B[ii + 1, jj] - 2*B[ii, jj] + B[ii - 1, jj]
-            
-        # Edge points, Forwards/Backwards difference
+                
+        # Edge B-nodes, Forwards/Backwards difference
         if zero_boundaries == True:
-            y2[0,      jj] = 0.
-            y2[NC - 1, jj] = 0.
+            y2[0 , jj] = 0.
+            y2[NC, jj] = 0.
         else:
-            y2[0,      jj] = 2*B[ii,     jj] - 5*B[ii + 1, jj] + 4*B[ii + 2, jj] - B[ii + 3, jj]
-            y2[NC - 1, jj] = 2*B[NC - 1, jj] - 5*B[NC - 2, jj] + 4*B[NC - 3, jj] - B[NC - 4, jj]
+            y2[0,  jj] = 2*B[0 ,    jj] - 5*B[1     , jj] + 4*B[2     , jj] - B[3     , jj]
+            y2[NC, jj] = 2*B[NC,    jj] - 5*B[NC - 1, jj] + 4*B[NC - 2, jj] - B[NC - 3, jj]
         
     # Do spline interpolation: E[ii] is bracketed by B[ii], B[ii + 1]
     for jj in range(B.shape[1]):
-        for ii in range(NC - 1):
+        for ii in range(NC):
             interp[ii, jj] = 0.5 * (B[ii, jj] + B[ii + 1, jj] + (1/6) * (y2[ii, jj] + y2[ii + 1, jj]))
     return
 
-
-@nb.njit()
+import pdb
+#@nb.njit()
 def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
                      qq, DT, max_inc, part_save_iter, field_save_iter, idx):
-    
+        
     interpolate_edges_to_center(B, B_cent)
     B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
 
@@ -96,6 +98,9 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
     vel_ts          = 0.80 * dx / vel[0, :].max()                          # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
     DT_part         = min(Eacc_ts, vel_ts, ion_ts, disp_ts)                      # Smallest of the allowable timesteps
     
+    if qq > 1:
+        pdb.set_trace()
+        
     if DT_part < 0.9*DT:
 
         particles.velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E, 0.5*DT)    # Re-sync vel/pos       
@@ -127,7 +132,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
     return qq, DT, max_inc, part_save_iter, field_save_iter
 
 
-@nb.njit()
+#@nb.njit()
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
               Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,\

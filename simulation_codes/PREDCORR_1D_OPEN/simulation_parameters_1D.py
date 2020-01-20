@@ -32,12 +32,12 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 128                              # Number of cells - doesn't include ghost cells
-ND       = 32                               # Damping region length: Multiple of NX (on each side of simulation domain)
+NX       = 6                              # Number of cells - doesn't include ghost cells
+ND       = 2                               # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev  = 100                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 r_damp   = 0.0129                           # Damping strength
 
-nsp_ppc  = 200                              # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+nsp_ppc  = 100                               # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
@@ -52,15 +52,15 @@ field_res = 0.10                            # Data capture resolution in gyroper
 
 ### PARTICLE PARAMETERS ###
 species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
-temp_color = ['blue'      , 'red']
+temp_color = ['blue', 'red']
 temp_type  = np.asarray([0, 1])                   	        # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
 dist_type  = np.asarray([0, 0])                             # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
 
 mass       = np.asarray([1., 1.])    			            # Species ion mass (proton mass units)
 charge     = np.asarray([1., 1.])    			            # Species ion charge (elementary charge units)
 drift_v    = np.asarray([0., 0.])                           # Species parallel bulk velocity (alfven velocity units)
-density    = np.asarray([180. , 20.]) * 1e6                 # Species density in /cc (cast to /m3)
-E_per      = np.array([5.0, 30000.0])
+density    = np.asarray([180., 20.]) * 1e6                 # Species density in /cc (cast to /m3)
+E_per      = np.array([5.0, 30000.])
 anisotropy = np.array([0.0, 4.0])
 
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
@@ -90,7 +90,7 @@ Tper       = E_per * 11603.
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B0 / np.sqrt(mu0*ne*mp)                     # Alfven speed: Assuming pure proton plasma
 
-dx         = dxm * c / wpi                               # Spatial cadence, based on ion inertial length
+dx         = 1.#dxm * c / wpi                               # Spatial cadence, based on ion inertial length
 xmin       = 0                                           # Minimum simulation dimension
 xmax       = NX * dx                                     # Maximum simulation dimension
 
@@ -100,11 +100,11 @@ drift_v   *= va                                          # Cast species velocity
 
 Nj         = len(mass)                                   # Number of species
 cellpart   = nsp_ppc * Nj                                # Number of Particles per cell.
-N          = cellpart*NX                                 # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
-
+N          = cellpart*NX + 2*Nj                          # Number of Particles to simulate: # cells x # particles per cell, 
+                                                         # plus an extra two per species for end "boundary"
 n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
 
-N_species  = np.ones(Nj, dtype=int) * nsp_ppc * NX       # Number of sim particles for each species, total
+N_species  = np.ones(Nj, dtype=int) * nsp_ppc * NX + 2   # Number of sim particles for each species, total
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
 idx_bounds = np.stack((idx_start, idx_end)).transpose()                              # idx_bounds[species, start/end]

@@ -1,6 +1,5 @@
 ## PYTHON MODULES ##
 from timeit import default_timer as timer
-import pdb
 
 ## HYBRID MODULES ##
 import init_1D       as init
@@ -24,11 +23,11 @@ if __name__ == '__main__':
     q_dens, q_dens_adv, Ji, ni, nu                      = init.initialize_source_arrays()
     old_particles, old_fields, temp3De, temp3Db, temp1D = init.initialize_tertiary_arrays()
 
-    DT, max_inc, part_save_iter, field_save_iter        = init.set_timestep(vel)
-    
     # Collect initial moments and save initial state
     sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D) 
-    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D)  
+    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D)
+    
+    DT, max_inc, part_save_iter, field_save_iter        = init.set_timestep(vel, E_int)
     
     if save_particles == 1:
         save.save_particle_data(0, DT, part_save_iter, 0, pos, vel)
@@ -36,13 +35,14 @@ if __name__ == '__main__':
     if save_fields == 1:
         save.save_field_data(0, DT, field_save_iter, 0, Ji, E_int, B, Ve, Te, q_dens)
     
-    diag.save_diagnostic_plots(0, pos, vel, B, E_int, q_dens, Ji, 0, DT)
+    diag.check_source_term_boundaries(q_dens, Ji)
+    #diag.save_diagnostic_plots(0, pos, vel, B, E_int, q_dens, Ji, 0, DT)
     
     # Retard velocity
     particles.assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
     particles.velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT)
-
-    qq       = 1;    sim_time = DT
+    
+    qq       = 1;    sim_time = DT; max_inc = 0
     print('Starting main loop...')
     while qq < max_inc:
         qq, DT, max_inc, part_save_iter, field_save_iter =               \
@@ -50,15 +50,15 @@ if __name__ == '__main__':
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
               Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,\
               damping_array, qq, DT, max_inc, part_save_iter, field_save_iter)
-       
+
         if qq%part_save_iter == 0 and save_particles == 1:
             save.save_particle_data(sim_time, DT, part_save_iter, qq, pos, vel)
             
         if qq%field_save_iter == 0 and save_fields == 1:
             save.save_field_data(sim_time, DT, field_save_iter, qq, Ji, E_int, B, Ve, Te, q_dens)
-            
-        if qq%20 == 0:
-            diag.save_diagnostic_plots(qq, pos, vel, B, E_int, q_dens, Ji, sim_time, DT)
+        
+        #if qq%20 == 0:
+        #    diag.save_diagnostic_plots(qq, pos, vel, B, E_int, q_dens, Ji, sim_time, DT)
             
         print('Timestep {} of {} complete'.format(qq, max_inc))
         qq       += 1

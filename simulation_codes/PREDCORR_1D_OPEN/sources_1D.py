@@ -37,9 +37,9 @@ def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
         ni[I + 2, sp] += W_elec[2, ii]
     return
 
-
+import pdb
 @nb.njit()
-def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D):
+def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D, mirror=True):
     '''
     Moment (charge/current) collection function.
 
@@ -55,13 +55,11 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D):
         
     Source terms in damping region set to be equal to last valid cell value
     '''
-    NC = q_dens.shape[0]
-    
     q_dens *= 0.
     Ji     *= 0.
     ni     *= 0.
     nu     *= 0.
-    
+
     deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu)
 
     if smooth_sources == 1:
@@ -76,28 +74,31 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D):
 
         for kk in range(3):
             Ji[:, kk] += nu[:, jj, kk] * n_contr[jj] * charge[jj]
-    
-    # Mirror source term contributions at edge back into domain: Simulates having
-    # some sort of source on the outside of the physical space boundary.
-    # Is this going to cause "rippling" when particles disappear from simulation domain?
-    q_dens[ND]          += q_dens[ND - 1]
-    q_dens[ND + NX - 1] += q_dens[ND + NX]
 
-    # Set damping cell source values
-    q_dens[:ND]    = q_dens[ND]
-    q_dens[ND+NX:] = q_dens[ND+NX-1]
+    if mirror == True:
+        # Mirror source term contributions at edge back into domain: Simulates having
+        # some sort of source on the outside of the physical space boundary.
+        # Is this going to cause "rippling" when particles disappear from simulation domain?
+        q_dens[ND]          += q_dens[ND - 1]
+        q_dens[ND + NX - 1] += q_dens[ND + NX]
     
-    for ii in range(3):
-        Ji[ND, ii]          += Ji[ND - 1, ii]
-        Ji[ND + NX - 1, ii] += Ji[ND + NX, ii]
-    
-        Ji[:ND, ii] = Ji[ND, ii]
-        Ji[ND+NX:]  = Ji[ND+NX-1]
+        # Set damping cell source values
+        q_dens[:ND]    = q_dens[ND]
+        q_dens[ND+NX:] = q_dens[ND+NX-1]
         
-    # Set density minimum
-    for ii in range(NC):
-        if q_dens[ii] < min_dens * ne * q:
-            q_dens[ii] = min_dens * ne * q
+        for ii in range(3):
+            Ji[ND, ii]          += Ji[ND - 1, ii]
+            Ji[ND + NX - 1, ii] += Ji[ND + NX, ii]
+        
+            Ji[:ND, ii] = Ji[ND, ii]
+            Ji[ND+NX:]  = Ji[ND+NX-1]
+        
+# =============================================================================
+#     # Set density minimum
+#     for ii in range(q_dens.shape[0]):
+#         if q_dens[ii] < min_dens * ne * q:
+#             q_dens[ii] = min_dens * ne * q
+# =============================================================================
     return
 
 

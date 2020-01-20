@@ -14,6 +14,7 @@ import particles_1D             as particles
 import sources_1D               as sources
 import fields_1D                as fields
 import auxilliary_1D            as aux
+import init_1D as init
 from matplotlib import animation
 
 
@@ -242,12 +243,15 @@ def test_weight_shape():
 
 
 def check_source_term_boundaries(qn, ji):
+    '''
+    Called in main_1D()
+    '''
     E_nodes  = (np.arange(const.NX + 2*const.ND    ) - const.ND  + 0.5) * const.dx / 1e3
     B_nodes  = (np.arange(const.NX + 2*const.ND + 1) - const.ND  - 0.0) * const.dx / 1e3
     
     plt.figure()
     plt.plot(E_nodes, qn, marker='o')
-
+    
     for ii in range(E_nodes.shape[0]):
         plt.axvline(E_nodes[ii], linestyle='--', c='r', alpha=0.2)
         plt.axvline(B_nodes[ii], linestyle='--', c='b', alpha=0.2)
@@ -262,7 +266,7 @@ def check_source_term_boundaries(qn, ji):
     
     plt.figure()
     plt.plot(E_nodes, ji, marker='o')
-
+    
     for ii in range(E_nodes.shape[0]):
         plt.axvline(E_nodes[ii], linestyle='--', c='r', alpha=0.2)
         plt.axvline(B_nodes[ii], linestyle='--', c='b', alpha=0.2)
@@ -278,79 +282,73 @@ def check_source_term_boundaries(qn, ji):
     return
 
 
-def animate_moving_weight():
-    fig = plt.figure(figsize=(12, 8))
-    ax  = fig.add_subplot(1,1,1)
-    x   = np.arange(const.NX + 3)
-    
-    dt       = 0.1
-    vel      = np.array([[0.3 * const.dx / dt],
-                         [ 0.],
-                         [ 0.]])
-    
-    position = np.array([0.0]) 
-
-    E_nodes = (np.arange(const.NX + 3) - 0.5) #* const.dx
-    B_nodes = (np.arange(const.NX + 3) - 1.0) #* const.dx
-    
-    for ii in range(150):
-        dns_test  = np.zeros(const.NX + 3) 
-
-        pos, left_nodes, weights = particles.position_update(position, vel, dt)
-        
-        for jj in range(3):
-                dns_test[left_nodes + jj] = weights[jj]
-                
-        y = dns_test
-
-        ax.clear()
-        ax.plot(x, y)
-        ax.set_xlim(-1.5, const.NX + 2)
-        ax.set_ylim(0, 1.5)
-        ax.text(1, 1.4, 'Total Weight: {}'.format(dns_test.sum()))
-        
-        ax.scatter(pos/const.dx, 1.0, c='r')
-    
-        for kk in range(const.NX + 3):
-            ax.axvline(E_nodes[kk], linestyle='--', c='r', alpha=0.2)
-            ax.axvline(B_nodes[kk], linestyle='--', c='b', alpha=0.2)
-            
-            ax.axvline(const.xmin/const.dx, linestyle='-', c='k', alpha=0.2)
-            ax.axvline(const.xmax/const.dx, linestyle='-', c='k', alpha=0.2)
-    
-        plt.pause(0.05)
-    plt.show()
-
-
 def test_density_and_velocity_deposition():
-    E_nodes = (np.arange(const.NX + 3) - 0.5) #* const.dx
-    B_nodes = (np.arange(const.NX + 3) - 1.0) #* const.dx
+    # Change dx to 1 and NX/ND/ppc to something reasonable to make this nice
+    # Works fine with one species, why not two?
+    E_nodes  = (np.arange(const.NX + 2*const.ND    ) - const.ND  + 0.5) * const.dx
+    B_nodes  = (np.arange(const.NX + 2*const.ND + 1) - const.ND  - 0.0) * const.dx
+     
+    POS, VEL, IE, W_ELEC, IB, W_MAG, IDX  = init.initialize_particles()
+    Q_DENS, Q_DENS_ADV, JI, NI, NU        = init.initialize_source_arrays()
+    temp1D                                = np.zeros(const.NC, dtype=np.float64) 
     
-    dt       = 0.1
-    velocity = np.array([[0.3 * const.dx / dt, 0.0],
-                         [ 0., 0.0],
-                         [ 0., 0.0]])
-    
-    position = np.array([16.5, 16.5]) * const.dx
-    idx      = np.array([0, 0]) 
-    
-    left_nodes, weights = particles.assign_weighting_TSC(position)
-    n_i, nu_i = sources.deposit_both_moments(position, velocity, left_nodes, weights, idx)
+    sources.collect_moments(VEL, IE, W_ELEC, IDX, Q_DENS, JI, NI, NU, temp1D, mirror=False) 
 
-    for jj in range(const.Nj):
-        normalized_density = (const.cellpart / const.Nj)*n_i[:, jj] / const.density[jj]
-        species_color = const.temp_color[jj]
-        plt.plot(E_nodes, normalized_density, marker='o', c=species_color)
+    # Plot particle position
+    ypos = np.ones(POS.shape[0] // 2)
+    plt.scatter(POS[:POS.shape[0] // 2 ], ypos + 0.1, c='r')
+    plt.scatter(POS[ POS.shape[0] // 2:], ypos + 0.2, c='b')
+
+    # Plot charge density
+    plt.plot(E_nodes, Q_DENS / Q_DENS.max(), marker='o')
         
-        print('Normalized total density contribution of species {} is {}'.format(jj, normalized_density.sum()))
-
-    for ii in range(const.NX + 3):
+    for ii in range(E_nodes.shape[0]):
         plt.axvline(E_nodes[ii], linestyle='--', c='r', alpha=0.2)
         plt.axvline(B_nodes[ii], linestyle='--', c='b', alpha=0.2)
-        
-    plt.axvline(const.xmin/const.dx, linestyle='-', c='k', alpha=0.2)
-    plt.axvline(const.xmax/const.dx, linestyle='-', c='k', alpha=0.2)
+     
+    plt.axvline(0         , color='k')
+    plt.axvline(const.xmax, color='k')
+    plt.axvline(B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
     return
+
+
+def check_density_deposition():
+    # Change dx to 1 and NX/ND to reasonable values to make this nice
+    E_nodes  = (np.arange(const.NX + 2*const.ND    ) - const.ND  + 0.5) * const.dx
+    B_nodes  = (np.arange(const.NX + 2*const.ND + 1) - const.ND  - 0.0) * const.dx
+     
+    pos        = np.array([0.0, 1.0, 6.0])
+    pos        = np.arange(0.0, 6.05, 0.05)
+    
+    vel        = np.zeros((3, pos.shape[0]))
+    idx        = np.zeros(pos.shape[0], dtype=np.uint8)
+    Ie         = np.zeros(pos.shape[0],      dtype=np.uint16)
+    W_elec     = np.zeros((3, pos.shape[0]), dtype=np.float64)
+    
+    q_dens, q_dens_adv, Ji, ni, nu = init.initialize_source_arrays()
+    temp1D                         = np.zeros(const.NC, dtype=np.float64) 
+    
+    particles.assign_weighting_TSC(pos, Ie, W_elec)
+    sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D, mirror=False) 
+
+    # Plot normalized charge density
+    q_dens /= q_dens.max()
+    
+    ypos = np.ones(pos.shape[0]) * q_dens.max() * 1.1
+    plt.plot(E_nodes, q_dens, marker='o')
+    plt.scatter(pos, ypos, marker='x', c='k')
+        
+    for ii in range(E_nodes.shape[0]):
+        plt.axvline(E_nodes[ii], linestyle='--', c='r', alpha=0.2)
+        plt.axvline(B_nodes[ii], linestyle='--', c='b', alpha=0.2)
+     
+    plt.axvline(0          , linestyle=':', c='k'       , alpha=0.7)
+    plt.axvline(const.xmax , linestyle=':', c='k'       , alpha=0.7)
+    plt.axvline(B_nodes[ 0], linestyle='-', c='darkblue', alpha=0.7)
+    plt.axvline(B_nodes[-1], linestyle='-', c='darkblue', alpha=0.7)
+    return
+
 
 
 def test_velocity_deposition():
@@ -381,24 +379,6 @@ def test_velocity_deposition():
         
     plt.axvline(const.xmin/const.dx, linestyle='-', c='k', alpha=0.2)
     plt.axvline(const.xmax/const.dx, linestyle='-', c='k', alpha=0.2)
-    return
-
-
-def test_init_collect_moments():
-   # E_nodes = (np.arange(const.NX + 3) - 0.5) #* const.dx
-   # B_nodes = (np.arange(const.NX + 3) - 1.0) #* const.dx
-    
-    dt       = 0.1
-    velocity = np.array([[0.3 * const.dx / dt, 0.0],
-                         [ 0., 0.0],
-                         [ 0., 0.0]])
-    
-    position = np.array([16.5, 16.5]) * const.dx
-    idx      = np.array([0, 0]) 
-    
-    left_node, weights = particles.assign_weighting_TSC(position, E_nodes=True)
-    
-    position, left_node, weights, rho_0, rho, J_plus, J_init, G, L = sources.init_collect_moments(position, velocity, left_node, weights, idx, dt)
     return
 
 
@@ -1062,65 +1042,6 @@ def test_interp_cross_manual():
     return
 
 
-
-def test_current_push():
-    NX   = 32      #const.NX
-    xmin = 0.0     #const.xmin
-    xmax = 2*np.pi #const.xmax
-    k    = 1.0
-    marker_size = 20
-    
-    dx      = xmax / NX
-    x       = np.arange(xmin, xmax, dx/100.)
-    E_nodes = (np.arange(NX + 3) - 0.5) * dx
-    B_nodes = (np.arange(NX + 3) - 1.0) * dx
-        
-    E_in    = np.zeros((NX + 3, 3))
-    J_in    = np.zeros((NX + 3, 3))
-    L_in    = np.ones((NX + 3))         # Charge-like  (const.)
-    G_in    = np.ones((NX + 3, 3))      # Current-like (const.)
-    
-    Be       = np.zeros((NX + 3, 3))
-    Be[:, 0] = np.sin(1.0*E_nodes*k)
-    Be[:, 1] = np.sin(2.0*E_nodes*k)
-    Be[:, 2] = np.sin(3.0*E_nodes*k)
-    
-    B       = np.zeros((NX + 3, 3))
-    B[:, 0] = np.sin(1.0*B_nodes*k)
-    B[:, 1] = np.sin(2.0*B_nodes*k)
-    B[:, 2] = np.sin(3.0*B_nodes*k)
-    
-    DT        = 2.0
-    
-    J_out = sources.push_current(J_in, E_in, B, L_in, G_in, DT)
-    
-    J_an       = np.zeros((NX + 3, 3))
-    J_an[:, 0] = Be[:, 2] - Be[:, 1]
-    J_an[:, 1] = Be[:, 0] - Be[:, 2]
-    J_an[:, 2] = Be[:, 1] - Be[:, 0]
-
-    if True:
-        plt.figure()
-        plt.scatter(E_nodes, J_an[:, 0], s=marker_size, c='k', marker='o')
-        plt.scatter(E_nodes, J_an[:, 1], s=marker_size, c='k', marker='o')
-        plt.scatter(E_nodes, J_an[:, 2], s=marker_size, c='k', marker='o')
-    
-        plt.scatter(E_nodes, J_out[:, 0], s=marker_size, c='r', marker='x')
-        plt.scatter(E_nodes, J_out[:, 1], s=marker_size, c='r', marker='x')
-        plt.scatter(E_nodes, J_out[:, 2], s=marker_size, c='r', marker='x')
-    
-        for kk in range(NX + 3):
-            plt.axvline(E_nodes[kk], linestyle='--', c='r', alpha=0.2)
-            plt.axvline(B_nodes[kk], linestyle='--', c='b', alpha=0.2)
-            
-            plt.axvline(xmin, linestyle='-', c='k', alpha=0.2)
-            plt.axvline(xmax, linestyle='-', c='k', alpha=0.2)
-        
-        plt.xlim(xmin - 1.5*dx, xmax + 2*dx)
-        plt.legend()
-    return
-
-
 def test_varying_background_function():
     t  = np.arange(0, 1000)
     Bv = np.zeros((t.shape[0], const.NX + 3, 3), dtype=float)
@@ -1131,54 +1052,6 @@ def test_varying_background_function():
     plt.plot(t, Bv[:, 0, 0])
     return
 
-
-def test_push_B_w_varying_background():
-    max_inc   = 101
-    DT        = 1.0
-    x_offset  = 200e-9
-    
-    E  = np.zeros((const.NX + 3, 3))
-    B  = np.zeros((const.NX + 3, 3), dtype=float)
-    x  = np.arange(const.NX + 3)
-    #fig, ax = plt.subplots()
-    
-    B[:, 0] += x_offset
-    
-    qq = 1
-    while qq < max_inc:
-        # push_B(B, E, DT, qq)
-        B = fields.push_B(B, E, DT, qq, half_flag=1)
-        print('t = {}s, B = {}nT'.format((qq - 0.5) * DT, B[0, :]*1e9))
-# =============================================================================
-#         ax.clear()
-#         ax.plot(x, B[:, 0] * 1e9)
-#         ax.plot(x, B[:, 1] * 1e9)
-#         ax.plot(x, B[:, 2] * 1e9)
-#         ax.set_title('Bx at t = {}'.format((qq - 0.5) * DT))
-#         ax.set_ylim(-(const.HM_amplitude + x_offset)*1e9, (const.HM_amplitude + x_offset)*1e9)
-#         ax.set_xlim(0, const.NX + 3)
-#         ax.set_ylabel('Magnetic Field (nT)')
-#         ax.set_xlabel('Cell number')
-#         plt.pause(0.1)
-# =============================================================================
-        
-        B = fields.push_B(B, E, DT, qq, half_flag=0)
-        print('t = {}s, B = {}nT'.format(qq * DT, B[0, :]*1e9))
-# =============================================================================
-#         ax.clear()
-#         ax.plot(x, B[:, 0] * 1e9)
-#         ax.plot(x, B[:, 1] * 1e9)
-#         ax.plot(x, B[:, 2] * 1e9)
-#         ax.set_title('Bx at t = {}'.format(qq * DT))
-#         ax.set_ylim(-(const.HM_amplitude + x_offset)*1e9, (const.HM_amplitude + x_offset)*1e9)
-#         ax.set_xlim(0, const.NX + 3)
-#         ax.set_ylabel('Magnetic Field (nT)')
-#         ax.set_xlabel('Cell number')
-#         plt.pause(0.1)
-# =============================================================================
-        
-        qq += 1
-    return
 
 
 def save_diagnostic_plots(qq, pos, vel, B, E, q_dens, Ji, sim_time, DT):
@@ -1298,7 +1171,9 @@ if __name__ == '__main__':
     #test_particle_orbit()
     #test_curl_B()
     #test_curl_E()
-    test_grad_P_varying_qn()
+    #test_grad_P_varying_qn()
+    #test_density_and_velocity_deposition()
+    check_density_deposition()
     #test_cross_product()
     #test_cspline_interpolation()
     #test_E_convective()
