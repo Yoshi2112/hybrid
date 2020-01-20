@@ -145,7 +145,7 @@ def get_grad_P(qn, te, grad_P, temp):
     return
 
 
-#@nb.njit()
+@nb.njit()
 def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,

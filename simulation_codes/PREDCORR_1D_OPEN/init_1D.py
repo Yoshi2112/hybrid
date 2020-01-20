@@ -12,7 +12,7 @@ import save_routines as save
 from particles_1D             import assign_weighting_TSC
 from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, dist_type, nsp_ppc, xmax, \
                                      idx_bounds, seed, Tpar, Tper, mass, drift_v, theta,  \
-                                     r_damp, Bc, high_rat, freq_res
+                                     r_damp, Bc, qm_ratios, freq_res
                                      
 @nb.njit()
 def particles_per_cell():
@@ -335,7 +335,7 @@ def set_timestep(vel, E):
     vel_ts   = 0.5 * const.dx / np.max(vel[0, :])     # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
 
     if E[:, 0].max() != 0:
-        elecfreq        = high_rat*(np.abs(E[:, 0] / vel.max()).max())               # Electron acceleration "frequency"
+        elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / vel.max()).max())               # Electron acceleration "frequency"
         Eacc_ts         = freq_res / elecfreq                            
     else:
         Eacc_ts = ion_ts

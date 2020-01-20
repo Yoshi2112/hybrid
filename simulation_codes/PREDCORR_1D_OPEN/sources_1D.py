@@ -37,7 +37,7 @@ def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
         ni[I + 2, sp] += W_elec[2, ii]
     return
 
-import pdb
+
 @nb.njit()
 def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D, mirror=True):
     '''
@@ -93,12 +93,10 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D, mirror=Tru
             Ji[:ND, ii] = Ji[ND, ii]
             Ji[ND+NX:]  = Ji[ND+NX-1]
         
-# =============================================================================
-#     # Set density minimum
-#     for ii in range(q_dens.shape[0]):
-#         if q_dens[ii] < min_dens * ne * q:
-#             q_dens[ii] = min_dens * ne * q
-# =============================================================================
+    # Set density minimum
+    for ii in range(q_dens.shape[0]):
+        if q_dens[ii] < min_dens * ne * q:
+            q_dens[ii] = min_dens * ne * q
     return
 
 

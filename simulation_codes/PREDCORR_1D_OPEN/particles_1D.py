@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 
-from   simulation_parameters_1D  import ND, dx, xmax, xmin, charge, mass, kB, Tpar, Tper, drift_v
+from   simulation_parameters_1D  import ND, dx, xmax, xmin, qm_ratios
 from   sources_1D                import collect_moments
 
 
@@ -85,7 +85,7 @@ def velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     not convinced they helped.
     '''
     for ii in nb.prange(vel.shape[1]):
-        qmi = 0.5 * dt * charge[idx[ii]] / mass[idx[ii]]                    # Charge-to-mass ration for ion of species idx[ii]
+        qmi = 0.5 * dt * qm_ratios[idx[ii]]                                 # Charge-to-mass ration for ion of species idx[ii]
         
         Ep = E[Ie[ii]    , 0:3] * W_elec[0, ii]                             \
            + E[Ie[ii] + 1, 0:3] * W_elec[1, ii]                             \

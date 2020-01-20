@@ -35,14 +35,14 @@ if __name__ == '__main__':
     if save_fields == 1:
         save.save_field_data(0, DT, field_save_iter, 0, Ji, E_int, B, Ve, Te, q_dens)
     
-    diag.check_source_term_boundaries(q_dens, Ji)
-    #diag.save_diagnostic_plots(0, pos, vel, B, E_int, q_dens, Ji, 0, DT)
+    #diag.check_source_term_boundaries(q_dens, Ji)
+    diag.save_diagnostic_plots(0, pos, vel, B, E_int, q_dens, Ji, 0, DT)
     
     # Retard velocity
     particles.assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
     particles.velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT)
     
-    qq       = 1;    sim_time = DT; max_inc = 0
+    qq       = 1;    sim_time = DT
     print('Starting main loop...')
     while qq < max_inc:
         qq, DT, max_inc, part_save_iter, field_save_iter =               \
@@ -57,8 +57,8 @@ if __name__ == '__main__':
         if qq%field_save_iter == 0 and save_fields == 1:
             save.save_field_data(sim_time, DT, field_save_iter, qq, Ji, E_int, B, Ve, Te, q_dens)
         
-        #if qq%20 == 0:
-        #    diag.save_diagnostic_plots(qq, pos, vel, B, E_int, q_dens, Ji, sim_time, DT)
+        if qq%20 == 0:
+            diag.save_diagnostic_plots(qq, pos, vel, B, E_int, q_dens, Ji, sim_time, DT)
             
         print('Timestep {} of {} complete'.format(qq, max_inc))
         qq       += 1

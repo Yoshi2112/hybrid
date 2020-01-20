@@ -10,7 +10,7 @@ import numpy as np
 import particles_1D as particles
 import fields_1D as fields
 
-from simulation_parameters_1D import dx, mu0, NC, high_rat, orbit_res, freq_res, \
+from simulation_parameters_1D import dx, mu0, NC, qm_ratios, orbit_res, freq_res, \
                                      account_for_dispersion, dispersion_allowance
 
 
@@ -72,8 +72,8 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
             interp[ii, jj] = 0.5 * (B[ii, jj] + B[ii + 1, jj] + (1/6) * (y2[ii, jj] + y2[ii + 1, jj]))
     return
 
-import pdb
-#@nb.njit()
+
+@nb.njit()
 def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
                      qq, DT, max_inc, part_save_iter, field_save_iter, idx):
         
@@ -81,11 +81,11 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
     B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
 
     dispfreq        = ((np.pi / dx) ** 2) * (B_tot / (mu0 * q_dens)).max()           # Dispersion frequency
-    gyfreq          = high_rat  * np.abs(B_tot).max() / (2 * np.pi)      
+    gyfreq          = qm_ratios.max()  * np.abs(B_tot).max() / (2 * np.pi)      
     ion_ts          = orbit_res * 1./gyfreq
     
     if E[:, 0].max() != 0:
-        elecfreq        = high_rat*(np.abs(E[:, 0] / vel.max()).max())               # Electron acceleration "frequency"
+        elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / vel.max()).max())               # Electron acceleration "frequency"
         Eacc_ts         = freq_res / elecfreq                            
     else:
         Eacc_ts = ion_ts
@@ -98,9 +98,6 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
     vel_ts          = 0.80 * dx / vel[0, :].max()                          # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
     DT_part         = min(Eacc_ts, vel_ts, ion_ts, disp_ts)                      # Smallest of the allowable timesteps
     
-    if qq > 1:
-        pdb.set_trace()
-        
     if DT_part < 0.9*DT:
 
         particles.velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E, 0.5*DT)    # Re-sync vel/pos       
@@ -132,7 +129,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
     return qq, DT, max_inc, part_save_iter, field_save_iter
 
 
-#@nb.njit()
+@nb.njit()
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
               Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,\
