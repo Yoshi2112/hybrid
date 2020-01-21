@@ -115,12 +115,33 @@ k_max      = np.pi / dx                                  # Maximum permissible w
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
 
 Bc        = np.zeros((NC + 1, 3), dtype=np.float64)        # Constant components of magnetic field based on theta and B0
-Bc[:, 0] += B0 * np.cos(theta * np.pi / 180.)              # Constant x-component of magnetic field (theta in degrees)
-Bc[:, 1] += 0.                                             # Assume Bzc = 0, orthogonal to field line direction
-Bc[:, 2] += B0 * np.sin(theta * np.pi / 180.)              # Constant y-component of magnetic field (theta in degrees)
+
+if False:
+    Bc[:, 0] += B0 * np.cos(theta * np.pi / 180.)              # Constant x-component of magnetic field (theta in degrees)
+    Bc[:, 1] += 0.                                             # Assume Bzc = 0, orthogonal to field line direction
+    Bc[:, 2] += B0 * np.sin(theta * np.pi / 180.)              # Constant y-component of magnetic field (theta in degrees)
+else:
+    L = 4.3
     
+    a = 4.5 / (L * RE)
+    
+    Bc[:, 0] += B0 * np.cos(theta * np.pi / 180.)              # Constant x-component of magnetic field (theta in degrees)
+    Bc[:, 1] += 0.                                             # Assume Bzc = 0, orthogonal to field line direction
 
 
+## DELETE ##
+if True:
+    import matplotlib.pyplot as plt
+    array_nums    = np.arange(NC + 1)                # Array numbers
+    midpoint      = 0.5*NC                           # Midpoint value
+    dist_from_mp  = (array_nums - midpoint)*dx       # Distance of each B-node from midpoint
+        
+    v_perp  = np.sqrt(2. * q * E_per.max() / mp)
+    r_lamor = v_perp / gyfreq
+    
+    plt.plot(dist_from_mp, Bc[:, 0], marker='o')
+    plt.axvline(xmin, c='k', ls=":", alpha=0.5)
+    plt.axvline(xmax, c='k', ls=":", alpha=0.5)
 
 
 
