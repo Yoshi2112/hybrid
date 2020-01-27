@@ -12,7 +12,7 @@ import sys
 from shutil import rmtree
 import simulation_parameters_1D as const
 from   simulation_parameters_1D import drive, save_path, NX, ND, NC, r_damp, ne, density, save_particles, save_fields
-from   simulation_parameters_1D import idx_bounds, Nj, species_lbl, temp_type, dist_type, mass, charge,\
+from   simulation_parameters_1D import idx_start, idx_end, Nj, species_lbl, temp_type, dist_type, mass, charge,\
                                        drift_v, Tpar, Tper, temp_color, nsp_ppc, Bc
 
 
@@ -88,7 +88,8 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
     
     # Particle values: Array parameters
     p_file = d_path + 'particle_parameters'
-    np.savez(p_file, idx_bounds  = idx_bounds,
+    np.savez(p_file, idx_start   = idx_start,
+                     idx_end     = idx_end,
                      species_lbl = species_lbl,
                      temp_color  = temp_color,
                      temp_type   = temp_type,

@@ -98,7 +98,7 @@ mass      *= mp                                          # Cast species mass to 
 drift_v   *= va                                          # Cast species velocity to m/s
 
 Nj         = len(mass)                                   # Number of species
-cellpart   = nsp_ppc * Nj                                # Number of Particles per cell.
+cellpart   = nsp_ppc.sum() * Nj                          # Number of Particles per cell.
 N          = cellpart*NX + 2*Nj                          # Number of Particles to simulate: # cells x # particles per cell, 
                                                          # plus an extra two per species for end "boundary"
 n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
@@ -106,7 +106,6 @@ n_contr    = density / nsp_ppc                           # Species density contr
 N_species  = np.ones(Nj, dtype=int) * nsp_ppc * NX + 2   # Number of sim particles for each species, total
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
-idx_bounds = np.stack((idx_start, idx_end)).transpose()                              # idx_bounds[species, start/end]
 
 gyfreq     = q*B_eq/mp                                   # Proton   Gyrofrequency (rad/s) (since this will be the highest of all ion species)
 e_gyfreq   = q*B_eq/me                                   # Electron Gyrofrequency (rad/s)

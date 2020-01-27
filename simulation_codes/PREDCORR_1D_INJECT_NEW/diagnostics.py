@@ -72,6 +72,8 @@ def check_cell_velocity_distribution(pos, vel, node_number=const.NC // 2, j=0): 
 
 def check_position_distribution(pos):
     '''Checks the spatial distribution of a particle species j within the spatial domain
+    
+    Called by main_1D()
     '''
     for j in range(const.Nj):
         fig = plt.figure(figsize=(12,10))
@@ -1192,6 +1194,21 @@ def visualize_inhomogenous_B():
     return
 
 
+def check_particle_position_individual():
+    ppc           = init.particles_per_cell()
+    pos, vel, idx = init.uniform_gaussian_distribution_quiet_extraparticle(ppc)
+    
+    for jj in range(const.Nj):
+        fac = np.ones(const.nsp_ppc[jj]) * jj
+        pdb.set_trace()
+        for ii in range(const.idx_start[jj], const.idx_end[jj]):
+            # Pos range isn't right
+            
+            plt.scatter(fac, pos[ii], color=const.temp_color[jj])
+    
+    return
+
+
 if __name__ == '__main__':
     #check_position_distribution()
     #animate_moving_weight()
@@ -1201,7 +1218,8 @@ if __name__ == '__main__':
     #test_grad_P_varying_qn()
     #test_density_and_velocity_deposition()
     #check_density_deposition()
-    visualize_inhomogenous_B()
+    #visualize_inhomogenous_B()
+    check_particle_position_individual()
     #test_cross_product()
     #test_cspline_interpolation()
     #test_E_convective()
