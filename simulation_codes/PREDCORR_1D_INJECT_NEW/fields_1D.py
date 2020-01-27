@@ -8,20 +8,8 @@ import numpy as np
 import numba as nb
 
 import auxilliary_1D as aux
-from simulation_parameters_1D import dx, Te0, ne, q, mu0, kB, ie, Bc, B_eq, a, rL
+from simulation_parameters_1D import dx, Te0, ne, q, mu0, kB, ie, Bc
 
-
-def get_B0(x, B0_x):
-    '''
-    Function to map a point (x) in real units (meters) to some 
-    field geometry. Returns a 3-vector as a 3-array
-    
-    Needs to be 
-    '''
-    B0_x[0] =  B_eq * (1 + a * x ** 2)
-    B0_x[1] = -B_eq * a * rL * x
-    B0_x[2] = 0.
-    return
 
 @nb.njit()
 def get_curl_E(E, dE, DX=dx):

@@ -1165,6 +1165,33 @@ def save_diagnostic_plots(qq, pos, vel, B, E, q_dens, Ji, sim_time, DT):
     return
 
 
+def visualize_inhomogenous_B():
+    L    = 4.3      ;   q = 1.602e-19
+    RE   = 6371000  ;   m = 1.673e-27
+    
+    B_eq = 200e-9               # Tesla
+    a    = 4.5 / (L * RE)       # Where does the 4.5 come from? 
+    c    = 3e8
+    v_c  = 0.05
+    
+    xmax = 2*RE
+    x    = np.linspace(-xmax, xmax, 1000)
+    
+    gyfreq = q * B_eq / m
+    v_perp = v_c * c
+    rL     = v_perp / gyfreq
+    
+    B_x =   B_eq * (1 + a * x**2)
+    B_r = - B_eq * rL * a * x
+    
+    plt.figure()
+    plt.plot(x, B_x, c='k')
+    plt.plot(x, B_r, c='r')
+    plt.show()
+    
+    return
+
+
 if __name__ == '__main__':
     #check_position_distribution()
     #animate_moving_weight()
@@ -1173,7 +1200,8 @@ if __name__ == '__main__':
     #test_curl_E()
     #test_grad_P_varying_qn()
     #test_density_and_velocity_deposition()
-    check_density_deposition()
+    #check_density_deposition()
+    visualize_inhomogenous_B()
     #test_cross_product()
     #test_cspline_interpolation()
     #test_E_convective()

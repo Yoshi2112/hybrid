@@ -36,13 +36,11 @@ NX       = 128                              # Number of cells - doesn't include 
 ND       = 32                               # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev  = 100                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 r_damp   = 0.0129                           # Damping strength
-
-nsp_ppc  = 2000                             # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
-B0       = 200e-9                           # Unform initial magnetic field value (in T)
+B_eq     = 200e-9                           # Unform initial magnetic field value (in T)
 
 orbit_res = 0.10                            # Particle orbit resolution: Fraction of gyroperiod in seconds
 freq_res  = 0.02                            # Frequency resolution     : Fraction of inverse radian cyclotron frequency
@@ -53,8 +51,9 @@ field_res = 0.10                            # Data capture resolution in gyroper
 ### PARTICLE PARAMETERS ###
 species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
 temp_color = ['blue', 'red']
-temp_type  = np.asarray([0, 1])                   	        # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-dist_type  = np.asarray([0, 0])                             # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+temp_type  = np.asarray([0,      1])             	        # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.asarray([0,      0])                        # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+nsp_ppc    = np.asarray([200, 2000])                        # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 
 mass       = np.asarray([1., 1.])    			            # Species ion mass (proton mass units)
 charge     = np.asarray([1., 1.])    			            # Species ion charge (elementary charge units)
@@ -88,7 +87,7 @@ Tpar       = E_par * 11603.
 Tper       = E_per * 11603.
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
-va         = B0 / np.sqrt(mu0*ne*mp)                     # Alfven speed: Assuming pure proton plasma
+va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma
 
 dx         =   dxm * c / wpi                             # Spatial cadence, based on ion inertial length
 xmin       = - NX // 2 * dx                              # Minimum simulation dimension
@@ -109,42 +108,25 @@ idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)]
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
 idx_bounds = np.stack((idx_start, idx_end)).transpose()                              # idx_bounds[species, start/end]
 
-gyfreq     = q*B0/mp                                     # Proton   Gyrofrequency (rad/s) (since this will be the highest of all ion species)
-e_gyfreq   = q*B0/me                                     # Electron Gyrofrequency (rad/s)
+gyfreq     = q*B_eq/mp                                   # Proton   Gyrofrequency (rad/s) (since this will be the highest of all ion species)
+e_gyfreq   = q*B_eq/me                                   # Electron Gyrofrequency (rad/s)
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
 
-Bc        = np.zeros((NC + 1, 3), dtype=np.float64)        # Constant components of magnetic field based on theta and B0
+Bc        = np.zeros((NC + 1, 3), dtype=np.float64)      # Constant components of magnetic field based on theta and B0
 
+L = 4.3
+a = 4.5 / (L * RE)
+    
 if False:
-    Bc[:, 0] += B0 * np.cos(theta * np.pi / 180.)              # Constant x-component of magnetic field (theta in degrees)
-    Bc[:, 1] += 0.                                             # Assume Bzc = 0, orthogonal to field line direction
-    Bc[:, 2] += B0 * np.sin(theta * np.pi / 180.)              # Constant y-component of magnetic field (theta in degrees)
+    Bc[:, 0] += B_eq * np.cos(theta * np.pi / 180.)      # Constant x-component of magnetic field (theta in degrees)
+    Bc[:, 1] += 0.                                       # Assume Bzc = 0, orthogonal to field line direction
+    Bc[:, 2] += B_eq * np.sin(theta * np.pi / 180.)      # Constant y-component of magnetic field (theta in degrees)
 else:
-    L = 4.3
     
-    a = 4.5 / (L * RE)
     
-    Bc[:, 0] += B0 * np.cos(theta * np.pi / 180.)              # Constant x-component of magnetic field (theta in degrees)
-    Bc[:, 1] += 0.                                             # Assume Bzc = 0, orthogonal to field line direction
-
-
-## DELETE ##
-if True:
-    import matplotlib.pyplot as plt
-    array_nums    = np.arange(NC + 1)                # Array numbers
-    midpoint      = 0.5*NC                           # Midpoint value
-    dist_from_mp  = (array_nums - midpoint)*dx       # Distance of each B-node from midpoint
-        
-    v_perp  = np.sqrt(2. * q * E_per.max() / mp)
-    r_lamor = v_perp / gyfreq
-    
-    plt.plot(dist_from_mp, Bc[:, 0], marker='o')
-    plt.axvline(xmin, c='k', ls=":", alpha=0.5)
-    plt.axvline(xmax, c='k', ls=":", alpha=0.5)
-
-
-
+    Bc[:, 0] += B_eq * np.cos(theta * np.pi / 180.)      # Constant x-component of magnetic field (theta in degrees)
+    Bc[:, 1] += 0.                                       # Assume Bzc = 0, orthogonal to field line direction
 
 
 
@@ -171,7 +153,7 @@ print('Field save flag    : {}'.format(save_fields))
 print('Particle save flag : {}\n'.format(save_particles))
 
 print('Density            : {}cc'.format(round(ne / 1e6, 2)))
-print('Background B-field : {}nT'.format(round(B0*1e9, 1)))
+print('Equatorial B-field : {}nT'.format(round(B_eq*1e9, 1)))
 print('HM amplitude       : {}nT'.format(HM_amplitude*1e9))
 print('HM frequency       : {}mHz\n'.format(HM_frequency*1e3))
 

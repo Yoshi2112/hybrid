@@ -7,9 +7,9 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 
-from   simulation_parameters_1D  import ND, dx, xmax, xmin, qm_ratios
+from   simulation_parameters_1D  import ND, dx, xmax, xmin, qm_ratios, B_eq, a
 from   sources_1D                import collect_moments
-from   fields_1D                 import get_B0
+
 
 
 @nb.njit()
@@ -63,10 +63,45 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
     return
 
 
+def get_B0(x, v, b1, qmi, B0_xp):
+    '''
+    Function to map a point (x) in real units (meters) to some 
+    field geometry. Returns a 3-vector as a 3-array
+    
+    # Issue: Calculate gyfreq but requires Br, which requires gyfreq?
+    '''
+    l_gyfreq = qmi * 1
+    
+    B0_xp[0] = B_eq * (1 + x ** 2)
+    B0_xp[1] = a * x * B_eq * v[2] / l_gyfreq
+    B0_xp[2] = 0.
+    return
+
+
+@nb.njit()
+def field_interpolation_to_particle(ii, E, B, Ie, W_elec, Ib, W_mag, pos, vel, qmi):
+    '''
+    Interpolates the fields to the particle positions using TSC weighting
+    '''
+    B0_xp = np.zeros(3)
+    
+    Ep = E[Ie[ii]    , 0:3] * W_elec[0, ii]                             \
+       + E[Ie[ii] + 1, 0:3] * W_elec[1, ii]                             \
+       + E[Ie[ii] + 2, 0:3] * W_elec[2, ii]                             # Vector E-field at particle location
+    
+    Bp = B[Ib[ii]    , 0:3] * W_mag[0, ii]                              \
+       + B[Ib[ii] + 1, 0:3] * W_mag[1, ii]                              \
+       + B[Ib[ii] + 2, 0:3] * W_mag[2, ii]                              # Vector B-field at particle location
+    
+    get_B0(pos[ii], vel[:, ii], Bp, qmi, B0_xp)
+    Bp += B0_xp
+    return Ep, Bp
+
+
 @nb.njit()
 def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     '''
-    Interpolates the fields to the particle positions using TSC weighting, then
+    
     updates velocities using a Boris particle pusher.
     Based on Birdsall & Langdon (1985), pp. 59-63.
 
@@ -85,20 +120,10 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     Removed the "cross product" and "field interpolation" functions because I'm
     not convinced they helped.
     '''
-    B0_xp = np.zeros(3)                                                     # Background field at xp
-    for ii in nb.prange(vel.shape[1]):
+    for ii in nb.prange(vel.shape[1]):  
         qmi = 0.5 * dt * qm_ratios[idx[ii]]                                 # Charge-to-mass ration for ion of species idx[ii]
-        
-        Ep = E[Ie[ii]    , 0:3] * W_elec[0, ii]                             \
-           + E[Ie[ii] + 1, 0:3] * W_elec[1, ii]                             \
-           + E[Ie[ii] + 2, 0:3] * W_elec[2, ii]                             # Vector E-field at particle location
-        
-        Bp = B[Ib[ii]    , 0:3] * W_mag[0, ii]                              \
-           + B[Ib[ii] + 1, 0:3] * W_mag[1, ii]                              \
-           + B[Ib[ii] + 2, 0:3] * W_mag[2, ii]                              # Vector B-field at particle location
-        
-        get_B0(pos[ii], B0_xp)
-        Bp += B0_xp
+
+        Ep, Bp = field_interpolation_to_particle(ii, E, B, Ie, W_elec, Ib, W_mag, pos, vel, qmi)
         
         T = qmi * Bp                                                        # Vector Boris variable
         S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable
