@@ -1195,16 +1195,11 @@ def visualize_inhomogenous_B():
 
 
 def check_particle_position_individual():
-    ppc           = init.particles_per_cell()
-    pos, vel, idx = init.uniform_gaussian_distribution_quiet_extraparticle(ppc)
-    
+    pos, vel, idx = init.uniform_gaussian_distribution_quiet()
+    pdb.set_trace()
     for jj in range(const.Nj):
-        fac = np.ones(const.nsp_ppc[jj]) * jj
-        pdb.set_trace()
-        for ii in range(const.idx_start[jj], const.idx_end[jj]):
-            # Pos range isn't right
-            
-            plt.scatter(fac, pos[ii], color=const.temp_color[jj])
+        for ii in range(const.N):            
+            plt.scatter(pos[ii], jj, color=const.temp_color[jj])
     
     return
 

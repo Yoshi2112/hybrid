@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 
-from   simulation_parameters_1D  import ND, dx, xmax, xmin, qm_ratios, B_eq, a
+from   simulation_parameters_1D  import ND, dx, xmin, xmax, qm_ratios, B_eq, a
 from   sources_1D                import collect_moments
 
 

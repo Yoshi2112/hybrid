@@ -32,15 +32,15 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 128                              # Number of cells - doesn't include ghost cells
-ND       = 32                               # Damping region length: Multiple of NX (on each side of simulation domain)
+NX       = 6                                # Number of cells - doesn't include ghost cells
+ND       = 2                                # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev  = 100                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 r_damp   = 0.0129                           # Damping strength
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 
-ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
-theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
-B_eq     = 200e-9                           # Unform initial magnetic field value (in T)
+ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
+B_eq      = 200e-9                          # Unform initial magnetic field value (in T)
+rc_hwidth = 1                               # Ring current half-width in number of cells (2*hwidth gives equatorial extent of RC) 
 
 orbit_res = 0.10                            # Particle orbit resolution: Fraction of gyroperiod in seconds
 freq_res  = 0.02                            # Frequency resolution     : Fraction of inverse radian cyclotron frequency
@@ -53,7 +53,7 @@ species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/label
 temp_color = ['blue', 'red']
 temp_type  = np.asarray([0,      1])             	        # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
 dist_type  = np.asarray([0,      0])                        # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.asarray([200, 2000])                        # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+nsp_ppc    = np.asarray([5, 10])                            # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 
 mass       = np.asarray([1., 1.])    			            # Species ion mass (proton mass units)
 charge     = np.asarray([1., 1.])    			            # Species ion charge (elementary charge units)
@@ -73,6 +73,7 @@ adaptive_timestep      = True                               # Flag (True/False) 
 HM_amplitude   = 0e-9                                       # Driven wave amplitude in T
 HM_frequency   = 0.02                                       # Driven wave in Hz
 
+                                       #
 
 
 
@@ -89,16 +90,16 @@ Tper       = E_per * 11603.
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma
 
-dx         =   dxm * c / wpi                             # Spatial cadence, based on ion inertial length
-xmin       = - NX // 2 * dx                              # Minimum simulation dimension
-xmax       =   NX // 2 * dx                              # Maximum simulation dimension
+dx         = 1.#dxm * c / wpi                               # Spatial cadence, based on ion inertial length
+xmax       = NX // 2 * dx                                # Maximum simulation length, +/-ve on each side
+xmin       =-NX // 2 * dx
 
 charge    *= q                                           # Cast species charge to Coulomb
 mass      *= mp                                          # Cast species mass to kg
 drift_v   *= va                                          # Cast species velocity to m/s
 
 Nj         = len(mass)                                   # Number of species
-cellpart   = nsp_ppc.sum() * Nj                          # Number of Particles per cell.
+cellpart   = nsp_ppc.sum()                               # Number of Particles per cell.
 N          = cellpart*NX + 2*Nj                          # Number of Particles to simulate: # cells x # particles per cell, 
                                                          # plus an extra two per species for end "boundary"
 n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
@@ -112,20 +113,11 @@ e_gyfreq   = q*B_eq/me                                   # Electron Gyrofrequenc
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
 
+# Need to fix this
 Bc        = np.zeros((NC + 1, 3), dtype=np.float64)      # Constant components of magnetic field based on theta and B0
-
 L = 4.3
 a = 4.5 / (L * RE)
-    
-if False:
-    Bc[:, 0] += B_eq * np.cos(theta * np.pi / 180.)      # Constant x-component of magnetic field (theta in degrees)
-    Bc[:, 1] += 0.                                       # Assume Bzc = 0, orthogonal to field line direction
-    Bc[:, 2] += B_eq * np.sin(theta * np.pi / 180.)      # Constant y-component of magnetic field (theta in degrees)
-else:
-    
-    
-    Bc[:, 0] += B_eq * np.cos(theta * np.pi / 180.)      # Constant x-component of magnetic field (theta in degrees)
-    Bc[:, 1] += 0.                                       # Assume Bzc = 0, orthogonal to field line direction
+                                                         # Assume Bzc = 0, orthogonal to field line direction
 
 
 
