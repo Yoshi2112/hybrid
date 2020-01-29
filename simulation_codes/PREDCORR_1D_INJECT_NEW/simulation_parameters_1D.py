@@ -51,14 +51,14 @@ field_res = 0.10                            # Data capture resolution in gyroper
 ### PARTICLE PARAMETERS ###
 species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
 temp_color = ['blue', 'red']
-temp_type  = np.asarray([0,      1])             	        # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-dist_type  = np.asarray([0,      0])                        # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.asarray([5, 10])                            # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+temp_type  = np.array([0,      1])             	            # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.array([0,      0])                          # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+nsp_ppc    = np.array([10, 20])                             # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 
-mass       = np.asarray([1., 1.])    			            # Species ion mass (proton mass units)
-charge     = np.asarray([1., 1.])    			            # Species ion charge (elementary charge units)
-drift_v    = np.asarray([0., 0.])                           # Species parallel bulk velocity (alfven velocity units)
-density    = np.asarray([190., 10.]) * 1e6                  # Species density in /cc (cast to /m3)
+mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
+charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
+drift_v    = np.array([0., 0.])                             # Species parallel bulk velocity (alfven velocity units)
+density    = np.array([190., 10.]) * 1e6                    # Species density in /cc (cast to /m3)
 E_per      = np.array([5.0, 30000.])
 anisotropy = np.array([0.0, 4.0])
 
@@ -99,12 +99,17 @@ mass      *= mp                                          # Cast species mass to 
 drift_v   *= va                                          # Cast species velocity to m/s
 
 Nj         = len(mass)                                   # Number of species
-cellpart   = nsp_ppc.sum()                               # Number of Particles per cell.
-N          = cellpart*NX + 2*Nj                          # Number of Particles to simulate: # cells x # particles per cell, 
-                                                         # plus an extra two per species for end "boundary"
 n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
 
-N_species  = np.ones(Nj, dtype=int) * nsp_ppc * NX + 2   # Number of sim particles for each species, total
+# Number of sim particles for each species, total
+N_species  = np.zeros(Nj, dtype=np.int64)
+for jj in range(Nj):
+    if temp_type[jj] == 0:                               # Cold species in every cell NX 
+        N_species[jj] = nsp_ppc[jj] * NX + 2                 
+    elif temp_type[jj] == 1:
+        N_species[jj] = nsp_ppc[jj] * 2*rc_hwidth + 2    # Warm species only in simulation center
+N = N_species.sum()
+
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
 
@@ -114,7 +119,11 @@ k_max      = np.pi / dx                                  # Maximum permissible w
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
 
 # Need to fix this
-Bc        = np.zeros((NC + 1, 3), dtype=np.float64)      # Constant components of magnetic field based on theta and B0
+B_nodes  = (np.arange(NC + 1) - NC // 2) * dx 
+Bc       =  np.zeros((NC + 1, 3), dtype=np.float64)      # Constant components of magnetic field based on theta and B0
+for ii in range(NC + 1):
+        B[:, 0] = eval_B0x(B_nodes[ii]) # Set Bx initial
+        
 L = 4.3
 a = 4.5 / (L * RE)
                                                          # Assume Bzc = 0, orthogonal to field line direction
@@ -150,12 +159,11 @@ print('HM frequency       : {}mHz\n'.format(HM_frequency*1e3))
 
 print('Gyroperiod         : {}s'.format(round(2. * np.pi / gyfreq, 2)))
 print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 2)))
-print('Maximum sim time   : {}s ({} gyroperiods)'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev))
+print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev))
 
-print('\n{} particles per cell'.format(cellpart))
-print('{} spatial cells, 2x{} damped cells'.format(NX, ND))
+print('{} spatial cells, {} ring current cells, 2x{} damped cells'.format(NX, rc_hwidth*2, ND))
 print('{} cells total'.format(NC))
-print('{} particles total\n'.format(cellpart * NX))
+print('{} particles total\n'.format(N))
 
 if None not in cpu_affin:
     import psutil

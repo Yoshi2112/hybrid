@@ -9,6 +9,7 @@ import numpy as np
 
 from   simulation_parameters_1D  import ND, dx, xmin, xmax, qm_ratios, B_eq, a
 from   sources_1D                import collect_moments
+
 from fields_1D import eval_B0x
 
 

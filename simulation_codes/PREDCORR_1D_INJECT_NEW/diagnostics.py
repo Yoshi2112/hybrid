@@ -5,6 +5,7 @@ Created on Fri Sep 22 10:42:13 2017
 @author: iarey
 """
 import numpy as np
+import numba as nb
 import matplotlib.pyplot as plt
 import os
 import pdb
@@ -1271,12 +1272,17 @@ def plot_dipole_field_line(length=True):
     return
 
 def check_particle_position_individual():
+    '''
+    Verified. RC and cold population positions load fine
+    '''
     pos, vel, idx = init.uniform_gaussian_distribution_quiet()
-    pdb.set_trace()
+
+    plt.figure()
     for jj in range(const.Nj):
-        for ii in range(const.N):            
-            plt.scatter(pos[ii], jj, color=const.temp_color[jj])
-    
+        st = const.idx_start[jj]
+        en = const.idx_end[  jj]    
+        Np = en - st
+        plt.scatter(pos[st:en], np.ones(Np)*jj, color=const.temp_color[jj])
     return
 
 
@@ -1290,8 +1296,8 @@ if __name__ == '__main__':
     #test_density_and_velocity_deposition()
     #check_density_deposition()
     #visualize_inhomogenous_B()
-    plot_dipole_field_line()
-    #check_particle_position_individual()
+    #plot_dipole_field_line()
+    check_particle_position_individual()
     #test_cross_product()
     #test_cspline_interpolation()
     #test_E_convective()
