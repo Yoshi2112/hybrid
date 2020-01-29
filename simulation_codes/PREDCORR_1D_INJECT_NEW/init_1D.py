@@ -149,10 +149,10 @@ def initialize_fields():
     E_int   = np.zeros((NC    , 3), dtype=np.float64)
     E_half  = np.zeros((NC    , 3), dtype=np.float64)
 
-    # This can be better
-    
-        B[:, 1] = 0.                    # Set By initial
-        B[:, 2] = 0.                    # Set Bz initial
+    # Set initial B0
+    B[:, 0] = Bc[:, 0]
+    B[:, 1] = Bc[:, 0]
+    B[:, 2] = Bc[:, 0]
     
     Ve      = np.zeros((NC, 3), dtype=np.float64)
     Te      = np.zeros( NC,     dtype=np.float64)

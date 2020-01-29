@@ -118,19 +118,13 @@ e_gyfreq   = q*B_eq/me                                   # Electron Gyrofrequenc
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
 
-# Need to fix this
-B_nodes  = (np.arange(NC + 1) - NC // 2) * dx 
+L = 4.3                                                  # L-shell equivalent
+a = 4.5 / (L * RE)                                       # Scaling factor? 1/(L*RE) determines field
+                                                         # Strength along line, but 4.5 seems arbitrary
+B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx      # B grid points position in space
+B_nodes  = (np.arange(NC + 1) - NC // 2 + 0.5) * dx      # E grid points position in space
 Bc       =  np.zeros((NC + 1, 3), dtype=np.float64)      # Constant components of magnetic field based on theta and B0
-for ii in range(NC + 1):
-        B[:, 0] = eval_B0x(B_nodes[ii]) # Set Bx initial
-        
-L = 4.3
-a = 4.5 / (L * RE)
-                                                         # Assume Bzc = 0, orthogonal to field line direction
-
-
-
-
+Bc[:, 0] = B_eq * (1 + a * B_nodes**2)                   # Set constant Bx
 
 
 
