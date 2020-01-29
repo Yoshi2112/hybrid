@@ -9,6 +9,7 @@ import numpy as np
 
 from   simulation_parameters_1D  import ND, dx, xmin, xmax, qm_ratios, B_eq, a
 from   sources_1D                import collect_moments
+from fields_1D import eval_B0x
 
 
 
@@ -63,19 +64,23 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
     return
 
 
-def get_B0(x, v, b1, qmi, B0_xp):
+
+def eval_B0_particle(x, v, pidx, b1):
     '''
-    Function to map a point (x) in real units (meters) to some 
-    field geometry. Returns a 3-vector as a 3-array
+    Calculates the B0 magnetic field at the position of a particle. Neglects B0_r
+    and thus local cyclotron depends only on B0_x. Includes b1 in cyclotron, but
+    since b1 < B0_r, maybe don't?
     
-    # Issue: Calculate gyfreq but requires Br, which requires gyfreq?
+    Also, how accurate is this near the equator?
     '''
-    l_gyfreq = qmi * 1
+    b0x   = eval_B0x(x)    
+    b1t   = np.sqrt(b1[0] ** 2 + b1[1] ** 2 + b1[2] ** 2)
+    l_cyc = qm_ratios[pidx] * (b0x + b1t)
     
-    B0_xp[0] = B_eq * (1 + x ** 2)
-    B0_xp[1] = a * x * B_eq * v[2] / l_gyfreq
-    B0_xp[2] = 0.
-    return
+    fac   = a * B_eq * x / l_cyc
+    b0y   = v[2] * fac
+    b0z   =-v[1] * fac
+    return b0x, b0y, b0z
 
 
 @nb.njit()
@@ -93,7 +98,7 @@ def field_interpolation_to_particle(ii, E, B, Ie, W_elec, Ib, W_mag, pos, vel, q
        + B[Ib[ii] + 1, 0:3] * W_mag[1, ii]                              \
        + B[Ib[ii] + 2, 0:3] * W_mag[2, ii]                              # Vector B-field at particle location
     
-    get_B0(pos[ii], vel[:, ii], Bp, qmi, B0_xp)
+    eval_B0_particle(pos[ii], vel[:, ii], Bp, qmi, B0_xp)
     Bp += B0_xp
     return Ep, Bp
 

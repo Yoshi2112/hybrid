@@ -8,7 +8,11 @@ import numpy as np
 import numba as nb
 
 import auxilliary_1D as aux
-from simulation_parameters_1D import dx, Te0, ne, q, mu0, kB, ie, Bc
+from simulation_parameters_1D import dx, Te0, ne, q, mu0, kB, ie, Bc, B_eq, a
+
+
+def eval_B0x(x):
+    return B_eq * (1 + a * x**2)
 
 
 @nb.njit()

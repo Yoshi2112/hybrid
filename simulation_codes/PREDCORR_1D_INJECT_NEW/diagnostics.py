@@ -18,6 +18,13 @@ import init_1D as init
 from matplotlib import animation
 
 
+def boundary_idx64(time_arr, start, end):
+    '''Returns index values corresponding to the locations of the start/end times in a numpy time array, if specified times are np.datetime64'''
+    idx1 = np.where(abs(time_arr - start) == np.min(abs(time_arr - start)))[0][0] 
+    idx2 = np.where(abs(time_arr - end)   == np.min(abs(time_arr - end)))[0][0]
+    return idx1, idx2
+
+
 def r_squared(data, model):                  
     '''Calculates a simple R^2 value for the fit of model against data. Accepts single dimensional
     arrays only.'''
@@ -1168,31 +1175,100 @@ def save_diagnostic_plots(qq, pos, vel, B, E, q_dens, Ji, sim_time, DT):
 
 
 def visualize_inhomogenous_B():
+    '''
+    This isn't right, or is it? Work it out later
+    '''
     L    = 4.3      ;   q = 1.602e-19
     RE   = 6371000  ;   m = 1.673e-27
     
-    B_eq = 200e-9               # Tesla
-    a    = 4.5 / (L * RE)       # Where does the 4.5 come from? 
-    c    = 3e8
-    v_c  = 0.05
+    B_eq  = 200e-9               # Tesla at equator (Br = 0)
+    a     = 4.5 / (L * RE)       # Where does the 4.5 come from? 1/s variation, but derivation?
+    Wx_eq = 30e3 * q             # Initial perp energy in Joules
+    mu_eq = Wx_eq / B_eq         # First adiabatic invariant
     
-    xmax = 2*RE
+    xmax = 1*RE                  # How long should this be?
     x    = np.linspace(-xmax, xmax, 1000)
-    
-    gyfreq = q * B_eq / m
-    v_perp = v_c * c
-    rL     = v_perp / gyfreq
+    Nx   = x.shape[0]
     
     B_x =   B_eq * (1 + a * x**2)
-    B_r = - B_eq * rL * a * x
+    B_r = np.zeros((Nx, 3))
     
+    for ii in range(Nx):
+        # Coefficients of cubic in Br2: ax^3 + bx^2 + cx + d:
+        coeffs    = np.zeros(4)
+        coeffs[0] = 1.0      # Constant
+        coeffs[1] = B_x[ii] ** 2
+        coeffs[2] = 0.0
+        coeffs[3] = -a**4 * B_eq**4 * x[ii]**4 * 4 * mu_eq**2 * m**2 / q**4
+        Br2       = np.roots(coeffs)
+        B_r[ii, :]= np.sqrt(Br2)
+        
+    pdb.set_trace()
     plt.figure()
-    plt.plot(x, B_x, c='k')
-    plt.plot(x, B_r, c='r')
+    plt.plot(x / RE, B_x, c='k', label=r'$B_\parallel$')
+    plt.plot(x / RE, B_r, c='r', label=r'$B_\perp$')
+    plt.xlabel('x (RE)')
+    plt.ylabel('nT')
+    plt.legend()
     plt.show()
+    
+# =============================================================================
+#     plt.figure()
+#     plt.title('Percentage of main field composed of radial component')
+#     plt.scatter(x / RE, pct)
+#     plt.ylabel(r'%')
+# =============================================================================
     
     return
 
+
+def compare_parabolic_to_dipole():
+    '''
+    To do: Calculate difference in magnetic strength along a field line, test
+    how good this parabolic approx. is. Use dipole code to compare B0_x to
+    B0_mu and the radial component B0_r to mod(B0_nu, B0_phi). Plot for Colin, 
+    along with method Chapter
+    '''
+    return
+
+
+def plot_dipole_field_line(length=True):
+    '''
+    Plots field lines with basic L = r*sin^2(theta) relation. Can plot
+    multiple for all in Ls. Can also calculate arclengths from lat_st/lat_min
+    and print as the title (can be changed if you want)
+    '''
+    Ls         = [4.3]
+    dtheta     = 0.1
+    theta      = np.arange(0, 180. + dtheta, dtheta) * np.pi / 180
+        
+    lat_st = 80  
+    lat_en = 100
+    
+    plt.figure()
+    plt.gcf().gca().add_artist(plt.Circle((0,0), 1.0, color='k'))
+    
+    for L in Ls:
+        r     = L * np.sin(theta) ** 2
+        x     = r * np.cos(theta)
+        y     = r * np.sin(theta) 
+        
+        plt.scatter(y, x, c='b', s=1, marker='o')
+        
+    plt.axis('equal')
+    plt.axhline(0, ls=':', alpha=0.2, color='k')
+    plt.axvline(0, ls=':', alpha=0.2, color='k')
+    
+    if length == True:
+        idx_start, idx_end = boundary_idx64(theta * 180 / np.pi, lat_st, lat_en)
+        plt.scatter(y[idx_start:idx_end], x[idx_start:idx_end], c='k', s=4, marker='x')
+        
+        # Calculate arclength, r*dt
+        length = 0
+        for ii in range(idx_start, idx_end):
+            length += r[ii] * dtheta * np.pi / 180
+        plt.title('Arclength from {} deg to {} deg at L = {} : {:>5.2f} R_E'.format(lat_st, lat_en, L, length))
+    return
 
 def check_particle_position_individual():
     pos, vel, idx = init.uniform_gaussian_distribution_quiet()
@@ -1214,7 +1290,8 @@ if __name__ == '__main__':
     #test_density_and_velocity_deposition()
     #check_density_deposition()
     #visualize_inhomogenous_B()
-    check_particle_position_individual()
+    plot_dipole_field_line()
+    #check_particle_position_individual()
     #test_cross_product()
     #test_cspline_interpolation()
     #test_E_convective()
