@@ -68,8 +68,7 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
     return
 
 
-
-def eval_B0_particle(x, v, pidx, b1):
+def eval_B0_particle(x, v, qmi, b1):
     '''
     Calculates the B0 magnetic field at the position of a particle. Neglects B0_r
     and thus local cyclotron depends only on B0_x. Includes b1 in cyclotron, but
@@ -77,34 +76,15 @@ def eval_B0_particle(x, v, pidx, b1):
     
     Also, how accurate is this near the equator?
     '''
-    b0x   = eval_B0x(x)    
-    b1t   = np.sqrt(b1[0] ** 2 + b1[1] ** 2 + b1[2] ** 2)
-    l_cyc = qm_ratios[pidx] * (b0x + b1t)
+    B0_xp    = np.zeros(3)
+    B0_xp[0] = eval_B0x(x)    
+    b1t      = np.sqrt(b1[0] ** 2 + b1[1] ** 2 + b1[2] ** 2)
+    l_cyc    = qmi * (B0_xp[0] + b1t)
     
-    fac   = a * B_eq * x / l_cyc
-    b0y   = v[2] * fac
-    b0z   =-v[1] * fac
-    return b0x, b0y, b0z
-
-
-@nb.njit()
-def field_interpolation_to_particle(ii, E, B, Ie, W_elec, Ib, W_mag, pos, vel, qmi):
-    '''
-    Interpolates the fields to the particle positions using TSC weighting
-    '''
-    B0_xp = np.zeros(3)
-    
-    Ep = E[Ie[ii]    , 0:3] * W_elec[0, ii]                             \
-       + E[Ie[ii] + 1, 0:3] * W_elec[1, ii]                             \
-       + E[Ie[ii] + 2, 0:3] * W_elec[2, ii]                             # Vector E-field at particle location
-    
-    Bp = B[Ib[ii]    , 0:3] * W_mag[0, ii]                              \
-       + B[Ib[ii] + 1, 0:3] * W_mag[1, ii]                              \
-       + B[Ib[ii] + 2, 0:3] * W_mag[2, ii]                              # Vector B-field at particle location
-    
-    eval_B0_particle(pos[ii], vel[:, ii], Bp, qmi, B0_xp)
-    Bp += B0_xp
-    return Ep, Bp
+    fac      = a * B_eq * x / l_cyc
+    B0_xp[1] = v[2] * fac
+    B0_xp[2] =-v[1] * fac
+    return B0_xp
 
 
 @nb.njit()
@@ -132,15 +112,24 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     for ii in nb.prange(vel.shape[1]):  
         qmi = 0.5 * dt * qm_ratios[idx[ii]]                                 # Charge-to-mass ration for ion of species idx[ii]
 
-        Ep, Bp = field_interpolation_to_particle(ii, E, B, Ie, W_elec, Ib, W_mag, pos, vel, qmi)
+        Ep = E[Ie[ii]    , 0:3] * W_elec[0, ii]                             \
+           + E[Ie[ii] + 1, 0:3] * W_elec[1, ii]                             \
+           + E[Ie[ii] + 2, 0:3] * W_elec[2, ii]                             # Vector E-field at particle location
+
+        v_minus    = vel[:, ii] + qmi * Ep                                  # First E-field half-push
+
+        Bp = B[Ib[ii]    , 0:3] * W_mag[0, ii]                              \
+           + B[Ib[ii] + 1, 0:3] * W_mag[1, ii]                              \
+           + B[Ib[ii] + 2, 0:3] * W_mag[2, ii]                              # b1 at particle location
         
+        B0_xp = eval_B0_particle(pos[ii], v_minus, qmi, Bp)                 # B0 at particle location
+        Bp   += B0_xp                                                       # B  at particle location (total)
+
         T = qmi * Bp                                                        # Vector Boris variable
         S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable
 
-        v_minus    = vel[:, ii] + qmi * Ep
-        
         v_prime    = np.zeros(3)
-        v_prime[0] = v_minus[0] + v_minus[1] * T[2] - v_minus[2] * T[1]
+        v_prime[0] = v_minus[0] + v_minus[1] * T[2] - v_minus[2] * T[1]     # Magnetic field rotation
         v_prime[1] = v_minus[1] + v_minus[2] * T[0] - v_minus[0] * T[2]
         v_prime[2] = v_minus[2] + v_minus[0] * T[1] - v_minus[1] * T[0]
                 
@@ -149,7 +138,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
         v_plus[1]  = v_minus[1] + v_prime[2] * S[0] - v_prime[0] * S[2]
         v_plus[2]  = v_minus[2] + v_prime[0] * S[1] - v_prime[1] * S[0]
 
-        vel[:, ii] = v_plus +  qmi * Ep
+        vel[:, ii] = v_plus +  qmi * Ep                                     # Second E-field half-push
     return
 
 
