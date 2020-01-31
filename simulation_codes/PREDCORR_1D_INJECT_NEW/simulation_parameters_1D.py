@@ -18,7 +18,7 @@ save_particles  = 1                             # Save data flag    : For later 
 save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin       = [(2*run_num)%8, (2*run_num + 1)%8]      # Set CPU affinity for run. Must be list. Auto-assign: None.
-
+supress_text    = True
 
 ### PHYSICAL CONSTANTS ###
 q   = 1.602177e-19                          # Elementary charge (C)
@@ -122,12 +122,9 @@ L = 4.3                                                  # L-shell equivalent
 a = 4.5 / (L * RE)                                       # Scaling factor? 1/(L*RE) determines field
                                                          # Strength along line, but 4.5 seems arbitrary
 B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx      # B grid points position in space
-B_nodes  = (np.arange(NC + 1) - NC // 2 + 0.5) * dx      # E grid points position in space
+E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
 Bc       =  np.zeros((NC + 1, 3), dtype=np.float64)      # Constant components of magnetic field based on theta and B0
 Bc[:, 0] = B_eq * (1 + a * B_nodes**2)                   # Set constant Bx
-
-
-
 
 
 
@@ -140,33 +137,34 @@ Bc[:, 0] = B_eq * (1 + a * B_nodes**2)                   # Set constant Bx
 #%%
 #%%
 #%%### INPUT TESTS AND CHECKS
-print('Run Started')
-print('Run Series         : {}'.format(save_path.split('//')[-1]))
-print('Run Number         : {}'.format(run_num))
-print('Field save flag    : {}'.format(save_fields))
-print('Particle save flag : {}\n'.format(save_particles))
-
-print('Density            : {}cc'.format(round(ne / 1e6, 2)))
-print('Equatorial B-field : {}nT'.format(round(B_eq*1e9, 1)))
-print('HM amplitude       : {}nT'.format(HM_amplitude*1e9))
-print('HM frequency       : {}mHz\n'.format(HM_frequency*1e3))
-
-print('Gyroperiod         : {}s'.format(round(2. * np.pi / gyfreq, 2)))
-print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 2)))
-print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev))
-
-print('{} spatial cells, {} ring current cells, 2x{} damped cells'.format(NX, rc_hwidth*2, ND))
-print('{} cells total'.format(NC))
-print('{} particles total\n'.format(N))
-
-if None not in cpu_affin:
-    import psutil
-    run_proc = psutil.Process()
-    run_proc.cpu_affinity(cpu_affin)
-    if len(cpu_affin) == 1:
-        print('CPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
-    else:
-        print('CPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
+if supress_text == False:
+    print('Run Started')
+    print('Run Series         : {}'.format(save_path.split('//')[-1]))
+    print('Run Number         : {}'.format(run_num))
+    print('Field save flag    : {}'.format(save_fields))
+    print('Particle save flag : {}\n'.format(save_particles))
+    
+    print('Density            : {}cc'.format(round(ne / 1e6, 2)))
+    print('Equatorial B-field : {}nT'.format(round(B_eq*1e9, 1)))
+    print('HM amplitude       : {}nT'.format(HM_amplitude*1e9))
+    print('HM frequency       : {}mHz\n'.format(HM_frequency*1e3))
+    
+    print('Gyroperiod         : {}s'.format(round(2. * np.pi / gyfreq, 2)))
+    print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 2)))
+    print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev))
+    
+    print('{} spatial cells, {} ring current cells, 2x{} damped cells'.format(NX, rc_hwidth*2, ND))
+    print('{} cells total'.format(NC))
+    print('{} particles total\n'.format(N))
+    
+    if None not in cpu_affin:
+        import psutil
+        run_proc = psutil.Process()
+        run_proc.cpu_affinity(cpu_affin)
+        if len(cpu_affin) == 1:
+            print('CPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
+        else:
+            print('CPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
     
 density_normal_sum = (charge / q) * (density / ne)
 

@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 
-from   simulation_parameters_1D  import ND, dx, xmin, xmax, qm_ratios, B_eq, a
+from   simulation_parameters_1D  import ND, dx, xmin, xmax, qm_ratios, B_eq, a, NC
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -55,11 +55,14 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
     else:
         grid_offset   = 0.0
     
-    for ii in np.arange(Np):
-        I[ii]       = int(round(pos[ii] / dx - grid_offset + epsilon) - 1.0) + ND
-        delta_left  = I[ii] - (pos[ii] + epsilon) / dx + grid_offset - ND
+    particle_transform = xmax - grid_offset + epsilon + ND      # Offset to account for E/B grid and damping nodes
     
-        W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))
+    for ii in np.arange(Np):
+        xp          = (pos[ii] + particle_transform) / dx       # Shift particle position >= 0
+        I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node
+        delta_left  = I[ii] - xp                                # Distance from left node in grid units
+    
+        W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))      # Get weighting factors
         W[1, ii] = 0.75 - np.square(delta_left + 1.)
         W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
     return

@@ -212,43 +212,53 @@ def test_weight_conservation():
     return
 
 
-def test_weight_shape():
+def test_weight_shape_and_alignment():
     plt.ion()
     
-    XMIN = 0
-    XMAX = const.NX * const.dx
+    positions  = np.array([2.45])
     
-    #positions     = np.array([80, 205, 340, 360])
-    positions     = np.array([350])
+    XMIN       = const.xmin
+    XMAX       = const.xmax
+    E_nodes    = const.E_nodes
+    B_nodes    = const.B_nodes    
     
-    E_nodes  = (np.arange(const.NX + 2*const.ND) - const.ND  + 0.5) * const.dx
-    B_nodes  = (np.arange(const.NX + 2*const.ND) - const.ND  - 0.0) * const.dx
-    dns_test =  np.zeros( const.NX + 2*const.ND) 
+    E_grid     = False
+    arr_offset = 0       if E_grid is True else 1
+    X_grid     = E_nodes if E_grid is True else B_nodes
+    X_color    = 'r'     if E_grid is True else 'b'
     
-    left_nodes    = np.zeros(positions.shape[0], dtype=int)
-    weights       = np.zeros((3, positions.shape[0]))
+    Np         = positions.shape[0]
+    Nc         = const.NX + 2*const.ND + arr_offset
     
-    particles.assign_weighting_TSC(positions, left_nodes, weights, E_nodes=True)
+    W_test     = np.zeros(Nc) 
+    left_nodes = np.zeros(Np, dtype=int)
+    weights    = np.zeros((3, Np))
+
+    particles.assign_weighting_TSC(positions, left_nodes, weights, E_nodes=E_grid)
     
-    plt.figure()
+    plt.figure(figsize=(16,10))
     for ii in range(positions.shape[0]):
-        plt.axvline(positions[ii], linestyle='-', c='k', alpha=0.2)
+        
+        plt.scatter(positions[ii], 1.0, c='k')
+        
         for jj in range(3):
             xx = left_nodes[ii] + jj
             
-            plt.axvline(positions[ii], linestyle='-', c='k', alpha=0.2)
-            plt.axvline(E_nodes[  xx], linestyle='-', c='r', alpha=1.0)
+            plt.axvline(X_grid[xx], linestyle='-', c=X_color, alpha=1.0)
             
-            dns_test[xx] = weights[jj, ii]
+            W_test[xx] = weights[jj, ii]
+    
+    plt.plot(X_grid, W_test, marker='o')
+    plt.title('Total Weighting: {}'.format(W_test.sum()))
 
-    plt.plot(E_nodes, dns_test, marker='o')
-
+    # Draw nodes, limits
     for ii in range(E_nodes.shape[0]):
         plt.axvline(E_nodes[ii], linestyle='--', c='r', alpha=0.2)
         plt.axvline(B_nodes[ii], linestyle='--', c='b', alpha=0.2)
     
     plt.axvline(XMIN, linestyle=':', c='k', alpha=0.5)
     plt.axvline(XMAX, linestyle=':', c='k', alpha=0.5)
+    plt.xlim(B_nodes[0], B_nodes[-1])
     return
 
 
@@ -288,6 +298,7 @@ def check_source_term_boundaries(qn, ji):
     plt.axvline(const.xmax / 1e3, linestyle=':', c='k', alpha=0.5)
     plt.ylabel('Current density')
     plt.xlabel('x (km)')
+    
     
     return
 
@@ -1223,16 +1234,6 @@ def visualize_inhomogenous_B():
     return
 
 
-def compare_parabolic_to_dipole():
-    '''
-    To do: Calculate difference in magnetic strength along a field line, test
-    how good this parabolic approx. is. Use dipole code to compare B0_x to
-    B0_mu and the radial component B0_r to mod(B0_nu, B0_phi). Plot for Colin, 
-    along with method Chapter
-    '''
-    return
-
-
 def plot_dipole_field_line(length=True):
     '''
     Plots field lines with basic L = r*sin^2(theta) relation. Can plot
@@ -1286,6 +1287,77 @@ def check_particle_position_individual():
     return
 
 
+def compare_parabolic_to_dipole():
+    '''
+    To do: Calculate difference in magnetic strength along a field line, test
+    how good this parabolic approx. is. Use dipole code to compare B0_x to
+    B0_mu and the radial component B0_r to mod(B0_nu, B0_phi). Plot for Colin, 
+    along with method Chapter.
+    
+    Shoji has a simulation extent on the order of R_E (0, 800 is about 6.3R_E,
+    but is that symmetric?)
+    
+    Coded my own a based on equivalent values at +-30 degrees off equator. Maybe 
+    alter code to 
+    '''
+    B_surf = 3.12e-5    # Magnetic field strength at Earth surface
+    L      = 4.3        # Field line L shell
+    dtheta = 0.01       # Angle increment
+    lat_st = 60         # Minimum latitude
+    lat_en = 120        # Maximum latitude
+    
+    min_theta = np.arcsin(np.sqrt(1 / (L))) * 180 / np.pi
+    
+    # Calculate dipole field intensity (nT) and locations in (r, theta)
+    theta = np.arange(min_theta, 180. + dtheta - min_theta, dtheta) * np.pi / 180
+    r     = L * np.sin(theta) ** 2
+    B_mu  = (B_surf / (r ** 3)) * np.sqrt(3*np.cos(theta)**2 + 1) * 1e9
+
+    if False:
+        # Convert to (x,y) for plotting
+        x     = r * np.cos(theta)
+        y     = r * np.sin(theta)
+        
+        plt.figure(1)
+        plt.gcf().gca().add_artist(plt.Circle((0,0), 1.0, color='k', fill=False))
+        
+        plt.scatter(y, x, c=B_mu, s=1)
+        plt.colorbar().set_label('|B| (nT)', rotation=0, labelpad=20, fontsize=14)
+        plt.clim(None, 1000)
+        plt.xlabel(r'x ($R_E$)', rotation=0)
+        plt.ylabel(r'y ($R_E$)', rotation=0, labelpad=10)
+        plt.title('Geomagnetic Field Intensity at L = {}'.format(L))
+        plt.axis('equal')
+        plt.axhline(0, ls=':', alpha=0.2, color='k')
+        plt.axvline(0, ls=':', alpha=0.2, color='k')    
+    
+    
+    # Calculate cylindrical/parabolic approximation between lat st/en
+    st, en = boundary_idx64(theta * 180 / np.pi, lat_st, lat_en)
+    
+    length = 0
+    for ii in range(st, en):
+        length += r[ii] * dtheta * np.pi / 180
+    
+    RE   = 1.0
+    z    = np.linspace(-length/2, length/2, en - st, endpoint=True) * RE
+    a    = 4.5 / (L * RE)
+    B0_z = B_mu.min() * (1 + a * z ** 2)
+    
+    print('Domain length : {:5.2f}RE'.format(length))
+    print('Minimum field : {:5.2f}nT'.format(B_mu.min()))
+    print('Maximum field : {:5.2f}nT'.format(B_mu[st:en].max()))
+    print('Max/Min ratio : {:5.2f}'.format(B_mu[st:en].max() / B_mu.min()))
+    
+    plt.figure(2)
+    plt.scatter(z, B0_z,           label='Cylindrical approximation')
+    plt.scatter(z/RE, B_mu[st:en], label='Dipole field intensity')
+    plt.xlabel(r'z ($R_E$)',     rotation=0, fontsize=14)
+    plt.ylabel(r'$B_\parallel$', rotation=0, fontsize=14)
+    plt.legend()
+    return
+
+
 if __name__ == '__main__':
     #check_position_distribution()
     #animate_moving_weight()
@@ -1297,7 +1369,7 @@ if __name__ == '__main__':
     #check_density_deposition()
     #visualize_inhomogenous_B()
     #plot_dipole_field_line()
-    check_particle_position_individual()
+    #check_particle_position_individual()
     #test_cross_product()
     #test_cspline_interpolation()
     #test_E_convective()
@@ -1309,5 +1381,5 @@ if __name__ == '__main__':
     #test_varying_background_function()
     #test_push_B_w_varying_background()
     #test_weight_conservation()
-    #test_weight_shape()
-    
+    test_weight_shape_and_alignment()
+    #compare_parabolic_to_dipole()
