@@ -215,7 +215,7 @@ def test_weight_conservation():
 def test_weight_shape_and_alignment():
     plt.ion()
     
-    positions  = np.array([2.45])
+    positions  = np.array([-1.5]) * const.dx
     
     XMIN       = const.xmin
     XMAX       = const.xmax
@@ -1301,10 +1301,10 @@ def compare_parabolic_to_dipole():
     alter code to 
     '''
     B_surf = 3.12e-5    # Magnetic field strength at Earth surface
-    L      = 4.3        # Field line L shell
+    L      = 5.35       # Field line L shell
     dtheta = 0.01       # Angle increment
-    lat_st = 60         # Minimum latitude
-    lat_en = 120        # Maximum latitude
+    lat_st = 80         # Minimum latitude
+    lat_en = 110        # Maximum latitude
     
     min_theta = np.arcsin(np.sqrt(1 / (L))) * 180 / np.pi
     

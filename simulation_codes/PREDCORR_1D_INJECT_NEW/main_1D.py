@@ -12,7 +12,7 @@ import save_routines as save
 import diagnostics   as diag
 
 from simulation_parameters_1D import save_particles, save_fields
-
+import pdb
 
 if __name__ == '__main__':
     start_time = timer()
@@ -26,7 +26,7 @@ if __name__ == '__main__':
     # Collect initial moments and save initial state
     sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D) 
     fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D)
-    
+    pdb.set_trace()
     DT, max_inc, part_save_iter, field_save_iter        = init.set_timestep(vel, E_int)
     
     if save_particles == 1:
@@ -36,13 +36,13 @@ if __name__ == '__main__':
         save.save_field_data(0, DT, field_save_iter, 0, Ji, E_int, B, Ve, Te, q_dens)
     
     #diag.check_source_term_boundaries(q_dens, Ji)
-    diag.save_diagnostic_plots(0, pos, vel, B, E_int, q_dens, Ji, 0, DT)
+    #diag.save_diagnostic_plots(0, pos, vel, B, E_int, q_dens, Ji, 0, DT)
     
     # Retard velocity
     particles.assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
-    particles.velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT)
+    particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT)
     
-    qq       = 1;    sim_time = DT
+    qq       = 1;    sim_time = DT;     max_inc = 0
     print('Starting main loop...')
     while qq < max_inc:
         qq, DT, max_inc, part_save_iter, field_save_iter =               \

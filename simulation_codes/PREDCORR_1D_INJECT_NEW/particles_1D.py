@@ -21,7 +21,7 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
     Helper function to group the particle advance and moment collection functions
     ''' 
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
-    velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT)
+    velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT)
     position_update(pos, vel, idx, DT, Ie, W_elec)  
     collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, ni, nu, temp1D)
     return
@@ -48,14 +48,14 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
           is the easiest way to get around it.
     '''
     Np         = pos.shape[0]
-    epsilon    = 1e-15
+    epsil      = 1e-15
     
     if E_nodes == True:
         grid_offset   = 0.5
     else:
         grid_offset   = 0.0
     
-    particle_transform = xmax - grid_offset + epsilon + ND      # Offset to account for E/B grid and damping nodes
+    particle_transform = xmax + (ND - grid_offset)*dx  + epsil  # Offset to account for E/B grid and damping nodes
     
     for ii in np.arange(Np):
         xp          = (pos[ii] + particle_transform) / dx       # Shift particle position >= 0
@@ -68,6 +68,7 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
     return
 
 
+@nb.njit()
 def eval_B0_particle(x, v, qmi, b1):
     '''
     Calculates the B0 magnetic field at the position of a particle. Neglects B0_r

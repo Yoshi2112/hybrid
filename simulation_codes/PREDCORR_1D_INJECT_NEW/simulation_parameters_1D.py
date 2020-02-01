@@ -14,11 +14,11 @@ run_description = '''Testing to see if I can get this open boundary thing to wor
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path       = 'runs//open_boundary_test'    # Series save dir   : Folder containing all runs of a series
 run_num         = 2                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles  = 1                             # Save data flag    : For later analysis
-save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
+save_particles  = 0                             # Save data flag    : For later analysis
+save_fields     = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin       = [(2*run_num)%8, (2*run_num + 1)%8]      # Set CPU affinity for run. Must be list. Auto-assign: None.
-supress_text    = True
+supress_text    = False
 
 ### PHYSICAL CONSTANTS ###
 q   = 1.602177e-19                          # Elementary charge (C)
@@ -32,7 +32,7 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 6                                # Number of cells - doesn't include ghost cells
+NX       = 16                                # Number of cells - doesn't include ghost cells
 ND       = 2                                # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev  = 100                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 r_damp   = 0.0129                           # Damping strength
@@ -49,18 +49,18 @@ field_res = 0.10                            # Data capture resolution in gyroper
 
 
 ### PARTICLE PARAMETERS ###
-species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
-temp_color = ['blue', 'red']
-temp_type  = np.array([0,      1])             	            # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-dist_type  = np.array([0,      0])                          # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.array([10, 20])                             # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+species_lbl= [r'$H^+$ cold']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
+temp_color = ['blue']
+temp_type  = np.array([0])             	            # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.array([0])                          # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+nsp_ppc    = np.array([1000])                         # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 
-mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
-charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
-drift_v    = np.array([0., 0.])                             # Species parallel bulk velocity (alfven velocity units)
-density    = np.array([190., 10.]) * 1e6                    # Species density in /cc (cast to /m3)
-E_per      = np.array([5.0, 30000.])
-anisotropy = np.array([0.0, 4.0])
+mass       = np.array([1.])    			                # Species ion mass (proton mass units)
+charge     = np.array([1.])    			                # Species ion charge (elementary charge units)
+drift_v    = np.array([0.])                             # Species parallel bulk velocity (alfven velocity units)
+density    = np.array([195.]) * 1e6                     # Species density in /cc (cast to /m3)
+E_per      = np.array([5.0])
+anisotropy = np.array([0.0])
 
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
@@ -90,7 +90,7 @@ Tper       = E_per * 11603.
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma
 
-dx         = 1.#dxm * c / wpi                               # Spatial cadence, based on ion inertial length
+dx         = dxm * c / wpi                               # Spatial cadence, based on ion inertial length
 xmax       = NX // 2 * dx                                # Maximum simulation length, +/-ve on each side
 xmin       =-NX // 2 * dx
 
@@ -145,9 +145,9 @@ if supress_text == False:
     print('Particle save flag : {}\n'.format(save_particles))
     
     print('Density            : {}cc'.format(round(ne / 1e6, 2)))
-    print('Equatorial B-field : {}nT'.format(round(B_eq*1e9, 1)))
-    print('HM amplitude       : {}nT'.format(HM_amplitude*1e9))
-    print('HM frequency       : {}mHz\n'.format(HM_frequency*1e3))
+    print('Equatorial B-field : {}nT\n'.format(round(B_eq*1e9, 1)))
+    #print('HM amplitude       : {}nT'.format(HM_amplitude*1e9))
+    #print('HM frequency       : {}mHz\n'.format(HM_frequency*1e3))
     
     print('Gyroperiod         : {}s'.format(round(2. * np.pi / gyfreq, 2)))
     print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 2)))

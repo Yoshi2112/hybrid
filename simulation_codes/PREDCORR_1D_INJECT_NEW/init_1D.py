@@ -11,7 +11,6 @@ import simulation_parameters_1D as const
 import save_routines as save
 
 from particles_1D             import assign_weighting_TSC
-from fields_1D                import eval_B0x
 
 from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc,                  \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v, \
@@ -249,7 +248,7 @@ def set_timestep(vel, E):
 
     if const.save_fields == 1 or const.save_particles == 1:
         save.store_run_parameters(DT, part_save_iter, field_save_iter)
-
+    pdb.set_trace()
     print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))
     return DT, max_inc, part_save_iter, field_save_iter
 
