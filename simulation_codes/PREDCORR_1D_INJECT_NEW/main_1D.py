@@ -58,9 +58,9 @@ if __name__ == '__main__':
             save.save_field_data(sim_time, DT, field_save_iter, qq, Ji, E_int, B, Ve, Te, q_dens)
         
         if qq%20 == 0:
-            diag.save_diagnostic_plots(qq, pos, vel, B, E_int, q_dens, Ji, sim_time, DT)
+            #diag.save_diagnostic_plots(qq, pos, vel, B, E_int, q_dens, Ji, sim_time, DT)
             
-        print('Timestep {} of {} complete'.format(qq, max_inc))
+            print('Timestep {} of {} complete'.format(qq, max_inc))
         qq       += 1
         sim_time += DT
         

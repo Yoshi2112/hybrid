@@ -12,8 +12,8 @@ run_description = '''Testing to see if I can get this open boundary thing to wor
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs//open_boundary_test'    # Series save dir   : Folder containing all runs of a series
-run_num         = 2                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path       = 'runs//non_uniform_B0_test'   # Series save dir   : Folder containing all runs of a series
+run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles  = 0                             # Save data flag    : For later analysis
 save_fields     = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
@@ -32,15 +32,15 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 16                                # Number of cells - doesn't include ghost cells
-ND       = 2                                # Damping region length: Multiple of NX (on each side of simulation domain)
+NX       = 128                              # Number of cells - doesn't include ghost cells
+ND       = 32                               # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev  = 100                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 r_damp   = 0.0129                           # Damping strength
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
 B_eq      = 200e-9                          # Unform initial magnetic field value (in T)
-rc_hwidth = 1                               # Ring current half-width in number of cells (2*hwidth gives equatorial extent of RC) 
+rc_hwidth = 16                              # Ring current half-width in number of cells (2*hwidth gives equatorial extent of RC) 
 
 orbit_res = 0.10                            # Particle orbit resolution: Fraction of gyroperiod in seconds
 freq_res  = 0.02                            # Frequency resolution     : Fraction of inverse radian cyclotron frequency
@@ -49,18 +49,18 @@ field_res = 0.10                            # Data capture resolution in gyroper
 
 
 ### PARTICLE PARAMETERS ###
-species_lbl= [r'$H^+$ cold']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
-temp_color = ['blue']
-temp_type  = np.array([0])             	            # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-dist_type  = np.array([0])                          # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.array([1000])                         # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
+temp_color = ['blue', 'red']
+temp_type  = np.array([0, 1])             	            # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.array([0, 0])                           # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+nsp_ppc    = np.array([1000, 4000])                     # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 
-mass       = np.array([1.])    			                # Species ion mass (proton mass units)
-charge     = np.array([1.])    			                # Species ion charge (elementary charge units)
-drift_v    = np.array([0.])                             # Species parallel bulk velocity (alfven velocity units)
-density    = np.array([195.]) * 1e6                     # Species density in /cc (cast to /m3)
-E_per      = np.array([5.0])
-anisotropy = np.array([0.0])
+mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
+charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
+drift_v    = np.array([0., 0.])                             # Species parallel bulk velocity (alfven velocity units)
+density    = np.array([195., 5.]) * 1e6                     # Species density in /cc (cast to /m3)
+E_per      = np.array([5.0, 30000.])
+anisotropy = np.array([0.0, 4.0])
 
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
