@@ -150,8 +150,8 @@ def initialize_fields():
 
     # Set initial B0
     B[:, 0] = Bc[:, 0]
-    B[:, 1] = Bc[:, 0]
-    B[:, 2] = Bc[:, 0]
+    B[:, 1] = Bc[:, 1]
+    B[:, 2] = Bc[:, 2]
     
     Ve      = np.zeros((NC, 3), dtype=np.float64)
     Te      = np.zeros( NC,     dtype=np.float64)
@@ -248,7 +248,7 @@ def set_timestep(vel, E):
 
     if const.save_fields == 1 or const.save_particles == 1:
         save.store_run_parameters(DT, part_save_iter, field_save_iter)
-    pdb.set_trace()
+
     print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))
     return DT, max_inc, part_save_iter, field_save_iter
 
