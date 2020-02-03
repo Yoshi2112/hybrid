@@ -1358,11 +1358,9 @@ def compare_parabolic_to_dipole():
     Coded my own a based on equivalent values at +-30 degrees off equator. Maybe 
     alter code to 
     '''
-    B_surf = 3.12e-5    # Magnetic field strength at Earth surface
-    L      = 5.35       # Field line L shell
-    dtheta = 0.01       # Angle increment
-    lat_st = 80         # Minimum latitude
-    lat_en = 110        # Maximum latitude
+    B_surf    = 3.12e-5    # Magnetic field strength at Earth surface
+    L         = 5.35       # Field line L shell
+    dtheta    = 0.01       # Angle increment
     
     min_theta = np.arcsin(np.sqrt(1 / (L))) * 180 / np.pi
     
@@ -1389,30 +1387,35 @@ def compare_parabolic_to_dipole():
         plt.axhline(0, ls=':', alpha=0.2, color='k')
         plt.axvline(0, ls=':', alpha=0.2, color='k')    
     
+    else:
     
-    # Calculate cylindrical/parabolic approximation between lat st/en
-    st, en = boundary_idx64(theta * 180 / np.pi, lat_st, lat_en)
-    
-    length = 0
-    for ii in range(st, en):
-        length += r[ii] * dtheta * np.pi / 180
-    
-    RE   = 1.0
-    z    = np.linspace(-length/2, length/2, en - st, endpoint=True) * RE
-    a    = 4.5 / (L * RE)
-    B0_z = B_mu.min() * (1 + a * z ** 2)
-    
-    print('Domain length : {:5.2f}RE'.format(length))
-    print('Minimum field : {:5.2f}nT'.format(B_mu.min()))
-    print('Maximum field : {:5.2f}nT'.format(B_mu[st:en].max()))
-    print('Max/Min ratio : {:5.2f}'.format(B_mu[st:en].max() / B_mu.min()))
-    
-    plt.figure(2)
-    plt.scatter(z, B0_z,           label='Cylindrical approximation')
-    plt.scatter(z/RE, B_mu[st:en], label='Dipole field intensity')
-    plt.xlabel(r'z ($R_E$)',     rotation=0, fontsize=14)
-    plt.ylabel(r'$B_\parallel$', rotation=0, fontsize=14)
-    plt.legend()
+        # Calculate cylindrical/parabolic approximation between lat st/en
+        lat_width = 20         # Latitudinal width (from equator)
+
+        st, en = boundary_idx64(theta * 180 / np.pi, 90 - lat_width, 90 + lat_width)
+        
+        length = 0
+        for ii in range(st, en):
+            length += r[ii] * dtheta * np.pi / 180
+        
+        RE   = 1.0
+        sfac = 1.1
+        z    = np.linspace(-length/2, length/2, en - st, endpoint=True) * RE
+        a    = sfac / (L * RE)
+        B0_z = B_mu.min() * (1 + a * z ** 2)
+        
+        print('Domain length : {:5.2f}RE'.format(length))
+        print('Minimum field : {:5.2f}nT'.format(B_mu.min()))
+        print('Maximum field : {:5.2f}nT'.format(B_mu[st:en].max()))
+        print('Max/Min ratio : {:5.2f}'.format(B_mu[st:en].max() / B_mu.min()))
+        
+        plt.figure(2)
+        plt.scatter(z/RE, B0_z,        label='Cylindrical approximation')
+        plt.scatter(z/RE, B_mu[st:en], label='Dipole field intensity')
+        plt.title(r'Approximation for $a = \frac{%.1f}{LR_E}$' % sfac, fontsize=18)
+        plt.xlabel(r'z ($R_E$)',     rotation=0, fontsize=14)
+        plt.ylabel(r'$B_\parallel$', rotation=0, fontsize=14)
+        plt.legend()
     return
 
 
@@ -1440,7 +1443,7 @@ def test_mirror_motion():
     DT       = min(ion_ts, vel_ts)
     #DT      *= 0.1
     
-    max_rev  = 10 
+    max_rev  = 20 
     max_inc  = int(max_rev / (DT*gyfreq))
     
     pos_history = np.zeros((max_inc))
@@ -1477,7 +1480,7 @@ def test_mirror_motion():
         
     time = np.arange(pos_history.shape[0])
 
-    if False:
+    if True:
         ## Plots position/mag timeseries ##
         fig, ax = plt.subplots()
         ax.plot(time, pos_history*1e-3, c='k', marker='o')
@@ -1494,7 +1497,7 @@ def test_mirror_motion():
         ax.axhline(const.xmin*1e-3, color='k', ls=':')
         ax.axhline(const.xmax*1e-3, color='k', ls=':')
         
-    if False:
+    elif False:
         ## Plots velocity timeseries ##
         fig, ax = plt.subplots()
         ax.plot(time, vel_history[:, 0]*1e-3, marker='o', label='vx')
@@ -1504,7 +1507,7 @@ def test_mirror_motion():
         ax.set_xlabel('v (km/s)')
         ax.legend()
         
-    if True:
+    elif False:
         # Plot gyromotion of particle
         plt.plot(vel_history[:, 1], vel_history[:, 2], marker='o')
         plt.ylabel('vy (km/s)')

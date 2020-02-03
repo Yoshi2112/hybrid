@@ -132,7 +132,11 @@ theta_xmax  = xmax/(L*RE)   # Latitudinal extent of simulation
 # Calculate radial distance of boundary in dipole and get field intensity
 r_xmax = L * np.sin(np.pi / 2 - theta_xmax) ** 2
 B_xmax = (B_surf / (r_xmax ** 3)) * np.sqrt(3*np.cos(theta_xmax)**2 + 1)
-a      = (B_xmax / B_eq - 1) / xmax ** 2                                
+
+if True:
+    a = (B_xmax / B_eq - 1) / xmax ** 2                                
+else:
+    a = 1.0
 
 Bc       =  np.zeros((NC + 1, 3), dtype=np.float64)      # Constant components of magnetic field based on theta and B0
 Bc[:, 0] = B_eq * (1 + a * B_nodes**2)                   # Set constant Bx

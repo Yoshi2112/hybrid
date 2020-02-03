@@ -83,8 +83,8 @@ def eval_B0_particle(x, v, qmi, b1):
     l_cyc    = qmi * (B0_xp[0] + b1t)
     
     fac      = a * B_eq * x / l_cyc
-    #B0_xp[1] = v[2] * fac
-    #B0_xp[2] =-v[1] * fac
+    B0_xp[1] = v[2] * fac
+    B0_xp[2] =-v[1] * fac
     return B0_xp
 
 
