@@ -14,8 +14,8 @@ run_description = '''Testing to see if I can get this open boundary thing to wor
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path       = 'runs//non_uniform_B0_test'   # Series save dir   : Folder containing all runs of a series
 run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles  = 0                             # Save data flag    : For later analysis
-save_fields     = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
+save_particles  = 1                             # Save data flag    : For later analysis
+save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin       = [(2*run_num)%8, (2*run_num + 1)%8]      # Set CPU affinity for run. Must be list. Auto-assign: None.
 supress_text    = False
@@ -32,9 +32,9 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 128                              # Number of cells - doesn't include ghost cells
-ND       = 32                               # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev  = 100                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+NX       = 512                              # Number of cells - doesn't include ghost cells
+ND       = 128                              # Damping region length: Multiple of NX (on each side of simulation domain)
+max_rev  = 10000                            # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 r_damp   = 0.0129                           # Damping strength
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 
@@ -53,7 +53,7 @@ species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/label
 temp_color = ['blue', 'red']
 temp_type  = np.array([0, 1])             	            # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
 dist_type  = np.array([0, 0])                           # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.array([1000, 4000])                     # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+nsp_ppc    = np.array([1000, 6000])                     # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
@@ -118,15 +118,28 @@ e_gyfreq   = q*B_eq/me                                   # Electron Gyrofrequenc
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
 
-L = 4.3                                                  # L-shell equivalent
-a = 4.5 / (L * RE)                                       # Scaling factor? 1/(L*RE) determines field
-                                                         # Strength along line, but 4.5 seems arbitrary
 B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx      # B grid points position in space
 E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
+
+
+############################
+### MAGNETIC FIELD STUFF ###
+############################
+B_surf      = 3.12e-5       # Magnetic field strength at Earth surface
+L           = 4.3           # Field line L shell
+theta_xmax  = xmax/(L*RE)   # Latitudinal extent of simulation 
+
+# Calculate radial distance of boundary in dipole and get field intensity
+r_xmax = L * np.sin(np.pi / 2 - theta_xmax) ** 2
+B_xmax = (B_surf / (r_xmax ** 3)) * np.sqrt(3*np.cos(theta_xmax)**2 + 1)
+a      = (B_xmax / B_eq - 1) / xmax ** 2                                
+
 Bc       =  np.zeros((NC + 1, 3), dtype=np.float64)      # Constant components of magnetic field based on theta and B0
 Bc[:, 0] = B_eq * (1 + a * B_nodes**2)                   # Set constant Bx
 
-
+# Set B0 in damping cells (same as last spatial cell)
+Bc[:ND]      = Bc[ND]
+Bc[ND+NX+1:] = Bc[ND+NX]
 
 
 
@@ -144,12 +157,12 @@ if supress_text == False:
     print('Field save flag    : {}'.format(save_fields))
     print('Particle save flag : {}\n'.format(save_particles))
     
-    print('Density            : {}cc'.format(round(ne / 1e6, 2)))
-    print('Equatorial B-field : {}nT\n'.format(round(B_eq*1e9, 1)))
-    #print('HM amplitude       : {}nT'.format(HM_amplitude*1e9))
-    #print('HM frequency       : {}mHz\n'.format(HM_frequency*1e3))
+    print('Sim domain length  : {:5.2f}R_E'.format(2 * xmax / RE))
+    print('Density            : {:5.2f}cc'.format(ne / 1e6))
+    print('Equatorial B-field : {:5.2f}nT'.format(B_eq*1e9))
+    print('Maximum    B-field : {:5.2f}nT\n'.format(Bc.max()*1e9))
     
-    print('Gyroperiod         : {}s'.format(round(2. * np.pi / gyfreq, 2)))
+    print('Equat. Gyroperiod: : {}s'.format(round(2. * np.pi / gyfreq, 2)))
     print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 2)))
     print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev))
     

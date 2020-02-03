@@ -13,7 +13,7 @@ from shutil import rmtree
 import simulation_parameters_1D as const
 from   simulation_parameters_1D import drive, save_path, NX, ND, NC, r_damp, ne, density, save_particles, save_fields
 from   simulation_parameters_1D import idx_start, idx_end, Nj, species_lbl, temp_type, dist_type, mass, charge,\
-                                       drift_v, Tpar, Tper, temp_color, nsp_ppc, Bc
+                                       drift_v, Tpar, Tper, temp_color, nsp_ppc, Bc, N_species
 
 
 def manage_directories():
@@ -54,21 +54,24 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
 
     # Single parameters
     params = dict([('seed', const.seed),
-                   ('nsp_ppc', nsp_ppc),
                    ('Nj', Nj),
                    ('dt', dt),
                    ('NX', NX),
                    ('ND', ND),
                    ('NC', NC),
+                   ('N' , const.N),
                    ('dxm', const.dxm),
                    ('dx', const.dx),
-                   ('cellpart', const.cellpart),
                    ('r_damp', r_damp),
-                   ('B0', const.B0),
+                   ('B_eq', const.B_eq),
+                   ('xmax', const.xmax),
+                   ('B_xmax', const.B_xmax),
+                   ('a', const.a),
+                   ('theta_xmax', const.theta_xmax),
+                   ('rc_hwidth', const.rc_hwidth),
                    ('ne', ne),
                    ('Te0', const.Te0),
                    ('ie', const.ie),
-                   ('theta', const.theta),
                    ('part_save_iter', part_save_iter),
                    ('field_save_iter', field_save_iter),
                    ('max_rev', const.max_rev),
@@ -97,7 +100,9 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                      mass        = mass,
                      charge      = charge,
                      drift_v     = drift_v,
+                     nsp_ppc     = nsp_ppc,
                      density     = density,
+                     N_species   = N_species,
                      Tpar        = Tpar,
                      Tper        = Tper,
                      Bc          = Bc)

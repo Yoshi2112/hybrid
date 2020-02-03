@@ -83,15 +83,14 @@ def eval_B0_particle(x, v, qmi, b1):
     l_cyc    = qmi * (B0_xp[0] + b1t)
     
     fac      = a * B_eq * x / l_cyc
-    B0_xp[1] = v[2] * fac
-    B0_xp[2] =-v[1] * fac
+    #B0_xp[1] = v[2] * fac
+    #B0_xp[2] =-v[1] * fac
     return B0_xp
 
 
-@nb.njit()
+#@nb.njit()
 def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     '''
-    
     updates velocities using a Boris particle pusher.
     Based on Birdsall & Langdon (1985), pp. 59-63.
 
@@ -122,10 +121,11 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
         Bp = B[Ib[ii]    , 0:3] * W_mag[0, ii]                              \
            + B[Ib[ii] + 1, 0:3] * W_mag[1, ii]                              \
            + B[Ib[ii] + 2, 0:3] * W_mag[2, ii]                              # b1 at particle location
-        
-        B0_xp = eval_B0_particle(pos[ii], v_minus, qmi, Bp)                 # B0 at particle location
-        Bp   += B0_xp                                                       # B  at particle location (total)
 
+        Bp[0]  = 0                                                          # Zero b1 at particle location (doesn't exist)
+        B0_xp  = eval_B0_particle(pos[ii], v_minus, qmi, Bp)                # B0 at particle location
+        Bp    += B0_xp                                                      # B  at particle location (total)
+        
         T = qmi * Bp                                                        # Vector Boris variable
         S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable
 
@@ -140,7 +140,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
         v_plus[2]  = v_minus[2] + v_prime[0] * S[1] - v_prime[1] * S[0]
 
         vel[:, ii] = v_plus +  qmi * Ep                                     # Second E-field half-push
-    return
+    return Bp
 
 
 @nb.njit()

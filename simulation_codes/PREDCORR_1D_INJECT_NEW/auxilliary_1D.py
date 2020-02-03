@@ -76,7 +76,25 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
 @nb.njit()
 def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
                      qq, DT, max_inc, part_save_iter, field_save_iter, idx):
+    '''
+    Evaluates all the things that could cause a violation of the timestep:
+        - Magnetic field dispersion (switchable in param file since this can be tiny)
+        - Gyromotion resolution
+        - Ion velocity (Don't cross more than half a cell in a timestep)
+        - Electric field acceleration
         
+    When a violating condition found, velocity is advanced by 0.5DT (since this happens
+    at the top of a loop anyway). The assumption is that the timestep isn't violated by
+    enough to cause instant instability (each criteria should have a little give), which 
+    should be valid except under extreme instability. The timestep is then halved and all
+    time-dependent counters and quantities are doubled. Velocity is then retarded back
+    half a timestep to de-sync back into a leapfrog scheme.
+    
+    Also evaluates if a timestep is unnneccessarily too small, which can sometimes happen
+    after wave-particle interactions are complete and energetic particles are slower. This
+    criteria is higher in order to provide a little hysteresis and prevent constantly switching
+    timesteps.
+    '''
     interpolate_edges_to_center(B, B_cent)
     B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
 
@@ -95,7 +113,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
     else:
         disp_ts     = ion_ts
 
-    vel_ts          = 0.80 * dx / vel[0, :].max()                          # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
+    vel_ts          = 0.80 * dx / np.abs(vel[0, :]).max()                          # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
     DT_part         = min(Eacc_ts, vel_ts, ion_ts, disp_ts)                      # Smallest of the allowable timesteps
     
     if DT_part < 0.9*DT:
@@ -125,7 +143,6 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
         particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*DT)   # De-sync vel/pos 
         print('Timestep Doubled. Syncing particle velocity...')
 
-    
     return qq, DT, max_inc, part_save_iter, field_save_iter
 
 

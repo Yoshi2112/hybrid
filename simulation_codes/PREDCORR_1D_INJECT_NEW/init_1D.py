@@ -4,7 +4,6 @@ Created on Fri Sep 22 17:27:33 2017
 
 @author: iarey
 """
-import pdb
 import numba as nb
 import numpy as np
 import simulation_parameters_1D as const
@@ -222,7 +221,8 @@ def set_timestep(vel, E):
            be initial limiting factor. This may change for inhomogenous loading
            of particles or initial fields.
     '''
-    gyperiod = (2*np.pi) / const.gyfreq               # Gyroperiod within uniform field, initial B0 (s)         
+    gyfreq   = qm_ratios.max()  * const.B_xmax / (2 * np.pi)
+    gyperiod = (2*np.pi) / gyfreq                     # Gyroperiod within uniform field, initial B0 (s)         
     ion_ts   = const.orbit_res * gyperiod             # Timestep to resolve gyromotion
     vel_ts   = 0.5 * const.dx / np.max(vel[0, :])     # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
 

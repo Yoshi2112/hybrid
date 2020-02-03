@@ -13,7 +13,7 @@ import pdb
 
 @nb.njit()
 def eval_B0x(x):
-    return B_eq * (1 + a * x**2)
+    return B_eq# * (1 + a * x**2)
 
 
 @nb.njit()

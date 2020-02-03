@@ -19,6 +19,67 @@ import init_1D as init
 from matplotlib import animation
 
 
+def test_boris():
+    def velocity_update(vel_in, DT):
+        qmi = 0.5 * DT * const.q / const.mp                                 # Charge-to-mass ration for ion of species idx[ii]
+
+        Bp = np.array([B0, 0, 0])
+        Ep = np.array([0 , 0, 0])
+
+        v_minus = vel_in + qmi * Ep                                         # First E-field half-push
+       
+        T = qmi * Bp                                                        # Vector Boris variable
+        S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable
+
+        v_prime    = np.zeros(3)
+        v_prime[0] = v_minus[0] + v_minus[1] * T[2] - v_minus[2] * T[1]     # Magnetic field rotation
+        v_prime[1] = v_minus[1] + v_minus[2] * T[0] - v_minus[0] * T[2]
+        v_prime[2] = v_minus[2] + v_minus[0] * T[1] - v_minus[1] * T[0]
+                
+        v_plus     = np.zeros(3)
+        v_plus[0]  = v_minus[0] + v_prime[1] * S[2] - v_prime[2] * S[1]
+        v_plus[1]  = v_minus[1] + v_prime[2] * S[0] - v_prime[0] * S[2]
+        v_plus[2]  = v_minus[2] + v_prime[0] * S[1] - v_prime[1] * S[0]
+
+        vel_out = v_plus +  qmi * Ep                                     # Second E-field half-push
+        return vel_out
+
+    def position_update(POS, VEL, DT):
+        return POS + VEL[0] * DT
+    
+    B0        = 2e-7
+    gyfreq    = const.q * B0 / (2 * np.pi * const.mp)
+    orbit_res = 0.05
+    max_rev   = 1
+    dt        = orbit_res / gyfreq 
+    max_inc   = int(max_rev / (gyfreq*dt))
+    
+    pos       = 0
+    vel       = np.array([0, 1000, 0])
+    
+    pos_history = np.zeros( max_inc)
+    vel_history = np.zeros((max_inc, 3))
+    
+    tt = 0; t_total = 0
+    
+    vel = velocity_update(vel, -0.5*dt)
+    while tt < max_inc:
+        pos_history[tt] = pos
+        vel_history[tt] = vel
+        
+        vel = velocity_update(vel, dt)
+        pos = position_update(pos, vel, dt)  
+        
+        tt      += 1
+        t_total += dt
+    
+    time = np.array([ii * dt for ii in range(max_inc)])
+    plt.plot(time, vel_history, marker='o')
+    return
+
+
+
+
 def boundary_idx64(time_arr, start, end):
     '''Returns index values corresponding to the locations of the start/end times in a numpy time array, if specified times are np.datetime64'''
     idx1 = np.where(abs(time_arr - start) == np.min(abs(time_arr - start)))[0][0] 
@@ -1196,24 +1257,21 @@ def visualize_inhomogenous_B():
     B_eq  = 200e-9               # Tesla at equator (Br = 0)
     a     = 4.5 / (L * RE)       # Where does the 4.5 come from? 1/s variation, but derivation?
     Wx_eq = 30e3 * q             # Initial perp energy in Joules
+    vx_
     mu_eq = Wx_eq / B_eq         # First adiabatic invariant
     
     xmax = 1*RE                  # How long should this be?
     x    = np.linspace(-xmax, xmax, 1000)
     Nx   = x.shape[0]
     
-    B_x =   B_eq * (1 + a * x**2)
+    B_x = B_eq * (1 + a * x**2)
     B_r = np.zeros((Nx, 3))
     
     for ii in range(Nx):
-        # Coefficients of cubic in Br2: ax^3 + bx^2 + cx + d:
-        coeffs    = np.zeros(4)
-        coeffs[0] = 1.0      # Constant
-        coeffs[1] = B_x[ii] ** 2
-        coeffs[2] = 0.0
-        coeffs[3] = -a**4 * B_eq**4 * x[ii]**4 * 4 * mu_eq**2 * m**2 / q**4
-        Br2       = np.roots(coeffs)
-        B_r[ii, :]= np.sqrt(Br2)
+        aa = 1.0   
+        bb = B_x[ii] ** 2
+        cc = a * m * 1
+
         
     pdb.set_trace()
     plt.figure()
@@ -1358,6 +1416,102 @@ def compare_parabolic_to_dipole():
     return
 
 
+def test_mirror_motion():
+    '''
+    Diagnostic code to call the particle pushing part of the hybrid and check
+    that its solving ok. Runs with zero background E field and B field defined
+    by the constant background field specified in the parameter script.
+    '''
+    mid    = const.NC // 2
+    pos    = np.array([0])
+    idx    = np.array([0])
+    vel    = np.array([const.va, const.va, const.va]).reshape((3, 1))
+    W_elec = np.array([0, 1, 0]).reshape((3, 1))
+    W_mag  = np.array([0, 1, 0]).reshape((3, 1))
+    Ie     = np.array([mid])
+    Ib     = np.array([mid])
+    
+    B_test = np.zeros((const.NC + 1, 3), dtype=np.float64) 
+    E_test = np.zeros((const.NC, 3),     dtype=np.float64) 
+    
+    gyfreq   = const.q * const.B_eq / (2 * np.pi * const.mp)
+    ion_ts   = const.orbit_res * 0.1 / gyfreq
+    vel_ts   = 0.5 * const.dx / np.max(vel[0, :])
+    DT       = min(ion_ts, vel_ts)
+    #DT      *= 0.1
+    
+    max_rev  = 10 
+    max_inc  = int(max_rev / (DT*gyfreq))
+    
+    pos_history = np.zeros((max_inc))
+    vel_history = np.zeros((max_inc, 3))
+    mag_history = np.zeros((max_inc, 3))
+    
+    dump_every  = 1; tt = 0; halves = 0; t_total = 0
+    
+    Bp = particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, -0.5*DT)
+    while tt < max_inc:
+        Bp = particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, DT)
+        particles.position_update(pos, vel, idx, DT, Ie, W_elec)  
+        
+        if tt%dump_every == 0:
+            pos_history[tt // 2**halves] = pos[0]
+            vel_history[tt // 2**halves] = vel[:, 0]
+            mag_history[tt // 2**halves] = Bp
+        tt += 1
+        t_total += DT
+        
+        # Check timestep
+        vel_ts = 0.5*const.dx/np.max(np.abs(vel[0, :]))
+        if vel_ts < DT:
+            print('Timestep reduced')
+            particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, 0.5*DT)    # Re-sync vel/pos       
+
+            DT           /= 2
+            tt           *= 2
+            max_inc      *= 2
+            dump_every   *= 2
+            halves       += 1
+            
+            particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, -0.5*DT)    # De-sync      
+        
+    time = np.arange(pos_history.shape[0])
+
+    if False:
+        ## Plots position/mag timeseries ##
+        fig, ax = plt.subplots()
+        ax.plot(time, pos_history*1e-3, c='k', marker='o')
+        ax.set_ylabel('x (km)')
+        ax.set_xlabel('t (s)')
+        
+        ax2 = ax.twinx()
+        ax2.plot(time, mag_history[:, 0], label='B0x')
+        ax2.plot(time, mag_history[:, 1], label='B0y')
+        ax2.plot(time, mag_history[:, 2], label='B0z')
+        ax2.legend()
+        ax2.set_ylabel('nT')
+        
+        ax.axhline(const.xmin*1e-3, color='k', ls=':')
+        ax.axhline(const.xmax*1e-3, color='k', ls=':')
+        
+    if False:
+        ## Plots velocity timeseries ##
+        fig, ax = plt.subplots()
+        ax.plot(time, vel_history[:, 0]*1e-3, marker='o', label='vx')
+        ax.plot(time, vel_history[:, 1]*1e-3, marker='o', label='vy')
+        ax.plot(time, vel_history[:, 2]*1e-3, marker='o', label='vz')
+        ax.set_ylabel('t (s)')
+        ax.set_xlabel('v (km/s)')
+        ax.legend()
+        
+    if True:
+        # Plot gyromotion of particle
+        plt.plot(vel_history[:, 1], vel_history[:, 2], marker='o')
+        plt.ylabel('vy (km/s)')
+        plt.xlabel('vz (km/s)')
+    return
+
+
 if __name__ == '__main__':
     #check_position_distribution()
     #animate_moving_weight()
@@ -1381,5 +1535,7 @@ if __name__ == '__main__':
     #test_varying_background_function()
     #test_push_B_w_varying_background()
     #test_weight_conservation()
-    test_weight_shape_and_alignment()
+    #test_weight_shape_and_alignment()
     #compare_parabolic_to_dipole()
+    #test_boris()
+    test_mirror_motion()
