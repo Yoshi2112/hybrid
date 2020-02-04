@@ -50,7 +50,7 @@ def test_boris():
     B0        = 2e-7
     gyfreq    = const.q * B0 / (2 * np.pi * const.mp)
     orbit_res = 0.05
-    max_rev   = 1
+    max_rev   = 1000
     dt        = orbit_res / gyfreq 
     max_inc   = int(max_rev / (gyfreq*dt))
     
@@ -1390,7 +1390,7 @@ def compare_parabolic_to_dipole():
     else:
     
         # Calculate cylindrical/parabolic approximation between lat st/en
-        lat_width = 20         # Latitudinal width (from equator)
+        lat_width = 30         # Latitudinal width (from equator)
 
         st, en = boundary_idx64(theta * 180 / np.pi, 90 - lat_width, 90 + lat_width)
         
@@ -1410,9 +1410,9 @@ def compare_parabolic_to_dipole():
         print('Max/Min ratio : {:5.2f}'.format(B_mu[st:en].max() / B_mu.min()))
         
         plt.figure(2)
-        plt.scatter(z/RE, B0_z,        label='Cylindrical approximation')
-        plt.scatter(z/RE, B_mu[st:en], label='Dipole field intensity')
-        plt.title(r'Approximation for $a = \frac{%.1f}{LR_E}$' % sfac, fontsize=18)
+        plt.scatter(z/RE, B0_z,        label='Cylindrical approximation', s=4)
+        plt.scatter(z/RE, B_mu[st:en], label='Dipole field intensity', s=4)
+        plt.title(r'Approximation for $a = \frac{%.1f}{LR_E}$, lat. width %s deg' % (sfac, lat_width), fontsize=18)
         plt.xlabel(r'z ($R_E$)',     rotation=0, fontsize=14)
         plt.ylabel(r'$B_\parallel$', rotation=0, fontsize=14)
         plt.legend()
@@ -1443,7 +1443,7 @@ def test_mirror_motion():
     DT       = min(ion_ts, vel_ts)
     #DT      *= 0.1
     
-    max_rev  = 20 
+    max_rev  = 1000 
     max_inc  = int(max_rev / (DT*gyfreq))
     
     pos_history = np.zeros((max_inc))
@@ -1480,7 +1480,7 @@ def test_mirror_motion():
         
     time = np.arange(pos_history.shape[0])
 
-    if True:
+    if False:
         ## Plots position/mag timeseries ##
         fig, ax = plt.subplots()
         ax.plot(time, pos_history*1e-3, c='k', marker='o')
@@ -1497,7 +1497,7 @@ def test_mirror_motion():
         ax.axhline(const.xmin*1e-3, color='k', ls=':')
         ax.axhline(const.xmax*1e-3, color='k', ls=':')
         
-    elif False:
+    elif True:
         ## Plots velocity timeseries ##
         fig, ax = plt.subplots()
         ax.plot(time, vel_history[:, 0]*1e-3, marker='o', label='vx')
@@ -1512,6 +1512,24 @@ def test_mirror_motion():
         plt.plot(vel_history[:, 1], vel_history[:, 2], marker='o')
         plt.ylabel('vy (km/s)')
         plt.xlabel('vz (km/s)')
+        
+    
+    #pos = np.array([500*const.dx])
+    if False:
+        x = np.linspace(const.xmin, const.xmax, 1000)
+        B0_xp = np.zeros((x.shape[0], 3))
+        B_mag = np.zeros(x.shape[0])
+        
+        for ii in range(x.shape[0]):
+            B0_xp[ii] = particles.eval_B0_particle(pos, vel, const.qm_ratios[0], np.array([0, 0, 0]))
+            B_mag[ii] = np.sqrt(B0_xp[ii,0] ** 2 + B0_xp[ii,1] ** 2 + B0_xp[ii,2] ** 2)
+    
+        plt.plot(x, B0_xp[:, 0]*1e9, label='x')
+        plt.plot(x, B0_xp[:, 1]*1e9, label='y')
+        plt.plot(x, B0_xp[:, 2]*1e9, label='z')
+        plt.plot(x, B_mag*1e9, label='mag')
+        plt.legend()
+        
     return
 
 
@@ -1539,6 +1557,6 @@ if __name__ == '__main__':
     #test_push_B_w_varying_background()
     #test_weight_conservation()
     #test_weight_shape_and_alignment()
-    #compare_parabolic_to_dipole()
+    compare_parabolic_to_dipole()
     #test_boris()
-    test_mirror_motion()
+    #test_mirror_motion()

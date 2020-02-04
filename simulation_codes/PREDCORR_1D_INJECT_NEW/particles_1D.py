@@ -68,7 +68,7 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
     return
 
 
-@nb.njit()
+#@nb.njit()
 def eval_B0_particle(x, v, qmi, b1):
     '''
     Calculates the B0 magnetic field at the position of a particle. Neglects B0_r

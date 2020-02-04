@@ -138,7 +138,7 @@ if True:
 else:
     a = 1.0
 
-Bc       =  np.zeros((NC + 1, 3), dtype=np.float64)      # Constant components of magnetic field based on theta and B0
+Bc       = np.zeros((NC + 1, 3), dtype=np.float64)       # Constant components of magnetic field based on theta and B0
 Bc[:, 0] = B_eq * (1 + a * B_nodes**2)                   # Set constant Bx
 
 # Set B0 in damping cells (same as last spatial cell)
