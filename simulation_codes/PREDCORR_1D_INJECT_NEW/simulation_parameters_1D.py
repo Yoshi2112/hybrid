@@ -21,25 +21,27 @@ cpu_affin       = [(2*run_num)%8, (2*run_num + 1)%8]      # Set CPU affinity for
 supress_text    = False
 
 ### PHYSICAL CONSTANTS ###
-q   = 1.602177e-19                          # Elementary charge (C)
-c   = 2.998925e+08                          # Speed of light (m/s)
-mp  = 1.672622e-27                          # Mass of proton (kg)
-me  = 9.109384e-31                          # Mass of electron (kg)
-kB  = 1.380649e-23                          # Boltzmann's Constant (J/K)
-e0  = 8.854188e-12                          # Epsilon naught - permittivity of free space
-mu0 = (4e-7) * np.pi                        # Magnetic Permeability of Free Space (SI units)
-RE  = 6.371e6                               # Earth radius in metres
+q      = 1.602177e-19                       # Elementary charge (C)
+c      = 2.998925e+08                       # Speed of light (m/s)
+mp     = 1.672622e-27                       # Mass of proton (kg)
+me     = 9.109384e-31                       # Mass of electron (kg)
+kB     = 1.380649e-23                       # Boltzmann's Constant (J/K)
+e0     = 8.854188e-12                       # Epsilon naught - permittivity of free space
+mu0    = (4e-7) * np.pi                     # Magnetic Permeability of Free Space (SI units)
+RE     = 6.371e6                            # Earth radius in metres
+B_surf = 3.12e-5                            # Magnetic field strength at Earth surface
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 512                              # Number of cells - doesn't include ghost cells
-ND       = 128                              # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev  = 10000                            # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
-r_damp   = 0.0129                           # Damping strength
-dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
+NX        = 512                             # Number of cells - doesn't include ghost cells
+ND        = 128                             # Damping region length: Multiple of NX (on each side of simulation domain)
+max_rev   = 10000                           # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+r_damp    = 0.0129                          # Damping strength
+dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
+L         = 5.35                            # Field line L shell
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
-B_eq      = 200e-9                          # Unform initial magnetic field value (in T)
+B_eq      = 200e-9                          # Initial magnetic field at equator: None for L-determined value (in T)
 rc_hwidth = 16                              # Ring current half-width in number of cells (2*hwidth gives equatorial extent of RC) 
 
 orbit_res = 0.10                            # Particle orbit resolution: Fraction of gyroperiod in seconds
@@ -51,9 +53,9 @@ field_res = 0.10                            # Data capture resolution in gyroper
 ### PARTICLE PARAMETERS ###
 species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
 temp_color = ['blue', 'red']
-temp_type  = np.array([0, 1])             	            # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-dist_type  = np.array([0, 0])                           # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.array([1000, 6000])                     # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+nsp_ppc    = np.array([1000, 6000])                         # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
@@ -73,10 +75,6 @@ adaptive_timestep      = True                               # Flag (True/False) 
 HM_amplitude   = 0e-9                                       # Driven wave amplitude in T
 HM_frequency   = 0.02                                       # Driven wave in Hz
 
-                                       #
-
-
-
 
 #%%### DERIVED SIMULATION PARAMETERS
 NC         = NX + 2*ND
@@ -86,6 +84,9 @@ E_par      = E_per / (anisotropy + 1)
 Te0        = E_e   * 11603.
 Tpar       = E_par * 11603.
 Tper       = E_per * 11603.
+
+if B_eq is None:
+    B_eq      = (B_surf / (L ** 3))                      # Magnetic field at equator, based on L value
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma
@@ -113,37 +114,30 @@ N = N_species.sum()
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
 
-gyfreq     = q*B_eq/mp                                   # Proton   Gyrofrequency (rad/s) (since this will be the highest of all ion species)
-e_gyfreq   = q*B_eq/me                                   # Electron Gyrofrequency (rad/s)
-k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
-qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
-
-B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx      # B grid points position in space
-E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
-
-
 ############################
 ### MAGNETIC FIELD STUFF ###
 ############################
-B_surf      = 3.12e-5       # Magnetic field strength at Earth surface
-L           = 4.3           # Field line L shell
-theta_xmax  = xmax/(L*RE)   # Latitudinal extent of simulation 
+B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx      # B grid points position in space
+E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
 
-# Calculate radial distance of boundary in dipole and get field intensity
-r_xmax = L * np.sin(np.pi / 2 - theta_xmax) ** 2
-B_xmax = (B_surf / (r_xmax ** 3)) * np.sqrt(3*np.cos(theta_xmax)**2 + 1)
+theta_xmax  = xmax/(L*RE)                                # Latitudinal extent of simulation , based on xmax
+r_xmax      = L * np.sin(np.pi / 2 - theta_xmax) ** 2    # Calculate radial distance of boundary in dipole and get field intensity
+cos_bit     = np.sqrt(3*np.cos(theta_xmax)**2 + 1)       # Intermediate variable (angular scale factor)
+B_xmax      = (B_surf / (r_xmax ** 3)) * cos_bit         # Magnetic field intensity at boundary
+a           = (B_xmax / B_eq - 1) / xmax ** 2            # Parabolic scale factor
 
-if True:
-    a = (B_xmax / B_eq - 1) / xmax ** 2                                
-else:
-    a = 1.0
-
-Bc       = np.zeros((NC + 1, 3), dtype=np.float64)       # Constant components of magnetic field based on theta and B0
-Bc[:, 0] = B_eq * (1 + a * B_nodes**2)                   # Set constant Bx
+Bc          = np.zeros((NC + 1, 3), dtype=np.float64)    # Constant components of magnetic field based on theta and B0
+Bc[:, 0]    = B_eq * (1 + a * B_nodes**2)                # Set constant Bx
 
 # Set B0 in damping cells (same as last spatial cell)
 Bc[:ND]      = Bc[ND]
 Bc[ND+NX+1:] = Bc[ND+NX]
+
+# Freqs based on highest magnetic field value (at simulation boundaries)
+gyfreq     = q*B_xmax/mp                                 # Proton   Gyrofrequency (rad/s) (since this will be the highest of all ion species)
+e_gyfreq   = q*B_xmax/me                                 # Electron Gyrofrequency (rad/s)
+k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
+qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
 
 
 

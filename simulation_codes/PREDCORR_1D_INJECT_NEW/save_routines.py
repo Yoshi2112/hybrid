@@ -63,6 +63,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                    ('dxm', const.dxm),
                    ('dx', const.dx),
                    ('r_damp', r_damp),
+                   ('L', const.L), 
                    ('B_eq', const.B_eq),
                    ('xmax', const.xmax),
                    ('B_xmax', const.B_xmax),

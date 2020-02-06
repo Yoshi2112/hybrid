@@ -19,63 +19,7 @@ import init_1D as init
 from matplotlib import animation
 
 
-def test_boris():
-    def velocity_update(vel_in, DT):
-        qmi = 0.5 * DT * const.q / const.mp                                 # Charge-to-mass ration for ion of species idx[ii]
 
-        Bp = np.array([B0, 0, 0])
-        Ep = np.array([0 , 0, 0])
-
-        v_minus = vel_in + qmi * Ep                                         # First E-field half-push
-       
-        T = qmi * Bp                                                        # Vector Boris variable
-        S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable
-
-        v_prime    = np.zeros(3)
-        v_prime[0] = v_minus[0] + v_minus[1] * T[2] - v_minus[2] * T[1]     # Magnetic field rotation
-        v_prime[1] = v_minus[1] + v_minus[2] * T[0] - v_minus[0] * T[2]
-        v_prime[2] = v_minus[2] + v_minus[0] * T[1] - v_minus[1] * T[0]
-                
-        v_plus     = np.zeros(3)
-        v_plus[0]  = v_minus[0] + v_prime[1] * S[2] - v_prime[2] * S[1]
-        v_plus[1]  = v_minus[1] + v_prime[2] * S[0] - v_prime[0] * S[2]
-        v_plus[2]  = v_minus[2] + v_prime[0] * S[1] - v_prime[1] * S[0]
-
-        vel_out = v_plus +  qmi * Ep                                     # Second E-field half-push
-        return vel_out
-
-    def position_update(POS, VEL, DT):
-        return POS + VEL[0] * DT
-    
-    B0        = 2e-7
-    gyfreq    = const.q * B0 / (2 * np.pi * const.mp)
-    orbit_res = 0.05
-    max_rev   = 1000
-    dt        = orbit_res / gyfreq 
-    max_inc   = int(max_rev / (gyfreq*dt))
-    
-    pos       = 0
-    vel       = np.array([0, 1000, 0])
-    
-    pos_history = np.zeros( max_inc)
-    vel_history = np.zeros((max_inc, 3))
-    
-    tt = 0; t_total = 0
-    
-    vel = velocity_update(vel, -0.5*dt)
-    while tt < max_inc:
-        pos_history[tt] = pos
-        vel_history[tt] = vel
-        
-        vel = velocity_update(vel, dt)
-        pos = position_update(pos, vel, dt)  
-        
-        tt      += 1
-        t_total += dt
-    
-    time = np.array([ii * dt for ii in range(max_inc)])
-    plt.plot(time, vel_history, marker='o')
-    return
 
 
 
@@ -1419,6 +1363,79 @@ def compare_parabolic_to_dipole():
     return
 
 
+def test_boris():
+    B0        = const.B_xmax
+    v0_perp   = const.va
+    
+    gyfreq    = const.gyfreq / (2 * np.pi)
+    orbit_res = 0.05
+    max_rev   = 1000
+    dt        = orbit_res / gyfreq 
+    max_t     = max_rev   / gyfreq
+    max_inc   = int(max_t / dt)
+    
+    pos       = np.array([0])
+    vel       = np.array([const.va, const.va, const.va]).reshape((3, 1))
+    idx       = np.array([0])
+    
+    # Dummy arrays so the functions work
+    E       = np.zeros((const.NC    , 3))
+    B       = np.zeros((const.NC + 1, 3))
+    
+    W_mag   = np.array([0, 1, 0]).reshape((3, 1))
+    W_elec  = np.array([0, 1, 0]).reshape((3, 1))
+    Ie      = np.zeros(pos.shape[0], dtype=int)
+    Ib      = np.zeros(pos.shape[0], dtype=int)
+    
+    pos_history = np.zeros( max_inc)
+    vel_history = np.zeros((max_inc, 3))
+    
+    B[:, 0]+= B0; tt = 0; t_total = 0
+    
+    particles.assign_weighting_TSC(pos, Ie, W_elec)
+    particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*dt)
+    while tt < max_inc:
+        pos_history[tt] = pos
+        vel_history[tt] = vel[:, 0]
+        
+        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt)
+        particles.position_update(pos, vel, dt, Ie, W_elec)  
+        
+        if pos[0] < const.xmin:
+            pos[0] += const.xmax
+        elif pos[0] > const.xmax:
+            pos[0] -= const.xmax
+                
+        tt      += 1
+        t_total += dt
+    
+    if True:
+        time = np.array([ii * dt for ii in range(max_inc)])
+        plt.plot(time, vel_history[:, 0], marker='o', label=r'$v_x$')
+        plt.plot(time, vel_history[:, 1], marker='o', label=r'$v_y$')
+        plt.plot(time, vel_history[:, 2], marker='o', label=r'$v_z$')
+        plt.title('Particle gyromotion /w Boris Pusher: B0 = {:.1f}nT, v0y = {:.0f}km/s, $T_c$ = {:5.3f}s'.format(B0*1e9, v0_perp*1e-3, 1/gyfreq))
+        plt.xlabel('Time (s)')
+        plt.ylabel('Velocity (m/s)')
+        plt.legend()
+    elif False:
+        plt.plot(vel_history[max_inc //2:, 1], vel_history[max_inc //2:, 2])
+        plt.title('Particle gyromotion /w Boris Pusher: B0 = {:.1f}nT, v0y = {:.0f}km/s, $T_c$ = {:5.3f}s'.format(B0*1e9, v0_perp*1e-3, 1/gyfreq))
+        plt.xlabel('y-Velocity (m/s)')
+        plt.ylabel('z-Velocity (m/s)')
+        plt.axis('equal')
+    elif False:
+        eval_gyperiods = 5
+        eval_idxs      = int(eval_gyperiods / orbit_res) + 1
+        plt.plot(vel_history[:eval_idxs, 1], vel_history[:eval_idxs, 2], label='First {}'.format(eval_gyperiods))
+        plt.plot(vel_history[eval_idxs:, 1], vel_history[eval_idxs:, 2], label=' Last {}'.format(eval_gyperiods))
+        plt.title('Particle gyromotion /w Boris Pusher: First and Last {} gyroperiods'.format(eval_gyperiods))
+        plt.xlabel('y-Velocity (m/s)')
+        plt.ylabel('z-Velocity (m/s)')
+        plt.axis('equal')
+    return
+
+
 def test_mirror_motion():
     '''
     Diagnostic code to call the particle pushing part of the hybrid and check
@@ -1428,7 +1445,7 @@ def test_mirror_motion():
     mid    = const.NC // 2
     pos    = np.array([0])
     idx    = np.array([0])
-    vel    = np.array([const.va, const.va, const.va]).reshape((3, 1))
+    vel    = np.array([1.0*const.va, 1.0*const.va, 0]).reshape((3, 1))
     W_elec = np.array([0, 1, 0]).reshape((3, 1))
     W_mag  = np.array([0, 1, 0]).reshape((3, 1))
     Ie     = np.array([mid])
@@ -1437,15 +1454,19 @@ def test_mirror_motion():
     B_test = np.zeros((const.NC + 1, 3), dtype=np.float64) 
     E_test = np.zeros((const.NC, 3),     dtype=np.float64) 
     
-    gyfreq   = const.q * const.B_eq / (2 * np.pi * const.mp)
-    ion_ts   = const.orbit_res * 0.1 / gyfreq
+    vel_init = vel.copy() * 1e-3
+    KE_init  = 0.5 * const.mp * vel ** 2
+    gyfreq   = const.gyfreq / (2 * np.pi)
+    ion_ts   = const.orbit_res / gyfreq
     vel_ts   = 0.5 * const.dx / np.max(vel[0, :])
     DT       = min(ion_ts, vel_ts)
-    #DT      *= 0.1
     
-    max_rev  = 1000 
-    max_inc  = int(max_rev / (DT*gyfreq))
+    # Target: 25000 cyclotron periods (~1hrs)
+    max_rev  = 10000
+    max_t    = max_rev / gyfreq
+    max_inc  = int(max_t / DT)
     
+    time        = np.zeros((max_inc))
     pos_history = np.zeros((max_inc))
     vel_history = np.zeros((max_inc, 3))
     mag_history = np.zeros((max_inc, 3))
@@ -1455,9 +1476,10 @@ def test_mirror_motion():
     Bp = particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, -0.5*DT)
     while tt < max_inc:
         Bp = particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, DT)
-        particles.position_update(pos, vel, idx, DT, Ie, W_elec)  
+        particles.position_update(pos, vel, DT, Ie, W_elec)  
         
         if tt%dump_every == 0:
+            time[       tt // 2**halves] = t_total
             pos_history[tt // 2**halves] = pos[0]
             vel_history[tt // 2**halves] = vel[:, 0]
             mag_history[tt // 2**halves] = Bp
@@ -1478,44 +1500,57 @@ def test_mirror_motion():
             
             particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, -0.5*DT)    # De-sync      
         
-    time = np.arange(pos_history.shape[0])
 
     if False:
         ## Plots position/mag timeseries ##
-        fig, ax = plt.subplots()
-        ax.plot(time, pos_history*1e-3, c='k', marker='o')
-        ax.set_ylabel('x (km)')
-        ax.set_xlabel('t (s)')
+        fig, axes = plt.subplots(2, sharex=True)
+        axes[0].plot(time, pos_history*1e-3, c='k')
+        axes[0].set_ylabel('x (km)')
+        axes[0].set_xlabel('t (s)')
+        axes[0].axhline(const.xmin*1e-3, color='k', ls=':')
+        axes[0].axhline(const.xmax*1e-3, color='k', ls=':')
+        axes[0].set_title('Position and Magnetic Field at Particle Position, v0 = [{:4.1f}, {:4.1f}, {:4.1f}]km/s'.format(vel_init[0, 0], vel_init[1, 0], vel_init[2, 0]))
+        axes[0].set_xlim(0, None)
         
-        ax2 = ax.twinx()
-        ax2.plot(time, mag_history[:, 0], label='B0x')
-        ax2.plot(time, mag_history[:, 1], label='B0y')
-        ax2.plot(time, mag_history[:, 2], label='B0z')
-        ax2.legend()
-        ax2.set_ylabel('nT')
-        
-        ax.axhline(const.xmin*1e-3, color='k', ls=':')
-        ax.axhline(const.xmax*1e-3, color='k', ls=':')
-        
-    elif True:
-        ## Plots velocity timeseries ##
-        fig, ax = plt.subplots()
-        ax.plot(time, vel_history[:, 0]*1e-3, marker='o', label='vx')
-        ax.plot(time, vel_history[:, 1]*1e-3, marker='o', label='vy')
-        ax.plot(time, vel_history[:, 2]*1e-3, marker='o', label='vz')
-        ax.set_ylabel('t (s)')
-        ax.set_xlabel('v (km/s)')
-        ax.legend()
+        axes[1].plot(time, mag_history[:, 0], label='B0x')
+        axes[1].plot(time, mag_history[:, 1], label='B0y')
+        axes[1].plot(time, mag_history[:, 2], label='B0z')
+        axes[1].legend()
+        axes[1].set_ylabel('t (s)')
+        axes[1].set_ylabel('B (nT)')
+        axes[1].set_xlim(0, None)
         
     elif False:
-        # Plot gyromotion of particle
-        plt.plot(vel_history[:, 1], vel_history[:, 2], marker='o')
+        ## Plots 3-velocity timeseries ##
+        fig, axes = plt.subplots(3, sharex=True)
+        axes[0].set_title(r'Velocities with initial v0 = [%4.1f, %4.1f, %4.1f]$v_{A,eq}^{-1}$' % (vel_init[0, 0], vel_init[1, 0], vel_init[2, 0]))
+        axes[0].plot(time, vel_history[:, 0]/const.va, label='vx')
+        axes[0].set_xlabel('t (s)')
+        axes[0].set_ylabel(r'$v_\parallel$ (km/s)')
+        
+        axes[1].plot(time, vel_history[:, 1]/const.va, label='vy')
+        axes[1].plot(time, vel_history[:, 2]/const.va, label='vz')
+        axes[1].set_xlabel('t (s)')
+        axes[1].set_ylabel(r'$v_\perp$ (km/s)')
+        axes[1].legend()
+        
+        axes[2].plot(time, pos_history*1e-3)
+        axes[2].set_xlabel('t (s)')
+        axes[2].set_ylabel(r'x (km)')
+        axes[2].legend()
+        
+        for ax in axes:
+            ax.set_xlim(0, None)
+    elif False:
+        # Plot gyromotion of particle vx vs. vy
+        plt.title('Particle gyromotion: {} gyroperiods ({:.1f}s)'.format(max_rev, max_t))
+        plt.scatter(vel_history[:, 1], vel_history[:, 2], c=time)
+        plt.colorbar().set_label('Time (s)')
         plt.ylabel('vy (km/s)')
         plt.xlabel('vz (km/s)')
-        
-    
-    #pos = np.array([500*const.dx])
-    if False:
+        plt.axis('equal')
+    elif False:
+        # Written under duress: Just trying to get the shape of the bottle #
         x = np.linspace(const.xmin, const.xmax, 1000)
         B0_xp = np.zeros((x.shape[0], 3))
         B_mag = np.zeros(x.shape[0])
@@ -1529,7 +1564,100 @@ def test_mirror_motion():
         plt.plot(x, B0_xp[:, 2]*1e9, label='z')
         plt.plot(x, B_mag*1e9, label='mag')
         plt.legend()
+    elif False:
+        ## Plot parallel and perpendicular kinetic energies/velocities
+        KE_para = 0.5 * const.mp *  vel_history[:, 0] ** 2
+        KE_perp = 0.5 * const.mp * (vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
         
+# =============================================================================
+#         plt.figure()
+#         plt.title('Kinetic energy of single particle: Parabolic B0x, radial B0y,z')
+#         plt.plot(time, KE_para/const.q, label=r'$KE_\parallel$')
+#         plt.plot(time, KE_perp/const.q, label=r'$KE_\perp$')
+#         plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
+#         plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
+#         plt.ylabel('Energy (eV)')
+#         plt.xlabel('Time (s)')
+#         plt.legend()
+# =============================================================================
+        
+# =============================================================================
+#         plt.figure()
+#         plt.title('Kinetic energy difference: $|\perp$ - $\parallel$| : Uniform B0')
+#         difference = (KE_perp - KE_para) / const.q  * 1e12
+#         plt.plot(time, difference)
+#         plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
+#         plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
+#         plt.ylabel(r'Energy ($\times 10^-12$ eV)')
+#         plt.xlabel('Time (s)')
+# =============================================================================
+        
+        plt.figure()
+        plt.title('Total kinetic energy change: Parabolic B0x, radial B0y,z')
+        percent = abs(KE_perp + KE_para - KE_init.sum()) / KE_init.sum() * 100. 
+
+        plt.plot(time, percent)
+        plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
+        plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
+        plt.ylim(-0.1e-3, 1e-3)
+        plt.xlim(0, time[-1])
+        plt.ylabel(r'Percent change ($\times 10^{-12}$)')
+        plt.xlabel('Time (s)')
+    elif True:
+        pass
+        ## Ideas of Colins
+        
+        # vx vs. x - vx at each x should have a single value. Drifting suggests energy gain.
+        # As above, but for v_perp
+        vel_perp = np.sqrt(vel_history[:, 0] ** 2 + vel_history[:, 0] ** 2) * 1e-3
+        
+        fig, ax = plt.subplots(1)
+        ax.set_title(r'Velocity vs. Space: v0 = [%4.1f, %4.1f, %4.1f]$v_{A,eq}^{-1}$' % (vel_init[0, 0], vel_init[1, 0], vel_init[2, 0]))
+        ax.plot(pos_history*1e-3, vel_history[:, 0]*1e-3, c='b', label=r'$v_\parallel$')
+        ax.plot(pos_history*1e-3, vel_perp,               c='r', label=r'$v_\perp$')
+        ax.set_xlabel('x (km)')
+        ax.set_ylabel('v (km/s)')
+        ax.set_xlim(const.xmin*1e-3, const.xmax*1e-3)
+        ax.legend()
+                
+        # How to check vx_x0 with vperp_xmax? (Mirror only)
+        
+        # Check these things for varying energies/pitch angles (maybe have more than one particle?)
+    return
+
+
+def test_B0_analytic():
+    '''
+    Analytically evaluate what magnetic field mapping this function is giving us.
+    
+    Combine B0y,z outputs to BOr. Compare expectation to theory? Also maybe specify rho
+    instead? Find some way to get velocity out of that to input.
+    
+    # Test: The idea is that for a given v_perp, BO_r should come out the same. Is this true?
+    #       If so, v_perp can be input -> turns our 2D parameter space into a 1D (and output as well)
+    #       If not, there's a problem with either the derivation or the code... although both are
+    #       super simple. I guess we'll find out...
+    '''
+    b1  = np.zeros(3)
+    qmi = const.qm_ratios[0]
+    
+    Nx  = 1000; Nv = 4000
+    
+    x_space   = np.linspace( const.xmin, const.xmax, Nx)
+    v_space   = np.linspace(-2*const.va, 2*const.va, Nv)
+    B0_output = np.zeros((2, Nx, Nv))                       # Each spatial point, radial velocity
+    
+    for ii in range(Nx):
+        for jj in range(Nv):
+            for kk in range(Nv):
+                vel = np.array([0.1*const.va, v_space[jj], v_space[kk]])
+                
+                B0_particle = particles.eval_B0_particle(x_space[ii], vel, qmi, b1)
+                
+                B0_output[0, ii, jj] = B0_particle[0]
+                B0_output[1, ii, jj] = B0_particle[1]
+                B0_output[2, ii, jj] = B0_particle[2]
+    
     return
 
 
@@ -1557,6 +1685,7 @@ if __name__ == '__main__':
     #test_push_B_w_varying_background()
     #test_weight_conservation()
     #test_weight_shape_and_alignment()
-    compare_parabolic_to_dipole()
+    #compare_parabolic_to_dipole()
     #test_boris()
     #test_mirror_motion()
+    test_B0_analytic()

@@ -22,7 +22,7 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
     ''' 
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT)
-    position_update(pos, vel, idx, DT, Ie, W_elec)  
+    position_update(pos, vel, DT, Ie, W_elec)  
     collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, ni, nu, temp1D)
     return
 
@@ -79,16 +79,17 @@ def eval_B0_particle(x, v, qmi, b1):
     '''
     B0_xp    = np.zeros(3)
     B0_xp[0] = eval_B0x(x)    
+    
     b1t      = np.sqrt(b1[0] ** 2 + b1[1] ** 2 + b1[2] ** 2)
     l_cyc    = qmi * (B0_xp[0] + b1t)
-    
     fac      = a * B_eq * x / l_cyc
+    
     B0_xp[1] = v[2] * fac
     B0_xp[2] =-v[1] * fac
     return B0_xp
 
 
-#@nb.njit()
+@nb.njit()
 def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     '''
     updates velocities using a Boris particle pusher.
@@ -116,19 +117,19 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
            + E[Ie[ii] + 1, 0:3] * W_elec[1, ii]                             \
            + E[Ie[ii] + 2, 0:3] * W_elec[2, ii]                             # Vector E-field at particle location
 
-        v_minus    = vel[:, ii] + qmi * Ep                                  # First E-field half-push
-
         Bp = B[Ib[ii]    , 0:3] * W_mag[0, ii]                              \
            + B[Ib[ii] + 1, 0:3] * W_mag[1, ii]                              \
            + B[Ib[ii] + 2, 0:3] * W_mag[2, ii]                              # b1 at particle location
-
-        Bp[0]  = 0                                                          # Zero b1 at particle location (doesn't exist)
+        
+        v_minus    = vel[:, ii] + qmi * Ep                                  # First E-field half-push
+        
+        Bp[0]  = 0                                                          # No wave b1 exists, removes B due to B-nodes (since they're analytic)
         B0_xp  = eval_B0_particle(pos[ii], v_minus, qmi, Bp)                # B0 at particle location
         Bp    += B0_xp                                                      # B  at particle location (total)
-        
+
         T = qmi * Bp                                                        # Vector Boris variable
         S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable
-
+        
         v_prime    = np.zeros(3)
         v_prime[0] = v_minus[0] + v_minus[1] * T[2] - v_minus[2] * T[1]     # Magnetic field rotation
         v_prime[1] = v_minus[1] + v_minus[2] * T[0] - v_minus[0] * T[2]
@@ -138,13 +139,13 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
         v_plus[0]  = v_minus[0] + v_prime[1] * S[2] - v_prime[2] * S[1]
         v_plus[1]  = v_minus[1] + v_prime[2] * S[0] - v_prime[0] * S[2]
         v_plus[2]  = v_minus[2] + v_prime[0] * S[1] - v_prime[1] * S[0]
-
+        
         vel[:, ii] = v_plus +  qmi * Ep                                     # Second E-field half-push
     return Bp
 
 
 @nb.njit()
-def position_update(pos, vel, idx, dt, Ie, W_elec):
+def position_update(pos, vel, dt, Ie, W_elec, diag=False):
     '''Updates the position of the particles using x = x0 + vt. 
     Also updates particle nearest node and weighting.
 
@@ -160,10 +161,10 @@ def position_update(pos, vel, idx, dt, Ie, W_elec):
     '''
     for ii in nb.prange(pos.shape[0]):
         pos[ii] += vel[0, ii] * dt
-        
-        if pos[ii] < xmin or pos[ii] > xmax:
+
+        if (pos[ii] <= xmin or pos[ii] >= xmax):
             vel[0, ii] *= -1.                   # Reflect velocity
             pos[ii]    += vel[0, ii] * dt       # Get particle back in simulation space
-
+                
     assign_weighting_TSC(pos, Ie, W_elec)
     return
