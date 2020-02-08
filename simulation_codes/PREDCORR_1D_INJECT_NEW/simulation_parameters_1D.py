@@ -139,6 +139,8 @@ e_gyfreq   = q*B_xmax/me                                 # Electron Gyrofrequenc
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
 
+loss_cone = np.arcsin(np.sqrt(B_eq / B_xmax))*180 / np.pi
+
 
 
 #%%
@@ -158,7 +160,8 @@ if supress_text == False:
     print('Sim domain length  : {:5.2f}R_E'.format(2 * xmax / RE))
     print('Density            : {:5.2f}cc'.format(ne / 1e6))
     print('Equatorial B-field : {:5.2f}nT'.format(B_eq*1e9))
-    print('Maximum    B-field : {:5.2f}nT\n'.format(Bc.max()*1e9))
+    print('Maximum    B-field : {:5.2f}nT'.format(Bc.max()*1e9))
+    print('Loss cone          : {:5.2f} degrees\n'.format(loss_cone))
     
     print('Equat. Gyroperiod: : {}s'.format(round(2. * np.pi / gyfreq, 2)))
     print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 2)))

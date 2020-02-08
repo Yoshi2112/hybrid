@@ -6,6 +6,7 @@ Created on Fri Sep 22 10:42:13 2017
 """
 import numpy as np
 import numba as nb
+import matplotlib        as mpl
 import matplotlib.pyplot as plt
 import os
 import pdb
@@ -16,9 +17,6 @@ import sources_1D               as sources
 import fields_1D                as fields
 import auxilliary_1D            as aux
 import init_1D as init
-from matplotlib import animation
-
-
 
 
 
@@ -1445,7 +1443,7 @@ def test_mirror_motion():
     mid    = const.NC // 2
     pos    = np.array([0])
     idx    = np.array([0])
-    vel    = np.array([1.0*const.va, 1.0*const.va, 0]).reshape((3, 1))
+    vel    = np.array([0.8*const.va, 1.0*const.va, 0]).reshape((3, 1))
     W_elec = np.array([0, 1, 0]).reshape((3, 1))
     W_mag  = np.array([0, 1, 0]).reshape((3, 1))
     Ie     = np.array([mid])
@@ -1454,7 +1452,9 @@ def test_mirror_motion():
     B_test = np.zeros((const.NC + 1, 3), dtype=np.float64) 
     E_test = np.zeros((const.NC, 3),     dtype=np.float64) 
     
-    vel_init = vel.copy() * 1e-3
+    vel_init    = vel.copy() * 1e-3
+    particle_pa = np.arctan(vel_init[1] / vel_init[0]) * 180. / np.pi
+    
     KE_init  = 0.5 * const.mp * vel ** 2
     gyfreq   = const.gyfreq / (2 * np.pi)
     ion_ts   = const.orbit_res / gyfreq
@@ -1462,7 +1462,7 @@ def test_mirror_motion():
     DT       = min(ion_ts, vel_ts)
     
     # Target: 25000 cyclotron periods (~1hrs)
-    max_rev  = 10000
+    max_rev  = 50000
     max_t    = max_rev / gyfreq
     max_inc  = int(max_t / DT)
     
@@ -1501,7 +1501,7 @@ def test_mirror_motion():
             particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, -0.5*DT)    # De-sync      
         
 
-    if False:
+    if True:
         ## Plots position/mag timeseries ##
         fig, axes = plt.subplots(2, sharex=True)
         axes[0].plot(time, pos_history*1e-3, c='k')
@@ -1509,7 +1509,7 @@ def test_mirror_motion():
         axes[0].set_xlabel('t (s)')
         axes[0].axhline(const.xmin*1e-3, color='k', ls=':')
         axes[0].axhline(const.xmax*1e-3, color='k', ls=':')
-        axes[0].set_title('Position and Magnetic Field at Particle Position, v0 = [{:4.1f}, {:4.1f}, {:4.1f}]km/s'.format(vel_init[0, 0], vel_init[1, 0], vel_init[2, 0]))
+        axes[0].set_title(r'Position/Magnetic Field at Particle, v0 = [%4.1f, %4.1f, %4.1f]km/s, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (vel_init[0, 0], vel_init[1, 0], vel_init[2, 0], const.loss_cone, particle_pa))
         axes[0].set_xlim(0, None)
         
         axes[1].plot(time, mag_history[:, 0], label='B0x')
@@ -1626,6 +1626,15 @@ def test_mirror_motion():
     return
 
 
+@nb.njit()
+def analytic_B0_equation(R, X, A, BEQ, B0):
+    for ii in nb.prange(X.shape[0]):
+        for jj in nb.prange(R.shape[0]):
+            B0[0, ii, jj] = BEQ * (1 + A * X[ii]**2)
+            B0[1, ii, jj] = - A * R[jj] * BEQ * np.abs(X[ii])
+    return
+
+
 def test_B0_analytic():
     '''
     Analytically evaluate what magnetic field mapping this function is giving us.
@@ -1641,23 +1650,102 @@ def test_B0_analytic():
     b1  = np.zeros(3)
     qmi = const.qm_ratios[0]
     
-    Nx  = 1000; Nv = 4000
+    if False:
+        # Test: For a given (vr, x) is the resulting magnetic field output (B0x, B0r) constant in theta?
+        # Yes, B0r is constant in theta, as expected
+        x  = const.xmax
+        vx = const.va
+        vr = const.va
+        
+        Ntheta = 1000
+        theta  = np.linspace(0, 2*np.pi, Ntheta)
+        B0x    = np.zeros(Ntheta)
+        B0r    = np.zeros(Ntheta)
+        vya    = np.zeros(Ntheta)
+        vza    = np.zeros(Ntheta)
+        
+        for ii in range(Ntheta):
+            # Go around whole orbit
+            vy  = vr * np.cos(theta[ii])
+            vz  = vr * np.sin(theta[ii])
+            vel = np.array([vx, vy, vz])
+            vya[ii] = vy
+            vza[ii] = vz
+            # Check if 
+            B0_particle = particles.eval_B0_particle(x, vel, qmi, b1)
+            
+            br = np.sqrt(B0_particle[1] ** 2 + B0_particle[2] ** 2)
+            
+            B0x[ii] = B0_particle[0]
+            B0r[ii] = br
+        
+        fig, ax = plt.subplots()
+        plt.plot(theta, B0x*1e9, label='B0_x', c='k')
+        ax.plot(theta,  B0r*1e9, label='B0_r', c='r')
+        ax.set_xlabel('Particle orbit phase (rad)')
+        ax.set_ylabel('B0 component (nT)')
+        ax.set_title( 'Analytic B0 around single particle orbit: Constant position, constant v_radial')
+        ax.legend()
+        
+        ax2 = ax.twinx()
+        ax2.plot(theta, vya, label='vy', c='orange')
+        ax2.plot(theta, vza, label='vz', c='b')
+        ax2.set_ylabel('Velocity (m/s)')
+        ax2.legend()
     
-    x_space   = np.linspace( const.xmin, const.xmax, Nx)
-    v_space   = np.linspace(-2*const.va, 2*const.va, Nv)
-    B0_output = np.zeros((2, Nx, Nv))                       # Each spatial point, radial velocity
-    
-    for ii in range(Nx):
-        for jj in range(Nv):
-            for kk in range(Nv):
-                vel = np.array([0.1*const.va, v_space[jj], v_space[kk]])
-                
-                B0_particle = particles.eval_B0_particle(x_space[ii], vel, qmi, b1)
-                
-                B0_output[0, ii, jj] = B0_particle[0]
-                B0_output[1, ii, jj] = B0_particle[1]
-                B0_output[2, ii, jj] = B0_particle[2]
-    
+    if True:
+        # Plot magnetic mirror from raw equation (independent of energy yet, r != rL yet)
+        Nx  = 1000; Nr = 40000
+        
+        x_space   = np.linspace(const.xmin , const.xmax, Nx)    # Simulation domain
+        r_space   = np.linspace(0, 400000, Nr)                  # Derived for a maximum speed of around 400km/s
+        B0_output = np.zeros((2, Nx, Nr))                       # Each spatial point, radial distance
+        
+        print('Plotting magnetic map from equations...')
+        analytic_B0_equation(r_space, x_space, const.a, const.B_eq, B0_output)
+        
+        B_magnitude = np.sqrt(B0_output[0] ** 2 + B0_output[1] ** 2)
+
+        if True:
+            # Not great: Flips the vertical axis without telling you (and plots the wrong y axis)
+            plt.figure()
+            plt.imshow(np.flip(B0_output[1].T*1e9, axis=0), cmap=mpl.cm.get_cmap('Blues_r'),
+                       extent=[const.xmin, const.xmax, 0, 400000], aspect='auto')
+            plt.title(r'Contour Plot of $B0_r$ with abs(x) in equation')
+            plt.xlabel('x (m)')
+            plt.ylabel('r (m)')
+            plt.colorbar().set_label('Magnetic Field (nT)')
+            
+            plt.figure()
+            plt.imshow(np.flip(B0_output[0].T*1e9, axis=0), cmap='Blues',
+                       extent=[const.xmin, const.xmax, 0, 400000], aspect='auto')
+            plt.title(r'Contour Plot of $B0_x$')
+            plt.xlabel('x (m)')
+            plt.ylabel('r (m)')
+            plt.colorbar().set_label('Magnetic Field (nT)')   
+            
+            plt.figure()
+            plt.imshow(np.flip(B_magnitude.T*1e9, axis=0), cmap='Blues',
+                       extent=[const.xmin, const.xmax, 0, 400000], aspect='auto')
+            plt.title(r'Contour Plot of $|B0|$')
+            plt.xlabel('x (m)')
+            plt.ylabel('r (m)')
+            plt.colorbar().set_label('Magnetic Field (nT)')   
+        else:
+            # Backup plot that does it right, but takes ages
+            plt.figure()
+            plt.contourf(x_space*1e-3, r_space*1e-3, B0_output[1].T*1e9, levels=100, cmap='bwr')
+            plt.title(r'Contour Plot of $B0_r$')
+            plt.xlabel('x (km)')
+            plt.ylabel('r (km)')
+            plt.colorbar().set_label('Magnetic Field (nT)')
+            
+            plt.figure()
+            plt.contourf(x_space*1e-3, r_space*1e-3, B0_output[0].T*1e9, levels=100, cmap='bwr')
+            plt.title(r'Contour Plot of $B0_x$')
+            plt.xlabel('x (km)')
+            plt.ylabel('r (km)')
+            plt.colorbar().set_label('Magnetic Field (nT)')       
     return
 
 
@@ -1687,5 +1775,5 @@ if __name__ == '__main__':
     #test_weight_shape_and_alignment()
     #compare_parabolic_to_dipole()
     #test_boris()
-    #test_mirror_motion()
-    test_B0_analytic()
+    test_mirror_motion()
+    #test_B0_analytic()
