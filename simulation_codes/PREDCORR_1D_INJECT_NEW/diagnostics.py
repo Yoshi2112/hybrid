@@ -1362,6 +1362,10 @@ def compare_parabolic_to_dipole():
 
 
 def test_boris():
+    '''
+    Contains stripped down version of the particle-push (velocity/position updates) loop
+    in order to test accuracy of boris pusher.
+    '''
     B0        = const.B_xmax
     v0_perp   = const.va
     
@@ -1436,6 +1440,10 @@ def test_boris():
 
 def test_mirror_motion():
     '''
+    Contains full particle pusher including timestep checker to simulate the motion
+    of a single particle in the analytic magnetic field field. No wave magnetic/electric
+    fields present.
+    
     Diagnostic code to call the particle pushing part of the hybrid and check
     that its solving ok. Runs with zero background E field and B field defined
     by the constant background field specified in the parameter script.
@@ -1453,16 +1461,16 @@ def test_mirror_motion():
     E_test = np.zeros((const.NC, 3),     dtype=np.float64) 
     
     vel_init    = vel.copy() * 1e-3
+    KE_init     = 0.5 * const.mp * vel_init ** 2
     particle_pa = np.arctan(vel_init[1] / vel_init[0]) * 180. / np.pi
-    
-    KE_init  = 0.5 * const.mp * vel ** 2
+        
     gyfreq   = const.gyfreq / (2 * np.pi)
     ion_ts   = const.orbit_res / gyfreq
     vel_ts   = 0.5 * const.dx / np.max(vel[0, :])
     DT       = min(ion_ts, vel_ts)
     
     # Target: 25000 cyclotron periods (~1hrs)
-    max_rev  = 50000
+    max_rev  = 5000
     max_t    = max_rev / gyfreq
     max_inc  = int(max_t / DT)
     
@@ -1501,7 +1509,7 @@ def test_mirror_motion():
             particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, -0.5*DT)    # De-sync      
         
 
-    if True:
+    if False:
         ## Plots position/mag timeseries ##
         fig, axes = plt.subplots(2, sharex=True)
         axes[0].plot(time, pos_history*1e-3, c='k')
@@ -1603,7 +1611,7 @@ def test_mirror_motion():
         plt.xlim(0, time[-1])
         plt.ylabel(r'Percent change ($\times 10^{-12}$)')
         plt.xlabel('Time (s)')
-    elif True:
+    elif False:
         pass
         ## Ideas of Colins
         
@@ -1623,8 +1631,23 @@ def test_mirror_motion():
         # How to check vx_x0 with vperp_xmax? (Mirror only)
         
         # Check these things for varying energies/pitch angles (maybe have more than one particle?)
+        
+    elif False:
+        # Calculate and plot magnetic moment (first invariant)
+        
+        KE_perp     = 0.5 * const.mp * (vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
+        B_magnitude = np.sqrt(mag_history[:, 0] ** 2 + mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
+        invariant   = KE_perp / B_magnitude
+        
+        plt.figure()
+        plt.plot(time, invariant)
+        plt.title(r'First Invariant $\mu$ for single trapped particle, v0 = [%4.1f, %4.1f, %4.1f]$v_{A,eq}^{-1}$' % (vel_init[0, 0], vel_init[1, 0], vel_init[2, 0]))
+        plt.xlabel('Time (s)')
+        plt.ylabel(r'$\mu$', rotation=0)
+        plt.xlim(0, None)
+        
     return
-
+    
 
 @nb.njit()
 def analytic_B0_equation(R, X, A, BEQ, B0):

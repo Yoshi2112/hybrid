@@ -124,7 +124,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
         v_minus    = vel[:, ii] + qmi * Ep                                  # First E-field half-push
         
         Bp[0]  = 0                                                          # No wave b1 exists, removes B due to B-nodes (since they're analytic)
-        B0_xp  = eval_B0_particle(pos[ii], v_minus, qmi, Bp)                # B0 at particle location
+        B0_xp  = eval_B0_particle(pos[ii], v_minus, qm_ratios[idx[ii]], Bp) # B0 at particle location
         Bp    += B0_xp                                                      # B  at particle location (total)
 
         T = qmi * Bp                                                        # Vector Boris variable
