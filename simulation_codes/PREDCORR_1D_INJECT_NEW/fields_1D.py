@@ -167,6 +167,11 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P):
         Te  -- Electron temperature
     
     arr3D, arr1D are tertiary arrays used for intermediary computations
+    
+    To Do: Improve accuracy (and clean up code) by allowing B array to only be
+    perturbed B. B0 only needed for Ve x B calculation, where it must be interpolated
+    to cell centers first. In the interpolation function, add on B0 along with the 
+    spline interpolation. No other part of the code requires B0 in the nodes.
     '''
     curl_B_term(B, temp3De)                                   # temp3De is now curl B term
 
@@ -178,7 +183,7 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P):
 
     get_grad_P(q_dens, Te, grad_P, temp3Db[:, 0])            # temp1D is now del_p term, temp3D2 slice used for computation
 
-    aux.interpolate_edges_to_center(B, temp3Db)              # temp3d2 is now B_center
+    aux.interpolate_edges_to_center(B, temp3Db)              # temp3db is now B_center
 
     aux.cross_product(Ve, temp3Db, temp3De)                  # temp3De is now Ve x B term
 

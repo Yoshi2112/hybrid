@@ -1470,7 +1470,7 @@ def test_mirror_motion():
     DT       = min(ion_ts, vel_ts)
     
     # Target: 25000 cyclotron periods (~1hrs)
-    max_rev  = 5000
+    max_rev  = 25000
     max_t    = max_rev / gyfreq
     max_inc  = int(max_t / DT)
     
@@ -1549,6 +1549,7 @@ def test_mirror_motion():
         
         for ax in axes:
             ax.set_xlim(0, None)
+            
     elif False:
         # Plot gyromotion of particle vx vs. vy
         plt.title('Particle gyromotion: {} gyroperiods ({:.1f}s)'.format(max_rev, max_t))
@@ -1557,6 +1558,7 @@ def test_mirror_motion():
         plt.ylabel('vy (km/s)')
         plt.xlabel('vz (km/s)')
         plt.axis('equal')
+        
     elif False:
         # Written under duress: Just trying to get the shape of the bottle #
         x = np.linspace(const.xmin, const.xmax, 1000)
@@ -1576,18 +1578,18 @@ def test_mirror_motion():
         ## Plot parallel and perpendicular kinetic energies/velocities
         KE_para = 0.5 * const.mp *  vel_history[:, 0] ** 2
         KE_perp = 0.5 * const.mp * (vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
+        KE_tot  = KE_para + KE_perp
         
-# =============================================================================
-#         plt.figure()
-#         plt.title('Kinetic energy of single particle: Parabolic B0x, radial B0y,z')
-#         plt.plot(time, KE_para/const.q, label=r'$KE_\parallel$')
-#         plt.plot(time, KE_perp/const.q, label=r'$KE_\perp$')
-#         plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
-#         plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
-#         plt.ylabel('Energy (eV)')
-#         plt.xlabel('Time (s)')
-#         plt.legend()
-# =============================================================================
+        plt.figure()
+        plt.title('Kinetic energy of single particle: Full Bottle')
+        plt.plot(time, KE_para/const.q, c='b', label=r'$KE_\parallel$')
+        plt.plot(time, KE_perp/const.q, c='r', label=r'$KE_\perp$')
+        plt.plot(time, KE_tot /const.q, c='k', label=r'$KE_{total}$')
+        plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
+        plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
+        plt.ylabel('Energy (eV)')
+        plt.xlabel('Time (s)')
+        plt.legend()
         
 # =============================================================================
 #         plt.figure()
@@ -1600,27 +1602,26 @@ def test_mirror_motion():
 #         plt.xlabel('Time (s)')
 # =============================================================================
         
-        plt.figure()
-        plt.title('Total kinetic energy change: Parabolic B0x, radial B0y,z')
-        percent = abs(KE_perp + KE_para - KE_init.sum()) / KE_init.sum() * 100. 
-
-        plt.plot(time, percent)
-        plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
-        plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
-        plt.ylim(-0.1e-3, 1e-3)
-        plt.xlim(0, time[-1])
-        plt.ylabel(r'Percent change ($\times 10^{-12}$)')
-        plt.xlabel('Time (s)')
+# =============================================================================
+#         plt.figure()
+#         plt.title('Total kinetic energy change: Parabolic B0x, radial B0y,z')
+#         percent = abs(KE_perp + KE_para - KE_init.sum()) / KE_init.sum() * 100. 
+# 
+#         plt.plot(time, percent)
+#         plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
+#         plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
+#         plt.ylim(-0.1e-3, 1e-3)
+#         plt.xlim(0, time[-1])
+#         plt.ylabel(r'Percent change ($\times 10^{-12}$)')
+#         plt.xlabel('Time (s)')
+# =============================================================================
     elif False:
-        pass
-        ## Ideas of Colins
-        
         # vx vs. x - vx at each x should have a single value. Drifting suggests energy gain.
         # As above, but for v_perp
         vel_perp = np.sqrt(vel_history[:, 0] ** 2 + vel_history[:, 0] ** 2) * 1e-3
         
         fig, ax = plt.subplots(1)
-        ax.set_title(r'Velocity vs. Space: v0 = [%4.1f, %4.1f, %4.1f]$v_{A,eq}^{-1}$' % (vel_init[0, 0], vel_init[1, 0], vel_init[2, 0]))
+        ax.set_title(r'Velocity vs. Space: v0 = [%4.1f, %4.1f, %4.1f]$v_{A,eq}^{-1}$ : %d gyroperiods (%5.2fs)' % (vel_init[0, 0], vel_init[1, 0], vel_init[2, 0], max_rev, max_t))
         ax.plot(pos_history*1e-3, vel_history[:, 0]*1e-3, c='b', label=r'$v_\parallel$')
         ax.plot(pos_history*1e-3, vel_perp,               c='r', label=r'$v_\perp$')
         ax.set_xlabel('x (km)')
@@ -1632,19 +1633,20 @@ def test_mirror_motion():
         
         # Check these things for varying energies/pitch angles (maybe have more than one particle?)
         
-    elif False:
+    elif True:
         # Calculate and plot magnetic moment (first invariant)
         
         KE_perp     = 0.5 * const.mp * (vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
         B_magnitude = np.sqrt(mag_history[:, 0] ** 2 + mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
         invariant   = KE_perp / B_magnitude
-        
+
         plt.figure()
-        plt.plot(time, invariant)
+        plt.plot(time, invariant*1e10)
         plt.title(r'First Invariant $\mu$ for single trapped particle, v0 = [%4.1f, %4.1f, %4.1f]$v_{A,eq}^{-1}$' % (vel_init[0, 0], vel_init[1, 0], vel_init[2, 0]))
         plt.xlabel('Time (s)')
-        plt.ylabel(r'$\mu$', rotation=0)
+        plt.ylabel(r'$\mu (\times 10^{-10})$', rotation=0)
         plt.xlim(0, None)
+        plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
         
     return
     
@@ -1772,6 +1774,137 @@ def test_B0_analytic():
     return
 
 
+@nb.njit()
+def interrogate_B0_function(theta=0):
+    '''
+    Arguments: eval_B0_particle(x, v, qmi, b1)
+    
+    For each point in space.
+    For v_para = 0 (shouldn't matter, v[0] isn't used)
+    For v_perp between +/- a few v_A
+    
+    Have v0y, v0z related by gyrophase, but that shouldn't matter
+    For each v_perp, calculate rL based on B0x. Maybe can also calculate
+    the error for B0r this way?
+    
+    rL will change in x due to varying B0x -> cyclotron frequency
+    rL will change in v due to varying v_perp
+    '''
+    qmi = const.q / const.mp
+    b1  = np.zeros(3)
+
+    Nx = 2500       # Number of points in space
+    Nv = 2500       # Number of points in velocity
+    VM = 10         # vA multiplier: Velocity space is between +/- va * VM
+
+    x_axis      = np.linspace(  const.xmin,  const.xmax, Nx)    
+    v_perp_axis = np.linspace(-VM*const.va, VM*const.va, Nv)
+    vx          = 0.
+
+    B0xr_surface = np.zeros((3, Nx, Nv))
+    x_pos        = np.zeros((Nx, Nv))
+    y_pos        = np.zeros((Nx, Nv))
+    z_pos        = np.zeros((Nx, Nv))
+    r_pos        = np.zeros((Nx, Nv))
+    
+    for ii in nb.prange(Nx):
+        for jj in range(Nv):
+            vy = v_perp_axis[jj] * np.cos(theta * np.pi / 180.)
+            vz = v_perp_axis[jj] * np.sin(theta * np.pi / 180.)
+            
+            B0 = particles.eval_B0_particle(x_axis[ii], np.array([vx, vy, vz]), qmi, b1)
+            
+            B0xr_surface[0, ii, jj] = B0[0]
+            B0xr_surface[1, ii, jj] = B0[1]
+            B0xr_surface[2, ii, jj] = B0[2]
+            
+            r_pos[ii, jj] = const.mp * v_perp_axis[jj] / (const.q * B0[0])
+            
+            x_pos[ii, jj] = x_axis[ii]
+            y_pos[ii, jj] = r_pos[ii, jj] * np.cos(theta * np.pi / 180.)
+            z_pos[ii, jj] = r_pos[ii, jj] * np.sin(theta * np.pi / 180.)
+            
+    return x_axis, v_perp_axis, B0xr_surface, x_pos, y_pos, z_pos, r_pos
+
+
+def save_B0_map_3D():
+    
+    save_dir = 'F://runs//magnetic_bottle_savefiles//'
+    
+    r = 0
+    for theta in np.arange(0, 360, 0.5):
+        print('Analysing bottle for theta = {} degrees'.format(theta))
+        x_axis, v_perp_axis, B0xr_surface, x_pos, y_pos, z_pos, r_pos = interrogate_B0_function(theta=theta)
+    
+        d_fullpath = save_dir + 'magbottle_%05d' % r
+    
+        np.savez(d_fullpath,
+                 theta = np.array([theta]),
+                 x_axis = x_axis,
+                 v_perp_axis = v_perp_axis,
+                 B0xr_surface = B0xr_surface,
+                 x_pos = x_pos,
+                 y_pos = y_pos,
+                 z_pos = z_pos,
+                 r_pos = r_pos)
+        r += 1
+    return
+
+
+def plot_B0_function():
+    x_axis, v_perp_axis, B0xr_surface, x_pos, y_pos, z_pos, r_pos = interrogate_B0_function()
+    pdb.set_trace()
+    B0_r = np.sqrt(B0xr_surface[1] **2 + B0xr_surface[2] ** 2)
+    pdb.set_trace()
+    if False: # Plot in x-v space
+        plt.figure()
+        plt.contourf(x_axis*1e-3, v_perp_axis*1e-3, B0xr_surface[0].T*1e9, levels=100)
+        plt.title('B0x in x-v space')
+        plt.colorbar().set_label('$B_{0x}$\n(nT)', rotation=0, labelpad=20)
+        plt.xlabel('x (km)')
+        plt.ylabel('$v_\perp$\n(km/s)', rotation=0)
+        
+        plt.figure()
+        plt.contourf(x_axis*1e-3, v_perp_axis*1e-3, B0_r.T*1e9, levels=100)
+        plt.title('B0r in x-v space')
+        plt.colorbar().set_label('$B_{0r}$\n(nT)', rotation=0, labelpad=20)
+        plt.xlabel('x (km)')
+        plt.ylabel('$v_\perp$\n(km/s)', rotation=0)
+        
+    # For each value of (x, v), an rL is associated with it.
+    if True:
+# =============================================================================
+#         from scipy.interpolate import griddata
+#         # (x,   r) are existing     data (uneven mesh)
+#         # (xi, ri) are interpolated data (even mesh)
+#         xi = x.copy()
+#         ri = np.linspace(rL_pos.min(), rL_pos.max(), rL_pos.shape[1])
+#         
+#         
+#         zi = griddata((x, y), z, (xi[None,:], yi[:,None]), method='linear')
+# =============================================================================
+    
+        plt.figure()
+        
+        # For each value of x, scatterplot all the values of rL
+        # color is magnetic field
+        for ii in range(x_axis.shape[0]):
+            xi = np.ones(r_pos[ii].shape[0]) * x_axis[ii]
+            
+            if x_axis[ii] == 0:
+                pdb.set_trace()
+            
+            plt.scatter(xi*1e-3, r_pos[ii]*1e-3, c=B0_r[ii]*1e9)
+            
+        plt.colorbar().set_label('$B_{0r}$\n(nT)', rotation=0, labelpad=20)
+        plt.title('B0r in x-r space')
+        plt.xlabel('x (km)')
+        plt.ylabel('r (km)', rotation=0)
+        
+    return
+
+
+
 if __name__ == '__main__':
     #check_position_distribution()
     #animate_moving_weight()
@@ -1798,5 +1931,7 @@ if __name__ == '__main__':
     #test_weight_shape_and_alignment()
     #compare_parabolic_to_dipole()
     #test_boris()
-    test_mirror_motion()
+    #test_mirror_motion()
     #test_B0_analytic()
+    #plot_B0_function()
+    save_B0_map_3D()
