@@ -1470,10 +1470,10 @@ def test_mirror_motion():
     vel_init    = vel.copy()
     KE_init     = 0.5 * const.mp * vel_init ** 2
     particle_pa = np.arctan(vel_init[1] / vel_init[0]) * 180. / np.pi
-        
+    
     gyfreq   = const.gyfreq / (2 * np.pi)
     ion_ts   = const.orbit_res / gyfreq
-    vel_ts   = 0.5 * const.dx / np.max(vel[0, :])
+    vel_ts   = 0.6 * const.dx / np.max(vel[0, :])
     DT       = min(ion_ts, vel_ts)
     
     # Target: 25000 cyclotron periods (~1hrs)
@@ -1487,7 +1487,7 @@ def test_mirror_motion():
     mag_history = np.zeros((max_inc, 3))
     
     dump_every  = 1; tt = 0; halves = 0; t_total = 0
-    
+
     Bp = particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, -0.5*DT)
     while tt < max_inc:
         Bp = particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, DT)
@@ -1498,7 +1498,8 @@ def test_mirror_motion():
             pos_history[tt // 2**halves] = pos[0]
             vel_history[tt // 2**halves] = vel[:, 0]
             mag_history[tt // 2**halves] = Bp
-        tt += 1
+            
+        tt      += 1
         t_total += DT
         
         # Check timestep
@@ -1515,30 +1516,39 @@ def test_mirror_motion():
             
             particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, -0.5*DT)    # De-sync      
         
+    vel_perp    = np.sqrt(vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
+    vel_para    = vel_history[:, 0]
+    B_magnitude = np.sqrt(mag_history[:, 0] ** 2 + mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
+    
+    initial_invariant = 0.5 * const.mp * (vel_init[1] ** 2 + vel_init[2] ** 2) / const.B_eq
 
     if False:
         ## Plots position/mag timeseries ##
         fig, axes = plt.subplots(2, sharex=True)
-        axes[0].plot(time, pos_history*1e-3, c='k')
-        axes[0].set_ylabel('x (km)')
+        axes[0].plot(time, vel_perp*1e-3, label='v_perp')
+        axes[0].plot(time, vel_history[:, 1]*1e-3, label='vy')
+        axes[0].plot(time, vel_history[:, 2]*1e-3, label='vz')
+        axes[0].plot(time, vel_para*1e-3, label='v_para')
+        axes[0].set_ylabel('v (km)')
         axes[0].set_xlabel('t (s)')
-        axes[0].axhline(const.xmin*1e-3, color='k', ls=':')
-        axes[0].axhline(const.xmax*1e-3, color='k', ls=':')
-        axes[0].set_title(r'Position/Magnetic Field at Particle, v0 = [%4.1f, %4.1f, %4.1f]km/s, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (vel_init[0, 0], vel_init[1, 0], vel_init[2, 0], const.loss_cone, particle_pa))
-        axes[0].set_xlim(0, None)
+        #axes[0].axhline(const.xmin*1e-3, color='k', ls=':')
+        #axes[0].axhline(const.xmax*1e-3, color='k', ls=':')
+        axes[0].set_title(r'Velocity/Magnetic Field at Particle, v0 = [%4.1f, %4.1f, %4.1f]km/s, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (vel_init[0, 0], vel_init[1, 0], vel_init[2, 0], const.loss_cone, particle_pa))
+        #axes[0].set_xlim(0, None)
+        axes[0].legend()
         
-        axes[1].plot(time, mag_history[:, 0], label='B0x')
-        axes[1].plot(time, mag_history[:, 1], label='B0y')
-        axes[1].plot(time, mag_history[:, 2], label='B0z')
+        axes[1].plot(time, B_magnitude,       label='|B0|')
+        #axes[1].plot(time, mag_history[:, 0], label='B0x')
+        #axes[1].plot(time, mag_history[:, 1], label='B0y')
+        #axes[1].plot(time, mag_history[:, 2], label='B0z')
         axes[1].legend()
         axes[1].set_ylabel('t (s)')
         axes[1].set_ylabel('B (nT)')
         axes[1].set_xlim(0, None)
         
-    if True:
+    if False:
         ## Plots 3-velocity timeseries ##
-        v_perp = np.sqrt(vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
-        
+
         fig, axes = plt.subplots(3, sharex=True)
         axes[0].set_title(r'Position/Velocity of Particle : v0 = [%3.1f, %3.1f, %3.1f]$v_A$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (vel_init[0, 0]/const.va, vel_init[1, 0]/const.va, vel_init[2, 0]/const.va, const.loss_cone, particle_pa))
 
@@ -1550,7 +1560,7 @@ def test_mirror_motion():
         axes[0].legend()
         
         axes[1].plot(time, vel_history[:, 0]/const.va, label='$v_\parallel$')
-        axes[1].plot(time,            v_perp/const.va, label='$v_\perp$')
+        axes[1].plot(time,            vel_perp/const.va, label='$v_\perp$')
         axes[1].set_xlabel('t (s)')
         axes[1].set_ylabel(r'$v$ ($v_{A,eq}^{-1}$)')
         axes[1].legend()
@@ -1630,7 +1640,6 @@ def test_mirror_motion():
     if False:
         # vx vs. x - vx at each x should have a single value. Drifting suggests energy gain.
         # As above, but for v_perp
-        vel_perp = np.sqrt(vel_history[:, 0] ** 2 + vel_history[:, 0] ** 2) * 1e-3
         
         fig, ax = plt.subplots(1)
         ax.set_title(r'Velocity vs. Space: v0 = [%4.1f, %4.1f, %4.1f]$v_{A,eq}^{-1}$ : %d gyroperiods (%5.2fs)' % (vel_init[0, 0], vel_init[1, 0], vel_init[2, 0], max_rev, max_t))
@@ -1642,30 +1651,32 @@ def test_mirror_motion():
         ax.legend()
 
         
-    if False:
+    if True:
         # Calculate and plot magnetic moment (first invariant)
+        v_perp      = np.sqrt(vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
         KE_perp     = 0.5 * const.mp * (vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
-        B_magnitude = np.sqrt(mag_history[:, 0] ** 2 + mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
-        B_para      = mag_history[:, 0]
-        B_perp      = np.sqrt(mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
+        #B_para      = mag_history[:, 0]
+        #B_perp      = np.sqrt(mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
         invariant   = KE_perp / B_magnitude
 
         fig, axes = plt.subplots(3, sharex=True)
         axes[0].plot(time, invariant*1e10)
-        axes[0].set_title(r'First Invariant $\mu$ for single trapped particle, v0 = [%3.1f, %3.1f, %3.1f]$v_{A,eq}^{-1}$' % (vel_init[0, 0]/const.va, vel_init[1, 0]/const.va, vel_init[2, 0]/const.va))
+        axes[0].set_title(r'First Invariant $\mu$ for single trapped particle, v0 = [%3.1f, %3.1f, %3.1f]$v_{A,eq}^{-1}$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (vel_init[0, 0]/const.va, vel_init[1, 0]/const.va, vel_init[2, 0]/const.va, const.loss_cone, particle_pa))
         axes[0].set_xlabel('Time (s)')
         axes[0].set_ylabel(r'$\mu (\times 10^{-10})$', rotation=0, labelpad=20)
         axes[0].set_xlim(0, None)
         axes[0].get_yaxis().get_major_formatter().set_useOffset(False)
+        axes[0].axhline(initial_invariant*1e10, c='k', ls=':')
         
-        axes[1].plot(time, pos_history*1e-3)
+        axes[1].plot(time, v_perp*1e-3)
         axes[1].set_xlabel('Time (s)')
-        axes[1].set_ylabel('Position\n(km)', rotation=0, labelpad=20)
-        axes[1].axhline(const.xmin*1e-3, color='k', ls=':')
-        axes[1].axhline(const.xmax*1e-3, color='k', ls=':')
-
-        axes[2].plot(time, B_para*1e9, label=r'$B_\parallel$')
-        axes[2].plot(time, B_perp*1e9*100, label=r'$B_\perp (\times 100)$')
+        axes[1].set_ylabel('Velocity Perp\n(km/s)', rotation=0, labelpad=20)
+        #axes[1].axhline(const.xmin*1e-3, color='k', ls=':')
+        #axes[1].axhline(const.xmax*1e-3, color='k', ls=':')
+        
+        axes[2].plot(time, B_magnitude*1e9, label=r'B_mag')
+        #axes[2].plot(time, B_para*1e9, label=r'$B_\parallel$')
+        #axes[2].plot(time, B_perp*1e9*100, label=r'$B_\perp (\times 100)$')
         axes[2].set_xlabel('Time (s)')
         axes[2].set_ylabel('Magnetic\nField (nT)', rotation=0, labelpad=20)
         axes[2].legend()
@@ -2154,7 +2165,7 @@ def smart_plot_2D_planes():
         z_mid = jj
         B0xy  = np.sqrt(B0_grid[:, :, z_mid, 0] ** 2 + B0_grid[:, :, z_mid, 1] ** 2)
           
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(16,10))
         im2 = ax.quiver(x_axis*1e-3, y_axis*1e-3, B0_grid[:, :, z_mid, 0].T, B0_grid[:, :, z_mid, 1].T, B0xy*1e9, clim=(200, 425))
         
         ax.set_xlabel('x (km)')
@@ -2173,7 +2184,7 @@ def smart_plot_2D_planes():
         y_mid = kk
         B0xz  = np.sqrt(B0_grid[:, y_mid, :, 0] ** 2 + B0_grid[:, y_mid, :, 2] ** 2)
           
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(16,10))
         im3 = ax.quiver(x_axis*1e-3, z_axis*1e-3, B0_grid[:, y_mid, :, 0].T, B0_grid[:, y_mid, :, 2].T, B0xz*1e9, clim=(200, 425))
         
         ax.set_xlabel('x (km)')
@@ -2208,6 +2219,7 @@ def smart_plot_3D():
     
     ax.quiver(X, Y, Z, U, V, W)
     return
+
 
 def check_directions():
     v_perp = 1.
@@ -2247,13 +2259,13 @@ if __name__ == '__main__':
     #test_weight_shape_and_alignment()
     #compare_parabolic_to_dipole()
     #test_boris()
-    #test_mirror_motion()
+    test_mirror_motion()
     #test_B0_analytic()
     #plot_B0_function()
     #save_B0_map_3D()
     #return_2D_slice_rtheta()
     #interpolate_2D_slice()
     #calculate_all_2D_slices()
-    smart_plot_2D_planes()
+    #smart_plot_2D_planes()
     #smart_plot_3D()
     #check_directions()
