@@ -4,6 +4,7 @@ Created on Fri Sep 22 10:42:13 2017
 
 @author: iarey
 """
+import math
 import numpy as np
 import numba as nb
 import matplotlib        as mpl
@@ -19,7 +20,13 @@ import auxilliary_1D            as aux
 import init_1D as init
 
 
-
+@nb.njit()
+def roundup(x, nearest=10.):
+    '''
+    Rounds up x to the nearest multiple specified by 'nearest'
+    Returns float
+    '''
+    return int(math.ceil(x / nearest)) * nearest
 
 
 def boundary_idx64(time_arr, start, end):
@@ -1451,7 +1458,7 @@ def test_mirror_motion():
     mid    = const.NC // 2
     pos    = np.array([0])
     idx    = np.array([0])
-    vel    = np.array([0.8*const.va, 1.0*const.va, 0]).reshape((3, 1))
+    vel    = np.array([1.0, 1.0, 0]).reshape((3, 1))*const.va
     W_elec = np.array([0, 1, 0]).reshape((3, 1))
     W_mag  = np.array([0, 1, 0]).reshape((3, 1))
     Ie     = np.array([mid])
@@ -1460,7 +1467,7 @@ def test_mirror_motion():
     B_test = np.zeros((const.NC + 1, 3), dtype=np.float64) 
     E_test = np.zeros((const.NC, 3),     dtype=np.float64) 
     
-    vel_init    = vel.copy() * 1e-3
+    vel_init    = vel.copy()
     KE_init     = 0.5 * const.mp * vel_init ** 2
     particle_pa = np.arctan(vel_init[1] / vel_init[0]) * 180. / np.pi
         
@@ -1528,29 +1535,38 @@ def test_mirror_motion():
         axes[1].set_ylabel('B (nT)')
         axes[1].set_xlim(0, None)
         
-    elif False:
+    if True:
         ## Plots 3-velocity timeseries ##
-        fig, axes = plt.subplots(3, sharex=True)
-        axes[0].set_title(r'Velocities with initial v0 = [%4.1f, %4.1f, %4.1f]$v_{A,eq}^{-1}$' % (vel_init[0, 0], vel_init[1, 0], vel_init[2, 0]))
-        axes[0].plot(time, vel_history[:, 0]/const.va, label='vx')
-        axes[0].set_xlabel('t (s)')
-        axes[0].set_ylabel(r'$v_\parallel$ (km/s)')
+        v_perp = np.sqrt(vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
         
-        axes[1].plot(time, vel_history[:, 1]/const.va, label='vy')
-        axes[1].plot(time, vel_history[:, 2]/const.va, label='vz')
+        fig, axes = plt.subplots(3, sharex=True)
+        axes[0].set_title(r'Position/Velocity of Particle : v0 = [%3.1f, %3.1f, %3.1f]$v_A$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (vel_init[0, 0]/const.va, vel_init[1, 0]/const.va, vel_init[2, 0]/const.va, const.loss_cone, particle_pa))
+
+        axes[0].plot(time, pos_history*1e-3)
+        axes[0].set_xlabel('t (s)')
+        axes[0].set_ylabel(r'x (km)')
+        axes[0].axhline(const.xmin*1e-3, color='k', ls=':')
+        axes[0].axhline(const.xmax*1e-3, color='k', ls=':')
+        axes[0].legend()
+        
+        axes[1].plot(time, vel_history[:, 0]/const.va, label='$v_\parallel$')
+        axes[1].plot(time,            v_perp/const.va, label='$v_\perp$')
         axes[1].set_xlabel('t (s)')
-        axes[1].set_ylabel(r'$v_\perp$ (km/s)')
+        axes[1].set_ylabel(r'$v$ ($v_{A,eq}^{-1}$)')
         axes[1].legend()
         
-        axes[2].plot(time, pos_history*1e-3)
+        axes[2].plot(time, vel_history[:, 1]/const.va, label='vy')
+        axes[2].plot(time, vel_history[:, 2]/const.va, label='vz')
         axes[2].set_xlabel('t (s)')
-        axes[2].set_ylabel(r'x (km)')
+        axes[2].set_ylabel(r'$v_\perp$ ($v_{A,eq}^{-1}$)')
         axes[2].legend()
+        
+        
         
         for ax in axes:
             ax.set_xlim(0, None)
             
-    elif False:
+    if False:
         # Plot gyromotion of particle vx vs. vy
         plt.title('Particle gyromotion: {} gyroperiods ({:.1f}s)'.format(max_rev, max_t))
         plt.scatter(vel_history[:, 1], vel_history[:, 2], c=time)
@@ -1559,7 +1575,7 @@ def test_mirror_motion():
         plt.xlabel('vz (km/s)')
         plt.axis('equal')
         
-    elif False:
+    if False:
         # Written under duress: Just trying to get the shape of the bottle #
         x = np.linspace(const.xmin, const.xmax, 1000)
         B0_xp = np.zeros((x.shape[0], 3))
@@ -1574,7 +1590,8 @@ def test_mirror_motion():
         plt.plot(x, B0_xp[:, 2]*1e9, label='z')
         plt.plot(x, B_mag*1e9, label='mag')
         plt.legend()
-    elif False:
+        
+    if False:
         ## Plot parallel and perpendicular kinetic energies/velocities
         KE_para = 0.5 * const.mp *  vel_history[:, 0] ** 2
         KE_perp = 0.5 * const.mp * (vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
@@ -1590,32 +1607,27 @@ def test_mirror_motion():
         plt.ylabel('Energy (eV)')
         plt.xlabel('Time (s)')
         plt.legend()
+    
+    if False:    
+        # Look at total kinetic energy change over the simulation
+        KE_para = 0.5 * const.mp *  vel_history[:, 0] ** 2
+        KE_perp = 0.5 * const.mp * (vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
+        KE_tot  = KE_para + KE_perp
         
-# =============================================================================
-#         plt.figure()
-#         plt.title('Kinetic energy difference: $|\perp$ - $\parallel$| : Uniform B0')
-#         difference = (KE_perp - KE_para) / const.q  * 1e12
-#         plt.plot(time, difference)
-#         plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
-#         plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
-#         plt.ylabel(r'Energy ($\times 10^-12$ eV)')
-#         plt.xlabel('Time (s)')
-# =============================================================================
+        percent = abs(KE_tot - KE_init.sum()) / KE_init.sum() * 100. 
+
+        plt.figure()
+        plt.title('Total kinetic energy change')
+
+        plt.plot(time, percent*1e12)
+        #plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
+        #plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
+        #plt.ylim(-0.1e-3, 1e-3)
+        plt.xlim(0, time[-1])
+        plt.ylabel(r'Percent change ($\times 10^{-12}$)')
+        plt.xlabel('Time (s)')
         
-# =============================================================================
-#         plt.figure()
-#         plt.title('Total kinetic energy change: Parabolic B0x, radial B0y,z')
-#         percent = abs(KE_perp + KE_para - KE_init.sum()) / KE_init.sum() * 100. 
-# 
-#         plt.plot(time, percent)
-#         plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
-#         plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
-#         plt.ylim(-0.1e-3, 1e-3)
-#         plt.xlim(0, time[-1])
-#         plt.ylabel(r'Percent change ($\times 10^{-12}$)')
-#         plt.xlabel('Time (s)')
-# =============================================================================
-    elif False:
+    if False:
         # vx vs. x - vx at each x should have a single value. Drifting suggests energy gain.
         # As above, but for v_perp
         vel_perp = np.sqrt(vel_history[:, 0] ** 2 + vel_history[:, 0] ** 2) * 1e-3
@@ -1628,26 +1640,35 @@ def test_mirror_motion():
         ax.set_ylabel('v (km/s)')
         ax.set_xlim(const.xmin*1e-3, const.xmax*1e-3)
         ax.legend()
-                
-        # How to check vx_x0 with vperp_xmax? (Mirror only)
+
         
-        # Check these things for varying energies/pitch angles (maybe have more than one particle?)
-        
-    elif True:
+    if False:
         # Calculate and plot magnetic moment (first invariant)
-        
         KE_perp     = 0.5 * const.mp * (vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
         B_magnitude = np.sqrt(mag_history[:, 0] ** 2 + mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
+        B_para      = mag_history[:, 0]
+        B_perp      = np.sqrt(mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
         invariant   = KE_perp / B_magnitude
 
-        plt.figure()
-        plt.plot(time, invariant*1e10)
-        plt.title(r'First Invariant $\mu$ for single trapped particle, v0 = [%4.1f, %4.1f, %4.1f]$v_{A,eq}^{-1}$' % (vel_init[0, 0], vel_init[1, 0], vel_init[2, 0]))
-        plt.xlabel('Time (s)')
-        plt.ylabel(r'$\mu (\times 10^{-10})$', rotation=0)
-        plt.xlim(0, None)
-        plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
+        fig, axes = plt.subplots(3, sharex=True)
+        axes[0].plot(time, invariant*1e10)
+        axes[0].set_title(r'First Invariant $\mu$ for single trapped particle, v0 = [%3.1f, %3.1f, %3.1f]$v_{A,eq}^{-1}$' % (vel_init[0, 0]/const.va, vel_init[1, 0]/const.va, vel_init[2, 0]/const.va))
+        axes[0].set_xlabel('Time (s)')
+        axes[0].set_ylabel(r'$\mu (\times 10^{-10})$', rotation=0, labelpad=20)
+        axes[0].set_xlim(0, None)
+        axes[0].get_yaxis().get_major_formatter().set_useOffset(False)
         
+        axes[1].plot(time, pos_history*1e-3)
+        axes[1].set_xlabel('Time (s)')
+        axes[1].set_ylabel('Position\n(km)', rotation=0, labelpad=20)
+        axes[1].axhline(const.xmin*1e-3, color='k', ls=':')
+        axes[1].axhline(const.xmax*1e-3, color='k', ls=':')
+
+        axes[2].plot(time, B_para*1e9, label=r'$B_\parallel$')
+        axes[2].plot(time, B_perp*1e9*100, label=r'$B_\perp (\times 100)$')
+        axes[2].set_xlabel('Time (s)')
+        axes[2].set_ylabel('Magnetic\nField (nT)', rotation=0, labelpad=20)
+        axes[2].legend()
     return
     
 
@@ -1789,6 +1810,8 @@ def interrogate_B0_function(theta=0):
     
     rL will change in x due to varying B0x -> cyclotron frequency
     rL will change in v due to varying v_perp
+    
+    DEPRECATED. RETURNS TOO MUCH.
     '''
     qmi = const.q / const.mp
     b1  = np.zeros(3)
@@ -1828,7 +1851,9 @@ def interrogate_B0_function(theta=0):
 
 
 def save_B0_map_3D():
-    
+    '''
+    Deprecated. Too much to work with.
+    '''
     save_dir = 'F://runs//magnetic_bottle_savefiles//'
     
     r = 0
@@ -1853,9 +1878,9 @@ def save_B0_map_3D():
 
 def plot_B0_function():
     x_axis, v_perp_axis, B0xr_surface, x_pos, y_pos, z_pos, r_pos = interrogate_B0_function()
-    pdb.set_trace()
+
     B0_r = np.sqrt(B0xr_surface[1] **2 + B0xr_surface[2] ** 2)
-    pdb.set_trace()
+
     if False: # Plot in x-v space
         plt.figure()
         plt.contourf(x_axis*1e-3, v_perp_axis*1e-3, B0xr_surface[0].T*1e9, levels=100)
@@ -1872,18 +1897,7 @@ def plot_B0_function():
         plt.ylabel('$v_\perp$\n(km/s)', rotation=0)
         
     # For each value of (x, v), an rL is associated with it.
-    if True:
-# =============================================================================
-#         from scipy.interpolate import griddata
-#         # (x,   r) are existing     data (uneven mesh)
-#         # (xi, ri) are interpolated data (even mesh)
-#         xi = x.copy()
-#         ri = np.linspace(rL_pos.min(), rL_pos.max(), rL_pos.shape[1])
-#         
-#         
-#         zi = griddata((x, y), z, (xi[None,:], yi[:,None]), method='linear')
-# =============================================================================
-    
+    if True:  
         plt.figure()
         
         # For each value of x, scatterplot all the values of rL
@@ -1900,9 +1914,311 @@ def plot_B0_function():
         plt.title('B0r in x-r space')
         plt.xlabel('x (km)')
         plt.ylabel('r (km)', rotation=0)
-        
     return
 
+
+@nb.njit()
+def return_2D_slice_rtheta(x_val=0., Nv=500, Nt=360, VM=10.):
+    '''
+    For a specified x, creates a 2D slice using velocity/theta space
+    
+    Has to be regridded onto something more regular.
+    '''
+    qmi    = const.q / const.mp
+    b1     = np.zeros(3)
+    vx     = 0.
+
+    v_perp_axis = np.linspace(-VM*const.va, VM*const.va, Nv)
+    theta_axis  = np.linspace(0, 360., Nt)
+
+    # In order to keep the coordinates flat
+    B0xr_surface = np.zeros((3, Nv * Nt))
+    y_pos        = np.zeros((Nv * Nt))
+    z_pos        = np.zeros((Nv * Nt))
+    
+    for ii in nb.prange(Nv):
+        for jj in range(Nt):
+            xx = ii * Nt + jj       # Flattened array index
+            
+            vy = v_perp_axis[ii] * np.cos(theta_axis[jj] * np.pi / 180.)
+            vz = v_perp_axis[ii] * np.sin(theta_axis[jj] * np.pi / 180.)
+            B0 = particles.eval_B0_particle(x_val, np.array([vx, vy, vz]), qmi, b1)
+            
+            B0xr_surface[0, xx] = B0[0]
+            B0xr_surface[1, xx] = B0[1]
+            B0xr_surface[2, xx] = B0[2]
+
+            r_pos     = const.mp * v_perp_axis[ii] / (const.q * B0[0])
+            y_pos[xx] = r_pos * np.cos(theta_axis[jj] * np.pi / 180.)
+            z_pos[xx] = r_pos * np.sin(theta_axis[jj] * np.pi / 180.)
+            
+    return y_pos, z_pos, B0xr_surface
+
+
+def plot_single_2D_slice():
+    '''
+    For a single slice, interpolate onto 165km x 165km grid 
+    
+    Could do this for N positions along the x-axis, and then slice them however I want.
+    '''
+    from scipy.interpolate import griddata
+    
+    # Get irregularly spaced (y,z) points with 3D field at each point
+    x_val = const.xmax
+    y_pos, z_pos, B0xr_slice = return_2D_slice_rtheta(x_val=x_val)
+
+    length = 165        # Box diameter for interpolation
+    Nl     = 100        # Number of gridpoints per side
+    
+    #plt.scatter(y_pos, z_pos, B0xr_surface[1])
+    
+    # Create grid
+    y_axis = np.linspace(-length, length, Nl)
+    z_axis = np.linspace(-length, length, Nl)
+    yi, zi = np.meshgrid(y_axis, z_axis)
+    
+    print('Interpolating B0x')
+    interpolated_B0x = griddata(np.array([y_pos, z_pos]).T, B0xr_slice[0]*1e9, (yi, zi), method='cubic')
+    
+    print('Interpolating B0y')
+    interpolated_B0y = griddata(np.array([y_pos, z_pos]).T, B0xr_slice[1]*1e9, (yi, zi), method='cubic')
+    
+    print('Interpolating B0z')
+    interpolated_B0z = griddata(np.array([y_pos, z_pos]).T, B0xr_slice[2]*1e9, (yi, zi), method='cubic')
+    
+    if True:
+        plt.figure()
+        plt.quiver(y_axis, z_axis, interpolated_B0y, interpolated_B0z)
+    
+    if False:
+        plt.figure()
+        plt.imshow(interpolated_B0x.T*1e9, extent=(-length, length, -length, length), origin='lower')
+        plt.title('B0x Magnetic Bottle y-z plane slice at x = {}'.format(x_val))
+        plt.xlabel('y (km)')
+        plt.ylabel('z (km)')
+        plt.colorbar().set_label('B0x\n(nT)', rotation=0, labelpad=20)
+        
+        plt.figure()
+        plt.imshow(interpolated_B0y.T*1e9, extent=(-length, length, -length, length), origin='lower')
+        plt.title('B0y Magnetic Bottle y-z plane slice at x = {}'.format(x_val))
+        plt.xlabel('y (km)')
+        plt.ylabel('z (km)')
+        plt.colorbar().set_label('B0y\n(nT)', rotation=0, labelpad=20)
+        
+        plt.figure()
+        plt.imshow(interpolated_B0z.T*1e9, extent=(-length, length, -length, length), origin='lower')
+        plt.title('B0z Magnetic Bottle y-z plane slice at x = {}'.format(x_val))
+        plt.xlabel('y (km)')
+        plt.ylabel('z (km)')
+        plt.colorbar().set_label('B0z\n(nT)', rotation=0, labelpad=20)
+    return
+
+
+def calculate_all_2D_slices():
+    '''
+    For a single slice, interpolate onto 165km x 165km grid 
+    
+    Could do this for N positions along the x-axis, and then slice them however I want.
+    '''
+    from scipy.interpolate import griddata
+    save_dir = 'F://runs//magnetic_bottle_savefiles//'
+    
+    # Get extrema
+    y_pos, z_pos, B0xr_slice = return_2D_slice_rtheta(x_val=const.xmax)
+    
+    length = roundup(y_pos.max()*1e-3, nearest=10.)     # Box diameter for interpolation (in km)
+    Nl     = 100                                        # Number of gridpoints per side
+    Nx     = 100                                        # Number of gridpoints along simulation domain
+
+    x_axis = np.linspace(const.xmin, const.xmax, Nx)
+    
+    # Create grid for each 2D slice (in m)
+    y_axis = np.linspace(-length*1e3, length*1e3, Nl)
+    z_axis = np.linspace(-length*1e3, length*1e3, Nl)
+    yi, zi = np.meshgrid(y_axis, z_axis)
+        
+    field_shape = np.zeros((Nx, Nl, Nl, 3))
+    
+    ii = 0
+    for x_val in x_axis:
+        d_slicepath = save_dir + 'bottleslice_%05d' % ii
+        
+        print('Slice x = {:5.2f}km'.format(x_val * 1e-3))
+        y_pos, z_pos, B0xr_slice = return_2D_slice_rtheta(x_val=x_val)
+
+        print('Interpolating...')
+        field_shape[ii, :, :, 0] = griddata(np.array([y_pos, z_pos]).T, B0xr_slice[0]*1e9, np.array([y_axis, z_axis]).T, method='cubic')
+        field_shape[ii, :, :, 1] = griddata(np.array([y_pos, z_pos]).T, B0xr_slice[1]*1e9, np.array([y_axis, z_axis]).T, method='cubic')
+        field_shape[ii, :, :, 2] = griddata(np.array([y_pos, z_pos]).T, B0xr_slice[2]*1e9, np.array([y_axis, z_axis]).T, method='cubic')
+        pdb.set_trace()
+        print('Saving...')
+        np.savez(d_slicepath,
+                 x_val = np.array([x_val]),
+                 B0xi  = field_shape[ii, :, :, 0],
+                 B0yi  = field_shape[ii, :, :, 1],
+                 B0zi  = field_shape[ii, :, :, 2])
+
+        ii += 1
+        
+    # Save result
+    print('Saving total result')
+    d_slicepath_all = save_dir + '_bottleslice_all'
+    
+    np.savez(d_slicepath_all,
+             x_axis       = x_axis,
+             y_axis       = y_axis,
+             z_axis       = z_axis,
+             field_shape  = field_shape)
+    return
+
+
+@nb.njit()
+def smart_interrogate_B0(Nx=100, Nl=50, v_max_va=10):
+    '''
+    Uses positions (y,z) on a grid to calculate required v_perp
+    (from rL) and theta from arctan2. This aligns theta=0 with the +y axis.
+    This changes the signs for velocity, as in a RHCS with this geometry, a
+    particle would gyrate CCW as viewed from behind (going down +x)
+    '''
+    # Get extrema, where rL is at maximum (boundary)
+    y_pos, z_pos, B0xr_slice = return_2D_slice_rtheta(x_val=const.xmax, VM=v_max_va)
+    
+    length = roundup(y_pos.max()*1e-3, nearest=10.)     # Box diameter for interpolation (in km)
+
+    x_axis = np.linspace(const.xmin, const.xmax, Nx)
+    y_axis = np.linspace(-length*1e3, length*1e3, Nl)
+    z_axis = np.linspace(-length*1e3, length*1e3, Nl)
+    
+    qmi    = const.q / const.mp
+    b1     = np.zeros(3)
+    vx     = 0.
+
+    B0_grid = np.zeros((Nx, Nl, Nl, 3))
+    
+    for ii in nb.prange(Nx):
+        
+        B0x = fields.eval_B0x(x_axis[ii])  
+        
+        for jj in range(Nl):
+            for kk in range(Nl):
+                rL      = np.sqrt(y_axis[jj] ** 2 + z_axis[kk] ** 2)
+                v_perp  = rL * qmi * B0x
+                theta   = np.arctan2(z_axis[kk], y_axis[jj])
+                
+                vy =    v_perp * np.sin(theta)
+                vz =  - v_perp * np.cos(theta)
+                
+                B0 = particles.eval_B0_particle(x_axis[ii], np.array([vx, vy, vz]), qmi, b1)
+                
+                B0_grid[ii, jj, kk, 0] = B0[0]
+                B0_grid[ii, jj, kk, 1] = B0[1]
+                B0_grid[ii, jj, kk, 2] = B0[2]
+    
+    return x_axis, y_axis, z_axis, B0_grid
+
+
+def smart_plot_2D_planes():
+    '''
+    Do slices in each of 3 planes
+    
+    x,y,z axes are 1D
+    B0_grid is B0 at each (x,y,z) with 3 components (shape [3, x, y, z])
+    '''
+    savedir = 'F://runs//bottle_plane_plots//'
+    v_max   = 15
+    x_axis, y_axis, z_axis, B0_grid = smart_interrogate_B0(v_max_va=v_max)
+
+    B0r_max = 8
+
+    # yz slice at some x
+    for ii in range(x_axis.shape[0]):
+        x_mid = ii
+        B0r   = np.sqrt(B0_grid[x_mid, :, :, 1] ** 2 + B0_grid[x_mid, :, :, 2] ** 2)
+        
+        fig, ax = plt.subplots(figsize=(16,10))
+        im1 = ax.quiver(y_axis*1e-3, z_axis*1e-3, B0_grid[x_mid, :, :, 1].T, B0_grid[x_mid, :, :, 2].T, B0r*1e9, clim=(0, B0r_max))
+        
+        ax.set_xlabel('y (km)')
+        ax.set_ylabel('z (km)')
+        ax.set_title('YZ slice at X = {:5.2f} km :: B0r vectors :: Vmax = {}vA'.format(x_axis[x_mid]*1e-3, v_max))
+        fig.colorbar(im1).set_label('B0r (nT)')
+        
+        filename = 'yz_plane_%05d.png' % ii
+        savepath = savedir + 'yz_plane//' + filename
+        plt.savefig(savepath)
+        print('yz plot {} saved'.format(ii))
+        plt.close('all')
+    
+    # xy slice at some z
+    for jj in range(z_axis.shape[0]):
+        z_mid = jj
+        B0xy  = np.sqrt(B0_grid[:, :, z_mid, 0] ** 2 + B0_grid[:, :, z_mid, 1] ** 2)
+          
+        fig, ax = plt.subplots()
+        im2 = ax.quiver(x_axis*1e-3, y_axis*1e-3, B0_grid[:, :, z_mid, 0].T, B0_grid[:, :, z_mid, 1].T, B0xy*1e9, clim=(200, 425))
+        
+        ax.set_xlabel('x (km)')
+        ax.set_ylabel('y (km)')
+        ax.set_title('XY slice at Z = {:5.2f} km :: B0xy vectors :: Vmax = {}vA'.format(z_axis[z_mid]*1e-3, v_max))
+        fig.colorbar(im2).set_label('B0xy (nT)')   
+        
+        filename = 'xy_plane_%05d.png' % jj
+        savepath = savedir + 'xy_plane//' + filename
+        plt.savefig(savepath)
+        print('xy plot {} saved'.format(jj))
+        plt.close('all')
+    
+    # xz slice at some y
+    for kk in range(y_axis.shape[0]):
+        y_mid = kk
+        B0xz  = np.sqrt(B0_grid[:, y_mid, :, 0] ** 2 + B0_grid[:, y_mid, :, 2] ** 2)
+          
+        fig, ax = plt.subplots()
+        im3 = ax.quiver(x_axis*1e-3, z_axis*1e-3, B0_grid[:, y_mid, :, 0].T, B0_grid[:, y_mid, :, 2].T, B0xz*1e9, clim=(200, 425))
+        
+        ax.set_xlabel('x (km)')
+        ax.set_ylabel('z (km)')
+        ax.set_title('XZ slice at Y = {:5.2f} km :: B0xz vectors :: Vmax = {}vA'.format(y_axis[y_mid]*1e-3, v_max))
+        fig.colorbar(im3).set_label('B0xz (nT)')  
+        
+        filename = 'xz_plane_%05d.png' % kk
+        savepath = savedir + 'xz_plane//' + filename
+        plt.savefig(savepath)
+        print('xz plot {} saved'.format(kk))
+        plt.close('all')
+    
+    return
+
+
+def smart_plot_3D():
+    '''
+    Doesn't work, and would probably be mega slow anyway
+    '''
+    from mpl_toolkits.mplot3d import Axes3D
+    
+    x_axis, y_axis, z_axis, B0_grid = smart_interrogate_B0()
+    
+    X,Y,Z = np.meshgrid(x_axis, y_axis, z_axis)
+    U = B0_grid[:, :, :, 0]
+    V = B0_grid[:, :, :, 1]
+    W = B0_grid[:, :, :, 2]
+
+    fig = plt.figure()
+    ax  = fig.gca(projection='3d')
+    
+    ax.quiver(X, Y, Z, U, V, W)
+    return
+
+def check_directions():
+    v_perp = 1.
+    angles = np.linspace(0, 2 * np.pi, 5)
+    
+    for theta in angles:
+        vy =   v_perp * np.sin(theta)
+        vz = - v_perp * np.cos(theta)
+        
+        print('theta {:5.1f} : vy = {:4.1f}, vz = {:4.1f}'.format(theta * 180 / np.pi, vy, vz))
+    return
 
 
 if __name__ == '__main__':
@@ -1934,4 +2250,10 @@ if __name__ == '__main__':
     #test_mirror_motion()
     #test_B0_analytic()
     #plot_B0_function()
-    save_B0_map_3D()
+    #save_B0_map_3D()
+    #return_2D_slice_rtheta()
+    #interpolate_2D_slice()
+    #calculate_all_2D_slices()
+    smart_plot_2D_planes()
+    #smart_plot_3D()
+    #check_directions()
