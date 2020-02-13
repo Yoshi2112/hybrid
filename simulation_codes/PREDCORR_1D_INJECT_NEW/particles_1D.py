@@ -88,7 +88,28 @@ def eval_B0_particle(x, v, qmi, b1):
     return B0_xp
 
 
-@nb.njit()
+#@nb.njit()
+def eval_B0_exact(x, v, qmi):
+    '''
+    Just solves Bz for now: But its a quartic in Bz
+    '''
+    Bx = eval_B0x(x)
+    K2 = (a * B_eq * x / qmi) ** 2
+    
+    # Coefficients of Q = Bz ** 2 (from highest order to lowest)
+    coeffs = np.zeros(5)
+    coeffs[0] =  1.
+    coeffs[1] = -2. * Bx**2
+    coeffs[2] = (3. * v[1]**2 - v[2]**2) * K2
+    coeffs[3] = v[1]**2 * (K2 - K2 * Bx**2 - Bx**2)
+    coeffs[4] = v[1]**4 * K2 ** 2
+    
+    solns = np.sqrt(np.roots(coeffs))
+
+    return solns
+
+
+#@nb.njit()
 def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     '''
     updates velocities using a Boris particle pusher.
@@ -125,7 +146,11 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
         Bp[0]  = 0                                                          # No wave b1 exists, removes B due to B-nodes (since they're analytic)
         B0_xp  = eval_B0_particle(pos[ii], v_minus, qm_ratios[idx[ii]], Bp) # B0 at particle location
         Bp    += B0_xp                                                      # B  at particle location (total)
-
+       
+        # DIAGNOSTIC: DELETE (as well as return signature)
+        B0r_exact = eval_B0_exact(pos[ii], v_minus, qm_ratios[idx[ii]])
+        ###
+        
         T = qmi * Bp                                                        # Vector Boris variable
         S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable
         
@@ -140,7 +165,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
         v_plus[2]  = v_minus[2] + v_prime[0] * S[1] - v_prime[1] * S[0]
         
         vel[:, ii] = v_plus +  qmi * Ep                                     # Second E-field half-push
-    return Bp
+    return Bp, B0r_exact
 
 
 @nb.njit()
