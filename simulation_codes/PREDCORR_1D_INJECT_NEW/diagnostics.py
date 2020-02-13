@@ -1445,241 +1445,366 @@ def test_boris():
     return
 
 
-def test_mirror_motion():
+def do_particle_run(max_rev=1000):
     '''
     Contains full particle pusher including timestep checker to simulate the motion
     of a single particle in the analytic magnetic field field. No wave magnetic/electric
     fields present.
-    
-    Diagnostic code to call the particle pushing part of the hybrid and check
-    that its solving ok. Runs with zero background E field and B field defined
-    by the constant background field specified in the parameter script.
     '''
+    # Initialize arrays (W/I dummy - not used)
     mid    = const.NC // 2
-    pos    = np.array([0])
+    pos    = np.array([0.])
     idx    = np.array([0])
-    vel    = np.array([1.0, 1.0, 0]).reshape((3, 1))*const.va
+    vel    = np.array([1.0, 1.0, 0.0]).reshape((3, 1))*const.va
     W_elec = np.array([0, 1, 0]).reshape((3, 1))
     W_mag  = np.array([0, 1, 0]).reshape((3, 1))
     Ie     = np.array([mid])
     Ib     = np.array([mid])
-    
     B_test = np.zeros((const.NC + 1, 3), dtype=np.float64) 
     E_test = np.zeros((const.NC, 3),     dtype=np.float64) 
     
-    vel_init    = vel.copy()
-    KE_init     = 0.5 * const.mp * vel_init ** 2
-    particle_pa = np.arctan(vel_init[1] / vel_init[0]) * 180. / np.pi
-    
+    # Initial quantities
+    init_pos = pos.copy() 
+    init_vel = vel.copy()
     gyfreq   = const.gyfreq / (2 * np.pi)
     ion_ts   = const.orbit_res / gyfreq
-    vel_ts   = 0.6 * const.dx / np.max(vel[0, :])
-    DT       = min(ion_ts, vel_ts)
+    
+    if vel[0, :] != 0.:
+        vel_ts   = 0.6 * const.dx / np.max(vel[0, :])
+    else:
+        vel_ts = ion_ts
+    
+    DT       = min(ion_ts, vel_ts) * 0.01
     
     # Target: 25000 cyclotron periods (~1hrs)
-    max_rev  = 25000
     max_t    = max_rev / gyfreq
-    max_inc  = int(max_t / DT)
+    max_inc  = int(max_t / DT) + 1
     
     time        = np.zeros((max_inc))
     pos_history = np.zeros((max_inc))
     vel_history = np.zeros((max_inc, 3))
-    mag_history = np.zeros((max_inc, 3))
     
-    dump_every  = 1; tt = 0; halves = 0; t_total = 0
+    mag_history   = np.zeros((max_inc, 3))
 
+    
+    # Retard velocity for stability
     Bp = particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, -0.5*DT)
-    while tt < max_inc:
-        Bp = particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, DT)
-        particles.position_update(pos, vel, DT, Ie, W_elec)  
-        
-        if tt%dump_every == 0:
-            time[       tt // 2**halves] = t_total
-            pos_history[tt // 2**halves] = pos[0]
-            vel_history[tt // 2**halves] = vel[:, 0]
-            mag_history[tt // 2**halves] = Bp
-            
+    
+    # Record initial values
+    time[       0]   = 0.                       # t = 0
+    pos_history[0]   = pos[0]                   # t = 0
+    vel_history[0]   = vel[:, 0]                # t = -0.5
+    mag_history[0]   = Bp                       # t = -0.5 (since it is evaluated only during velocity push)
+
+    tt = 0; t_total = 0
+    while tt < max_inc - 1:
+        # Increment so first loop is at t = 1*DT
         tt      += 1
         t_total += DT
         
-        # Check timestep
-        vel_ts = 0.5*const.dx/np.max(np.abs(vel[0, :]))
-        if vel_ts < DT:
-            print('Timestep reduced')
-            particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, 0.5*DT)    # Re-sync vel/pos       
-
-            DT           /= 2
-            tt           *= 2
-            max_inc      *= 2
-            dump_every   *= 2
-            halves       += 1
-            
-            particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, -0.5*DT)    # De-sync      
+        # Update values: Velocity first, then position
+        Bp = particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, DT)
+        particles.position_update(pos, vel, DT, Ie, W_elec)
         
-    vel_perp    = np.sqrt(vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
-    vel_para    = vel_history[:, 0]
+        if tt%10 == 0 : # Dump values to record
+            time[         tt] = t_total
+            pos_history[  tt] = pos[0]
+            vel_history[  tt] = vel[:, 0]
+            mag_history[  tt] = Bp
+    pdb.set_trace()
+    return init_pos, init_vel, time, pos_history, vel_history, mag_history, DT, max_t
+
+
+def test_mirror_motion():
+    '''
+    Diagnostic code to call the particle pushing part of the hybrid and check
+    that its solving ok. Runs with zero background E field and B field defined
+    by the constant background field specified in the parameter script.
+    '''
+    max_rev = 50000
+    init_pos, init_vel, time, pos_history, vel_history, mag_history, DT, max_t = do_particle_run(max_rev=max_rev)
+
+# =============================================================================
+#     # Calculate parameter timeseries using recorded values
+#     
+#     init_vpara = init_vel[0]
+#     init_KE    = 0.5 * const.mp * init_vel ** 2
+#     init_pitch = np.arctan(init_vperp / init_vpara) * 180. / np.pi
+#     
+#     
+#     vel_para      = vel_history[:, 0]
+#     
+#     vel_magnitude = np.sqrt(vel_history[:, 0] ** 2 + vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
+#     
+#     B_para      = mag_history[:, 0]
+#     B_perp      = np.sqrt(mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
+#     
+#     KE_para = 0.5 * const.mp *  vel_history[:, 0] ** 2
+#     KE_tot  = KE_para + KE_perp
+#     
+#     #mu_x = KE_perp / np.sqrt(mag_history_x ** 2 + mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
+# =============================================================================
+    
+    init_vperp  = np.sqrt(init_vel[1] ** 2 + init_vel[2] ** 2)
     B_magnitude = np.sqrt(mag_history[:, 0] ** 2 + mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
+    #vel_perp    = np.sqrt(vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
+    KE_perp     = 0.5 * const.mp * (vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
     
-    initial_invariant = 0.5 * const.mp * (vel_init[1] ** 2 + vel_init[2] ** 2) / const.B_eq
-
-    if False:
-        ## Plots position/mag timeseries ##
-        fig, axes = plt.subplots(2, sharex=True)
-        axes[0].plot(time, vel_perp*1e-3, label='v_perp')
-        axes[0].plot(time, vel_history[:, 1]*1e-3, label='vy')
-        axes[0].plot(time, vel_history[:, 2]*1e-3, label='vz')
-        axes[0].plot(time, vel_para*1e-3, label='v_para')
-        axes[0].set_ylabel('v (km)')
-        axes[0].set_xlabel('t (s)')
-        #axes[0].axhline(const.xmin*1e-3, color='k', ls=':')
-        #axes[0].axhline(const.xmax*1e-3, color='k', ls=':')
-        axes[0].set_title(r'Velocity/Magnetic Field at Particle, v0 = [%4.1f, %4.1f, %4.1f]km/s, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (vel_init[0, 0], vel_init[1, 0], vel_init[2, 0], const.loss_cone, particle_pa))
-        #axes[0].set_xlim(0, None)
-        axes[0].legend()
-        
-        axes[1].plot(time, B_magnitude,       label='|B0|')
-        #axes[1].plot(time, mag_history[:, 0], label='B0x')
-        #axes[1].plot(time, mag_history[:, 1], label='B0y')
-        #axes[1].plot(time, mag_history[:, 2], label='B0z')
-        axes[1].legend()
-        axes[1].set_ylabel('t (s)')
-        axes[1].set_ylabel('B (nT)')
-        axes[1].set_xlim(0, None)
-        
-    if False:
-        ## Plots 3-velocity timeseries ##
-
-        fig, axes = plt.subplots(3, sharex=True)
-        axes[0].set_title(r'Position/Velocity of Particle : v0 = [%3.1f, %3.1f, %3.1f]$v_A$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (vel_init[0, 0]/const.va, vel_init[1, 0]/const.va, vel_init[2, 0]/const.va, const.loss_cone, particle_pa))
-
-        axes[0].plot(time, pos_history*1e-3)
-        axes[0].set_xlabel('t (s)')
-        axes[0].set_ylabel(r'x (km)')
-        axes[0].axhline(const.xmin*1e-3, color='k', ls=':')
-        axes[0].axhline(const.xmax*1e-3, color='k', ls=':')
-        axes[0].legend()
-        
-        axes[1].plot(time, vel_history[:, 0]/const.va, label='$v_\parallel$')
-        axes[1].plot(time,            vel_perp/const.va, label='$v_\perp$')
-        axes[1].set_xlabel('t (s)')
-        axes[1].set_ylabel(r'$v$ ($v_{A,eq}^{-1}$)')
-        axes[1].legend()
-        
-        axes[2].plot(time, vel_history[:, 1]/const.va, label='vy')
-        axes[2].plot(time, vel_history[:, 2]/const.va, label='vz')
-        axes[2].set_xlabel('t (s)')
-        axes[2].set_ylabel(r'$v_\perp$ ($v_{A,eq}^{-1}$)')
-        axes[2].legend()
-        
-        
-        
-        for ax in axes:
-            ax.set_xlim(0, None)
-            
-    if False:
-        # Plot gyromotion of particle vx vs. vy
-        plt.title('Particle gyromotion: {} gyroperiods ({:.1f}s)'.format(max_rev, max_t))
-        plt.scatter(vel_history[:, 1], vel_history[:, 2], c=time)
-        plt.colorbar().set_label('Time (s)')
-        plt.ylabel('vy (km/s)')
-        plt.xlabel('vz (km/s)')
-        plt.axis('equal')
-        
-    if False:
-        # Written under duress: Just trying to get the shape of the bottle #
-        x = np.linspace(const.xmin, const.xmax, 1000)
-        B0_xp = np.zeros((x.shape[0], 3))
-        B_mag = np.zeros(x.shape[0])
-        
-        for ii in range(x.shape[0]):
-            B0_xp[ii] = particles.eval_B0_particle(pos, vel, const.qm_ratios[0], np.array([0, 0, 0]))
-            B_mag[ii] = np.sqrt(B0_xp[ii,0] ** 2 + B0_xp[ii,1] ** 2 + B0_xp[ii,2] ** 2)
+    init_mu     = 0.5 * const.mp * init_vperp ** 2 / const.B_eq
+    mu          = KE_perp / B_magnitude
+    mu_percent  = (mu.max() - mu.min()) / init_mu * 100.
     
-        plt.plot(x, B0_xp[:, 0]*1e9, label='x')
-        plt.plot(x, B0_xp[:, 1]*1e9, label='y')
-        plt.plot(x, B0_xp[:, 2]*1e9, label='z')
-        plt.plot(x, B_mag*1e9, label='mag')
-        plt.legend()
-        
-    if False:
-        ## Plot parallel and perpendicular kinetic energies/velocities
-        KE_para = 0.5 * const.mp *  vel_history[:, 0] ** 2
-        KE_perp = 0.5 * const.mp * (vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
-        KE_tot  = KE_para + KE_perp
-        
-        plt.figure()
-        plt.title('Kinetic energy of single particle: Full Bottle')
-        plt.plot(time, KE_para/const.q, c='b', label=r'$KE_\parallel$')
-        plt.plot(time, KE_perp/const.q, c='r', label=r'$KE_\perp$')
-        plt.plot(time, KE_tot /const.q, c='k', label=r'$KE_{total}$')
-        plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
-        plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
-        plt.ylabel('Energy (eV)')
-        plt.xlabel('Time (s)')
-        plt.legend()
-    
-    if False:    
-        # Look at total kinetic energy change over the simulation
-        KE_para = 0.5 * const.mp *  vel_history[:, 0] ** 2
-        KE_perp = 0.5 * const.mp * (vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
-        KE_tot  = KE_para + KE_perp
-        
-        percent = abs(KE_tot - KE_init.sum()) / KE_init.sum() * 100. 
-
-        plt.figure()
-        plt.title('Total kinetic energy change')
-
-        plt.plot(time, percent*1e12)
-        #plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
-        #plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
-        #plt.ylim(-0.1e-3, 1e-3)
-        plt.xlim(0, time[-1])
-        plt.ylabel(r'Percent change ($\times 10^{-12}$)')
-        plt.xlabel('Time (s)')
-        
-    if False:
-        # vx vs. x - vx at each x should have a single value. Drifting suggests energy gain.
-        # As above, but for v_perp
-        
-        fig, ax = plt.subplots(1)
-        ax.set_title(r'Velocity vs. Space: v0 = [%4.1f, %4.1f, %4.1f]$v_{A,eq}^{-1}$ : %d gyroperiods (%5.2fs)' % (vel_init[0, 0], vel_init[1, 0], vel_init[2, 0], max_rev, max_t))
-        ax.plot(pos_history*1e-3, vel_history[:, 0]*1e-3, c='b', label=r'$v_\parallel$')
-        ax.plot(pos_history*1e-3, vel_perp,               c='r', label=r'$v_\perp$')
-        ax.set_xlabel('x (km)')
-        ax.set_ylabel('v (km/s)')
-        ax.set_xlim(const.xmin*1e-3, const.xmax*1e-3)
-        ax.legend()
-
-        
     if True:
-        # Calculate and plot magnetic moment (first invariant)
-        v_perp      = np.sqrt(vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
-        KE_perp     = 0.5 * const.mp * (vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
-        #B_para      = mag_history[:, 0]
-        #B_perp      = np.sqrt(mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
-        invariant   = KE_perp / B_magnitude
+        # Interpolate mag_x to half positions (where v is calculated)
+        # The first value of mag_interp lines up with v[1]
+        
+        print('Minimum mu value: {}'.format(mu.min()))
+        print('Maximum mu value: {}'.format(mu.max()))
+        print('Percent change  : {}%%'.format(mu_percent))
+        
+        # Invariant (with parameters) timeseries
+# =============================================================================
+#         fig, axes = plt.subplots(3, sharex=True)
+#         axes[0].plot(time,            mu*1e10, label='$\mu(t_v)$', lw=0.5, c='k')
+#         #axes[0].set_title(r'First Invariant $\mu$ for single trapped particle, v0 = [%3.1f, %3.1f, %3.1f]$v_{A,eq}^{-1}$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (init_vel[0, 0]/const.va, init_vel[1, 0]/const.va, init_vel[2, 0]/const.va, const.loss_cone, init_pitch))
+#         axes[0].set_title(r'First Invariant $\mu$ for single trapped particle :: TEST DT = %7.5fs :: Max $\delta \mu = $%6.4f%%' % (DT, mu_percent))
+#         axes[0].set_ylabel(r'$(\times 10^{-10})$', rotation=0, labelpad=30)
+#         axes[0].get_yaxis().get_major_formatter().set_useOffset(False)
+#         axes[0].axhline(init_mu*1e10, c='k', ls=':')
+#         axes[0].set_ylim(3.84, 3.99)
+# =============================================================================
+# =============================================================================
+#         # Check mu calculation against different sources of B: Source of oscillation? Nope
+#         mag_interp           = (mag_history_x[1:] + mag_history_x[:-1]) / 2
+#         mag_interp_magnitude = np.sqrt(mag_interp ** 2 + mag_history[1:, 1] ** 2 + mag_history[1:, 2] ** 2)
+#         
+#         mu_interp  = 0.5*const.mp*(vel_history[1:, 1] ** 2 + vel_history[1:, 2] ** 2) / mag_interp_magnitude
+# 
+#         axes[0].plot(time,          mu_x*1e10, label='$\mu(t_x)$')
+#         axes[0].plot(time[1:], mu_interp*1e10, label='$\mu(t_v)$ interpolated')
+#         axes[0].legend()
+# =============================================================================
+        
+# =============================================================================
+#         axes[1].plot(time, vel_perp*1e-3, lw=0.5, c='k')
+#         axes[1].set_ylabel('$v_\perp$\n(km/s)', rotation=0, labelpad=20)
+# 
+#         axes[2].plot(time, B_magnitude*1e9, lw=0.5, c='k')
+#         axes[2].set_ylabel('$|B|(t_v)$ (nT)', rotation=0, labelpad=20)
+# 
+#         axes[2].set_xlabel('Time (s)')
+#         axes[2].set_xlim(0, time[-1])
+# =============================================================================
 
-        fig, axes = plt.subplots(3, sharex=True)
-        axes[0].plot(time, invariant*1e10)
-        axes[0].set_title(r'First Invariant $\mu$ for single trapped particle, v0 = [%3.1f, %3.1f, %3.1f]$v_{A,eq}^{-1}$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (vel_init[0, 0]/const.va, vel_init[1, 0]/const.va, vel_init[2, 0]/const.va, const.loss_cone, particle_pa))
-        axes[0].set_xlabel('Time (s)')
-        axes[0].set_ylabel(r'$\mu (\times 10^{-10})$', rotation=0, labelpad=20)
-        axes[0].set_xlim(0, None)
-        axes[0].get_yaxis().get_major_formatter().set_useOffset(False)
-        axes[0].axhline(initial_invariant*1e10, c='k', ls=':')
-        
-        axes[1].plot(time, v_perp*1e-3)
-        axes[1].set_xlabel('Time (s)')
-        axes[1].set_ylabel('Velocity Perp\n(km/s)', rotation=0, labelpad=20)
-        #axes[1].axhline(const.xmin*1e-3, color='k', ls=':')
-        #axes[1].axhline(const.xmax*1e-3, color='k', ls=':')
-        
-        axes[2].plot(time, B_magnitude*1e9, label=r'B_mag')
-        #axes[2].plot(time, B_para*1e9, label=r'$B_\parallel$')
-        #axes[2].plot(time, B_perp*1e9*100, label=r'$B_\perp (\times 100)$')
-        axes[2].set_xlabel('Time (s)')
-        axes[2].set_ylabel('Magnetic\nField (nT)', rotation=0, labelpad=20)
-        axes[2].legend()
+
+# =============================================================================
+#     if False:
+#         ## Plots velocity/mag timeseries ##
+#         fig, axes = plt.subplots(2, sharex=True)
+#         
+#         axes[0].plot(time, vel_history[:, 1]* 1e-3, label='vy')
+#         axes[0].plot(time, vel_history[:, 2]* 1e-3, label='vz')
+#         axes[0].plot(time, vel_perp         * 1e-3, label='v_perp')
+#         axes[0].plot(time, vel_para*1e-3, label='v_para')
+#         
+#         axes[0].set_ylabel('v (km)')
+#         axes[0].set_xlabel('t (s)')
+#         axes[0].set_title(r'Velocity/Magnetic Field at Particle, v0 = [%4.1f, %4.1f, %4.1f]km/s, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (init_vel[0, 0], init_vel[1, 0], init_vel[2, 0], const.loss_cone, init_pitch))
+#         #axes[0].set_xlim(0, None)
+#         axes[0].legend()
+#         
+#         axes[1].plot(time, B_magnitude,       label='|B0|')
+#         #axes[1].plot(time, mag_history[:, 0], label='B0x')
+#         #axes[1].plot(time, mag_history[:, 1], label='B0y')
+#         #axes[1].plot(time, mag_history[:, 2], label='B0z')
+#         axes[1].legend()
+#         axes[1].set_ylabel('t (s)')
+#         axes[1].set_ylabel('B (nT)')
+#         axes[1].set_xlim(0, None)
+#         
+#     if False:
+#         ## Plots 3-velocity timeseries ##
+#         fig, axes = plt.subplots(3, sharex=True)
+#         axes[0].set_title(r'Position/Velocity of Particle : v0 = [%3.1f, %3.1f, %3.1f]$v_A$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (init_vel[0, 0]/const.va, init_vel[1, 0]/const.va, init_vel[2, 0]/const.va, const.loss_cone, init_pitch))
+# 
+#         axes[0].plot(time, pos_history*1e-3)
+#         axes[0].set_xlabel('t (s)')
+#         axes[0].set_ylabel(r'x (km)')
+#         axes[0].axhline(const.xmin*1e-3, color='k', ls=':')
+#         axes[0].axhline(const.xmax*1e-3, color='k', ls=':')
+#         axes[0].legend()
+#         
+#         axes[1].plot(time, vel_history[:, 0]/const.va, label='$v_\parallel$')
+#         axes[1].plot(time,            vel_perp/const.va, label='$v_\perp$')
+#         axes[1].set_xlabel('t (s)')
+#         axes[1].set_ylabel(r'$v_\parallel$ ($v_{A,eq}^{-1}$)')
+#         axes[1].legend()
+#         
+#         axes[2].plot(time, vel_history[:, 1]/const.va, label='vy')
+#         axes[2].plot(time, vel_history[:, 2]/const.va, label='vz')
+#         axes[2].set_xlabel('t (s)')
+#         axes[2].set_ylabel(r'$v_\perp$ ($v_{A,eq}^{-1}$)')
+#         axes[2].legend()
+#         
+#         for ax in axes:
+#             ax.set_xlim(0, 100)
+#             
+#     if False:
+#         # Plot gyromotion of particle vx vs. vy
+#         plt.title('Particle gyromotion: {} gyroperiods ({:.1f}s)'.format(max_rev, max_t))
+#         plt.scatter(vel_history[:, 1], vel_history[:, 2], c=time)
+#         plt.colorbar().set_label('Time (s)')
+#         plt.ylabel('vy (km/s)')
+#         plt.xlabel('vz (km/s)')
+#         plt.axis('equal')
+#         
+#     if False:
+#         ## Plot parallel and perpendicular kinetic energies/velocities
+#         plt.figure()
+#         plt.title('Kinetic energy of single particle: Full Bottle')
+#         plt.plot(time, KE_para/const.q, c='b', label=r'$KE_\parallel$')
+#         plt.plot(time, KE_perp/const.q, c='r', label=r'$KE_\perp$')
+#         plt.plot(time, KE_tot /const.q, c='k', label=r'$KE_{total}$')
+#         plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
+#         plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
+#         plt.ylabel('Energy (eV)')
+#         plt.xlabel('Time (s)')
+#         plt.legend()
+#     
+#     if False:           
+#         percent = abs(KE_tot - init_KE.sum()) / init_KE.sum() * 100. 
+# 
+#         plt.figure()
+#         plt.title('Total kinetic energy change')
+# 
+#         plt.plot(time, percent*1e12)
+#         #plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
+#         #plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
+#         #plt.ylim(-0.1e-3, 1e-3)
+#         plt.xlim(0, time[-1])
+#         plt.ylabel(r'Percent change ($\times 10^{-12}$)')
+#         plt.xlabel('Time (s)')
+#         
+#     if False:
+#         # Plots vx, v_perp vs. x - should be constant at any given x        
+#         fig, ax = plt.subplots(1)
+#         ax.set_title(r'Velocity vs. Space: v0 = [%4.1f, %4.1f, %4.1f]$v_{A,eq}^{-1}$ : %d gyroperiods (%5.2fs)' % (init_vel[0, 0], init_vel[1, 0], init_vel[2, 0], max_rev, max_t))
+#         ax.plot(pos_history*1e-3, vel_history[:, 0]*1e-3, c='b', label=r'$v_\parallel$')
+#         ax.plot(pos_history*1e-3, vel_perp,               c='r', label=r'$v_\perp$')
+#         ax.set_xlabel('x (km)')
+#         ax.set_ylabel('v (km/s)')
+#         ax.set_xlim(const.xmin*1e-3, const.xmax*1e-3)
+#         ax.legend()
+#
+#     if False:
+#         # Invariant and parameters vs. space
+#         fig, axes = plt.subplots(3, sharex=True)
+#         axes[0].plot(pos_history*1e-3, mu*1e10)
+#         axes[0].set_title(r'First Invariant $\mu$ for single trapped particle, v0 = [%3.1f, %3.1f, %3.1f]$v_{A,eq}^{-1}$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg, $t_{max} = %5.0fs$' % (init_vel[0, 0]/const.va, init_vel[1, 0]/const.va, init_vel[2, 0]/const.va, const.loss_cone, init_pitch, max_t))
+#         axes[0].set_ylabel(r'$\mu (\times 10^{-10})$', rotation=0, labelpad=20)
+#         axes[0].get_yaxis().get_major_formatter().set_useOffset(False)
+#         axes[0].axhline(init_mu*1e10, c='k', ls=':')
+#         
+#         axes[1].plot(pos_history*1e-3, KE_perp/const.q)
+#         axes[1].set_ylabel(r'$KE_\perp (eV)$', rotation=0, labelpad=20)
+# 
+#         axes[2].plot(pos_history*1e-3, B_magnitude*1e9)
+#         axes[2].set_ylabel(r'$|B|$ (nT)', rotation=0, labelpad=20)
+#         
+#         axes[2].set_xlabel('Position (km)')
+#         axes[2].set_xlim(const.xmin*1e-3, const.xmax*1e-3)
+#         
+#     if False:
+#         fig, axes = plt.subplots(2, sharex=True)
+#         axes[0].plot(pos_history*1e-3, mag_history[:, 0] * 1e9, lw=0.25, c='k')
+#         axes[0].set_title(r'Magnetic fields taken at v, x times :: v0 = [%3.1f, %3.1f, %3.1f]$v_{A,eq}^{-1}$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg, $t_{max} = %5.0fs$' % (init_vel[0, 0]/const.va, init_vel[1, 0]/const.va, init_vel[2, 0]/const.va, const.loss_cone, init_pitch, max_t))
+#         axes[0].set_ylabel(r'$B0_x(t_v) (nT)$', rotation=0, labelpad=20)
+#         
+#         axes[1].plot(pos_history*1e-3, mag_history_x * 1e9, lw=0.25, c='k')
+#         axes[1].set_ylabel(r'$B0_x(t_x) (nT)$', rotation=0, labelpad=20)
+#         
+#         axes[1].set_xlabel('Position (km)')
+#         #axes[1].set_xlim(-100, 100)
+#         
+#         #for ax in axes:
+#             #ax.set_ylim(200, 201)
+#     
+#     if False:
+#         ## Average out cyclotron motion for KE, B - see what effect that has on mu
+#         ## DT = 0.0155s
+#         ## Bounce period    ~ 83.0s
+#         ## Cyclotron period ~  0.1704s
+#         ## Smooth with a moving centered moving average of 0.2s
+#         import pandas as pd
+#         DT       = time[1] - time[0]
+#         win_size = int(0.2 / DT) + 1
+#         
+#         KE_pd = pd.Series(KE_perp)
+#         Bm_pd = pd.Series(B_magnitude)
+#         
+#         KE_av = KE_pd.rolling(center=True, window=win_size).mean()
+#         Bm_av = Bm_pd.rolling(center=True, window=win_size).mean()
+#         
+#         mu_average = KE_av / Bm_av
+#         
+#         fig, ax = plt.subplots(3, sharex=True)
+#         
+#         ax[0].set_title('Invariant Calculation :: Rolling average test :: window = {:5.3f}s, Tc = {:6.4f}s'.format(DT * win_size, 0.1704))
+#         
+#         ax[0].plot(time, mu        *1e10, label='$\mu$',     c='k', marker='o')
+#         ax[0].plot(time, mu_average*1e10, label='$\mu$ av.', c='r', marker='x', ms=1.0)
+#         ax[0].set_ylabel('$\mu$\n(J/T)', rotation=0, labelpad=20)
+#         ax[0].axhline(init_mu*1e10, c='k', ls=':')
+#         
+#         ax[1].plot(time, KE_perp/const.q, label='$KE_\perp$',     c='k', marker='o')
+#         ax[1].plot(time, KE_av/const.q,   label='$KE_\perp$ av.', c='r', marker='x', ms=1.0)
+#         ax[1].set_ylabel('$KE_\perp$\n(eV)', rotation=0, labelpad=20)
+#         
+#         ax[2].plot(time, B_magnitude*1e9, label='$|B|$',     c='k', marker='o')
+#         ax[2].plot(time, Bm_av*1e9,       label='$|B|$ av.', c='r', marker='x', ms=1.0)
+#         ax[2].set_ylabel('|B|\n(nT)', rotation=0, labelpad=20)
+#         ax[2].set_xlabel('Time (s)')
+#         
+#         for axes in ax:
+#             axes.legend()
+#             axes.set_xlim(0, time[-1])
+#     
+#     if False:
+#         # Check mag_history[0] (B0x) against eval_B0x(pos_history)
+#         # Cut off first value in mag_history because it records it twice
+#         # This might be the lag issue between the two elements.
+#         fig, ax = plt.subplots(2, sharex=True)
+#         ax[0].set_title('Recorded vs. Evaluated (using position history) B0x')
+#         ax[0].plot(time, mag_history[:, 0] * 1e9, label='B0x from v')
+#         ax[0].plot(time, mag_history_x     * 1e9, label='B0x from x')
+#         ax[0].legend()
+#         ax[0].set_ylabel('nT')
+#         
+#         diff = (mag_history[1:, 0] - mag_history_x[:-1]) * 1e9
+#         ax[1].set_title('Difference')
+#         ax[1].plot(time[:-1], diff)
+#         ax[1].set_ylabel('nT')
+#         ax[1].set_xlabel('Time (s)')
+#         ax[1].set_xlim(0, time[-1])
+#    
+#     if False:
+#         # Check dot product of v_perp with mag_history. Should always be perpendicular
+#         # vx set to zero since we only care about v_perp
+#         v_dot_B = vel_history[:, 0] * mag_history[:, 0] * 0 \
+#                 + vel_history[:, 1] * mag_history[:, 1] \
+#                 + vel_history[:, 2] * mag_history[:, 2]
+#         
+#         fig, ax = plt.subplots(2, sharex=True)
+#         ax[0].set_title('$v_\perp \cdot B$ test :: Should always be perpendicular')
+#         ax[0].plot(time, v_dot_B)
+#         ax[0].set_ylabel('$v_\perp \cdot B$', rotation=0, labelpad=20)
+# 
+#         ax[1].plot(time, mu)
+#         ax[1].set_ylabel('$\mu$', rotation=0, labelpad=20)
+#         ax[1].set_xlabel('Time (s)')
+#         ax[1].set_xlim(0, time[-1])
+# =============================================================================
+
     return
     
 
@@ -2134,6 +2259,8 @@ def smart_plot_2D_planes():
     
     x,y,z axes are 1D
     B0_grid is B0 at each (x,y,z) with 3 components (shape [3, x, y, z])
+    
+    CHECK AXES ORDER :: MIGHT BE LABELLED WRONG/BACKWARDS (NOTICABLE FOR Y,Z .vs X)
     '''
     savedir = 'F://runs//bottle_plane_plots//'
     v_max   = 15
