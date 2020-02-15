@@ -87,29 +87,78 @@ def eval_B0_particle(x, v, qmi, b1):
     B0_xp[2] = -v[1] * fac
     return B0_xp
 
-
-#@nb.njit()
-def eval_B0_exact(x, v, qmi):
+@nb.njit()
+def solve_quadratic(AA, BB, CC):
     '''
-    Just solves Bz for now: But its a quartic in Bz
+    DIAGNOSTIC FUNCTION
+    Solves quadratic equation: Gives positive and negative solution for
+    - b +/- sqrt(b ** 2 - 4ac) / 2a
+    
+    Only returns negative (of the +/- in quadratic) solution since the positive
+    sign will always give a negative value (due to the signs of a, b, c and the
+    squaring in the coefficients)
     '''
-    Bx = eval_B0x(x)
-    K2 = (a * B_eq * x / qmi) ** 2
+    if AA != 0:
+        negative_soln = (- BB - np.sqrt(BB ** 2 - 4*AA*CC)) / (2*AA)
+    else:
+        negative_soln = 0.
+    return negative_soln
+
+
+@nb.njit()
+def eval_B0_exact(x, v, qmi, approx):
+    '''
+    DIAGNOSTIC FUNCTION
+    Solves (maybe?) the exact solution for By,Bz radial (coupled quadratic
+    equations of their squares)
     
-    # Coefficients of Q = Bz ** 2 (from highest order to lowest)
-    coeffs = np.zeros(5)
-    coeffs[0] =  1.
-    coeffs[1] = -2. * Bx**2
-    coeffs[2] = (3. * v[1]**2 - v[2]**2) * K2
-    coeffs[3] = v[1]**2 * (K2 - K2 * Bx**2 - Bx**2)
-    coeffs[4] = v[1]**4 * K2 ** 2
+    Need to code this manually to separate out the two real solutions.
     
-    solns = np.sqrt(np.roots(coeffs))
+    The +det term of the quadratic always seems to be nan? Probably some 
+    mathematical reason for this (b < 4ac? Check later)
+    
+    Just return positive results for each for now, but don't assume this will work
+    generally - just for this particle.
+    
+    How to work out if it should be the positive or negative solution 
+    (of the sqrt) taken? Use v_perp cross B?
+    
+    Currently using approximation as guide - not the best solution, but it works
+    '''
+    B0_particle = np.zeros(3)
+    B0_x        = eval_B0x(x)
+    K2          = (a * B_eq * x / qmi) ** 2     # Constant for calculation
+    
+    # Quadratic coefficients of R = By ** 2 :: 4 solutions
+    ay = (v[1] ** 2 + v[2] ** 2) * (-K2)
+    by = - v[2] ** 2 * K2 * B0_x ** 2
+    cy = (v[2] ** 2 * K2) ** 2
+    
+    B0_y = np.sqrt(solve_quadratic(ay, by, cy))
+    
+    # Quadratic coefficients of Q = Bz ** 2 :: 4 solutions
+    az = (v[1] ** 2 + v[2] ** 2) * (-K2)
+    bz = - v[1] ** 2 * K2 * B0_x ** 2
+    cz = (v[1] ** 2 * K2) ** 2
+    
+    B0_z = np.sqrt(solve_quadratic(az, bz, cz))
+    
+    # All three of these will always be positive
+    # Need a way to work out how to set +/- status
+    B0_particle[0] = B0_x
+    B0_particle[1] = B0_y
+    B0_particle[2] = B0_z
+    
+    if approx[1] < 0:
+        B0_particle[1] *= -1.0
+        
+    if approx[2] < 0:
+        B0_particle[2] *= -1.0
+    
+    return B0_particle
 
-    return solns
 
-
-#@nb.njit()
+@nb.njit()
 def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     '''
     updates velocities using a Boris particle pusher.
@@ -145,11 +194,13 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
         
         Bp[0]  = 0                                                          # No wave b1 exists, removes B due to B-nodes (since they're analytic)
         B0_xp  = eval_B0_particle(pos[ii], v_minus, qm_ratios[idx[ii]], Bp) # B0 at particle location
-        Bp    += B0_xp                                                      # B  at particle location (total)
+                                                              
        
         # DIAGNOSTIC: DELETE (as well as return signature)
-        B0r_exact = eval_B0_exact(pos[ii], v_minus, qm_ratios[idx[ii]])
+        B0_exact = eval_B0_exact(pos[ii], v_minus, qm_ratios[idx[ii]], B0_xp)
         ###
+        
+        Bp    += B0_xp                                                      # B  at particle location (total)
         
         T = qmi * Bp                                                        # Vector Boris variable
         S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable
@@ -165,7 +216,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
         v_plus[2]  = v_minus[2] + v_prime[0] * S[1] - v_prime[1] * S[0]
         
         vel[:, ii] = v_plus +  qmi * Ep                                     # Second E-field half-push
-    return Bp, B0r_exact
+    return Bp, B0_exact
 
 
 @nb.njit()

@@ -1484,15 +1484,13 @@ def do_particle_run(max_rev=1000):
     pos_history = np.zeros((max_inc))
     vel_history = np.zeros((max_inc, 3))
     
-    mag_history         = np.zeros((max_inc, 3))
-    mag_history_z_exact = np.zeros((max_inc, 4), dtype=np.complex128)
+    mag_history       = np.zeros((max_inc, 3))
+    mag_history_exact = np.zeros((max_inc, 3))
 
     
     # Retard velocity for stability
     Bp, Bpe = particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, -0.5*DT)
-    
-    # Unpack exact solution into history
-    mag_history_z_exact[0] = Bpe
+    mag_history_exact[0] = Bpe
     
     # Record initial values
     time[       0]   = 0.                       # t = 0
@@ -1510,7 +1508,7 @@ def do_particle_run(max_rev=1000):
         Bp, Bpe = particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, DT)
         
         # Unpack exact solution into history
-        mag_history_z_exact[tt] = Bpe
+        mag_history_exact[tt] = Bpe
         
         particles.position_update(pos, vel, DT, Ie, W_elec)
         
@@ -1519,7 +1517,19 @@ def do_particle_run(max_rev=1000):
         vel_history[  tt] = vel[:, 0]
         mag_history[  tt] = Bp
 
-    return init_pos, init_vel, time, pos_history, vel_history, mag_history, mag_history_z_exact, DT, max_t
+    return init_pos, init_vel, time, pos_history, vel_history, mag_history, mag_history_exact, DT, max_t
+
+
+def straighten_out_soln(approx, exact):
+    '''
+    Use the sign of the approximation to work out what the sign of the exact value should be.
+    Used on timeseries
+    '''
+    for jj in range(3):
+        for ii in range(approx.shape[0]):
+            if approx[ii, jj] < 0:
+                exact[ii, jj] *= -1.0
+    return
 
 
 def test_mirror_motion():
@@ -1528,8 +1538,8 @@ def test_mirror_motion():
     that its solving ok. Runs with zero background E field and B field defined
     by the constant background field specified in the parameter script.
     '''
-    max_rev = 100
-    init_pos, init_vel, time, pos_history, vel_history, mag_history, mag_history_z_exact, DT, max_t = do_particle_run(max_rev=max_rev)
+    max_rev = 1000
+    init_pos, init_vel, time, pos_history, vel_history, mag_history, mag_history_exact, DT, max_t = do_particle_run(max_rev=max_rev)
 
     mag_history_x = np.zeros(pos_history.shape[0])
 
@@ -1549,7 +1559,7 @@ def test_mirror_motion():
     B_perp      = np.sqrt(mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
     B_magnitude = np.sqrt(mag_history[:, 0] ** 2 + mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
     
-    KE_perp     = 0.5 * const.mp * (vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
+    KE_perp = 0.5 * const.mp * (vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
     KE_para = 0.5 * const.mp *  vel_history[:, 0] ** 2
     KE_tot  = KE_para + KE_perp
     
@@ -1560,26 +1570,60 @@ def test_mirror_motion():
     
     if True:
         # Plot approximate solution vs. quadratic solutions for magnetic field
-        # mag_history_exact = np.zeros((max_inc, 3, 4)) :: in array as [time, component, soln]
-        # 0, 1 are solutions with inner +/- as positive (Outer sqrt Positive / Negative)
-        # 2, 3 are solutions with inner +/- as negative (Outer sqrt Positive / Negative)
-# =============================================================================
-#         real_solution_z = np.zeros(pos_history.shape[0])
-#         for ii in range(pos_history.shape[0]):
-#             
-#             for jj in range(4):
-#                 if mag_history_z_exact[ii, jj].imag == 0:
-#                     if mag_history_z_exact[ii, jj].real != 0:
-#                         real_solution_z[ii] = mag_history_z_exact[ii, jj].real
-# =============================================================================
+        # mag_history_y_exact = np.zeros((max_inc, 2), dtype=np.complex128)
+        
+        errors = np.abs(mag_history - mag_history_exact)
+        
+        fig, axes = plt.subplots(3, sharex=True)
+        
+        axes[0].set_title('Comparison of approximate vs. exact solutions for B0r components: Approx. Driver')
+        
+        axes[0].plot(time, mag_history[      :, 1] * 1e9, label='By Approx'    , c='b', marker='o')
+        axes[0].plot(time, mag_history_exact[:, 1] * 1e9, label='By Exact +ve' , c='r', marker='x')
+        axes[0].set_ylabel('B0y (nT)', rotation=0, labelpad=20)
+        axes[0].legend()
+        
+        axes[1].plot(time, mag_history[      :, 2] * 1e9, label='Bz Approx'    , c='b', marker='o')
+        axes[1].plot(time, mag_history_exact[:, 2] * 1e9, label='Bz Exact +ve' , c='r', marker='x')
+        axes[1].set_ylabel('B0z (nT)', rotation=0, labelpad=20)
+        axes[1].legend()
+        
+        axes[2].plot(time, errors[:, 1] * 1e9, label='By' , c='b')
+        axes[2].plot(time, errors[:, 2] * 1e9, label='Bz' , c='r')
+        axes[2].set_ylabel('Abs. Error\n(nT)', rotation=0, labelpad=20)
+        axes[2].legend()
+        
+        axes[2].set_xlabel('Time (s)')
+        axes[2].set_xlim(0, time[-1])
         
         
-        fig, axes = plt.subplots(1, sharex=True)
+    if False:
+        # Plot approximate solution vs. quadratic solutions for magnetic field
+        # mag_history_y_exact = np.zeros((max_inc, 2), dtype=np.complex128)
         
-        #axes[0].plot(time, mag_history[:, 1] * 1e9, label='By', c='r')
-        axes.plot(time, mag_history[        :, 2] * 1e9, label='Bz Approx', c='b')
-        axes.plot(time, mag_history_z_exact[:, 2] , label='Bz Exact' , c='r')
-        axes.legend()
+        errors = np.abs(mag_history - mag_history_exact)
+        
+        mu_exact = KE_perp / np.sqrt(mag_history_exact[:, 0] ** 2
+                                   + mag_history_exact[:, 1] ** 2
+                                   + mag_history_exact[:, 2] ** 2)
+        
+        mu_error = np.abs(mu - mu_exact)
+        
+        fig, axes = plt.subplots(2, sharex=True)
+        
+        axes[0].set_title('Comparison of approximate vs. exact solutions for B0r components: Approx. Driver')
+        
+        axes[0].plot(time, mu       * 1e10, label=r'$\mu$ Approx sol.' , c='b', marker='o')
+        axes[0].plot(time, mu_exact * 1e10, label=r'$\mu$ Exact  sol.' , c='r', marker='x')
+        axes[0].set_ylabel(r'$\mu (\times 10^{10})$', rotation=0, labelpad=40)
+        axes[0].legend()
+        
+        axes[1].plot(time, mu_error * 1e10, label=r'$\mu$ error' , c='b')
+        axes[1].set_ylabel(r'Abs. Error $(\times 10^{10})$', rotation=0, labelpad=40)
+        axes[1].legend()
+        
+        axes[1].set_xlabel('Time (s)')
+        axes[1].set_xlim(0, time[-1])
     
     
     if False:
