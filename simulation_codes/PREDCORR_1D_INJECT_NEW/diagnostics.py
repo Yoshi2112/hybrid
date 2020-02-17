@@ -1489,7 +1489,8 @@ def do_particle_run(max_rev=1000):
 
     
     # Retard velocity for stability
-    Bp, Bpe = particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, -0.5*DT)
+    #Bp, Bpe = particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, -0.5*DT)
+    Bp, Bpe = velocity_update(pos, vel, -0.5*DT)
     mag_history_exact[0] = Bpe
     
     # Record initial values
@@ -1505,7 +1506,8 @@ def do_particle_run(max_rev=1000):
         t_total += DT
         
         # Update values: Velocity first, then position
-        Bp, Bpe = particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, DT)
+        #Bp, Bpe = particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, DT)
+        Bp, Bpe = velocity_update(pos, vel, DT)
         
         # Unpack exact solution into history
         mag_history_exact[tt] = Bpe
@@ -1532,13 +1534,42 @@ def straighten_out_soln(approx, exact):
     return
 
 
+def velocity_update(pos, vel, dt):  
+    '''
+    Based on Appendix A of Ch5 : Hybrid Codes by Winske & Omidi.
+    
+    Cut down specifically for analytic B-field (no interpolation of wave fields,
+    and no E-field)
+    '''
+    for ii in range(pos.shape[0]):
+        qmi = const.q / const.mp
+        vn  = vel[:, ii]
+        
+        B_p = particles.eval_B0_particle(pos[ii], vel[:, ii], qmi, np.array([0., 0., 0.]))
+        
+        # Intermediate calculations
+        h  = qmi * dt
+        f  = 1 - (h**2) / 2 * (B_p[0]**2 + B_p[1]**2 + B_p[2]**2)
+        g  = h / 2 * (B_p[0]*vn[0] + B_p[1]*vn[1] + B_p[2]*vn[2])
+    
+        # Velocity push
+        vel_x = f * vn[0] + h * (g * B_p[0] + (vn[1]*B_p[2] - vn[2]*B_p[1]) )
+        vel_y = f * vn[1] + h * (g * B_p[1] - (vn[0]*B_p[2] - vn[2]*B_p[0]) )
+        vel_z = f * vn[2] + h * (g * B_p[2] + (vn[0]*B_p[1] - vn[1]*B_p[0]) )
+        
+        vel[0, ii] = vel_x
+        vel[1, ii] = vel_y
+        vel[2, ii] = vel_z
+    return B_p, B_p
+
+
 def test_mirror_motion():
     '''
     Diagnostic code to call the particle pushing part of the hybrid and check
     that its solving ok. Runs with zero background E field and B field defined
     by the constant background field specified in the parameter script.
     '''
-    max_rev = 1000
+    max_rev = 50
     init_pos, init_vel, time, pos_history, vel_history, mag_history, mag_history_exact, DT, max_t = do_particle_run(max_rev=max_rev)
 
     mag_history_x = np.zeros(pos_history.shape[0])
@@ -1568,7 +1599,7 @@ def test_mirror_motion():
     mu          = KE_perp / B_magnitude
     mu_percent  = (mu.max() - mu.min()) / init_mu * 100.
     
-    if True:
+    if False:
         # Plot approximate solution vs. quadratic solutions for magnetic field
         # mag_history_y_exact = np.zeros((max_inc, 2), dtype=np.complex128)
         
@@ -1576,7 +1607,7 @@ def test_mirror_motion():
         
         fig, axes = plt.subplots(3, sharex=True)
         
-        axes[0].set_title('Comparison of approximate vs. exact solutions for B0r components: Approx. Driver')
+        axes[0].set_title('Comparison of approximate vs. exact solutions for B0r components: Exact Driver')
         
         axes[0].plot(time, mag_history[      :, 1] * 1e9, label='By Approx'    , c='b', marker='o')
         axes[0].plot(time, mag_history_exact[:, 1] * 1e9, label='By Exact +ve' , c='r', marker='x')
@@ -1625,6 +1656,29 @@ def test_mirror_motion():
         axes[1].set_xlabel('Time (s)')
         axes[1].set_xlim(0, time[-1])
     
+    
+    if True:
+        # Basic mu plot with v_perp, |B| also plotted
+        fig, axes = plt.subplots(4, sharex=True)
+        
+        axes[0].plot(time, mu*1e10, label='$\mu(t_v)$', lw=0.5, c='k')
+        
+        axes[0].set_title(r'First Invariant $\mu$ for single trapped particle :: DT = %7.5fs :: Max $\delta \mu = $%6.4f%%' % (DT, mu_percent))
+        axes[0].set_ylabel(r'$(\times 10^{-10})$', rotation=0, labelpad=30)
+        axes[0].get_yaxis().get_major_formatter().set_useOffset(False)
+        axes[0].axhline(init_mu*1e10, c='k', ls=':')
+        
+        axes[1].plot(time, vel_perp*1e-3, lw=0.5, c='k')
+        axes[1].set_ylabel('$v_\perp$\n(km/s)', rotation=0, labelpad=20)
+        
+        axes[2].plot(time, pos_history*1e-3, lw=0.5, c='k')
+        axes[2].set_ylabel('$x$\n(km)', rotation=0, labelpad=20)
+
+        axes[3].plot(time, B_magnitude*1e9, lw=0.5, c='k')
+        axes[3].set_ylabel('$|B|(t_v)$ (nT)', rotation=0, labelpad=20)
+
+        axes[3].set_xlabel('Time (s)')
+        axes[3].set_xlim(0, time[-1])
     
     if False:
         # Interpolate mag_x to half positions (where v is calculated)
@@ -1868,7 +1922,6 @@ def test_mirror_motion():
         ax[1].set_ylabel('$\mu$', rotation=0, labelpad=20)
         ax[1].set_xlabel('Time (s)')
         ax[1].set_xlim(0, time[-1])
-
     return
     
 
