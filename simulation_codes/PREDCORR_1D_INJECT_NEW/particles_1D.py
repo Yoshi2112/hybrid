@@ -197,11 +197,11 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
                                                               
        
         # DIAGNOSTIC: DELETE (as well as return signature)
-        B0_exact = eval_B0_exact(pos[ii], v_minus, qm_ratios[idx[ii]], B0_xp)
+        #B0_exact = eval_B0_exact(pos[ii], v_minus, qm_ratios[idx[ii]], B0_xp)
         ###
         
         # DIAGNOSTIC: Change this back to B0_xp
-        Bp    += B0_exact                                                      # B  at particle location (total)
+        Bp    += B0_xp                                                      # B  at particle location (total)
         
         T = qmi * Bp                                                        # Vector Boris variable
         S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable
@@ -217,7 +217,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
         v_plus[2]  = v_minus[2] + v_prime[0] * S[1] - v_prime[1] * S[0]
         
         vel[:, ii] = v_plus +  qmi * Ep                                     # Second E-field half-push
-    return Bp, B0_exact
+    return Bp, Bp
 
 
 @nb.njit()
