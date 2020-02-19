@@ -1,16 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Mon Feb 17 11:17:49 2020
-
-@author: Yoshi
-"""
-import pdb
-import numpy as np
-import numba as nb
-import matplotlib.pyplot as plt
-
-from simulation_parameters_1D import B_eq, B_xmax, a, q, mp, xmin, xmax, dx, va, loss_cone
-
 '''
 Diagnostic code that contains a stripped down version of the functions in the
 hybrid code responsible for pushing the particles
@@ -21,11 +9,49 @@ position_update() :: Updates the position of a single particle using a simple
                     x_new = x_old + v*dt
 eval_B0_particle():: Returns the magnetic field of a particle at its location,
                     analytically solved.
+run_instance()   :: Helper function to initialise variable arrays, set initial 
+                   conditions, record output values, and contains main loop
+call_and_plot()  :: Calls run_instance() to perform a particle simulation and
+                   retrieve output values. Mostly just plotting scripts.
                     
 Simulation variables imported from the simulation_parameters_1D script
 '''
+import pdb
+import numpy as np
+import numba as nb
+import matplotlib.pyplot as plt
+
+######################################
+### CONSTANTS AND GLOBAL VARIABLES ###
+######################################
+ne         = 200e6                             # Electron density in /m3
+B_eq       = 200e-9                            # Initial magnetic field at equator (x=0), in T
+B_xmax     = 423.5e-9                          # Magnetic field intensity at boundary, in T
+
+c          = 2.998925e+08                      # Speed of light (m/s)
+q          = 1.602177e-19                      # Elementary charge (C)
+mp         = 1.672622e-27                      # Mass of proton (kg)
+e0         = 8.854188e-12                      # Epsilon naught - permittivity of free space
+mu0        = (4e-7) * np.pi                    # Magnetic Permeability of Free Space (SI units)
+wpi        = np.sqrt(ne * q ** 2 / (mp * e0))  # Proton   Plasma Frequency, wpi (rad/s)
+va         = B_eq / np.sqrt(mu0*ne*mp)         # Alfven speed at equator: Assuming pure proton plasma
+
+NX         = 512                               # Number of "cells". Sets simulation length as multiples of dx
+dx         = 1.0 * c / wpi                     # Spatial cadence, based on ion inertial length
+xmax       = NX // 2 * dx                      # Maximum simulation length, +/-ve on each side
+xmin       =-NX // 2 * dx
+
+a          = (B_xmax / B_eq - 1) / xmax ** 2   # Parabolic scale factor: Fitted to B_eq, B_xmax
+loss_cone  = np.arcsin(np.sqrt(B_eq / B_xmax))*180 / np.pi
+
 @nb.njit()
 def eval_B0_particle(x, v):
+    '''
+    Calculates the B0 magnetic field at the position of a particle. Neglects B0_r
+    in the calculation of local cyclotron frequency. B0_r is evaluated at the particle
+    gyroradius (Larmor radius), which is calculated via the perp velocity and 
+    local cyclotron frequency.
+    '''
     B0_xp    = np.zeros(3)
     B0_xp[0] = B_eq * (1 + a * x**2)    
     
@@ -39,60 +65,87 @@ def eval_B0_particle(x, v):
 
 @nb.njit()
 def velocity_update(pos, vel, dt):
+    '''
+    Updates N particle velocity via the Boris-Buneman algorithm.
+    Based on Birdsall & Langdon (1985), pp. 59-63 (Sections 4.3, 4.4)
 
+    INPUT:
+        pos   -- Position array to be updated in place, in meters.           Shape (N,)  ndarray
+        vel   -- Velocity array in m/s. Only x-component (index 0) accessed. Shape (3,N) ndarray
+        dt    -- Temporal cadence of simulation in seconds.                  float64
+        
+    Notes: Still not sure how to parallelise this: There are a lot of array operations
+    Probably need to do it more algebraically? Find some way to not create those temp arrays,
+    since array creation (memory allocation) is mega resource intensive.
+    '''
     for ii in nb.prange(vel.shape[1]):  
         qmi = 0.5 * dt * q / mp                                 
         
         Ep         = np.zeros(3)
-        v_minus    = vel[:, ii] + qmi * Ep                                  # First E-field half-push
+        v_minus    = vel[:, ii] + qmi * Ep                                  # First E-field half-push (Eq. 4.3-7)
         Bp         = eval_B0_particle(pos[ii], v_minus)                     # B0 at particle location
         
-        T = qmi * Bp                                                        # Vector Boris variable
-        S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable
+        T = qmi * Bp                                                        # Vector Boris variable (Eq. 4.4-11)
+        S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable (Eq. 4.4-13)
         
         v_prime    = np.zeros(3)
-        v_prime[0] = v_minus[0] + v_minus[1] * T[2] - v_minus[2] * T[1]     # Magnetic field rotation
+        v_prime[0] = v_minus[0] + v_minus[1] * T[2] - v_minus[2] * T[1]     # Magnetic field rotation (Eq. 4.4-10)
         v_prime[1] = v_minus[1] + v_minus[2] * T[0] - v_minus[0] * T[2]
         v_prime[2] = v_minus[2] + v_minus[0] * T[1] - v_minus[1] * T[0]
                 
         v_plus     = np.zeros(3)
-        v_plus[0]  = v_minus[0] + v_prime[1] * S[2] - v_prime[2] * S[1]
+        v_plus[0]  = v_minus[0] + v_prime[1] * S[2] - v_prime[2] * S[1]     # (Eq. 4.4-12)
         v_plus[1]  = v_minus[1] + v_prime[2] * S[0] - v_prime[0] * S[2]
         v_plus[2]  = v_minus[2] + v_prime[0] * S[1] - v_prime[1] * S[0]
         
-        vel[:, ii] = v_plus +  qmi * Ep                                     # Second E-field half-push
+        vel[:, ii] = v_plus +  qmi * Ep                                     # Second E-field half-push (Eq. 4.3-8)
     return Bp
 
 
 @nb.njit()
 def position_update(pos, vel, dt):
-    for ii in nb.prange(pos.shape[0]):
-        pos[ii] += vel[0, ii] * dt
+    '''
+    Updates the position of the N particles using x_new = x_old + vx*t. 
 
-        if (pos[ii] <= xmin or pos[ii] >= xmax):
-            vel[0, ii] *= -1.                   # Reflect velocity
-            pos[ii]    += vel[0, ii] * dt       # Get particle back in simulation space
+    INPUT:
+        pos   -- Position array to be updated in place, in meters.           Shape (N,)  ndarray
+        vel   -- Velocity array in m/s. Only x-component (index 0) accessed. Shape (3,N) ndarray
+        dt    -- Temporal cadence of simulation in seconds.                  float64
+
+    Reflective boundaries to simulate the "open ends" that would have flux coming in from the ionosphere side.
+    Could potentially merge this function with the velocity update function, but would have to include an
+    if call so that the position isn't retarded when the velocity is (t = 0 -> t = -1/2)
+    '''
+    for ii in nb.prange(pos.shape[0]):
+        pos[ii] += vel[0, ii] * dt                  # Update position
+
+        if (pos[ii] <= xmin or pos[ii] >= xmax):    # If simulation boundary reached
+            vel[0, ii] *= -1.                       # Reflect velocity
+            pos[ii]    += vel[0, ii] * dt           # Get particle back in simulation space
     return
 
 
 @nb.njit()
-def do_particle_run(max_rev=1000):
+def run_instance(max_rev=1000, v_mag=1.0, pitch=45.0):
     '''
-    Contains full particle pusher including timestep checker to simulate the motion
-    of a single particle in the analytic magnetic field field. No wave magnetic/electric
+    Contains full particle pusher to simulate the motion of a single particle
+    in the analytic magnetic bottle. No wave magnetic/electric
     fields present.
     '''
-    orbit_res = 0.1
+    # Set initial position and velocity based on pitch angle and particle energy
     pos       = np.array([0.])
-    vel       = np.array([0.5, 1.0, 0.0]).reshape((3, 1))*va
+    vel       = np.zeros((3, 1))
 
-    # Initial quantities
+    vel[0, 0] = v_mag * va * np.cos(pitch * np.pi / 180.)
+    vel[1, 0] = v_mag * va * np.sin(pitch * np.pi / 180.)
+
+    # Initial quantities (save for export)
     init_pos = pos.copy() 
     init_vel = vel.copy()
     
-    # Set timestep
+    # Set timestep: Gyromotion resolver or particle vx limit
     gyroperiod = (2 * np.pi * mp) / (q * B_xmax)
-    ion_ts     = orbit_res * gyroperiod
+    ion_ts     = 0.1 * gyroperiod
     
     if vel[0, :].max() != 0.:
         vel_ts   = 0.6 * dx / vel[0, :].max()
@@ -140,17 +193,22 @@ def do_particle_run(max_rev=1000):
     return init_pos, init_vel, time, pos_history, vel_history, mag_history, DT, max_t
 
 
-def test_mirror_motion():
+def call_and_plot():
     '''
     Diagnostic code to call the particle pushing part of the hybrid and check
     that its solving ok. Runs with zero background E field and B field defined
     by the constant background field specified in the parameter script.
     '''
-    max_rev = 50000
-    init_pos, init_vel, time, pos_history, vel_history, mag_history, DT, max_t = do_particle_run(max_rev=max_rev)
+    max_rev = 400           # Total simulation length in gyroperiods
+    v_mag   = 1.0           # Particle velocity magnitude
+    pitch   = 45.0          # Particle pitch angle
+    
+    # Call main function (split into two lines because its a long boi)
+    init_pos, init_vel, time, pos_history,   \
+    vel_history, mag_history, DT, max_t      = run_instance(max_rev=max_rev, v_mag=v_mag, pitch=pitch)
 
-    # Calculate parameter timeseries using recorded values
-    init_vperp  = np.sqrt(init_vel[1] ** 2 + init_vel[2] ** 2)
+    # Calculate a bunch of parameters that'll probably be useful in multiple plots
+    init_vperp = np.sqrt(init_vel[1] ** 2 + init_vel[2] ** 2)
     init_vpara = init_vel[0]
     init_KE    = 0.5 * mp * init_vel ** 2
     init_pitch = np.arctan(init_vperp / init_vpara) * 180. / np.pi
@@ -169,17 +227,23 @@ def test_mirror_motion():
     KE_para = 0.5 * mp *  vel_history[:, 0] ** 2
     KE_tot  = KE_para + KE_perp
     
+    # Calculate first adiabatic invariant (magnetic moment, mu)
     mu         = KE_perp / B_magnitude
     mu_percent = (mu.max() - mu.min()) / init_mu * 100.
-    
-    if True:
-        # Basic mu plot with v_perp, |B| also plotted
+
+    #############################################################################
+    ## Each one of these sections produces a plot. Turn them on/off by setting ##
+    ## as either True/False                                                    ##
+    #############################################################################
+        
+    if False:
+        # Basic 4 timeseries plot with mu, v_perp, position, and |B| at the particle position
         fig, axes = plt.subplots(4, sharex=True)
         
         axes[0].plot(time, mu*1e10, label='$\mu(t_v)$', lw=0.5, c='k')
         
         axes[0].set_title(r'First Invariant $\mu$ for single trapped particle :: DT = %7.5fs :: Max $\delta \mu = $%6.4f%%' % (DT, mu_percent))
-        axes[0].set_ylabel(r'$(\times 10^{-10})$', rotation=0, labelpad=30)
+        axes[0].set_ylabel('$\mu$\n$(\\times 10^{-10})$', rotation=0, labelpad=30)
         axes[0].get_yaxis().get_major_formatter().set_useOffset(False)
         axes[0].axhline(init_mu*1e10, c='k', ls=':')
         
@@ -190,25 +254,28 @@ def test_mirror_motion():
         axes[2].set_ylabel('$x$\n(km)', rotation=0, labelpad=20)
 
         axes[3].plot(time, B_magnitude*1e9, lw=0.5, c='k')
-        axes[3].set_ylabel('$|B|(t_v)$ (nT)', rotation=0, labelpad=20)
+        axes[3].set_ylabel('$|B|(t_v)$\n(nT)', rotation=0, labelpad=20)
 
         axes[3].set_xlabel('Time (s)')
         axes[3].set_xlim(0, time[-1])
         
+        fig.align_ylabels()
+        
         
     if False:
-        ## Plots velocity/mag timeseries ##
+        ## Plots velocity/magnetic field timeseries                 ##
+        ## comment out the bits you don't want to plot              ##
+        ## vy,vz show cyclotron motion, v_perp shows bounce motion  ##
         fig, axes = plt.subplots(2, sharex=True)
         
-        axes[0].plot(time, vel_history[:, 1]* 1e-3, label='vy')
-        axes[0].plot(time, vel_history[:, 2]* 1e-3, label='vz')
+        #axes[0].plot(time, vel_history[:, 1]* 1e-3, label='vy')
+        #axes[0].plot(time, vel_history[:, 2]* 1e-3, label='vz')
         axes[0].plot(time, vel_perp         * 1e-3, label='v_perp')
         axes[0].plot(time, vel_para*1e-3, label='v_para')
         
         axes[0].set_ylabel('v (km)')
         axes[0].set_xlabel('t (s)')
         axes[0].set_title(r'Velocity/Magnetic Field at Particle, v0 = [%4.1f, %4.1f, %4.1f]km/s, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (init_vel[0, 0], init_vel[1, 0], init_vel[2, 0], loss_cone, init_pitch))
-        #axes[0].set_xlim(0, None)
         axes[0].legend()
         
         axes[1].plot(time, B_magnitude,       label='|B0|')
@@ -218,40 +285,13 @@ def test_mirror_motion():
         axes[1].legend()
         axes[1].set_ylabel('t (s)')
         axes[1].set_ylabel('B (nT)')
-        axes[1].set_xlim(0, None)
-        
-        
-    if False:
-        ## Plots position/velocity component timeseries ##
-        fig, axes = plt.subplots(3, sharex=True)
-        axes[0].set_title(r'Position/Velocity of Particle : v0 = [%3.1f, %3.1f, %3.1f]$v_A$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (init_vel[0, 0]/va, init_vel[1, 0]/va, init_vel[2, 0]/va, loss_cone, init_pitch))
-
-        axes[0].plot(time, pos_history*1e-3)
-        axes[0].set_xlabel('t (s)')
-        axes[0].set_ylabel(r'x (km)')
-        axes[0].axhline(xmin*1e-3, color='k', ls=':')
-        axes[0].axhline(xmax*1e-3, color='k', ls=':')
-        axes[0].legend()
-        
-        axes[1].plot(time, vel_history[:, 0]/va, label='$v_\parallel$')
-        axes[1].plot(time,            vel_perp/va, label='$v_\perp$')
-        axes[1].set_xlabel('t (s)')
-        axes[1].set_ylabel(r'$v_\parallel$ ($v_{A,eq}^{-1}$)')
-        axes[1].legend()
-        
-        axes[2].plot(time, vel_history[:, 1]/va, label='vy')
-        axes[2].plot(time, vel_history[:, 2]/va, label='vz')
-        axes[2].set_xlabel('t (s)')
-        axes[2].set_ylabel(r'$v_\perp$ ($v_{A,eq}^{-1}$)')
-        axes[2].legend()
-        
-        for ax in axes:
-            ax.set_xlim(0, 100)
+        axes[1].set_xlim(0, time[-1])
             
     if False:
-        # Plot gyromotion of particle vx vs. vy
+        ## Plot gyromotion of particle vx vs. vy ##
+        ## Only really handles up to a few thousand gyroperiods, thanks matplotlib
         plt.title('Particle gyromotion: {} gyroperiods ({:.1f}s)'.format(max_rev, max_t))
-        plt.scatter(vel_history[:, 1], vel_history[:, 2], c=time)
+        plt.scatter(vel_history[:, 1], vel_history[:, 2], c=time, s=1)
         plt.colorbar().set_label('Time (s)')
         plt.ylabel('vy (km/s)')
         plt.xlabel('vz (km/s)')
@@ -259,32 +299,31 @@ def test_mirror_motion():
         
     if False:
         ## Plot parallel and perpendicular kinetic energies/velocities
-        plt.figure()
-        plt.title('Kinetic energy of single particle: Full Bottle')
-        plt.plot(time, KE_para/q, c='b', label=r'$KE_\parallel$')
-        plt.plot(time, KE_perp/q, c='r', label=r'$KE_\perp$')
-        plt.plot(time, KE_tot /q, c='k', label=r'$KE_{total}$')
-        plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
-        plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
-        plt.ylabel('Energy (eV)')
-        plt.xlabel('Time (s)')
-        plt.legend()
-    
-    if False:           
-        percent = abs(KE_tot - init_KE.sum()) / init_KE.sum() * 100. 
-
-        plt.figure()
-        plt.title('Total kinetic energy change')
-
-        plt.plot(time, percent*1e12)
-        plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
-        plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
-        plt.xlim(0, time[-1])
-        plt.ylabel(r'Percent change ($\times 10^{-12}$)')
-        plt.xlabel('Time (s)')
+        percent_change = np.abs(KE_tot - init_KE.sum()) / init_KE.sum() * 100. 
         
+        fig, axes = plt.subplots(2, sharex=True)
+        axes[0].set_title('Kinetic energy of single particle: Components and Conservation')
+        axes[0].plot(time, KE_para/q, c='b', label=r'$KE_\parallel$')
+        axes[0].plot(time, KE_perp/q, c='r', label=r'$KE_\perp$')
+        axes[0].plot(time, KE_tot/q, c='k', label=r'$KE_{total}$')
+        axes[0].get_yaxis().get_major_formatter().set_useOffset(False)
+        axes[0].get_yaxis().get_major_formatter().set_scientific(False)
+        axes[0].set_ylabel('Energy (eV)')
+        axes[0].set_xlabel('Time (s)')
+        axes[0].legend()
+        
+        axes[1].set_title('Total change :: $\Delta KE = |KE_{init} - KE(t)|$')
+        axes[1].plot(time, percent_change*1e12)
+        axes[1].get_yaxis().get_major_formatter().set_useOffset(False)
+        axes[1].get_yaxis().get_major_formatter().set_scientific(False)
+        axes[1].set_xlim(0, time[-1])
+        axes[1].set_ylabel(r'Percent change ($\times 10^{-12}$)')
+        axes[1].set_xlabel('Time (s)')
+
+
     if False:
         # Plots vx, v_perp vs. x  
+        # Tests if quantities are conserved vs. position in the bottle
         fig, ax = plt.subplots(1)
         ax.set_title(r'Velocity vs. Space: v0 = [%4.1f, %4.1f, %4.1f]$v_{A,eq}^{-1}$ : %d gyroperiods (%5.2fs)' % (init_vel[0, 0], init_vel[1, 0], init_vel[2, 0], max_rev, max_t))
         ax.plot(pos_history*1e-3, vel_history[:, 0]*1e-3, c='b', label=r'$v_\parallel$')
@@ -294,8 +333,10 @@ def test_mirror_motion():
         ax.set_xlim(xmin*1e-3, xmax*1e-3)
         ax.legend()
 
+
     if False:
         # Invariant and parameters vs. x
+        # Tests if quantities are conserved vs. position in the bottle
         fig, axes = plt.subplots(3, sharex=True)
         axes[0].plot(pos_history*1e-3, mu*1e10)
         axes[0].set_title(r'First Invariant $\mu$ for single trapped particle, v0 = [%3.1f, %3.1f, %3.1f]$v_{A,eq}^{-1}$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg, $t_{max} = %5.0fs$' % (init_vel[0, 0]/va, init_vel[1, 0]/va, init_vel[2, 0]/va, loss_cone, init_pitch, max_t))
@@ -311,8 +352,16 @@ def test_mirror_motion():
         
         axes[2].set_xlabel('Position (km)')
         axes[2].set_xlim(xmin*1e-3, xmax*1e-3)
+    
+    
+    # Maximizes plot window, but only if you've plotted something
+    # (prevents random empty plot windows from opening)
+    if plt.fignum_exists(1):
+        figManager = plt.get_current_fig_manager()
+        figManager.window.showMaximized()
+        plt.show()
     return
 
 
 if __name__ == '__main__':
-    test_mirror_motion()
+    call_and_plot()
