@@ -21,6 +21,8 @@ import numpy as np
 import numba as nb
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.patches import Circle
 
 ######################################
 ### CONSTANTS AND GLOBAL VARIABLES ###
@@ -44,6 +46,7 @@ xmin       =-NX // 2 * dx
 
 a          = (B_xmax / B_eq - 1) / xmax ** 2   # Parabolic scale factor: Fitted to B_eq, B_xmax
 loss_cone  = np.arcsin(np.sqrt(B_eq / B_xmax))*180 / np.pi
+exact      = False
 
 @nb.njit()
 def eval_B0_particle(x, v):
@@ -54,13 +57,33 @@ def eval_B0_particle(x, v):
     local cyclotron frequency.
     '''
     B0_xp    = np.zeros(3)
-    B0_xp[0] = B_eq * (1 + a * x**2)    
-    
+    B0_xp[0] = B_eq * (1 + a * x[0]**2)    
+
     l_cyc    = q * B0_xp[0] / mp
-    fac      = a * B_eq * x / l_cyc
+    fac      = a * B_eq * x[0] / l_cyc
     
     B0_xp[1] =  v[2] * fac
     B0_xp[2] = -v[1] * fac
+    return B0_xp
+
+
+@nb.njit()
+def eval_B0_particle_exact(x):
+    '''
+    Calculates the B0 magnetic field at the position of a particle. Neglects B0_r
+    in the calculation of local cyclotron frequency. B0_r is evaluated at the particle
+    gyroradius (Larmor radius), which is calculated via the perp velocity and 
+    local cyclotron frequency.
+    '''
+    B0_xp    = np.zeros(3)
+    B0_xp[0] = B_eq * (1 + a * x[0]**2)    
+
+    gyroangle= np.arctan2(x[2], x[1])
+    rL       = np.sqrt(x[1]**2 + x[2]**2)
+    B0_r     = - a * B_eq * x[0] * rL
+    
+    B0_xp[1] = B0_r * np.cos(gyroangle)
+    B0_xp[2] = B0_r * np.sin(gyroangle)
     return B0_xp
 
 
@@ -84,23 +107,27 @@ def velocity_update(pos, vel, dt):
         
         Ep         = np.zeros(3)
         v_minus    = vel[:, ii] + qmi * Ep                                  # First E-field half-push (Eq. 4.3-7)
-        Bp         = eval_B0_particle(pos[ii], v_minus)                     # B0 at particle location
         
+        if exact == False:
+            Bp         = eval_B0_particle(pos[:, ii], v_minus)              # B0 at particle location
+        else:
+            Bp         = eval_B0_particle_exact(pos[:, ii])
+
         T = qmi * Bp                                                        # Vector Boris variable (Eq. 4.4-11)
         S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable (Eq. 4.4-13)
         
-        v_prime    = np.zeros(3, dtype=nb.float64)
+        v_prime    = np.zeros(3, dtype=np.float64)
         v_prime[0] = v_minus[0] + v_minus[1] * T[2] - v_minus[2] * T[1]     # Magnetic field rotation (Eq. 4.4-10)
         v_prime[1] = v_minus[1] + v_minus[2] * T[0] - v_minus[0] * T[2]
         v_prime[2] = v_minus[2] + v_minus[0] * T[1] - v_minus[1] * T[0]
                 
-        v_plus     = np.zeros(3, dtype=nb.float64)
+        v_plus     = np.zeros(3, dtype=np.float64)
         v_plus[0]  = v_minus[0] + v_prime[1] * S[2] - v_prime[2] * S[1]     # (Eq. 4.4-12)
         v_plus[1]  = v_minus[1] + v_prime[2] * S[0] - v_prime[0] * S[2]
         v_plus[2]  = v_minus[2] + v_prime[0] * S[1] - v_prime[1] * S[0]
         
         vel[:, ii] = v_plus +  qmi * Ep                                     # Second E-field half-push (Eq. 4.3-8)
-    return Bp
+    return vel, Bp
 
 
 @nb.njit()
@@ -117,13 +144,16 @@ def position_update(pos, vel, dt):
     Could potentially merge this function with the velocity update function, but would have to include an
     if call so that the position isn't retarded when the velocity is (t = 0 -> t = -1/2)
     '''
-    for ii in nb.prange(pos.shape[0]):
-        pos[ii] += vel[0, ii] * dt                  # Update position
-
-        if (pos[ii] <= xmin or pos[ii] >= xmax):    # If simulation boundary reached
-            vel[0, ii] *= -1.                       # Reflect velocity
-            pos[ii]    += vel[0, ii] * dt           # Get particle back in simulation space
-    return
+    for ii in nb.prange(vel.shape[1]):
+        pos[0, ii] = pos[0, ii] + vel[0, ii] * dt               # Update position
+        pos[1, ii] = pos[1, ii] + vel[1, ii] * dt
+        pos[2, ii] = pos[2, ii] + vel[2, ii] * dt
+# =============================================================================
+#         if (pos[0, ii] <= xmin or pos[0, ii] >= xmax):  # If simulation boundary reached
+#             vel[0, ii] *= -1.                           # Reflect velocity
+#             pos[0, ii] += vel[0, ii] * dt               # Get particle back in simulation space
+# =============================================================================
+    return pos
 
 
 @nb.njit()
@@ -134,12 +164,16 @@ def run_instance(max_rev=1000, v_mag=1.0, pitch=45.0):
     fields present.
     '''
     # Set initial position and velocity based on pitch angle and particle energy
-    pos       = np.array([0.]  , dtype=nb.float64)
-    vel       = np.zeros((3, 1), dtype=nb.float64)
+    pos       = np.zeros((3, 1), dtype=np.float64)
+    vel       = np.zeros((3, 1), dtype=np.float64)
 
     vel[0, 0] = v_mag * va * np.cos(pitch * np.pi / 180.)
     vel[1, 0] = v_mag * va * np.sin(pitch * np.pi / 180.)
 
+    # Assumes particle starts at equator (x = 0) with v_perp = vy
+    rL        = mp * vel[1, 0] / (q * B_eq)
+    pos[2, 0] = rL
+    
     # Initial quantities (save for export)
     init_pos = pos.copy() 
     init_vel = vel.copy()
@@ -158,21 +192,23 @@ def run_instance(max_rev=1000, v_mag=1.0, pitch=45.0):
     else:
         DT = vel_ts
     
+    DT *= 1.0
+    
     # Set output arrays and max time/timesteps
     max_t    = max_rev * gyroperiod
     max_inc  = int(max_t / DT) + 1
     
-    time        = np.zeros((max_inc),    dtype=nb.float64)
-    pos_history = np.zeros((max_inc),    dtype=nb.float64)
-    vel_history = np.zeros((max_inc, 3), dtype=nb.float64)
-    mag_history = np.zeros((max_inc, 3), dtype=nb.float64)
+    time        = np.zeros((max_inc),    dtype=np.float64)
+    pos_history = np.zeros((max_inc, 3), dtype=np.float64)
+    vel_history = np.zeros((max_inc, 3), dtype=np.float64)
+    mag_history = np.zeros((max_inc, 3), dtype=np.float64)
 
     # Retard velocity by half a timestep
-    Bp = velocity_update(pos, vel, -0.5*DT)
+    vel, Bp = velocity_update(pos, vel, -0.5*DT)
 
     # Record initial values
     time[       0]   = 0.                       # t = 0
-    pos_history[0]   = pos[0]                   # t = 0
+    pos_history[0]   = pos[:, 0]                # t = 0
     vel_history[0]   = vel[:, 0]                # t = -0.5
     mag_history[0]   = Bp                       # t = -0.5 (since it is evaluated only during velocity push)
 
@@ -183,11 +219,11 @@ def run_instance(max_rev=1000, v_mag=1.0, pitch=45.0):
         t_total += DT
         
         # Update values: Velocity first, then position
-        Bp = velocity_update(pos, vel, DT)
-        position_update(pos, vel, DT)
+        vel, Bp = velocity_update(pos, vel, DT)
+        pos = position_update(pos, vel, DT)
         
         time[         tt] = t_total
-        pos_history[  tt] = pos[0]
+        pos_history[  tt] = pos[:, 0]
         vel_history[  tt] = vel[:, 0]
         mag_history[  tt] = Bp
 
@@ -199,10 +235,14 @@ def call_and_plot():
     Diagnostic code to call the particle pushing part of the hybrid and check
     that its solving ok. Runs with zero background E field and B field defined
     by the constant background field specified in the parameter script.
+    
+    Note that "gyroperiods" are defined using the boundary magnetic field and not
+    the equatorial one, since we want the shortest gyroperiod (i.e. highest field)
+    to be resolved. Hence gymotion will be slower at the equator.
     '''
-    max_rev = 761           # Total simulation length in gyroperiods (bounce period ~761: 117.81s for v_mag = 1, pitch=45)
-    v_mag   = 20.0           # Particle velocity magnitude
-    pitch   = 75.0          # Particle pitch angle
+    max_rev = 34           # Total simulation length in gyroperiods (bounce period ~761: 117.81s for v_mag = 1, pitch=45)
+    v_mag   = 20.0          # Particle velocity magnitude
+    pitch   = 50.0          # Particle pitch angle
     
     # Call main function (split into two lines because its a long boi)
     init_pos, init_vel, time, pos_history,   \
@@ -214,6 +254,7 @@ def call_and_plot():
     init_KE    = 0.5 * mp * init_vel ** 2
     init_pitch = np.arctan(init_vperp / init_vpara) * 180. / np.pi
     init_mu    = 0.5 * mp * init_vperp ** 2 / B_eq
+    init_rad   = np.sqrt(init_pos[1] ** 2 + init_pos[2] ** 2)
     
     vel_perp      = np.sqrt(vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
     vel_para      = vel_history[:, 0]
@@ -231,19 +272,36 @@ def call_and_plot():
     # Calculate first adiabatic invariant (magnetic moment, mu)
     mu         = KE_perp / B_magnitude
     mu_percent = (mu.max() - mu.min()) / init_mu * 100.
-
+    mu_abs     = (mu.max() - mu.min())*1e10
+    
     #############################################################################
     ## Each one of these sections produces a plot. Turn them on/off by setting ##
     ## as either True/False                                                    ##
     #############################################################################
         
+    if False:
+        # Plot 3D trajectory (This is just a check of the 1D approximation, since everything
+        # can be more or less exact here. Yay for not needing gridpoints)
+        fig = plt.figure()
+        ax  = fig.add_subplot(111, projection='3d')
+        
+        #ax.plot(pos_history[:, 0]*1e-3, pos_history[:, 1]*1e-3, pos_history[:, 2]*1e-3, marker='o')
+        im = ax.scatter(pos_history[:, 0]*1e-3, pos_history[:, 1]*1e-3, pos_history[:, 2]*1e-3, c=time)
+        plt.colorbar(im).set_label('Time (s)', rotation=0, labelpad=20)
+        
+        plt.title(r'Single Trapped Particle :: 3D Position (exact soln) :: Max $\delta \mu = $%6.4f%% :: |v| = %4.1f$v_A$ :: $\alpha$ = %4.1f' % (mu_percent, v_mag, pitch))
+        
+        ax.set_xlabel('x (km)')
+        ax.set_ylabel('y (km)')
+        ax.set_zlabel('z (km)')
+    
     if True:
         # Basic 4 timeseries plot with mu, v_perp, position, and |B| at the particle position
         fig, axes = plt.subplots(4, sharex=True)
         
         axes[0].plot(time, mu*1e10, label='$\mu(t_v)$', lw=0.5, c='k')
         
-        axes[0].set_title(r'First Invariant $\mu$ for single trapped particle :: DT = %7.5fs :: Max $\delta \mu = $%6.4f%%' % (DT, mu_percent))
+        axes[0].set_title(r'First Invariant $\mu$ for single trapped particle :: 3D pusher (exact soln) :: Max $\delta \mu = $%6.4f%% :: |v| = %4.1f$v_A$ :: $\alpha$ = %4.1f' % (mu_abs, v_mag, pitch))
         axes[0].set_ylabel('$\mu$\n$(\\times 10^{-10})$', rotation=0, labelpad=30)
         axes[0].get_yaxis().get_major_formatter().set_useOffset(False)
         axes[0].axhline(init_mu*1e10, c='k', ls=':')
@@ -251,12 +309,20 @@ def call_and_plot():
         axes[1].plot(time, vel_perp*1e-3, lw=0.5, c='k')
         axes[1].set_ylabel('$v_\perp$\n(km/s)', rotation=0, labelpad=20)
         
-        axes[2].plot(time, pos_history*1e-3, lw=0.5, c='k')
-        axes[2].set_ylabel('$x$\n(km)', rotation=0, labelpad=20)
+        axes[2].plot(time, pos_history[:, 0]*1e-3, lw=0.5, c='k', label='x')
+        axes[2].plot(time, pos_history[:, 1]*1e-3, lw=0.5, c='b', label='y')
+        axes[2].plot(time, pos_history[:, 2]*1e-3, lw=0.5, c='r', label='z')
+        axes[2].set_ylabel('$Position$\n(km)', rotation=0, labelpad=20)
         axes[2].axhline(0, c='k', ls=':')
+        axes[2].axhline(xmin*1e-3, c='k', ls=':')
+        axes[2].axhline(xmax*1e-3, c='k', ls=':')
+        axes[2].legend(loc='lower right')
 
-        axes[3].plot(time, B_magnitude*1e9, lw=0.5, c='k')
-        axes[3].set_ylabel('$|B|(t_v)$\n(nT)', rotation=0, labelpad=20)
+        axes[3].plot(time, mag_history[:, 0]*1e9, lw=0.5, c='k', label='$B_{0x}$')
+        axes[3].plot(time, mag_history[:, 1]*1e9, lw=0.5, c='b', label='$B_{0y}$')
+        axes[3].plot(time, mag_history[:, 2]*1e9, lw=0.5, c='r', label='$B_{0z}$')
+        axes[3].set_ylabel('$B$\n(nT)', rotation=0, labelpad=20)
+        axes[3].legend(loc='lower right')
 
         axes[3].set_xlabel('Time (s)')
         axes[3].set_xlim(0, time[-1])
@@ -288,14 +354,59 @@ def call_and_plot():
         axes[1].set_xlim(0, time[-1])
             
     if False:
-        ## Plot gyromotion of particle vx vs. vy ##
+        ## Plot gyromotion of particle vy vs. vz ##
         ## Only really handles up to a few thousand gyroperiods, thanks matplotlib
-        plt.title('Particle gyromotion: {} gyroperiods ({:.1f}s)'.format(max_rev, max_t))
-        plt.scatter(vel_history[:, 1], vel_history[:, 2], c=time, s=50)
-        plt.colorbar().set_label('Time (s)')
+        plt.figure()
+        plt.title('Particle gyromotion :: Velocity :: {} gyroperiods ({:.1f}s)'.format(max_rev, max_t))
+        plt.scatter(vel_history[:, 1]*1e-3, vel_history[:, 2]*1e-3, c='b', s=20)
+                
+        testCircle = Circle((0, 0), radius=init_vperp*1e-3, color='k', ls=':', fill=False)
+        plt.gca().add_artist(testCircle)
+        
         plt.ylabel('vy (km/s)')
         plt.xlabel('vz (km/s)')
         plt.axis('equal')
+        
+        plt.figure()
+        vel_rad = np.sqrt(vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
+        plt.title('Particle gyromotion ERROR :: Velocity :: {} gyroperiods ({:.1f}s)'.format(max_rev, max_t))
+        plt.plot(time, (init_vperp - vel_rad)/init_vperp, c='k') 
+        plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
+        plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
+        plt.ylabel('$(v_{\perp, 0} - v_{\perp, t})/v_{\perp, 0}$')
+        plt.xlabel('Time (s)')
+        
+        
+        
+    if False:
+        ## Plot gyromotion of particle y vs. z ##
+        ## Only really handles up to a few thousand gyroperiods, thanks matplotlib
+        v_perp_analytic = np.sqrt(2 * init_mu * mag_history[:, 0] / mp)
+        radial_analytic = mp * v_perp_analytic / (q * mag_history[:, 0])
+        pos_rad         = np.sqrt(pos_history[:, 1] ** 2 + pos_history[:, 2] ** 2)
+        rad_error       = radial_analytic - pos_rad
+# =============================================================================
+#         plt.figure()
+#         plt.title('Particle gyromotion :: Position :: {} gyroperiods ({:.1f}s)'.format(max_rev, max_t))
+#         plt.scatter(pos_history[:, 1]*1e-3, pos_history[:, 2]*1e-3, c='b', s=20)
+#         
+#         testCircle = Circle((0, 0), radius=init_rad*1e-3, color='k', ls=':', fill=False)
+#         plt.gca().add_artist(testCircle)
+#         
+#         plt.ylabel('y (km)')
+#         plt.xlabel('z (km)')
+#         plt.axis('equal')
+# =============================================================================
+        
+        plt.figure()
+        
+        plt.title('Particle gyromotion ERROR :: Position :: {} gyroperiods ({:.1f}s)'.format(max_rev, max_t))
+        #plt.plot(time, (init_rad - pos_rad)/init_rad, c='k')   
+        plt.plot(time, rad_error, c='k')
+        plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
+        plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
+        plt.ylabel('$(r_0 - r_t)$')
+        plt.xlabel('Time (s)')
         
     if False:
         ## Plot parallel and perpendicular kinetic energies/velocities vs. time
