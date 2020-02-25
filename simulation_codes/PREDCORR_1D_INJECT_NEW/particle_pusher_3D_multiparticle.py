@@ -604,8 +604,11 @@ def call_and_plot():
         # Tests if quantities are conserved vs. position in the bottle
         fig, ax = plt.subplots(1)
         ax.set_title(r'Velocity vs. Space: v0 = [%4.1f, %4.1f, %4.1f]$v_{A,eq}^{-1}$ : %d gyroperiods (%5.2fs)' % (init_vel[0, 0], init_vel[1, 0], init_vel[2, 0], max_rev, max_t))
-        ax.plot(pos_history*1e-3, vel_history[:, 0]*1e-3, c='b', label=r'$v_\parallel$')
-        ax.plot(pos_history*1e-3, vel_perp,               c='r', label=r'$v_\perp$')
+        
+        for idx, lbl, mk in zip([0, 1], ['1D', '3D'], ['x', 'o']):
+            ax.scatter(pos_history*1e-3, vel_history[:, 0]*1e-3, c='b', label=r'$v_\parallel$')
+            ax.scatter(pos_history*1e-3, vel_perp,               c='r', label=r'$v_\perp$')
+        
         ax.set_xlabel('x (km)')
         ax.set_ylabel('v (km/s)')
         ax.set_xlim(xmin*1e-3, xmax*1e-3)
