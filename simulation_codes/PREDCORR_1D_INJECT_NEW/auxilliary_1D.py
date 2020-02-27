@@ -10,7 +10,7 @@ import numpy as np
 import particles_1D as particles
 import fields_1D as fields
 
-from simulation_parameters_1D import dx, mu0, NC, qm_ratios, orbit_res, freq_res, \
+from simulation_parameters_1D import dx, mu0, NC, qm_ratios, freq_res, \
                                      account_for_dispersion, dispersion_allowance
 
 
@@ -74,7 +74,7 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
 
 
 @nb.njit()
-def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
+def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, \
                      qq, DT, max_inc, part_save_iter, field_save_iter, idx):
     '''
     Evaluates all the things that could cause a violation of the timestep:
@@ -95,12 +95,9 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
     criteria is higher in order to provide a little hysteresis and prevent constantly switching
     timesteps.
     '''
-    interpolate_edges_to_center(B, B_cent)
-    B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
-
-    dispfreq        = ((np.pi / dx) ** 2) * (B_tot / (mu0 * q_dens)).max()           # Dispersion frequency
-    gyfreq          = qm_ratios.max()  * np.abs(B_tot).max() / (2 * np.pi)      
-    ion_ts          = orbit_res * 1./gyfreq
+    B_magnitude     = np.sqrt(B[:, 0] ** 2 + B[:, 1] ** 2 + B[:, 2] ** 2)
+    gyfreq          = qm_ratios.max() * B_magnitude.max()     
+    ion_ts          = freq_res / gyfreq
     
     if E[:, 0].max() != 0:
         elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / vel.max()).max())               # Electron acceleration "frequency"
@@ -109,11 +106,16 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
         Eacc_ts = ion_ts
     
     if account_for_dispersion == True:
+        interpolate_edges_to_center(B, B_center)
+        B_tot           = np.sqrt(B_center[:, 0] ** 2 + B_center[:, 1] ** 2 + B_center[:, 2] ** 2)
+    
+        dispfreq        = ((np.pi / dx) ** 2) * (B_tot / (mu0 * q_dens)).max()           # Dispersion frequency
+
         disp_ts     = dispersion_allowance * freq_res / dispfreq     # Making this a little bigger so it doesn't wreck everything
     else:
         disp_ts     = ion_ts
 
-    vel_ts          = 0.80 * dx / np.abs(vel[0, :]).max()                          # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
+    vel_ts          = 0.60 * dx / np.abs(vel[0, :]).max()                        # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
     DT_part         = min(Eacc_ts, vel_ts, ion_ts, disp_ts)                      # Smallest of the allowable timesteps
     
     if DT_part < 0.9*DT:

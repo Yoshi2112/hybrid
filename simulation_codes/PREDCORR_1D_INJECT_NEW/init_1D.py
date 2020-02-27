@@ -96,7 +96,6 @@ def initialize_particles():
     W_mag      = np.zeros((3, N), dtype=np.float64)
     
     assign_weighting_TSC(pos, Ie, W_elec)
-    assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
     return pos, vel, Ie, W_elec, Ib, W_mag, idx
 
 
@@ -221,9 +220,7 @@ def set_timestep(vel, E):
            be initial limiting factor. This may change for inhomogenous loading
            of particles or initial fields.
     '''
-    gyfreq   = qm_ratios.max()  * const.B_xmax / (2 * np.pi)
-    gyperiod = (2*np.pi) / gyfreq                     # Gyroperiod within uniform field, initial B0 (s)         
-    ion_ts   = const.orbit_res * gyperiod             # Timestep to resolve gyromotion
+    ion_ts   = freq_res / const.gyfreq                # Timestep to resolve gyromotion
     vel_ts   = 0.5 * const.dx / np.max(vel[0, :])     # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
 
     if E[:, 0].max() != 0:
@@ -232,6 +229,7 @@ def set_timestep(vel, E):
     else:
         Eacc_ts = ion_ts
 
+    gyperiod = 2 * np.pi / const.gyfreq
     DT       = min(ion_ts, vel_ts, Eacc_ts)
     max_time = const.max_rev * gyperiod               # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1                 # Total number of time steps

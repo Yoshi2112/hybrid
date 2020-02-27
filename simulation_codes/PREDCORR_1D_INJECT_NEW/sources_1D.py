@@ -5,8 +5,8 @@ Created on Fri Sep 22 17:55:15 2017
 @author: iarey
 """
 import numba as nb
+from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, q, ne, min_dens
 
-from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, smooth_sources, q, ne, min_dens
 
 @nb.njit()
 def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
@@ -50,10 +50,17 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D, mirror=Tru
         idx    -- Particle species identifier
         
     OUTPUT:
-        rho_c  -- Charge  density
+        q_dens -- Charge  density
         Ji     -- Current density
         
-    Source terms in damping region set to be equal to last valid cell value
+    TERTIARY:
+        ni
+        nu
+        temp1D
+        
+    Source terms in damping region set to be equal to last valid cell value. 
+    Smoothing routines deleted (can be found in earlier versions) since TSC 
+    weighting effectively also performs smoothing.
     '''
     q_dens *= 0.
     Ji     *= 0.
@@ -61,13 +68,6 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D, mirror=Tru
     nu     *= 0.
 
     deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu)
-
-    if smooth_sources == 1:
-        for jj in range(Nj):
-            smooth(ni[:, jj], temp1D)
-            
-            for kk in range(3):
-                smooth(nu[:,  jj, kk], temp1D)
 
     for jj in range(Nj):
         q_dens  += ni[:, jj] * n_contr[jj] * charge[jj]
@@ -97,30 +97,4 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D, mirror=Tru
     for ii in range(q_dens.shape[0]):
         if q_dens[ii] < min_dens * ne * q:
             q_dens[ii] = min_dens * ne * q
-    return
-
-
-@nb.njit()
-def smooth(arr, temp1D):
-    '''Smoothing function: Applies Gaussian smoothing routine across adjacent cells. 
-    Assummes no contribution from ghost cells. Designed for source terms.
-    
-    HOW TO DEAL WITH OPEN BOUNDARIES? If smoothed before damping regions filled, 
-    then they'll be overwritten anyway (and there will be a loss of source from
-    the boundaries). Leaving the boundaries unchanged should be fine.
-    
-    Some weird stuff going on with memory management: Does it create a new numpy array
-    or not? Or new numpy instance pointing to same memory locations? Passing
-    slices as function arguments seems weird. But the function works, it just might not be efficient.
-    '''
-    nc      = arr.shape[0]
-    temp1D *= 0
-             
-    for ii in nb.prange(1, nc - 1):
-        temp1D[ii - 1] += 0.25*arr[ii]
-        temp1D[ii]     += 0.50*arr[ii]
-        temp1D[ii + 1] += 0.25*arr[ii]
-    
-    # Output smoothed array
-    arr[:] = temp1D[:]
     return

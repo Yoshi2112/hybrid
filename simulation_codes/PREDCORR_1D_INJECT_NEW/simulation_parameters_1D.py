@@ -8,7 +8,7 @@ import numpy as np
 import sys
 
 ### RUN DESCRIPTION ###
-run_description = '''Testing to see if I can get this open boundary thing to work'''
+run_description = '''Testing to see if I can get this open boundary and non-homogenous field thing to work'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
@@ -19,6 +19,7 @@ save_fields     = 1                             # Save plot flag    : To ensure 
 seed            = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin       = [(2*run_num)%8, (2*run_num + 1)%8]      # Set CPU affinity for run. Must be list. Auto-assign: None.
 supress_text    = False
+
 
 ### PHYSICAL CONSTANTS ###
 q      = 1.602177e-19                       # Elementary charge (C)
@@ -33,8 +34,8 @@ B_surf = 3.12e-5                            # Magnetic field strength at Earth s
 
 
 ### SIMULATION PARAMETERS ###
-NX        = 512                             # Number of cells - doesn't include ghost cells
-ND        = 128                             # Damping region length: Multiple of NX (on each side of simulation domain)
+NX        = 128                             # Number of cells - doesn't include ghost cells
+ND        = 32                              # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev   = 10000                           # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 r_damp    = 0.0129                          # Damping strength
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
@@ -44,8 +45,7 @@ ie        = 1                               # Adiabatic electrons. 0: off (const
 B_eq      = 200e-9                          # Initial magnetic field at equator: None for L-determined value (in T)
 rc_hwidth = 16                              # Ring current half-width in number of cells (2*hwidth gives equatorial extent of RC) 
 
-orbit_res = 0.10                            # Particle orbit resolution: Fraction of gyroperiod in seconds
-freq_res  = 0.02                            # Frequency resolution     : Fraction of inverse radian cyclotron frequency
+freq_res  = 0.02                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
 part_res  = 0.20                            # Data capture resolution in gyroperiod fraction: Particle information
 field_res = 0.10                            # Data capture resolution in gyroperiod fraction: Field information
 
@@ -64,16 +64,12 @@ density    = np.array([195., 5.]) * 1e6                     # Species density in
 E_per      = np.array([5.0, 30000.])
 anisotropy = np.array([0.0, 4.0])
 
-smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
 E_e            = 200.0                                      # Electron energy (eV)
 
+# This will be fixed by subcycling later on
 account_for_dispersion = False                              # Flag (True/False) whether or not to reduce timestep to prevent dispersion getting too high
 dispersion_allowance   = 1.                                 # Multiple of how much past frac*wD^-1 is allowed: Used to stop dispersion from slowing down sim too much  
-adaptive_timestep      = True                               # Flag (True/False) for adaptive timestep based on particle and field parameters
-
-HM_amplitude   = 0e-9                                       # Driven wave amplitude in T
-HM_frequency   = 0.02                                       # Driven wave in Hz
 
 
 #%%### DERIVED SIMULATION PARAMETERS
@@ -128,9 +124,7 @@ a           = (B_xmax / B_eq - 1) / xmax ** 2            # Parabolic scale facto
 
 Bc          = np.zeros((NC + 1, 3), dtype=np.float64)    # Constant components of magnetic field based on theta and B0
 Bc[:, 0]    = B_eq * (1 + a * B_nodes**2)                # Set constant Bx
-
-# Set B0 in damping cells (same as last spatial cell)
-Bc[:ND]      = Bc[ND]
+Bc[:ND]      = Bc[ND]                                    # Set B0 in damping cells (same as last spatial cell)
 Bc[ND+NX+1:] = Bc[ND+NX]
 
 # Freqs based on highest magnetic field value (at simulation boundaries)
@@ -143,12 +137,6 @@ loss_cone = np.arcsin(np.sqrt(B_eq / B_xmax))*180 / np.pi
 
 
 
-#%%
-#%%
-#%%
-#%%
-#%%
-#%%
 #%%### INPUT TESTS AND CHECKS
 if supress_text == False:
     print('Run Started')

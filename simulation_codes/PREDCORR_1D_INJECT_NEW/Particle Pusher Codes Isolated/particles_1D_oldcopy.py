@@ -18,7 +18,8 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
                                   B, E, DT, q_dens_adv, Ji, ni, nu, temp1D, pc=0):
     '''
     Helper function to group the particle advance and moment collection functions
-    '''
+    ''' 
+    assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT)
     position_update(pos, vel, DT, Ie, W_elec)  
     collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, ni, nu, temp1D)
@@ -67,21 +68,94 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
 
 
 @nb.njit()
-def eval_B0_particle(x, Bp):
+def eval_B0_particle(x, v, qmi, b1):
     '''
-    Calculates the B0 magnetic field at the position of a particle. B0x is
-    non-uniform in space, and B0r (split into y,z components) is the required
-    value to keep div(B) = 0
+    Calculates the B0 magnetic field at the position of a particle. Neglects B0_r
+    and thus local cyclotron depends only on B0_x. Includes b1 in cyclotron, but
+    since b1 < B0_r, maybe don't?
     
-    These values are added onto the existing value of B at the particle location,
-    Bp. B0x is simply equated since we never expect a non-zero wave field in x.
+    Also, how accurate is this near the equator?
     '''
-    rL     = np.sqrt(x[1]**2 + x[2]**2)
-    B0_r   = - a * B_eq * x[0] * rL
-    Bp[0]  = eval_B0x(x)   
-    Bp[1] += B0_r * x[1] / rL
-    Bp[2] += B0_r * x[2] / rL
-    return
+    B0_xp    = np.zeros(3)
+    B0_xp[0] = eval_B0x(x)    
+    
+    b1t      = np.sqrt(b1[0] ** 2 + b1[1] ** 2 + b1[2] ** 2)
+    l_cyc    = qmi * (B0_xp[0] + b1t)
+    fac      = a * B_eq * x / l_cyc
+    
+    B0_xp[1] =  v[2] * fac
+    B0_xp[2] = -v[1] * fac
+    return B0_xp
+
+@nb.njit()
+def solve_quadratic(AA, BB, CC):
+    '''
+    DIAGNOSTIC FUNCTION
+    Solves quadratic equation: Gives positive and negative solution for
+    - b +/- sqrt(b ** 2 - 4ac) / 2a
+    
+    Only returns negative (of the +/- in quadratic) solution since the positive
+    sign will always give a negative value (due to the signs of a, b, c and the
+    squaring in the coefficients)
+    '''
+    if AA != 0:
+        negative_soln = (- BB - np.sqrt(BB ** 2 - 4*AA*CC)) / (2*AA)
+    else:
+        negative_soln = 0.
+    return negative_soln
+
+
+@nb.njit()
+def eval_B0_exact(x, v, qmi, approx):
+    '''
+    DIAGNOSTIC FUNCTION
+    Solves (maybe?) the exact solution for By,Bz radial (coupled quadratic
+    equations of their squares)
+    
+    Need to code this manually to separate out the two real solutions.
+    
+    The +det term of the quadratic always seems to be nan? Probably some 
+    mathematical reason for this (b < 4ac? Check later)
+    
+    Just return positive results for each for now, but don't assume this will work
+    generally - just for this particle.
+    
+    How to work out if it should be the positive or negative solution 
+    (of the sqrt) taken? Use v_perp cross B?
+    
+    Currently using approximation as guide - not the best solution, but it works
+    '''
+    B0_particle = np.zeros(3)
+    B0_x        = eval_B0x(x)
+    K2          = (a * B_eq * x / qmi) ** 2     # Constant for calculation
+    
+    # Quadratic coefficients of R = By ** 2 :: 4 solutions
+    ay = (v[1] ** 2 + v[2] ** 2) * (-K2)
+    by = - v[2] ** 2 * K2 * B0_x ** 2
+    cy = (v[2] ** 2 * K2) ** 2
+    
+    B0_y = np.sqrt(solve_quadratic(ay, by, cy))
+    
+    # Quadratic coefficients of Q = Bz ** 2 :: 4 solutions
+    az = (v[1] ** 2 + v[2] ** 2) * (-K2)
+    bz = - v[1] ** 2 * K2 * B0_x ** 2
+    cz = (v[1] ** 2 * K2) ** 2
+    
+    B0_z = np.sqrt(solve_quadratic(az, bz, cz))
+    
+    # All three of these will always be positive
+    # Need a way to work out how to set +/- status
+    B0_particle[0] = B0_x
+    B0_particle[1] = B0_y
+    B0_particle[2] = B0_z
+    
+    if approx[1] < 0:
+        B0_particle[1] *= -1.0
+        
+    if approx[2] < 0:
+        B0_particle[2] *= -1.0
+    
+    return B0_particle
 
 
 @nb.njit()
@@ -104,15 +178,10 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     Probably need to do it more algebraically? Find some way to not create those temp arrays.
     Removed the "cross product" and "field interpolation" functions because I'm
     not convinced they helped.
-    
-    4 temp arrays of length 3 used.
     '''
-    assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)                     # Calculate magnetic node weights
-    
     for ii in nb.prange(vel.shape[1]):  
         qmi = 0.5 * dt * qm_ratios[idx[ii]]                                 # Charge-to-mass ration for ion of species idx[ii]
 
-        # These create two new length 3 arrays
         Ep = E[Ie[ii]    , 0:3] * W_elec[0, ii]                             \
            + E[Ie[ii] + 1, 0:3] * W_elec[1, ii]                             \
            + E[Ie[ii] + 2, 0:3] * W_elec[2, ii]                             # Vector E-field at particle location
@@ -123,7 +192,16 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
         
         v_minus    = vel[:, ii] + qmi * Ep                                  # First E-field half-push
         
-        eval_B0_particle(pos[ii], Bp)                                       # Add B0 at particle location
+        Bp[0]  = 0                                                          # No wave b1 exists, removes B due to B-nodes (since they're analytic)
+        B0_xp  = eval_B0_particle(pos[ii], v_minus, qm_ratios[idx[ii]], Bp) # B0 at particle location
+                                                              
+       
+        # DIAGNOSTIC: DELETE (as well as return signature)
+        #B0_exact = eval_B0_exact(pos[ii], v_minus, qm_ratios[idx[ii]], B0_xp)
+        ###
+        
+        # DIAGNOSTIC: Change this back to B0_xp
+        Bp    += B0_xp                                                      # B  at particle location (total)
         
         T = qmi * Bp                                                        # Vector Boris variable
         S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable
@@ -139,7 +217,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
         v_plus[2]  = v_minus[2] + v_prime[0] * S[1] - v_prime[1] * S[0]
         
         vel[:, ii] = v_plus +  qmi * Ep                                     # Second E-field half-push
-    return
+    return Bp, Bp
 
 
 @nb.njit()
