@@ -13,13 +13,13 @@ run_description = '''Testing to see if I can get this open boundary and non-homo
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path       = 'runs//non_uniform_B0_test'   # Series save dir   : Folder containing all runs of a series
-run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+run             = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles  = 1                             # Save data flag    : For later analysis
 save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [(2*run_num)%8, (2*run_num + 1)%8]      # Set CPU affinity for run. Must be list. Auto-assign: None.
-supress_text    = False
-
+cpu_affin       = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run. Must be list. Auto-assign: None.
+supress_text    = False                         # Flag to supress initialization text (usually for diagnostics)
+homogenous      = False                         # Flag to set B0 to homogenous (as test to compare to parabolic)
 
 ### PHYSICAL CONSTANTS ###
 q      = 1.602177e-19                       # Elementary charge (C)
@@ -44,7 +44,7 @@ L         = 5.35                            # Field line L shell
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
 B_eq      = 200e-9                          # Initial magnetic field at equator: None for L-determined value (in T)
 rc_hwidth = 16                              # Ring current half-width in number of cells (2*hwidth gives equatorial extent of RC) 
-
+                                            # Set to 0 to distribute across all space as per cold population
 freq_res  = 0.02                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
 part_res  = 0.20                            # Data capture resolution in gyroperiod fraction: Particle information
 field_res = 0.10                            # Data capture resolution in gyroperiod fraction: Field information
@@ -67,7 +67,7 @@ anisotropy = np.array([0.0, 4.0])
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
 E_e            = 200.0                                      # Electron energy (eV)
 
-# This will be fixed by subcycling later on
+# This will be fixed by subcycling later on, hopefully
 account_for_dispersion = False                              # Flag (True/False) whether or not to reduce timestep to prevent dispersion getting too high
 dispersion_allowance   = 1.                                 # Multiple of how much past frac*wD^-1 is allowed: Used to stop dispersion from slowing down sim too much  
 
@@ -122,8 +122,12 @@ cos_bit     = np.sqrt(3*np.cos(theta_xmax)**2 + 1)       # Intermediate variable
 B_xmax      = (B_surf / (r_xmax ** 3)) * cos_bit         # Magnetic field intensity at boundary
 a           = (B_xmax / B_eq - 1) / xmax ** 2            # Parabolic scale factor: Fitted to B_eq, B_xmax
 
-Bc          = np.zeros((NC + 1, 3), dtype=np.float64)    # Constant components of magnetic field based on theta and B0
-Bc[:, 0]    = B_eq * (1 + a * B_nodes**2)                # Set constant Bx
+if homogenous == True:
+    a      = 0
+    B_xmax = B_eq
+    
+Bc           = np.zeros((NC + 1, 3), dtype=np.float64)   # Constant components of magnetic field based on theta and B0
+Bc[:, 0]     = B_eq * (1 + a * B_nodes**2)               # Set constant Bx
 Bc[:ND]      = Bc[ND]                                    # Set B0 in damping cells (same as last spatial cell)
 Bc[ND+NX+1:] = Bc[ND+NX]
 
@@ -141,7 +145,7 @@ loss_cone = np.arcsin(np.sqrt(B_eq / B_xmax))*180 / np.pi
 if supress_text == False:
     print('Run Started')
     print('Run Series         : {}'.format(save_path.split('//')[-1]))
-    print('Run Number         : {}'.format(run_num))
+    print('Run Number         : {}'.format(run))
     print('Field save flag    : {}'.format(save_fields))
     print('Particle save flag : {}\n'.format(save_particles))
     

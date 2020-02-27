@@ -41,7 +41,10 @@ def uniform_gaussian_distribution_quiet():
         if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
             NC_load = NX
         else:
-            NC_load = 2*rc_hwidth
+            if rc_hwidth == 0:
+                NC_load = NX
+            else:
+                NC_load = 2*rc_hwidth
         
         # Load particles in selected cell range
         acc = 0; offset  = 0
