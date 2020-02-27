@@ -13,7 +13,7 @@ from   sources_1D                import collect_moments
 from fields_1D import eval_B0x
 
 
-@nb.njit()
+#@nb.njit()
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
                                   B, E, DT, q_dens_adv, Ji, ni, nu, temp1D, pc=0):
     '''
@@ -45,7 +45,7 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
     NOTE: The addition of `epsilon' prevents banker's rounding due to precision limits. This
           is the easiest way to get around it.
     '''
-    Np         = pos.shape[0]
+    Np         = pos.shape[1]
     epsil      = 1e-15
     
     if E_nodes == True:
@@ -56,7 +56,7 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
     particle_transform = xmax + (ND - grid_offset)*dx  + epsil  # Offset to account for E/B grid and damping nodes
     
     for ii in np.arange(Np):
-        xp          = (pos[ii] + particle_transform) / dx       # Shift particle position >= 0
+        xp          = (pos[0, ii] + particle_transform) / dx    # Shift particle position >= 0
         I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node
         delta_left  = I[ii] - xp                                # Distance from left node in grid units
     
@@ -65,8 +65,8 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
         W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
     return
 
-
-@nb.njit()
+import pdb
+#@nb.njit()
 def eval_B0_particle(x, Bp):
     '''
     Calculates the B0 magnetic field at the position of a particle. B0x is
@@ -77,14 +77,18 @@ def eval_B0_particle(x, Bp):
     Bp. B0x is simply equated since we never expect a non-zero wave field in x.
     '''
     rL     = np.sqrt(x[1]**2 + x[2]**2)
+    
+    if rL == 0:
+        pdb.set_trace()
+    
     B0_r   = - a * B_eq * x[0] * rL
-    Bp[0]  = eval_B0x(x)   
+    Bp[0]  = eval_B0x(x[0])   
     Bp[1] += B0_r * x[1] / rL
     Bp[2] += B0_r * x[2] / rL
     return
 
 
-@nb.njit()
+#@nb.njit()
 def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     '''
     updates velocities using a Boris particle pusher.
@@ -123,7 +127,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
         
         v_minus    = vel[:, ii] + qmi * Ep                                  # First E-field half-push
         
-        eval_B0_particle(pos[ii], Bp)                                       # Add B0 at particle location
+        eval_B0_particle(pos[:, ii], Bp)                                    # Add B0 at particle location
         
         T = qmi * Bp                                                        # Vector Boris variable
         S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable
@@ -157,12 +161,12 @@ def position_update(pos, vel, dt, Ie, W_elec, diag=False):
         
     Reflective boundaries to simulate the "open ends" that would have flux coming in from the ionosphere side.
     '''
-    for ii in nb.prange(pos.shape[0]):
-        pos[ii] += vel[0, ii] * dt
+    for ii in nb.prange(pos.shape[1]):
+        pos[0, ii] += vel[0, ii] * dt
 
-        if (pos[ii] <= xmin or pos[ii] >= xmax):
+        if (pos[0, ii] <= xmin or pos[0, ii] >= xmax):
             vel[0, ii] *= -1.                   # Reflect velocity
-            pos[ii]    += vel[0, ii] * dt       # Get particle back in simulation space
+            pos[0, ii] += vel[0, ii] * dt       # Get particle back in simulation space
                 
     assign_weighting_TSC(pos, Ie, W_elec)
     return

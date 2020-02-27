@@ -23,7 +23,7 @@ def manage_directories():
             os.makedirs('%s/%s' % (drive, save_path))                        # Create master test series directory
             print('Master directory created')
 
-        path = ('%s/%s/run_%d' % (drive, save_path, const.run_num))          # Set root run path (for images)
+        path = ('%s/%s/run_%d' % (drive, save_path, const.run))          # Set root run path (for images)
 
         if os.path.exists(path) == False:
             os.makedirs(path)
@@ -35,14 +35,14 @@ def manage_directories():
                 rmtree(path)
                 os.makedirs(path)
             elif overwrite_flag.lower() == 'n':
-                sys.exit('Program Terminated: Change run_num in simulation_parameters_1D')
+                sys.exit('Program Terminated: Change run in simulation_parameters_1D')
             else:
                 sys.exit('Unfamiliar input: Run terminated for safety')
     return
 
 
 def store_run_parameters(dt, part_save_iter, field_save_iter):
-    d_path = ('%s/%s/run_%d/data/' % (drive, save_path, const.run_num))    # Set path for data
+    d_path = ('%s/%s/run_%d/data/' % (drive, save_path, const.run))    # Set path for data
     f_path = d_path + '/fields/'
     p_path = d_path + '/particles/'
     
@@ -111,7 +111,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
 
 
 def save_field_data(sim_time, dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns):
-    d_path   = '%s/%s/run_%d/data/fields/' % (drive, save_path, const.run_num)
+    d_path   = '%s/%s/run_%d/data/fields/' % (drive, save_path, const.run)
     r        = qq / field_save_iter
 
     d_fullpath = d_path + 'data%05d' % r
@@ -122,7 +122,7 @@ def save_field_data(sim_time, dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns):
     
     
 def save_particle_data(sim_time, dt, part_save_iter, qq, pos, vel):
-    d_path   = '%s/%s/run_%d/data/particles/' % (drive, save_path, const.run_num)
+    d_path   = '%s/%s/run_%d/data/particles/' % (drive, save_path, const.run)
     r        = qq / part_save_iter
 
     d_fullpath = d_path + 'data%05d' % r

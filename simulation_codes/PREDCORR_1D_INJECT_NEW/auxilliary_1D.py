@@ -73,7 +73,7 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
     return
 
 
-@nb.njit()
+#@nb.njit()
 def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, \
                      qq, DT, max_inc, part_save_iter, field_save_iter, idx):
     '''
@@ -148,7 +148,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, \
     return qq, DT, max_inc, part_save_iter, field_save_iter
 
 
-@nb.njit()
+#@nb.njit()
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
               Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,\
@@ -189,10 +189,10 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     ###################################
 
     # Store old values
-    old_particles[0  , :] = pos
-    old_particles[1:4, :] = vel
-    old_particles[4  , :] = Ie
-    old_particles[5:8, :] = W_elec
+    old_particles[0:3 , :] = pos
+    old_particles[3:6 , :] = vel
+    old_particles[6   , :] = Ie
+    old_particles[7:10, :] = W_elec
     
     old_fields[:,   0:3]  = B
     old_fields[:NC, 3:6]  = Ji
@@ -219,10 +219,10 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     E_int *= 0.5;    E_int += 0.5 * E_half
 
     # Restore old values: [:] allows reference to same memory (instead of creating new, local instance)
-    pos[:]    = old_particles[0  , :]
-    vel[:]    = old_particles[1:4, :]
-    Ie[:]     = old_particles[4  , :]
-    W_elec[:] = old_particles[5:8, :]
+    pos[:]    = old_particles[0:3 , :]
+    vel[:]    = old_particles[3:6 , :]
+    Ie[:]     = old_particles[6   , :]
+    W_elec[:] = old_particles[7:10, :]
     B[:]      = old_fields[:,   0:3]
     Ji[:]     = old_fields[:NC, 3:6]
     Ve[:]     = old_fields[:NC, 6:9]
