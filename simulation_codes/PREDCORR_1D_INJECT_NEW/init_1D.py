@@ -12,8 +12,8 @@ import save_routines as save
 from particles_1D             import assign_weighting_TSC
 from fields_1D                import eval_B0x
 
-from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, N_species,       \
-                                     idx_start, idx_end, seed, Tpar, Tper, mass, drift_v, \
+from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, N_species, B_eq,  \
+                                     idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
                                      r_damp, Bc, qm_ratios, freq_res, rc_hwidth, temp_type
 
 
@@ -83,11 +83,20 @@ def uniform_gaussian_distribution_quiet():
                 
             acc                     += half_n * 2
             
+        # Recast v_perp accounting for local magnetic field and
         # Set Larmor radius (y,z positions) for all particles
+        # Put check in for rL == 0 and/or v_perp == 0?
+        # Still gotta check this. Also check distributions with a plot.
         for kk in range(N_species[jj]):
             B0x             = eval_B0x(pos[0, st + kk])
             v_perp          = np.sqrt(vel[1, kk] ** 2 + vel[2, kk] ** 2)
-            pos[1, st + kk] = v_perp / (qm_ratios[jj] * B0x)
+            theta           = np.arctan2(vel[2, kk], vel[1, kk])
+            v_perp_new      = B0x / B_eq * v_perp
+            
+            vel[1, kk] = v_perp_new * np.sin(theta)
+            vel[2, kk] = v_perp_new * np.cos(theta)
+            
+            pos[1, st + kk] = v_perp_new / (qm_ratios[jj] * B0x)
             
     return pos, vel, idx
 
