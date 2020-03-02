@@ -4,10 +4,12 @@ Created on Fri Sep 22 17:27:33 2017
 
 @author: iarey
 """
+import pdb
 import numba as nb
 import numpy as np
 import simulation_parameters_1D as const
 import save_routines as save
+import diagnostics as diag
 
 from particles_1D             import assign_weighting_TSC
 from fields_1D                import eval_B0x
@@ -34,6 +36,13 @@ def uniform_gaussian_distribution_quiet():
     throughout the simulation, and not drift with time.
     
     CHECK THIS LATER: BUT ITS ONLY AN INITIAL CONDITION SO IT SHOULD BE OK FOR NOW
+    
+    Verified :: Velocity Gyrophase conserved with transformation from uniform to position-based distribution 
+    
+    TO DO: Have option to not initialize particles into the loss cone. Since they're initialized at the equator
+    and then their velocities "moved" to their position, limiting the velocity distribution to only pitch angles
+    above alpha_loss should be fine. Although I'd probably need to find a way to initialize via a pitch angle 
+    distribution (e.g. like Winske)
     '''
     pos = np.zeros((3, N), dtype=np.float64)
     vel = np.zeros((3, N), dtype=np.float64)
@@ -83,21 +92,20 @@ def uniform_gaussian_distribution_quiet():
                 
             acc                     += half_n * 2
             
-        # Recast v_perp accounting for local magnetic field and
-        # Set Larmor radius (y,z positions) for all particles
-        # Put check in for rL == 0 and/or v_perp == 0?
-        # Still gotta check this. Also check distributions with a plot.
-        for kk in range(N_species[jj]):
-            B0x             = eval_B0x(pos[0, st + kk])
-            v_perp          = np.sqrt(vel[1, kk] ** 2 + vel[2, kk] ** 2)
-            theta           = np.arctan2(vel[2, kk], vel[1, kk])
-            v_perp_new      = B0x / B_eq * v_perp
+    # Recast v_perp accounting for local magnetic field and
+    # Set Larmor radius (y,z positions) for all particles
+    # Can set a flag for this later
+    if True:
+        B0x = np.zeros(N, dtype=np.float64)
+        for kk in range(N):
+            B0x[kk] = eval_B0x(pos[0, kk])
             
-            vel[1, kk] = v_perp_new * np.sin(theta)
-            vel[2, kk] = v_perp_new * np.cos(theta)
-            
-            pos[1, st + kk] = v_perp_new / (qm_ratios[jj] * B0x)
-            
+        theta      = np.arctan2(vel[2], vel[1])
+        v_perp     = np.sqrt(vel[1] ** 2 + vel[2] ** 2)
+        v_perp_new = B0x / B_eq * v_perp
+        vel[1]     = v_perp_new * np.cos(theta)
+        vel[2]     = v_perp_new * np.sin(theta)
+        pos[1]     = v_perp_new / (qm_ratios[jj] * B0x)
     return pos, vel, idx
 
 
@@ -283,3 +291,65 @@ def set_timestep(vel, E):
 
 if __name__ == '__main__':
     POS, VEL, IDX = uniform_gaussian_distribution_quiet()
+    
+    #v_perp = np.sqrt(VEL[1] ** 2 + VEL[2] ** 2)
+    #rL     = np.sqrt(POS[1] ** 2 + VEL[2] ** 2)
+    
+    import matplotlib.pyplot as plt
+    
+    if False:
+        for jj in range(const.Nj):
+            plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+                        rL[const.idx_start[jj]:idx_end[jj]],
+                        c=const.temp_color[jj],
+                        label=const.species_lbl[jj])
+        plt.legend()
+        plt.title('Larmor radius with position')
+        
+    if False:
+        for jj in range(const.Nj):
+            plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+                        v_perp[const.idx_start[jj]:idx_end[jj]],
+                        c=const.temp_color[jj],
+                        label=const.species_lbl[jj])
+        plt.legend()
+        plt.title('v_perp with position')
+        
+    if False:
+        jj = 1
+        v_perp_old = np.sqrt(IDX[1] ** 2 + IDX[2] ** 2)
+        plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+                    v_perp[const.idx_start[jj]:idx_end[jj]],
+                    c='r',
+                    label=const.species_lbl[jj])
+        
+        plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+                    v_perp_old[const.idx_start[jj]:idx_end[jj]],
+                    c='k',
+                    label=const.species_lbl[jj])
+        
+        plt.legend()
+        plt.title('v_perp with position: Initial (Black) and adjusted for position (Red)')
+    
+    
+    if False:
+        jj = 1
+        plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+                    np.log10(VEL[const.idx_start[jj]:idx_end[jj]]),
+                    c='k',
+                    label='$v_\perp/v_\parallel$ old',
+                    marker='o', s=1)
+        
+        plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+                    np.log10(IDX[const.idx_start[jj]:idx_end[jj]]),
+                    c='r',
+                    label='$v_\perp/v_\parallel$ new',
+                    marker='x', s=1)
+        
+        plt.ylim(-2, 6)
+        plt.legend()
+        plt.title('perp/parallel velocity ratios before/after transformation')
+
+    
+    #diag.check_cell_velocity_distribution(POS, VEL, j=1, node_number=0)
+    #diag.check_position_distribution(POS)

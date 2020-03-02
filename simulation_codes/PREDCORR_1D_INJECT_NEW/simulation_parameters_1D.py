@@ -43,7 +43,7 @@ L         = 5.35                            # Field line L shell
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
 B_eq      = 200e-9                          # Initial magnetic field at equator: None for L-determined value (in T)
-rc_hwidth = 16                              # Ring current half-width in number of cells (2*hwidth gives equatorial extent of RC) 
+rc_hwidth = 0                               # Ring current half-width in number of cells (2*hwidth gives equatorial extent of RC) 
                                             # Set to 0 to distribute across all space as per cold population
 freq_res  = 0.02                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
 part_res  = 0.20                            # Data capture resolution in gyroperiod fraction: Particle information
@@ -55,7 +55,7 @@ species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/label
 temp_color = ['blue', 'red']
 temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
 dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.array([100, 500])                         # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+nsp_ppc    = np.array([1000, 5000])                         # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
@@ -101,10 +101,16 @@ n_contr    = density / nsp_ppc                           # Species density contr
 # Number of sim particles for each species, total
 N_species  = np.zeros(Nj, dtype=np.int64)
 for jj in range(Nj):
-    if temp_type[jj] == 0:                               # Cold species in every cell NX 
-        N_species[jj] = nsp_ppc[jj] * NX + 2                 
+    # Cold species in every cell NX 
+    if temp_type[jj] == 0:                               
+        N_species[jj] = nsp_ppc[jj] * NX + 2   
+        
+    # Warm species only in simulation center, unless rc_hwidth = 0 (disabled)           
     elif temp_type[jj] == 1:
-        N_species[jj] = nsp_ppc[jj] * 2*rc_hwidth + 2    # Warm species only in simulation center
+        if rc_hwidth == 0:
+            N_species[jj] = nsp_ppc[jj] * NX + 2
+        else:
+            N_species[jj] = nsp_ppc[jj] * 2*rc_hwidth + 2    
 N = N_species.sum()
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order

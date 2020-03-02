@@ -45,27 +45,32 @@ def r_squared(data, model):
     return r_sq
 
 
-def check_cell_velocity_distribution(pos, vel, node_number=const.NC // 2, j=0): #
+def check_cell_velocity_distribution(pos, vel, node_number=const.NX // 2, j=0): #
     '''Checks the velocity distribution of a particle species within a specified cell
     '''
-    x_node = (node_number - 0.5) * const.dx   # Position of E-field node
-    f = np.zeros((1, 3))
+    # Account for damping nodes. Node_number should be "real" node count.
+    node_number += const.ND
+    x_node = const.E_nodes[node_number]
+    f      = np.zeros((1, 3))
+    
     count = 0
-
-    for ii in np.arange(const.idx_bounds[j, 0], const.idx_bounds[j, 1]):
-        if (abs(pos[ii] - x_node) <= 0.5*const.dx):
+    for ii in np.arange(const.idx_start[j], const.idx_end[j]):
+        if (abs(pos[0, ii] - x_node) <= 0.5*const.dx):
             f = np.append(f, [vel[0:3, ii]], axis=0)
             count += 1
-    
+
     print('{} particles counted for diagnostic'.format(count))
     fig = plt.figure(figsize=(12,10))
     fig.suptitle('Particle velocity distribution of species {} in cell {}'.format(j, node_number))
     fig.patch.set_facecolor('w')
-    num_bins = const.nsp_ppc // 20
+    num_bins = const.nsp_ppc[j] // 20
 
     ax_x = plt.subplot2grid((2, 3), (0,0), colspan=2, rowspan=2)
     ax_y = plt.subplot2grid((2, 3), (0,2))
     ax_z = plt.subplot2grid((2, 3), (1,2))
+    
+    for ax in [ax_x, ax_y, ax_z]:
+        ax.axvline(0, c='k', ls=':', alpha=0.25)
 
     xs, BinEdgesx = np.histogram((f[:, 0] - const.drift_v[j]) / const.va, bins=num_bins)
     bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
@@ -101,11 +106,11 @@ def check_position_distribution(pos):
     
         ax_x = plt.subplot()
     
-        xs, BinEdgesx = np.histogram(pos[const.idx_bounds[j, 0]: const.idx_bounds[j, 1]] / float(const.dx), bins=num_bins)
+        xs, BinEdgesx = np.histogram(pos[0, const.idx_start[j]: const.idx_end[j]], bins=num_bins)
         bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
         ax_x.plot(bx, xs, '-', c=const.temp_color[const.temp_type[j]], drawstyle='steps')
-        ax_x.set_xlabel(r'$x_p$')
-        ax_x.set_xlim(0, const.NX)
+        ax_x.set_xlabel(r'$x_p (m)$')
+        ax_x.set_xlim(const.xmin, const.xmax)
 
     plt.show()
     return
@@ -117,7 +122,7 @@ def check_velocity_distribution(vel):
         fig = plt.figure(figsize=(12,10))
         fig.suptitle('Velocity distribution of species {} in simulation domain'.format(j))
         fig.patch.set_facecolor('w')
-        num_bins = const.nsp_ppc // 5
+        num_bins = const.nsp_ppc[j] // 5
     
         ax_x = plt.subplot2grid((2, 3), (0,0), colspan=2, rowspan=2)
         ax_y = plt.subplot2grid((2, 3), (0,2))

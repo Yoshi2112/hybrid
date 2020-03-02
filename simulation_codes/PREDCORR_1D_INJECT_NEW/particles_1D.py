@@ -75,6 +75,8 @@ def eval_B0_particle(x, Bp):
     
     These values are added onto the existing value of B at the particle location,
     Bp. B0x is simply equated since we never expect a non-zero wave field in x.
+    
+    if rL == 0, set By,z to zero
     '''
     rL     = np.sqrt(x[1]**2 + x[2]**2)
     
