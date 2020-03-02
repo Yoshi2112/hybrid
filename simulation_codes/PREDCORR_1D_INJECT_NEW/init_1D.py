@@ -4,17 +4,17 @@ Created on Fri Sep 22 17:27:33 2017
 
 @author: iarey
 """
-import pdb
+#import pdb
 import numba as nb
 import numpy as np
 import simulation_parameters_1D as const
 import save_routines as save
-import diagnostics as diag
+#import diagnostics as diag
 
 from particles_1D             import assign_weighting_TSC
 from fields_1D                import eval_B0x
 
-from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, N_species, B_eq,  \
+from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, B_eq,  \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
                                      r_damp, Bc, qm_ratios, freq_res, rc_hwidth, temp_type
 
@@ -94,18 +94,26 @@ def uniform_gaussian_distribution_quiet():
             
     # Recast v_perp accounting for local magnetic field and
     # Set Larmor radius (y,z positions) for all particles
-    # Can set a flag for this later
-    if True:
-        B0x = np.zeros(N, dtype=np.float64)
-        for kk in range(N):
-            B0x[kk] = eval_B0x(pos[0, kk])
+    v_perp2    = (vel[1] ** 2 + vel[2] ** 2)                 # Perpendicular velocity magnitude squared
+
+    B0x = np.zeros(N, dtype=np.float64)
+    for kk in range(N):
+        B0x[kk] = eval_B0x(pos[0, kk])                       # Background magnetic field at position
+
+    if False:
+        pitch_angle = np.abs(np.arctan(np.sqrt(vel[1] ** 2 + vel[2] ** 2)/ vel[0]) * 180. / np.pi)
+        v_mag_eq    = vel[0] ** 2 + vel[1] ** 2 + vel[2] ** 2   # Magnitude of velocity squared (conserved quantity)
             
-        theta      = np.arctan2(vel[2], vel[1])
-        v_perp     = np.sqrt(vel[1] ** 2 + vel[2] ** 2)
-        v_perp_new = B0x / B_eq * v_perp
-        vel[1]     = v_perp_new * np.cos(theta)
+        v_perp_new = v_perp2 * B0x / B_eq                        # New v_perp adjusting for position in bottle
+        vel[0]     = np.sqrt(v_mag_eq - v_perp_new)              # New v_parallel conserving constant
+    
+        theta      = np.arctan2(vel[2], vel[1])                 # Velocity gyrophase
+        vel[1]     = v_perp_new * np.cos(theta)                 # New vy, vz preserving gyrophase
         vel[2]     = v_perp_new * np.sin(theta)
-        pos[1]     = v_perp_new / (qm_ratios[jj] * B0x)
+    
+    # Change this back to v_perp_new once I fix it
+    pos[1]     = np.sqrt(v_perp2) / (qm_ratios[jj] * B0x)         # Larmor radii as initial off-axis position
+    
     return pos, vel, idx
 
 
@@ -257,7 +265,7 @@ def set_timestep(vel, E):
            be initial limiting factor. This may change for inhomogenous loading
            of particles or initial fields.
     '''
-    ion_ts   = freq_res / const.gyfreq                # Timestep to resolve gyromotion
+    ion_ts   = const.orbit_res / const.gyfreq         # Timestep to resolve gyromotion
     vel_ts   = 0.5 * const.dx / np.max(vel[0, :])     # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
 
     if E[:, 0].max() != 0:
@@ -289,67 +297,72 @@ def set_timestep(vel, E):
 
 
 
-if __name__ == '__main__':
-    POS, VEL, IDX = uniform_gaussian_distribution_quiet()
-    
-    #v_perp = np.sqrt(VEL[1] ** 2 + VEL[2] ** 2)
-    #rL     = np.sqrt(POS[1] ** 2 + VEL[2] ** 2)
-    
-    import matplotlib.pyplot as plt
-    
-    if False:
-        for jj in range(const.Nj):
-            plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
-                        rL[const.idx_start[jj]:idx_end[jj]],
-                        c=const.temp_color[jj],
-                        label=const.species_lbl[jj])
-        plt.legend()
-        plt.title('Larmor radius with position')
+# =============================================================================
+# if __name__ == '__main__':
+#     POS, VEL, IDX = uniform_gaussian_distribution_quiet()
+#     
+#     #v_perp = np.sqrt(VEL[1] ** 2 + VEL[2] ** 2)
+#     rL     = np.sqrt(POS[1] ** 2 + POS[2] ** 2)
+#     
+#     import matplotlib.pyplot as plt
+#     
+#     if True:
+#         for jj in range(const.Nj):
+#             plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+#                         rL[const.idx_start[jj]:idx_end[jj]],
+#                         c=const.temp_color[jj],
+#                         label=const.species_lbl[jj], s=1)
+#         plt.legend()
+#         plt.title('Larmor radius with position')
+# =============================================================================
         
-    if False:
-        for jj in range(const.Nj):
-            plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
-                        v_perp[const.idx_start[jj]:idx_end[jj]],
-                        c=const.temp_color[jj],
-                        label=const.species_lbl[jj])
-        plt.legend()
-        plt.title('v_perp with position')
-        
-    if False:
-        jj = 1
-        v_perp_old = np.sqrt(IDX[1] ** 2 + IDX[2] ** 2)
-        plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
-                    v_perp[const.idx_start[jj]:idx_end[jj]],
-                    c='r',
-                    label=const.species_lbl[jj])
-        
-        plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
-                    v_perp_old[const.idx_start[jj]:idx_end[jj]],
-                    c='k',
-                    label=const.species_lbl[jj])
-        
-        plt.legend()
-        plt.title('v_perp with position: Initial (Black) and adjusted for position (Red)')
-    
-    
-    if False:
-        jj = 1
-        plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
-                    np.log10(VEL[const.idx_start[jj]:idx_end[jj]]),
-                    c='k',
-                    label='$v_\perp/v_\parallel$ old',
-                    marker='o', s=1)
-        
-        plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
-                    np.log10(IDX[const.idx_start[jj]:idx_end[jj]]),
-                    c='r',
-                    label='$v_\perp/v_\parallel$ new',
-                    marker='x', s=1)
-        
-        plt.ylim(-2, 6)
-        plt.legend()
-        plt.title('perp/parallel velocity ratios before/after transformation')
-
-    
-    #diag.check_cell_velocity_distribution(POS, VEL, j=1, node_number=0)
-    #diag.check_position_distribution(POS)
+# =============================================================================
+#     if False:
+#         for jj in range(const.Nj):
+#             plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+#                         v_perp[const.idx_start[jj]:idx_end[jj]],
+#                         c=const.temp_color[jj],
+#                         label=const.species_lbl[jj])
+#         plt.legend()
+#         plt.title('v_perp with position')
+#         
+#     if False:
+#         jj = 1
+#         v_perp_old = np.sqrt(IDX[1] ** 2 + IDX[2] ** 2)
+#         plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+#                     v_perp[const.idx_start[jj]:idx_end[jj]],
+#                     c='r',
+#                     label=const.species_lbl[jj])
+#         
+#         plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+#                     v_perp_old[const.idx_start[jj]:idx_end[jj]],
+#                     c='k',
+#                     label=const.species_lbl[jj])
+#         
+#         plt.legend()
+#         plt.title('v_perp with position: Initial (Black) and adjusted for position (Red)')
+#     
+#     
+#     if False:
+#         jj = 1
+#         plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+#                     np.log10(VEL[const.idx_start[jj]:idx_end[jj]]),
+#                     c='k',
+#                     label='$v_\perp/v_\parallel$ old',
+#                     marker='o', s=1)
+#         
+#         plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+#                     np.log10(IDX[const.idx_start[jj]:idx_end[jj]]),
+#                     c='r',
+#                     label='$v_\perp/v_\parallel$ new',
+#                     marker='x', s=1)
+#         
+#         plt.ylim(-2, 6)
+#         plt.legend()
+#         plt.title('perp/parallel velocity ratios before/after transformation')
+# 
+#     
+#     #diag.check_cell_velocity_distribution(POS, VEL, j=1, node_number=0)
+#     #diag.check_position_distribution(POS)
+# 
+# =============================================================================

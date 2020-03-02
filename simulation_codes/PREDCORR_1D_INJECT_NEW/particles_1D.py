@@ -13,7 +13,7 @@ from   sources_1D                import collect_moments
 from fields_1D import eval_B0x
 
 
-#@nb.njit()
+@nb.njit()
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
                                   B, E, DT, q_dens_adv, Ji, ni, nu, temp1D, pc=0):
     '''
@@ -65,8 +65,8 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
         W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
     return
 
-import pdb
-#@nb.njit()
+
+@nb.njit()
 def eval_B0_particle(x, Bp):
     '''
     Calculates the B0 magnetic field at the position of a particle. B0x is
@@ -80,9 +80,6 @@ def eval_B0_particle(x, Bp):
     '''
     rL     = np.sqrt(x[1]**2 + x[2]**2)
     
-    if rL == 0:
-        pdb.set_trace()
-    
     B0_r   = - a * B_eq * x[0] * rL
     Bp[0]  = eval_B0x(x[0])   
     Bp[1] += B0_r * x[1] / rL
@@ -90,7 +87,7 @@ def eval_B0_particle(x, Bp):
     return
 
 
-#@nb.njit()
+@nb.njit()
 def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     '''
     updates velocities using a Boris particle pusher.

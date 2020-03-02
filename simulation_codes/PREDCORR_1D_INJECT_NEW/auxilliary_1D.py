@@ -10,7 +10,7 @@ import numpy as np
 import particles_1D as particles
 import fields_1D as fields
 
-from simulation_parameters_1D import dx, mu0, NC, qm_ratios, freq_res, \
+from simulation_parameters_1D import dx, mu0, NC, qm_ratios, freq_res, orbit_res,\
                                      account_for_dispersion, dispersion_allowance
 
 
@@ -73,7 +73,7 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
     return
 
 
-#@nb.njit()
+@nb.njit()
 def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, \
                      qq, DT, max_inc, part_save_iter, field_save_iter, idx):
     '''
@@ -97,7 +97,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, \
     '''
     B_magnitude     = np.sqrt(B[:, 0] ** 2 + B[:, 1] ** 2 + B[:, 2] ** 2)
     gyfreq          = qm_ratios.max() * B_magnitude.max()     
-    ion_ts          = freq_res / gyfreq
+    ion_ts          = orbit_res / gyfreq
     
     if E[:, 0].max() != 0:
         elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / vel.max()).max())               # Electron acceleration "frequency"
@@ -148,7 +148,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, \
     return qq, DT, max_inc, part_save_iter, field_save_iter
 
 
-#@nb.njit()
+@nb.njit()
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
               Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,\
