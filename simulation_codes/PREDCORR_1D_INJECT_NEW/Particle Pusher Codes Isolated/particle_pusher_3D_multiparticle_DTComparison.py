@@ -211,7 +211,7 @@ def run_instance(max_rev=1000, v_mag=1.0, pitch=45.0, DT_mult=1.0, gyrofraction=
     pos_history = np.zeros((max_inc, 3, 2), dtype=np.float64)
     vel_history = np.zeros((max_inc, 3, 2), dtype=np.float64)
     mag_history = np.zeros((max_inc, 3, 2), dtype=np.float64)
-
+    
     # Retard velocity by half a timestep
     Bp, rad = velocity_update(pos, vel, -0.5*DT)
 
@@ -261,12 +261,12 @@ def call_and_plot():
     Ideas:
         - Plot rL from B0 with
     '''
-    max_rev = 100          # Total simulation length in gyroperiods (bounce period ~761: 117.81s for v_mag = 1, pitch=45)
+    max_rev = 50000        # Total simulation length in gyroperiods (bounce period ~761: 117.81s for v_mag = 1, pitch=45)
     v_mag   = 20.0         # Particle velocity magnitude
     pitch   = 44.0         # Particle pitch angle
     
     # Generate figure axes for the multi-DT plots
-    dt_mults = [2.0, 1.5, 1.0, 0.8, 0.5, 0.25, 0.2, 0.15, 0.1, 0.05, 0.025, 0.01, 0.01]
+    dt_mults = [2.0, 1.0, 0.5, 0.1, 0.01]
     dt_color = ['k', 'b', 'r', 'g', 'm']
     Nt       = len(dt_mults)
     var_dt   = np.zeros((Nt, 2))
@@ -645,6 +645,7 @@ def call_and_plot():
             axes[2].set_xlim(xmin*1e-3, xmax*1e-3)
     
         if True:
+            print(var_dt)
             for ii, mk, lbl in zip([0, 1], ['x', 'o'], ['1D', '3D']):
                  ax.scatter(dt_mult, var_dt[ii], c='k', marker=mk, label='%s' % lbl)
         
