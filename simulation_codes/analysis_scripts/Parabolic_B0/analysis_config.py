@@ -14,7 +14,6 @@ clogging up its namespace - i.e. run-specific parameters are called by
 using e.g. cf.B0
 '''
 def load_run(drive, series, run_num, extract_arrays=True):
-    global missing_t0_offset
     manage_dirs(drive, series, run_num)
     load_simulation_params()
     load_species_params()
@@ -24,7 +23,8 @@ def load_run(drive, series, run_num, extract_arrays=True):
         extract_all_arrays()
     return
 
-def manage_dirs(drive, series, run_num, create_new=True):
+
+def manage_dirs(drive, series, run_num):
     global run_dir, data_dir, anal_dir, temp_dir, base_dir, field_dir, particle_dir, num_field_steps, num_particle_steps
     
     base_dir = '{}/runs/{}/'.format(drive, series)                      # Main series directory, containing runs
@@ -36,14 +36,8 @@ def manage_dirs(drive, series, run_num, create_new=True):
     field_dir    = data_dir + '/fields/'
     particle_dir = data_dir + '/particles/'
     
-    num_field_steps    = len(os.listdir(field_dir))                    # Number of field    time slices
-    num_particle_steps = len(os.listdir(particle_dir))                 # Number of particle time slices
-    
-    ##################
-    ### DELET THIS ###
-    num_field_steps = 100; num_particle_steps = 500
-    ##################
-    ##################
+    num_field_steps    = len(os.listdir(field_dir))                     # Number of field    time slices
+    num_particle_steps = len(os.listdir(particle_dir))                  # Number of particle time slices
     
     # Make Output folders if they don't exist
     for this_dir in [anal_dir, temp_dir]:
@@ -54,6 +48,7 @@ def manage_dirs(drive, series, run_num, create_new=True):
             raise IOError('Run {} does not exist for series {}. Check range argument.'.format(run_num, series))
     return
 
+
 def load_species_params():
     global species_present, density, dist_type, charge, mass, Tper,      \
            sim_repr, temp_type, temp_color, Tpar, species_lbl, n_contr,  \
@@ -62,22 +57,21 @@ def load_species_params():
     p_path = os.path.join(data_dir, 'particle_parameters.npz')                  # File location
     p_data = np.load(p_path)                                                    # Load file
 
-    density    = p_data['density']
-    charge     = p_data['charge']
-    mass       = p_data['mass']
-    Tper       = p_data['Tper']
-    
-    temp_type  = p_data['temp_type']
-    temp_color = p_data['temp_color']
-    dist_type  = p_data['dist_type']
-    Tpar       = p_data['Tpar']
-    species_lbl= p_data['species_lbl']
-    drift_v    = p_data['drift_v']
-    
     idx_start  = p_data['idx_start']
     idx_end    = p_data['idx_end']
+    species_lbl= p_data['species_lbl']
+    temp_color = p_data['temp_color']
+    temp_type  = p_data['temp_type']
+    dist_type  = p_data['dist_type']
+    
+    mass       = p_data['mass']
+    charge     = p_data['charge']
+    drift_v    = p_data['drift_v']
     nsp_ppc    = p_data['nsp_ppc']
+    density    = p_data['density']
     N_species  = p_data['N_species']
+    Tpar       = p_data['Tpar']
+    Tper       = p_data['Tper']
     Bc         = p_data['Bc']
 
     n_contr    = density / nsp_ppc  
@@ -92,12 +86,13 @@ def load_species_params():
             species_present[2] = True
     return
 
+
 def load_simulation_params():
     global Nj, cellpart, ne, NX, dxm, seed, B0, dx, Te0, dt_sim, max_rev,           \
            ie, run_desc, seed, subcycles, LH_frac, orbit_res, freq_res, method_type,\
            particle_shape, part_save_iter, field_save_iter, dt_field, dt_particle,  \
            ND, NC, N, r_damp, xmax, B_xmax, B_eq, theta_xmax, a, boundary_type,     \
-           particle_boundary, rc_hwidth
+           particle_boundary, rc_hwidth, L
 
     h_name = os.path.join(data_dir, 'simulation_parameters.pckl')       # Load header file
     f      = open(h_name, 'rb')                                         # Open header file
@@ -121,6 +116,8 @@ def load_simulation_params():
     B_xmax            = obj['B_xmax']
     B_eq              = obj['B_eq']
     a                 = obj['a']
+    L                 = obj['L']
+    rc_hwidth         = obj['rc_hwidth']
     theta_xmax        = obj['theta_xmax']
     max_rev           = obj['max_rev']
     orbit_res         = obj['orbit_res']
@@ -130,14 +127,17 @@ def load_simulation_params():
     particle_shape    = obj['particle_shape']
     boundary_type     = obj['boundary_type']
     particle_boundary = obj['particle_boundary']
-    rc_hwidth         = obj['rc_hwidth']
     
     part_save_iter    = obj['part_save_iter']
     field_save_iter   = obj['field_save_iter']
     
     dt_field        = dt_sim * field_save_iter                         # Time between data slices (seconds)
     dt_particle     = dt_sim * part_save_iter
+    
+    if rc_hwidth == 0: 
+        rc_hwidth = NX
     return 
+
 
 def initialize_simulation_variables():
     global wpi, gyfreq, gyperiod, time_seconds_field, time_seconds_particle, \

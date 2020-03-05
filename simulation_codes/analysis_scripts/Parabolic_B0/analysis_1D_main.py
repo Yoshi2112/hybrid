@@ -28,23 +28,24 @@ e0  = 8.854e-12               # Epsilon naught - permittivity of free space
 Aim: To populate this script with plotting routines ONLY. Separate out the 
 processing/loading/calculation steps into other modules that can be called.
 '''
-def plot_tx(component='By', saveas='tx_plot', save=False, tmax=600):
+def plot_tx(component='By', saveas='tx_plot', save=False, tmax=None):
     plt.ioff()
 
-    tx = cf.get_array(component)
-    x  = np.arange(cf.NX) * cf.dx
-    t  = cf.time_radperiods_field
-    
+    arr = cf.get_array(component)
+    t   = cf.time_radperiods_field
+        
     if component[0] == 'B':
-        tx *= 1e9
+        arr *= 1e9
+        x    = np.arange(cf.NC + 1) * cf.dx
     else:
-        tx *= 1e3
+        arr *= 1e3
+        x    = np.arange(cf.NC) * cf.dx
     
     ## PLOT IT
     fig = plt.figure(1, figsize=(15, 10))
     ax  = fig.add_subplot(111)
 
-    im1 = ax.pcolormesh(x, t, tx, cmap='nipy_spectral')      # Remove f[0] since FFT[0] >> FFT[1, 2, ... , k]
+    im1 = ax.pcolormesh(x, t, arr, cmap='nipy_spectral')      # Remove f[0] since FFT[0] >> FFT[1, 2, ... , k]
     cb  = fig.colorbar(im1)
     
     if component[0] == 'B':
@@ -1191,42 +1192,6 @@ def do_all_dynamic_spectra(ymax=None):
     return
 
 
-def check_first_invariant():
-    '''
-    Uses a sample particle/s and plots their invariant (magnetic moment?) with
-    time to see if its really all that invariant. 
-    
-    Could do this two ways:
-        - Calculate value of mu = W_perp / B_p
-        - Check conservation of energy over time: W = W_perp + W_parallel
-    '''
-    part_idx = 0                                            # Could be integer or list
-    kinetic_energy = np.zeros((2, cf.num_particle_steps))   # Parallel/Perp/Total kinetic energy
-    
-    # Find species
-    for jj in range(cf.Nj):
-        if part_idx >= cf.idx_start[jj] and part_idx < cf.idx_end[jj]:
-            sp = jj
-                
-    for ii in range(cf.num_particle_steps):
-        pos, vel, particle_ts = cf.load_particles(ii)
-
-        # Calculate particle energy
-        kinetic_energy[0, ii] =         vel[0, part_idx] ** 2
-        kinetic_energy[1, ii] = np.sqrt(vel[1, part_idx] ** 2 + vel[2, part_idx] ** 2)
-        
-    kinetic_energy *= 0.5 * cf.mass[sp] / 1.602e-19
-    total_energy    = kinetic_energy[0] + kinetic_energy[1]
-    
-    plt.plot(cf.time_seconds_particle, kinetic_energy[1], c='r', label=r'$KE_\perp$')
-    plt.plot(cf.time_seconds_particle, kinetic_energy[0], c='b', label=r'$KE_\parallel$')
-    #plt.plot(cf.time_seconds_particle, total_energy,      c='k', label=r'Total $KE$')
-    
-    plt.xlabel('Time (s)')
-    plt.ylabel('Energy (eV)')
-    
-    plt.legend()
-    return
 
 #%%
 if __name__ == '__main__':
@@ -1235,11 +1200,11 @@ if __name__ == '__main__':
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in range(num_runs):
+    for run_num in [0]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
-
-        check_first_invariant()
+        
+        plot_tx(save=True)
         
         #disp_folder = 'dispersion_plots/'
 

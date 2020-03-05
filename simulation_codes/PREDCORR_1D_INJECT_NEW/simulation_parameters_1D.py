@@ -19,7 +19,7 @@ save_fields     = 1                             # Save plot flag    : To ensure 
 seed            = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin       = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run. Must be list. Auto-assign: None.
 supress_text    = False                         # Flag to supress initialization text (usually for diagnostics)
-homogenous      = True                         # Flag to set B0 to homogenous (as test to compare to parabolic)
+homogenous      = False                         # Flag to set B0 to homogenous (as test to compare to parabolic)
 
 ### PHYSICAL CONSTANTS ###
 q      = 1.602177e-19                       # Elementary charge (C)
