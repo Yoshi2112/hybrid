@@ -35,10 +35,7 @@ def manage_dirs(drive, series, run_num):
 
     field_dir    = data_dir + '/fields/'
     particle_dir = data_dir + '/particles/'
-    
-    num_field_steps    = len(os.listdir(field_dir))                     # Number of field    time slices
-    num_particle_steps = len(os.listdir(particle_dir))                  # Number of particle time slices
-    
+
     # Make Output folders if they don't exist
     for this_dir in [anal_dir, temp_dir]:
         if os.path.exists(run_dir) == True:
@@ -140,8 +137,7 @@ def load_simulation_params():
 
 
 def initialize_simulation_variables():
-    global wpi, gyfreq, gyperiod, time_seconds_field, time_seconds_particle, \
-           time_gperiods_field, time_gperiods_particle, time_radperiods_field, time_radperiods_particle, va
+    global wpi, gyfreq, gyperiod, va
     q   = 1.602e-19               # Elementary charge (C)
     mp  = 1.67e-27                # Mass of proton (kg)
     e0  = 8.854e-12               # Epsilon naught - permittivity of free space
@@ -151,15 +147,6 @@ def initialize_simulation_variables():
     gyfreq     = q * B_eq / mp                               # Proton gyrofrequency (rad/s)
     gyperiod   = (mp * 2 * np.pi) / (q * B_eq)               # Proton gyroperiod (s)
     va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed: Assuming pure proton plasma
-    
-    time_seconds_field    = np.array([ii * dt_field    for ii in range(num_field_steps)])
-    time_seconds_particle = np.array([ii * dt_particle for ii in range(num_particle_steps)])
-    
-    time_gperiods_field   = time_seconds_field    / gyperiod
-    time_gperiods_particle= time_seconds_particle / gyperiod
-    
-    time_radperiods_field    = time_seconds_field    * gyfreq 
-    time_radperiods_particle = time_seconds_particle * gyfreq
     return
 
 
@@ -178,6 +165,7 @@ def load_fields(ii):
 
     return tB, tE, tVe, tTe, tJ, tdns, tsim_time
 
+
 def load_particles(ii):    
     part_file  = 'data%05d.npz' % ii             # Define target file
     input_path = particle_dir + part_file        # File location
@@ -189,12 +177,15 @@ def load_particles(ii):
         
     return tx, tv, tsim_time
 
+
 def extract_all_arrays():
     '''
     Extracts and saves all field arrays separate from the timestep slice files for easy
     access. Note that magnetic field arrays exclude the last value due to periodic
     boundary conditions. This may be changed later.
     '''
+    num_field_steps    = len(os.listdir(field_dir)) 
+    
     bx_arr, by_arr, bz_arr = [np.zeros((num_field_steps, NC + 1)) for _ in range(3)]
     
     ex_arr,ey_arr,ez_arr,vex_arr,jx_arr,vey_arr,jy_arr,vez_arr,jz_arr,te_arr,qdns_arr\
@@ -263,7 +254,7 @@ def extract_all_arrays():
     return
 
 
-def get_array(component='by', get_all=False):
+def get_array(component='by', get_all=False, timebase=None):
     '''
     Input  : Array Component
     Output : Array as np.ndarray
@@ -271,11 +262,24 @@ def get_array(component='by', get_all=False):
     Components:
         3D (x, y, z) -- B, E, J, Ve
         1D           -- qdens, Te
+    
+    kwargs:
+        get_all  :: Flag to retrieve all recorded fields (Default False)
+        timebase :: Flag to change timebase to 'gyperiod' or 'radperiod' (Default seconds)
     '''
     if get_all == False:
-        arr_path = temp_dir + component.lower() + '_array' + '.npy'
-        arr      = np.load(arr_path)
-        return arr
+        arr_path   = temp_dir + component.lower() + '_array' + '.npy'
+        arr        = np.load(arr_path)
+        ftime_sec  = dt_field * np.arange(arr.shape[0])
+        
+        if timebase == 'gyperiod':
+            ftime  = ftime_sec / gyperiod
+        elif timebase == 'radperiod':
+            ftime = ftime_sec * gyfreq 
+        else:
+            ftime = ftime_sec
+        
+        return ftime, arr
     else:
         bx = np.load(temp_dir + 'bx' +'_array.npy')
         by = np.load(temp_dir + 'by' +'_array.npy')
@@ -296,7 +300,17 @@ def get_array(component='by', get_all=False):
         te    = np.load(temp_dir + 'te' +'_array.npy')
         qdens = np.load(temp_dir + 'qdens' +'_array.npy')
         field_sim_time = np.load(temp_dir + 'field_sim_time' +'_array.npy')
-        return bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens, field_sim_time
+        
+        ftime_sec = dt_field * np.arange(bx.shape[0])
+
+        if timebase == 'gyperiod':
+            ftime = ftime_sec / gyperiod
+        elif timebase == 'radperiod':
+            ftime = ftime_sec * gyfreq 
+        else:
+            ftime = ftime_sec
+
+        return ftime, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens, field_sim_time
 
 
 @nb.njit()

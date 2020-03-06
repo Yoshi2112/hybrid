@@ -31,21 +31,19 @@ processing/loading/calculation steps into other modules that can be called.
 def plot_tx(component='By', saveas='tx_plot', save=False, tmax=None):
     plt.ioff()
 
-    arr = cf.get_array(component)
-    t   = cf.time_radperiods_field
-        
+    t, arr = cf.get_array(component)
+    
     if component[0] == 'B':
         arr *= 1e9
         x    = np.arange(cf.NC + 1) * cf.dx
     else:
         arr *= 1e3
         x    = np.arange(cf.NC) * cf.dx
-    
-    ## PLOT IT
-    fig = plt.figure(1, figsize=(15, 10))
-    ax  = fig.add_subplot(111)
 
-    im1 = ax.pcolormesh(x, t, arr, cmap='nipy_spectral')      # Remove f[0] since FFT[0] >> FFT[1, 2, ... , k]
+    ## PLOT IT
+    fig, ax = plt.subplots(1, figsize=(15, 10))
+
+    im1 = ax.pcolormesh(x, t, arr, cmap='nipy_spectral', vmin=0, vmax=100)      # Remove f[0] since FFT[0] >> FFT[1, 2, ... , k]
     cb  = fig.colorbar(im1)
     
     if component[0] == 'B':
@@ -54,8 +52,11 @@ def plot_tx(component='By', saveas='tx_plot', save=False, tmax=None):
         cb.set_label('mV/m', rotation=0)
 
     ax.set_title('t-x Plot for {}'.format(component), fontsize=14)
-    ax.set_ylabel(r't $(\Omega^{-1})$', rotation=0, labelpad=15)
+    ax.set_ylabel(r't (s)', rotation=0, labelpad=15)
     ax.set_xlabel('x (m)')
+    ax.set_ylim(0, 60)
+    ax.axvline(         cf.ND  * cf.dx, c='k', ls=':', alpha=0.5)
+    ax.axvline((cf.NC - cf.ND) * cf.dx, c='k', ls=':', alpha=0.5)
         
     if save == True:
         fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
@@ -903,52 +904,38 @@ def single_point_both_fields_AGU(cell=None, save=True):
     return
 
 
-def interpolate_fields_to_particle_time():
+def interpolate_fields_to_particle_time(num_particle_steps, timebase=None):
     '''
     For each particle timestep, interpolate field values
-    
-    RECODE THIS TO USE NP.INTERPOLATE()
     '''
-    bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens = cf.get_array(get_all=True)
-
-    time_particles = cf.time_seconds_particle
-    time_fields    = cf.time_seconds_field
+    ftime, bx, by, bz, ex, ey, ez, vex, vey, vez,\
+    te, jx, jy, jz, qdens, fsim_time = cf.get_array(get_all=True)
     
-    pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens = \
-    [np.zeros((time_particles.shape[0], cf.NX)) for _ in range(14)]
+    ptime_sec = np.arange(num_particle_steps) * cf.dt_particle
     
-    for ii in range(time_particles.shape[0]):
-        this_time    = time_particles[ii]                   # Target interpolant
-        diff         = abs(this_time - time_fields)         # Difference matrix
-        nearest_idx  = np.where(diff == diff.min())[0][0]   # Index of nearest value
-        
-        if time_fields[nearest_idx] < this_time:
-            case = 1
-            lidx = nearest_idx
-            uidx = nearest_idx + 1
-        elif time_fields[nearest_idx] > this_time:
-            case = 2
-            uidx = nearest_idx
-            lidx = nearest_idx - 1
-        else:
-            case    = 3
-            for arr_out, arr_in in zip([pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens], 
-                                   [bx,  by,  bz,  ex,  ey,  ez,  vex,  vey,  vez,  te,  jx,  jy,  jz,  qdens]):
-                arr_out[ii] = arr_in[nearest_idx]
-            continue
-        
-        if not time_fields[lidx] <= this_time <= time_fields[uidx]:
-            print('WARNING: Interpolation issue :: {}'.format(case))
-        
-        ufac = (this_time - time_fields[lidx]) / cf.dt_field
-        lfac = 1.0 - ufac
-        
-        # Now do the actual interpolation: Example here, extend (or loop?) it to the other ones later.
-        for arr_out, arr_in in zip([pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens], 
-                                   [bx,  by,  bz,  ex,  ey,  ez,  vex,  vey,  vez,  te,  jx,  jy,  jz,  qdens]):
-            arr_out[ii] = lfac*arr_in[lidx] + ufac*arr_in[uidx]
+    pbx, pby, pbz = [np.zeros((num_particle_steps, cf.NC + 1)) for _ in range(3)]
+    
+    for ii in range(cf.NC + 1):
+        pbx[:, ii] = np.interp(ptime_sec, ftime, bx[:, ii])
+        pby[:, ii] = np.interp(ptime_sec, ftime, by[:, ii])
+        pbz[:, ii] = np.interp(ptime_sec, ftime, bz[:, ii])
+    
+    pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens = [np.zeros((num_particle_steps, cf.NC + 1)) for _ in range(11)]
+    
+    for ii in range(cf.NC):
+        pex[:, ii]    = np.interp(ptime_sec, ftime, ex[:, ii])
+        pey[:, ii]    = np.interp(ptime_sec, ftime, ey[:, ii])
+        pez[:, ii]    = np.interp(ptime_sec, ftime, ez[:, ii])
+        pvex[:, ii]   = np.interp(ptime_sec, ftime, vex[:, ii])
+        pvey[:, ii]   = np.interp(ptime_sec, ftime, vey[:, ii])
+        pvez[:, ii]   = np.interp(ptime_sec, ftime, vez[:, ii])
+        pte[:, ii]    = np.interp(ptime_sec, ftime, te[:, ii])
+        pjx[:, ii]    = np.interp(ptime_sec, ftime, jx[:, ii])
+        pjy[:, ii]    = np.interp(ptime_sec, ftime, jy[:, ii])
+        pjz[:, ii]    = np.interp(ptime_sec, ftime, jz[:, ii])
+        pqdens[:, ii] = np.interp(ptime_sec, ftime, qdens[:, ii])
 
-    return pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens
+    return ptime_sec, pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens
 
 
 def analyse_helicity(overwrite=False, save=True):
@@ -1000,11 +987,26 @@ def summary_plots(save=True):
         
     if os.path.exists(path) == False:                                   # Create data directory
         os.makedirs(path)
-            
+    
+    num_particle_steps = len(os.listdir(cf.particle_dir))
+    
     plt.ioff()
-    pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens = interpolate_fields_to_particle_time()
-    qdens_norm = pqdens / (cf.density*cf.charge).sum()                          # Normalized change density
-    for ii in range(dumb_offset, cf.num_particle_steps+dumb_offset):
+    ptime_sec, pbx, pby, pbz, pex, pey, pez, pvex, pvey,\
+    pvez, pte, pjx, pjy, pjz, pqdens = interpolate_fields_to_particle_time(num_particle_steps)
+    
+    time_seconds_particle    = ptime_sec
+    time_gperiods_particle   = ptime_sec / cf.gyperiod 
+    time_radperiods_particle = ptime_sec / cf.gyfreq
+    
+    # Normalized change density
+    qdens_norm = pqdens / (cf.density*cf.charge).sum()     
+          
+    vel_lim = 20
+    B_lim   = cf.B_eq*1e9
+    E_lim   = 30
+    den_lim = 2.0
+           
+    for ii in range(num_particle_steps):
         filename = 'summ%05d.png' % ii
         fullpath = path + filename
         
@@ -1016,16 +1018,16 @@ def summary_plots(save=True):
         fig_size = 4, 7                                                             # Set figure grid dimensions
         fig = plt.figure(figsize=(20,10))                                           # Initialize Figure Space
         fig.patch.set_facecolor('w')   
-        xp, vp = cf.load_particles(ii + cf.missing_t0_offset)
+        xp, vp, psim_time = cf.load_particles(ii)
         
-        pos       = xp / cf.dx                                                   # Cell particle position
-        vel       = vp / cf.va                                                      # Normalized velocity
-    
+        pos       = xp  
+        vel       = vp / cf.va 
+        
         ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
         ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
         for jj in range(cf.Nj):
-            ax_vx.scatter(pos[cf.idx_bounds[jj, 0]: cf.idx_bounds[jj, 1]], vel[0, cf.idx_bounds[jj, 0]: cf.idx_bounds[jj, 1]], s=3, c=cf.temp_color[jj], lw=0, label=cf.species_lbl[jj])
-            ax_vy.scatter(pos[cf.idx_bounds[jj, 0]: cf.idx_bounds[jj, 1]], vel[1, cf.idx_bounds[jj, 0]: cf.idx_bounds[jj, 1]], s=3, c=cf.temp_color[jj], lw=0)
+            ax_vx.scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[0, cf.idx_start[jj]: cf.idx_end[jj]], s=3, c=cf.temp_color[jj], lw=0, label=cf.species_lbl[jj])
+            ax_vy.scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[1, cf.idx_start[jj]: cf.idx_end[jj]], s=3, c=cf.temp_color[jj], lw=0)
     
         ax_vx.legend()
         ax_vx.set_title(r'Particle velocities vs. Position (x)')
@@ -1037,60 +1039,67 @@ def summary_plots(save=True):
         ax_vx.set_yticks(ax_vx.get_yticks()[1:])
     
         for ax in [ax_vy, ax_vx]:
-            ax.set_xlim(0, cf.NX)
-            ax.set_ylim(-10, 10)
+            ax.set_xlim(-cf.xmax, cf.xmax)
+            ax.set_ylim(-vel_lim, vel_lim)
     
         ax_den  = plt.subplot2grid(fig_size, (0, 3), colspan=3)
         ax_den.plot(qdens_norm[ii], color='green')
                 
         ax_den.set_title('Charge Density and Fields')
         ax_den.set_ylabel(r'$\frac{\rho_c}{\rho_{c0}}$', fontsize=14, rotation=0, labelpad=20)
-        ax_den.set_ylim(0.5, 1.5)
-
+        
 
         ax_Ex   = plt.subplot2grid(fig_size, (1, 3), colspan=3, sharex=ax_den)
         ax_Ex.plot(pex[ii]*1e3, color='red',   label=r'$E_x$')
         ax_Ex.plot(pey[ii]*1e3, color='cyan',  label=r'$E_y$')
         ax_Ex.plot(pez[ii]*1e3, color='black', label=r'$E_z$')
         ax_Ex.set_ylabel(r'$E (mV/m)$', labelpad=25, rotation=0, fontsize=14)
-        ax_Ex.set_ylim(-30, 30)
+        
         ax_Ex.legend(loc=4, ncol=3)
         
         ax_By  = plt.subplot2grid(fig_size, (2, 3), colspan=3, sharex=ax_den)
         ax_B   = plt.subplot2grid(fig_size, (3, 3), colspan=3, sharex=ax_den)
         mag_B  = np.sqrt(pby[ii] ** 2 + pbz[ii] ** 2)
-    
+        
+        ax_Bx = ax_By.twinx()
+        ax_Bx.plot(pbx[ii]*1e9, color='k', label=r'$B_x$', ls=':', alpha=0.5) 
+        ax_Bx.set_ylim(cf.B_eq*1e9, cf.B_xmax*1e9)
+        
         ax_B.plot( mag_B*1e9, color='g')
         ax_By.plot(pby[ii]*1e9, color='g',   label=r'$B_y$') 
         ax_By.plot(pbz[ii]*1e9, color='b',   label=r'$B_z$') 
         ax_By.legend(loc=4, ncol=2)
         
-        ax_B.set_ylim(0, cf.B0*1e9)
-        ax_By.set_ylim(-cf.B0*1e9, cf.B0*1e9)
-    
         ax_B.set_ylabel( r'$B_\perp (nT)$', rotation=0, labelpad=30, fontsize=14)
         ax_By.set_ylabel(r'$B_{y,z} (nT)$', rotation=0, labelpad=20, fontsize=14)
         ax_B.set_xlabel('Cell Number')
         
+        # SET FIELD RANGES #
+        if ax_den.get_ylim()[1] > den_lim:
+            den_lim *= 2.0
+        ax_den.set_ylim(0, den_lim)
+           
+        if ax_Ex.get_ylim()[1] >  E_lim or \
+           ax_Ex.get_ylim()[0] < -E_lim :
+            E_lim *= 2.0
+        ax_Ex.set_ylim(-E_lim, E_lim)
         
-        ax_HM    = ax_B.twinx()
+        if ax_By.get_ylim()[1] >  B_lim or \
+           ax_By.get_ylim()[0] < -B_lim :            
+           B_lim *= 2.0
+        ax_B.set_ylim(0, B_lim)
+        ax_By.set_ylim(-B_lim, B_lim)
         
-        ax_HM.plot(pbx[ii]*1e9, c='red')
-        ax_HM.set_ylabel(r'$B_x (nT)$', rotation=0, labelpad=30, fontsize=14, color='r')
-        
-        if cf.HM_amplitude != 0:
-            ax_HM.set_ylim((cf.B0 - cf.HM_amplitude)*1e9, (cf.B0 + cf.HM_amplitude)*1e9)
-        else:
-            ax_HM.set_ylim(cf.B0*1e9 - 1, cf.B0*1e9 + 1)
-    
         for ax in [ax_den, ax_Ex, ax_By]:
             plt.setp(ax.get_xticklabels(), visible=False)
             ax.set_yticks(ax.get_yticks()[1:])
             
-        for ax in [ax_den, ax_Ex, ax_By, ax_B]:
-            grad = cf.NX / (4.)
-            ax.set_xlim(0,  cf.NX)
-            ax.set_xticks(np.arange(0, cf.NX + grad, grad))
+        for ax in [ax_den, ax_Ex]:
+            ax.set_xlim(0, cf.NC)
+            ax.grid()
+            
+        for ax in [ax_By, ax_B]:
+            ax.set_xlim(0, cf.NC + 1)
             ax.grid()
         
         plt.tight_layout(pad=1.0, w_pad=1.8)
@@ -1100,8 +1109,8 @@ def summary_plots(save=True):
         ### FIGURE TEXT ###
         ###################
         anisotropy = (cf.Tper / cf.Tpar - 1).round(1)
-        beta_per   = (2*(4e-7*np.pi)*(1.381e-23)*cf.Tper*cf.ne / (cf.B0**2)).round(1)
-        beta_e     = round((2*(4e-7*np.pi)*(1.381e-23)*cf.Te0*cf.ne  / (cf.B0**2)), 2)
+        beta_per   = (2*(4e-7*np.pi)*(1.381e-23)*cf.Tper*cf.ne / (cf.B_eq**2)).round(1)
+        beta_e     = round((2*(4e-7*np.pi)*(1.381e-23)*cf.Te0*cf.ne  / (cf.B_eq**2)), 2)
         rdens      = (cf.density / cf.ne).round(2)
 
         try:
@@ -1122,17 +1131,14 @@ def summary_plots(save=True):
         plt.figtext(0.855, top        , 'Simulation Parameters', fontsize=fontsize, family='monospace', fontweight='bold')
         plt.figtext(0.855, top - 1*gap, '{}[{}]'.format(series, run_num), fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 2*gap, '{} cells'.format(cf.NX), fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 3*gap, '{} particles/cell'.format(cf.cellpart), fontsize=fontsize, family='monospace')
+        #plt.figtext(0.855, top - 3*gap, '{} particles/cell'.format(cf.cellpart), fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 4*gap, '{}'.format(estring), fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 5*gap, '', fontsize=fontsize, family='monospace')
         
-        plt.figtext(0.855, top - 6*gap, 'B0      : {}nT'.format(cf.B0*1e9), fontsize=fontsize, family='monospace')
+        plt.figtext(0.855, top - 6*gap, 'B_eq    : {}nT'.format(cf.B_eq*1e9), fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 7*gap, 'n0      : {}cc'.format(cf.ne/1e6), fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 8*gap, 'HM_amp  : {}nT'.format(cf.HM_amplitude*1e9), fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 9*gap, 'HM_freq : {}mHz'.format(cf.HM_frequency*1e3), fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 10*gap, '', fontsize=fontsize, family='monospace')
         
-        plt.figtext(0.855, top - 11*gap, r'$\theta$       : %d deg' % cf.theta, fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 12*gap, r'$\beta_e$      : %.2f' % beta_e, fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 13*gap, 'dx      : {}km'.format(round(cf.dx/1e3, 2)), fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 14*gap, '', fontsize=fontsize, family='monospace')
@@ -1146,9 +1152,9 @@ def summary_plots(save=True):
                     fontsize=fontsize-2, family='monospace')
  
         time_top = 0.1
-        plt.figtext(0.88, time_top - 0*gap, 't_seconds   : {:>10}'.format(round(cf.time_seconds_particle[ii], 3))   , fontsize=fontsize, family='monospace')
-        plt.figtext(0.88, time_top - 1*gap, 't_gperiod   : {:>10}'.format(round(cf.time_gperiods_particle[ii], 3))  , fontsize=fontsize, family='monospace')
-        plt.figtext(0.88, time_top - 2*gap, 't_radperiod : {:>10}'.format(round(cf.time_radperiods_particle[ii], 3)), fontsize=fontsize, family='monospace')
+        plt.figtext(0.88, time_top - 0*gap, 't_seconds   : {:>10}'.format(round(time_seconds_particle[ii], 3))   , fontsize=fontsize, family='monospace')
+        plt.figtext(0.88, time_top - 1*gap, 't_gperiod   : {:>10}'.format(round(time_gperiods_particle[ii], 3))  , fontsize=fontsize, family='monospace')
+        plt.figtext(0.88, time_top - 2*gap, 't_radperiod : {:>10}'.format(round(time_radperiods_particle[ii], 3)), fontsize=fontsize, family='monospace')
     
         if save == True:
             plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
@@ -1204,7 +1210,9 @@ if __name__ == '__main__':
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
-        plot_tx(save=True)
+        summary_plots(save=True)
+        
+        #plot_tx(save=True)
         
         #disp_folder = 'dispersion_plots/'
 
