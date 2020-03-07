@@ -7,6 +7,7 @@ Created on Wed Apr 27 11:56:34 2016
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import matplotlib.colors as colors
 import os
 import pdb
 
@@ -27,8 +28,16 @@ e0  = 8.854e-12               # Epsilon naught - permittivity of free space
 '''
 Aim: To populate this script with plotting routines ONLY. Separate out the 
 processing/loading/calculation steps into other modules that can be called.
+
+To Do:
+    tx plot         -- Make log to see reflections (if any)
+    diagnostic plot -- Use velocity distribution instead of scatterplot (faster)
+    Question : Why is parabolic B0 unstable?
+     -- Gradient across NX-ND? Make B0 parabolic across range
+     -- dB/dx too large? Make smaller (let L = 5.35)
+     
 '''
-def plot_tx(component='By', saveas='tx_plot', save=False, tmax=None):
+def plot_tx(component='By', saveas='tx_plot', save=False, tmax=None, log=False):
     plt.ioff()
 
     t, arr = cf.get_array(component)
@@ -42,8 +51,15 @@ def plot_tx(component='By', saveas='tx_plot', save=False, tmax=None):
 
     ## PLOT IT
     fig, ax = plt.subplots(1, figsize=(15, 10))
-
-    im1 = ax.pcolormesh(x, t, arr, cmap='nipy_spectral', vmin=0, vmax=100)      # Remove f[0] since FFT[0] >> FFT[1, 2, ... , k]
+    
+    if log == True:
+        im1 = ax.pcolormesh(x, t, abs(arr),
+                       norm=colors.LogNorm(vmin=1e-3, vmax=None), cmap='nipy_spectral')
+        suffix = '_log'
+    else:
+        im1 = ax.pcolormesh(x, t, arr, cmap='nipy_spectral', vmin=0, vmax=100)      # Remove f[0] since FFT[0] >> FFT[1, 2, ... , k]
+        suffix = ''
+    
     cb  = fig.colorbar(im1)
     
     if component[0] == 'B':
@@ -55,11 +71,11 @@ def plot_tx(component='By', saveas='tx_plot', save=False, tmax=None):
     ax.set_ylabel(r't (s)', rotation=0, labelpad=15)
     ax.set_xlabel('x (m)')
     ax.set_ylim(0, 60)
-    ax.axvline(         cf.ND  * cf.dx, c='k', ls=':', alpha=0.5)
-    ax.axvline((cf.NC - cf.ND) * cf.dx, c='k', ls=':', alpha=0.5)
+    ax.axvline(         cf.ND  * cf.dx, c='w', ls=':', alpha=1.0)
+    ax.axvline((cf.NC - cf.ND) * cf.dx, c='w', ls=':', alpha=1.0)
         
     if save == True:
-        fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
+        fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + suffix + '.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
         print('t-x Plot saved')
         plt.close('all')
@@ -410,7 +426,7 @@ def plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None):
     if it_max is None:
         it_max = cf.num_field_steps
     
-    Bt_pos, Bt_neg = bk.get_helical_components(overwrite)
+    ftime, Bt_pos, Bt_neg = bk.get_helical_components(overwrite)
 
     By_pos = Bt_pos.real
     By_neg = Bt_neg.real
@@ -502,6 +518,86 @@ def plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None):
         fig3.savefig(cf.anal_dir + 'raw_fields_t{}.png'.format(it_max), facecolor=fig3.get_facecolor(), edgecolor='none')
 
     plt.close('all')
+    return
+
+
+def plot_helicity_colourplot(title='', save=True, overwrite=False, log=False):
+    By_raw         = cf.get_array('By')
+    Bz_raw         = cf.get_array('Bz')
+    
+    ftime, Bt_pos, Bt_neg = bk.get_helical_components(overwrite)
+
+    xarr   = np.arange(cf.NC + 1) * cf.dx
+
+    By_pos = Bt_pos.real
+    By_neg = Bt_neg.real
+    Bz_pos = Bt_pos.imag
+    Bz_neg = Bt_neg.imag
+    
+    sig_fig = 3
+    
+    plt.ioff()
+    fig1, [ax1, ax2] = plt.subplots(2, figsize=(18, 10))
+
+    if log == True:
+        im1 = ax1.pcolormesh(xarr, ftime, abs(By_pos),
+                       norm=colors.LogNorm(vmin=1e-3, vmax=None), cmap='nipy_spectral')
+        
+        im2 = ax2.pcolormesh(xarr, ftime, abs(By_neg),
+                       norm=colors.LogNorm(vmin=1e-3, vmax=None), cmap='nipy_spectral')
+        
+        suffix1 = '_log'
+    else:
+        im1 = ax1.pcolormesh(xarr, ftime, abs(By_pos), cmap='nipy_spectral')
+        
+        im2 = ax2.pcolormesh(xarr, ftime, abs(By_neg), cmap='nipy_spectral')
+        suffix1 = ''
+    
+    ax1.set_title('By: +ve Helicity')
+    ax2.set_title('By: -ve Helicity')
+    ax1.set_title(title)
+
+    
+        
+    fig2, [ax3, ax4] = plt.subplots(2, figsize=(18, 10))
+
+    if log == True:
+        im3 = ax3.pcolormesh(xarr, ftime, abs(Bz_pos),
+                       norm=colors.LogNorm(vmin=1e-3, vmax=None), cmap='nipy_spectral')
+        
+        im4 = ax4.pcolormesh(xarr, ftime, abs(Bz_neg),
+                       norm=colors.LogNorm(vmin=1e-3, vmax=None), cmap='nipy_spectral')
+        
+        suffix2 = '_log'
+    else:
+        im3 = ax3.pcolormesh(xarr, ftime, abs(Bz_pos), cmap='nipy_spectral')
+        
+        im4 = ax4.pcolormesh(xarr, ftime, abs(Bz_neg), cmap='nipy_spectral')
+        suffix2 = ''
+
+    ax3.set_title('Bz: +ve Helicity')
+    ax4.set_title('Bz: -ve Helicity')
+    plt.suptitle(title)
+    
+    for ax in [ax1, ax2, ax3, ax4]:
+        ax.set_xlim(-cf.xmax, cf.xmax)
+        ax.set_xlabel('x (m)')
+        
+    ax1.set_ylabel('Time slice, dt = {:g}s'.format(float('{:.{p}g}'.format(cf.dt_field, p=sig_fig))))
+    ax3.set_ylabel('Time slice, dt = {:g}s'.format(float('{:.{p}g}'.format(cf.dt_field, p=sig_fig))))
+    
+    if save == True:
+        fig1.subplots_adjust(bottom=0.07, top=0.96, left=0.04)
+        fig1.subplots_adjust(wspace=0.05)
+        ax2.set_yticklabels([])
+        fig1.savefig(cf.anal_dir + 'by_helicity_t{}.png'.format(it_max), facecolor=fig1.get_facecolor(), edgecolor='none')
+        
+        fig2.subplots_adjust(bottom=0.07, top=0.96, left=0.04)
+        fig2.subplots_adjust(wspace=0.05)
+        ax4.set_yticklabels([])
+        fig2.savefig(cf.anal_dir + 'bz_helicity_t{}.png'.format(it_max), facecolor=fig2.get_facecolor(), edgecolor='none')
+
+        plt.close('all')
     return
 
 
@@ -1206,13 +1302,14 @@ if __name__ == '__main__':
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [0]:#range(num_runs):
+    for run_num in range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
-        summary_plots(save=True)
+        #summary_plots(save=True)
         
-        #plot_tx(save=True)
+        #plot_tx(save=True, log=True)
+        plot_helicity_colourplot()
         
         #disp_folder = 'dispersion_plots/'
 

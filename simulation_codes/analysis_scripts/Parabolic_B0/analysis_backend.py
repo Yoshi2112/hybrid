@@ -5,7 +5,7 @@ Created on Tue Apr 30 11:24:46 2019
 @author: Yoshi
 """
 import sys
-data_scripts_dir = 'D://Google Drive//Uni//PhD 2017//Data//Scripts//'
+data_scripts_dir = 'F://Google Drive//Uni//PhD 2017//Data//Scripts//'
 sys.path.append(data_scripts_dir)
 from analysis_scripts import analytic_signal
 
@@ -120,8 +120,8 @@ def get_helical_components(overwrite):
     temp_dir = cf.temp_dir
 
     if os.path.exists(temp_dir + 'B_positive_helicity.npy') == False or overwrite == True:
-        By = cf.get_array('By')
-        Bz = cf.get_array('Bz')
+        ftime, By = cf.get_array('By')
+        ftime, Bz = cf.get_array('Bz')
         
         Bt_pos = np.zeros(By.shape, dtype=np.complex128)
         Bt_neg = np.zeros(By.shape, dtype=np.complex128)
@@ -137,7 +137,7 @@ def get_helical_components(overwrite):
         print('Loading helicities from file...')
         Bt_pos = np.load(temp_dir + 'B_positive_helicity.npy')
         Bt_neg = np.load(temp_dir + 'B_negative_helicity.npy')
-    return Bt_pos, Bt_neg
+    return ftime, Bt_pos, Bt_neg
 
 
 def calculate_helicity(By, Bz, NX, dx):
