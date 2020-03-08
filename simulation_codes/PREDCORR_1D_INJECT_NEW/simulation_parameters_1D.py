@@ -8,7 +8,7 @@ import numpy as np
 import sys
 
 ### RUN DESCRIPTION ###
-run_description = '''Testing to see if I can get this open boundary and non-homogenous field thing to work'''
+run_description = '''Unchanged B0 at boundary: Testing to see if I can get this open boundary and non-homogenous field thing to work'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
@@ -19,7 +19,7 @@ save_fields     = 1                             # Save plot flag    : To ensure 
 seed            = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin       = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run. Must be list. Auto-assign: None.
 supress_text    = False                         # Flag to supress initialization text (usually for diagnostics)
-homogenous      = False                         # Flag to set B0 to homogenous (as test to compare to parabolic)
+homogenous      = True                         # Flag to set B0 to homogenous (as test to compare to parabolic)
 
 ### PHYSICAL CONSTANTS ###
 q      = 1.602177e-19                       # Elementary charge (C)
@@ -36,7 +36,7 @@ B_surf = 3.12e-5                            # Magnetic field strength at Earth s
 ### SIMULATION PARAMETERS ###
 NX        = 128                             # Number of cells - doesn't include ghost cells
 ND        = 32                              # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 6000                            # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+max_rev   = 1000                            # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 r_damp    = 0.0129                          # Damping strength
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 4.0                             # Field line L shell
@@ -146,11 +146,6 @@ qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each sp
 
 loss_cone = np.arcsin(np.sqrt(B_eq / B_xmax))*180 / np.pi
 
-import matplotlib.pyplot as plt
-
-xarr = np.arange(NC + 1)
-plt.plot(xarr, Bc[:, 0])
-plt.show()
 
 #%%### INPUT TESTS AND CHECKS
 if supress_text == False:

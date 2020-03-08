@@ -18,7 +18,7 @@ from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, B_eq,  
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
                                      r_damp, Bc, qm_ratios, freq_res, rc_hwidth, temp_type
 
-#@nb.njit()
+@nb.njit()
 def uniform_gaussian_distribution_quiet():
     '''Creates an N-sampled normal distribution across all particle species within each simulation cell
 
@@ -156,7 +156,7 @@ def initialize_particles():
 
 
 @nb.njit()
-def create_damping_array():
+def create_damping_array(DT):
     '''Create masking array for magnetic field damping used to apply open
     boundaries. Based on applcation by Shoji et al. (2011) and
     Umeda et al. (2001)
