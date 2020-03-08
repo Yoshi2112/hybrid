@@ -13,6 +13,7 @@ import numpy as np
 import numba as nb
 import os
 import analysis_config as cf
+import pdb
 '''
 Dump general processing scripts here that don't require global variables: i.e. 
 they are completely self-contained or can be easily imported.
@@ -122,19 +123,21 @@ def get_helical_components(overwrite):
     if os.path.exists(temp_dir + 'B_positive_helicity.npy') == False or overwrite == True:
         ftime, By = cf.get_array('By')
         ftime, Bz = cf.get_array('Bz')
-        
+
         Bt_pos = np.zeros(By.shape, dtype=np.complex128)
         Bt_neg = np.zeros(By.shape, dtype=np.complex128)
         
         for ii in range(By.shape[0]):
             print('Analysing time step {}'.format(ii))
-            Bt_pos[ii, :], Bt_neg[ii, :] = calculate_helicity(By[ii], Bz[ii], cf.NX, cf.dx)
+            Bt_pos[ii, :], Bt_neg[ii, :] = calculate_helicity(By[ii], Bz[ii], cf.NC + 1, cf.dx)
         
         print('Saving helicities to file...')
         np.save(temp_dir + 'B_positive_helicity.npy', Bt_pos)
         np.save(temp_dir + 'B_negative_helicity.npy', Bt_neg)
     else:
         print('Loading helicities from file...')
+        ftime, By = cf.get_array('By')
+        
         Bt_pos = np.load(temp_dir + 'B_positive_helicity.npy')
         Bt_neg = np.load(temp_dir + 'B_negative_helicity.npy')
     return ftime, Bt_pos, Bt_neg

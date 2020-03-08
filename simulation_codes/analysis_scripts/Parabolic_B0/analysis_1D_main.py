@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
+from   matplotlib.gridspec import GridSpec
 import os
 import pdb
 
@@ -522,8 +523,6 @@ def plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None):
 
 
 def plot_helicity_colourplot(title='', save=True, overwrite=False, log=False):
-    By_raw         = cf.get_array('By')
-    Bz_raw         = cf.get_array('Bz')
     
     ftime, Bt_pos, Bt_neg = bk.get_helical_components(overwrite)
 
@@ -533,11 +532,19 @@ def plot_helicity_colourplot(title='', save=True, overwrite=False, log=False):
     By_neg = Bt_neg.real
     Bz_pos = Bt_pos.imag
     Bz_neg = Bt_neg.imag
-    
+
     sig_fig = 3
     
     plt.ioff()
-    fig1, [ax1, ax2] = plt.subplots(2, figsize=(18, 10))
+    
+    ## Y-AXIS FIELD ##
+    fig1 = plt.figure(constrained_layout=True, figsize=(18, 10))
+    gs   = GridSpec(2, 2, figure=fig1, hspace=0, width_ratios=[1.0, 0.05])
+    
+    ax1  = fig1.add_subplot(gs[0, 0])
+    ax2  = fig1.add_subplot(gs[1, 0])
+    cax1 = fig1.add_subplot(gs[0, 1])
+    cax2 = fig1.add_subplot(gs[1, 1])
 
     if log == True:
         im1 = ax1.pcolormesh(xarr, ftime, abs(By_pos),
@@ -553,13 +560,22 @@ def plot_helicity_colourplot(title='', save=True, overwrite=False, log=False):
         im2 = ax2.pcolormesh(xarr, ftime, abs(By_neg), cmap='nipy_spectral')
         suffix1 = ''
     
+    plt.colorbar(im1, cax=cax1).set_label('Flux\n$cm^{-2}s^{-1}sr^{-1}keV^{-1}$')
+    plt.colorbar(im2, cax=cax2).set_label('Flux\n$cm^{-2}s^{-1}sr^{-1}keV^{-1}$')
+    
     ax1.set_title('By: +ve Helicity')
     ax2.set_title('By: -ve Helicity')
     ax1.set_title(title)
 
     
-        
-    fig2, [ax3, ax4] = plt.subplots(2, figsize=(18, 10))
+    ## Z-AXIS FIELD
+    fig2 = plt.figure(constrained_layout=True, figsize=(18, 10))
+    gs   = GridSpec(2, 2, figure=fig2, hspace=0, width_ratios=[1.0, 0.05])
+    
+    ax3  = fig2.add_subplot(gs[0, 0])
+    ax4  = fig2.add_subplot(gs[1, 0])
+    cax3 = fig2.add_subplot(gs[0, 1])
+    cax4 = fig2.add_subplot(gs[1, 1])
 
     if log == True:
         im3 = ax3.pcolormesh(xarr, ftime, abs(Bz_pos),
@@ -574,6 +590,9 @@ def plot_helicity_colourplot(title='', save=True, overwrite=False, log=False):
         
         im4 = ax4.pcolormesh(xarr, ftime, abs(Bz_neg), cmap='nipy_spectral')
         suffix2 = ''
+
+    plt.colorbar(im3, cax=cax3).set_label('Flux\n$cm^{-2}s^{-1}sr^{-1}keV^{-1}$')
+    plt.colorbar(im4, cax=cax4).set_label('Flux\n$cm^{-2}s^{-1}sr^{-1}keV^{-1}$')
 
     ax3.set_title('Bz: +ve Helicity')
     ax4.set_title('Bz: -ve Helicity')
@@ -590,12 +609,12 @@ def plot_helicity_colourplot(title='', save=True, overwrite=False, log=False):
         fig1.subplots_adjust(bottom=0.07, top=0.96, left=0.04)
         fig1.subplots_adjust(wspace=0.05)
         ax2.set_yticklabels([])
-        fig1.savefig(cf.anal_dir + 'by_helicity_t{}.png'.format(it_max), facecolor=fig1.get_facecolor(), edgecolor='none')
+        fig1.savefig(cf.anal_dir + 'by_helicity_{}.png'.format(suffix1), facecolor=fig1.get_facecolor(), edgecolor='none')
         
         fig2.subplots_adjust(bottom=0.07, top=0.96, left=0.04)
         fig2.subplots_adjust(wspace=0.05)
         ax4.set_yticklabels([])
-        fig2.savefig(cf.anal_dir + 'bz_helicity_t{}.png'.format(it_max), facecolor=fig2.get_facecolor(), edgecolor='none')
+        fig2.savefig(cf.anal_dir + 'bz_helicity_{}.png'.format(suffix2), facecolor=fig2.get_facecolor(), edgecolor='none')
 
         plt.close('all')
     return

@@ -12,7 +12,7 @@ run_description = '''Testing to see if I can get this open boundary and non-homo
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs//non_uniform_B0_test'   # Series save dir   : Folder containing all runs of a series
+save_path       = 'runs//non_uniform_B0_test_2' # Series save dir   : Folder containing all runs of a series
 run             = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles  = 1                             # Save data flag    : For later analysis
 save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
@@ -135,8 +135,8 @@ if homogenous == True:
     
 Bc           = np.zeros((NC + 1, 3), dtype=np.float64)   # Constant components of magnetic field based on theta and B0
 Bc[:, 0]     = B_eq * (1 + a * B_nodes**2)               # Set constant Bx
-Bc[:ND]      = Bc[ND]                                    # Set B0 in damping cells (same as last spatial cell)
-Bc[ND+NX+1:] = Bc[ND+NX]
+#Bc[:ND]      = Bc[ND]                                    # Set B0 in damping cells (same as last spatial cell)
+#Bc[ND+NX+1:] = Bc[ND+NX]
 
 # Freqs based on highest magnetic field value (at simulation boundaries)
 gyfreq     = q*B_xmax/mp                                 # Proton   Gyrofrequency (rad/s) (since this will be the highest of all ion species)
@@ -146,7 +146,11 @@ qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each sp
 
 loss_cone = np.arcsin(np.sqrt(B_eq / B_xmax))*180 / np.pi
 
+import matplotlib.pyplot as plt
 
+xarr = np.arange(NC + 1)
+plt.plot(xarr, Bc[:, 0])
+plt.show()
 
 #%%### INPUT TESTS AND CHECKS
 if supress_text == False:
