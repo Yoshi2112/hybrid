@@ -8,18 +8,18 @@ import numpy as np
 import sys
 
 ### RUN DESCRIPTION ###
-run_description = '''Unchanged B0 at boundary: Testing to see if I can get this open boundary and non-homogenous field thing to work'''
+run_description = '''Unchanged B0 at boundary, now with better damping: Testing to see if I can get this open boundary and non-homogenous field thing to work'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs//non_uniform_B0_test_2' # Series save dir   : Folder containing all runs of a series
+save_path       = 'runs//non_uniform_B0_test_3' # Series save dir   : Folder containing all runs of a series
 run             = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles  = 1                             # Save data flag    : For later analysis
 save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run. Must be list. Auto-assign: None.
+cpu_affin       = [6, 7]                        # Set CPU affinity for run. Must be list. Auto-assign: None.
 supress_text    = False                         # Flag to supress initialization text (usually for diagnostics)
-homogenous      = True                         # Flag to set B0 to homogenous (as test to compare to parabolic)
+homogenous      = True                          # Flag to set B0 to homogenous (as test to compare to parabolic)
 
 ### PHYSICAL CONSTANTS ###
 q      = 1.602177e-19                       # Elementary charge (C)
@@ -37,7 +37,6 @@ B_surf = 3.12e-5                            # Magnetic field strength at Earth s
 NX        = 128                             # Number of cells - doesn't include ghost cells
 ND        = 32                              # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev   = 1000                            # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
-r_damp    = 0.0129                          # Damping strength
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 4.0                             # Field line L shell
 
@@ -139,12 +138,12 @@ Bc[:, 0]     = B_eq * (1 + a * B_nodes**2)               # Set constant Bx
 #Bc[ND+NX+1:] = Bc[ND+NX]
 
 # Freqs based on highest magnetic field value (at simulation boundaries)
-gyfreq     = q*B_xmax/mp                                 # Proton   Gyrofrequency (rad/s) (since this will be the highest of all ion species)
-e_gyfreq   = q*B_xmax/me                                 # Electron Gyrofrequency (rad/s)
+gyfreq     = q*B_xmax/ mp                                # Proton Gyrofrequency (rad/s) at boundary (highest)
+gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
 
-loss_cone = np.arcsin(np.sqrt(B_eq / B_xmax))*180 / np.pi
+loss_cone  = np.arcsin(np.sqrt(B_eq / B_xmax))*180 / np.pi
 
 
 #%%### INPUT TESTS AND CHECKS
@@ -158,12 +157,12 @@ if supress_text == False:
     print('Sim domain length  : {:5.2f}R_E'.format(2 * xmax / RE))
     print('Density            : {:5.2f}cc'.format(ne / 1e6))
     print('Equatorial B-field : {:5.2f}nT'.format(B_eq*1e9))
-    print('Maximum    B-field : {:5.2f}nT'.format(Bc.max()*1e9))
+    print('Maximum    B-field : {:5.2f}nT'.format(B_xmax*1e9))
     print('Loss cone          : {:5.2f} degrees\n'.format(loss_cone))
     
     print('Equat. Gyroperiod: : {}s'.format(round(2. * np.pi / gyfreq, 2)))
     print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 2)))
-    print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev))
+    print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_rev * 2. * np.pi / gyfreq_eq, 2), max_rev))
     
     print('{} spatial cells, {} ring current cells, 2x{} damped cells'.format(NX, rc_hwidth*2, ND))
     print('{} cells total'.format(NC))

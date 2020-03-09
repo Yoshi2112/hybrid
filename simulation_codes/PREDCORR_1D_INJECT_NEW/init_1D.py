@@ -14,9 +14,9 @@ import save_routines as save
 from particles_1D             import assign_weighting_TSC
 from fields_1D                import eval_B0x
 
-from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, B_eq,  \
+from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, B_eq, va, \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
-                                     r_damp, Bc, qm_ratios, freq_res, rc_hwidth, temp_type
+                                     Bc, qm_ratios, freq_res, rc_hwidth, temp_type
 
 @nb.njit()
 def uniform_gaussian_distribution_quiet():
@@ -156,7 +156,7 @@ def initialize_particles():
 
 
 @nb.njit()
-def create_damping_array(DT):
+def set_damping_array(damping_array, DT):
     '''Create masking array for magnetic field damping used to apply open
     boundaries. Based on applcation by Shoji et al. (2011) and
     Umeda et al. (2001)
@@ -171,16 +171,15 @@ def create_damping_array(DT):
     points. Relying on lots of time spend there? Or some sort of error?
     Can just play with r value/damping region length once it doesn't explode.
     '''
-    damping_array = np.ones(NC + 1)                  # Blank damping array
-    array_nums    = np.arange(NC + 1)                # Array numbers
-    midpoint      = 0.5*NC                           # Midpoint value
-    dist_from_mp  = np.abs(array_nums - midpoint)    # Distance of each B-node from midpoint
+    dist_from_mp  = np.abs(np.arange(NC + 1) - 0.5*NC)          # Distance of each B-node from midpoint
+    r_damp        = np.sqrt(29.7 * va / ND * (DT / dx))         # Damping coefficient
     
     for ii in range(NC + 1):
         if dist_from_mp[ii] > 0.5*NX:
             damping_array[ii] = 1. - r_damp * ((dist_from_mp[ii] - 0.5*NX) / ND) ** 2 
-    
-    return damping_array
+        else:
+            damping_array[ii] = 1.0
+    return
 
 
 @nb.njit()
@@ -209,10 +208,8 @@ def initialize_fields():
     
     Ve      = np.zeros((NC, 3), dtype=np.float64)
     Te      = np.zeros( NC,     dtype=np.float64)
-    
-    damping_array = create_damping_array()
-    
-    return B, E_int, E_half, Ve, Te, damping_array
+        
+    return B, E_int, E_half, Ve, Te
 
 
 @nb.njit()
@@ -287,8 +284,8 @@ def set_timestep(vel, E):
 
     gyperiod = 2 * np.pi / const.gyfreq
     DT       = min(ion_ts, vel_ts, Eacc_ts)
-    max_time = const.max_rev * gyperiod               # Total runtime in seconds
-    max_inc  = int(max_time / DT) + 1                 # Total number of time steps
+    max_time = const.max_rev * 2 * np.pi / const.gyfreq_eq     # Total runtime in seconds
+    max_inc  = int(max_time / DT) + 1                          # Total number of time steps
 
     if const.part_res == 0:
         part_save_iter = 1
@@ -303,8 +300,11 @@ def set_timestep(vel, E):
     if const.save_fields == 1 or const.save_particles == 1:
         save.store_run_parameters(DT, part_save_iter, field_save_iter)
 
+    damping_array = np.ones(NC + 1)
+    set_damping_array(damping_array, DT)
+
     print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))
-    return DT, max_inc, part_save_iter, field_save_iter
+    return DT, max_inc, part_save_iter, field_save_iter, damping_array
 
 
 

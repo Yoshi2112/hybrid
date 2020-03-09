@@ -8,9 +8,10 @@ import numba as nb
 import numpy as np
 
 import particles_1D as particles
-import fields_1D as fields
+import fields_1D    as fields
+import init_1D      as init
 
-from simulation_parameters_1D import dx, mu0, NC, qm_ratios, freq_res, orbit_res,\
+from simulation_parameters_1D import dx, mu0, NC, NX, ND, qm_ratios, freq_res, orbit_res,\
                                      account_for_dispersion, dispersion_allowance
 
 
@@ -75,7 +76,7 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
 
 @nb.njit()
 def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, \
-                     qq, DT, max_inc, part_save_iter, field_save_iter, idx):
+                     qq, DT, max_inc, part_save_iter, field_save_iter, idx, damping_array):
     '''
     Evaluates all the things that could cause a violation of the timestep:
         - Magnetic field dispersion (switchable in param file since this can be tiny)
@@ -95,7 +96,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, \
     criteria is higher in order to provide a little hysteresis and prevent constantly switching
     timesteps.
     '''
-    B_magnitude     = np.sqrt(B[:, 0] ** 2 + B[:, 1] ** 2 + B[:, 2] ** 2)
+    B_magnitude     = np.sqrt(B[ND:ND+NX+1, 0] ** 2 + B[ND:ND+NX+1, 1] ** 2 + B[ND:ND+NX+1, 2] ** 2)
     gyfreq          = qm_ratios.max() * B_magnitude.max()     
     ion_ts          = orbit_res / gyfreq
     
@@ -131,7 +132,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, \
 
         particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*DT)   # De-sync vel/pos 
         print('Timestep halved. Syncing particle velocity...')
-        
+        init.set_damping_array(damping_array, DT)
             
     elif DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0:
         particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, 0.5*DT)    # Re-sync vel/pos          
@@ -144,8 +145,9 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, \
             
         particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*DT)   # De-sync vel/pos 
         print('Timestep Doubled. Syncing particle velocity...')
+        init.set_damping_array(damping_array, DT)
 
-    return qq, DT, max_inc, part_save_iter, field_save_iter
+    return qq, DT, max_inc, part_save_iter, field_save_iter, damping_array
 
 
 @nb.njit()
@@ -165,9 +167,9 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     If no saves, steps_to_go = max_inc
     '''
     # Check timestep
-    qq, DT, max_inc, part_save_iter, field_save_iter \
+    qq, DT, max_inc, part_save_iter, field_save_iter, damping_array \
     = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, \
-                     qq, DT, max_inc, part_save_iter, field_save_iter, idx)
+                     qq, DT, max_inc, part_save_iter, field_save_iter, idx, damping_array)
     
     # Move particles, collect moments
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
