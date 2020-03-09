@@ -1093,7 +1093,7 @@ def analyse_helicity(overwrite=False, save=True):
     return
 
 
-def summary_plots(save=True):
+def summary_plots(save=True, histogram=True):
     '''
     Plot summary plot of raw values for each particle timestep
     Field values are interpolated to this point
@@ -1120,7 +1120,8 @@ def summary_plots(save=True):
     B_lim   = cf.B_eq*1e9
     E_lim   = 30
     den_lim = 2.0
-           
+    
+    
     for ii in range(num_particle_steps):
         filename = 'summ%05d.png' % ii
         fullpath = path + filename
@@ -1140,23 +1141,46 @@ def summary_plots(save=True):
         
         ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
         ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
-        for jj in range(cf.Nj):
-            ax_vx.scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[0, cf.idx_start[jj]: cf.idx_end[jj]], s=3, c=cf.temp_color[jj], lw=0, label=cf.species_lbl[jj])
-            ax_vy.scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[1, cf.idx_start[jj]: cf.idx_end[jj]], s=3, c=cf.temp_color[jj], lw=0)
-    
-        ax_vx.legend()
-        ax_vx.set_title(r'Particle velocities vs. Position (x)')
-        ax_vy.set_xlabel(r'Cell', labelpad=10)
-        ax_vx.set_ylabel(r'$\frac{v_x}{v_A}$', rotation=0)
-        ax_vy.set_ylabel(r'$\frac{v_y}{v_A}$', rotation=0)
         
-        plt.setp(ax_vx.get_xticklabels(), visible=False)
-        ax_vx.set_yticks(ax_vx.get_yticks()[1:])
+        if histogram == True:
+
+            vel_tr = np.sqrt(vel[1] ** 2 + vel[2] ** 2)
+            
+            for jj in range(cf.Nj):
+                ax_vx.suptitle('Velocity distribution of each species in simulation domain')
+                num_bins = cf.nsp_ppc[jj] // 5
+            
+                xs, BinEdgesx = np.histogram(vel[0, cf.idx_bounds[jj, 0]: cf.idx_bounds[jj, 1]], bins=num_bins)
+                bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
+                ax_vx.plot(bx, xs, '-', c='c', drawstyle='steps', label=cf.species_lbl[jj])
+                
+                ys, BinEdgesy = np.histogram(vel_tr[cf.idx_bounds[jj, 0]: cf.idx_bounds[jj, 1]], bins=num_bins)
+                by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
+                ax_vy.plot(by, ys, '-', c='c', drawstyle='steps', label=cf.species_lbl[jj])
+                
+                ax_vx.set_xlabel(r'$v_\parallel / v_A$')
+                ax_vy.set_xlabel(r'$v_\perp / v_A$')
+        else:
+        
+            for jj in range(cf.Nj):
+                ax_vx.scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[0, cf.idx_start[jj]: cf.idx_end[jj]], s=3, c=cf.temp_color[jj], lw=0, label=cf.species_lbl[jj])
+                ax_vy.scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[1, cf.idx_start[jj]: cf.idx_end[jj]], s=3, c=cf.temp_color[jj], lw=0)
+        
+            ax_vx.legend()
+            ax_vx.set_title(r'Particle velocities vs. Position (x)')
+            ax_vy.set_xlabel(r'Cell', labelpad=10)
+            ax_vx.set_ylabel(r'$\frac{v_x}{v_A}$', rotation=0)
+            ax_vy.set_ylabel(r'$\frac{v_y}{v_A}$', rotation=0)
+            
+            plt.setp(ax_vx.get_xticklabels(), visible=False)
+            ax_vx.set_yticks(ax_vx.get_yticks()[1:])
+        
+            for ax in [ax_vy, ax_vx]:
+                ax.set_xlim(-cf.xmax, cf.xmax)
+                ax.set_ylim(-vel_lim, vel_lim)
     
-        for ax in [ax_vy, ax_vx]:
-            ax.set_xlim(-cf.xmax, cf.xmax)
-            ax.set_ylim(-vel_lim, vel_lim)
-    
+        
+        ## DENSITY ##
         ax_den  = plt.subplot2grid(fig_size, (0, 3), colspan=3)
         ax_den.plot(qdens_norm[ii], color='green')
                 
@@ -1325,10 +1349,10 @@ if __name__ == '__main__':
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
-        #summary_plots(save=True)
+        summary_plots(save=True)
         
         #plot_tx(save=True, log=True)
-        plot_helicity_colourplot()
+        #plot_helicity_colourplot()
         
         #disp_folder = 'dispersion_plots/'
 
