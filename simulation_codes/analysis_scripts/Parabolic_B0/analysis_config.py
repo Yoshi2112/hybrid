@@ -49,7 +49,7 @@ def manage_dirs(drive, series, run_num):
 def load_species_params():
     global species_present, density, dist_type, charge, mass, Tper,      \
            sim_repr, temp_type, temp_color, Tpar, species_lbl, n_contr,  \
-           drift_v, idx_start, idx_end, N_species, Bc
+           drift_v, idx_start, idx_end, N_species, Bc, nsp_ppc
 
     p_path = os.path.join(data_dir, 'particle_parameters.npz')                  # File location
     p_data = np.load(p_path)                                                    # Load file
@@ -67,6 +67,7 @@ def load_species_params():
     nsp_ppc    = p_data['nsp_ppc']
     density    = p_data['density']
     N_species  = p_data['N_species']
+    nsp_ppc    = p_data['nsp_ppc']
     Tpar       = p_data['Tpar']
     Tper       = p_data['Tper']
     Bc         = p_data['Bc']

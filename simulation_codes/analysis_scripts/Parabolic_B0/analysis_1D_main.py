@@ -1035,7 +1035,7 @@ def interpolate_fields_to_particle_time(num_particle_steps, timebase=None):
         pby[:, ii] = np.interp(ptime_sec, ftime, by[:, ii])
         pbz[:, ii] = np.interp(ptime_sec, ftime, bz[:, ii])
     
-    pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens = [np.zeros((num_particle_steps, cf.NC + 1)) for _ in range(11)]
+    pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens = [np.zeros((num_particle_steps, cf.NC)) for _ in range(11)]
     
     for ii in range(cf.NC):
         pex[:, ii]    = np.interp(ptime_sec, ftime, ex[:, ii])
@@ -1143,23 +1143,33 @@ def summary_plots(save=True, histogram=True):
         ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
         
         if histogram == True:
-
+            
             vel_tr = np.sqrt(vel[1] ** 2 + vel[2] ** 2)
             
             for jj in range(cf.Nj):
-                ax_vx.suptitle('Velocity distribution of each species in simulation domain')
                 num_bins = cf.nsp_ppc[jj] // 5
-            
-                xs, BinEdgesx = np.histogram(vel[0, cf.idx_bounds[jj, 0]: cf.idx_bounds[jj, 1]], bins=num_bins)
+                
+                xs, BinEdgesx = np.histogram(vel[0, cf.idx_start[jj]: cf.idx_end[jj]], bins=num_bins)
                 bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
-                ax_vx.plot(bx, xs, '-', c='c', drawstyle='steps', label=cf.species_lbl[jj])
+                ax_vx.plot(bx, xs, '-', c=cf.temp_color[jj], drawstyle='steps', label=cf.species_lbl[jj])
                 
-                ys, BinEdgesy = np.histogram(vel_tr[cf.idx_bounds[jj, 0]: cf.idx_bounds[jj, 1]], bins=num_bins)
+                ys, BinEdgesy = np.histogram(vel_tr[cf.idx_start[jj]: cf.idx_end[jj]], bins=num_bins)
                 by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
-                ax_vy.plot(by, ys, '-', c='c', drawstyle='steps', label=cf.species_lbl[jj])
+                ax_vy.plot(by, ys, '-', c=cf.temp_color[jj], drawstyle='steps', label=cf.species_lbl[jj])
                 
-                ax_vx.set_xlabel(r'$v_\parallel / v_A$')
-                ax_vy.set_xlabel(r'$v_\perp / v_A$')
+                ax_vx.set_ylabel(r'$n_{v_\parallel}$')
+                ax_vx.set_ylabel(r'$n_{v_\perp}$')
+                
+                ax_vx.set_title('Velocity distribution of each species in simulation domain')
+                ax_vy.set_xlabel(r'$v / v_A$')
+                
+                ax_vx.set_xlim(-vel_lim, vel_lim)
+                ax_vy.set_xlim(0, np.sqrt(2)*vel_lim)
+                
+                for ax, comp in zip([ax_vx, ax_vy], ['v_\parallel', 'v_\perp']):
+                    ax.set_ylim(0, int(cf.N / cf.NX) * 2.0)
+                    ax.legend(loc='upper right')
+                    ax.set_ylabel('$n_{%s}$'%comp)
         else:
         
             for jj in range(cf.Nj):
@@ -1181,17 +1191,20 @@ def summary_plots(save=True, histogram=True):
     
         
         ## DENSITY ##
+        B_nodes  = (np.arange(cf.NC + 1) - cf.NC // 2)            # B grid points position in space
+        E_nodes  = (np.arange(cf.NC)     - cf.NC // 2 + 0.5)      # E grid points position in space
+
         ax_den  = plt.subplot2grid(fig_size, (0, 3), colspan=3)
-        ax_den.plot(qdens_norm[ii], color='green')
+        ax_den.plot(E_nodes, qdens_norm[ii], color='green')
                 
         ax_den.set_title('Charge Density and Fields')
         ax_den.set_ylabel(r'$\frac{\rho_c}{\rho_{c0}}$', fontsize=14, rotation=0, labelpad=20)
         
 
         ax_Ex   = plt.subplot2grid(fig_size, (1, 3), colspan=3, sharex=ax_den)
-        ax_Ex.plot(pex[ii]*1e3, color='red',   label=r'$E_x$')
-        ax_Ex.plot(pey[ii]*1e3, color='cyan',  label=r'$E_y$')
-        ax_Ex.plot(pez[ii]*1e3, color='black', label=r'$E_z$')
+        ax_Ex.plot(E_nodes, pex[ii]*1e3, color='red',   label=r'$E_x$')
+        ax_Ex.plot(E_nodes, pey[ii]*1e3, color='cyan',  label=r'$E_y$')
+        ax_Ex.plot(E_nodes, pez[ii]*1e3, color='black', label=r'$E_z$')
         ax_Ex.set_ylabel(r'$E (mV/m)$', labelpad=25, rotation=0, fontsize=14)
         
         ax_Ex.legend(loc=4, ncol=3)
@@ -1201,12 +1214,12 @@ def summary_plots(save=True, histogram=True):
         mag_B  = np.sqrt(pby[ii] ** 2 + pbz[ii] ** 2)
         
         ax_Bx = ax_By.twinx()
-        ax_Bx.plot(pbx[ii]*1e9, color='k', label=r'$B_x$', ls=':', alpha=0.5) 
-        ax_Bx.set_ylim(cf.B_eq*1e9, cf.B_xmax*1e9)
+        ax_Bx.plot(B_nodes, pbx[ii]*1e9, color='k', label=r'$B_x$', ls=':', alpha=0.5) 
+        ax_Bx.set_ylim(cf.B_eq*1e9, cf.Bc.max()*1e9)
         
-        ax_B.plot( mag_B*1e9, color='g')
-        ax_By.plot(pby[ii]*1e9, color='g',   label=r'$B_y$') 
-        ax_By.plot(pbz[ii]*1e9, color='b',   label=r'$B_z$') 
+        ax_B.plot( B_nodes, mag_B*1e9, color='g')
+        ax_By.plot(B_nodes, pby[ii]*1e9, color='g',   label=r'$B_y$') 
+        ax_By.plot(B_nodes, pbz[ii]*1e9, color='b',   label=r'$B_z$') 
         ax_By.legend(loc=4, ncol=2)
         
         ax_B.set_ylabel( r'$B_\perp (nT)$', rotation=0, labelpad=30, fontsize=14)
@@ -1233,16 +1246,14 @@ def summary_plots(save=True, histogram=True):
             plt.setp(ax.get_xticklabels(), visible=False)
             ax.set_yticks(ax.get_yticks()[1:])
             
-        for ax in [ax_den, ax_Ex]:
-            ax.set_xlim(0, cf.NC)
+        for ax in [ax_den, ax_Ex, ax_By, ax_B]:
+            ax.set_xlim(B_nodes[0], B_nodes[-1])
+            ax.axvline(-cf.NX//2, c='k', ls=':', alpha=0.5)
+            ax.axvline( cf.NX//2, c='k', ls=':', alpha=0.5)
             ax.grid()
-            
-        for ax in [ax_By, ax_B]:
-            ax.set_xlim(0, cf.NC + 1)
-            ax.grid()
-        
+                
         plt.tight_layout(pad=1.0, w_pad=1.8)
-        fig.subplots_adjust(hspace=0)
+        fig.subplots_adjust(hspace=0.125)
         
         ###################
         ### FIGURE TEXT ###
@@ -1341,7 +1352,7 @@ def do_all_dynamic_spectra(ymax=None):
 #%%
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'non_uniform_B0_test'
+    series      = 'non_uniform_B0_test_3'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
