@@ -13,7 +13,6 @@ import init_1D      as init
 
 from simulation_parameters_1D import dx, mu0, NC, NX, ND, qm_ratios, freq_res, orbit_res,\
                                      account_for_dispersion, dispersion_allowance, E_nodes
-from fields_1D import eval_B0x
 
 @nb.njit()
 def cross_product(A, B, C):
@@ -75,7 +74,7 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
             interp[ii, jj] = 0.5 * (B[ii, jj] + B[ii + 1, jj] + (1/6) * (y2[ii, jj] + y2[ii + 1, jj]))
     
     for ii in range(NC):
-        interp[ii, 0] = eval_B0x(E_nodes[ii])
+        interp[ii, 0] = fields.eval_B0x(E_nodes[ii])
     return
 
 
