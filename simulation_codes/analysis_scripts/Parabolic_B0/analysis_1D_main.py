@@ -837,7 +837,7 @@ def single_point_field_timeseries(cells=None, overwrite=False, save=True, tmax=N
     if os.path.exists(ts_folder_E) == False:
         os.makedirs(ts_folder_E)
     
-    bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens = cf.get_array(get_all=True)
+    bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens, fsim_time, damping_array = cf.get_array(get_all=True)
     
     plt.ioff()
     for x_idx in cells:
@@ -984,7 +984,7 @@ def single_point_both_fields_AGU(cell=None, save=True):
     if os.path.exists(ts_folder_BE) == False:
         os.makedirs(ts_folder_BE)
 
-    bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens = cf.get_array(get_all=True)
+    bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens, fsim_time, damping_array = cf.get_array(get_all=True)
     
     plt.ioff()
     for x_idx in cells:
@@ -1024,7 +1024,7 @@ def interpolate_fields_to_particle_time(num_particle_steps, timebase=None):
     For each particle timestep, interpolate field values
     '''
     ftime, bx, by, bz, ex, ey, ez, vex, vey, vez,\
-    te, jx, jy, jz, qdens, fsim_time = cf.get_array(get_all=True)
+    te, jx, jy, jz, qdens, fsim_time, damping_array = cf.get_array(get_all=True)
     
     ptime_sec = np.arange(num_particle_steps) * cf.dt_particle
     
@@ -1348,6 +1348,159 @@ def do_all_dynamic_spectra(ymax=None):
     return
 
 
+def plot_damping_array(save=True):
+    save_folder = cf.anal_dir + '//ABC_check//'
+    
+    ftime, by            = cf.get_array('By')
+    ftime, bz            = cf.get_array('Bz')
+    ftime, damping_array = cf.get_array('damping_array')
+    xarr                 = cf.B_nodes / cf.dx
+    
+    plt.ioff()
+    for ii in range(by.shape[0]):
+        print('Plotting ABCs {} of {}'.format(ii, by.shape[0]))
+        fig, axes = plt.subplots(3, sharex=True, figsize=(16,10))
+        
+        axes[0].plot(xarr, by[ii], c='b')
+        axes[1].plot(xarr, bz[ii], c='r')
+        axes[2].plot(xarr, damping_array[ii], c='g')
+    
+        axes[0].set_title('Absorbing Boundary Conditions checkplot')
+        axes[0].set_ylabel('$B_y$' , rotation=0, labelpad=20)
+        axes[1].set_ylabel('$B_z$' , rotation=0, labelpad=20)
+        axes[2].set_ylabel('$r(x)$', rotation=0, labelpad=20)
+        
+        axes[0].set_ylim(-cf.B_xmax, cf.B_xmax)
+        axes[1].set_ylim(-cf.B_xmax, cf.B_xmax)
+    
+        for ax in axes:
+            ax.set_xlim(xarr[0], xarr[-1])
+            ax.axvline(-cf.xmax/cf.dx, ls=':', alpha=0.75, c='k')
+            ax.axvline( cf.xmax/cf.dx, ls=':', alpha=0.75, c='k')
+            
+        if save==True:
+            if os.path.exists(save_folder) == False:
+                os.makedirs(save_folder)
+            
+            fig.savefig(save_folder + 'Bfield_ABC_check_{:05}.png'.format(ii), edgecolor='none')
+            plt.close('all')
+    return
+
+
+def check_fields(save=True):
+    '''
+    Plot summary plot of raw values for each particle timestep
+    Field values are interpolated to this point
+    '''    
+    path = cf.anal_dir + '/field_plots_all/'
+        
+    if os.path.exists(path) == False:                                   # Create data directory
+        os.makedirs(path)
+        
+    plt.ioff()
+    ftime, bx, by, bz, ex, ey, ez, vex, vey, vez,\
+    te, jx, jy, jz, qdens, fsim_time, damping_array = cf.get_array(get_all=True)
+
+    # Plot lims
+    B_lim   = cf.B_eq*1e9
+    E_lim   = 30
+    J_lim   = None
+    den_lim = None
+    T_lim   = None
+    
+    for ii in range(bx.shape[0]):
+        filename = 'summ%05d.png' % ii
+        fullpath = path + filename
+        fontsize = 14
+        
+        if os.path.exists(fullpath):
+            print('Summary plot already present for timestep [{}]{}'.format(run_num, ii))
+            continue
+                
+        print('Creating summary field plots [{}]{}'.format(run_num, ii))
+        fig, axes = plt.subplots(3, ncols=2, figsize=(20,10), sharex=True)
+        fig.patch.set_facecolor('w')   
+
+        # Background magnetic field
+        axes_B0 = axes[0, 0].twinx()
+        axes_B0.plot(cf.B_nodes, bx[ii]*1e9, color='k', label=r'$B_x$', ls=':', alpha=0.5) 
+        axes_B0.set_ylim(cf.B_eq*1e9, cf.Bc.max()*1e9)
+        
+        # Wave magnetic field
+        axes[0, 0].set_title('Field outputs: {}[{}]'.format(series, run_num), fontsize=fontsize, family='monospace')
+        axes[0, 0].plot(cf.B_nodes, by[ii]*1e9, color='cyan', label=r'$B_y$') 
+        axes[0, 0].plot(cf.B_nodes, bz[ii]*1e9, color='black', label=r'$B_z$')
+        axes[0, 0].set_ylim(-cf.B_eq*1e9, cf.B_eq*1e9)
+        axes[0, 0].legend(loc=4, ncol=2)
+        axes[0, 0].set_ylabel( r'$B_\perp (nT)$', rotation=0, labelpad=30, fontsize=14)
+        
+        # Wave electric field
+        axes[0, 1].plot(cf.E_nodes, ex[ii]*1e3, color='red',   label=r'$E_x$')
+        axes[0, 1].plot(cf.E_nodes, ey[ii]*1e3, color='cyan',  label=r'$E_y$')
+        axes[0, 1].plot(cf.E_nodes, ez[ii]*1e3, color='black', label=r'$E_z$')
+        axes[0, 1].set_ylabel(r'$E (mV/m)$', labelpad=25, rotation=0, fontsize=14)
+        axes[0, 1].legend(loc=4, ncol=3)
+        
+        # Electron Velocity
+        axes[1, 0].plot(cf.E_nodes, vex[ii], color='red' , label=r'$V_{ex}$')
+        axes[1, 0].plot(cf.E_nodes, vey[ii], color='cyan', label=r'$V_{ey}$')
+        axes[1, 0].plot(cf.E_nodes, vez[ii], color='k'   , label=r'$V_{ez}$')
+        axes[1, 0].legend(loc=4, ncol=2)
+        axes[1, 0].set_ylabel(r'$V_e (m/s)$', labelpad=25, rotation=0, fontsize=14)
+        
+        # Ion Current
+        axes[1, 1].plot(cf.E_nodes, jx[ii], color='red'   , label=r'$J_{ix}$' )
+        axes[1, 1].plot(cf.E_nodes, jy[ii], color='cyan'  , label=r'$J_{iy}$' )
+        axes[1, 1].plot(cf.E_nodes, jz[ii], color='black' , label=r'$J_{iz}$' )
+        axes[1, 1].legend(loc=4, ncol=2)
+        axes[1, 1].set_ylabel(r'$J_i$', fontsize=14, rotation=0, labelpad=20)
+        
+        # Charge density and temperature
+        axes[2, 0].plot(cf.E_nodes, qdens[ii], color='green')
+        axes[2, 0].set_ylabel(r'$\rho_c$', fontsize=14, rotation=0, labelpad=20)
+        #axes[2, 0].set_ylim(0, None)
+        axes_Te = axes[2, 0].twinx()
+        axes_Te.plot(cf.E_nodes, te[ii],       color='red')
+        axes_Te.set_ylabel(r'$T_e$', fontsize=14, rotation=0, labelpad=20)
+        
+        
+# =============================================================================
+#         # SET FIELD RANGES #
+#         if ax_den.get_ylim()[1] > den_lim:
+#             den_lim *= 2.0
+#         ax_den.set_ylim(0, den_lim)
+#            
+#         if ax_Ex.get_ylim()[1] >  E_lim or \
+#            ax_Ex.get_ylim()[0] < -E_lim :
+#             E_lim *= 2.0
+#         ax_Ex.set_ylim(-E_lim, E_lim)
+#         
+#         if ax_By.get_ylim()[1] >  B_lim or \
+#            ax_By.get_ylim()[0] < -B_lim :            
+#            B_lim *= 2.0
+#         ax_B.set_ylim(0, B_lim)
+#         ax_By.set_ylim(-B_lim, B_lim)
+#         
+#         for ax in [ax_den, ax_Ex, ax_By]:
+#             plt.setp(ax.get_xticklabels(), visible=False)
+#             ax.set_yticks(ax.get_yticks()[1:])
+#             
+#         for ax in [ax_den, ax_Ex, ax_By, ax_B]:
+#             ax.set_xlim(B_nodes[0], B_nodes[-1])
+#             ax.axvline(-cf.NX//2, c='k', ls=':', alpha=0.5)
+#             ax.axvline( cf.NX//2, c='k', ls=':', alpha=0.5)
+#             ax.grid()
+# =============================================================================
+                
+        plt.tight_layout(pad=1.0, w_pad=1.8)
+        fig.subplots_adjust(hspace=0.125)
+
+        if save == True:
+            plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+        plt.close('all')
+    return
+
+
 
 #%%
 if __name__ == '__main__':
@@ -1360,7 +1513,9 @@ if __name__ == '__main__':
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
-        summary_plots(save=True)
+        check_fields()
+        #plot_damping_array()
+        #summary_plots(save=True)
         
         #plot_tx(save=True, log=True)
         #plot_helicity_colourplot()

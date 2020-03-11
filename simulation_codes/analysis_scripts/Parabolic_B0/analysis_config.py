@@ -2,6 +2,7 @@ import os
 import numpy as np
 import numba as nb
 import pickle
+import pdb
 '''
 Used to initialise values for a run
 e.g. directories, simulation/particle parameters, derived quantities, etc.
@@ -90,7 +91,7 @@ def load_simulation_params():
            ie, run_desc, seed, subcycles, LH_frac, orbit_res, freq_res, method_type,\
            particle_shape, part_save_iter, field_save_iter, dt_field, dt_particle,  \
            ND, NC, N, r_damp, xmax, B_xmax, B_eq, theta_xmax, a, boundary_type,     \
-           particle_boundary, rc_hwidth, L
+           particle_boundary, rc_hwidth, L, B_nodes, E_nodes
 
     h_name = os.path.join(data_dir, 'simulation_parameters.pckl')       # Load header file
     f      = open(h_name, 'rb')                                         # Open header file
@@ -132,6 +133,9 @@ def load_simulation_params():
     dt_field        = dt_sim * field_save_iter                         # Time between data slices (seconds)
     dt_particle     = dt_sim * part_save_iter
     
+    B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx      # B grid points position in space
+    E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
+    
     if rc_hwidth == 0: 
         rc_hwidth = NX
     return 
@@ -163,8 +167,9 @@ def load_fields(ii):
     tJ               = data['J']
     tdns             = data['dns']
     tsim_time        = data['sim_time']
+    tdamping_array   = data['damping_array']
 
-    return tB, tE, tVe, tTe, tJ, tdns, tsim_time
+    return tB, tE, tVe, tTe, tJ, tdns, tsim_time, tdamping_array
 
 
 def load_particles(ii):    
@@ -187,7 +192,7 @@ def extract_all_arrays():
     '''
     num_field_steps    = len(os.listdir(field_dir)) 
     
-    bx_arr, by_arr, bz_arr = [np.zeros((num_field_steps, NC + 1)) for _ in range(3)]
+    bx_arr, by_arr, bz_arr, damping_array = [np.zeros((num_field_steps, NC + 1)) for _ in range(4)]
     
     ex_arr,ey_arr,ez_arr,vex_arr,jx_arr,vey_arr,jy_arr,vez_arr,jz_arr,te_arr,qdns_arr\
     = [np.zeros((num_field_steps, NC)) for _ in range(11)]
@@ -209,8 +214,8 @@ def extract_all_arrays():
         for ii in range(num_field_steps):
             print('Extracting field timestep {}'.format(ii))
             
-            B, E, Ve, Te, J, q_dns, sim_time = load_fields(ii)
-            
+            B, E, Ve, Te, J, q_dns, sim_time, damp = load_fields(ii)
+
             bx_arr[ii, :] = B[:, 0]
             by_arr[ii, :] = B[:, 1]
             bz_arr[ii, :] = B[:, 2]
@@ -227,9 +232,10 @@ def extract_all_arrays():
             vey_arr[ii, :] = Ve[:, 1]
             vez_arr[ii, :] = Ve[:, 2]
             
-            te_arr[  ii, :]    = Te
-            qdns_arr[ii, :]    = q_dns
-            field_sim_time[ii] = sim_time
+            te_arr[  ii, :]      = Te
+            qdns_arr[ii, :]      = q_dns
+            field_sim_time[ii]   = sim_time
+            damping_array[ii, :] = damp
         
         np.save(temp_dir + 'bx' +'_array.npy', bx_arr)
         np.save(temp_dir + 'by' +'_array.npy', by_arr)
@@ -249,6 +255,7 @@ def extract_all_arrays():
         
         np.save(temp_dir + 'te'    +'_array.npy', te_arr)
         np.save(temp_dir + 'qdens' +'_array.npy', qdns_arr)
+        np.save(temp_dir + 'damping_array' +'_array.npy', damping_array)
         np.save(temp_dir + 'field_sim_time' +'_array.npy', field_sim_time)
         
         print('Field component arrays saved in {}'.format(temp_dir))
@@ -262,7 +269,7 @@ def get_array(component='by', get_all=False, timebase=None):
     
     Components:
         3D (x, y, z) -- B, E, J, Ve
-        1D           -- qdens, Te
+        1D           -- qdens, Te, damping_array
     
     kwargs:
         get_all  :: Flag to retrieve all recorded fields (Default False)
@@ -300,6 +307,7 @@ def get_array(component='by', get_all=False, timebase=None):
         
         te    = np.load(temp_dir + 'te' +'_array.npy')
         qdens = np.load(temp_dir + 'qdens' +'_array.npy')
+        damping_array = np.load(temp_dir + 'damping_array' +'_array.npy')
         field_sim_time = np.load(temp_dir + 'field_sim_time' +'_array.npy')
         
         ftime_sec = dt_field * np.arange(bx.shape[0])
@@ -311,7 +319,7 @@ def get_array(component='by', get_all=False, timebase=None):
         else:
             ftime = ftime_sec
 
-        return ftime, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens, field_sim_time
+        return ftime, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens, field_sim_time, damping_array
 
 
 @nb.njit()
