@@ -12,8 +12,8 @@ import fields_1D    as fields
 import init_1D      as init
 
 from simulation_parameters_1D import dx, mu0, NC, NX, ND, qm_ratios, freq_res, orbit_res,\
-                                     account_for_dispersion, dispersion_allowance
-
+                                     account_for_dispersion, dispersion_allowance, E_nodes
+from fields_1D import eval_B0x
 
 @nb.njit()
 def cross_product(A, B, C):
@@ -48,12 +48,14 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
     
     This might be able to be done without the intermediate y2 array since the interpolated
     points don't require previous point values.
+    
+    ADDS B0 TO X-AXIS ON TOP OF INTERPOLATION
     '''
     y2      = np.zeros(B.shape, dtype=nb.float64)
     interp *= 0.
     
     # Calculate second derivative
-    for jj in range(B.shape[1]):
+    for jj in range(1, B.shape[1]):
         
         # Interior B-nodes, Centered difference
         for ii in range(1, NC):
@@ -68,9 +70,12 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
             y2[NC, jj] = 2*B[NC,    jj] - 5*B[NC - 1, jj] + 4*B[NC - 2, jj] - B[NC - 3, jj]
         
     # Do spline interpolation: E[ii] is bracketed by B[ii], B[ii + 1]
-    for jj in range(B.shape[1]):
+    for jj in range(1, B.shape[1]):
         for ii in range(NC):
             interp[ii, jj] = 0.5 * (B[ii, jj] + B[ii + 1, jj] + (1/6) * (y2[ii, jj] + y2[ii + 1, jj]))
+    
+    for ii in range(NC):
+        interp[ii, 0] = eval_B0x(E_nodes[ii])
     return
 
 
@@ -96,7 +101,10 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, \
     criteria is higher in order to provide a little hysteresis and prevent constantly switching
     timesteps.
     '''
-    B_magnitude     = np.sqrt(B[ND:ND+NX+1, 0] ** 2 + B[ND:ND+NX+1, 1] ** 2 + B[ND:ND+NX+1, 2] ** 2)
+    interpolate_edges_to_center(B, B_center)
+    B_magnitude     = np.sqrt(B_center[ND:ND+NX+1, 0] ** 2 +
+                              B_center[ND:ND+NX+1, 1] ** 2 +
+                              B_center[ND:ND+NX+1, 2] ** 2)
     gyfreq          = qm_ratios.max() * B_magnitude.max()     
     ion_ts          = orbit_res / gyfreq
     
@@ -107,7 +115,6 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, \
         Eacc_ts = ion_ts
     
     if account_for_dispersion == True:
-        interpolate_edges_to_center(B, B_center)
         B_tot           = np.sqrt(B_center[:, 0] ** 2 + B_center[:, 1] ** 2 + B_center[:, 2] ** 2)
     
         dispfreq        = ((np.pi / dx) ** 2) * (B_tot / (mu0 * q_dens)).max()           # Dispersion frequency

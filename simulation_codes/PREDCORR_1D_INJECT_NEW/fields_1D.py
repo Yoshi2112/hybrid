@@ -8,7 +8,7 @@ import numpy as np
 import numba as nb
 
 import auxilliary_1D as aux
-from simulation_parameters_1D import dx, Te0, ne, q, mu0, kB, ie, Bc, B_eq, a
+from simulation_parameters_1D import dx, Te0, ne, q, mu0, kB, ie, B_eq, a, ND, NX
 
 
 @nb.njit()
@@ -74,13 +74,10 @@ def push_B(B, E, curlE, DT, qq, damping_array, half_flag=1):
     '''
     get_curl_E(E, curlE)
 
-    B       -= Bc
     B       -= 0.5 * DT * curlE                          # Advance using curl (apply retarding factor here?)
     
-    for ii in nb.prange(3):                              # Apply damping
+    for ii in nb.prange(1, B.shape[1]):                  # Apply damping, skipping x-axis
         B[:, ii] *= damping_array                        # Not sure if this needs to modified for half steps?
-    
-    B       += Bc
     return
 
 
@@ -129,21 +126,22 @@ def get_grad_P(qn, te, grad_P, temp):
         temp   -- intermediary array used to store electron pressure, since both
                   density and temperature may vary (with adiabatic approx.)
         
-    Forwards/backwards differencing for the edge cells, and central difference
-    over 2dx instead of dx, since everything's on the E-grid. No point in doing
-    a differencing onto B, then having to interpolate back.
+    Forwards/backwards differencing at the simulation cells at the edge of the
+    physical space domain. Guard cells set to zero.
     '''
+    temp     *= 0; grad_P *= 0
     nc        = qn.shape[0]
     grad_P[:] = qn * kB * te / q       # Store Pe in grad_P array for calculation
+    LC        = NX + ND - 1
 
     # Central differencing, internal points
-    for ii in nb.prange(1, nc - 1):
+    for ii in nb.prange(ND + 1, LC - 1):
         temp[ii] = (grad_P[ii + 1] - grad_P[ii - 1])
-
-    # Forwards/Backwards difference
-    temp[0]      = -3*grad_P[0]      + 4*grad_P[1]      - grad_P[2]
-    temp[nc - 1] =  3*grad_P[nc - 1] - 4*grad_P[nc - 2] + grad_P[nc - 3]
-    temp        /= (2*dx)
+    
+    # Forwards/Backwards difference at physical boundaries
+    temp[ND] = -3*grad_P[ND] + 4*grad_P[ND + 1] - grad_P[ND + 2]
+    temp[LC] =  3*grad_P[LC] - 4*grad_P[LC - 1] + grad_P[LC - 2]
+    temp    /= (2*dx)
     
     # Return value
     grad_P[:]    = temp[:nc]
