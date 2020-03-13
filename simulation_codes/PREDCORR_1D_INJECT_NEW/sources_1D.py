@@ -22,19 +22,23 @@ def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
     OUTPUT:
         ni     -- Species number moment array(size, Nj)
         nui    -- Species velocity moment array (size, Nj)
+        
+    13/03/2020 :: Modified to ignore contributions from particles with negative
+                    indices (i.e. "deactivated" particles)
     '''
     for ii in nb.prange(vel.shape[1]):
         I   = Ie[ii]
         sp  = idx[ii]
-    
-        for kk in range(3):
-            nu[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
-            nu[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
-            nu[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
         
-        ni[I,     sp] += W_elec[0, ii]
-        ni[I + 1, sp] += W_elec[1, ii]
-        ni[I + 2, sp] += W_elec[2, ii]
+        if sp >= 0:
+            for kk in range(3):
+                nu[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
+                nu[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
+                nu[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
+            
+            ni[I,     sp] += W_elec[0, ii]
+            ni[I + 1, sp] += W_elec[1, ii]
+            ni[I + 2, sp] += W_elec[2, ii]
     return
 
 

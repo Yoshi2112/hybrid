@@ -1090,7 +1090,7 @@ def test_varying_background_function():
 
 
 
-def save_diagnostic_plots(qq, pos, vel, B, E, q_dens, Ji, sim_time, DT):
+def save_diagnostic_plots(qq, pos, vel, B, E, q_dens, Ji, sim_time, DT, histogram=True):
     
     plt.ioff()
 
@@ -1098,8 +1098,12 @@ def save_diagnostic_plots(qq, pos, vel, B, E, q_dens, Ji, sim_time, DT):
     fig = plt.figure(figsize=(20,10))                                           # Initialize Figure Space
     fig.patch.set_facecolor('w')                                                # Set figure face color
 
-    npos       = pos / const.dx + const.ND                                      # Cell particle position
     nvel       = vel / const.va                                                 # Normalized velocity
+
+    vel_lim = 20
+    B_lim   = const.B_eq*1e9
+    E_lim   = 30
+    den_lim = 2.0
 
     qdens_norm = q_dens / (const.density*const.charge).sum()                    # Normalized change density
      
@@ -1107,23 +1111,34 @@ def save_diagnostic_plots(qq, pos, vel, B, E, q_dens, Ji, sim_time, DT):
     ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
     ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
 
-    for jj in range(const.Nj):
-        ax_vx.scatter(npos[const.idx_bounds[jj, 0]: const.idx_bounds[jj, 1]], nvel[0, const.idx_bounds[jj, 0]: const.idx_bounds[jj, 1]], s=3, c=const.temp_color[jj], lw=0, label=const.species_lbl[jj])
-        ax_vy.scatter(npos[const.idx_bounds[jj, 0]: const.idx_bounds[jj, 1]], nvel[1, const.idx_bounds[jj, 0]: const.idx_bounds[jj, 1]], s=3, c=const.temp_color[jj], lw=0)
-
-    ax_vx.legend()
-    ax_vx.set_title(r'Particle velocities vs. Position (x)')
-    ax_vy.set_xlabel(r'Cell', labelpad=10)
-
-    ax_vx.set_ylabel(r'$\frac{v_x}{vA}$', rotation=90)
-    ax_vy.set_ylabel(r'$\frac{v_y}{vA}$', rotation=90)
-
-    plt.setp(ax_vx.get_xticklabels(), visible=False)
-    ax_vx.set_yticks(ax_vx.get_yticks()[1:])
-
-    for ax in [ax_vy, ax_vx]:
-        ax.set_xlim(const.ND, const.NX + const.ND)
-        ax.set_ylim(-20, 20)
+    if histogram == True:
+            
+        vel_tr = np.sqrt(nvel[1] ** 2 + nvel[2] ** 2)
+        
+        for jj in range(const.Nj):
+            num_bins = const.nsp_ppc[jj] // 5
+            
+            xs, BinEdgesx = np.histogram(nvel[0, const.idx_start[jj]: const.idx_end[jj]], bins=num_bins)
+            bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
+            ax_vx.plot(bx, xs, '-', c=const.temp_color[jj], drawstyle='steps', label=const.species_lbl[jj])
+            
+            ys, BinEdgesy = np.histogram(vel_tr[const.idx_start[jj]: const.idx_end[jj]], bins=num_bins)
+            by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
+            ax_vy.plot(by, ys, '-', c=const.temp_color[jj], drawstyle='steps', label=const.species_lbl[jj])
+            
+            ax_vx.set_ylabel(r'$n_{v_\parallel}$')
+            ax_vx.set_ylabel(r'$n_{v_\perp}$')
+            
+            ax_vx.set_title('Velocity distribution of each species in simulation domain')
+            ax_vy.set_xlabel(r'$v / v_A$')
+            
+            ax_vx.set_xlim(-vel_lim, vel_lim)
+            ax_vy.set_xlim(0, np.sqrt(2)*vel_lim)
+            
+            for ax, comp in zip([ax_vx, ax_vy], ['v_\parallel', 'v_\perp']):
+                ax.set_ylim(0, int(const.N / const.NX) * 2.0)
+                ax.legend(loc='upper right')
+                ax.set_ylabel('$n_{%s}$'%comp, rotation=0)
 
 #----- Density Plot
     ax_den = plt.subplot2grid((fig_size), (0, 3), colspan=3)                     # Initialize axes
@@ -1154,18 +1169,17 @@ def save_diagnostic_plots(qq, pos, vel, B, E, q_dens, Ji, sim_time, DT):
     ax_By = plt.subplot2grid((fig_size), (2, 3), colspan=3, sharex=ax_den)
     ax_B  = plt.subplot2grid((fig_size), (3, 3), colspan=3, sharex=ax_den)
 
-    mag_B  = (np.sqrt(B[:, 0] ** 2 + B[:, 1] ** 2 + B[:, 2] ** 2)) / const.B0
-    B_norm = B / const.B0                                                           
+    mag_B  = np.sqrt(B[:, 0] ** 2 + B[:, 1] ** 2 + B[:, 2] ** 2)
 
     ax_B.plot(mag_B, color='g')
-    ax_By.plot(B_norm[:, 1], color='g') 
-    ax_By.plot(B_norm[:, 2], color='b') 
+    ax_By.plot(B[:, 1], color='g') 
+    ax_By.plot(B[:, 2], color='b') 
 
     ax_B.set_xlim(0,  const.NC + 1)
     ax_By.set_xlim(0, const.NC + 1)
 
-    ax_B.set_ylim(0, 2)
-    ax_By.set_ylim(-1, 1)
+    ax_B.set_ylim(0, const.B_eq)
+    ax_By.set_ylim(-const.B_eq, const.B_eq)
 
     ax_B.set_ylabel( r'$|B|$', rotation=0, labelpad=20, fontsize=14)
     ax_By.set_ylabel(r'$\frac{B_{y,z}}{B_0}$', rotation=0, labelpad=10, fontsize=14)
@@ -1189,7 +1203,7 @@ def save_diagnostic_plots(qq, pos, vel, B, E, q_dens, Ji, sim_time, DT):
     plt.figtext(0.855, 0.86, 'DT   : {:>7.3f} ms'.format(DT * 1e3), fontname='monospace', fontsize=14)
 
     filename = 'diag%05d.png' % qq
-    path     = const.drive + '//' + const.save_path + '//run_{}'.format(const.run_num) + '//diagnostic_plots//'
+    path     = const.drive + '//' + const.save_path + '//run_{}'.format(const.run) + '//diagnostic_plots//'
 
     if os.path.exists(path) == False:                                   # Create data directory
         os.makedirs(path)

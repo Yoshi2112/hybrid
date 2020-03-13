@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 
-from   simulation_parameters_1D  import ND, dx, xmin, xmax, qm_ratios, B_eq, a
+from   simulation_parameters_1D  import ND, dx, xmin, xmax, qm_ratios, B_eq, a, particle_boundary
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -20,7 +20,7 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
     Helper function to group the particle advance and moment collection functions
     '''
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT)
-    position_update(pos, vel, DT, Ie, W_elec)  
+    position_update(pos, vel, idx, DT, Ie, W_elec)  
     collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, ni, nu, temp1D)
     return
 
@@ -113,40 +113,41 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)                     # Calculate magnetic node weights
     
     for ii in nb.prange(vel.shape[1]):  
-        qmi = 0.5 * dt * qm_ratios[idx[ii]]                                 # Charge-to-mass ration for ion of species idx[ii]
-
-        # These create two new length 3 arrays
-        Ep = E[Ie[ii]    , 0:3] * W_elec[0, ii]                             \
-           + E[Ie[ii] + 1, 0:3] * W_elec[1, ii]                             \
-           + E[Ie[ii] + 2, 0:3] * W_elec[2, ii]                             # Vector E-field at particle location
-
-        Bp = B[Ib[ii]    , 0:3] * W_mag[0, ii]                              \
-           + B[Ib[ii] + 1, 0:3] * W_mag[1, ii]                              \
-           + B[Ib[ii] + 2, 0:3] * W_mag[2, ii]                              # b1 at particle location
-        
-        v_minus    = vel[:, ii] + qmi * Ep                                  # First E-field half-push
-        
-        eval_B0_particle(pos[:, ii], Bp)                                    # Add B0 at particle location
-        
-        T = qmi * Bp                                                        # Vector Boris variable
-        S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable
-        
-        v_prime    = np.zeros(3)
-        v_prime[0] = v_minus[0] + v_minus[1] * T[2] - v_minus[2] * T[1]     # Magnetic field rotation
-        v_prime[1] = v_minus[1] + v_minus[2] * T[0] - v_minus[0] * T[2]
-        v_prime[2] = v_minus[2] + v_minus[0] * T[1] - v_minus[1] * T[0]
-                
-        v_plus     = np.zeros(3)
-        v_plus[0]  = v_minus[0] + v_prime[1] * S[2] - v_prime[2] * S[1]
-        v_plus[1]  = v_minus[1] + v_prime[2] * S[0] - v_prime[0] * S[2]
-        v_plus[2]  = v_minus[2] + v_prime[0] * S[1] - v_prime[1] * S[0]
-        
-        vel[:, ii] = v_plus +  qmi * Ep                                     # Second E-field half-push
+        if idx[ii] > 0:
+            qmi = 0.5 * dt * qm_ratios[idx[ii]]                                 # Charge-to-mass ration for ion of species idx[ii]
+    
+            # These create two new length 3 arrays
+            Ep = E[Ie[ii]    , 0:3] * W_elec[0, ii]                             \
+               + E[Ie[ii] + 1, 0:3] * W_elec[1, ii]                             \
+               + E[Ie[ii] + 2, 0:3] * W_elec[2, ii]                             # Vector E-field at particle location
+    
+            Bp = B[Ib[ii]    , 0:3] * W_mag[0, ii]                              \
+               + B[Ib[ii] + 1, 0:3] * W_mag[1, ii]                              \
+               + B[Ib[ii] + 2, 0:3] * W_mag[2, ii]                              # b1 at particle location
+            
+            v_minus    = vel[:, ii] + qmi * Ep                                  # First E-field half-push
+            
+            eval_B0_particle(pos[:, ii], Bp)                                    # Add B0 at particle location
+            
+            T = qmi * Bp                                                        # Vector Boris variable
+            S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable
+            
+            v_prime    = np.zeros(3)
+            v_prime[0] = v_minus[0] + v_minus[1] * T[2] - v_minus[2] * T[1]     # Magnetic field rotation
+            v_prime[1] = v_minus[1] + v_minus[2] * T[0] - v_minus[0] * T[2]
+            v_prime[2] = v_minus[2] + v_minus[0] * T[1] - v_minus[1] * T[0]
+                    
+            v_plus     = np.zeros(3)
+            v_plus[0]  = v_minus[0] + v_prime[1] * S[2] - v_prime[2] * S[1]
+            v_plus[1]  = v_minus[1] + v_prime[2] * S[0] - v_prime[0] * S[2]
+            v_plus[2]  = v_minus[2] + v_prime[0] * S[1] - v_prime[1] * S[0]
+            
+            vel[:, ii] = v_plus +  qmi * Ep                                     # Second E-field half-push
     return
 
 
 @nb.njit()
-def position_update(pos, vel, dt, Ie, W_elec, diag=False):
+def position_update(pos, vel, idx, dt, Ie, W_elec, diag=False):
     '''Updates the position of the particles using x = x0 + vt. 
     Also updates particle nearest node and weighting.
 
@@ -161,11 +162,19 @@ def position_update(pos, vel, dt, Ie, W_elec, diag=False):
     Reflective boundaries to simulate the "open ends" that would have flux coming in from the ionosphere side.
     '''
     for ii in nb.prange(pos.shape[1]):
-        pos[0, ii] += vel[0, ii] * dt
-
-        if (pos[0, ii] <= xmin or pos[0, ii] >= xmax):
-            vel[0, ii] *= -1.                   # Reflect velocity
-            pos[0, ii] += vel[0, ii] * dt       # Get particle back in simulation space
-                
+        if idx[ii] >= 0:
+            pos[0, ii] += vel[0, ii] * dt
+    
+            if (pos[0, ii] <= xmin or pos[0, ii] >= xmax):
+                if particle_boundary == 'reflect':
+                    vel[0, ii] *= -1.                   # Reflect velocity
+                    pos[0, ii] += vel[0, ii] * dt       # Get particle back in simulation space
+                elif particle_boundary == 'absorb':
+                    vel[:, ii] *= 0                     # Zero particle velocity
+                    idx[ii]     = -128 + idx[ii]        # Fold index to negative values (preserves species ID)
+                    # Where do place position? Or just leave them there?
+                else:
+                    pass
+    
     assign_weighting_TSC(pos, Ie, W_elec)
     return

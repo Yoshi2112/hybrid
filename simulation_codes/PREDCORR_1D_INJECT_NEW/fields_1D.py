@@ -76,8 +76,8 @@ def push_B(B, E, curlE, DT, qq, damping_array, half_flag=1):
 
     B       -= 0.5 * DT * curlE                          # Advance using curl (apply retarding factor here?)
     
-    for ii in nb.prange(1, B.shape[1]):                  # Apply damping, skipping x-axis
-        B[:, ii] *= damping_array                        # Not sure if this needs to modified for half steps?
+    #for ii in nb.prange(1, B.shape[1]):                  # Apply damping, skipping x-axis
+    #    B[:, ii] *= damping_array                        # Not sure if this needs to modified for half steps?
     return
 
 

@@ -1505,56 +1505,59 @@ def check_fields(save=True):
 #%%
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'non_uniform_B0_test_3'
-    series_dir  = '{}/runs//{}//'.format(drive, series)
-    num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in range(num_runs):
-        print('Run {}'.format(run_num))
-        cf.load_run(drive, series, run_num, extract_arrays=True)
+    for series in ['non_uniform_B0_test_longspace_RClimited', 'non_uniform_B0_test_nodamp']:
+        #series      = 'non_uniform_B0_test_4'
+        series_dir  = '{}/runs//{}//'.format(drive, series)
+        num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         
-        check_fields()
-        #plot_damping_array()
-        #summary_plots(save=True)
-        
-        #plot_tx(save=True, log=True)
-        #plot_helicity_colourplot()
-        
-        #disp_folder = 'dispersion_plots/'
-
-        #single_point_both_fields_AGU()
-        
-        #do_all_dynamic_spectra(ymax=1.0)
-        #do_all_dynamic_spectra(ymax=None)
-        
-        #By_raw         = cf.get_array('By') * 1e9
-        #Bz_raw         = cf.get_array('Bz') * 1e9
-        #ggg.get_linear_growth(By_raw, Bz_raw)
-
-# =============================================================================
-#         try:
-#             single_point_field_timeseries()
-#         except:
-#             pass
-# =============================================================================
-        
-# =============================================================================
-#         try:
-#             plot_spatially_averaged_fields()
-#         except:
-#             pass
-# =============================================================================
-        
-# =============================================================================
-#         try:
-#             standard_analysis_package()
-#         except:
-#             pass
-#         
-#         try:
-#             plot_energies(normalize=True, save=True)
-#         except:
-#             pass
-# =============================================================================
-        
-
+        for run_num in range(num_runs):
+            print('Run {}'.format(run_num))
+            cf.load_run(drive, series, run_num, extract_arrays=True)
+            
+            #check_fields()
+            #plot_damping_array()
+            #summary_plots(save=True)
+            plot_tx(save=True, log=True)
+            plot_tx(save=True, log=False)
+            
+            #plot_helicity_colourplot()
+            
+            #disp_folder = 'dispersion_plots/'
+    
+            #single_point_both_fields_AGU()
+            
+            #do_all_dynamic_spectra(ymax=1.0)
+            #do_all_dynamic_spectra(ymax=None)
+            
+            #By_raw         = cf.get_array('By') * 1e9
+            #Bz_raw         = cf.get_array('Bz') * 1e9
+            #ggg.get_linear_growth(By_raw, Bz_raw)
+    
+    # =============================================================================
+    #         try:
+    #             single_point_field_timeseries()
+    #         except:
+    #             pass
+    # =============================================================================
+            
+    # =============================================================================
+    #         try:
+    #             plot_spatially_averaged_fields()
+    #         except:
+    #             pass
+    # =============================================================================
+            
+    # =============================================================================
+    #         try:
+    #             standard_analysis_package()
+    #         except:
+    #             pass
+    #         
+    #         try:
+    #             plot_energies(normalize=True, save=True)
+    #         except:
+    #             pass
+    # =============================================================================
+            
+    
