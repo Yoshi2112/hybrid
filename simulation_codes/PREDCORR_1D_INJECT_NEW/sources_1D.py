@@ -5,7 +5,7 @@ Created on Fri Sep 22 17:55:15 2017
 @author: iarey
 """
 import numba as nb
-from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, q, ne, min_dens
+from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, q, ne, min_dens, mirror
 
 
 @nb.njit()
@@ -43,7 +43,7 @@ def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
 
 
 @nb.njit()
-def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D, mirror=True):
+def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D):
     '''
     Moment (charge/current) collection function.
 

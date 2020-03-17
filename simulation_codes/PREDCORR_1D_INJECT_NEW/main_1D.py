@@ -8,7 +8,7 @@ import particles_1D  as particles
 import fields_1D     as fields
 import sources_1D    as sources
 import save_routines as save
-import diagnostics   as diag
+#import diagnostics   as diag
 
 from simulation_parameters_1D import save_particles, save_fields
 
@@ -55,7 +55,7 @@ if __name__ == '__main__':
                                  B, Ve, Te, q_dens, damping_array)
         
         if qq%50 == 0:
-            diag.save_diagnostic_plots(qq, pos, vel, B, E_int, q_dens, Ji, sim_time, DT)
+            #diag.save_diagnostic_plots(qq, pos, vel, B, E_int, q_dens, Ji, sim_time, DT)
             
             running_time = int(timer() - start_time)
             hrs          = running_time // 3600

@@ -38,7 +38,7 @@ To Do:
      -- dB/dx too large? Make smaller (let L = 5.35)
      
 '''
-def plot_tx(component='By', saveas='tx_plot', save=False, tmax=None, log=False):
+def plot_tx(component='By', saveas='tx_plot', save=False, log=False):
     plt.ioff()
 
     t, arr = cf.get_array(component)
@@ -51,35 +51,36 @@ def plot_tx(component='By', saveas='tx_plot', save=False, tmax=None, log=False):
         x    = np.arange(cf.NC) * cf.dx
 
     ## PLOT IT
-    fig, ax = plt.subplots(1, figsize=(15, 10))
-    
-    if log == True:
-        im1 = ax.pcolormesh(x, t, abs(arr),
-                       norm=colors.LogNorm(vmin=1e-3, vmax=None), cmap='nipy_spectral')
-        suffix = '_log'
-    else:
-        im1 = ax.pcolormesh(x, t, arr, cmap='nipy_spectral', vmin=0, vmax=100)      # Remove f[0] since FFT[0] >> FFT[1, 2, ... , k]
-        suffix = ''
-    
-    cb  = fig.colorbar(im1)
-    
-    if component[0] == 'B':
-        cb.set_label('nT', rotation=0)
-    else:
-        cb.set_label('mV/m', rotation=0)
-
-    ax.set_title('t-x Plot for {}'.format(component), fontsize=14)
-    ax.set_ylabel(r't (s)', rotation=0, labelpad=15)
-    ax.set_xlabel('x (m)')
-    ax.set_ylim(0, 60)
-    ax.axvline(         cf.ND  * cf.dx, c='w', ls=':', alpha=1.0)
-    ax.axvline((cf.NC - cf.ND) * cf.dx, c='w', ls=':', alpha=1.0)
+    for tmax, lbl in zip([60, None], ['min', 'full']):
+        fig, ax = plt.subplots(1, figsize=(15, 10))
         
-    if save == True:
-        fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + suffix + '.png'
-        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-        print('t-x Plot saved')
-        plt.close('all')
+        if log == True:
+            im1 = ax.pcolormesh(x, t, abs(arr),
+                           norm=colors.LogNorm(vmin=1e-3, vmax=None), cmap='nipy_spectral')
+            suffix = '_log'
+        else:
+            im1 = ax.pcolormesh(x, t, arr, cmap='nipy_spectral', vmin=0, vmax=100)      # Remove f[0] since FFT[0] >> FFT[1, 2, ... , k]
+            suffix = ''
+        
+        cb  = fig.colorbar(im1)
+        
+        if component[0] == 'B':
+            cb.set_label('nT', rotation=0)
+        else:
+            cb.set_label('mV/m', rotation=0)
+    
+        ax.set_title('t-x Plot for {}'.format(component), fontsize=14)
+        ax.set_ylabel(r't (s)', rotation=0, labelpad=15)
+        ax.set_xlabel('x (m)')
+        ax.set_ylim(0, tmax)
+        ax.axvline(         cf.ND  * cf.dx, c='w', ls=':', alpha=1.0)
+        ax.axvline((cf.NC - cf.ND) * cf.dx, c='w', ls=':', alpha=1.0)
+            
+        if save == True:
+            fullpath = cf.anal_dir + saveas + '_{}_{}'.format(component.lower(), lbl) + suffix + '.png'
+            plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+            print('t-x Plot saved')
+            plt.close('all')
     return
 
 
@@ -132,7 +133,6 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
         plt.close('all')
     return
 
-
 def plot_kt(component='By', saveas='kt_plot', save=False):
     plt.ioff()
     kt = disp.get_kt(component)
@@ -156,7 +156,6 @@ def plot_kt(component='By', saveas='kt_plot', save=False):
         plt.close('all')
         print('k-t Plot saved')
     return
-
 
 def plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=False, save=False, pcyc_mult=None):
     plt.ioff()
@@ -320,20 +319,36 @@ def plot_dynamic_spectra(component='By', saveas='power_spectra', save=False, yma
 def plot_energies(normalize=True, save=False):
     mag_energy, electron_energy, particle_energy, total_energy = bk.get_energies()
 
+    ftime_sec  = cf.dt_field    * np.arange(mag_energy.shape[0])
+    ptime_sec  = cf.dt_particle * np.arange(particle_energy.shape[0])
+
     fig     = plt.figure(figsize=(15, 7))
     ax      = plt.subplot2grid((7, 7), (0, 0), colspan=6, rowspan=7)
 
-    ax.plot(cf.time_seconds_field, mag_energy      / mag_energy[0],      label = r'$U_B$', c='green')
-    ax.plot(cf.time_seconds_field, electron_energy / electron_energy[0], label = r'$U_e$', c='orange')
-    ax.plot(cf.time_seconds_field, total_energy    / total_energy[0],    label = r'$Total$', c='k')
-    
-    for jj in range(cf.Nj):
-        ax.plot(cf.time_seconds_particle, particle_energy[:, jj, 0] / particle_energy[0, jj, 0],
-                 label=r'$K_{E\parallel}$ %s' % cf.species_lbl[jj], c=cf.temp_color[jj], linestyle=':')
+    if normalize == True:
+        ax.plot(ftime_sec, mag_energy      / mag_energy[0],      label = r'$U_B$', c='green')
+        ax.plot(ftime_sec, electron_energy / electron_energy[0], label = r'$U_e$', c='orange')
+        ax.plot(ptime_sec, total_energy    / total_energy[0],    label = r'$Total$', c='k')
         
-        ax.plot(cf.time_seconds_particle, particle_energy[:, jj, 1] / particle_energy[0, jj, 1],
-                 label=r'$K_{E\perp}$ %s' % cf.species_lbl[jj], c=cf.temp_color[jj], linestyle='-')
-
+        for jj in range(cf.Nj):
+            ax.plot(ptime_sec, particle_energy[:, jj, 0] / particle_energy[0, jj, 0],
+                     label=r'$K_{E\parallel}$ %s' % cf.species_lbl[jj], c=cf.temp_color[jj], linestyle=':')
+            
+            ax.plot(ptime_sec, particle_energy[:, jj, 1] / particle_energy[0, jj, 1],
+                     label=r'$K_{E\perp}$ %s' % cf.species_lbl[jj], c=cf.temp_color[jj], linestyle='-')
+    else:
+        ax.plot(ftime_sec, mag_energy,      label = r'$U_B$', c='green')
+        ax.plot(ftime_sec, electron_energy, label = r'$U_e$', c='orange')
+        ax.plot(ptime_sec, total_energy,    label = r'$Total$', c='k')
+        
+        for jj in range(cf.Nj):
+            ax.plot(ptime_sec, particle_energy[:, jj, 0],
+                     label=r'$K_{E\parallel}$ %s' % cf.species_lbl[jj], c=cf.temp_color[jj], linestyle=':')
+            
+            ax.plot(ptime_sec, particle_energy[:, jj, 1],
+                     label=r'$K_{E\perp}$ %s' % cf.species_lbl[jj], c=cf.temp_color[jj], linestyle='-')
+    
+    
     ax.legend(loc='center left', bbox_to_anchor=(1, 0.2))
     fig.tight_layout()
 
@@ -357,7 +372,7 @@ def plot_energies(normalize=True, save=False):
         plt.figtext(0.85, 0.76-jj*0.04, 'ION{}    : {:>7}%'.format(jj, percent_ion[jj]), fontsize=fsize,  fontname=fname)
 
     ax.set_xlabel('Time (seconds)')
-    ax.set_xlim(0, cf.time_seconds_field[-1])
+    ax.set_xlim(0, ptime_sec[-1])
 
     if normalize == True:
         ax.set_title('Normalized Energy Distribution in Simulation Space')
@@ -1019,40 +1034,6 @@ def single_point_both_fields_AGU(cell=None, save=True):
     return
 
 
-def interpolate_fields_to_particle_time(num_particle_steps, timebase=None):
-    '''
-    For each particle timestep, interpolate field values
-    '''
-    ftime, bx, by, bz, ex, ey, ez, vex, vey, vez,\
-    te, jx, jy, jz, qdens, fsim_time, damping_array = cf.get_array(get_all=True)
-    
-    ptime_sec = np.arange(num_particle_steps) * cf.dt_particle
-    
-    pbx, pby, pbz = [np.zeros((num_particle_steps, cf.NC + 1)) for _ in range(3)]
-    
-    for ii in range(cf.NC + 1):
-        pbx[:, ii] = np.interp(ptime_sec, ftime, bx[:, ii])
-        pby[:, ii] = np.interp(ptime_sec, ftime, by[:, ii])
-        pbz[:, ii] = np.interp(ptime_sec, ftime, bz[:, ii])
-    
-    pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens = [np.zeros((num_particle_steps, cf.NC)) for _ in range(11)]
-    
-    for ii in range(cf.NC):
-        pex[:, ii]    = np.interp(ptime_sec, ftime, ex[:, ii])
-        pey[:, ii]    = np.interp(ptime_sec, ftime, ey[:, ii])
-        pez[:, ii]    = np.interp(ptime_sec, ftime, ez[:, ii])
-        pvex[:, ii]   = np.interp(ptime_sec, ftime, vex[:, ii])
-        pvey[:, ii]   = np.interp(ptime_sec, ftime, vey[:, ii])
-        pvez[:, ii]   = np.interp(ptime_sec, ftime, vez[:, ii])
-        pte[:, ii]    = np.interp(ptime_sec, ftime, te[:, ii])
-        pjx[:, ii]    = np.interp(ptime_sec, ftime, jx[:, ii])
-        pjy[:, ii]    = np.interp(ptime_sec, ftime, jy[:, ii])
-        pjz[:, ii]    = np.interp(ptime_sec, ftime, jz[:, ii])
-        pqdens[:, ii] = np.interp(ptime_sec, ftime, qdens[:, ii])
-
-    return ptime_sec, pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens
-
-
 def analyse_helicity(overwrite=False, save=True):
     By_raw         = cf.get_array('By')
     Bz_raw         = cf.get_array('Bz')
@@ -1107,7 +1088,7 @@ def summary_plots(save=True, histogram=True):
     
     plt.ioff()
     ptime_sec, pbx, pby, pbz, pex, pey, pez, pvex, pvey,\
-    pvez, pte, pjx, pjy, pjz, pqdens = interpolate_fields_to_particle_time(num_particle_steps)
+    pvez, pte, pjx, pjy, pjz, pqdens = cf.interpolate_fields_to_particle_time(num_particle_steps)
     
     time_seconds_particle    = ptime_sec
     time_gperiods_particle   = ptime_sec / cf.gyperiod 
@@ -1502,62 +1483,63 @@ def check_fields(save=True):
 
 
 
-#%%
+#%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
     
-    for series in ['non_uniform_B0_test_longspace_RClimited', 'non_uniform_B0_test_nodamp']:
-        #series      = 'non_uniform_B0_test_4'
-        series_dir  = '{}/runs//{}//'.format(drive, series)
-        num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+    series      = 'homogenous_ABC_test_long'
+    series_dir  = '{}/runs//{}//'.format(drive, series)
+    num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+    
+    for run_num in range(num_runs):
+        print('Run {}'.format(run_num))
+        cf.load_run(drive, series, run_num, extract_arrays=True)
         
-        for run_num in range(num_runs):
-            print('Run {}'.format(run_num))
-            cf.load_run(drive, series, run_num, extract_arrays=True)
-            
-            #check_fields()
-            #plot_damping_array()
-            #summary_plots(save=True)
-            plot_tx(save=True, log=True)
-            plot_tx(save=True, log=False)
-            
-            #plot_helicity_colourplot()
-            
-            #disp_folder = 'dispersion_plots/'
-    
-            #single_point_both_fields_AGU()
-            
-            #do_all_dynamic_spectra(ymax=1.0)
-            #do_all_dynamic_spectra(ymax=None)
-            
-            #By_raw         = cf.get_array('By') * 1e9
-            #Bz_raw         = cf.get_array('Bz') * 1e9
-            #ggg.get_linear_growth(By_raw, Bz_raw)
-    
-    # =============================================================================
-    #         try:
-    #             single_point_field_timeseries()
-    #         except:
-    #             pass
-    # =============================================================================
-            
-    # =============================================================================
-    #         try:
-    #             plot_spatially_averaged_fields()
-    #         except:
-    #             pass
-    # =============================================================================
-            
-    # =============================================================================
-    #         try:
-    #             standard_analysis_package()
-    #         except:
-    #             pass
-    #         
-    #         try:
-    #             plot_energies(normalize=True, save=True)
-    #         except:
-    #             pass
-    # =============================================================================
-            
-    
+        #plot_energies(normalize=False, save=True)
+        
+        #check_fields()
+        #plot_damping_array()
+        #summary_plots(save=True)
+        plot_tx(save=True, log=True)
+        plot_tx(save=True, log=False)
+        
+        #plot_helicity_colourplot()
+        
+        #disp_folder = 'dispersion_plots/'
+
+        #single_point_both_fields_AGU()
+        
+        #do_all_dynamic_spectra(ymax=1.0)
+        #do_all_dynamic_spectra(ymax=None)
+        
+        #By_raw         = cf.get_array('By') * 1e9
+        #Bz_raw         = cf.get_array('Bz') * 1e9
+        #ggg.get_linear_growth(By_raw, Bz_raw)
+
+# =============================================================================
+#         try:
+#             single_point_field_timeseries()
+#         except:
+#             pass
+# =============================================================================
+        
+# =============================================================================
+#         try:
+#             plot_spatially_averaged_fields()
+#         except:
+#             pass
+# =============================================================================
+        
+# =============================================================================
+#         try:
+#             standard_analysis_package()
+#         except:
+#             pass
+#         
+#         try:
+#             plot_energies(normalize=True, save=True)
+#         except:
+#             pass
+# =============================================================================
+        
+

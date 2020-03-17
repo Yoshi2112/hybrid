@@ -65,9 +65,11 @@ def get_B0_particle(x, v, B, sp):
 def get_energies(): 
     '''
     Computes and saves field and particle energies at each field/particle timestep.
+    
+    TODO: Use particle-interpolated fields rather than raw field files.
+    OR    Use these interpolated fields ONLY for the total energy, would be slower.
     '''
-    from analysis_config import NX, dx, idx_bounds, Nj, n_contr, mass,\
-                                num_field_steps, num_particle_steps
+    from analysis_config import NX, dx, idx_start, idx_end, Nj, n_contr, mass
 
     energy_file = cf.temp_dir + 'energies.npz'
     
@@ -76,31 +78,45 @@ def get_energies():
         kB  = 1.38065e-23             # Boltzmann's Constant (J/K)
         q   = 1.602e-19               # Elementary charge (C)
     
+        num_field_steps    = len(os.listdir(cf.field_dir))
+        num_particle_steps = len(os.listdir(cf.particle_dir))
+    
         mag_energy      = np.zeros( num_field_steps)
         electron_energy = np.zeros( num_field_steps)
         particle_energy = np.zeros((num_particle_steps, Nj, 2))
         
         for ii in range(num_field_steps):
             print('Loading field file {}'.format(ii))
-            B, E, Ve, Te, J, q_dns = cf.load_fields(ii)
+            B, E, Ve, Te, J, q_dns, sim_time, damping_array = cf.load_fields(ii)
             
             mag_energy[ii]      = (0.5 / mu0) * np.square(B[1:-2]).sum() * NX * dx
             electron_energy[ii] = 1.5 * (kB * Te * q_dns / q).sum() * NX * dx
     
         for ii in range(num_particle_steps):
             print('Loading particle file {}'.format(ii))
-            pos, vel = cf.load_particles(ii)
+            pos, vel, psim_time = cf.load_particles(ii)
             for jj in range(Nj):
                 '''
                 Only works properly for theta = 0 : Fix later
                 '''
-                vpp2 = vel[0, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2
-                vpx2 = vel[1, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2 + vel[2, idx_bounds[jj, 0]:idx_bounds[jj, 1]] ** 2
+                vpp2 = vel[0, idx_start[jj]:idx_end[jj]] ** 2
+                vpx2 = vel[1, idx_start[jj]:idx_end[jj]] ** 2 + vel[2, idx_start[jj]:idx_end[jj]] ** 2
         
                 particle_energy[ii, jj, 0] = 0.5 * mass[jj] * vpp2.sum() * n_contr[jj] * NX * dx
                 particle_energy[ii, jj, 1] = 0.5 * mass[jj] * vpx2.sum() * n_contr[jj] * NX * dx
         
-        total_energy = np.zeros(cf.num_field_steps)   # Placeholder until I interpolate this
+        # Calculate total energy
+        ptime_sec, pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens = \
+        cf.interpolate_fields_to_particle_time(num_particle_steps)
+        
+        pmag_energy      = (0.5 / mu0) * (np.square(pbx) + np.square(pby) + np.square(pbz)).sum(axis=1) * NX * dx
+        pelectron_energy = 1.5 * (kB * pte * pqdens / q).sum(axis=1) * NX * dx
+
+        total_energy = np.zeros(num_particle_steps)   # Placeholder until I interpolate this
+        for ii in range(num_particle_steps):
+            total_energy[ii] = pmag_energy[ii] + pelectron_energy[ii]
+            for jj in range(Nj):
+                total_energy[ii] += particle_energy[ii, jj, :].sum()
         
         print('Saving energies to file...')
         np.savez(energy_file, mag_energy      = mag_energy,

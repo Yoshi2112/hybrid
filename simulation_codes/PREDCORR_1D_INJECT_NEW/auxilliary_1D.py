@@ -143,18 +143,20 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, \
         print('Timestep halved. Syncing particle velocity...')
         init.set_damping_array(damping_array, DT)
             
-    elif DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0:
-        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, 0.5*DT)    # Re-sync vel/pos          
-        DT         *= 2.0
-        max_inc   //= 2
-        qq        //= 2
-
-        field_save_iter //= 2
-        part_save_iter //= 2
-            
-        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*DT)   # De-sync vel/pos 
-        print('Timestep Doubled. Syncing particle velocity...')
-        init.set_damping_array(damping_array, DT)
+# =============================================================================
+#     elif DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0:
+#         particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, 0.5*DT)    # Re-sync vel/pos          
+#         DT         *= 2.0
+#         max_inc   //= 2
+#         qq        //= 2
+# 
+#         field_save_iter //= 2
+#         part_save_iter //= 2
+#             
+#         particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*DT)   # De-sync vel/pos 
+#         print('Timestep Doubled. Syncing particle velocity...')
+#         init.set_damping_array(damping_array, DT)
+# =============================================================================
 
     return qq, DT, max_inc, part_save_iter, field_save_iter, damping_array
 

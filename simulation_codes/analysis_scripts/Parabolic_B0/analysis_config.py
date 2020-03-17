@@ -322,6 +322,40 @@ def get_array(component='by', get_all=False, timebase=None):
         return ftime, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens, field_sim_time, damping_array
 
 
+def interpolate_fields_to_particle_time(num_particle_steps, timebase=None):
+    '''
+    For each particle timestep, interpolate field values
+    '''
+    ftime, bx, by, bz, ex, ey, ez, vex, vey, vez,\
+    te, jx, jy, jz, qdens, fsim_time, damping_array = get_array(get_all=True)
+    
+    ptime_sec = np.arange(num_particle_steps) * dt_particle
+    
+    pbx, pby, pbz = [np.zeros((num_particle_steps, NC + 1)) for _ in range(3)]
+    
+    for ii in range(NC + 1):
+        pbx[:, ii] = np.interp(ptime_sec, ftime, bx[:, ii])
+        pby[:, ii] = np.interp(ptime_sec, ftime, by[:, ii])
+        pbz[:, ii] = np.interp(ptime_sec, ftime, bz[:, ii])
+    
+    pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens = [np.zeros((num_particle_steps, NC)) for _ in range(11)]
+    
+    for ii in range(NC):
+        pex[:, ii]    = np.interp(ptime_sec, ftime, ex[:, ii])
+        pey[:, ii]    = np.interp(ptime_sec, ftime, ey[:, ii])
+        pez[:, ii]    = np.interp(ptime_sec, ftime, ez[:, ii])
+        pvex[:, ii]   = np.interp(ptime_sec, ftime, vex[:, ii])
+        pvey[:, ii]   = np.interp(ptime_sec, ftime, vey[:, ii])
+        pvez[:, ii]   = np.interp(ptime_sec, ftime, vez[:, ii])
+        pte[:, ii]    = np.interp(ptime_sec, ftime, te[:, ii])
+        pjx[:, ii]    = np.interp(ptime_sec, ftime, jx[:, ii])
+        pjy[:, ii]    = np.interp(ptime_sec, ftime, jy[:, ii])
+        pjz[:, ii]    = np.interp(ptime_sec, ftime, jz[:, ii])
+        pqdens[:, ii] = np.interp(ptime_sec, ftime, qdens[:, ii])
+
+    return ptime_sec, pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens
+
+
 @nb.njit()
 def create_idx():
     N_part = cellpart * NX
