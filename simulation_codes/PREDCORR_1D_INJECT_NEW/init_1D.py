@@ -11,14 +11,14 @@ import simulation_parameters_1D as const
 import save_routines as save
 #import diagnostics as diag
 
-from particles_1D             import assign_weighting_TSC
-from fields_1D                import eval_B0x
+import particles_1D as particles
+import fields_1D    as fields
 
 from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, B_eq, va, \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
                                      Bc, qm_ratios, freq_res, rc_hwidth, temp_type
 
-@nb.njit()
+#@nb.njit()
 def uniform_gaussian_distribution_quiet():
     '''Creates an N-sampled normal distribution across all particle species within each simulation cell
 
@@ -101,10 +101,10 @@ def uniform_gaussian_distribution_quiet():
     # Set Larmor radius (y,z positions) for all particles
     B0x = np.zeros(N, dtype=np.float64)
     for kk in range(N):
-        B0x[kk] = eval_B0x(pos[0, kk])                      # Background magnetic field at position
+        B0x[kk] = fields.eval_B0x(pos[0, kk])                      # Background magnetic field at position
     
     # WHY DOESN'T THIS WORK!?!? ONLY FOR PARTICLES OUTSIDE THE LOSS CONE???
-    if False:
+    if False: # Old version
         mu_eq       = 0.5 * mass[idx] * (vel[1] ** 2 + vel[2] ** 2) / B_eq
         v_mag2_eq   = vel[0] ** 2 + vel[1] ** 2 + vel[2] ** 2
         v_perp_new  = np.sqrt(2 * mu_eq * B0x / mass[idx])
@@ -113,6 +113,13 @@ def uniform_gaussian_distribution_quiet():
         vel[0]      = np.sqrt(v_mag2_eq - v_perp_new ** 2)       # New vx,    preserving velocity/energy
         vel[1]      = v_perp_new * np.cos(theta)                 # New vy, vz preserving gyrophase, invariant
         vel[2]      = v_perp_new * np.sin(theta)
+    elif True: # Newer version
+        v_perp2     = vel[1] ** 2 + vel[2] ** 2
+        v_mag2_eq   = vel[0] ** 2 + vel[1] ** 2 + vel[2] ** 2
+        
+        v_perp_new  = np.sqrt(v_perp2 * B0x / B_eq)
+        v_para_new  = np.sqrt(v_mag2_eq - v_perp_new**2)
+        pdb.set_trace()
     else:
         v_perp_new  = np.sqrt(vel[1] ** 2 + vel[2] ** 2)
     
@@ -151,7 +158,7 @@ def initialize_particles():
     W_elec     = np.zeros((3, N), dtype=np.float64)
     W_mag      = np.zeros((3, N), dtype=np.float64)
     
-    assign_weighting_TSC(pos, Ie, W_elec)
+    particles.assign_weighting_TSC(pos, Ie, W_elec)
     return pos, vel, Ie, W_elec, Ib, W_mag, idx
 
 

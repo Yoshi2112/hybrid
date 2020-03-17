@@ -12,7 +12,7 @@ import fields_1D    as fields
 import init_1D      as init
 
 from simulation_parameters_1D import dx, mu0, NC, NX, ND, qm_ratios, freq_res, orbit_res,\
-                                     account_for_dispersion, dispersion_allowance, E_nodes, Bc
+                                     account_for_dispersion, dispersion_allowance, E_nodes
 
 @nb.njit()
 def cross_product(A, B, C):
