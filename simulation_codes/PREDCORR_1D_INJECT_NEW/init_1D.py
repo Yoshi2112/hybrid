@@ -18,14 +18,19 @@ from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, B_eq, v
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
                                      Bc, qm_ratios, freq_res, rc_hwidth, temp_type
 
-def calc_losses(v_para, v_perp):
-    alpha        = np.arctan(v_perp / v_para) * 180. / np.pi
+#@nb.njit()
+def calc_losses(v_para, v_perp, st=0):
+    '''
+    For arrays of parallel and perpendicular velocities, finds the number and 
+    indices of particles outside the loss cone.
     
-    in_loss_cone = (abs(alpha) < const.loss_cone)
-    N_loss       = in_loss_cone.sum()
-    loss_idx     = np.where(in_loss_cone == True)[0]
-    
-    print('{} particles in loss cone'.format(N_loss))
+    Calculation of in_loss_cone not compatible with njit(). Recode later if you want.
+    '''
+    alpha        = np.arctan(v_perp / v_para) * 180. / np.pi    # Calculate particle PA's
+    in_loss_cone = (abs(alpha) < const.loss_cone)               # Determine if particle in loss cone
+    N_loss       = in_loss_cone.sum()                           # Count number that are
+    loss_idx     = np.where(in_loss_cone == True)[0]            # Find their indices
+    loss_idx    += st                                           # Offset indices to account for position in master array
     return N_loss, loss_idx
 
 
@@ -46,13 +51,8 @@ def uniform_gaussian_distribution_quiet():
     throughout the simulation, and not drift with time.
     
     CHECK THIS LATER: BUT ITS ONLY AN INITIAL CONDITION SO IT SHOULD BE OK FOR NOW
-    
-    Verified :: Transformation of velocity to account for position in bottle conserves energy (velocity), invariant, and gyrophase
-    
-    TO DO: Have option to not initialize particles into the loss cone. Since they're initialized at the equator
-    and then their velocities "moved" to their position, limiting the velocity distribution to only pitch angles
-    above alpha_loss should be fine. Although I'd probably need to find a way to initialize via a pitch angle 
-    distribution (e.g. like Winske)
+
+    # Could use temp_type[jj] == 1 for RC LCD only
     '''
     pos = np.zeros((3, N), dtype=np.float64)
     vel = np.zeros((3, N), dtype=np.float64)
@@ -74,77 +74,74 @@ def uniform_gaussian_distribution_quiet():
             else:
                 NC_load = 2*rc_hwidth
         
-        # Load particles in selected cell range
+        # Load particles in each applicable cell
         acc = 0; offset  = 0
         for ii in range(NC_load):
-            st     = idx_start[jj] + acc
-            
+            # Add particle if last cell (for symmetry)
             if ii == NC_load - 1:
                 half_n += 1
                 offset  = 1
+                
+            # Particle index ranges
+            st = idx_start[jj] + acc
+            en = idx_start[jj] + acc + half_n
             
-            # Do velocities first
-            en             = idx_start[jj] + acc + half_n
+            # Set position for half: Analytically uniform
+            for kk in range(half_n):
+                pos[0, st + kk] = dx*(float(kk) / (half_n - offset) + ii)
+            
+            # Turn [0, NC] distro into +/- NC/2 distro
+            pos[0, st: en]-= NC_load*dx/2              
+            
+            # Set velocity for half: Randomly Maxwellian
             vel[0, st: en] = np.random.normal(0, sf_par, half_n) +  drift_v[jj]
             vel[1, st: en] = np.random.normal(0, sf_per, half_n)
             vel[2, st: en] = np.random.normal(0, sf_per, half_n)
+
+            # Set Loss Cone Distribution: Reinitialize particles in loss cone
+            B0x = fields.eval_B0x(pos[0, st: en])
+            if const.homogenous == False:
+                N_loss = const.N_species[jj]
+                
+                while N_loss > 0:
+                    v_mag       = vel[0, st: en] ** 2 + vel[1, st: en] ** 2 + vel[2, st: en] ** 2
+                    v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
+                    v_perp_eq   = v_perp * np.sqrt(B_eq / B0x)
+                    v_para_eq   = np.sqrt(v_mag - v_perp_eq ** 2)
+
+                    N_loss, loss_idx = calc_losses(v_para_eq, v_perp_eq, st=st)
+                    
+                    # Catch for a particle on the boundary : Set 90 degree pitch angle (gyrophase shouldn't overly matter)
+                    if N_loss == 1:
+                        if abs(pos[0, loss_idx[0]]) == const.xmax:
+                            ww = loss_idx[0]
+                            vel[0, loss_idx[0]] = 0.
+                            vel[1, loss_idx[0]] = np.sqrt(vel[0, ww] ** 2 + vel[1, ww] ** 2 + vel[2, ww] ** 2)
+                            vel[2, loss_idx[0]] = 0.
+                            N_loss = 0
+                                        
+                    if N_loss != 0:                        
+                        vel[0, loss_idx] = np.random.normal(0., sf_par, N_loss)
+                        vel[1, loss_idx] = np.random.normal(0., sf_per, N_loss)
+                        vel[2, loss_idx] = np.random.normal(0., sf_per, N_loss)
+            else:
+                v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
+        
+            pos[1, st: en]  = v_perp / (qm_ratios[jj] * B0x)    # Set initial Larmor radius   
             
-            vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Inverted velocities (v2 = -v1)
+            vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Invert velocities (v2 = -v1)
             vel[1, en: en + half_n] = vel[1, st: en] * -1.0
             vel[2, en: en + half_n] = vel[2, st: en] * -1.0
+            pos[1, en: en + half_n] = pos[1, st: en] * -1.0     # Move gyrophase 180 degrees (doesn't do anything)
             
-            # Then position: Loads evenly, adds one particle on end boundary
-            for kk in range(half_n):
-                pos[0, st + kk] = dx*(float(kk) / (half_n - offset) + ii)
-
-            pos[0, en: en + half_n]  = pos[0, st: en]           # Other half, same position
-            pos[0, st: en + half_n] -= NC_load*dx/2             # Turn [0, NC] distro into +/- NC/2 distro
-                
-            acc                     += half_n * 2
-        
-    # Recast v_perp accounting for local magnetic field and
-    # Set Larmor radius (y,z positions) for all particles
-    B0x = fields.eval_B0x(pos[0])                      # Background magnetic field at position
-    
-    N_loss = N
-    if True:
-        
-        # Still need to work out how to initialize those particles on the simulation boundaries
-        # Also need to move this to the above initialization loop (and only do for half)
-        # Otherwise quite start isn't so quiet. Not a big deal - do later.
-        while N_loss > 4:
-            v_mag       = vel[0] ** 2 + vel[1] ** 2 + vel[2] ** 2
-            v_perp      = np.sqrt(vel[1] ** 2 + vel[2] ** 2)
+            pos[0, en: en + half_n] = pos[0, st: en]            # Other half, same position
             
-            # Get particle velocity at equator
-            v_perp_eq   = v_perp * np.sqrt(B_eq / B0x)
-            v_para_eq   = np.sqrt(v_mag - v_perp_eq ** 2)
-
-            # Identify those particles which 
-            N_loss, loss_idx = calc_losses(v_para_eq, v_perp_eq)
-            
-            if N_loss != 0:
-                # Must be a tricky way to vectorize this
-                # Would probably require separating loss_idx by species
-                # Require a change in calc_losses to turn loss_idx into a 2D array
-                # Would speed it up, requiring less calls to normal(). Not worth it though.
-                for ii in range(N_loss):
-                    sf_par = np.sqrt(kB *  Tpar[idx[ii]] /  mass[idx[ii]])  # Scale factors for velocity initialization
-                    sf_per = np.sqrt(kB *  Tper[idx[ii]] /  mass[idx[ii]])
+            acc                    += half_n * 2
         
-                    vel[0, loss_idx[ii]] = np.random.normal(0., sf_par, 1)
-                    vel[1, loss_idx[ii]] = np.random.normal(0., sf_per, 1)
-                    vel[2, loss_idx[ii]] = np.random.normal(0., sf_per, 1)
-    else:
-        v_perp      = np.sqrt(vel[1] ** 2 + vel[2] ** 2)
-    
-    # Larmor radii as initial off-axis position
-    pos[1]     = v_perp / (qm_ratios[jj] * B0x)         
-
     return pos, vel, idx
 
 
-@nb.njit()
+#@nb.njit()
 def initialize_particles():
     '''Initializes particle arrays.
     
@@ -186,9 +183,11 @@ def set_damping_array(damping_array, DT):
     Also, using Shoji's parameters, mask at most damps 98.7% at end grid 
     points. Relying on lots of time spend there? Or some sort of error?
     Can just play with r value/damping region length once it doesn't explode.
+    
+    23/03/2020 Put factor of 0.5 in front of va to set group velocity approx.
     '''
     dist_from_mp  = np.abs(np.arange(NC + 1) - 0.5*NC)          # Distance of each B-node from midpoint
-    r_damp        = np.sqrt(29.7 * va / ND * (DT / dx))         # Damping coefficient
+    r_damp        = np.sqrt(29.7 * 0.5 * va / ND * (DT / dx))   # Damping coefficient
     
     for ii in range(NC + 1):
         if dist_from_mp[ii] > 0.5*NX:
@@ -224,7 +223,7 @@ def initialize_fields():
     
     Ve      = np.zeros((NC, 3), dtype=np.float64)
     Te      = np.zeros( NC,     dtype=np.float64)
-        
+    
     return B, E_int, E_half, Ve, Te
 
 
