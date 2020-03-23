@@ -128,17 +128,17 @@ def check_velocity_distribution(vel):
         ax_y = plt.subplot2grid((2, 3), (0,2))
         ax_z = plt.subplot2grid((2, 3), (1,2))
     
-        xs, BinEdgesx = np.histogram(vel[0, const.idx_bounds[j, 0]: const.idx_bounds[j, 1]] / const.va, bins=num_bins)
+        xs, BinEdgesx = np.histogram(vel[0, const.idx_start[j]: const.idx_end[j]] / const.va, bins=num_bins)
         bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
         ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
         ax_x.set_xlabel(r'$v_x / v_A$')
     
-        ys, BinEdgesy = np.histogram(vel[1, const.idx_bounds[j, 0]: const.idx_bounds[j, 1]] / const.va, bins=num_bins)
+        ys, BinEdgesy = np.histogram(vel[1, const.idx_start[j]: const.idx_end[j]] / const.va, bins=num_bins)
         by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
         ax_y.plot(by, ys, '-', c='c', drawstyle='steps')
         ax_y.set_xlabel(r'$v_y / v_A$')
     
-        zs, BinEdgesz = np.histogram(vel[2, const.idx_bounds[j, 0]: const.idx_bounds[j, 1]] / const.va, bins=num_bins)
+        zs, BinEdgesz = np.histogram(vel[2, const.idx_start[j]: const.idx_end[j]] / const.va, bins=num_bins)
         bz = 0.5 * (BinEdgesz[1:] + BinEdgesz[:-1])
         ax_z.plot(bz, zs, '-', c='c', drawstyle='steps')
         ax_z.set_xlabel(r'$v_z / v_A$')
