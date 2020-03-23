@@ -166,9 +166,7 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P):
     
     arr3D, arr1D are tertiary arrays used for intermediary computations
     
-    To Do: Improve accuracy (and clean up code) by allowing B array to only be
-    perturbed B. B0 only needed for Ve x B calculation, where it must be interpolated
-    to cell centers first. In the interpolation function, add on B0 along with the 
+    To Do: In the interpolation function, add on B0 along with the 
     spline interpolation. No other part of the code requires B0 in the nodes.
     '''
     curl_B_term(B, temp3De)                                   # temp3De is now curl B term

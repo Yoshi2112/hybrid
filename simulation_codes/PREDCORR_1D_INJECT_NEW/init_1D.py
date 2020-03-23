@@ -19,16 +19,12 @@ from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, B_eq, v
                                      Bc, qm_ratios, freq_res, rc_hwidth, temp_type
 
 def calc_losses(v_para, v_perp):
-    alpha  = np.arctan(v_perp / v_para) * 180. / np.pi
+    alpha        = np.arctan(v_perp / v_para) * 180. / np.pi
     
     in_loss_cone = (abs(alpha) < const.loss_cone)
     N_loss       = in_loss_cone.sum()
     loss_idx     = np.where(in_loss_cone == True)[0]
     
-# =============================================================================
-#     if N_loss == 4:
-#         pdb.set_trace()
-# =============================================================================
     print('{} particles in loss cone'.format(N_loss))
     return N_loss, loss_idx
 

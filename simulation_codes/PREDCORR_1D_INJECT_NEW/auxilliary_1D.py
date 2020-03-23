@@ -73,6 +73,7 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
         for ii in range(NC):
             interp[ii, jj] = 0.5 * (B[ii, jj] + B[ii + 1, jj] + (1/6) * (y2[ii, jj] + y2[ii + 1, jj]))
     
+    # Add B0x to interpolated array
     for ii in range(NC):
         interp[ii, 0] = fields.eval_B0x(E_nodes[ii])
     
