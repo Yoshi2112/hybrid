@@ -13,9 +13,9 @@ run_description = '''ABC Test :: Change nothing yet.'''
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path         = 'runs//ABC_test_lowres'       # Series save dir   : Folder containing all runs of a series
-run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles    = 0                             # Save data flag    : For later analysis
-save_fields       = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
+run               = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_particles    = 1                             # Save data flag    : For later analysis
+save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 #cpu_affin         = [run%8]
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run. Must be list. Auto-assign: None.
@@ -38,8 +38,8 @@ B_surf = 3.12e-5                            # Magnetic field strength at Earth s
 
 
 ### SIMULATION PARAMETERS ###
-NX        = 128                              # Number of cells - doesn't include ghost cells
-ND        = NX                              # Damping region length: Multiple of NX (on each side of simulation domain)
+NX        = 6                             # Number of cells - doesn't include ghost cells
+ND        = 2                              # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev   = 200                             # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 4.0                             # Field line L shell
@@ -55,18 +55,18 @@ field_res = 0.20                            # Data capture resolution in gyroper
 
 
 ### PARTICLE PARAMETERS ###
-species_lbl= [r'$H^+$ cold']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
-temp_color = ['blue']
-temp_type  = np.array([0])             	                # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-dist_type  = np.array([0])                               # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.array([10])                           # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
+temp_color = ['blue', 'red']
+temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+nsp_ppc    = np.array([10, 10])                           # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 
-mass       = np.array([1.])    			                # Species ion mass (proton mass units)
-charge     = np.array([1.])    			                # Species ion charge (elementary charge units)
-drift_v    = np.array([0.])                             # Species parallel bulk velocity (alfven velocity units)
-density    = np.array([100.]) * 1e6                    # Species density in /cc (cast to /m3)
-E_per      = np.array([1.0])                        # Perpendicular energy in eV
-anisotropy = np.array([0.0])
+mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
+charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
+drift_v    = np.array([0., 0.])                             # Species parallel bulk velocity (alfven velocity units)
+density    = np.array([190., 10.]) * 1e6                    # Species density in /cc (cast to /m3)
+E_per      = np.array([5.0, 50000.])                        # Perpendicular energy in eV
+anisotropy = np.array([0.0, 4.0])
 
 # External current properties
 J_amp          = 1.0                                        # External current : Amplitude  (A)
@@ -74,7 +74,7 @@ J_freq         = 0.02                                       # External current :
 J_k            = 1e-7                                       # External current : Wavenumber (/m)
 
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
-E_e            = 1.0                                       # Electron energy (eV)
+E_e            = 10.0                                       # Electron energy (eV)
 
 # This will be fixed by subcycling later on, hopefully
 account_for_dispersion = False                              # Flag (True/False) whether or not to reduce timestep to prevent dispersion getting too high

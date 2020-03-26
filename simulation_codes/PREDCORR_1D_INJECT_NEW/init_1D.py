@@ -281,10 +281,29 @@ def set_equilibrium_te0(qdens):
     
     Iterative? Analytic?
     '''
+    LC             = NX + ND - 1
+    qdens_gradient = np.zeros(NC    , dtype=np.float64)
+    temp           = np.zeros(NC + 1, dtype=np.float64)
     
+    # Get density gradient:
+    
+    # Central differencing, internal points
+    for ii in nb.prange(ND + 1, LC - 1):
+        qdens_gradient[ii] = (qdens[ii + 1] - qdens[ii - 1])
+    
+    # Forwards/Backwards difference at physical boundaries
+    qdens_gradient[ND] = -3*qdens[ND] + 4*qdens[ND + 1] - qdens[ND + 2]
+    qdens_gradient[LC] =  3*qdens[LC] - 4*qdens[LC - 1] + qdens[LC - 2]
+    qdens_gradient    /= (2*dx)
+    
+    # Work out equilibrium temperature
+    te0_arr = np.ones(NC, dtype=np.float64) * Te0
     
     for ii in range(ND, ND + NX):
-        pass
+        te0_arr[ii + 1] = - 2.0 * dx * te0_arr[ii] * qdens_gradient[ii] * qdens[ii] + te0_arr[ii - 1]
+        
+    fields.get_grad_P(qdens, te0_arr, qdens_gradient, temp)
+    #pdb.set_trace()
     return
 
 

@@ -320,69 +320,78 @@ def check_source_term_boundaries(qn, ji):
 
 def test_density_and_velocity_deposition():
     # Change dx to 1 and NX/ND/ppc to something reasonable to make this nice
-    # Works fine with one species, why not two?
-    E_nodes  = (np.arange(const.NX + 2*const.ND    ) - const.ND  + 0.5) * const.dx
-    B_nodes  = (np.arange(const.NX + 2*const.ND + 1) - const.ND  - 0.0) * const.dx
-     
+    # Use the sim_params with only one species
     POS, VEL, IE, W_ELEC, IB, W_MAG, IDX  = init.initialize_particles()
     Q_DENS, Q_DENS_ADV, JI, NI, NU        = init.initialize_source_arrays()
     temp1D                                = np.zeros(const.NC, dtype=np.float64) 
     
-    sources.collect_moments(VEL, IE, W_ELEC, IDX, Q_DENS, JI, NI, NU, temp1D, mirror=False) 
-
-    # Plot particle position
-    ypos = np.ones(POS.shape[0] // 2)
-    plt.scatter(POS[:POS.shape[0] // 2 ], ypos + 0.1, c='r')
-    plt.scatter(POS[ POS.shape[0] // 2:], ypos + 0.2, c='b')
-
-    # Plot charge density
-    plt.plot(E_nodes, Q_DENS / Q_DENS.max(), marker='o')
+    sources.collect_moments(VEL, IE, W_ELEC, IDX, Q_DENS, JI, NI, NU, temp1D) 
+    
+    if False:
+        # Two species
+        ypos = np.ones(POS.shape[1] // 2)
         
-    for ii in range(E_nodes.shape[0]):
-        plt.axvline(E_nodes[ii], linestyle='--', c='r', alpha=0.2)
-        plt.axvline(B_nodes[ii], linestyle='--', c='b', alpha=0.2)
+        plt.scatter(POS[0, :POS.shape[1] // 2 ], ypos + 0.1, c='r')
+        plt.scatter(POS[0,  POS.shape[1] // 2:], ypos + 0.2, c='b')
+    else:
+        # One species
+        ypos = np.ones(POS.shape[1])
+        plt.scatter(POS[0], ypos + 0.1, c='b')
+        
+    # Plot charge density
+    plt.plot(const.E_nodes, Q_DENS / Q_DENS.max(), marker='o')
+        
+    for ii in range(const.E_nodes.shape[0]):
+        plt.axvline(const.E_nodes[ii], linestyle='--', c='r', alpha=0.2)
+        plt.axvline(const.B_nodes[ii], linestyle='--', c='b', alpha=0.2)
      
-    plt.axvline(0         , color='k')
+    plt.axvline(const.xmin, color='k')
     plt.axvline(const.xmax, color='k')
-    plt.axvline(B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
-    plt.axvline(B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(const.B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(const.B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
     return
 
 
 def check_density_deposition():
     # Change dx to 1 and NX/ND to reasonable values to make this nice
-    E_nodes  = (np.arange(const.NX + 2*const.ND    ) - const.ND  + 0.5) * const.dx
-    B_nodes  = (np.arange(const.NX + 2*const.ND + 1) - const.ND  - 0.0) * const.dx
-     
-    pos        = np.array([0.0, 1.0, 6.0])
-    pos        = np.arange(0.0, 6.05, 0.05)
+    # Don't forget to comment out the density floor AND re-enable it when done.
+    #positions   = np.array([2.00])
+    dy = 0.5
+    positions = np.arange(-const.NX/2, const.NX/2 + dy, dy)
+
+    Np  = positions.shape[0]
+    pos = np.zeros((3, Np))
     
-    vel        = np.zeros((3, pos.shape[0]))
-    idx        = np.zeros(pos.shape[0], dtype=np.uint8)
-    Ie         = np.zeros(pos.shape[0],      dtype=np.uint16)
-    W_elec     = np.zeros((3, pos.shape[0]), dtype=np.float64)
+    for ii in range(Np):
+        pos[0, ii] = positions[ii]
+    
+    vel        = np.zeros((3, Np))
+    idx        = np.zeros(Np, dtype=np.uint8)
+    Ie         = np.zeros(Np, dtype=np.uint16)
+    W_elec     = np.zeros((3, Np), dtype=np.float64)
     
     q_dens, q_dens_adv, Ji, ni, nu = init.initialize_source_arrays()
     temp1D                         = np.zeros(const.NC, dtype=np.float64) 
     
     particles.assign_weighting_TSC(pos, Ie, W_elec)
-    sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D, mirror=False) 
-
-    # Plot normalized charge density
-    q_dens /= q_dens.max()
+    sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D) 
     
-    ypos = np.ones(pos.shape[0]) * q_dens.max() * 1.1
-    plt.plot(E_nodes, q_dens, marker='o')
-    plt.scatter(pos, ypos, marker='x', c='k')
+    # Plot normalized charge density
+    q_dens /= (const.q * const.n_contr[0])
+    #pdb.set_trace()
+    #print(q_dens.sum())
+    ypos = np.ones(Np) * q_dens.max() * 1.1
+    plt.plot(const.E_nodes, q_dens, marker='o')
+    plt.scatter(pos[0], ypos, marker='x', c='k')
         
-    for ii in range(E_nodes.shape[0]):
-        plt.axvline(E_nodes[ii], linestyle='--', c='r', alpha=0.2)
-        plt.axvline(B_nodes[ii], linestyle='--', c='b', alpha=0.2)
+    for ii in range(const.E_nodes.shape[0]):
+        plt.axvline(const.E_nodes[ii], linestyle='--', c='r', alpha=0.2)
+        plt.axvline(const.B_nodes[ii], linestyle='--', c='b', alpha=0.2)
      
-    plt.axvline(0          , linestyle=':', c='k'       , alpha=0.7)
-    plt.axvline(const.xmax , linestyle=':', c='k'       , alpha=0.7)
-    plt.axvline(B_nodes[ 0], linestyle='-', c='darkblue', alpha=0.7)
-    plt.axvline(B_nodes[-1], linestyle='-', c='darkblue', alpha=0.7)
+    plt.axvline(const.xmin, linestyle=':', c='k'       , alpha=0.7)
+    plt.axvline(const.xmax, linestyle=':', c='k'       , alpha=0.7)
+    plt.axvline(const.B_nodes[ 0], linestyle='-', c='darkblue', alpha=0.7)
+    plt.axvline(const.B_nodes[-1], linestyle='-', c='darkblue', alpha=0.7)
     return
 
 
@@ -2518,7 +2527,7 @@ if __name__ == '__main__':
     #test_curl_E()
     #test_grad_P_varying_qn()
     #test_density_and_velocity_deposition()
-    #check_density_deposition()
+    check_density_deposition()
     #visualize_inhomogenous_B()
     #plot_dipole_field_line()
     #check_particle_position_individual()
@@ -2536,7 +2545,7 @@ if __name__ == '__main__':
     #test_weight_shape_and_alignment()
     #compare_parabolic_to_dipole()
     #test_boris()
-    test_mirror_motion()
+    #test_mirror_motion()
     #test_B0_analytic()
     #plot_B0_function()
     #save_B0_map_3D()

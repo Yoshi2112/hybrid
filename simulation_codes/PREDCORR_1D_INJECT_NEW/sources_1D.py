@@ -82,7 +82,6 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D):
     if mirror == True:
         # Mirror source term contributions at edge back into domain: Simulates having
         # some sort of source on the outside of the physical space boundary.
-        # Is this going to cause "rippling" when particles disappear from simulation domain?
         q_dens[ND]          += q_dens[ND - 1]
         q_dens[ND + NX - 1] += q_dens[ND + NX]
     

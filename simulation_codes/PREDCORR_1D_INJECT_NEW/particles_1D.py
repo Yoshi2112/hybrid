@@ -6,8 +6,8 @@ Created on Fri Sep 22 17:23:44 2017
 """
 import numba as nb
 import numpy as np
-
-from   simulation_parameters_1D  import ND, dx, xmin, xmax, qm_ratios, B_eq, a, particle_boundary
+import pdb
+from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, B_eq, a, particle_boundary
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -44,6 +44,12 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
     
     NOTE: The addition of `epsilon' prevents banker's rounding due to precision limits. This
           is the easiest way to get around it.
+          
+    NOTE2: If statements in weighting prevent double counting of particles on simulation
+           boundaries. abs() with threshold used due to machine accuracy not recognising the
+           upper boundary sometimes. Note sure how big I can make this and still have it
+           be valid/not cause issues, but considering the scale of normal particle runs (speeds
+           on the order of va) it should be plenty fine.
     '''
     Np         = pos.shape[1]
     epsil      = 1e-15
@@ -59,10 +65,21 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
         xp          = (pos[0, ii] + particle_transform) / dx    # Shift particle position >= 0
         I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node
         delta_left  = I[ii] - xp                                # Distance from left node in grid units
-    
-        W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))      # Get weighting factors
-        W[1, ii] = 0.75 - np.square(delta_left + 1.)
-        W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
+        
+        if abs(pos[0, ii] - xmin) < 1e-10:
+            I[ii]    = ND - 1
+            W[0, ii] = 0.0
+            W[1, ii] = 0.5
+            W[2, ii] = 0.0
+        elif abs(pos[0, ii] - xmax) < 1e-10:
+            I[ii]    = ND + NX - 1
+            W[0, ii] = 0.5
+            W[1, ii] = 0.0
+            W[2, ii] = 0.0
+        else:
+            W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))      # Get weighting factors
+            W[1, ii] = 0.75 - np.square(delta_left + 1.)
+            W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
     return
 
 
