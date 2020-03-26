@@ -189,7 +189,6 @@ def position_update(pos, vel, idx, dt, Ie, W_elec, diag=False):
                 elif particle_boundary == 'absorb':
                     vel[:, ii] *= 0                     # Zero particle velocity
                     idx[ii]     = -128 + idx[ii]        # Fold index to negative values (preserves species ID)
-                    # Where do place position? Or just leave them there?
                 else:
                     pass
     
