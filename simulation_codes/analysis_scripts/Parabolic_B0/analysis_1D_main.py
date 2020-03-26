@@ -5,6 +5,7 @@ Created on Wed Apr 27 11:56:34 2016
 @author: c3134027
 """
 import numpy as np
+import numba as nb
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
@@ -28,16 +29,82 @@ e0  = 8.854e-12               # Epsilon naught - permittivity of free space
 
 '''
 Aim: To populate this script with plotting routines ONLY. Separate out the 
-processing/loading/calculation steps into other modules that can be called.
-
-To Do:
-    tx plot         -- Make log to see reflections (if any)
-    diagnostic plot -- Use velocity distribution instead of scatterplot (faster)
-    Question : Why is parabolic B0 unstable?
-     -- Gradient across NX-ND? Make B0 parabolic across range
-     -- dB/dx too large? Make smaller (let L = 5.35)
-     
+processing/loading/calculation steps into other modules that can be called.    
 '''
+@nb.njit()
+def calc_poynting(bx, by, bz, ex, ey, ez):
+    '''
+    Calculates point value of Poynting flux using E, B 3-vectors
+    '''
+    # Poynting Flux: Time, space, component
+    S = np.zeros((bx.shape[0], bx.shape[1], 3))
+    
+    for ii in range(bx.shape[0]):       # For each time
+        print('Calculating Poynting flux for time ',ii)
+        for jj in range(bx.shape[1]):   # For each point in space
+            S[ii, jj, 0] = ey[ii, jj] * bz[ii, jj] - ez[ii, jj] * by[ii, jj]
+            S[ii, jj, 1] = ez[ii, jj] * bx[ii, jj] - ex[ii, jj] * bz[ii, jj]
+            S[ii, jj, 2] = ex[ii, jj] * by[ii, jj] - ey[ii, jj] * bx[ii, jj]
+            
+    S *= 1 / mu0
+    return  S
+
+def plot_spatial_poynting(saveas='poynting_space_plot', save=False, log=False):
+    '''
+    Plots poynting flux at each gridpoint point in space
+    
+    -- Need to interpolate B to cell centers
+    -- S = E x H = 1/mu0 E x B
+    -- Loop through each cell     : E(t), B(t), S(t)
+    -- Maybe also do some sort of S, x plot
+    -- And/or do dynamic Poynting spectrum
+    '''
+    plt.ioff()
+
+    t, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens,\
+        field_sim_time, damping_array = cf.get_array(get_all=True)
+
+    bx, by, bz = bk.interpolate_B_to_center(bx, by, bz, zero_boundaries=False)
+    S          = calc_poynting(bx, by, bz, ex, ey, ez)
+    # Have an option to save poynting flux, later.
+    x = np.arange(cf.NC) * cf.dx
+    
+    ## PLOT IT
+    vlim = None
+    #if True:
+    for ii, comp in zip(range(3), ['x', 'y', 'z']):
+        #ii = 2; comp = 'z'
+        print('Creating plots for S{}'.format(comp))
+        for tmax, lbl in zip([60, None], ['min', 'full']):
+            fig, ax = plt.subplots(1, figsize=(15, 10))
+            # 
+            if log == True:
+                im1 = ax.pcolormesh(x, t, S[:, :, ii],
+                     norm=colors.SymLogNorm(linthresh=1e-7, vmin=vlim, vmax=vlim),  
+                     cmap='bwr')
+                suffix = '_log'
+            else:
+                im1 = ax.pcolormesh(x, t, S[:, :, ii], cmap='bwr', vmin=vlim, vmax=vlim)
+                suffix = ''
+            
+            cb  = fig.colorbar(im1)
+            cb.set_label('$S_z$')
+            
+            ax.set_title('Power Propagation :: Time vs. Space', fontsize=14)
+            ax.set_ylabel(r't (s)', rotation=0, labelpad=15)
+            ax.set_xlabel('x (m)')
+            ax.set_ylim(0, tmax)
+            ax.axvline(         cf.ND  * cf.dx, c='w', ls=':', alpha=1.0)
+            ax.axvline((cf.NC - cf.ND) * cf.dx, c='w', ls=':', alpha=1.0)
+                
+            if save == True:
+                fullpath = cf.anal_dir + saveas + '_s{}_{}'.format(comp, lbl) + suffix + '.png'
+                plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+                print('t-x Plot saved')
+                plt.close('all')
+    return
+
+
 def plot_tx(component='By', saveas='tx_plot', save=False, log=False):
     plt.ioff()
 
@@ -436,11 +503,11 @@ def plot_ion_energy_components(normalize=True, save=True, tmax=600):
 
 
 def plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None):
-    By_raw         = cf.get_array('By')
-    Bz_raw         = cf.get_array('Bz')
+    ftime, By_raw         = cf.get_array('By')
+    ftime, Bz_raw         = cf.get_array('Bz')
     
     if it_max is None:
-        it_max = cf.num_field_steps
+        it_max = ftime.shape[0]
     
     ftime, Bt_pos, Bt_neg = bk.get_helical_components(overwrite)
 
@@ -457,7 +524,7 @@ def plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None):
     
     sep    = 1.
     dark   = 1.0
-    cells  = np.arange(cf.NX)
+    cells  = np.arange(cf.NC + 1)
 
     plt.ioff()
     fig1 = plt.figure(figsize=(18, 10))
@@ -1380,14 +1447,13 @@ def check_fields(save=True):
         
     plt.ioff()
     ftime, bx, by, bz, ex, ey, ez, vex, vey, vez,\
-    te, jx, jy, jz, qdens, fsim_time, damping_array = cf.get_array(get_all=True)
+    te, jx, jy, jz, qdens, fsim_time, rD = cf.get_array(get_all=True)
 
-    # Plot lims
-    B_lim   = cf.B_eq*1e9
-    E_lim   = 30
-    J_lim   = None
-    den_lim = None
-    T_lim   = None
+    # Convert to plot units
+    bx *= 1e9; by *= 1e9; bz *= 1e9
+    ex *= 1e3; ey *= 1e3; ez *= 1e3
+    qdens *= 1e-6/q
+    te /= 11603.
     
     for ii in range(bx.shape[0]):
         filename = 'summ%05d.png' % ii
@@ -1398,80 +1464,79 @@ def check_fields(save=True):
             print('Summary plot already present for timestep [{}]{}'.format(run_num, ii))
             continue
                 
+        fsize = 12; lpad = 20
+        
         print('Creating summary field plots [{}]{}'.format(run_num, ii))
-        fig, axes = plt.subplots(3, ncols=2, figsize=(20,10), sharex=True)
+        fig, axes = plt.subplots(5, ncols=3, figsize=(20,10), sharex=True)
         fig.patch.set_facecolor('w')   
 
-        # Background magnetic field
-        axes_B0 = axes[0, 0].twinx()
-        axes_B0.plot(cf.B_nodes, bx[ii]*1e9, color='k', label=r'$B_x$', ls=':', alpha=0.5) 
-        axes_B0.set_ylim(cf.B_eq*1e9, cf.Bc.max()*1e9)
+        axes[0, 0].set_title('Field outputs: {}[{}]'.format(series, run_num), fontsize=fontsize+4, family='monospace')
+
+        # Wave Fields (Plots, Labels, Lims)
+        axes[0, 0].plot(cf.B_nodes / cf.dx, rD[ii], color='k', label=r'$r_D(x)$') 
+        axes[1, 0].plot(cf.B_nodes / cf.dx, by[ii], color='b', label=r'$B_y$') 
+        axes[2, 0].plot(cf.B_nodes / cf.dx, bz[ii], color='g', label=r'$B_z$')
+        axes[3, 0].plot(cf.E_nodes / cf.dx, ey[ii], color='b', label=r'$E_y$')
+        axes[4, 0].plot(cf.E_nodes / cf.dx, ez[ii], color='g', label=r'$E_z$')
         
-        # Wave magnetic field
-        axes[0, 0].set_title('Field outputs: {}[{}]'.format(series, run_num), fontsize=fontsize, family='monospace')
-        axes[0, 0].plot(cf.B_nodes, by[ii]*1e9, color='cyan', label=r'$B_y$') 
-        axes[0, 0].plot(cf.B_nodes, bz[ii]*1e9, color='black', label=r'$B_z$')
-        axes[0, 0].set_ylim(-cf.B_eq*1e9, cf.B_eq*1e9)
-        axes[0, 0].legend(loc=4, ncol=2)
-        axes[0, 0].set_ylabel( r'$B_\perp (nT)$', rotation=0, labelpad=30, fontsize=14)
+        axes[0, 0].set_ylabel('$r_D(x)$'     , rotation=0, labelpad=lpad, fontsize=fsize)
+        axes[1, 0].set_ylabel('$B_y$\n(nT)'  , rotation=0, labelpad=lpad, fontsize=fsize)
+        axes[2, 0].set_ylabel('$B_z$\n(nT)'  , rotation=0, labelpad=lpad, fontsize=fsize)
+        axes[3, 0].set_ylabel('$E_y$\n(mV/m)', rotation=0, labelpad=lpad, fontsize=fsize)
+        axes[4, 0].set_ylabel('$E_z$\n(mV/m)', rotation=0, labelpad=lpad, fontsize=fsize)
         
-        # Wave electric field
-        axes[0, 1].plot(cf.E_nodes, ex[ii]*1e3, color='red',   label=r'$E_x$')
-        axes[0, 1].plot(cf.E_nodes, ey[ii]*1e3, color='cyan',  label=r'$E_y$')
-        axes[0, 1].plot(cf.E_nodes, ez[ii]*1e3, color='black', label=r'$E_z$')
-        axes[0, 1].set_ylabel(r'$E (mV/m)$', labelpad=25, rotation=0, fontsize=14)
-        axes[0, 1].legend(loc=4, ncol=3)
+        axes[0, 0].set_ylim(rD.min(), rD.max())
+        axes[1, 0].set_ylim(by.min(), by.max())
+        axes[2, 0].set_ylim(bz.min(), bz.max())
+        axes[3, 0].set_ylim(ey.min(), ey.max())
+        axes[4, 0].set_ylim(ez.min(), ez.max())
         
-        # Electron Velocity
-        axes[1, 0].plot(cf.E_nodes, vex[ii], color='red' , label=r'$V_{ex}$')
-        axes[1, 0].plot(cf.E_nodes, vey[ii], color='cyan', label=r'$V_{ey}$')
-        axes[1, 0].plot(cf.E_nodes, vez[ii], color='k'   , label=r'$V_{ez}$')
-        axes[1, 0].legend(loc=4, ncol=2)
-        axes[1, 0].set_ylabel(r'$V_e (m/s)$', labelpad=25, rotation=0, fontsize=14)
+        # Transverse Electric Field Variables (Plots, Labels, Lims)
+        axes[0, 1].plot(cf.E_nodes / cf.dx, qdens[ii], color='k', label=r'$n_e$')
+        axes[1, 1].plot(cf.E_nodes / cf.dx,   vey[ii], color='b', label=r'$V_{ey}$')
+        axes[2, 1].plot(cf.E_nodes / cf.dx,   vez[ii], color='g', label=r'$V_{ez}$')
+        axes[3, 1].plot(cf.E_nodes / cf.dx,    jy[ii], color='b', label=r'$J_{iy}$' )
+        axes[4, 1].plot(cf.E_nodes / cf.dx,    jz[ii], color='g', label=r'$J_{iz}$' )
         
-        # Ion Current
-        axes[1, 1].plot(cf.E_nodes, jx[ii], color='red'   , label=r'$J_{ix}$' )
-        axes[1, 1].plot(cf.E_nodes, jy[ii], color='cyan'  , label=r'$J_{iy}$' )
-        axes[1, 1].plot(cf.E_nodes, jz[ii], color='black' , label=r'$J_{iz}$' )
-        axes[1, 1].legend(loc=4, ncol=2)
-        axes[1, 1].set_ylabel(r'$J_i$', fontsize=14, rotation=0, labelpad=20)
+        axes[0, 1].set_ylabel('$n_e$\n$(cm^{-1})$', fontsize=fsize, rotation=0, labelpad=lpad)
+        axes[1, 1].set_ylabel('$V_{ey}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
+        axes[2, 1].set_ylabel('$V_{ez}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
+        axes[3, 1].set_ylabel('$J_{iy}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
+        axes[4, 1].set_ylabel('$J_{iz}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
         
-        # Charge density and temperature
-        axes[2, 0].plot(cf.E_nodes, qdens[ii], color='green')
-        axes[2, 0].set_ylabel(r'$\rho_c$', fontsize=14, rotation=0, labelpad=20)
-        #axes[2, 0].set_ylim(0, None)
-        axes_Te = axes[2, 0].twinx()
-        axes_Te.plot(cf.E_nodes, te[ii],       color='red')
-        axes_Te.set_ylabel(r'$T_e$', fontsize=14, rotation=0, labelpad=20)
+        axes[0, 1].set_ylim(qdens.min(), qdens.max())
+        axes[1, 1].set_ylim(vey.min(), vey.max())
+        axes[2, 1].set_ylim(vez.min(), vez.max())
+        axes[3, 1].set_ylim(jy.min() , jy.max())
+        axes[4, 1].set_ylim(jz.min() , jz.max())
         
+        # Parallel Variables (Plots, Labels, Lims)
+        axes[0, 2].plot(cf.E_nodes / cf.dx,   te[ii], color='k', label=r'$T_e$')
+        axes[1, 2].plot(cf.E_nodes / cf.dx,  vex[ii], color='r', label=r'$V_{ex}$')
+        axes[2, 2].plot(cf.E_nodes / cf.dx,   jx[ii], color='r', label=r'$J_{ix}$' )
+        axes[3, 2].plot(cf.E_nodes / cf.dx,   ex[ii], color='r', label=r'$E_x$')
+        axes[4, 2].plot(cf.B_nodes / cf.dx,   bx[ii], color='r', label=r'$B_{0x}$')
         
-# =============================================================================
-#         # SET FIELD RANGES #
-#         if ax_den.get_ylim()[1] > den_lim:
-#             den_lim *= 2.0
-#         ax_den.set_ylim(0, den_lim)
-#            
-#         if ax_Ex.get_ylim()[1] >  E_lim or \
-#            ax_Ex.get_ylim()[0] < -E_lim :
-#             E_lim *= 2.0
-#         ax_Ex.set_ylim(-E_lim, E_lim)
-#         
-#         if ax_By.get_ylim()[1] >  B_lim or \
-#            ax_By.get_ylim()[0] < -B_lim :            
-#            B_lim *= 2.0
-#         ax_B.set_ylim(0, B_lim)
-#         ax_By.set_ylim(-B_lim, B_lim)
-#         
-#         for ax in [ax_den, ax_Ex, ax_By]:
-#             plt.setp(ax.get_xticklabels(), visible=False)
-#             ax.set_yticks(ax.get_yticks()[1:])
-#             
-#         for ax in [ax_den, ax_Ex, ax_By, ax_B]:
-#             ax.set_xlim(B_nodes[0], B_nodes[-1])
-#             ax.axvline(-cf.NX//2, c='k', ls=':', alpha=0.5)
-#             ax.axvline( cf.NX//2, c='k', ls=':', alpha=0.5)
-#             ax.grid()
-# =============================================================================
+        axes[0, 2].set_ylabel('$T_e$\n(eV)'     , fontsize=fsize, rotation=0, labelpad=lpad)
+        axes[1, 2].set_ylabel('$V_{ex}$\n(m/s)' , fontsize=fsize, rotation=0, labelpad=lpad)
+        axes[2, 2].set_ylabel('$J_{ix}$'        , fontsize=fsize, rotation=0, labelpad=lpad)
+        axes[3, 2].set_ylabel('$E_x$\n(mV/m)'   , fontsize=fsize, rotation=0, labelpad=lpad)
+        axes[4, 2].set_ylabel('$B_x$\n(nT)'     , fontsize=fsize, rotation=0, labelpad=lpad)
+
+        axes[0, 2].set_ylim(te.min(), te.max())
+        axes[1, 2].set_ylim(vex.min(), vex.max())
+        axes[2, 2].set_ylim(jx.min(), jx.max())
+        axes[3, 2].set_ylim(ex.min(), ex.max())
+        
+        fig.align_labels()
+            
+        for ii in range(3):
+            axes[4, ii].set_xlabel('Position (m/dx)')
+            for jj in range(5):
+                axes[jj, ii].set_xlim(cf.B_nodes[0] / cf.dx, cf.B_nodes[-1] / cf.dx)
+                axes[jj, ii].axvline(-cf.NX//2, c='k', ls=':', alpha=0.5)
+                axes[jj, ii].axvline( cf.NX//2, c='k', ls=':', alpha=0.5)
+                axes[jj, ii].grid()
                 
         plt.tight_layout(pad=1.0, w_pad=1.8)
         fig.subplots_adjust(hspace=0.125)
@@ -1487,7 +1552,7 @@ def check_fields(save=True):
 if __name__ == '__main__':
     drive       = 'F:'
     
-    series      = 'homogenous_ABC_test_long'
+    series      = 'ABC_test_lowres'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
@@ -1495,14 +1560,17 @@ if __name__ == '__main__':
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
-        #plot_energies(normalize=False, save=True)
+        #plot_helical_waterfall()
         
-        #check_fields()
+        #plot_spatial_poynting(save=True, log=True)
+                
+        check_fields()
+        summary_plots(save=True)
+        #plot_tx(save=True, log=True)
+        #plot_tx(save=True, log=False)
+        
         #plot_damping_array()
-        #summary_plots(save=True)
-        plot_tx(save=True, log=True)
-        plot_tx(save=True, log=False)
-        
+        #plot_energies(normalize=False, save=True)
         #plot_helicity_colourplot()
         
         #disp_folder = 'dispersion_plots/'

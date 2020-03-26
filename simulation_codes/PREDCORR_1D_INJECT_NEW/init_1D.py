@@ -13,10 +13,11 @@ import save_routines as save
 
 import particles_1D as particles
 import fields_1D    as fields
+import auxilliary_1D as aux
 
 from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, B_eq, va, \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
-                                     Bc, qm_ratios, freq_res, rc_hwidth, temp_type
+                                     Bc, qm_ratios, freq_res, rc_hwidth, temp_type, Te0
 
 #@nb.njit()
 def calc_losses(v_para, v_perp, st=0):
@@ -222,7 +223,7 @@ def initialize_fields():
     B[:, 2] = Bc[:, 2]
     
     Ve      = np.zeros((NC, 3), dtype=np.float64)
-    Te      = np.zeros( NC,     dtype=np.float64)
+    Te      = np.ones(  NC,     dtype=np.float64) * Te0
     
     return B, E_int, E_half, Ve, Te
 
@@ -272,6 +273,19 @@ def initialize_tertiary_arrays():
     old_particles = np.zeros((10, N),      dtype=nb.float64)
     
     return old_particles, old_fields, temp3De, temp3Db, temp1D
+
+
+def set_equilibrium_te0(qdens):
+    '''
+    Modifies the initial Te array to allow grad(P_e) = grad(nkT) = 0
+    
+    Iterative? Analytic?
+    '''
+    
+    
+    for ii in range(ND, ND + NX):
+        pass
+    return
 
 
 def set_timestep(vel, E):

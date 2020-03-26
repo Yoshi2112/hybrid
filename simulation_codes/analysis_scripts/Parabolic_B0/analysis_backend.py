@@ -62,6 +62,56 @@ def get_B0_particle(x, v, B, sp):
     return B0_xp
 
 
+@nb.njit()
+def interpolate_B_to_center(bx, by, bz, zero_boundaries=False):
+    ''' 
+    Interpolates magnetic field from cell edges to cell centers (where the E
+    field is measured). 
+    
+    bx, by, bz are each (time, space) ndarrays
+    '''
+    n_times = bx.shape[0]
+    NC      = cf.NC                                   # Number of cells
+    
+    y2x = np.zeros(NC + 1, dtype=nb.float64)          # Second derivatives on B grid
+    y2y = np.zeros(NC + 1, dtype=nb.float64)
+    y2z = np.zeros(NC + 1, dtype=nb.float64)
+    
+    bxi = np.zeros((n_times, NC), dtype=nb.float64)   # Interpolation on E grid
+    byi = np.zeros((n_times, NC), dtype=nb.float64)
+    bzi = np.zeros((n_times, NC), dtype=nb.float64)
+    
+    # For each time (tt): Calculate second derivative (for each component)
+    for tt in range(n_times):
+        print('Interpolating cell centers for time ', tt)
+        # Interior B-nodes, Centered difference
+        for ii in range(1, NC):
+            y2x[ii] = bx[tt, ii + 1] - 2*bx[tt, ii] + bx[tt, ii - 1]
+            y2y[ii] = by[tt, ii + 1] - 2*by[tt, ii] + by[tt, ii - 1]
+            y2z[ii] = bz[tt, ii + 1] - 2*bz[tt, ii] + bz[tt, ii - 1]
+                
+        # Edge B-nodes, Zero or Forwards/Backwards difference
+        if zero_boundaries == True:
+            y2x[0 ] = 0.    ;   y2y[0 ] = 0.    ;   y2z[0 ] = 0.
+            y2x[NC] = 0.    ;   y2y[NC] = 0.    ;   y2z[NC] = 0.
+        else:
+            y2x[0]  = 2*bx[tt, 0 ] - 5*bx[tt, 1]      + 4*bx[tt, 2]      - bx[tt, 3]
+            y2x[NC] = 2*bx[tt, NC] - 5*bx[tt, NC - 1] + 4*bx[tt, NC - 2] - bx[tt, NC - 3]
+            
+            y2y[0]  = 2*by[tt, 0 ] - 5*by[tt, 1]      + 4*by[tt, 2]      - by[tt, 3]
+            y2y[NC] = 2*by[tt, NC] - 5*by[tt, NC - 1] + 4*by[tt, NC - 2] - by[tt, NC - 3]
+            
+            y2z[0]  = 2*bz[tt, 0 ] - 5*bz[tt, 1]      + 4*bz[tt, 2]      - bz[tt, 3]
+            y2z[NC] = 2*bz[tt, NC] - 5*bz[tt, NC - 1] + 4*bz[tt, NC - 2] - bz[tt, NC - 3]
+        
+        # Do spline interpolation: E[ii] is bracketed by B[ii], B[ii + 1]
+        for ii in range(NC):
+            bxi[tt, ii] = 0.5 * (bx[tt, ii] + bx[tt, ii + 1] + (1/6) * (y2x[ii] + y2x[ii + 1]))
+            byi[tt, ii] = 0.5 * (by[tt, ii] + by[tt, ii + 1] + (1/6) * (y2y[ii] + y2y[ii + 1]))
+            bzi[tt, ii] = 0.5 * (bz[tt, ii] + bz[tt, ii + 1] + (1/6) * (y2z[ii] + y2z[ii + 1]))
+    return bxi, byi, bzi
+
+
 def get_energies(): 
     '''
     Computes and saves field and particle energies at each field/particle timestep.
