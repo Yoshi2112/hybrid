@@ -1182,10 +1182,15 @@ def summary_plots(save=True, histogram=True):
         fig_size = 4, 7                                                             # Set figure grid dimensions
         fig = plt.figure(figsize=(20,10))                                           # Initialize Figure Space
         fig.patch.set_facecolor('w')   
-        xp, vp, psim_time = cf.load_particles(ii)
+        xp, vp, idx, psim_time = cf.load_particles(ii)
         
         pos       = xp  
         vel       = vp / cf.va 
+        
+        if idx is not None:
+            N_lost = idx[idx < 0].shape[0]
+        else:
+            N_lost = None
         
         ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
         ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
@@ -1335,6 +1340,7 @@ def summary_plots(save=True, histogram=True):
         
         plt.figtext(0.855, top - 6*gap, 'B_eq    : {}nT'.format(cf.B_eq*1e9), fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 7*gap, 'n0      : {}cc'.format(cf.ne/1e6), fontsize=fontsize, family='monospace')
+        plt.figtext(0.855, top - 8*gap, 'n_lost  : {}'.format(N_lost), fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 10*gap, '', fontsize=fontsize, family='monospace')
         
         plt.figtext(0.855, top - 12*gap, r'$\beta_e$      : %.2f' % beta_e, fontsize=fontsize, family='monospace')
@@ -1552,24 +1558,24 @@ def check_fields(save=True):
 if __name__ == '__main__':
     drive       = 'F:'
     
-    series      = 'ABC_test_lowres'
+    series      = 'ABC_test_lowres_v3'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in range(num_runs):
+    for run_num in range(3, num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
-        #plot_helical_waterfall()
+        plot_helical_waterfall()
         
-        #plot_spatial_poynting(save=True, log=True)
-                
-        check_fields()
+        plot_spatial_poynting(save=True, log=True)
+            
+        plot_tx(save=True, log=True)
+        plot_tx(save=True, log=False)
+        
         summary_plots(save=True)
-        #plot_tx(save=True, log=True)
-        #plot_tx(save=True, log=False)
+        check_fields()
         
-        #plot_damping_array()
         #plot_energies(normalize=False, save=True)
         #plot_helicity_colourplot()
         

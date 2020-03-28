@@ -123,11 +123,11 @@ def save_field_data(sim_time, dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, da
     print('Field data saved')
     
     
-def save_particle_data(sim_time, dt, part_save_iter, qq, pos, vel):
+def save_particle_data(sim_time, dt, part_save_iter, qq, pos, vel, idx):
     d_path   = '%s/%s/run_%d/data/particles/' % (drive, save_path, const.run)
     r        = qq / part_save_iter
 
     d_fullpath = d_path + 'data%05d' % r
     
-    np.savez(d_fullpath, pos = pos, vel = vel, sim_time = sim_time)
+    np.savez(d_fullpath, pos = pos, vel = vel, idx=idx, sim_time = sim_time)
     print('Particle data saved')

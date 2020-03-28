@@ -180,8 +180,13 @@ def load_particles(ii):
     tx               = data['pos']
     tv               = data['vel']
     tsim_time        = data['sim_time']
+    
+    try:
+        tidx = data['idx']
+    except:
+        tidx = None
         
-    return tx, tv, tsim_time
+    return tx, tv, tidx, tsim_time
 
 
 def extract_all_arrays():

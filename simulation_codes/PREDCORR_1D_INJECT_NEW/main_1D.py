@@ -30,7 +30,7 @@ if __name__ == '__main__':
     DT, max_inc, part_save_iter, field_save_iter, damping_array = init.set_timestep(vel, E_int)
 
     if save_particles == 1:
-        save.save_particle_data(0, DT, part_save_iter, 0, pos, vel)
+        save.save_particle_data(0, DT, part_save_iter, 0, pos, vel, idx)
         
     if save_fields == 1:
         save.save_field_data(0, DT, field_save_iter, 0, Ji, E_int, B, Ve, Te, q_dens, damping_array)
@@ -49,7 +49,7 @@ if __name__ == '__main__':
 
         if qq%part_save_iter == 0 and save_particles == 1:
             save.save_particle_data(sim_time, DT, part_save_iter, qq, pos,
-                                    vel)
+                                    vel, idx)
             
         if qq%field_save_iter == 0 and save_fields == 1:
             save.save_field_data(sim_time, DT, field_save_iter, qq, Ji, E_int,
