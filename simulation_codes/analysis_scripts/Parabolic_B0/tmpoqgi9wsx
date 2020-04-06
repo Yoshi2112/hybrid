@@ -1174,13 +1174,8 @@ def summary_plots(save=True, histogram=True):
     '''
     Plot summary plot of raw values for each particle timestep
     Field values are interpolated to this point
-    '''  
-    np.set_printoptions(suppress=True)
-    
-    if histogram == True:
-        path = cf.anal_dir + '/summary_plots_histogram/'
-    else:
-        path = cf.anal_dir + '/summary_plots/'
+    '''    
+    path = cf.anal_dir + '/summary_plots/'
         
     if os.path.exists(path) == False:                                   # Create data directory
         os.makedirs(path)
@@ -1220,16 +1215,12 @@ def summary_plots(save=True, histogram=True):
         
         pos       = xp  
         vel       = vp / cf.va 
-
-        # Count particles lost to the simulation
-        N_lost = np.zeros(cf.Nj, dtype=int)
+        
         if idx is not None:
-            Nl_idx  = idx[idx < 0]  # Collect indices of those < 0
-            Nl_idx += 128           # Cast from negative to positive indexes ("reactivate" particles)
-            for jj in range(cf.Nj):
-                N_lost[jj] = Nl_idx[Nl_idx == jj].shape[0]
+            N_lost = idx[idx < 0].shape[0]
         else:
             N_lost = None
+        
         ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
         ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
         
@@ -1263,7 +1254,7 @@ def summary_plots(save=True, histogram=True):
                     ax.set_ylabel('$n_{%s}$'%comp)
         else:
         
-            for jj in reversed(range(cf.Nj)):
+            for jj in range(cf.Nj):
                 ax_vx.scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[0, cf.idx_start[jj]: cf.idx_end[jj]], s=3, c=cf.temp_color[jj], lw=0, label=cf.species_lbl[jj])
                 ax_vy.scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[1, cf.idx_start[jj]: cf.idx_end[jj]], s=3, c=cf.temp_color[jj], lw=0)
         
@@ -1372,14 +1363,13 @@ def summary_plots(save=True, histogram=True):
         plt.figtext(0.855, top        , 'Simulation Parameters', fontsize=fontsize, family='monospace', fontweight='bold')
         plt.figtext(0.855, top - 1*gap, '{}[{}]'.format(series, run_num), fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 2*gap, '{} cells'.format(cf.NX), fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 3*gap, '{} particles'.format(cf.N_species.sum()), fontsize=fontsize, family='monospace')
+        #plt.figtext(0.855, top - 3*gap, '{} particles/cell'.format(cf.cellpart), fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 4*gap, '{}'.format(estring), fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 5*gap, '', fontsize=fontsize, family='monospace')
         
-        plt.figtext(0.855, top - 6*gap, 'B_eq      : {}nT'.format(cf.B_eq*1e9), fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 7*gap, 'ne        : {}cc'.format(cf.ne/1e6), fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 8*gap, 'N_species : {}'.format(cf.N_species), fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 9*gap, 'N_lost    : {}'.format(N_lost), fontsize=fontsize, family='monospace')
+        plt.figtext(0.855, top - 6*gap, 'B_eq    : {}nT'.format(cf.B_eq*1e9), fontsize=fontsize, family='monospace')
+        plt.figtext(0.855, top - 7*gap, 'n0      : {}cc'.format(cf.ne/1e6), fontsize=fontsize, family='monospace')
+        plt.figtext(0.855, top - 8*gap, 'n_lost  : {}'.format(N_lost), fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 10*gap, '', fontsize=fontsize, family='monospace')
         
         plt.figtext(0.855, top - 12*gap, r'$\beta_e$      : %.2f' % beta_e, fontsize=fontsize, family='monospace')
@@ -1388,9 +1378,9 @@ def summary_plots(save=True, histogram=True):
         
         ptop = top - 15*gap
         plt.figtext(0.855, ptop, 'Particle Parameters', fontsize=fontsize, family='monospace', fontweight='bold')
-        plt.figtext(0.855, ptop - gap, ' SPECIES  ANI  XBET    VDR  RDNS', fontsize=fontsize-2, family='monospace')
+        plt.figtext(0.855, ptop - gap, ' SPECIES  ANI  XBET   VDR  RDNS', fontsize=fontsize-2, family='monospace')
         for jj in range(cf.Nj):
-            plt.figtext(0.855       , ptop - (jj + 2)*gap, '{:>10}  {:>3}  {:>5}  {:>4}  {:<5}'.format(
+            plt.figtext(0.855       , ptop - (jj + 2)*gap, '{:>10}  {:>3}  {:>4}  {:>4}  {:<5}'.format(
                     cf.species_lbl[jj], anisotropy[jj], beta_per[jj], vdrift[jj], rdens[jj]),
                     fontsize=fontsize-2, family='monospace')
  
