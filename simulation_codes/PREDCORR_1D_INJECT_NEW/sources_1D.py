@@ -5,7 +5,7 @@ Created on Fri Sep 22 17:55:15 2017
 @author: iarey
 """
 import numba as nb
-from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, q, ne, min_dens, mirror
+from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, q, ne, min_dens
 
 
 @nb.njit()
@@ -72,29 +72,29 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D):
     nu     *= 0.
 
     deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu)
-
+    
+    # Sum contributions across species
     for jj in range(Nj):
         q_dens  += ni[:, jj] * n_contr[jj] * charge[jj]
 
         for kk in range(3):
             Ji[:, kk] += nu[:, jj, kk] * n_contr[jj] * charge[jj]
 
-    if mirror == True:
-        # Mirror source term contributions at edge back into domain: Simulates having
-        # some sort of source on the outside of the physical space boundary.
-        q_dens[ND]          += q_dens[ND - 1]
-        q_dens[ND + NX - 1] += q_dens[ND + NX]
+    # Mirror source term contributions at edge back into domain: Simulates having
+    # some sort of source on the outside of the physical space boundary.
+    q_dens[ND]          += q_dens[ND - 1]
+    q_dens[ND + NX - 1] += q_dens[ND + NX]
+
+    # Set damping cell source values
+    q_dens[:ND]    = q_dens[ND]
+    q_dens[ND+NX:] = q_dens[ND+NX-1]
     
-        # Set damping cell source values
-        q_dens[:ND]    = q_dens[ND]
-        q_dens[ND+NX:] = q_dens[ND+NX-1]
-        
-        for ii in range(3):
-            Ji[ND, ii]          += Ji[ND - 1, ii]
-            Ji[ND + NX - 1, ii] += Ji[ND + NX, ii]
-        
-            Ji[:ND, ii] = Ji[ND, ii]
-            Ji[ND+NX:]  = Ji[ND+NX-1]
+    for ii in range(3):
+        Ji[ND, ii]          += Ji[ND - 1, ii]
+        Ji[ND + NX - 1, ii] += Ji[ND + NX, ii]
+    
+        Ji[:ND, ii] = Ji[ND, ii]
+        Ji[ND+NX:]  = Ji[ND+NX-1]
         
     # Set density minimum
     for ii in range(q_dens.shape[0]):

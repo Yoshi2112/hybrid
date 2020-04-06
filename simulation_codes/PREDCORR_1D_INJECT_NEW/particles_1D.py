@@ -6,8 +6,7 @@ Created on Fri Sep 22 17:23:44 2017
 """
 import numba as nb
 import numpy as np
-import pdb
-from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, B_eq, a, particle_boundary
+from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, B_eq, a
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -183,14 +182,8 @@ def position_update(pos, vel, idx, dt, Ie, W_elec, diag=False):
             pos[0, ii] += vel[0, ii] * dt
     
             if (pos[0, ii] <= xmin or pos[0, ii] >= xmax):
-                if particle_boundary == 'reflect':
-                    vel[0, ii] *= -1.                   # Reflect velocity
-                    pos[0, ii] += vel[0, ii] * dt       # Get particle back in simulation space
-                elif particle_boundary == 'absorb':
-                    vel[:, ii] *= 0                     # Zero particle velocity
-                    idx[ii]     = -128 + idx[ii]        # Fold index to negative values (preserves species ID)
-                else:
-                    pass
-    
+                vel[:, ii] *= 0                     # Zero particle velocity
+                idx[ii]     = -128 + idx[ii]        # Fold index to negative values (preserves species ID)
+
     assign_weighting_TSC(pos, Ie, W_elec)
     return

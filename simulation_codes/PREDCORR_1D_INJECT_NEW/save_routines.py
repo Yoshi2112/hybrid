@@ -83,7 +83,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                    ('method_type', 'PREDCORR_PARABOLIC'),
                    ('particle_shape', 'TSC'),
                    ('boundary_type', 'damped'),
-                   ('particle_boundary', 'reflective'),
+                   ('particle_boundary', 'absorptive'),
                    ])
 
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:

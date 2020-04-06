@@ -17,12 +17,9 @@ run               = 3                             # Series run number : For mult
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
-#cpu_affin         = [run%8]
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run. Must be list. Auto-assign: None.
 supress_text      = False                         # Flag to supress initialization text (usually for diagnostics)
 homogenous        = True                         # Flag to set B0 to homogenous (as test to compare to parabolic)
-particle_boundary = 'absorb'                      # 'reflect' or 'absorb' particles at the boundaries
-mirror            = True                          # Mirror edge cell contributions back into spatial cells
 
 
 ### PHYSICAL CONSTANTS ###
@@ -165,11 +162,6 @@ loss_cone  = np.arcsin(np.sqrt(B_eq / B_xmax))*180 / np.pi
 
 
 #%%### INPUT TESTS AND CHECKS
-particle_boundary = particle_boundary.lower()
-
-if particle_boundary != 'absorb':
-    if particle_boundary != 'reflect':
-        sys.exit('Error: Particle boundary condition must either be absorbtive or reflective')
 
 if supress_text == False:
     print('Run Started')
