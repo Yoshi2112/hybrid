@@ -4,6 +4,7 @@ Created on Tue Apr 30 13:14:56 2019
 
 @author: Yoshi
 """
+import pdb
 import analysis_config as cf
 import numpy as np
 import sys
@@ -113,34 +114,50 @@ def get_linear_dispersion_from_sim(k=None, plot=False, save=False):
 
 
 def get_wx(component):
-    arr = cf.get_array(component)
+    ftime, arr = cf.get_array(component)
     
-    
-    if arr.shape[0]%2 == 0:
-        fft_matrix  = np.zeros((arr.shape[0]//2+1, cf.NX), dtype='complex128')
+    if component[0] == 'B':
+        ncells = cf.NC + 1
     else:
-        fft_matrix  = np.zeros(((arr.shape[0]+1)//2, cf.NX), dtype='complex128')
+        ncells = cf.NC
+        
+    if arr.shape[0]%2 == 0:
+        fft_matrix  = np.zeros((arr.shape[0]//2+1, ncells), dtype='complex128')
+    else:
+        fft_matrix  = np.zeros(((arr.shape[0]+1)//2, ncells), dtype='complex128')
         
     for ii in range(arr.shape[1]):
         fft_matrix[:, ii] = np.fft.rfft(arr[:, ii] - arr[:, ii].mean())
     
     wx = (fft_matrix * np.conj(fft_matrix)).real
-    return wx
+    return ftime, wx
 
 
 def get_kt(component):
-    arr = cf.get_array(component)
+    ftime, arr = cf.get_array(component)
     
-    fft_matrix  = np.zeros(arr.shape, dtype='complex128')
-    for ii in range(arr.shape[0]): # Take spatial FFT at each time
-        fft_matrix[ii, :] = np.fft.fft(arr[ii, :] - arr[ii, :].mean())
+    # Get first/last indices for FFT range and k-space array
+    st = cf.ND
+    if component[0].upper() == 'B':
+        en = cf.ND + cf.NX + 1
+        k  = np.fft.fftfreq(cf.NX + 1, cf.dx)
+    else:
+        en = cf.ND + cf.NX
+        k  = np.fft.fftfreq(cf.NX, cf.dx)
+                  
+    k   = k[k>=0] * 1e6
+    
+    fft_matrix  = np.zeros((arr.shape[0], en-st), dtype='complex128')
+    for ii in range(arr.shape[0]): # Take spatial FFT at each time, ii
+        fft_matrix[ii, :] = np.fft.fft(arr[ii, st:en] - arr[ii, st:en].mean())
 
-    kt = (fft_matrix[:, :arr.shape[1] // 2] * np.conj(fft_matrix[:, :arr.shape[1] // 2])).real
-    return kt
+    kt = (fft_matrix[:, :k.shape[0]] * np.conj(fft_matrix[:, :k.shape[0]])).real
+    
+    return k, ftime, kt, st, en
 
 
 def get_wk(component):
-    arr = cf.get_array(component)
+    ftime, arr = cf.get_array(component)
     
     num_times = arr.shape[0]
 

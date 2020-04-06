@@ -30,7 +30,20 @@ e0  = 8.854e-12               # Epsilon naught - permittivity of free space
 '''
 Aim: To populate this script with plotting routines ONLY. Separate out the 
 processing/loading/calculation steps into other modules that can be called.    
+
+For parabolic with ABC's - Which cells are 'real'? (Important for k plots)
+
+B field
+First real cell: ND (LHS boundary)
+Last  real cell: ND + NX (RHS boundary)
+Cell range     : ND : ND + NX + 1
+
+E field
+First cell: ND
+Last  cell: ND+NX-1
+Cell range: ND:ND+NX
 '''
+
 @nb.njit()
 def calc_poynting(bx, by, bz, ex, ey, ez):
     '''
@@ -88,9 +101,14 @@ def plot_spatial_poynting(saveas='poynting_space_plot', save=False, log=False):
                 suffix = ''
             
             cb  = fig.colorbar(im1)
-            cb.set_label('$S_z$')
+            cb.set_label('$S_%s$'%comp)
             
-            ax.set_title('Power Propagation :: Time vs. Space', fontsize=14)
+            if comp == 'x':
+                suff = 'FIELD-ALIGNED DIRECTION'
+            else:
+                suff = 'TRANSVERSE DIRECTION'
+            
+            ax.set_title('Power Propagation :: Time vs. Space :: {}'.format(suff), fontsize=14)
             ax.set_ylabel(r't (s)', rotation=0, labelpad=15)
             ax.set_xlabel('x (m)')
             ax.set_ylim(0, tmax)
@@ -153,10 +171,14 @@ def plot_tx(component='By', saveas='tx_plot', save=False, log=False):
 
 def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, pcyc_mult=None):
     plt.ioff()
-    wx = disp.get_wx(component)
+    ftime, wx = disp.get_wx(component)
     
-    x  = np.arange(cf.NX)
-    f  = np.fft.rfftfreq(cf.time_seconds_field.shape[0], d=cf.dt_field)
+    if component[0] == 'B':
+        x    = np.arange(cf.NC + 1) * cf.dx
+    else:
+        x    = np.arange(cf.NC) * cf.dx
+        
+    f  = np.fft.rfftfreq(ftime.shape[0], d=cf.dt_field)
     
     ## PLOT IT
     fig = plt.figure(1, figsize=(15, 10))
@@ -168,10 +190,12 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
     lbl  = [r'$\Omega_{H^+}$', r'$\Omega_{He^+}$', r'$\Omega_{O^+}$']
     clr  = ['white', 'yellow', 'red']    
     M    = np.array([1., 4., 16.])
-    cyc  = q * cf.B0 / (2 * np.pi * mp * M)
+    
     for ii in range(3):
         if cf.species_present[ii] == True:
-            ax.axhline(cyc[ii], linestyle='--', c=clr[ii], label=lbl[ii])
+            xarr_B = np.arange(cf.NC + 1) * cf.dx
+            cyc    = q * cf.Bc[:, 0] / (2 * np.pi * mp * M[ii])
+            ax.plot(xarr_B, cyc, linestyle='--', c=clr[ii], label=lbl[ii])
     
     if linear_overlay == True:
         try:
@@ -191,7 +215,7 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
     else:
         ax.set_ylim(0, None)
         
-    ax.legend(loc=2, facecolor='grey')
+    #ax.legend(loc=2, facecolor='grey')
     
     if save == True:
         fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
@@ -200,17 +224,15 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
         plt.close('all')
     return
 
+
 def plot_kt(component='By', saveas='kt_plot', save=False):
     plt.ioff()
-    kt = disp.get_kt(component)
-    
-    k   = np.fft.fftfreq(cf.NX, cf.dx)
-    k   = k[k>=0] * 1e6
+    k, ftime, kt, st, en = disp.get_kt(component)
     
     fig = plt.figure(1, figsize=(15, 10))
     ax  = fig.add_subplot(111)
     
-    im1 = ax.pcolormesh(k[:k.shape[0]], cf.time_gperiods_field, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
+    im1 = ax.pcolormesh(k, ftime, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
     fig.colorbar(im1)
     ax.set_title(r'k-t Plot', fontsize=14)
     ax.set_ylabel(r'$\Omega_i t$', rotation=0)
@@ -223,6 +245,7 @@ def plot_kt(component='By', saveas='kt_plot', save=False):
         plt.close('all')
         print('k-t Plot saved')
     return
+
 
 def plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=False, save=False, pcyc_mult=None):
     plt.ioff()
@@ -241,20 +264,26 @@ def plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=False, save=Fa
     ax.set_ylabel(ylab)
     ax.set_xlabel(xlab)
     
-    clr  = ['white', 'yellow', 'red'] 
-    lbl  = [r'$\Omega_{H^+}$', r'$\Omega_{He^+}$', r'$\Omega_{O^+}$']
-    M    = np.array([1., 4., 16.])
-    cyc  = q * cf.B0 / (2 * np.pi * mp * M)
-    for ii in range(3):
-        if cf.species_present[ii] == True:
-            ax.axhline(cyc[ii], linestyle='--', c=clr[ii], label=lbl[ii])
-    
-    ax.set_xlim(0, None)
-    
-    if pcyc_mult is not None:
-        ax.set_ylim(0, pcyc_mult*cyc[0])
-    else:
-        ax.set_ylim(0, None)
+# =============================================================================
+#     # Doesn't work because cyclotron frequencies aren't constant in x
+#     clr  = ['white', 'yellow', 'red'] 
+#     lbl  = [r'$\Omega_{H^+}$', r'$\Omega_{He^+}$', r'$\Omega_{O^+}$']
+#     M    = np.array([1., 4., 16.])
+#     
+#     for ii in range(3):
+#         if cf.species_present[ii] == True:
+#             cyc  = q * cf.B_eq / (2 * np.pi * mp * M[ii])
+#             
+#             ax.axhline(cyc, linestyle='--', c=clr[ii], label=lbl[ii])
+#     
+#     if pcyc_mult is not None:
+#         ax.set_ylim(0, pcyc_mult*cyc[0])
+#     else:
+#         ax.set_ylim(0, None)
+# =============================================================================
+        
+    ax.set_xlim(cf.xmin, cf.xmax)
+    ax.set_ylim(0, None)
     
     if dispersion_overlay == True:
         '''
@@ -1380,17 +1409,25 @@ def standard_analysis_package():
         os.makedirs(cf.anal_dir + disp_folder)
         
     for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
+        print('2D summary for {}'.format(comp))
         plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True)
+        plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, log=True)
         plot_wx(component=comp, saveas=disp_folder + 'wx_plot', save=True, linear_overlay=False,     pcyc_mult=1.1)
         plot_wk(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=False, pcyc_mult=1.1)
         plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
         
-    plot_energies(normalize=True, save=True)
-    plot_ion_energy_components(save=True, tmax=1./cf.HM_frequency)
+    plot_spatial_poynting(save=True, log=True)
     plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
-    single_point_helicity_timeseries()
-    plot_spatially_averaged_fields()
-    single_point_field_timeseries(tmax=1./cf.HM_frequency)
+    
+    if True:
+        check_fields()
+        
+    if False:
+        plot_energies(normalize=True, save=True)
+        plot_ion_energy_components(save=True, tmax=1./cf.HM_frequency)
+        single_point_helicity_timeseries()
+        plot_spatially_averaged_fields()
+        single_point_field_timeseries(tmax=1./cf.HM_frequency)
     return
 
 
@@ -1558,23 +1595,27 @@ def check_fields(save=True):
 if __name__ == '__main__':
     drive       = 'F:'
     
-    series      = 'ABC_test_lowres_v3'
+    series      = 'ABC_test_lowres_v4L'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in range(3, num_runs):
+    for run_num in range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
-        plot_helical_waterfall()
+        standard_analysis_package()
         
-        plot_spatial_poynting(save=True, log=True)
-            
-        plot_tx(save=True, log=True)
-        plot_tx(save=True, log=False)
+# =============================================================================
+#         plot_helical_waterfall()
+#         
+#         plot_spatial_poynting(save=True, log=True)
+#             
+#         plot_tx(save=True, log=True)
+#         plot_tx(save=True, log=False)
+# =============================================================================
         
-        summary_plots(save=True)
-        check_fields()
+        #summary_plots(save=True)
+        #check_fields()
         
         #plot_energies(normalize=False, save=True)
         #plot_helicity_colourplot()

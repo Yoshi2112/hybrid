@@ -12,16 +12,16 @@ run_description = '''ABC Test :: Fixed density'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//ABC_test_lowres_v3'    # Series save dir   : Folder containing all runs of a series
-run               = 5                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path         = 'runs//ABC_test_lowres_v4L'   # Series save dir   : Folder containing all runs of a series
+run               = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 #cpu_affin         = [run%8]
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run. Must be list. Auto-assign: None.
 supress_text      = False                         # Flag to supress initialization text (usually for diagnostics)
-homogenous        = False                          # Flag to set B0 to homogenous (as test to compare to parabolic)
-particle_boundary = 'absorb'                     # 'reflect' or 'absorb' particles at the boundaries
+homogenous        = True                         # Flag to set B0 to homogenous (as test to compare to parabolic)
+particle_boundary = 'absorb'                      # 'reflect' or 'absorb' particles at the boundaries
 mirror            = True                          # Mirror edge cell contributions back into spatial cells
 
 
@@ -38,11 +38,11 @@ B_surf = 3.12e-5                            # Magnetic field strength at Earth s
 
 
 ### SIMULATION PARAMETERS ###
-NX        = 256                             # Number of cells - doesn't include ghost cells
-ND        = NX                              # Damping region length: Multiple of NX (on each side of simulation domain)
+NX        = 1024                            # Number of cells - doesn't include ghost cells
+ND        = 128                             # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev   = 200                             # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
-L         = 4.0                             # Field line L shell
+L         = 5.35                            # Field line L shell
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
 B_eq      = 200e-9                          # Initial magnetic field at equator: None for L-determined value (in T)
@@ -59,14 +59,16 @@ species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/label
 temp_color = ['blue', 'red']
 temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
 dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.array([500, 1000])                           # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+nsp_ppc    = np.array([200, 200])                           # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
 drift_v    = np.array([0., 0.])                             # Species parallel bulk velocity (alfven velocity units)
-density    = np.array([190., 10.]) * 1e6                    # Species density in /cc (cast to /m3)
+density    = np.array([180., 20.]) * 1e6                    # Species density in /cc (cast to /m3)
 E_per      = np.array([5.0, 50000.])                        # Perpendicular energy in eV
-anisotropy = np.array([0.0, 4.0])
+anisotropy = np.array([0.0, 5.0])
+
+beta_par   = np.array([1., 10.])                            # Overrides if not None
 
 # External current properties
 J_amp          = 1.0                                        # External current : Amplitude  (A)
@@ -85,10 +87,17 @@ dispersion_allowance   = 1.                                 # Multiple of how mu
 NC         = NX + 2*ND
 ne         = density.sum()
 E_par      = E_per / (anisotropy + 1)
+
+if beta_par is None:
+    Te0        = E_e   * 11603.
+    Tpar       = E_par * 11603.
+    Tper       = E_per * 11603.
+else:
+    beta_per   = beta_par * (anisotropy + 1)
     
-Te0        = E_e   * 11603.
-Tpar       = E_par * 11603.
-Tper       = E_per * 11603.
+    Tpar       = beta_par    * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Tper       = beta_per    * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Te0        = beta_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
 
 if B_eq is None:
     B_eq      = (B_surf / (L ** 3))                      # Magnetic field at equator, based on L value
@@ -156,6 +165,12 @@ loss_cone  = np.arcsin(np.sqrt(B_eq / B_xmax))*180 / np.pi
 
 
 #%%### INPUT TESTS AND CHECKS
+particle_boundary = particle_boundary.lower()
+
+if particle_boundary != 'absorb':
+    if particle_boundary != 'reflect':
+        sys.exit('Error: Particle boundary condition must either be absorbtive or reflective')
+
 if supress_text == False:
     print('Run Started')
     print('Run Series         : {}'.format(save_path.split('//')[-1]))

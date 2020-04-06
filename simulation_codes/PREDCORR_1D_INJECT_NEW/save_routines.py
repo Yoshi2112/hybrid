@@ -66,6 +66,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                    ('L', const.L), 
                    ('B_eq', const.B_eq),
                    ('xmax', const.xmax),
+                   ('xmin', const.xmin),
                    ('B_xmax', const.B_xmax),
                    ('a', const.a),
                    ('theta_xmax', const.theta_xmax),

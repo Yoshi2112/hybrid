@@ -91,7 +91,7 @@ def load_simulation_params():
            ie, run_desc, seed, subcycles, LH_frac, orbit_res, freq_res, method_type,\
            particle_shape, part_save_iter, field_save_iter, dt_field, dt_particle,  \
            ND, NC, N, r_damp, xmax, B_xmax, B_eq, theta_xmax, a, boundary_type,     \
-           particle_boundary, rc_hwidth, L, B_nodes, E_nodes
+           particle_boundary, rc_hwidth, L, B_nodes, E_nodes, xmin
 
     h_name = os.path.join(data_dir, 'simulation_parameters.pckl')       # Load header file
     f      = open(h_name, 'rb')                                         # Open header file
@@ -135,6 +135,11 @@ def load_simulation_params():
     
     B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx      # B grid points position in space
     E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
+    
+    try:
+        xmin = obj['xmin']
+    except:
+        xmin = -xmax
     
     if rc_hwidth == 0: 
         rc_hwidth = NX
