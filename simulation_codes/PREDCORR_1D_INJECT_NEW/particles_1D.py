@@ -180,8 +180,10 @@ def position_update(pos, vel, idx, dt, Ie, W_elec, diag=False):
     for ii in nb.prange(pos.shape[1]):
         if idx[ii] >= 0:
             pos[0, ii] += vel[0, ii] * dt
+            pos[1, ii] += vel[1, ii] * dt
+            pos[2, ii] += vel[2, ii] * dt
     
-            if (pos[0, ii] <= xmin or pos[0, ii] >= xmax):
+            if (pos[0, ii] < xmin or pos[0, ii] > xmax):
                 vel[:, ii] *= 0                     # Zero particle velocity
                 idx[ii]     = -128 + idx[ii]        # Fold index to negative values (preserves species ID)
 
