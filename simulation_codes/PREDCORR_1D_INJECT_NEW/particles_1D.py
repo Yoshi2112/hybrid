@@ -6,7 +6,7 @@ Created on Fri Sep 22 17:23:44 2017
 """
 import numba as nb
 import numpy as np
-from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, B_eq, a
+from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, B_eq, a, reflect, disable_waves
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -20,7 +20,9 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
     '''
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT)
     position_update(pos, vel, idx, DT, Ie, W_elec)  
-    collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, ni, nu, temp1D)
+    
+    if disable_waves == False:
+        collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, ni, nu, temp1D)
     return
 
 
@@ -83,7 +85,7 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
 
 
 @nb.njit()
-def eval_B0_particle(x, Bp):
+def eval_B0_particle(pos, Bp):
     '''
     Calculates the B0 magnetic field at the position of a particle. B0x is
     non-uniform in space, and B0r (split into y,z components) is the required
@@ -91,15 +93,16 @@ def eval_B0_particle(x, Bp):
     
     These values are added onto the existing value of B at the particle location,
     Bp. B0x is simply equated since we never expect a non-zero wave field in x.
-    
-    if rL == 0, set By,z to zero
+        
+    Could totally vectorise this. Would have to change to give a particle_temp
+    array for memory allocation or something
     '''
-    rL     = np.sqrt(x[1]**2 + x[2]**2)
+    rL     = np.sqrt(pos[1]**2 + pos[2]**2)
     
-    B0_r   = - a * B_eq * x[0] * rL
-    Bp[0]  = eval_B0x(x[0])   
-    Bp[1] += B0_r * x[1] / rL
-    Bp[2] += B0_r * x[2] / rL
+    B0_r   = - a * B_eq * pos[0] * rL
+    Bp[0]  = eval_B0x(pos[0])   
+    Bp[1] += B0_r * pos[1] / rL
+    Bp[2] += B0_r * pos[2] / rL
     return
 
 
@@ -129,18 +132,20 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)                     # Calculate magnetic node weights
     
     for ii in nb.prange(vel.shape[1]):  
-        if idx[ii] > 0:
+        if idx[ii] >= 0:
             qmi = 0.5 * dt * qm_ratios[idx[ii]]                                 # Charge-to-mass ration for ion of species idx[ii]
     
             # These create two new length 3 arrays
-            Ep = E[Ie[ii]    , 0:3] * W_elec[0, ii]                             \
-               + E[Ie[ii] + 1, 0:3] * W_elec[1, ii]                             \
-               + E[Ie[ii] + 2, 0:3] * W_elec[2, ii]                             # Vector E-field at particle location
-    
-            Bp = B[Ib[ii]    , 0:3] * W_mag[0, ii]                              \
-               + B[Ib[ii] + 1, 0:3] * W_mag[1, ii]                              \
-               + B[Ib[ii] + 2, 0:3] * W_mag[2, ii]                              # b1 at particle location
-            
+            if disable_waves == False:
+                Ep = E[Ie[ii]    , 0:3] * W_elec[0, ii]                             \
+                   + E[Ie[ii] + 1, 0:3] * W_elec[1, ii]                             \
+                   + E[Ie[ii] + 2, 0:3] * W_elec[2, ii]                             # Vector E-field at particle location
+        
+                Bp = B[Ib[ii]    , 0:3] * W_mag[0, ii]                              \
+                   + B[Ib[ii] + 1, 0:3] * W_mag[1, ii]                              \
+                   + B[Ib[ii] + 2, 0:3] * W_mag[2, ii]                              # b1 at particle location
+            else:
+                Ep = np.zeros(3); Bp = np.zeros(3)
             v_minus    = vel[:, ii] + qmi * Ep                                  # First E-field half-push
             
             eval_B0_particle(pos[:, ii], Bp)                                    # Add B0 at particle location
@@ -184,8 +189,21 @@ def position_update(pos, vel, idx, dt, Ie, W_elec, diag=False):
             pos[2, ii] += vel[2, ii] * dt
     
             if (pos[0, ii] < xmin or pos[0, ii] > xmax):
-                vel[:, ii] *= 0                     # Zero particle velocity
-                idx[ii]     = -128 + idx[ii]        # Fold index to negative values (preserves species ID)
+                if reflect == False:
+                    # Absorb particles
+                    vel[:, ii] *= 0                     # Zero particle velocity
+                    idx[ii]     = -128 + idx[ii]        # Fold index to negative values (preserves species ID)
+                else:
+                    # Reflect particles
+                    if pos[0, ii] > xmax:
+                        pos[0, ii] = 2*xmax - pos[0, ii]
+                    elif pos[0, ii] < xmin:
+                        pos[0, ii] = 2*xmin - pos[0, ii]
+
+                    # 'Reflect' velocities as well. 
+                    # vel[0]   to make it travel in opposite directoin
+                    # vel[1:2] to keep it resonant with ions travelling in that direction
+                    vel[:, ii] *= -1.0
 
     assign_weighting_TSC(pos, Ie, W_elec)
     return

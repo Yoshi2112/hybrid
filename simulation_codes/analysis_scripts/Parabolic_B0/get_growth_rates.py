@@ -288,12 +288,15 @@ def growth_rate_kt(arr, cut_idx, fi, saveas='kt_growth'):
     return
 
     
-def get_linear_growth(by, bz, plot=False):
+def get_linear_growth(plot=False):
     '''
     Calculates an exponential growth rate based on transverse magnetic field
     energy.
     '''
     import pdb
+    by         = cf.get_array('By') * 1e9
+    bz         = cf.get_array('Bz') * 1e9
+    
     mu0 = (4e-7) * np.pi             # Magnetic Permeability of Free Space (SI units)
     
     print('Fitting magnetic energy')

@@ -8,19 +8,22 @@ import numpy as np
 import sys
 
 ### RUN DESCRIPTION ###
-run_description = '''ABC Test :: Fixed density :: Also fixed 3D particle position'''
+run_description = '''Validation Test :: No wave fields, testing for constant magnetic moment'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//ABC_test_lowres_v5'   # Series save dir   : Folder containing all runs of a series
+save_path         = 'runs//validation_runs'       # Series save dir   : Folder containing all runs of a series
 run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run. Must be list. Auto-assign: None.
-supress_text      = False                         # Flag to supress initialization text (usually for diagnostics)
-homogenous        = False                         # Flag to set B0 to homogenous (as test to compare to parabolic)
 
+## DIAGNOSTIC FLAGS :: DOUBLE CHECK BEFORE EACH RUN! ##
+supress_text      = False                         # Supress initialization text
+homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
+reflect           = False                         # Reflect particles when they hit boundary (Default: Absorb)
+disable_waves     = True                          # Disables solutions to wave fields. Only background magnetic field exists
 
 ### PHYSICAL CONSTANTS ###
 q      = 1.602177e-19                       # Elementary charge (C)
@@ -35,14 +38,14 @@ B_surf = 3.12e-5                            # Magnetic field strength at Earth s
 
 
 ### SIMULATION PARAMETERS ###
-NX        = 1024                            # Number of cells - doesn't include ghost cells
-ND        = 128                             # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 200                             # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+NX        = 128                             # Number of cells - doesn't include ghost cells
+ND        = 32                              # Damping region length: Multiple of NX (on each side of simulation domain)
+max_rev   = 1000                            # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
-L         = 5.35                            # Field line L shell
+L         = 4.00                            # Field line L shell
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
-B_eq      = 200e-9                          # Initial magnetic field at equator: None for L-determined value (in T)
+B_eq      = None                            # Initial magnetic field at equator: None for L-determined value (in T)
 rc_hwidth = 0                               # Ring current half-width in number of cells (2*hwidth gives equatorial extent of RC) 
   
 orbit_res = 0.02                            # Set to 0 to distribute across all space as per cold population
@@ -56,7 +59,7 @@ species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/label
 temp_color = ['blue', 'red']
 temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
 dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.array([200, 200])                           # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+nsp_ppc    = np.array([100, 200])                           # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
@@ -85,6 +88,9 @@ NC         = NX + 2*ND
 ne         = density.sum()
 E_par      = E_per / (anisotropy + 1)
 
+if B_eq is None:
+    B_eq      = (B_surf / (L ** 3))                      # Magnetic field at equator, based on L value
+    
 if beta_par is None:
     Te0        = E_e   * 11603.
     Tpar       = E_par * 11603.
@@ -95,9 +101,6 @@ else:
     Tpar       = beta_par    * B_eq ** 2 / (2 * mu0 * ne * kB)
     Tper       = beta_per    * B_eq ** 2 / (2 * mu0 * ne * kB)
     Te0        = beta_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
-
-if B_eq is None:
-    B_eq      = (B_surf / (L ** 3))                      # Magnetic field at equator, based on L value
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma

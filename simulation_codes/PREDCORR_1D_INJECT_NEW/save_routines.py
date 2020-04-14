@@ -13,7 +13,7 @@ from shutil import rmtree
 import simulation_parameters_1D as const
 from   simulation_parameters_1D import drive, save_path, NX, ND, NC, ne, density, save_particles, save_fields
 from   simulation_parameters_1D import idx_start, idx_end, Nj, species_lbl, temp_type, dist_type, mass, charge,\
-                                       drift_v, Tpar, Tper, temp_color, nsp_ppc, Bc, N_species, orbit_res
+                                       drift_v, Tpar, Tper, temp_color, nsp_ppc, Bc, N_species, orbit_res, reflect
 
 
 def manage_directories():
@@ -24,7 +24,7 @@ def manage_directories():
             print('Master directory created')
 
         path = ('%s/%s/run_%d' % (drive, save_path, const.run))          # Set root run path (for images)
-
+        
         if os.path.exists(path) == False:
             os.makedirs(path)
             print('Run directory created')
@@ -51,7 +51,12 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
     for folder in [d_path, f_path, p_path]:
         if os.path.exists(folder) == False:                               # Create data directories
             os.makedirs(folder)
-
+    
+    if reflect == True:
+        rstring = 'reflective'
+    else:
+        rstring = 'absorptive'
+        
     # Single parameters
     params = dict([('seed', const.seed),
                    ('Nj', Nj),
@@ -83,7 +88,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                    ('method_type', 'PREDCORR_PARABOLIC'),
                    ('particle_shape', 'TSC'),
                    ('boundary_type', 'damped'),
-                   ('particle_boundary', 'absorptive'),
+                   ('particle_boundary', rstring),
                    ])
 
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:

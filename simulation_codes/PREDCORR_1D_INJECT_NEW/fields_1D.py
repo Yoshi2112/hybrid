@@ -8,7 +8,7 @@ import numpy as np
 import numba as nb
 
 import auxilliary_1D as aux
-from simulation_parameters_1D import dx, Te0, ne, q, mu0, kB, ie, B_eq, a, ND, NX
+from simulation_parameters_1D import dx, Te0, ne, q, mu0, kB, ie, B_eq, a, ND, NX, disable_waves
 
 
 @nb.njit()
@@ -185,4 +185,8 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P):
     E[:, 0]  = - temp3De[:, 0] - grad_P[:] / q_dens[:]
     E[:, 1]  = - temp3De[:, 1]
     E[:, 2]  = - temp3De[:, 2]
+    
+    # Diagnostic flag for testing
+    if disable_waves == True:   
+        E *= 0.
     return 

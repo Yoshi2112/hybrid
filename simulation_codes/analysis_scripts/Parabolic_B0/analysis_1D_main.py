@@ -79,8 +79,6 @@ def plot_spatial_poynting(saveas='poynting_space_plot', save=False, log=False):
 
     bx, by, bz = bk.interpolate_B_to_center(bx, by, bz, zero_boundaries=False)
     S          = calc_poynting(bx, by, bz, ex, ey, ez)
-    # Have an option to save poynting flux, later.
-    x = np.arange(cf.NC) * cf.dx
     
     ## PLOT IT
     vlim = None
@@ -92,12 +90,12 @@ def plot_spatial_poynting(saveas='poynting_space_plot', save=False, log=False):
             fig, ax = plt.subplots(1, figsize=(15, 10))
             # 
             if log == True:
-                im1 = ax.pcolormesh(x, t, S[:, :, ii],
+                im1 = ax.pcolormesh(cf.E_nodes, t, S[:, :, ii],
                      norm=colors.SymLogNorm(linthresh=1e-7, vmin=vlim, vmax=vlim),  
                      cmap='bwr')
                 suffix = '_log'
             else:
-                im1 = ax.pcolormesh(x, t, S[:, :, ii], cmap='bwr', vmin=vlim, vmax=vlim)
+                im1 = ax.pcolormesh(cf.E_nodes, t, S[:, :, ii], cmap='bwr', vmin=vlim, vmax=vlim)
                 suffix = ''
             
             cb  = fig.colorbar(im1)
@@ -112,13 +110,15 @@ def plot_spatial_poynting(saveas='poynting_space_plot', save=False, log=False):
             ax.set_ylabel(r't (s)', rotation=0, labelpad=15)
             ax.set_xlabel('x (m)')
             ax.set_ylim(0, tmax)
-            ax.axvline(         cf.ND  * cf.dx, c='w', ls=':', alpha=1.0)
-            ax.axvline((cf.NC - cf.ND) * cf.dx, c='w', ls=':', alpha=1.0)
+            
+            ax.set_xlim(cf.grid_min, cf.grid_max)
+            ax.axvline(cf.xmin, c='w', ls=':', alpha=1.0)
+            ax.axvline(cf.xmax, c='w', ls=':', alpha=1.0)
+            ax.axvline(cf.grid_mid, c='w', ls=':', alpha=0.75)   
                 
             if save == True:
                 fullpath = cf.anal_dir + saveas + '_s{}_{}'.format(comp, lbl) + suffix + '.png'
                 plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-                print('t-x Plot saved')
                 plt.close('all')
     return
 
@@ -130,11 +130,11 @@ def plot_tx(component='By', saveas='tx_plot', save=False, log=False):
     
     if component[0] == 'B':
         arr *= 1e9
-        x    = np.arange(cf.NC + 1) * cf.dx
+        x    = cf.B_nodes
     else:
         arr *= 1e3
-        x    = np.arange(cf.NC) * cf.dx
-
+        x    = cf.E_nodes
+    
     ## PLOT IT
     for tmax, lbl in zip([60, None], ['min', 'full']):
         fig, ax = plt.subplots(1, figsize=(15, 10))
@@ -154,12 +154,15 @@ def plot_tx(component='By', saveas='tx_plot', save=False, log=False):
         else:
             cb.set_label('mV/m', rotation=0)
     
-        ax.set_title('t-x Plot for {}'.format(component), fontsize=14)
+        ax.set_title('Time-Space ($t-x$) Plot :: {} component'.format(component.upper()), fontsize=14)
         ax.set_ylabel(r't (s)', rotation=0, labelpad=15)
         ax.set_xlabel('x (m)')
         ax.set_ylim(0, tmax)
-        ax.axvline(         cf.ND  * cf.dx, c='w', ls=':', alpha=1.0)
-        ax.axvline((cf.NC - cf.ND) * cf.dx, c='w', ls=':', alpha=1.0)
+        
+        ax.set_xlim(cf.grid_min, cf.grid_max)
+        ax.axvline(cf.xmin, c='w', ls=':', alpha=1.0)
+        ax.axvline(cf.xmax, c='w', ls=':', alpha=1.0)
+        ax.axvline(cf.grid_mid, c='w', ls=':', alpha=0.75)   
             
         if save == True:
             fullpath = cf.anal_dir + saveas + '_{}_{}'.format(component.lower(), lbl) + suffix + '.png'
@@ -174,9 +177,9 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
     ftime, wx = disp.get_wx(component)
     
     if component[0] == 'B':
-        x    = np.arange(cf.NC + 1) * cf.dx
+        x = cf.B_nodes
     else:
-        x    = np.arange(cf.NC) * cf.dx
+        x = cf.E_nodes
         
     f  = np.fft.rfftfreq(ftime.shape[0], d=cf.dt_field)
     
@@ -193,9 +196,8 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
     
     for ii in range(3):
         if cf.species_present[ii] == True:
-            xarr_B = np.arange(cf.NC + 1) * cf.dx
             cyc    = q * cf.Bc[:, 0] / (2 * np.pi * mp * M[ii])
-            ax.plot(xarr_B, cyc, linestyle='--', c=clr[ii], label=lbl[ii])
+            ax.plot(cf.B_nodes, cyc, linestyle='--', c=clr[ii], label=lbl[ii])
     
     if linear_overlay == True:
         try:
@@ -206,16 +208,19 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
         except:
             pass
 
-    ax.set_title(r'w-x Plot', fontsize=14)
+    ax.set_title('Frequency-Space ($\omega-x$) Plot :: {} component'.format(component.upper()), fontsize=14)
     ax.set_ylabel(r'f (Hz)', rotation=0, labelpad=15)
-    ax.set_xlabel('x (cell)')
+    ax.set_xlabel('x (m)')
     
     if pcyc_mult is not None:
         ax.set_ylim(0, pcyc_mult*cyc[0])
     else:
         ax.set_ylim(0, None)
-        
-    #ax.legend(loc=2, facecolor='grey')
+      
+    ax.set_xlim(cf.grid_min, cf.grid_max)
+    ax.axvline(cf.xmin, c='w', ls=':', alpha=1.0)
+    ax.axvline(cf.xmax, c='w', ls=':', alpha=1.0)
+    ax.axvline(cf.grid_mid, c='w', ls=':', alpha=0.75)   
     
     if save == True:
         fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
@@ -234,7 +239,7 @@ def plot_kt(component='By', saveas='kt_plot', save=False):
     
     im1 = ax.pcolormesh(k, ftime, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
     fig.colorbar(im1)
-    ax.set_title(r'k-t Plot', fontsize=14)
+    ax.set_title('Wavenumber-Time ($k-t$) Plot :: {} component'.format(component.upper()), fontsize=14)
     ax.set_ylabel(r'$\Omega_i t$', rotation=0)
     ax.set_xlabel(r'$k (m^{-1}) \times 10^6$')
     #ax.set_ylim(0, 15)
@@ -260,7 +265,7 @@ def plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=False, save=Fa
     
     im1 = ax.pcolormesh(1e6*k[1:], f[1:], np.log10(wk[1:, 1:].real), cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
     fig.colorbar(im1)
-    ax.set_title(r'$\omega/k$ Dispersion Plot for {}'.format(component), fontsize=14)
+    ax.set_title(r'$\omega/k$ Dispersion Plot :: {} component'.format(component.upper()), fontsize=14)
     ax.set_ylabel(ylab)
     ax.set_xlabel(xlab)
     
@@ -280,26 +285,25 @@ def plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=False, save=Fa
 #         ax.set_ylim(0, pcyc_mult*cyc[0])
 #     else:
 #         ax.set_ylim(0, None)
+#         
+#     if dispersion_overlay == True:
+#         '''
+#         Some weird factor of about 2pi inaccuracy? Is this inherent to the sim? Or a problem
+#         with linear theory? Or problem with the analysis?
+#         '''
+#         try:
+#             k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k)
+#             for ii in range(CPDR_solns.shape[1]):
+#                 ax.plot(k_vals, CPDR_solns[:, ii]*2*np.pi,      c='k', linestyle='--', label='CPDR')
+#                 ax.plot(k_vals, warm_solns[:, ii].real*2*np.pi, c='k', linestyle='-',  label='WPDR')
+#         except:
+#             pass
+#         
+#     ax.legend(loc=2, facecolor='grey')
 # =============================================================================
-        
-    ax.set_xlim(cf.xmin, cf.xmax)
+    
     ax.set_ylim(0, None)
     
-    if dispersion_overlay == True:
-        '''
-        Some weird factor of about 2pi inaccuracy? Is this inherent to the sim? Or a problem
-        with linear theory? Or problem with the analysis?
-        '''
-        try:
-            k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k)
-            for ii in range(CPDR_solns.shape[1]):
-                ax.plot(k_vals, CPDR_solns[:, ii]*2*np.pi,      c='k', linestyle='--', label='CPDR')
-                ax.plot(k_vals, warm_solns[:, ii].real*2*np.pi, c='k', linestyle='-',  label='WPDR')
-        except:
-            pass
-        
-    ax.legend(loc=2, facecolor='grey')
-        
     if save == True:
         fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
@@ -1384,7 +1388,7 @@ def summary_plots(save=True, histogram=True):
         plt.figtext(0.855, top - 12*gap, r'$\beta_e$      : %.2f' % beta_e, fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 13*gap, 'dx      : {}km'.format(round(cf.dx/1e3, 2)), fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 14*gap, 'L       : {}'.format(cf.L), fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 15*gap, 'MLAT_max: {:.1f} deg'.format(cf.theta_xmax * 180. / np.pi), fontsize=fontsize, family='monospace')
+        plt.figtext(0.855, top - 15*gap, 'MLAT_max: $\pm$%.1f$^{\circ}$' % (cf.theta_xmax * 180. / np.pi), fontsize=fontsize, family='monospace')
 
         plt.figtext(0.855, top - 16*gap, '', fontsize=fontsize, family='monospace')
         
@@ -1424,8 +1428,14 @@ def standard_analysis_package():
     for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
         print('2D summary for {}'.format(comp))
         plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True)
-        plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, log=True)
-        plot_wx(component=comp, saveas=disp_folder + 'wx_plot', save=True, linear_overlay=False,     pcyc_mult=1.1)
+        try:
+            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, log=True)
+        except:
+            pass
+        try:
+            plot_wx(component=comp, saveas=disp_folder + 'wx_plot', save=True, linear_overlay=False,     pcyc_mult=1.1)
+        except:
+            pass
         plot_wk(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=False, pcyc_mult=1.1)
         plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
         
@@ -1433,9 +1443,10 @@ def standard_analysis_package():
     plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
     
     if True:
-        check_fields()
+        pass
         
     if False:
+        check_fields()
         plot_energies(normalize=True, save=True)
         plot_ion_energy_components(save=True, tmax=1./cf.HM_frequency)
         single_point_helicity_timeseries()
@@ -1608,27 +1619,18 @@ def check_fields(save=True):
 if __name__ == '__main__':
     drive       = 'F:'
     
-    series      = 'ABC_test_lowres_v4L_nowave'
+    series      = 'ABC_test_lowres_v5'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in range(num_runs):
+    for run_num in [3]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
-        #standard_analysis_package()
-        
-# =============================================================================
-#         plot_helical_waterfall()
-#         
-#         plot_spatial_poynting(save=True, log=True)
-#             
-#         plot_tx(save=True, log=True)
-#         plot_tx(save=True, log=False)
-# =============================================================================
+        standard_analysis_package()
         
         summary_plots(save=True, histogram=False)
-        #check_fields()
+        check_fields()
         
         #plot_energies(normalize=False, save=True)
         #plot_helicity_colourplot()
@@ -1640,9 +1642,8 @@ if __name__ == '__main__':
         #do_all_dynamic_spectra(ymax=1.0)
         #do_all_dynamic_spectra(ymax=None)
         
-        #By_raw         = cf.get_array('By') * 1e9
-        #Bz_raw         = cf.get_array('Bz') * 1e9
-        #ggg.get_linear_growth(By_raw, Bz_raw)
+        
+        #ggg.get_linear_growth()
 
 # =============================================================================
 #         try:
