@@ -8,12 +8,12 @@ import numpy as np
 import sys
 
 ### RUN DESCRIPTION ###
-run_description = '''Validation Test :: No wave fields, testing for constant magnetic moment'''
+run_description = '''Validation Test :: Periodic Particles Test :: Partial RC'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path         = 'runs//validation_runs'       # Series save dir   : Folder containing all runs of a series
-run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+run               = 4                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
@@ -21,9 +21,10 @@ cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run. Mu
 
 ## DIAGNOSTIC FLAGS :: DOUBLE CHECK BEFORE EACH RUN! ##
 supress_text      = False                         # Supress initialization text
-homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
+homogenous        = True                          # Set B0 to homogenous (as test to compare to parabolic)
 reflect           = False                         # Reflect particles when they hit boundary (Default: Absorb)
-disable_waves     = True                          # Disables solutions to wave fields. Only background magnetic field exists
+disable_waves     = False                         # Disables solutions to wave fields. Only background magnetic field exists
+periodic          = True                          # Set periodic boundary conditions for particles. Overrides reflection flag.
 
 ### PHYSICAL CONSTANTS ###
 q      = 1.602177e-19                       # Elementary charge (C)
@@ -38,20 +39,20 @@ B_surf = 3.12e-5                            # Magnetic field strength at Earth s
 
 
 ### SIMULATION PARAMETERS ###
-NX        = 128                             # Number of cells - doesn't include ghost cells
-ND        = 32                              # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 1000                            # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+NX        = 256                             # Number of cells - doesn't include ghost cells
+ND        = 64                              # Damping region length: Multiple of NX (on each side of simulation domain)
+max_rev   = 500                             # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 4.00                            # Field line L shell
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
 B_eq      = None                            # Initial magnetic field at equator: None for L-determined value (in T)
-rc_hwidth = 0                               # Ring current half-width in number of cells (2*hwidth gives equatorial extent of RC) 
+rc_hwidth = 64                              # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
   
-orbit_res = 0.02                            # Set to 0 to distribute across all space as per cold population
+orbit_res = 0.02                            # Orbit resolution
 freq_res  = 0.02                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
 part_res  = 0.50                            # Data capture resolution in gyroperiod fraction: Particle information
-field_res = 0.20                            # Data capture resolution in gyroperiod fraction: Field information
+field_res = 0.10                            # Data capture resolution in gyroperiod fraction: Field information
 
 
 ### PARTICLE PARAMETERS ###
@@ -59,18 +60,19 @@ species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/label
 temp_color = ['blue', 'red']
 temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
 dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.array([100, 200])                           # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+nsp_ppc    = np.array([200, 1000])                          # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
 drift_v    = np.array([0., 0.])                             # Species parallel bulk velocity (alfven velocity units)
 density    = np.array([180., 20.]) * 1e6                    # Species density in /cc (cast to /m3)
+anisotropy = np.array([0.0, 5.0])                           # Particle anisotropy: A = T_per/T_par - 1
+
+# Particle energy: Choose one                                    
 E_per      = np.array([5.0, 50000.])                        # Perpendicular energy in eV
-anisotropy = np.array([0.0, 5.0])
+beta_par   = np.array([1., 10.])                            # Overrides E_per if not None. Uses B_eq for conversion
 
-beta_par   = np.array([1., 10.])                            # Overrides if not None
-
-# External current properties
+# External current properties (not yet implemented)
 J_amp          = 1.0                                        # External current : Amplitude  (A)
 J_freq         = 0.02                                       # External current : Frequency  (Hz)
 J_k            = 1e-7                                       # External current : Wavenumber (/m)
@@ -177,10 +179,11 @@ if supress_text == False:
     print('Density            : {:5.2f}cc'.format(ne / 1e6))
     print('Equatorial B-field : {:5.2f}nT'.format(B_eq*1e9))
     print('Maximum    B-field : {:5.2f}nT'.format(B_xmax*1e9))
-    print('Loss cone          : {:5.2f} degrees\n'.format(loss_cone))
+    print('Loss cone          : {:<5.2f} degrees  '.format(loss_cone))
+    print('Maximum MLAT (+/-) : {:<5.2f} degrees\n'.format(theta_xmax * 180. / np.pi))
     
-    print('Equat. Gyroperiod: : {}s'.format(round(2. * np.pi / gyfreq, 2)))
-    print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 2)))
+    print('Equat. Gyroperiod: : {}s'.format(round(2. * np.pi / gyfreq, 3)))
+    print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 3)))
     print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_rev * 2. * np.pi / gyfreq_eq, 2), max_rev))
     
     print('{} spatial cells, {} ring current cells, 2x{} damped cells'.format(NX, rc_hwidth*2, ND))

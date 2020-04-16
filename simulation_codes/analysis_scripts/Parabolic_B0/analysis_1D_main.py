@@ -82,9 +82,7 @@ def plot_spatial_poynting(saveas='poynting_space_plot', save=False, log=False):
     
     ## PLOT IT
     vlim = None
-    #if True:
     for ii, comp in zip(range(3), ['x', 'y', 'z']):
-        #ii = 2; comp = 'z'
         print('Creating plots for S{}'.format(comp))
         for tmax, lbl in zip([60, None], ['min', 'full']):
             fig, ax = plt.subplots(1, figsize=(15, 10))
@@ -122,6 +120,64 @@ def plot_spatial_poynting(saveas='poynting_space_plot', save=False, log=False):
                 plt.close('all')
     return
 
+
+def plot_spatial_poynting_helical(saveas='poynting_helical_plot', save=False, log=False):
+    '''
+    Plots poynting flux at each gridpoint point in space
+    
+    -- Need to interpolate B to cell centers
+    -- S = E x H = 1/mu0 E x B
+    -- Loop through each cell     : E(t), B(t), S(t)
+    -- Maybe also do some sort of S, x plot
+    -- And/or do dynamic Poynting spectrum
+    '''
+    plt.ioff()
+
+    t, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens,\
+        field_sim_time, damping_array = cf.get_array(get_all=True)
+
+    bx, by, bz = bk.interpolate_B_to_center(bx, by, bz, zero_boundaries=False)
+    S          = calc_poynting(bx, by, bz, ex, ey, ez)
+    
+    ## PLOT IT
+    vlim = None
+    for ii, comp in zip(range(3), ['x', 'y', 'z']):
+        print('Creating plots for S{}'.format(comp))
+        for tmax, lbl in zip([60, None], ['min', 'full']):
+            fig, ax = plt.subplots(1, figsize=(15, 10))
+            # 
+            if log == True:
+                im1 = ax.pcolormesh(cf.E_nodes, t, S[:, :, ii],
+                     norm=colors.SymLogNorm(linthresh=1e-7, vmin=vlim, vmax=vlim),  
+                     cmap='bwr')
+                suffix = '_log'
+            else:
+                im1 = ax.pcolormesh(cf.E_nodes, t, S[:, :, ii], cmap='bwr', vmin=vlim, vmax=vlim)
+                suffix = ''
+            
+            cb  = fig.colorbar(im1)
+            cb.set_label('$S_%s$'%comp)
+            
+            if comp == 'x':
+                suff = 'FIELD-ALIGNED DIRECTION'
+            else:
+                suff = 'TRANSVERSE DIRECTION'
+            
+            ax.set_title('Power Propagation :: Time vs. Space :: {}'.format(suff), fontsize=14)
+            ax.set_ylabel(r't (s)', rotation=0, labelpad=15)
+            ax.set_xlabel('x (m)')
+            ax.set_ylim(0, tmax)
+            
+            ax.set_xlim(cf.grid_min, cf.grid_max)
+            ax.axvline(cf.xmin, c='w', ls=':', alpha=1.0)
+            ax.axvline(cf.xmax, c='w', ls=':', alpha=1.0)
+            ax.axvline(cf.grid_mid, c='w', ls=':', alpha=0.75)   
+                
+            if save == True:
+                fullpath = cf.anal_dir + saveas + '_s{}_{}'.format(comp, lbl) + suffix + '.png'
+                plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+                plt.close('all')
+    return
 
 def plot_tx(component='By', saveas='tx_plot', save=False, log=False):
     plt.ioff()
@@ -1268,7 +1324,7 @@ def summary_plots(save=True, histogram=True):
                 ax_vy.set_xlim(0, np.sqrt(2)*vel_lim)
                 
                 for ax, comp in zip([ax_vx, ax_vy], ['v_\parallel', 'v_\perp']):
-                    ax.set_ylim(0, int(cf.N / cf.NX) * 2.0)
+                    ax.set_ylim(0, int(cf.N / cf.NX) * 4.0)
                     ax.legend(loc='upper right')
                     ax.set_ylabel('$n_{%s}$'%comp)
         else:
@@ -1619,18 +1675,18 @@ def check_fields(save=True):
 if __name__ == '__main__':
     drive       = 'F:'
     
-    series      = 'ABC_test_lowres_v5'
+    series      = 'validation_runs'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [3]:#range(num_runs):
+    for run_num in [1]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
         standard_analysis_package()
         
         summary_plots(save=True, histogram=False)
-        check_fields()
+        #check_fields()
         
         #plot_energies(normalize=False, save=True)
         #plot_helicity_colourplot()

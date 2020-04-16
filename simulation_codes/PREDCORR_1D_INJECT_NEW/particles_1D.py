@@ -6,7 +6,7 @@ Created on Fri Sep 22 17:23:44 2017
 """
 import numba as nb
 import numpy as np
-from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, B_eq, a, reflect, disable_waves
+from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, B_eq, a, reflect, disable_waves, periodic
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -146,6 +146,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
                    + B[Ib[ii] + 2, 0:3] * W_mag[2, ii]                              # b1 at particle location
             else:
                 Ep = np.zeros(3); Bp = np.zeros(3)
+                
             v_minus    = vel[:, ii] + qmi * Ep                                  # First E-field half-push
             
             eval_B0_particle(pos[:, ii], Bp)                                    # Add B0 at particle location
@@ -181,15 +182,25 @@ def position_update(pos, vel, idx, dt, Ie, W_elec, diag=False):
         W_elec -- (0) Updated nearest E-field node value and (1-2) left/centre weights
         
     Reflective boundaries to simulate the "open ends" that would have flux coming in from the ionosphere side.
+    
+    These equations aren't quite right for xmax != xmin, but they'll do for now
     '''
     for ii in nb.prange(pos.shape[1]):
+        # Only update particles that haven't been absorbed (positive species index)
         if idx[ii] >= 0:
             pos[0, ii] += vel[0, ii] * dt
             pos[1, ii] += vel[1, ii] * dt
             pos[2, ii] += vel[2, ii] * dt
     
+            # Particle boundary conditions
             if (pos[0, ii] < xmin or pos[0, ii] > xmax):
-                if reflect == False:
+                if periodic == True:
+                    # Mario particles
+                    if pos[0, ii] > xmax:
+                        pos[0, ii] = pos[0, ii] - xmax + xmin
+                    elif pos[0, ii] < xmin:
+                        pos[0, ii] = pos[0, ii] + xmax - xmin
+                elif reflect == False:
                     # Absorb particles
                     vel[:, ii] *= 0                     # Zero particle velocity
                     idx[ii]     = -128 + idx[ii]        # Fold index to negative values (preserves species ID)

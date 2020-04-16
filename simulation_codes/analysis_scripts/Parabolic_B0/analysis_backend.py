@@ -116,7 +116,7 @@ def get_energies():
     '''
     Computes and saves field and particle energies at each field/particle timestep.
     
-    TODO: Use particle-interpolated fields rather than raw field files.
+    TO DO: Use particle-interpolated fields rather than raw field files.
     OR    Use these interpolated fields ONLY for the total energy, would be slower.
     '''
     from analysis_config import NX, dx, idx_start, idx_end, Nj, n_contr, mass
@@ -183,29 +183,37 @@ def get_energies():
     return mag_energy, electron_energy, particle_energy, total_energy
 
 
-def get_helical_components(overwrite):
+def get_helical_components(overwrite, field='B'):
     temp_dir = cf.temp_dir
-
-    if os.path.exists(temp_dir + 'B_positive_helicity.npy') == False or overwrite == True:
-        ftime, By = cf.get_array('By')
-        ftime, Bz = cf.get_array('Bz')
+    
+    # Note: Are these definitions valid for ABC's? Or should I just be using the spatial section?
+    # Would rely on cutting off the end bits of the field as well (i.e. must be same length as Fy, Fz)
+    if field == 'B':
+        N_cells = cf.NC + 1
+    else:
+        N_cells = cf.NC
+    
+    print('Getting helical components for {} field'.format(field))
+    if os.path.exists(temp_dir + '{}_positive_helicity.npy'.format(field)) == False or overwrite == True:
+        ftime, By = cf.get_array('{}y'.format(field))
+        ftime, Bz = cf.get_array('{}z'.format(field))
 
         Bt_pos = np.zeros(By.shape, dtype=np.complex128)
         Bt_neg = np.zeros(By.shape, dtype=np.complex128)
         
         for ii in range(By.shape[0]):
             print('Analysing time step {}'.format(ii))
-            Bt_pos[ii, :], Bt_neg[ii, :] = calculate_helicity(By[ii], Bz[ii], cf.NC + 1, cf.dx)
+            Bt_pos[ii, :], Bt_neg[ii, :] = calculate_helicity(By[ii], Bz[ii], N_cells, cf.dx)
         
-        print('Saving helicities to file...')
-        np.save(temp_dir + 'B_positive_helicity.npy', Bt_pos)
-        np.save(temp_dir + 'B_negative_helicity.npy', Bt_neg)
+        print('Saving {}-helicities to file'.format(field))
+        np.save(temp_dir + '{}_positive_helicity.npy'.format(field), Bt_pos)
+        np.save(temp_dir + '{}_negative_helicity.npy'.format(field), Bt_neg)
     else:
-        print('Loading helicities from file...')
-        ftime, By = cf.get_array('By')
+        print('Loading {}-elicities from file'.format(field))
+        ftime, By = cf.get_array('{}y'.format(field))
         
-        Bt_pos = np.load(temp_dir + 'B_positive_helicity.npy')
-        Bt_neg = np.load(temp_dir + 'B_negative_helicity.npy')
+        Bt_pos = np.load(temp_dir + '{}_positive_helicity.npy'.format(field))
+        Bt_neg = np.load(temp_dir + '{}_negative_helicity.npy'.format(field))
     return ftime, Bt_pos, Bt_neg
 
 
