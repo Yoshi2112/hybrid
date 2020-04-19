@@ -56,9 +56,6 @@ def interpolate_edges_to_center(B, interp):
     for jj in range(1, B.shape[1]):
         for ii in range(1, NC):
             y2[ii, jj] = B[ii + 1, jj] - 2*B[ii, jj] + B[ii - 1, jj]
-
-        y2[0 , jj] = 0.
-        y2[NC, jj] = 0.
         
     # Do spline interpolation: E[ii] is bracketed by B[ii], B[ii + 1]
     for jj in range(1, B.shape[1]):
