@@ -64,7 +64,7 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
     
     for ii in np.arange(Np):
         xp          = (pos[0, ii] + particle_transform) / dx    # Shift particle position >= 0
-        I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node
+        I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node (Vectorize?)
         delta_left  = I[ii] - xp                                # Distance from left node in grid units
         
         if abs(pos[0, ii] - xmin) < 1e-10:
@@ -195,8 +195,8 @@ def position_update(pos, vel, idx, dt, Ie, W_elec, diag=False):
             # Particle boundary conditions
             if (pos[0, ii] < xmin or pos[0, ii] > xmax):
                 # Absorb particles
-                vel[:, ii] *= 0                     # Zero particle velocity
-                idx[ii]     = -128 + idx[ii]        # Fold index to negative values (preserves species ID)
+                vel[:, ii] *= 0          # Zero particle velocity
+                idx[ii]    -= 128        # Fold index to negative values (preserves species ID)
                 
 # =============================================================================
 #                 # Mario particles

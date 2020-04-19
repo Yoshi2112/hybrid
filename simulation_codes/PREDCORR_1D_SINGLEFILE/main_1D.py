@@ -964,8 +964,8 @@ def position_update(pos, vel, idx, dt, Ie, W_elec, diag=False):
             # Particle boundary conditions
             if (pos[0, ii] < xmin or pos[0, ii] > xmax):
                 # Absorb particles
-                vel[:, ii] *= 0                     # Zero particle velocity
-                idx[ii]     = -128 + idx[ii]        # Fold index to negative values (preserves species ID)
+                vel[:, ii] *= 0       # Zero particle velocity
+                idx[ii]    -= 128     # Fold index to negative values (preserves species ID)
                 
 # =============================================================================
 #                 # Mario particles

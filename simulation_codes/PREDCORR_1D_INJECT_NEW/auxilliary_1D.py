@@ -36,7 +36,7 @@ def cross_product(A, B, C):
 
 
 @nb.njit()
-def interpolate_edges_to_center(B, interp, zero_boundaries=False):
+def interpolate_edges_to_center(B, interp):
     ''' 
     Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
     with a 3D array (e.g. B). Second derivative y2 is calculated on the B-grid, with
@@ -53,20 +53,12 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
     y2      = np.zeros(B.shape, dtype=nb.float64)
     interp *= 0.
     
-    # Calculate second derivative
     for jj in range(1, B.shape[1]):
-        
-        # Interior B-nodes, Centered difference
         for ii in range(1, NC):
             y2[ii, jj] = B[ii + 1, jj] - 2*B[ii, jj] + B[ii - 1, jj]
-                
-        # Edge B-nodes, Forwards/Backwards difference
-        if zero_boundaries == True:
-            y2[0 , jj] = 0.
-            y2[NC, jj] = 0.
-        else:
-            y2[0,  jj] = 2*B[0 ,    jj] - 5*B[1     , jj] + 4*B[2     , jj] - B[3     , jj]
-            y2[NC, jj] = 2*B[NC,    jj] - 5*B[NC - 1, jj] + 4*B[NC - 2, jj] - B[NC - 3, jj]
+
+        y2[0 , jj] = 0.
+        y2[NC, jj] = 0.
         
     # Do spline interpolation: E[ii] is bracketed by B[ii], B[ii + 1]
     for jj in range(1, B.shape[1]):
@@ -74,8 +66,7 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
             interp[ii, jj] = 0.5 * (B[ii, jj] + B[ii + 1, jj] + (1/6) * (y2[ii, jj] + y2[ii + 1, jj]))
     
     # Add B0x to interpolated array
-    for ii in range(NC):
-        interp[ii, 0] = fields.eval_B0x(E_nodes[ii])
+    interp[:, 0] = fields.eval_B0x(E_nodes)
     
     interp[:ND,      0] = interp[ND,    0]
     interp[ND+NX+1:, 0] = interp[ND+NX, 0]
