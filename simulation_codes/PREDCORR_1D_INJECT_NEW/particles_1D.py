@@ -194,27 +194,29 @@ def position_update(pos, vel, idx, dt, Ie, W_elec, diag=False):
     
             # Particle boundary conditions
             if (pos[0, ii] < xmin or pos[0, ii] > xmax):
-                if periodic == True:
-                    # Mario particles
-                    if pos[0, ii] > xmax:
-                        pos[0, ii] = pos[0, ii] - xmax + xmin
-                    elif pos[0, ii] < xmin:
-                        pos[0, ii] = pos[0, ii] + xmax - xmin
-                elif reflect == False:
-                    # Absorb particles
-                    vel[:, ii] *= 0                     # Zero particle velocity
-                    idx[ii]     = -128 + idx[ii]        # Fold index to negative values (preserves species ID)
-                else:
-                    # Reflect particles
-                    if pos[0, ii] > xmax:
-                        pos[0, ii] = 2*xmax - pos[0, ii]
-                    elif pos[0, ii] < xmin:
-                        pos[0, ii] = 2*xmin - pos[0, ii]
-
-                    # 'Reflect' velocities as well. 
-                    # vel[0]   to make it travel in opposite directoin
-                    # vel[1:2] to keep it resonant with ions travelling in that direction
-                    vel[:, ii] *= -1.0
+                # Absorb particles
+                vel[:, ii] *= 0                     # Zero particle velocity
+                idx[ii]     = -128 + idx[ii]        # Fold index to negative values (preserves species ID)
+                
+# =============================================================================
+#                 # Mario particles
+#                 if pos[0, ii] > xmax:
+#                     pos[0, ii] = pos[0, ii] - xmax + xmin
+#                 elif pos[0, ii] < xmin:
+#                     pos[0, ii] = pos[0, ii] + xmax - xmin
+# =============================================================================
+# =============================================================================
+#                 # Reflect particles
+#                 if pos[0, ii] > xmax:
+#                     pos[0, ii] = 2*xmax - pos[0, ii]
+#                 elif pos[0, ii] < xmin:
+#                     pos[0, ii] = 2*xmin - pos[0, ii]
+# 
+#                 # 'Reflect' velocities as well. 
+#                 # vel[0]   to make it travel in opposite directoin
+#                 # vel[1:2] to keep it resonant with ions travelling in that direction
+#                 vel[:, ii] *= -1.0
+# =============================================================================
 
     assign_weighting_TSC(pos, Ie, W_elec)
     return
