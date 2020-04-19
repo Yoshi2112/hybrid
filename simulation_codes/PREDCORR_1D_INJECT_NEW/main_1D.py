@@ -20,8 +20,7 @@ if __name__ == '__main__':
     pos, vel, Ie, W_elec, Ib, W_mag, idx                = init.initialize_particles()
     B, E_int, E_half, Ve, Te                            = init.initialize_fields()
     q_dens, q_dens_adv, Ji, ni, nu                      = init.initialize_source_arrays()
-    old_particles, old_fields, temp3De, temp3Db, temp1D,\
-    particle_fields_temp, particle_velocity_temp = init.initialize_tertiary_arrays()
+    old_particles, old_fields, temp3De, temp3Db, temp1D = init.initialize_tertiary_arrays()
     
     # Collect initial moments and save initial state
     sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D) 
@@ -37,8 +36,7 @@ if __name__ == '__main__':
         save.save_field_data(0, DT, field_save_iter, 0, Ji, E_int, B, Ve, Te, q_dens, damping_array)
     
     # Retard velocity
-    particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int,
-                              particle_fields_temp, particle_velocity_temp, -0.5*DT)
+    particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT)
     
     qq       = 1;    sim_time = DT
     print('Starting main loop...')
@@ -47,7 +45,6 @@ if __name__ == '__main__':
         aux.main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,              \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
               Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,\
-                  particle_fields_temp, particle_velocity_temp,\
               damping_array, qq, DT, max_inc, part_save_iter, field_save_iter)
 
         if qq%part_save_iter == 0 and save_particles == 1:

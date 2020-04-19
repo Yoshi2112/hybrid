@@ -14,8 +14,8 @@ run_description = '''Validation Test :: No wave fields :: Test to see if particl
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path         = 'runs//validation_runs_v2'    # Series save dir   : Folder containing all runs of a series
 run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles    = 1                             # Save data flag    : For later analysis
-save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
+save_particles    = 0                             # Save data flag    : For later analysis
+save_fields       = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run. Must be list. Auto-assign: None.
 

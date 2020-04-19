@@ -14,12 +14,11 @@ from fields_1D import eval_B0x
 
 @nb.njit()
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
-                                  B, E, DT, q_dens_adv, Ji, ni, nu, temp1D,\
-                                  particle_fields_temp, particle_velocity_temp, pc=0):
+                                  B, E, DT, q_dens_adv, Ji, ni, nu, temp1D, pc=0):
     '''
     Helper function to group the particle advance and moment collection functions
     '''
-    velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, particle_fields_temp, particle_velocity_temp, DT)
+    velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT)
     position_update(pos, vel, idx, DT, Ie, W_elec)  
     
     if disable_waves == False:
@@ -108,8 +107,7 @@ def eval_B0_particle(pos, Bp):
 
 
 @nb.njit()
-def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E,
-                    Fp, pv_temp, dt):
+def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     '''
     updates velocities using a Boris particle pusher.
     Based on Birdsall & Langdon (1985), pp. 59-63.

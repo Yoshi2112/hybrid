@@ -271,11 +271,8 @@ def initialize_tertiary_arrays():
     old_fields    = np.zeros((NC + 1, 10), dtype=nb.float64)
     
     old_particles = np.zeros((10, N),      dtype=nb.float64)
-    
-    particle_fields_temp   = np.zeros((6, N), dtype=nb.float64)
-    particle_velocity_temp = np.zeros((6, N), dtype=nb.float64)
-    
-    return old_particles, old_fields, temp3De, temp3Db, temp1D, particle_fields_temp, particle_velocity_temp
+        
+    return old_particles, old_fields, temp3De, temp3Db, temp1D
 
 
 def set_equilibrium_te0(qdens):
