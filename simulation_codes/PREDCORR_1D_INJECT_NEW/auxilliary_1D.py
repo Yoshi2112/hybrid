@@ -166,6 +166,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, \
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
               Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,\
+                  particle_fields_temp, particle_velocity_temp,\
               damping_array, qq, DT, max_inc, part_save_iter, field_save_iter):
     '''
     Main loop separated from __main__ function, since this is the actual computation bit.
@@ -185,7 +186,8 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     
     # Move particles, collect moments
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
-                                            B, E_int, DT, q_dens_adv, Ji, ni, nu, temp1D)
+                                            B, E_int, DT, q_dens_adv, Ji, ni, nu, temp1D,
+                                            particle_fields_temp, particle_velocity_temp)
     
     # Average N, N + 1 densities (q_dens at N + 1/2)
     q_dens *= 0.5
@@ -221,7 +223,8 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     
         # Advance particles to obtain source terms at N + 3/2
         particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
-                                                B, E_int, DT, q_dens, Ji, ni, nu, temp1D, pc=1)
+                                                B, E_int, DT, q_dens, Ji, ni, nu, temp1D,
+                                                particle_fields_temp, particle_velocity_temp, pc=1)
         
         q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
         

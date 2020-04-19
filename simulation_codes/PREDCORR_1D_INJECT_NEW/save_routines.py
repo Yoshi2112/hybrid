@@ -13,7 +13,8 @@ from shutil import rmtree
 import simulation_parameters_1D as const
 from   simulation_parameters_1D import drive, save_path, NX, ND, NC, ne, density, save_particles, save_fields
 from   simulation_parameters_1D import idx_start, idx_end, Nj, species_lbl, temp_type, dist_type, mass, charge,\
-                                       drift_v, Tpar, Tper, temp_color, nsp_ppc, Bc, N_species, orbit_res, reflect
+                                       drift_v, Tpar, Tper, temp_color, nsp_ppc, Bc, N_species, orbit_res, reflect,\
+                                           periodic
 
 
 def manage_directories():
@@ -52,10 +53,13 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
         if os.path.exists(folder) == False:                               # Create data directories
             os.makedirs(folder)
     
-    if reflect == True:
-        rstring = 'reflective'
+    if periodic == True:
+        rstring = 'periodic'
     else:
-        rstring = 'absorptive'
+        if reflect == True:
+            rstring = 'reflective'
+        else:
+            rstring = 'absorptive'
         
     # Single parameters
     params = dict([('seed', const.seed),

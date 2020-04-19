@@ -24,6 +24,33 @@ script is shorter and less painful to work with
 If a method requires more than a few functions, it will be split into its own 
 module, i.e. get_growth_rates
 '''
+@nb.njit()
+def eval_B0x(x):
+    return cf.B_eq * (1. + cf.a * x**2)
+
+
+@nb.njit()
+def eval_B0_particle(pos, Bp):
+    '''
+    Calculates the B0 magnetic field at the position of a particle. B0x is
+    non-uniform in space, and B0r (split into y,z components) is the required
+    value to keep div(B) = 0
+    
+    These values are added onto the existing value of B at the particle location,
+    Bp. B0x is simply equated since we never expect a non-zero wave field in x.
+        
+    Could totally vectorise this. Would have to change to give a particle_temp
+    array for memory allocation or something
+    '''
+    rL     = np.sqrt(pos[1]**2 + pos[2]**2)
+    
+    B0_r   = - cf.a * cf.B_eq * pos[0] * rL
+    Bp[0]  = eval_B0x(pos[0])   
+    Bp[1] += B0_r * pos[1] / rL
+    Bp[2] += B0_r * pos[2] / rL
+    return
+
+
 def get_B0_particle(x, v, B, sp):
     
     @nb.njit()
@@ -45,9 +72,6 @@ def get_B0_particle(x, v, B, sp):
             xp_mag[kk] = W0 * mag[Ib, kk] + W1 * mag[Ib + 1, kk] + W2 * mag[Ib + 2, kk]
         
         return xp_mag
-    
-    def eval_B0x(x):
-        return cf.B_eq * (1 + cf.a * x**2)
     
     b1 = get_b1(x, B)
     
@@ -183,7 +207,7 @@ def get_energies():
     return mag_energy, electron_energy, particle_energy, total_energy
 
 
-def get_helical_components(overwrite, field='B'):
+def get_helical_components(overwrite=False, field='B'):
     temp_dir = cf.temp_dir
     
     # Note: Are these definitions valid for ABC's? Or should I just be using the spatial section?

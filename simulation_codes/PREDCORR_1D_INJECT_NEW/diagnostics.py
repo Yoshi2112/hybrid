@@ -9,6 +9,7 @@ import numpy as np
 import numba as nb
 import matplotlib        as mpl
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import os
 import pdb
 
@@ -1473,62 +1474,72 @@ def test_boris():
     return
 
 
-def do_particle_run(max_rev=1000, v_mag=1.0, pitch=45.0):
+def do_particle_run(max_rev=1000, v_mag=1.0, pitch=45.0, dt_mult=1.0):
     '''
     Contains full particle pusher including timestep checker to simulate the motion
     of a single particle in the analytic magnetic field field. No wave magnetic/electric
     fields present.
     '''    
     # Initialize arrays (W/I dummy - not used)
-    mid    = const.NC // 2
-    pos    = np.array([0.])
-    idx    = np.array([0])
-    vel    = np.zeros((3, 1), dtype=np.float64)
-    W_elec = np.array([0, 1, 0]).reshape((3, 1))
-    W_mag  = np.array([0, 1, 0]).reshape((3, 1))
-    Ie     = np.array([mid])
-    Ib     = np.array([mid])
+    Np     = 2
+    
+    idx    = np.zeros(Np, dtype=int)
+    
+    W_elec = np.zeros((3, Np))
+    W_mag  = np.zeros((3, Np))
+    Ie     = np.zeros(Np, dtype=int)
+    Ib     = np.zeros(Np, dtype=int)
     B_test = np.zeros((const.NC + 1, 3), dtype=np.float64) 
     E_test = np.zeros((const.NC, 3),     dtype=np.float64) 
     
     # Set initial velocity based on pitch angle and particle energy
-    vel[0, 0] = v_mag * const.va * np.cos(pitch * np.pi / 180.)
-    vel[1, 0] = v_mag * const.va * np.sin(pitch * np.pi / 180.)
+    #vel[0, 0] = v_mag * const.va * np.cos(pitch * np.pi / 180.)
+    #vel[1, 0] = v_mag * const.va * np.sin(pitch * np.pi / 180.)
+    
+    vel       = np.zeros((3, Np), dtype=np.float64)
+    vel[0, 0] = 503000.82206611
+    vel[1, 0] = -7498373.29547242
+    vel[2, 0] = -7669076.9396592
+    
+    pos       = np.zeros((3, Np), dtype=np.float64)
+    pos[0, 0] = 862044.1133723
+    pos[1, 0] = -134687.65012854
+    pos[2, 0] = 0.
+    
+    pos[:, 1] = pos[:, 0]
+    vel[:, 1] = vel[:, 0]
+    vel[2, 1] = vel[2, 0] * 0.5    # Same particle, lower vx
     
     # Initial quantities
     init_pos = pos.copy() 
     init_vel = vel.copy()
     gyfreq   = const.gyfreq / (2 * np.pi)
     ion_ts   = const.orbit_res / gyfreq
-    
-    if vel[0, :] != 0.:
-        vel_ts   = 0.6 * const.dx / np.max(vel[0, :])
-    else:
-        vel_ts = ion_ts
-    
-    DT       = min(ion_ts, vel_ts) * 0.25
+    vel_ts   = 0.6 * const.dx / np.max(vel[0, :])
+
+    DT       = min(ion_ts, vel_ts) * dt_mult
     
     # Target: 25000 cyclotron periods (~1hrs)
     max_t    = max_rev / gyfreq
     max_inc  = int(max_t / DT) + 1
     
     time        = np.zeros((max_inc))
-    pos_history = np.zeros((max_inc))
-    vel_history = np.zeros((max_inc, 3))
+    pos_history = np.zeros((max_inc, Np, 3))
+    vel_history = np.zeros((max_inc, Np, 3))
     
     mag_history       = np.zeros((max_inc, 3))
     mag_history_exact = np.zeros((max_inc, 3))
 
     
     # Retard velocity for stability
-    Bp, Bpe = particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, -0.5*DT)
-    mag_history_exact[0] = Bpe
+    particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, -0.5*DT)
+    #mag_history_exact[0] = Bpe
     
     # Record initial values
-    time[       0]   = 0.                       # t = 0
-    pos_history[0]   = pos[0]                   # t = 0
-    vel_history[0]   = vel[:, 0]                # t = -0.5
-    mag_history[0]   = Bp                       # t = -0.5 (since it is evaluated only during velocity push)
+    time[       0      ] = 0.                       # t = 0
+    pos_history[0, :, :] = pos[:, :].T             # t = 0
+    vel_history[0, :, :] = vel[:, :].T             # t = -0.5
+    #mag_history[0]      = Bp                       # t = -0.5 (since it is evaluated only during velocity push)
     
     tt = 0; t_total = 0
     while tt < max_inc - 1:
@@ -1537,17 +1548,17 @@ def do_particle_run(max_rev=1000, v_mag=1.0, pitch=45.0):
         t_total += DT
         
         # Update values: Velocity first, then position
-        Bp, Bpe = particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, DT)
+        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, DT)
         
         # Unpack exact solution into history
-        mag_history_exact[tt] = Bpe
+        #mag_history_exact[tt] = Bpe
         
-        particles.position_update(pos, vel, DT, Ie, W_elec)
+        particles.position_update(pos, vel, idx, DT, Ie, W_elec)
         
-        time[         tt] = t_total
-        pos_history[  tt] = pos[0]
-        vel_history[  tt] = vel[:, 0]
-        mag_history[  tt] = Bp
+        time[         tt]       = t_total
+        pos_history[  tt, :, :] = pos[:, :].T
+        vel_history[  tt, :, :] = vel[:, :].T
+        #mag_history[  tt] = Bp
 
     return init_pos, init_vel, time, pos_history, vel_history, mag_history, mag_history_exact, DT, max_t
 
@@ -1626,7 +1637,7 @@ def test_mirror_motion():
             
             #B_para      = mag_history[:, 0]
             #B_perp      = np.sqrt(mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
-            B_magnitude = np.sqrt(mag_history[:, 0] ** 2 + mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
+            #B_magnitude = np.sqrt(mag_history[:, 0] ** 2 + mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
             
             KE_perp = 0.5 * const.mp * (vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
             #KE_para = 0.5 * const.mp *  vel_history[:, 0] ** 2
@@ -1634,12 +1645,31 @@ def test_mirror_motion():
             
             #mu_x = KE_perp / np.sqrt(mag_history_x ** 2 + mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
             
-            mu          = KE_perp / B_magnitude
-            mu_percent  = (mu.max() - mu.min()) / init_mu * 100.
+            #mu          = KE_perp / B_magnitude
+            #mu_percent  = (mu.max() - mu.min()) / init_mu * 100.
             
-            print('v_mag = {:5.2f} :: pitch = {:4.1f} :: delta_mu = {}'.format(v_mags[ii], pitches[jj], mu_percent))
+            #print('v_mag = {:5.2f} :: pitch = {:4.1f} :: delta_mu = {}'.format(v_mags[ii], pitches[jj], mu_percent))
             
-            mu_percentages[ii, jj] = mu_percent
+            #mu_percentages[ii, jj] = mu_percent
+    
+    
+    if True:
+        # Check velocity timeseries to work out why its not smooth
+        ## Plots velocity/mag timeseries ##
+        fig, axes = plt.subplots(2, sharex=True)
+        
+        axes[0].plot(time, pos_history[:, 0]* 1e-3, label='x')
+        axes[1].plot(time, vel_history[:, 0]* 1e-3, label='vx')
+
+        
+        axes[0].set_ylabel('v (km)')
+        axes[0].set_xlabel('t (s)')
+        #axes[0].set_title(r'Velocity/Magnetic Field at Particle, v0 = [%4.1f, %4.1f, %4.1f]km/s, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (init_vel[0, 0], init_vel[1, 0], init_vel[2, 0], const.loss_cone, init_pitch))
+        #axes[0].legend()
+
+        #axes[1].legend()
+
+        axes[1].set_xlim(0, None)
     
     if False:
         # Plot approximate solution vs. quadratic solutions for magnetic field
@@ -1810,7 +1840,7 @@ def test_mirror_motion():
         for ax in axes:
             ax.set_xlim(0, 100)
             
-    if True:
+    if False:
         # Plot gyromotion of particle vx vs. vy
         plt.title('Particle gyromotion: {} gyroperiods ({:.1f}s)'.format(max_rev, max_t))
         plt.scatter(vel_history[:, 1], vel_history[:, 2], c=time)
@@ -2527,7 +2557,7 @@ if __name__ == '__main__':
     #test_curl_E()
     #test_grad_P_varying_qn()
     #test_density_and_velocity_deposition()
-    check_density_deposition()
+    #check_density_deposition()
     #visualize_inhomogenous_B()
     #plot_dipole_field_line()
     #check_particle_position_individual()
@@ -2555,3 +2585,61 @@ if __name__ == '__main__':
     #smart_plot_2D_planes()
     #smart_plot_3D()
     #check_directions()
+    DT_MULT = 1.00
+    init_pos, init_vel, time, pos_history, vel_history, mag_history,\
+        mag_history_exact, DT, max_t = do_particle_run(max_rev=100, dt_mult=DT_MULT)
+        
+    if True:
+        fig, axes = plt.subplots(2, sharex=True)
+        
+        for jj, comp in zip(range(3), ['x', 'y', 'z']):
+            axes[0].plot(time, pos_history[:, 0, jj]* 1e-3, label= '{}'.format(comp))
+            axes[1].plot(time, vel_history[:, 0, jj]* 1e-3, label='v{}'.format(comp))
+        
+        axes[0].set_title('Test :: Single Particle :: NX = {}'.format(const.NX))
+        axes[0].set_ylabel('x (m)')
+        axes[1].set_ylabel('v (km)')
+        axes[1].set_xlabel('t (s)')    
+        axes[1].set_xlim(0, None)
+        axes[0].legend()
+        axes[1].legend()
+        
+    if False:
+        fig, axes = plt.subplots(2, sharex=True)
+        
+        for ii, lbl in zip(range(2), ['fast', 'slow']):
+            axes[0].plot(time, pos_history[:, ii, 0]* 1e-3, label='{}'.format(lbl), marker='o')
+            axes[1].plot(time, vel_history[:, ii, 0]* 1e-3, label='{}'.format(lbl), marker='o')
+        
+        axes[0].set_title('Test :: Two particles, one with half vz, DT = {:05f}s'.format(DT))
+        axes[0].set_ylabel('x (m)')
+        axes[1].set_ylabel('v (km)')
+        axes[1].set_xlabel('t (s)')    
+        axes[1].set_xlim(0, None)
+        axes[0].legend()
+        axes[1].legend()
+            
+    elif False:
+        # 3D position plot
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        
+        pos_history *= 1e-3
+        ax.plot(pos_history[:, 0, 0], pos_history[:, 0, 1], pos_history[:, 0, 2], marker='o')
+            
+        ax.set_title('Particle Position in 3D')
+        ax.set_xlabel('x (km)')
+        ax.set_ylabel('y (km)')
+        ax.set_zlabel('z (km)')
+            
+        fig = plt.figure()
+        ax  = fig.add_subplot(111, projection='3d')
+        
+        vel_history *= 1e-3
+        ax.plot(pos_history[:, 0, 0], vel_history[:, 0, 1], pos_history[:, 0, 2], marker='o')
+        
+        ax.set_title('Particle Velocity in 2D (along x)')
+        ax.set_xlabel('x (km)')
+        ax.set_ylabel('vy (km/s)')
+        ax.set_zlabel('vz (km/s)')
+    

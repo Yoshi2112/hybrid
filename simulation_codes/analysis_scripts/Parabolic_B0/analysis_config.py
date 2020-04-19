@@ -130,8 +130,8 @@ def load_simulation_params():
     part_save_iter    = obj['part_save_iter']
     field_save_iter   = obj['field_save_iter']
     
-    dt_field        = dt_sim * field_save_iter                         # Time between data slices (seconds)
-    dt_particle     = dt_sim * part_save_iter
+    dt_field          = dt_sim * field_save_iter                        # Time between data slices (seconds)
+    dt_particle       = dt_sim * part_save_iter
     
     B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx                 # B grid points position in space
     E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx                 # E grid points position in space

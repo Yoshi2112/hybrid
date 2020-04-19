@@ -133,35 +133,51 @@ def plot_spatial_poynting_helical(saveas='poynting_helical_plot', save=False, lo
     '''
     plt.ioff()
 
-    t, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens,\
-        field_sim_time, damping_array = cf.get_array(get_all=True)
+    ftime, Bt_pos, Bt_neg = bk.get_helical_components()
 
-    bx, by, bz = bk.interpolate_B_to_center(bx, by, bz, zero_boundaries=False)
-    S          = calc_poynting(bx, by, bz, ex, ey, ez)
+    By_pos = Bt_pos.real
+    By_neg = Bt_neg.real
+    Bz_pos = Bt_pos.imag
+    Bz_neg = Bt_neg.imag
+    Bx     = np.zeros(By_pos.shape)
     
-    ## PLOT IT
+    ftime, Et_pos, Et_neg = bk.get_helical_components(field='E')
+
+    Ey_pos = Et_pos.real
+    Ey_neg = Et_neg.real
+    Ez_pos = Et_pos.imag
+    Ez_neg = Et_neg.imag
+    Ex     = np.zeros(Ey_pos.shape)
+
+    Bx, By_pos, Bz_pos = bk.interpolate_B_to_center(Bx, By_pos, Bz_pos, zero_boundaries=False)
+    Bx, By_neg, Bz_neg = bk.interpolate_B_to_center(Bx, By_neg, Bz_neg, zero_boundaries=False)
+    
+    S_pos              = calc_poynting(Bx, By_pos, Bz_pos, Ex, Ey_pos, Ez_pos)
+    S_neg              = calc_poynting(Bx, By_neg, Bz_neg, Ex, Ey_neg, Ez_neg)
+    
+    ## PLOT IT (x component only)
     vlim = None
-    for ii, comp in zip(range(3), ['x', 'y', 'z']):
-        print('Creating plots for S{}'.format(comp))
+    for S, comp in zip([S_pos, S_neg], ['pos', 'neg']):
+        print('Creating helical plots for S_{}'.format(comp))
         for tmax, lbl in zip([60, None], ['min', 'full']):
             fig, ax = plt.subplots(1, figsize=(15, 10))
-            # 
+            
             if log == True:
-                im1 = ax.pcolormesh(cf.E_nodes, t, S[:, :, ii],
+                im1 = ax.pcolormesh(cf.E_nodes, ftime, S[:, :, 0],
                      norm=colors.SymLogNorm(linthresh=1e-7, vmin=vlim, vmax=vlim),  
                      cmap='bwr')
                 suffix = '_log'
             else:
-                im1 = ax.pcolormesh(cf.E_nodes, t, S[:, :, ii], cmap='bwr', vmin=vlim, vmax=vlim)
+                im1 = ax.pcolormesh(cf.E_nodes, ftime, S[:, :, 0], cmap='bwr', vmin=vlim, vmax=vlim)
                 suffix = ''
             
             cb  = fig.colorbar(im1)
             cb.set_label('$S_%s$'%comp)
             
-            if comp == 'x':
-                suff = 'FIELD-ALIGNED DIRECTION'
+            if comp == 'pos':
+                suff = 'Positive Helicity'
             else:
-                suff = 'TRANSVERSE DIRECTION'
+                suff = 'Negative Helicity'
             
             ax.set_title('Power Propagation :: Time vs. Space :: {}'.format(suff), fontsize=14)
             ax.set_ylabel(r't (s)', rotation=0, labelpad=15)
@@ -1670,22 +1686,118 @@ def check_fields(save=True):
     return
 
 
+def analyse_particle_motion():
+    # To Do:
+    #   - Track bounce period of some hot/cold particles (maybe a handful each?)
+    #   - Look at their magnetic moments with time
+    #   - Sum all magnetic moments to look for conservation of total mu
+    #   - What is the initial pitch angle of particles that have been lost?
+    
+    num_particle_steps = len(os.listdir(cf.particle_dir))
+    
+    ptime = np.zeros(num_particle_steps)
+        
+    #np.random.seed(cf.seed)
+    N_samples = 1                              # Per species
+    sloc      = np.zeros((cf.Nj * N_samples), dtype=int)  # Sample location (to not confuse with particle index)
+    
+    sidx      = np.zeros((num_particle_steps, N_samples * cf.Nj), dtype=int)    # Sample particle index
+    spos      = np.zeros((num_particle_steps, N_samples * cf.Nj, 3))            # Sample particle position
+    svel      = np.zeros((num_particle_steps, N_samples * cf.Nj, 3))            # Sample particle velocity
+    
+    # Create flattened random sample index array (for easy indexing)
+    for ii in range(cf.Nj):
+        sloc[ii*N_samples: (ii + 1)*N_samples] = np.random.randint(cf.idx_start[ii], cf.idx_end[ii], N_samples, dtype=int)
+    
+    # Load up species index and particle position, velocity for samples
+    for ii in range(num_particle_steps):
+        pos, vel, idx, ptime[ii] = cf.load_particles(ii)
+        print('Loading sample particle data for particle file {}'.format(ii))
+        for jj in range(N_samples * cf.Nj):
+            sidx[ii, jj]    = idx[sloc[jj]]
+            spos[ii, jj, :] = pos[:, sloc[jj]]
+            svel[ii, jj, :] = vel[:, sloc[jj]]
+
+    # Plot position/velocity (will probably have to put a catch in here for absorbed particles: ylim?)
+    fig, axes = plt.subplots(2, sharex=True)
+    for ii in range(cf.Nj * N_samples):
+        axes[0].plot(ptime, spos[:, ii, 0], c=cf.temp_color[sidx[0, ii]], marker='o')
+        
+        axes[1].plot(ptime, svel[:, ii, 0], c=cf.temp_color[sidx[0, ii]], marker='o')
+        
+        axes[0].set_title('Sample Positions/Velocities of Particles :: Indices {}'.format(sloc))
+        axes[1].set_xlabel('Time (s)')
+        axes[0].set_ylabel('Position (m)')
+        axes[1].set_ylabel('Velocity (m/s)') 
+    return
+
+
+def analyse_particle_motion_manual():
+    # To Do:
+    #   - Track bounce period of some hot/cold particles (maybe a handful each?)
+    #   - Look at their magnetic moments with time
+    #   - Sum all magnetic moments to look for conservation of total mu
+    #   - What is the initial pitch angle of particles that have been lost?
+    
+    num_particle_steps = len(os.listdir(cf.particle_dir))
+    
+    ptime = np.zeros(num_particle_steps)
+        
+    #np.random.seed(cf.seed)
+    N_samples = 5   
+    sidx      = np.zeros((num_particle_steps, N_samples), dtype=int)    # Sample particle index
+    spos      = np.zeros((num_particle_steps, N_samples, 3))            # Sample particle position
+    svel      = np.zeros((num_particle_steps, N_samples, 3))            # Sample particle velocity
+
+    sloc      = np.random.randint(cf.idx_start[1], cf.idx_end[1], N_samples, dtype=int)
+    
+    # Load up species index and particle position, velocity for samples
+    for ii in range(num_particle_steps):
+        print('Loading sample particle data for particle file {}'.format(ii))
+        pos, vel, idx, ptime[ii] = cf.load_particles(ii)
+        for jj in range(N_samples):
+            sidx[ii, jj]    = idx[sloc[jj]]
+            spos[ii, jj, :] = pos[:, sloc[jj]]
+            svel[ii, jj, :] = vel[:, sloc[jj]]
+
+    # Plot position/velocity (will probably have to put a catch in here for absorbed particles: ylim?)
+    fig, axes = plt.subplots(2, sharex=True)
+    for ii in range(N_samples):
+        axes[0].plot(ptime, spos[:, ii, 0], marker='o', label=sloc[ii])
+        axes[1].plot(ptime, svel[:, ii, 0], marker='o', label=sloc[ii])
+        
+        print('Particle index {}'.format(sloc[ii]))
+        print('Position: {}'.format(spos[0, ii, :]))
+        print('Velocity: {}\n'.format(svel[0, ii, :]))
+        
+    axes[0].legend()
+    axes[0].set_title('Sample Positions/Velocities of Particles :: Indices {}'.format(sloc))
+    axes[1].set_xlabel('Time (s)')
+    axes[0].set_ylabel('Position (m)')
+    axes[1].set_ylabel('Velocity (m/s)') 
+    return
+
+
 
 #%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
     
-    series      = 'validation_runs'
+    series      = 'ABC_test_lowres_v5'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [1]:#range(num_runs):
+    for run_num in [0]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
-        standard_analysis_package()
+        plot_spatial_poynting_helical(save=True, log=True)
         
-        summary_plots(save=True, histogram=False)
+        #analyse_particle_motion()
+        #analyse_particle_motion_manual()
+        #standard_analysis_package()
+        
+        #summary_plots(save=True, histogram=False)
         #check_fields()
         
         #plot_energies(normalize=False, save=True)
