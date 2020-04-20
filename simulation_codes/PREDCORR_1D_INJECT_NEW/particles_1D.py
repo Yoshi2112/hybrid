@@ -199,7 +199,7 @@ def position_update(pos, vel, idx, dt, Ie, W_elec, diag=False):
                 idx[ii]    -= 128        # Fold index to negative values (preserves species ID)
                 
 # =============================================================================
-#                 # Mario particles
+#                 # Mario particles (Periodic :: Mainly for use with homogenous B0)
 #                 if pos[0, ii] > xmax:
 #                     pos[0, ii] = pos[0, ii] - xmax + xmin
 #                 elif pos[0, ii] < xmin:

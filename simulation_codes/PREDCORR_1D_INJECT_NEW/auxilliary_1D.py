@@ -36,7 +36,7 @@ def cross_product(A, B, C):
 
 
 @nb.njit()
-def interpolate_edges_to_center(B, interp):
+def interpolate_edges_to_center(B, interp, add_B0=True):
     ''' 
     Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
     with a 3D array (e.g. B). Second derivative y2 is calculated on the B-grid, with
@@ -63,7 +63,8 @@ def interpolate_edges_to_center(B, interp):
             interp[ii, jj] = 0.5 * (B[ii, jj] + B[ii + 1, jj] + (1/6) * (y2[ii, jj] + y2[ii + 1, jj]))
     
     # Add B0x to interpolated array
-    interp[:, 0] = fields.eval_B0x(E_nodes)
+    if add_B0 == True:
+        interp[:NC, 0] = fields.eval_B0x(E_nodes)
     
     interp[:ND,      0] = interp[ND,    0]
     interp[ND+NX+1:, 0] = interp[ND+NX, 0]

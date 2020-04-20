@@ -917,82 +917,51 @@ def test_E_hall():
 
 def test_cspline_interpolation():
     '''
-    Tests E-field update, hall term (B x curl(B)) only by selection of inputs
+    Tests cubic spline interpolation
     '''
-    grids = [8, 16, 32]
-    errors = np.zeros(len(grids))
+    k           = 1.0
+    marker_size = 20
+
+    # Interpolation
+    B_input       = np.zeros((const.NC + 1, 3))
+    B_input[:, 0] = np.cos(1.0*k*const.B_nodes)
+    B_input[:, 1] = np.cos(2.0*k*const.B_nodes)
+    B_input[:, 2] = np.cos(3.0*k*const.B_nodes)
     
-    for NX, ii in zip(grids, list(range(len(grids)))):
-        #NX   = 32      #const.NX
-        xmin = 0.0     #const.xmin
-        xmax = 2*np.pi #const.xmax
-        
-        dx   = xmax / NX
-        x    = np.arange(xmin - 1.5*dx, xmax + 2*dx, dx/100.)
-        k    = 1.0
-        marker_size = 20
-        
-        # Physical location of nodes
-        E_nodes = (np.arange(NX + 3) - 0.5) * dx
-        B_nodes = (np.arange(NX + 3) - 1.0) * dx
     
-        Bxc        = np.cos(1.0*k*x)
-        Byc        = np.cos(2.0*k*x)
-        Bzc        = np.cos(3.0*k*x)
-        
-        Bx         = np.cos(1.0*k*B_nodes)
-        By         = np.cos(2.0*k*B_nodes)
-        Bz         = np.cos(3.0*k*B_nodes)
-        
-        Bxe        = np.cos(1.0*k*E_nodes)
-        Bye        = np.cos(2.0*k*E_nodes)
-        Bze        = np.cos(3.0*k*E_nodes)  
-        
-        B_input       = np.zeros((NX + 3, 3))
-        B_input[:, 0] = Bx
-        B_input[:, 1] = By
-        B_input[:, 2] = Bz
+    # Analytic solution
+    Bxe        = np.cos(1.0*k*const.E_nodes)
+    Bye        = np.cos(2.0*k*const.E_nodes)
+    Bze        = np.cos(3.0*k*const.E_nodes)  
     
-        ## TEST INTERPOLATION ##
-        B_center = aux.interpolate_to_center_cspline3D(B_input, DX=dx)
-    
-        error_x    = abs(B_center[:, 0] - Bxe).max()
-        error_y    = abs(B_center[:, 1] - Bye).max()
-        error_z    = abs(B_center[:, 2] - Bze).max()
-        
-        errors[ii] = np.max([error_x, error_y, error_z])
-        
-    for ii in range(len(grids) - 1):
-        order = np.log(errors[ii] / errors[ii + 1]) / np.log(2)
-        print(order)
+    B_center      = np.zeros((const.NC, 3))
+
+    ## TEST INTERPOLATION ##
+    B_center = aux.interpolate_edges_to_center(B_input, B_center)
 
     plot = True
     if plot == True:
         plt.figure()
-        plt.scatter(B_nodes, B_input[:, 0], s=marker_size, c='b', marker='x')
-        plt.scatter(B_nodes, B_input[:, 1], s=marker_size, c='b', marker='x')
-        plt.scatter(B_nodes, B_input[:, 2], s=marker_size, c='b', marker='x')
+        plt.scatter(const.B_nodes, B_input[:, 0], s=marker_size, c='b', marker='x')
+        plt.scatter(const.B_nodes, B_input[:, 1], s=marker_size, c='b', marker='x')
+        plt.scatter(const.B_nodes, B_input[:, 2], s=marker_size, c='b', marker='x')
         
-        plt.scatter(E_nodes, Bxe, s=marker_size, c='k', marker='o')
-        plt.scatter(E_nodes, Bye, s=marker_size, c='k', marker='o')
-        plt.scatter(E_nodes, Bze, s=marker_size, c='k', marker='o')
+        plt.scatter(const.E_nodes, Bxe, s=marker_size, c='k', marker='o')
+        plt.scatter(const.E_nodes, Bye, s=marker_size, c='k', marker='o')
+        plt.scatter(const.E_nodes, Bze, s=marker_size, c='k', marker='o')
         
-        plt.scatter(E_nodes, B_center[:, 0], s=marker_size, c='r', marker='x')
-        plt.scatter(E_nodes, B_center[:, 1], s=marker_size, c='r', marker='x')
-        plt.scatter(E_nodes, B_center[:, 2], s=marker_size, c='r', marker='x')
+        plt.scatter(const.E_nodes, B_center[:, 0], s=marker_size, c='r', marker='x')
+        plt.scatter(const.E_nodes, B_center[:, 1], s=marker_size, c='r', marker='x')
+        plt.scatter(const.E_nodes, B_center[:, 2], s=marker_size, c='r', marker='x')
         
-        plt.plot(x, Bxc, linestyle=':', c='k')
-        plt.plot(x, Byc, linestyle=':', c='k')
-        plt.plot(x, Bzc, linestyle=':', c='k')
-        
-        for kk in range(NX + 3):
-            plt.axvline(E_nodes[kk], linestyle='--', c='r', alpha=0.2)
-            plt.axvline(B_nodes[kk], linestyle='--', c='b', alpha=0.2)
+        for kk in range(const.NC):
+            plt.axvline(const.E_nodes[kk], linestyle='--', c='r', alpha=0.2)
+            plt.axvline(const.B_nodes[kk], linestyle='--', c='b', alpha=0.2)
+        plt.axvline(const.B_nodes[kk+1], linestyle='--', c='b', alpha=0.2)
             
-        plt.axvline(xmin, linestyle='-', c='k', alpha=0.2)
-        plt.axvline(xmax, linestyle='-', c='k', alpha=0.2)
+        plt.axvline(const.xmin, linestyle='-', c='k', alpha=0.2)
+        plt.axvline(const.xmax, linestyle='-', c='k', alpha=0.2)
     
-        plt.xlim(xmin - 1.5*dx, xmax + 2*dx)
         plt.legend()
     return
 

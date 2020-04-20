@@ -15,8 +15,8 @@ run_description = '''Validation Test :: No wave fields :: Test to see if particl
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path         = 'runs//validation_runs_v2'    # Series save dir   : Folder containing all runs of a series
 run               = 2                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles    = 1                             # Save data flag    : For later analysis
-save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
+save_particles    = 0                             # Save data flag    : For later analysis
+save_fields       = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run. Must be list. Auto-assign: None.
 
@@ -28,17 +28,6 @@ homogenous        = False                         # Set B0 to homogenous (as tes
 reflect           = False                         # Reflect particles when they hit boundary (Default: Absorb)
 disable_waves     = False                         # Disables solutions to wave fields. Only background magnetic field exists
 periodic          = False                         # Set periodic boundary conditions for particles. Overrides reflection flag.
-
-### PHYSICAL CONSTANTS ###
-q      = 1.602177e-19                       # Elementary charge (C)
-c      = 2.998925e+08                       # Speed of light (m/s)
-mp     = 1.672622e-27                       # Mass of proton (kg)
-me     = 9.109384e-31                       # Mass of electron (kg)
-kB     = 1.380649e-23                       # Boltzmann's Constant (J/K)
-e0     = 8.854188e-12                       # Epsilon naught - permittivity of free space
-mu0    = (4e-7) * np.pi                     # Magnetic Permeability of Free Space (SI units)
-RE     = 6.371e6                            # Earth radius in metres
-B_surf = 3.12e-5                            # Magnetic field strength at Earth surface
 
 
 ### SIMULATION PARAMETERS ###
@@ -89,6 +78,17 @@ dispersion_allowance   = 1.                                 # Multiple of how mu
 
 
 #%%### DERIVED SIMULATION PARAMETERS
+### PHYSICAL CONSTANTS ###
+q      = 1.602177e-19                       # Elementary charge (C)
+c      = 2.998925e+08                       # Speed of light (m/s)
+mp     = 1.672622e-27                       # Mass of proton (kg)
+me     = 9.109384e-31                       # Mass of electron (kg)
+kB     = 1.380649e-23                       # Boltzmann's Constant (J/K)
+e0     = 8.854188e-12                       # Epsilon naught - permittivity of free space
+mu0    = (4e-7) * np.pi                     # Magnetic Permeability of Free Space (SI units)
+RE     = 6.371e6                            # Earth radius in metres
+B_surf = 3.12e-5                            # Magnetic field strength at Earth surface
+
 NC         = NX + 2*ND
 ne         = density.sum()
 E_par      = E_per / (anisotropy + 1)
