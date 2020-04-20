@@ -78,7 +78,7 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
             W[1, ii] = 0.0
             W[2, ii] = 0.0
         else:
-            W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))      # Get weighting factors
+            W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))  # Get weighting factors
             W[1, ii] = 0.75 - np.square(delta_left + 1.)
             W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
     return
