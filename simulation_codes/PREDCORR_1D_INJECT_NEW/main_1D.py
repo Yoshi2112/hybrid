@@ -55,7 +55,7 @@ if __name__ == '__main__':
             save.save_field_data(sim_time, DT, field_save_iter, qq, Ji, E_int,
                                  B, Ve, Te, q_dens, damping_array)
         
-        if qq%10 == 0:
+        if qq%100 == 0:
             #diag.save_diagnostic_plots(qq, pos, vel, B, E_int, q_dens, Ji, sim_time, DT)
             
             running_time = int(timer() - start_time)

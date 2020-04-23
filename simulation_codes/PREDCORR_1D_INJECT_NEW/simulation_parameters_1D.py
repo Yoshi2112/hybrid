@@ -14,16 +14,16 @@ run_description = '''Validation Test :: No wave fields :: Test different number 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path         = 'runs//small_bottle_test_v2'  # Series save dir   : Folder containing all runs of a series
-run               = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+run               = 5                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run. Must be list. Auto-assign: None.
+cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
 
 ## DIAGNOSTIC FLAGS :: DOUBLE CHECK BEFORE EACH RUN! ##
 ## THESE FLAGS NO LONGER TRIGGER THE SETTING, ONLY THE SAVE PARAMETER.
 ## SETTING MUST BE CHANGED IN THE PARTICLES.PY FILE BY UNCOMMENTING THE APPROPRIATE CODE
-supress_text      = True                         # Supress initialization text
+supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 reflect           = False                         # Reflect particles when they hit boundary (Default: Absorb)
 disable_waves     = True                          # Disables solutions to wave fields. Only background magnetic field exists
@@ -52,7 +52,7 @@ species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/label
 temp_color = ['blue', 'red']
 temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
 dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.array([200, 1200])                          # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+nsp_ppc    = np.array([500, 500])                           # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)

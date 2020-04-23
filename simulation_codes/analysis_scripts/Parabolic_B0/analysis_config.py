@@ -14,7 +14,7 @@ The global calls allow variables to be accessed in the main script without
 clogging up its namespace - i.e. run-specific parameters are called by
 using e.g. cf.B0
 '''
-def load_run(drive, series, run_num, extract_arrays=True):
+def load_run(drive, series, run_num, extract_arrays=True, print_summary=True):
     manage_dirs(drive, series, run_num)
     load_simulation_params()
     load_species_params()
@@ -22,6 +22,9 @@ def load_run(drive, series, run_num, extract_arrays=True):
     
     if extract_arrays == True:
         extract_all_arrays()
+        
+    if print_summary == True:
+        output_simulation_parameter_file(series, run_num)
     return
 
 
@@ -87,8 +90,8 @@ def load_species_params():
 
 
 def load_simulation_params():
-    global Nj, ne, NX, dxm, seed, dx, Te0, dt_sim, max_rev,           \
-           ie, run_desc, seed, orbit_res, freq_res, method_type,\
+    global Nj, ne, NX, dxm, seed, dx, Te0, dt_sim, max_rev,   \
+           ie, run_desc, orbit_res, freq_res, method_type,    \
            particle_shape, part_save_iter, field_save_iter, dt_field, dt_particle,  \
            ND, NC, N, r_damp, xmax, B_xmax, B_eq, theta_xmax, a, boundary_type,     \
            particle_boundary, rc_hwidth, L, B_nodes, E_nodes, xmin, grid_min, grid_max, grid_mid
@@ -164,6 +167,68 @@ def initialize_simulation_variables():
     va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed: Assuming pure proton plasma
     return
 
+
+def output_simulation_parameter_file(series, run):
+    output_file = run_dir + 'simulation_parameter_file.txt'
+    
+    if os.path.exists(output_file) == True:
+        pass
+    else:
+        with open(output_file, 'a') as f:
+            print('HYBRID SIMULATION :: PARAMETER FILE', file=f)
+            print('', file=f)
+            print('Series[run]  :: {}[{}]'.format(series, run), file=f)
+            print('Series Desc. :: {}'.format(run_desc), file=f)
+            print('Hybrid Type  :: {}'.format(method_type), file=f)
+            print('Random Seed  :: {}'.format(seed), file=f)
+            print('', file=f)
+            print('Temporal Paramters', file=f)
+            print('Maximum Sim. Time : {} GPeriods'.format(max_rev), file=f)
+            print('Simulation cadence: {} seconds'.format(dt_sim), file=f)
+            print('Particle Dump Time: {} seconds'.format(dt_particle), file=f)
+            print('Field Dump Time   : {} seconds'.format(dt_field), file=f)
+            print('Frequency Resol.  : {} GPeriods'.format(freq_res), file=f)
+            print('Gyperiod Resol.   : {}'.format(orbit_res), file=f)
+            print('', file=f)
+            print('Simulation Parameters', file=f)
+            print('# Spatial Cells :: {}'.format(NX), file=f)
+            print('# Damping Cells :: {}'.format(ND), file=f)
+            print('# Cells Total   :: {}'.format(NC), file=f)
+            print('Ion L per cell  :: {}'.format(dxm), file=f)
+            print('Cell width      :: {} m'.format(dx), file=f)
+            print('Simulation Min  :: {} m'.format(xmin), file=f)
+            print('Simulation Max  :: {} m'.format(xmax), file=f)
+            print('', file=f)
+            print('Equatorial Field Strength :: {} nT'.format(B_eq*1e9), file=f)
+            print('Boundary   Field Strength :: {} nT'.format(B_xmax*1e9), file=f)
+            print('MLAT max/min extent       :: {} deg'.format(theta_xmax), file=f)
+            print('McIlwain L value equiv.   :: {}'.format(L), file=f)
+            print('', file=f)
+            print('Electron Density   : {} /cc'.format(ne*1e-6), file=f)
+            print('Electron Treatment : {}'.format(ie), file=f)
+            print('Electron Temperature : {}K'.format(Te0), file=f)
+            print('', file=f)
+            print('Particle Parameters', file=f)
+            print('Number of Species   :: {}'.format(Nj), file=f)
+            print('Number of Particles :: {}'.format(N), file=f)
+            print('Species Per Cell    :: {}'.format(nsp_ppc), file=f)
+            print('Species Particles # :: {}'.format(N_species), file=f)
+            print('', file=f)
+            print('Ion Composition', file=f)
+            print('Species Name :: {}'.format(species_lbl), file=f)
+            print('Species Type :: {}'.format(temp_type), file=f)
+            print('Species Dens :: {} /cc'.format(density*1e-6), file=f)
+            print('Species Charge :: {}'.format(charge), file=f)
+            print('Species Mass  :: {} kg'.format(mass), file=f)
+            print('Drift Velocity :: {} m/s'.format(drift_v), file=f)
+            print('Perp Temp :: {}'.format(Tper), file=f)
+            print('Para Temp :: {}'.format(Tpar), file=f)
+        
+       #particle_shape, part_save_iter, field_save_iter, a, boundary_type,     \
+        #particle_boundary, rc_hwidth
+       # n_contr,  \
+       # idx_start, idx_end
+    return
 
 def load_fields(ii):
     field_file = 'data%05d.npz' % ii             # Define target file

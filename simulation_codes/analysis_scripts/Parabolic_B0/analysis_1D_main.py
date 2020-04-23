@@ -1897,15 +1897,15 @@ def plot_initial_configurations(it_max=None, save=True, plot_lost=True):
     return
 
 
-def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True):
+def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True, skip=1):
     ## Same plotting routines as above, just for all times, and saving output
     ## to a file
     if it_max is None:
         it_max = len(os.listdir(cf.particle_dir))
         
-    path_cone = cf.anal_dir + '/phase_spaces/velocity_phase_space/'
-    path_mag  = cf.anal_dir + '/phase_spaces/velocity_mag_vs_x/'
-    path_comp = cf.anal_dir + '/phase_spaces/velocity_components_vs_x/'
+    path_cone = cf.anal_dir + '/Particle_Loss_Analysis/phase_spaces/velocity_phase_space/'
+    path_mag  = cf.anal_dir + '/Particle_Loss_Analysis/phase_spaces/velocity_mag_vs_x/'
+    path_comp = cf.anal_dir + '/Particle_Loss_Analysis/phase_spaces/velocity_components_vs_x/'
     
     for path in [path_cone, path_mag, path_comp]:
         if os.path.exists(path) == False:                                   # Create directories
@@ -1914,9 +1914,9 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True):
     final_pos, final_vel, final_idx, ptime2 = cf.load_particles(it_max-1)
     lost_indices, N_lost                    = locate_lost_ions(final_idx)
     
-    v_max = 4
+    v_max = 16
     
-    for ii in range(it_max):
+    for ii in range(0, it_max, skip):
         print('Plotting phase space diagrams for particle output {}'.format(ii))
         pos, vel, idx, ptime = cf.load_particles(ii)
     
@@ -1930,7 +1930,7 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True):
         fig2, ax2 = plt.subplots(figsize=(15, 10))
         fig3, ax3 = plt.subplots(3, sharex=True, figsize=(15, 10))
         
-        for jj in [0]:#range(cf.Nj):
+        for jj in [1]:#range(cf.Nj):
             if lost_black == True:
                 lc = 'k'
             else:
@@ -1942,7 +1942,7 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True):
                 # Loss cone diagram
                 ax1.scatter(v_perp[cf.idx_start[jj]: cf.idx_end[jj]], v_para[cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
                 ax1.scatter(v_perp[lost_vals], v_para[lost_vals], c=lc, marker='x', s=20)
-                ax1.set_title('Initial Loss Cone Distribution')
+                ax1.set_title('Initial Loss Cone Distribution :: t = {:5.4f}'.format(ptime))
                 ax1.set_ylabel('$v_\parallel$ (m/s)')
                 ax1.set_xlabel('$v_\perp$ (m/s)')
                 ax1.set_xlim(-v_max, v_max)
@@ -1952,7 +1952,7 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True):
                 # v_mag vs. x
                 ax2.scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], v_mag[cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])       
                 ax2.scatter(pos[0, lost_vals], v_mag[lost_vals], c=lc, marker='x', s=20)
-                ax2.set_title('Initial Velocity vs. Position')
+                ax2.set_title('Initial Velocity vs. Position :: t = {:5.4f}'.format(ptime))
                 ax2.set_xlabel('Position (m)')
                 ax2.set_ylabel('Velocity |v| (m/s)')
                 
@@ -1977,12 +1977,12 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True):
                     ax.set_xlim(cf.xmin, cf.xmax)
                     ax.set_ylim(-v_max, v_max)
                 
-                ax3[0].set_title('Initial Velocity Components vs. Position')
+                ax3[0].set_title('Initial Velocity Components vs. Position :: t = {:5.4f}'.format(ptime))
                 ax3[2].set_xlabel('Position (m)')
                        
-        fig1.savefig(path_cone + 'cone%05d.png' % ii)
-        fig2.savefig(path_mag +  'mag%05d.png' % ii)
-        fig3.savefig(path_comp + 'comp%05d.png' % ii)
+        fig1.savefig(path_cone + 'cone%06d.png' % ii)
+        fig2.savefig(path_mag  +  'mag%06d.png' % ii)
+        fig3.savefig(path_comp + 'comp%06d.png' % ii)
         
         plt.close('all')
     return
@@ -2151,9 +2151,9 @@ def plot_B0():
     rmax = mp * vmax * cf.va / (q * cf.B_eq)     # Maximum expected Larmor radii
     
     # Sample number
-    Nx = 100
-    Ny = 50
-    Nz = 50
+    Nx = 80
+    Ny = 40
+    Nz = 40
     
     Px = np.linspace(cf.xmin, cf.xmax, Nx, dtype=np.float64)
     Py = np.linspace(  -rmax,    rmax, Ny, dtype=np.float64)
@@ -2229,27 +2229,28 @@ def plot_B0():
         plt.savefig(savepath)
         print('xz plot {} saved'.format(kk))
         plt.close('all')    
-    
     return
 
 #%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
+    #drive       = 'G://MODEL_RUNS//Josh_Runs//'
     
-    series      = 'validation_runs'
+    #series      = 'ABC_test_lowres_v5'
     #series      = 'small_bottle_test'
+    series      = 'validation_runs_v2'
+    
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [0]:#range(num_runs):
+    for run_num in [2]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
         # Particle Loss Analysis :: For Every Time (really time consuming)
         #analyse_particle_motion()
-        #plot_particle_loss_with_time()
         
-        #plot_phase_space_with_time()
+        #plot_phase_space_with_time(skip=5)
         #plot_loss_paths()
         #plot_B0()
         #analyse_particle_motion_manual()
