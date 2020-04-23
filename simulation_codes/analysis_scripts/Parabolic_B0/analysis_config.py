@@ -49,7 +49,7 @@ def manage_dirs(drive, series, run_num):
 
 def load_species_params():
     global species_present, density, dist_type, charge, mass, Tper,      \
-           sim_repr, temp_type, temp_color, Tpar, species_lbl, n_contr,  \
+           temp_type, temp_color, Tpar, species_lbl, n_contr,  \
            drift_v, idx_start, idx_end, N_species, Bc, nsp_ppc
 
     p_path = os.path.join(data_dir, 'particle_parameters.npz')                  # File location
@@ -87,8 +87,8 @@ def load_species_params():
 
 
 def load_simulation_params():
-    global Nj, cellpart, ne, NX, dxm, seed, B0, dx, Te0, dt_sim, max_rev,           \
-           ie, run_desc, seed, subcycles, LH_frac, orbit_res, freq_res, method_type,\
+    global Nj, ne, NX, dxm, seed, dx, Te0, dt_sim, max_rev,           \
+           ie, run_desc, seed, orbit_res, freq_res, method_type,\
            particle_shape, part_save_iter, field_save_iter, dt_field, dt_particle,  \
            ND, NC, N, r_damp, xmax, B_xmax, B_eq, theta_xmax, a, boundary_type,     \
            particle_boundary, rc_hwidth, L, B_nodes, E_nodes, xmin, grid_min, grid_max, grid_mid
@@ -147,6 +147,7 @@ def load_simulation_params():
     
     if rc_hwidth == 0: 
         rc_hwidth = NX
+        
     return 
 
 
@@ -181,7 +182,7 @@ def load_fields(ii):
     return tB, tE, tVe, tTe, tJ, tdns, tsim_time, tdamping_array
 
 
-def load_particles(ii):    
+def load_particles(ii):  
     part_file  = 'data%05d.npz' % ii             # Define target file
     input_path = particle_dir + part_file        # File location
     data       = np.load(input_path)             # Load file

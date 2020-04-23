@@ -107,6 +107,7 @@ def uniform_gaussian_distribution_quiet():
                 while N_loss > 0:
                     v_mag       = vel[0, st: en] ** 2 + vel[1, st: en] ** 2 + vel[2, st: en] ** 2
                     v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
+                    
                     v_perp_eq   = v_perp * np.sqrt(B_eq / B0x)
                     v_para_eq   = np.sqrt(v_mag - v_perp_eq ** 2)
 
@@ -270,7 +271,7 @@ def initialize_tertiary_arrays():
     temp1D        = np.zeros( NC    ,      dtype=nb.float64) 
     old_fields    = np.zeros((NC + 1, 10), dtype=nb.float64)
     
-    old_particles = np.zeros((10, N),      dtype=nb.float64)
+    old_particles = np.zeros((11, N),      dtype=nb.float64)
         
     return old_particles, old_fields, temp3De, temp3Db, temp1D
 
@@ -321,11 +322,11 @@ def set_timestep(vel, E):
            be initial limiting factor. This may change for inhomogenous loading
            of particles or initial fields.
     '''
-    ion_ts   = const.orbit_res / const.gyfreq         # Timestep to resolve gyromotion
-    vel_ts   = 0.5 * const.dx / np.max(vel[0, :])     # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
+    ion_ts   = const.orbit_res / const.gyfreq               # Timestep to resolve gyromotion
+    vel_ts   = 0.5 * const.dx / np.max(np.abs(vel[0, :]))   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
 
     if E[:, 0].max() != 0:
-        elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / vel.max()).max())               # Electron acceleration "frequency"
+        elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / np.abs(vel).max()).max())               # Electron acceleration "frequency"
         Eacc_ts         = freq_res / elecfreq                            
     else:
         Eacc_ts = ion_ts
@@ -357,42 +358,134 @@ def set_timestep(vel, E):
 
 
 if __name__ == '__main__':
-    POS, VEL, IDX = uniform_gaussian_distribution_quiet()
-    
-    #VPERP_NEW = np.sqrt(VEL[1]     ** 2 + VEL[2]     ** 2)
-    #VPERP_OLD = np.sqrt(OLD_VEL[1] ** 2 + OLD_VEL[2] ** 2)
-    #rL        = np.sqrt(POS[1]     ** 2 + POS[2]     ** 2)
-    
     import matplotlib.pyplot as plt
     
-    #import diagnostics       as diag
-    #diag.check_velocity_distribution(VEL)
+    POS, VEL, IDX = uniform_gaussian_distribution_quiet()
+    pdb.set_trace()
+    V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2)
+    V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2)
+    V_PARA = VEL[0]
     
-    if True:
-        for jj in range(const.Nj):
-            plt.figure(jj)
-            v_perp = np.sign(VEL[2, const.idx_start[jj]:idx_end[jj]]) * \
-                     np.sqrt(VEL[1, const.idx_start[jj]:idx_end[jj]] ** 2 +
-                             VEL[2, const.idx_start[jj]:idx_end[jj]] ** 2) / const.va
+    plt.ioff()
+    fig1, ax1 = plt.subplots()
+    fig2, ax2 = plt.subplots()
+    fig3, ax3 = plt.subplots(3, sharex=True)
+    
+    node_number = 0
+    
+    for jj in [1]:#range(cf.Nj):
+        if False:
+            # Loss cone diagram
+            ax1.scatter(V_PERP[idx_start[jj]: idx_end[jj]], V_PARA[idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+
+            ax1.set_title('Loss Cone Distribution')
+            ax1.set_ylabel('$v_\parallel$ (m/s)')
+            ax1.set_xlabel('$v_\perp$ (m/s)')
+        
+        if False:
+            # v_mag vs. x
+            ax2.scatter(POS[0, idx_start[jj]: idx_end[jj]], V_MAG[idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+
+            ax2.set_title('Velocity vs. Position')
+            ax2.set_xlabel('Position (m)')
+            ax2.set_ylabel('Velocity |v| (m/s)')
+        
+        if False:
+            # v components vs. x (3 plots)
+            ax3[0].scatter(POS[0, idx_start[jj]: idx_end[jj]], VEL[0, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+            ax3[1].scatter(POS[0, idx_start[jj]: idx_end[jj]], VEL[1, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+            ax3[2].scatter(POS[0, idx_start[jj]: idx_end[jj]], VEL[2, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+
+            ax3[0].set_ylabel('$v_x$ (m/s)')
+            ax3[1].set_ylabel('$v_y$ (m/s)')
+            ax3[2].set_ylabel('$v_z$ (m/s)')
             
-            v_para = VEL[0, const.idx_start[jj]:idx_end[jj]] / const.va
+            ax3[0].set_title('Velocity Components vs. Position')
+            ax3[2].set_xlabel('Position (m)')
             
-            plt.scatter(v_perp, v_para, c=const.temp_color[jj], s=1)
-            plt.title(r'Total Velocity Distribution Functions (%s) :: $\alpha_L$ = %.1f$^\circ$' % (const.species_lbl[jj], const.loss_cone))
-            plt.xlabel('$v_\perp / v_A$')
-            plt.ylabel('$v_\parallel / v_A$')
+        if False:
+            fig = plt.figure(figsize=(12,10))
+            fig.suptitle('Configuration space distribution of {}'.format(const.species_lbl[jj]))
+            fig.patch.set_facecolor('w')
+            num_bins = const.NX * 8
+        
+            ax_x = plt.subplot()
+        
+            xs, BinEdgesx = np.histogram(POS[0, const.idx_start[jj]: const.idx_end[jj]], bins=num_bins)
+            bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
+            ax_x.plot(bx, xs, '-', c=const.temp_color[const.temp_type[jj]], drawstyle='steps')
+            ax_x.set_xlabel(r'$x_p (m)$')
+            ax_x.set_xlim(const.xmin, const.xmax)
             
-            gradient = np.tan(np.pi/2 - const.loss_cone * np.pi / 180.)
-            lmin, lmax = plt.gca().get_xlim()
-            lcx  = np.linspace(lmin, lmax, 100, endpoint=True)
-            lcy1 =  gradient * lcx
-            lcy2 = -gradient * lcx
+        if True:
+            '''
+            Is there a way to get a 2D contour plot of velocity distribution (of a component)
+            across space?
+            '''            
+            # Account for damping nodes. Node_number should be "real" node count.
+            num_bins = const.nsp_ppc[jj] // 20
             
-            plt.plot(lcx, lcy1, c='k', alpha=0.5, ls=':')
-            plt.plot(lcx, lcy2, c='k', alpha=0.5, ls=':')
+            distro_function = np.zeros((3, NX, num_bins))
             
-            plt.axvline(0, c='k')
-            plt.axhline(0, c='k')
+            for ii in range(NX):
+                node_number = const.ND + ii
+                x_node      = const.E_nodes[node_number]
+                f           = np.zeros((1, 3))
+                
+                count = 0
+                for ii in np.arange(const.idx_start[jj], const.idx_end[jj]):
+                    if (abs(POS[0, ii] - x_node) <= 0.5*const.dx):
+                        f = np.append(f, [VEL[0:3, ii]], axis=0)
+                        count += 1
+          
+                xs, BinEdgesx = np.histogram((f[:, 0] - const.drift_v[jj]) / const.va, bins=num_bins)
+                bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
+                ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
+            
+                ys, BinEdgesy = np.histogram(f[:, 1] / const.va, bins=num_bins)
+                by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
+                ax_y.plot(by, ys, '-', c='c', drawstyle='steps')
+            
+                zs, BinEdgesz = np.histogram(f[:, 2] / const.va, bins=num_bins)
+                bz = 0.5 * (BinEdgesz[1:] + BinEdgesz[:-1])
+                ax_z.plot(bz, zs, '-', c='c', drawstyle='steps')
+
+    
+
+    plt.show()
+    
+# =============================================================================
+#     import matplotlib.pyplot as plt
+#     
+#     #import diagnostics       as diag
+#     #diag.check_velocity_distribution(VEL)
+#     
+#     if True:
+#         for jj in range(const.Nj):
+#             plt.figure(jj)
+#             v_perp = np.sign(VEL[2, const.idx_start[jj]:idx_end[jj]]) * \
+#                      np.sqrt(VEL[1, const.idx_start[jj]:idx_end[jj]] ** 2 +
+#                              VEL[2, const.idx_start[jj]:idx_end[jj]] ** 2) / const.va
+#             
+#             v_para = VEL[0, const.idx_start[jj]:idx_end[jj]] / const.va
+#             
+#             plt.scatter(v_perp, v_para, c=const.temp_color[jj], s=1)
+#             plt.title(r'Total Velocity Distribution Functions (%s) :: $\alpha_L$ = %.1f$^\circ$' % (const.species_lbl[jj], const.loss_cone))
+#             plt.xlabel('$v_\perp / v_A$')
+#             plt.ylabel('$v_\parallel / v_A$')
+#             
+#             gradient = np.tan(np.pi/2 - const.loss_cone * np.pi / 180.)
+#             lmin, lmax = plt.gca().get_xlim()
+#             lcx  = np.linspace(lmin, lmax, 100, endpoint=True)
+#             lcy1 =  gradient * lcx
+#             lcy2 = -gradient * lcx
+#             
+#             plt.plot(lcx, lcy1, c='k', alpha=0.5, ls=':')
+#             plt.plot(lcx, lcy2, c='k', alpha=0.5, ls=':')
+#             
+#             plt.axvline(0, c='k')
+#             plt.axhline(0, c='k')
+# =============================================================================
 # =============================================================================
 #     if False:
 #         for jj in range(const.Nj):

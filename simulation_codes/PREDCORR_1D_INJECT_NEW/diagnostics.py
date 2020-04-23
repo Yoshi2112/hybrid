@@ -1443,14 +1443,19 @@ def test_boris():
     return
 
 
-def do_particle_run(max_rev=1000, v_mag=1.0, pitch=45.0, dt_mult=1.0):
+def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
     '''
     Contains full particle pusher including timestep checker to simulate the motion
     of a single particle in the analytic magnetic field field. No wave magnetic/electric
     fields present.
     '''    
     # Initialize arrays (W/I dummy - not used)
-    Np     = 2
+    
+    # Particle index 12804 :: lval 40
+    # Init position: [-1020214.38977955,  -100874.673573  ,        0.        ]
+    # Init velocity: [ -170840.94864185, -8695629.67092295,  3474619.54765129]
+    
+    Np     = 1
     
     idx    = np.zeros(Np, dtype=int)
     
@@ -1466,70 +1471,79 @@ def do_particle_run(max_rev=1000, v_mag=1.0, pitch=45.0, dt_mult=1.0):
     #vel[1, 0] = v_mag * const.va * np.sin(pitch * np.pi / 180.)
     
     vel       = np.zeros((3, Np), dtype=np.float64)
-    vel[0, 0] = 503000.82206611
-    vel[1, 0] = -7498373.29547242
-    vel[2, 0] = -7669076.9396592
-    
     pos       = np.zeros((3, Np), dtype=np.float64)
-    pos[0, 0] = 862044.1133723
-    pos[1, 0] = -134687.65012854
-    pos[2, 0] = 0.
     
-    pos[:, 1] = pos[:, 0]
-    vel[:, 1] = vel[:, 0]
-    vel[2, 1] = vel[2, 0] * 0.5    # Same particle, lower vx
+    if True:
+        # Load particle config from file
+        print('Loading parameters from simulation run...')
+        fpath     = 'F:/runs/validation_runs/run_0/extracted/lost_particle_info.npz'
+        data      = np.load(fpath)
+        
+        #lval      = data['lval']
+        lost_pos  = data['lost_pos']
+        lost_vel  = data['lost_vel']
+        lost_idx  = data['lost_idx']
+        
+        lost_ii   = 0
+        
+        vel[:, 0] = lost_vel[0, :, lost_ii]
+        pos[:, 0] = lost_pos[0, :, lost_ii]
+
+        pdb.set_trace()
+    else:
+        # Specify manually
+        vel[0, 0] = -170840.94864185
+        vel[1, 0] = -8695629.67092295
+        vel[2, 0] = 3474619.54765129
+        
+        pos[0, 0] = -1020214.38977955
+        pos[1, 0] = -100874.673573
+        pos[2, 0] = 0.
+        
+        #pos[:, 1] = pos[:, 0]
+        #vel[:, 1] = vel[:, 0]
+        #vel[2, 1] = vel[2, 0] * 0.5    # Same particle, lower vx
     
     # Initial quantities
     init_pos = pos.copy() 
     init_vel = vel.copy()
     gyfreq   = const.gyfreq / (2 * np.pi)
     ion_ts   = const.orbit_res / gyfreq
-    vel_ts   = 0.6 * const.dx / np.max(vel[0, :])
+    vel_ts   = 0.6 * const.dx / np.max(np.abs(vel[0, :]))
 
     DT       = min(ion_ts, vel_ts) * dt_mult
     
     # Target: 25000 cyclotron periods (~1hrs)
     max_t    = max_rev / gyfreq
     max_inc  = int(max_t / DT) + 1
-    
+
     time        = np.zeros((max_inc))
     pos_history = np.zeros((max_inc, Np, 3))
     vel_history = np.zeros((max_inc, Np, 3))
-    
-    mag_history       = np.zeros((max_inc, 3))
-    mag_history_exact = np.zeros((max_inc, 3))
+    mag_history = np.zeros((max_inc, 3))
 
-    
     # Retard velocity for stability
     particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, -0.5*DT)
-    #mag_history_exact[0] = Bpe
     
     # Record initial values
-    time[       0      ] = 0.                       # t = 0
+    time[       0      ] = 0.                      # t = 0
     pos_history[0, :, :] = pos[:, :].T             # t = 0
     vel_history[0, :, :] = vel[:, :].T             # t = -0.5
-    #mag_history[0]      = Bp                       # t = -0.5 (since it is evaluated only during velocity push)
-    
+
     tt = 0; t_total = 0
     while tt < max_inc - 1:
         # Increment so first loop is at t = 1*DT
         tt      += 1
         t_total += DT
         
-        # Update values: Velocity first, then position
         particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, DT)
-        
-        # Unpack exact solution into history
-        #mag_history_exact[tt] = Bpe
-        
         particles.position_update(pos, vel, idx, DT, Ie, W_elec)
         
         time[         tt]       = t_total
         pos_history[  tt, :, :] = pos[:, :].T
         vel_history[  tt, :, :] = vel[:, :].T
-        #mag_history[  tt] = Bp
 
-    return init_pos, init_vel, time, pos_history, vel_history, mag_history, mag_history_exact, DT, max_t
+    return init_pos, init_vel, time, pos_history, vel_history, mag_history, DT, max_t
 
 
 def straighten_out_soln(approx, exact):
@@ -2556,18 +2570,22 @@ if __name__ == '__main__':
     #check_directions()
     DT_MULT = 1.00
     init_pos, init_vel, time, pos_history, vel_history, mag_history,\
-        mag_history_exact, DT, max_t = do_particle_run(max_rev=100, dt_mult=DT_MULT)
+        DT, max_t = do_particle_run(max_rev=100, dt_mult=DT_MULT)
         
     if True:
+        larmor = np.sqrt(pos_history[:, 0, 1] ** 2 + pos_history[:, 0, 2] ** 2) * 1e-3
+        
         fig, axes = plt.subplots(2, sharex=True)
         
         for jj, comp in zip(range(3), ['x', 'y', 'z']):
             axes[0].plot(time, pos_history[:, 0, jj]* 1e-3, label= '{}'.format(comp))
             axes[1].plot(time, vel_history[:, 0, jj]* 1e-3, label='v{}'.format(comp))
         
+        axes[0].plot(time, larmor, c='k', label='r_L')
+        
         axes[0].set_title('Test :: Single Particle :: NX = {}'.format(const.NX))
-        axes[0].set_ylabel('x (m)')
-        axes[1].set_ylabel('v (km)')
+        axes[0].set_ylabel('x (km)')
+        axes[1].set_ylabel('v (km/s)')
         axes[1].set_xlabel('t (s)')    
         axes[1].set_xlim(0, None)
         axes[0].legend()

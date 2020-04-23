@@ -1512,12 +1512,11 @@ def standard_analysis_package():
         plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
         
     plot_spatial_poynting(save=True, log=True)
-    plot_spatial_poynting_helical(save=True, log=True)
     plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
     
-    plot_particle_loss_with_time()
-    plot_initial_configurations()
-    
+    if True:
+        pass
+        
     if False:
         check_fields()
         plot_energies(normalize=True, save=True)
@@ -1744,51 +1743,41 @@ def analyse_particle_motion(it_max=None):
     return
 
 
-def plot_particle_loss_with_time(it_max=None, save=True):
+def analyse_loss_cone_with_time(it_max=None):
     #   - What is the initial pitch angle of particles that have been lost?
     #   - Sum all magnetic moments to look for conservation of total mu
     #
     # 1) Plot of N particles lost vs. time (per species in color)
     # 2) Some sort of 2D plot to look at the (initial equatorial?) pitch angle of the particles lost?
     # 3) Do the mu thing, also by species?
-    savedir = cf.anal_dir + '/Particle_Loss_Analysis/'
-    
-    if os.path.exists(savedir) == False:
-        os.makedirs(savedir)
-    
     if it_max is None:
-        it_max = len(os.listdir(cf.particle_dir))
+        num_particle_steps = len(os.listdir(cf.particle_dir))
            
-    ptime        = np.zeros(it_max)
-    N_lost       = np.zeros((it_max, cf.Nj), dtype=int)
+    ptime  = np.zeros(num_particle_steps)
+    N_lost = np.zeros((num_particle_steps, cf.Nj), dtype=int)
     
-    last_pos, last_vel, last_idx, last_time = cf.load_particles(len(os.listdir(cf.particle_dir)) - 1)
-    all_lost_idx, N_lost_total = locate_lost_ions(last_idx)
-
     ## Load up species index and particle position, velocity for calculations
-    for ii in range(it_max):
+    for ii in range(num_particle_steps):
         print('Loading data for particle file {}'.format(ii))
         pos, vel, idx, ptime[ii] = cf.load_particles(ii)
-        lost_idx, N_lost[ii, :] = locate_lost_ions(idx)
-    
-    plt.ioff()
+        
+        # Count how many particles are lost, per species
+        Nl_idx  = idx[idx < 0]  # Collect indices of those < 0
+        Nl_idx += 128           # Cast from negative to positive indexes ("reactivate" particles)
+        for jj in range(cf.Nj):
+            N_lost[ii, jj] = Nl_idx[Nl_idx == jj].shape[0]
+            
+                        
     # N_lost per species with time
     if True:
         fig, axes = plt.subplots()
         for ii in range(cf.Nj):
             axes.plot(ptime, N_lost[:, ii], c=cf.temp_color[ii], marker='o', label=cf.species_lbl[ii])
             
+            
         axes.set_title('Number of particles lost from simulation with time')
         axes.set_xlabel('Time (s)')
         axes.set_ylabel('N', rotation=0)
-        
-    if save == True:
-        fpath = savedir + 'particle_loss_vs_time.png'
-        fig.savefig(fpath)
-        plt.close('all')
-        print('Particle loss graph saved as {}'.format(fpath))
-    else:
-        plt.show()
     return
 
 
@@ -1809,7 +1798,7 @@ def locate_lost_ions(idx):
     return lost_indices, N_lost
 
 
-def plot_initial_configurations(it_max=None, save=True, plot_lost=True):
+def plot_loss_phase_space(it_max=None):
     ## Count those that have been lost by the end of the simulation
     ## and plot that against initial distro phase spaces
     #
@@ -1819,85 +1808,73 @@ def plot_initial_configurations(it_max=None, save=True, plot_lost=True):
     if it_max is None:
         it_max = len(os.listdir(cf.particle_dir))
     
-    savedir = cf.anal_dir + '/Particle_Loss_Analysis/Initial Particle Configuration/'
-
-    if os.path.exists(savedir) == False:                                   # Create directories
-        os.makedirs(savedir)
-    
-    if plot_lost == True:
-        final_pos, final_vel, final_idx, ptime2 = cf.load_particles(it_max-1)
-        lost_indices, N_lost     = locate_lost_ions(final_idx)
-
     init_pos , init_vel , init_idx , ptime1 = cf.load_particles(0)
+    final_pos, final_vel, final_idx, ptime2 = cf.load_particles(it_max-1)
+    
+    lost_indices, N_lost     = locate_lost_ions(final_idx)
+
     v_mag  = np.sqrt(init_vel[0] ** 2 + init_vel[1] ** 2 + init_vel[2] ** 2)
     v_perp = np.sign(init_vel[2]) * np.sqrt(init_vel[1] ** 2 + init_vel[2] ** 2)
     v_para = init_vel[0]
     
     plt.ioff()
-    cf.temp_color[0] = 'c'
+    fig1, ax1 = plt.subplots()
+    fig2, ax2 = plt.subplots()
+    fig3, ax3 = plt.subplots(3, sharex=True)
     
-    plt.ioff()
-    for jj in range(cf.Nj):
-        print('Plotting phase spaces for species {}'.format(jj))
-        fig1, ax1 = plt.subplots(figsize=(15, 10))
-        fig2, ax2 = plt.subplots(figsize=(15, 10))
-        fig3, ax3 = plt.subplots(3, sharex=True, figsize=(15, 10))
     
+    for jj in [1]:#range(cf.Nj):
         lost_vals = lost_indices[cf.idx_start[jj]: cf.idx_end[jj]].nonzero()[0]
 
-        # Loss cone diagram
-        ax1.scatter(v_perp[cf.idx_start[jj]: cf.idx_end[jj]], v_para[cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
+        if False:
+            # Loss cone diagram
+            print('Plotting all particles for species {}'.format(jj))
+            ax1.scatter(v_perp[cf.idx_start[jj]: cf.idx_end[jj]], v_para[cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
+            print('Plotting lost particles for species {}'.format(jj))
+            # Plot only lost particles ()
+    
+            ax1.scatter(v_perp[lost_vals], v_para[lost_vals], c='k', marker='x', s=20) #c=cf.temp_color[jj]
+            ax1.set_title('Initial Loss Cone Distribution')
+            ax1.set_ylabel('$v_\parallel$ (m/s)')
+            ax1.set_xlabel('$v_\perp$ (m/s)')
         
-        if plot_lost == True:
-            ax1.scatter(v_perp[lost_vals], v_para[lost_vals], c='k', marker='x', s=20, label='Lost particles')
+        if False:
+            # v_mag vs. x
+            print('Plotting all particles for species {}'.format(jj))
+            ax2.scatter(init_pos[0, cf.idx_start[jj]: cf.idx_end[jj]], v_mag[cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
+            print('Plotting lost particles for species {}'.format(jj))
+    
+            ax2.scatter(init_pos[0, lost_vals], v_mag[lost_vals], c='k', marker='x', s=20) #cf.temp_color[jj]
+            ax2.set_title('Initial Velocity vs. Position')
+            ax2.set_xlabel('Position (m)')
+            ax2.set_ylabel('Velocity |v| (m/s)')
         
-        ax1.set_title('Initial Loss Cone Distribution :: {}'.format(cf.species_lbl[jj]))
-        ax1.set_ylabel('$v_\parallel$ (m/s)')
-        ax1.set_xlabel('$v_\perp$ (m/s)')
-        ax1.legend()
-        
-        # v_mag vs. x
-        ax2.scatter(init_pos[0, cf.idx_start[jj]: cf.idx_end[jj]], v_mag[cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
-        
-        if plot_lost == True:
-            ax2.scatter(init_pos[0, lost_vals], v_mag[lost_vals], c='k', marker='x', s=20, label='Lost particles')
-        ax2.set_title('Initial Velocity vs. Position :: {}'.format(cf.species_lbl[jj]))
-        ax2.set_xlabel('Position (m)')
-        ax2.set_ylabel('Velocity |v| (m/s)')
-        ax2.legend()
+        if True:
+            # v components vs. x (3 plots)
+            print('Plotting all particles for species {}'.format(jj))
+            ax3[0].scatter(init_pos[0, cf.idx_start[jj]: cf.idx_end[jj]], init_vel[0, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
+            ax3[1].scatter(init_pos[0, cf.idx_start[jj]: cf.idx_end[jj]], init_vel[1, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
+            ax3[2].scatter(init_pos[0, cf.idx_start[jj]: cf.idx_end[jj]], init_vel[2, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
+
+            print('Plotting lost particles for species {}'.format(jj))    
+            ax3[0].scatter(init_pos[0, lost_vals], init_vel[0, lost_vals], c='k', marker='x', s=20) #cf.temp_color[jj]
+            ax3[1].scatter(init_pos[0, lost_vals], init_vel[1, lost_vals], c='k', marker='x', s=20) #cf.temp_color[jj]
+            ax3[2].scatter(init_pos[0, lost_vals], init_vel[2, lost_vals], c='k', marker='x', s=20) #cf.temp_color[jj]
             
-        # v components vs. x (3 plots)
-        ax3[0].scatter(init_pos[0, cf.idx_start[jj]: cf.idx_end[jj]], init_vel[0, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
-        ax3[1].scatter(init_pos[0, cf.idx_start[jj]: cf.idx_end[jj]], init_vel[1, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
-        ax3[2].scatter(init_pos[0, cf.idx_start[jj]: cf.idx_end[jj]], init_vel[2, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
-   
-        if plot_lost == True:
-            ax3[0].scatter(init_pos[0, lost_vals], init_vel[0, lost_vals], c='k', marker='x', s=20, label='Lost particles')
-            ax3[1].scatter(init_pos[0, lost_vals], init_vel[1, lost_vals], c='k', marker='x', s=20, label='Lost particles')
-            ax3[2].scatter(init_pos[0, lost_vals], init_vel[2, lost_vals], c='k', marker='x', s=20, label='Lost particles')
-        
-        ax3[0].set_ylabel('$v_x$ (m/s)')
-        ax3[1].set_ylabel('$v_y$ (m/s)')
-        ax3[2].set_ylabel('$v_z$ (m/s)')
-        
-        ax3[0].set_title('Initial Velocity Components vs. Position :: {}'.format(cf.species_lbl[jj]))
-        ax3[2].set_xlabel('Position (m)')
-        
-        for ax in ax3:
-            ax.legend()
+            ax3[0].set_ylabel('$v_x$ (m/s)')
+            ax3[1].set_ylabel('$v_y$ (m/s)')
+            ax3[2].set_ylabel('$v_z$ (m/s)')
             
-        if save == True:
-            fig1.savefig(savedir + 'loss_velocity_space_species_{}'.format(jj))
-            fig2.savefig(savedir + 'loss_position_velocity_magnitude_species_{}'.format(jj))
-            fig3.savefig(savedir + 'loss_position_velocity_components_species_{}'.format(jj))
-            print('Plots saved for species {}'.format(jj))
-            plt.close('all')
-        else:
-            plt.show()
+            ax3[0].set_title('Initial Velocity Components vs. Position')
+            ax3[2].set_xlabel('Position (m)')
+        
+    plt.show()
     return
 
 
 def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True):
+    ## For each particle file, plot phase spaces, marking those particles
+    ## that will be lost at some point in the simulation.
     ## Same plotting routines as above, just for all times, and saving output
     ## to a file
     if it_max is None:
@@ -1914,7 +1891,7 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True):
     final_pos, final_vel, final_idx, ptime2 = cf.load_particles(it_max-1)
     lost_indices, N_lost                    = locate_lost_ions(final_idx)
     
-    v_max = 4
+    v_max = 15
     
     for ii in range(it_max):
         print('Plotting phase space diagrams for particle output {}'.format(ii))
@@ -1929,8 +1906,9 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True):
         fig1, ax1 = plt.subplots(figsize=(15, 10))
         fig2, ax2 = plt.subplots(figsize=(15, 10))
         fig3, ax3 = plt.subplots(3, sharex=True, figsize=(15, 10))
+        fig4, ax4 = plt.subplot(figsize=(15, 10))
         
-        for jj in [0]:#range(cf.Nj):
+        for jj in [1]:#range(cf.Nj):
             if lost_black == True:
                 lc = 'k'
             else:
@@ -1938,7 +1916,7 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True):
         
             lost_vals = lost_indices[cf.idx_start[jj]: cf.idx_end[jj]].nonzero()[0]
     
-            if True:
+            if False:
                 # Loss cone diagram
                 ax1.scatter(v_perp[cf.idx_start[jj]: cf.idx_end[jj]], v_para[cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
                 ax1.scatter(v_perp[lost_vals], v_para[lost_vals], c=lc, marker='x', s=20)
@@ -1948,7 +1926,7 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True):
                 ax1.set_xlim(-v_max, v_max)
                 ax1.set_ylim(-v_max, v_max)
             
-            if True:
+            if False:
                 # v_mag vs. x
                 ax2.scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], v_mag[cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])       
                 ax2.scatter(pos[0, lost_vals], v_mag[lost_vals], c=lc, marker='x', s=20)
@@ -1959,7 +1937,7 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True):
                 ax2.set_xlim(cf.xmin, cf.xmax)
                 ax2.set_ylim(0, v_max)
             
-            if True:
+            if False:
                 # v components vs. x (3 plots)
                 ax3[0].scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[0, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
                 ax3[1].scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[1, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
@@ -1979,7 +1957,7 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True):
                 
                 ax3[0].set_title('Initial Velocity Components vs. Position')
                 ax3[2].set_xlabel('Position (m)')
-                       
+        
         fig1.savefig(path_cone + 'cone%05d.png' % ii)
         fig2.savefig(path_mag +  'mag%05d.png' % ii)
         fig3.savefig(path_comp + 'comp%05d.png' % ii)
@@ -1988,256 +1966,11 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True):
     return
 
 
-def plot_loss_paths(it_max=None, save_to_file=True):
-    savedir = cf.anal_dir + '/particle_loss_paths/'
-    
-    if os.path.exists(savedir) == False:                                   # Create directories
-        os.makedirs(savedir)
-            
-    if it_max is None:
-        it_max = len(os.listdir(cf.particle_dir))
-
-    # Find lost particles        
-    final_pos, final_vel, final_idx, ptime2 = cf.load_particles(it_max-1)
-    lost_indices, N_lost                    = locate_lost_ions(final_idx)
-    
-    ptime    = np.zeros(it_max) 
-    lost_pos = np.zeros((it_max, 3, N_lost.sum())) 
-    lost_vel = np.zeros((it_max, 3, N_lost.sum())) 
-    lost_idx = np.zeros((it_max, N_lost.sum()), dtype=int) 
-    
-    for ii in range(it_max):
-        print('Getting particle loss data from dump file {}'.format(ii))
-        lval = lost_indices.nonzero()[0]
-        pos, vel, idx, ptime[ii] = cf.load_particles(ii)
-
-        lost_pos[ii, :, :] = pos[:, lval]
-        lost_vel[ii, :, :] = vel[:, lval]
-        lost_idx[ii, :]    = idx[   lval]
-    
-    if save_to_file == True:  
-        print('Saving lost particle information to file.')
-        np.savez(cf.temp_dir + 'lost_particle_info', lval=lval, lost_pos=lost_pos,
-                 lost_vel=lost_vel, lost_idx=lost_idx)
-    
-    lost_vel /= cf.va
-    
-    v_mag  = np.sqrt(lost_vel[:, 0] ** 2 + lost_vel[:, 1] ** 2 + lost_vel[:, 2] ** 2)
-    v_perp = np.sign(lost_vel[:, 2]) * np.sqrt(lost_vel[:, 1] ** 2 + lost_vel[:, 2] ** 2)
-    rL     =                           np.sqrt(lost_pos[:, 1] ** 2 + lost_pos[:, 2] ** 2)
-    v_para = lost_vel[:, 0]
-
-    # Lost particle : idx 12968
-    # lval indx     : 142
-    # Initial pos   : [-1020214.38977955,  -100874.673573  ,        0.        ]
-    # Initial vel   : [ -170840.94864185, -8695629.67092295,  3474619.54765129]
-
-    plt.ioff()
-    
-    for ii in range(N_lost.sum()):
-        print('Plotting diagnostic outputs for particle {}'.format(lval[ii]))
-        particle_path = savedir + 'pidx_%05d//' % lval[ii]
-        
-        if os.path.exists(particle_path) == False:                                   # Create directories
-            os.makedirs(particle_path)
-        
-        fig1, ax1 = plt.subplots(figsize=(15, 10))
-        fig2, ax2 = plt.subplots(figsize=(15, 10))
-        fig3, ax3 = plt.subplots(3, sharex=True, figsize=(15, 10))
-        fig4, ax4 = plt.subplots(5, sharex=True, figsize=(15, 10))
-    
-        # Phase space plots as above
-        # But for a single (or small group of) particle/s with time
-        
-        # Fig 1 : Loss Cone
-        if True:
-            # Loss cone diagram
-            ax1.plot(v_perp[:, ii], v_para[:, ii], c=cf.temp_color[lost_idx[0, ii]])
-            ax1.set_title('Loss Cone Path')
-            ax1.set_ylabel('$v_\parallel$ (m/s)')
-            ax1.set_xlabel('$v_\perp$ (m/s)')
-            
-            filename1 = 'velocity_space_idx_%07d.png' % lval[ii]
-            fig1.savefig(particle_path + filename1)
-            plt.close('all')  
-        
-        # Fig 2 : v_mag vs. x
-        if True:
-            # v_mag vs. x
-            ax2.plot(lost_pos[:, 0, ii], v_mag[:, ii], c=cf.temp_color[lost_idx[0, ii]])       
-            ax2.set_title('Velocity Magnitude vs. Position')
-            ax2.set_xlabel('Position (m)')
-            ax2.set_ylabel('Velocity |v| (m/s)')
-            
-            ax2.set_xlim(cf.xmin, cf.xmax)
-            
-            filename2 = 'vmag_vs_x_idx_%07d.png' % lval[ii]
-            fig2.savefig(particle_path + filename2)
-            plt.close('all') 
-
-        
-        # Fig 3 : v_components vs. x
-        if True:
-            ax3[0].plot(lost_pos[:, 0, ii], lost_vel[:, 0, ii], c=cf.temp_color[lost_idx[0, ii]])
-            ax3[1].plot(lost_pos[:, 0, ii], lost_vel[:, 1, ii], c=cf.temp_color[lost_idx[0, ii]])
-            ax3[2].plot(lost_pos[:, 0, ii], lost_vel[:, 2, ii], c=cf.temp_color[lost_idx[0, ii]])
-               
-            ax3[0].set_ylabel('$v_x$ (m/s)')
-            ax3[1].set_ylabel('$v_y$ (m/s)')
-            ax3[2].set_ylabel('$v_z$ (m/s)')
-            
-            ax3[0].set_title('Velocity Components vs. Position')
-            ax3[2].set_xlabel('Position (m)')
-            ax3[2].set_xlim(cf.xmin, cf.xmax)
-            
-            filename3 = 'vcomp_vs_x_idx_%07d.png' % lval[ii]
-            fig3.savefig(particle_path + filename3)
-            plt.close('all') 
-        
-        # Fig 4 : x, v vs. t (4-5 plot)
-        if True:
-            fn_idx = np.argmax(lost_idx[:, ii] < 0)
-            
-            ax4[0].plot(ptime, lost_pos[:, 0, ii], c=cf.temp_color[lost_idx[0, ii]])
-            ax4[1].plot(ptime, lost_vel[:, 0, ii], c=cf.temp_color[lost_idx[0, ii]])
-            ax4[2].plot(ptime, lost_vel[:, 1, ii], c=cf.temp_color[lost_idx[0, ii]])
-            ax4[3].plot(ptime, lost_vel[:, 2, ii], c=cf.temp_color[lost_idx[0, ii]])
-            ax4[4].plot(ptime,       rL[:, ii],    c=cf.temp_color[lost_idx[0, ii]])
-
-            ax4[0].set_ylabel('$x$ (m)')
-            ax4[1].set_ylabel('$v_x$ (/va)')
-            ax4[2].set_ylabel('$v_y$ (/va)')
-            ax4[3].set_ylabel('$v_z$ (/va)')
-            ax4[4].set_ylabel('$r_L$ (m)')
-            
-            ax4[0].set_title('Position and Velocity Components vs. Time')
-            ax4[4].set_xlabel('Time (s)')
-            ax4[4].set_xlim(0, ptime[-1])
-            
-            for ax in ax4:
-                ax.axvline(ptime[fn_idx], c='k', ls='--', alpha=0.5)
-            
-            filename4 = 'components_vs_time_idx_%07d.png' % lval[ii]
-            fig4.savefig(particle_path + filename4)
-            plt.close('all') 
-
-    return
-
-@nb.njit(parallel=True, fastmath=True)
-def interrogate_B0(Px, Py, Pz, B0_out):
-    print('Interrogating B0 function')
-    for ii in nb.prange(Px.shape[0]):
-        for jj in range(Py.shape[0]):
-            for kk in range(Pz.shape[0]):
-                pos = np.array([Px[ii], Py[jj], Pz[kk]])
-                bk.eval_B0_particle(pos, B0_out[ii, jj, kk, :])
-    return
-
-
-def plot_B0():
-    savedir = cf.anal_dir + '/B0_quiver_plots_2D_slices/'
-    yz_dir  = savedir + 'yz_plane//'
-    xz_dir  = savedir + 'xz_plane//'
-    xy_dir  = savedir + 'xy_plane//'
-    
-    for dpath in [yz_dir, xz_dir, xy_dir]:
-        if os.path.exists(dpath) == False:                                   # Create directories
-            os.makedirs(dpath)
-            
-    q    = 1.602177e-19                  # Elementary charge (C)
-    mp   = 1.672622e-27                  # Mass of proton (kg)
-
-    vmax = 20                                    # Maximum expected particle velocity 
-    rmax = mp * vmax * cf.va / (q * cf.B_eq)     # Maximum expected Larmor radii
-    
-    # Sample number
-    Nx = 100
-    Ny = 50
-    Nz = 50
-    
-    Px = np.linspace(cf.xmin, cf.xmax, Nx, dtype=np.float64)
-    Py = np.linspace(  -rmax,    rmax, Ny, dtype=np.float64)
-    Pz = np.linspace(  -rmax,    rmax, Nz, dtype=np.float64)
-    
-    B0_out = np.zeros((Px.shape[0], Py.shape[0], Pz.shape[0], 3), dtype=np.float64)
-
-    interrogate_B0(Px, Py, Pz, B0_out)
-    
-    # Convert distances to km
-    Px *= 1e-3; Py *= 1e-3; Pz *= 1e-3
-    
-    # Normalize vector lengths (for constant arrow shape)
-    Uyz = B0_out[:, :, :, 1] / np.sqrt(B0_out[:, :, :, 1] ** 2 + B0_out[:, :, :, 2] ** 2)
-    Vyz = B0_out[:, :, :, 2] / np.sqrt(B0_out[:, :, :, 1] ** 2 + B0_out[:, :, :, 2] ** 2)
-    
-    Uxz = B0_out[:, :, :, 0] / np.sqrt(B0_out[:, :, :, 0] ** 2 + B0_out[:, :, :, 2] ** 2)
-    Vxz = B0_out[:, :, :, 2] / np.sqrt(B0_out[:, :, :, 0] ** 2 + B0_out[:, :, :, 2] ** 2)
-    
-    Uxy = B0_out[:, :, :, 0] / np.sqrt(B0_out[:, :, :, 0] ** 2 + B0_out[:, :, :, 1] ** 2)
-    Vxy = B0_out[:, :, :, 1] / np.sqrt(B0_out[:, :, :, 0] ** 2 + B0_out[:, :, :, 1] ** 2)
-
-    B0r   = np.sqrt(B0_out[:, :, :, 1] ** 2 + B0_out[:, :, :, 2] ** 2)*1e9
-    B0xy  = np.sqrt(B0_out[:, :, :, 0] ** 2 + B0_out[:, :, :, 1] ** 2)*1e9
-    B0xz  = np.sqrt(B0_out[:, :, :, 0] ** 2 + B0_out[:, :, :, 2] ** 2)*1e9
-    
-    plt.ioff()
-    # yz slice at some x
-    for ii in range(Nx):
-        # Magnitude (for quiver colour)
-        fig, ax = plt.subplots(figsize=(16,10))
-        im1     = ax.quiver(Py, Pz, Uyz[ii, :, :].T, Vyz[ii, :, :].T, B0r[ii, :, :], clim=(B0r.min(), B0r.max()))
-        
-        ax.set_xlabel('y (km)')
-        ax.set_ylabel('z (km)')
-        ax.set_title('YZ slice at X = {:5.2f} km :: B0r vectors :: Vmax = {}vA'.format(Px[ii], vmax))
-        fig.colorbar(im1).set_label('B0r (nT)')
-        
-        filename = 'yz_plane_%05d.png' % ii
-        savepath = yz_dir + filename
-        plt.savefig(savepath)
-        print('yz plot {} saved'.format(ii))
-        plt.close('all')
-    
-    # xy slice at some z
-    for jj in range(Ny):
-        fig, ax = plt.subplots(figsize=(16,10))
-        im2     = ax.quiver(Px, Py, Uxy[:, :, jj].T, Vxy[:, :, jj].T, B0xy[:, :, jj], clim=(B0xy.min(), B0xy.max()))
-        
-        ax.set_xlabel('x (km)')
-        ax.set_ylabel('y (km)')
-        ax.set_title('XY slice at Z = {:5.2f} km :: B0xy vectors :: Vmax = {}vA'.format(Pz[jj], vmax))
-        fig.colorbar(im2).set_label('B0xy (nT)')   
-        
-        filename = 'xy_plane_%05d.png' % jj
-        savepath = xy_dir + filename
-        plt.savefig(savepath)
-        print('xy plot {} saved'.format(jj))
-        plt.close('all')
-    
-    # xz slice at some y
-    for kk in range(Nz):        
-        fig, ax = plt.subplots(figsize=(16,10))
-        im3 = ax.quiver(Px, Pz, Uxz[:, kk, :].T, Vxz[:, kk, :].T, B0xz[:, kk, :], clim=(B0xz.min(), B0xz.max()))
-        
-        ax.set_xlabel('x (km)')
-        ax.set_ylabel('z (km)')
-        ax.set_title('XZ slice at Y = {:5.2f} km :: B0xz vectors :: Vmax = {}vA'.format(Py[kk], vmax))
-        fig.colorbar(im3).set_label('B0xz (nT)')  
-        
-        filename = 'xz_plane_%05d.png' % kk
-        savepath = savedir + 'xz_plane//' + filename
-        plt.savefig(savepath)
-        print('xz plot {} saved'.format(kk))
-        plt.close('all')    
-    
-    return
-
 #%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
     
     series      = 'validation_runs'
-    #series      = 'small_bottle_test'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
@@ -2245,23 +1978,21 @@ if __name__ == '__main__':
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
-        # Particle Loss Analysis :: For Every Time (really time consuming)
+        #plot_spatial_poynting_helical(save=True, log=True)
+        
         #analyse_particle_motion()
-        #plot_particle_loss_with_time()
-        
+        #analyse_loss_cone_with_time()
+        #plot_loss_phase_space()
         #plot_phase_space_with_time()
-        #plot_loss_paths()
-        #plot_B0()
+
         #analyse_particle_motion_manual()
-        
-        plot_particle_loss_with_time()
-        plot_initial_configurations()
-        
         #standard_analysis_package()
-        summary_plots(save=True, histogram=False)
         
+        #summary_plots(save=True, histogram=False)
         #check_fields()
+        
         #plot_energies(normalize=False, save=True)
+        #plot_helicity_colourplot()
         
         #disp_folder = 'dispersion_plots/'
 

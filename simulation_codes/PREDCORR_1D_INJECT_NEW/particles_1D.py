@@ -165,7 +165,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
             v_plus[2]  = v_minus[2] + v_prime[0] * S[1] - v_prime[1] * S[0]
             
             vel[:, ii] = v_plus +  qmi * Ep                                     # Second E-field half-push
-    return
+    return Bp
 
 
 @nb.njit()
@@ -194,6 +194,7 @@ def position_update(pos, vel, idx, dt, Ie, W_elec, diag=False):
     
             # Particle boundary conditions
             if (pos[0, ii] < xmin or pos[0, ii] > xmax):
+                
                 # Absorb particles
                 vel[:, ii] *= 0          # Zero particle velocity
                 idx[ii]    -= 128        # Fold index to negative values (preserves species ID)
@@ -205,6 +206,7 @@ def position_update(pos, vel, idx, dt, Ie, W_elec, diag=False):
 #                 elif pos[0, ii] < xmin:
 #                     pos[0, ii] = pos[0, ii] + xmax - xmin
 # =============================================================================
+                    
 # =============================================================================
 #                 # Reflect particles
 #                 if pos[0, ii] > xmax:

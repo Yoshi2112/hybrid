@@ -1754,7 +1754,7 @@ def plot_particle_loss_with_time(it_max=None, save=True):
     savedir = cf.anal_dir + '/Particle_Loss_Analysis/'
     
     if os.path.exists(savedir) == False:
-        os.makedirs(savedir)
+        os.path.makedirs(savedir)
     
     if it_max is None:
         it_max = len(os.listdir(cf.particle_dir))
@@ -2234,16 +2234,25 @@ def plot_B0():
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'F:'
+    drive      = 'F:'
     
-    series      = 'validation_runs'
-    #series      = 'small_bottle_test'
+    series     = ['validation_runs', 'small_bottle_test']
+    runs    = [0, 3]
+    
     series_dir  = '{}/runs//{}//'.format(drive, series)
-    num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [0]:#range(num_runs):
+    fig, ax = plt.subplots(figsize=(15, 10))
+    for ser, run_num in zip(series, runs):
         print('Run {}'.format(run_num))
-        cf.load_run(drive, series, run_num, extract_arrays=True)
+        cf.load_run(drive, ser, run_num, extract_arrays=True)
+
+        print(cf.N)
+        
+        
+        
+        
+        
+        
         
         # Particle Loss Analysis :: For Every Time (really time consuming)
         #analyse_particle_motion()
@@ -2254,11 +2263,12 @@ if __name__ == '__main__':
         #plot_B0()
         #analyse_particle_motion_manual()
         
-        plot_particle_loss_with_time()
-        plot_initial_configurations()
+        #plot_particle_loss_with_time()
         
+        #plot_initial_configurations()
+    
         #standard_analysis_package()
-        summary_plots(save=True, histogram=False)
+        #summary_plots(save=True, histogram=False)
         
         #check_fields()
         #plot_energies(normalize=False, save=True)

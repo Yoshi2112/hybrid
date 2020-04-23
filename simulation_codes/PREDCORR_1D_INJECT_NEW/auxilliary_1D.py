@@ -101,7 +101,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, \
     ion_ts          = orbit_res / gyfreq
     
     if E[:, 0].max() != 0:
-        elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / vel.max()).max())               # Electron acceleration "frequency"
+        elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / np.abs(vel).max()).max())               # Electron acceleration "frequency"
         Eacc_ts         = freq_res / elecfreq                            
     else:
         Eacc_ts = ion_ts
@@ -196,6 +196,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
         old_particles[3:6 , :] = vel
         old_particles[6   , :] = Ie
         old_particles[7:10, :] = W_elec
+        old_particles[10  , :] = idx
         
         old_fields[:,   0:3]  = B
         old_fields[:NC, 3:6]  = Ji
@@ -226,6 +227,8 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
         vel[:]    = old_particles[3:6 , :]
         Ie[:]     = old_particles[6   , :]
         W_elec[:] = old_particles[7:10, :]
+        idx[:]    = old_particles[10  , :]
+        
         B[:]      = old_fields[:,   0:3]
         Ji[:]     = old_fields[:NC, 3:6]
         Ve[:]     = old_fields[:NC, 6:9]
