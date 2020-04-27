@@ -6,7 +6,7 @@ Created on Fri Sep 22 17:23:44 2017
 """
 import numba as nb
 import numpy as np
-from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, B_eq, a, reflect, disable_waves, periodic
+from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, B_eq, a, disable_waves
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -165,7 +165,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
             v_plus[2]  = v_minus[2] + v_prime[0] * S[1] - v_prime[1] * S[0]
             
             vel[:, ii] = v_plus +  qmi * Ep                                     # Second E-field half-push
-    return Bp
+    return
 
 
 @nb.njit()
@@ -192,13 +192,15 @@ def position_update(pos, vel, idx, dt, Ie, W_elec, diag=False):
             pos[1, ii] += vel[1, ii] * dt
             pos[2, ii] += vel[2, ii] * dt
     
-            # Particle boundary conditions
+            # Particle boundary conditions: Absorb particles
             if (pos[0, ii] < xmin or pos[0, ii] > xmax):
-                
-                # Absorb particles
                 vel[:, ii] *= 0          # Zero particle velocity
                 idx[ii]    -= 128        # Fold index to negative values (preserves species ID)
-                
+
+    assign_weighting_TSC(pos, Ie, W_elec)
+    return
+
+
 # =============================================================================
 #                 # Mario particles (Periodic :: Mainly for use with homogenous B0)
 #                 if pos[0, ii] > xmax:
@@ -219,6 +221,3 @@ def position_update(pos, vel, idx, dt, Ie, W_elec, diag=False):
 #                 # vel[1:2] to keep it resonant with ions travelling in that direction
 #                 vel[:, ii] *= -1.0
 # =============================================================================
-
-    assign_weighting_TSC(pos, Ie, W_elec)
-    return

@@ -1511,9 +1511,9 @@ def standard_analysis_package():
         plot_wk(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=False, pcyc_mult=1.1)
         plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
         
-    plot_spatial_poynting(save=True, log=True)
-    plot_spatial_poynting_helical(save=True, log=True)
-    plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
+    #plot_spatial_poynting(save=True, log=True)
+    #plot_spatial_poynting_helical(save=True, log=True)
+    #plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
     
     plot_particle_loss_with_time()
     plot_initial_configurations()
@@ -2238,28 +2238,42 @@ if __name__ == '__main__':
     
     #series      = 'ABC_test_lowres_v5'
     #series      = 'small_bottle_test'
-    series      = 'validation_runs_v2'
+    #series      = 'validation_runs_v2'
+    #series      = 'small_bottle_test_v2'
+    series       = 'old_new_compare'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [2]:#range(num_runs):
+    for run_num in [1]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
         # Particle Loss Analysis :: For Every Time (really time consuming)
         #analyse_particle_motion()
         
-        #plot_phase_space_with_time(skip=5)
         #plot_loss_paths()
         #plot_B0()
         #analyse_particle_motion_manual()
         
-        plot_particle_loss_with_time()
-        plot_initial_configurations()
+        try:
+            standard_analysis_package()
+        except:
+            pass
         
-        #standard_analysis_package()
-        summary_plots(save=True, histogram=False)
+# =============================================================================
+#         try:
+#             summary_plots(save=True, histogram=False)
+#         except:
+#             pass
+# =============================================================================
+        
+        try:
+            plot_initial_configurations()
+            plot_particle_loss_with_time()
+            #plot_phase_space_with_time()
+        except:
+            pass
         
         #check_fields()
         #plot_energies(normalize=False, save=True)

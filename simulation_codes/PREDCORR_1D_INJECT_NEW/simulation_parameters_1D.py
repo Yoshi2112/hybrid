@@ -9,14 +9,14 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Validation Test :: No wave fields :: Test different number of particles to see cutoff'''
+run_description = '''New code giving different results to old code with minimal differences. This is the NEW code'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//small_bottle_test_v2'  # Series save dir   : Folder containing all runs of a series
-run               = 5                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path         = 'runs//old_new_compare'       # Series save dir   : Folder containing all runs of a series
+run               = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
-save_fields       = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
+save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
 
@@ -26,25 +26,25 @@ cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU 
 supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 reflect           = False                         # Reflect particles when they hit boundary (Default: Absorb)
-disable_waves     = True                          # Disables solutions to wave fields. Only background magnetic field exists
+disable_waves     = False                          # Disables solutions to wave fields. Only background magnetic field exists
 periodic          = False                         # Set periodic boundary conditions for particles. Overrides reflection flag.
 
 
 ### SIMULATION PARAMETERS ###
-NX        = 128                             # Number of cells - doesn't include ghost cells
-ND        = 8                               # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 100                             # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+NX        = 1024                            # Number of cells - doesn't include ghost cells
+ND        = 128                             # Damping region length: Multiple of NX (on each side of simulation domain)
+max_rev   = 200                             # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
-L         = 4.00                            # Field line L shell
+L         = 5.35                            # Field line L shell
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
-B_eq      = None                            # Initial magnetic field at equator: None for L-determined value (in T)
+B_eq      = 200e-9                          # Initial magnetic field at equator: None for L-determined value (in T)
 rc_hwidth = 0                               # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
   
 orbit_res = 0.02                            # Orbit resolution
 freq_res  = 0.02                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
-part_res  = 0.02                            # Data capture resolution in gyroperiod fraction: Particle information
-field_res = 1.00                            # Data capture resolution in gyroperiod fraction: Field information
+part_res  = 0.50                            # Data capture resolution in gyroperiod fraction: Particle information
+field_res = 0.20                            # Data capture resolution in gyroperiod fraction: Field information
 
 
 ### PARTICLE PARAMETERS ###
@@ -52,7 +52,7 @@ species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/label
 temp_color = ['blue', 'red']
 temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
 dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.array([500, 500])                           # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+nsp_ppc    = np.array([200, 200])                           # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
