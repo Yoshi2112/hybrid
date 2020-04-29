@@ -204,7 +204,7 @@ def position_update(pos, vel, idx, dt):
                         pos[0, ii] = 2*xmax - pos[0, ii]
                     elif pos[0, ii] < xmin:
                         pos[0, ii] = 2*xmin - pos[0, ii]
-                    vel[:, ii] *= -1.0                  # 'Reflect' velocities as well. 
+                    vel[0, ii] *= -1.0                  # 'Reflect' velocities as well (Only vx: Reflecting vy,z is not physical)
                     
                 elif particle_boundary == 2:            # Mario (Periodic)
                     if pos[0, ii] > xmax:
