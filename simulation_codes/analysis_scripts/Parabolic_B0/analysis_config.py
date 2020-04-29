@@ -93,7 +93,7 @@ def load_simulation_params():
     global Nj, ne, NX, dxm, seed, dx, Te0, dt_sim, max_rev,   \
            ie, run_desc, orbit_res, freq_res, method_type,    \
            particle_shape, part_save_iter, field_save_iter, dt_field, dt_particle,  \
-           ND, NC, N, r_damp, xmax, B_xmax, B_eq, theta_xmax, a, boundary_type,     \
+           ND, NC, N, loss_cone, xmax, B_xmax, B_eq, theta_xmax, a, boundary_type,     \
            particle_boundary, rc_hwidth, L, B_nodes, E_nodes, xmin, grid_min, grid_max, grid_mid
 
     h_name = os.path.join(data_dir, 'simulation_parameters.pckl')       # Load header file
@@ -113,7 +113,6 @@ def load_simulation_params():
     ne                = obj['ne']
     Te0               = obj['Te0']
     ie                = obj['ie']
-    r_damp            = obj['r_damp']
     xmax              = obj['xmax']
     B_xmax            = obj['B_xmax']
     B_eq              = obj['B_eq']
@@ -143,6 +142,11 @@ def load_simulation_params():
         xmin = obj['xmin']
     except:
         xmin = -xmax
+        
+    try:
+        loss_cone = obj['loss_cone']
+    except:
+        loss_cone = 0.0
         
     grid_min = B_nodes[0]
     grid_max = B_nodes[-1]

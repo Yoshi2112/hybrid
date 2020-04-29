@@ -2084,7 +2084,140 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True, skip
     return
 
 
+def plot_loss_paths(it_max=None, save_to_file=True):
+    savedir = cf.anal_dir + 'Particle_Loss_Analysis/particle_loss_paths/'
+    
+    if os.path.exists(savedir) == False:                                   # Create directories
+        os.makedirs(savedir)
+            
+    if it_max is None:
+        it_max = len(os.listdir(cf.particle_dir))
 
+    # Find lost particles        
+    final_pos, final_vel, final_idx, ptime2 = cf.load_particles(it_max-1)
+    lost_indices, N_lost                    = locate_lost_ions(final_idx)
+    
+    ptime    = np.zeros(it_max) 
+    lost_pos = np.zeros((it_max, 3, N_lost.sum())) 
+    lost_vel = np.zeros((it_max, 3, N_lost.sum())) 
+    lost_idx = np.zeros((it_max, N_lost.sum()), dtype=int) 
+    
+    for ii in range(it_max):
+        print('Getting particle loss data from dump file {}'.format(ii))
+        lval = lost_indices.nonzero()[0]
+        pos, vel, idx, ptime[ii] = cf.load_particles(ii)
+
+        lost_pos[ii, :, :] = pos[:, lval]
+        lost_vel[ii, :, :] = vel[:, lval]
+        lost_idx[ii, :]    = idx[   lval]
+    
+    if save_to_file == True:  
+        print('Saving lost particle information to file.')
+        np.savez(cf.temp_dir + 'lost_particle_info', lval=lval, lost_pos=lost_pos,
+                 lost_vel=lost_vel, lost_idx=lost_idx)
+    
+    lost_vel /= cf.va
+    
+    v_mag  = np.sqrt(lost_vel[:, 0] ** 2 + lost_vel[:, 1] ** 2 + lost_vel[:, 2] ** 2)
+    v_perp = np.sign(lost_vel[:, 2]) * np.sqrt(lost_vel[:, 1] ** 2 + lost_vel[:, 2] ** 2)
+    rL     =                           np.sqrt(lost_pos[:, 1] ** 2 + lost_pos[:, 2] ** 2)
+    v_para = lost_vel[:, 0]
+
+    # Lost particle : idx 12968
+    # lval indx     : 142
+    # Initial pos   : [-1020214.38977955,  -100874.673573  ,        0.        ]
+    # Initial vel   : [ -170840.94864185, -8695629.67092295,  3474619.54765129]
+
+    plt.ioff()
+    
+    for ii in range(N_lost.sum()):
+        print('Plotting diagnostic outputs for particle {}'.format(lval[ii]))
+        particle_path = savedir + 'pidx_%05d//' % lval[ii]
+        
+        if os.path.exists(particle_path) == False:                                   # Create directories
+            os.makedirs(particle_path)
+        
+        fig1, ax1 = plt.subplots(figsize=(15, 10))
+        fig2, ax2 = plt.subplots(figsize=(15, 10))
+        fig3, ax3 = plt.subplots(3, sharex=True, figsize=(15, 10))
+        fig4, ax4 = plt.subplots(5, sharex=True, figsize=(15, 10))
+    
+        # Phase space plots as above
+        # But for a single (or small group of) particle/s with time
+        
+        # Fig 1 : Loss Cone
+        if True:
+            # Loss cone diagram
+            ax1.plot(v_perp[:, ii], v_para[:, ii], c=cf.temp_color[lost_idx[0, ii]])
+            ax1.set_title('Loss Cone Path')
+            ax1.set_ylabel('$v_\parallel$ (m/s)')
+            ax1.set_xlabel('$v_\perp$ (m/s)')
+            
+            filename1 = 'velocity_space_idx_%07d.png' % lval[ii]
+            fig1.savefig(particle_path + filename1)
+            plt.close('all')  
+        
+        # Fig 2 : v_mag vs. x
+        if True:
+            # v_mag vs. x
+            ax2.plot(lost_pos[:, 0, ii], v_mag[:, ii], c=cf.temp_color[lost_idx[0, ii]])       
+            ax2.set_title('Velocity Magnitude vs. Position')
+            ax2.set_xlabel('Position (m)')
+            ax2.set_ylabel('Velocity |v| (m/s)')
+            
+            ax2.set_xlim(cf.xmin, cf.xmax)
+            
+            filename2 = 'vmag_vs_x_idx_%07d.png' % lval[ii]
+            fig2.savefig(particle_path + filename2)
+            plt.close('all') 
+
+        
+        # Fig 3 : v_components vs. x
+        if True:
+            ax3[0].plot(lost_pos[:, 0, ii], lost_vel[:, 0, ii], c=cf.temp_color[lost_idx[0, ii]])
+            ax3[1].plot(lost_pos[:, 0, ii], lost_vel[:, 1, ii], c=cf.temp_color[lost_idx[0, ii]])
+            ax3[2].plot(lost_pos[:, 0, ii], lost_vel[:, 2, ii], c=cf.temp_color[lost_idx[0, ii]])
+               
+            ax3[0].set_ylabel('$v_x$ (m/s)')
+            ax3[1].set_ylabel('$v_y$ (m/s)')
+            ax3[2].set_ylabel('$v_z$ (m/s)')
+            
+            ax3[0].set_title('Velocity Components vs. Position')
+            ax3[2].set_xlabel('Position (m)')
+            ax3[2].set_xlim(cf.xmin, cf.xmax)
+            
+            filename3 = 'vcomp_vs_x_idx_%07d.png' % lval[ii]
+            fig3.savefig(particle_path + filename3)
+            plt.close('all') 
+        
+        # Fig 4 : x, v vs. t (4-5 plot)
+        if True:
+            fn_idx = np.argmax(lost_idx[:, ii] < 0)
+            
+            ax4[0].plot(ptime, lost_pos[:, 0, ii], c=cf.temp_color[lost_idx[0, ii]])
+            ax4[1].plot(ptime, lost_vel[:, 0, ii], c=cf.temp_color[lost_idx[0, ii]])
+            ax4[2].plot(ptime, lost_vel[:, 1, ii], c=cf.temp_color[lost_idx[0, ii]])
+            ax4[3].plot(ptime, lost_vel[:, 2, ii], c=cf.temp_color[lost_idx[0, ii]])
+            ax4[4].plot(ptime,       rL[:, ii],    c=cf.temp_color[lost_idx[0, ii]])
+
+            ax4[0].set_ylabel('$x$ (m)')
+            ax4[1].set_ylabel('$v_x$ (/va)')
+            ax4[2].set_ylabel('$v_y$ (/va)')
+            ax4[3].set_ylabel('$v_z$ (/va)')
+            ax4[4].set_ylabel('$r_L$ (m)')
+            
+            ax4[0].set_title('Position and Velocity Components vs. Time')
+            ax4[4].set_xlabel('Time (s)')
+            ax4[4].set_xlim(0, ptime[-1])
+            
+            for ax in ax4:
+                ax.axvline(ptime[fn_idx], c='k', ls='--', alpha=0.5)
+            
+            filename4 = 'components_vs_time_idx_%07d.png' % lval[ii]
+            fig4.savefig(particle_path + filename4)
+            plt.close('all') 
+
+    return
 
 @nb.njit(parallel=True, fastmath=True)
 def interrogate_B0(Px, Py, Pz, B0_out):
@@ -2287,8 +2420,8 @@ def plot_pitch_and_radius_with_time(it_max=None, skip=1):
     return
 
 
-def plot_loss_paths(it_max=None, save_to_file=True):
-    savedir = cf.anal_dir + 'Particle_Loss_Analysis/Lost_Particle_Paths/'
+def plot_pitch_angle_paths(it_max=None, save_to_file=True):
+    savedir = cf.anal_dir + 'Particle_Loss_Analysis/PA_rad_loss_paths/'
     
     if os.path.exists(savedir) == False:                                   # Create directories
         os.makedirs(savedir)
@@ -2319,14 +2452,11 @@ def plot_loss_paths(it_max=None, save_to_file=True):
         np.savez(cf.temp_dir + 'lost_particle_info', lval=lval, lost_pos=lost_pos,
                  lost_vel=lost_vel, lost_idx=lost_idx)
     
-    lost_vel /= cf.va
-    lost_pos /= cf.dx
-    
-    v_mag  = np.sqrt(lost_vel[:, 0] ** 2 + lost_vel[:, 1] ** 2 + lost_vel[:, 2] ** 2)
     v_perp = np.sign(lost_vel[:, 2]) * np.sqrt(lost_vel[:, 1] ** 2 + lost_vel[:, 2] ** 2)
     v_para = lost_vel[:, 0]
-    rL     =                           np.sqrt(lost_pos[:, 1] ** 2 + lost_pos[:, 2] ** 2)
+    
     pitch  = np.arctan(v_perp / v_para) * 180. / np.pi
+    radius = np.sqrt(lost_pos[:, 1] ** 2 + lost_pos[:, 2] ** 2) * 1e-3
 
     plt.ioff()
     
@@ -2336,86 +2466,28 @@ def plot_loss_paths(it_max=None, save_to_file=True):
         
         if os.path.exists(particle_path) == False:                                   # Create directories
             os.makedirs(particle_path)
-        
-        fig1, ax1 = plt.subplots(figsize=(15, 10))
-        fig2, ax2 = plt.subplots(figsize=(15, 10))
-        fig3, ax3 = plt.subplots(4, sharex=True, figsize=(15, 10))
-        fig4, ax4 = plt.subplots(5, sharex=True, figsize=(15, 10))
-    
-        # Phase space plots as above
-        # But for a single (or small group of) particle/s with time
-        
-        # Fig 1 : Loss Cone
-        if True:
-            ax1.plot(v_perp[:, ii], v_para[:, ii], c=cf.temp_color[lost_idx[0, ii]], marker='o')
-            ax1.set_title('Loss Cone Path :: {:07}' % lval[ii])
-            ax1.set_ylabel('$v_\parallel$ (m/s)')
-            ax1.set_xlabel('$v_\perp$ (m/s)')
-            
-            filename1 = 'velocity_space_idx_%07d.png' % lval[ii]
-            fig1.savefig(particle_path + filename1)
-            plt.close('all')  
 
-        
-        # Fig 2 : 2D plot of gyromotion
-        if True:
-            ax2.scatter(lost_pos[:, 1, ii], lost_pos[:, 2, ii], c=cf.temp_color[lost_idx[0, ii]], marker='o')
-            ax2.set_title('Particle gyromotion :: {:07}' % lval[ii])
-            ax2.set_ylabel('y ($dx^{-1}$)')
-            ax2.set_xlabel('z ($dx^{-1}$)')
-            
-            filename2 = 'gyromotion_%07d.png' % lval[ii]
-            fig2.savefig(particle_path + filename2)
-            plt.close('all') 
-        
-        # Fig 3 : v_components vs. x
-        if True:
-            ax3[0].plot(lost_pos[:, 0, ii], lost_vel[:, 0, ii], c=cf.temp_color[lost_idx[0, ii]])
-            ax3[1].plot(lost_pos[:, 0, ii], lost_vel[:, 1, ii], c=cf.temp_color[lost_idx[0, ii]])
-            ax3[2].plot(lost_pos[:, 0, ii], lost_vel[:, 2, ii], c=cf.temp_color[lost_idx[0, ii]])
-            ax3[3].plot(lost_pos[:, 0, ii], v_mag[:, ii], c=cf.temp_color[lost_idx[0, ii]], marker='o') 
-               
-            ax3[0].set_ylabel('$v_x (v_A^{-1})$')
-            ax3[1].set_ylabel('$v_y (v_A^{-1})$')
-            ax3[2].set_ylabel('$v_z (v_A^{-1})$')
-            ax3[3].set_ylabel('$|v| (v_A^{-1})$')
-            
-            ax3[0].set_title('Velocity Components vs. Position :: {:07}' % lval[ii])
-            ax3[3].set_xlabel('Position ($dx^{-1}$)')
-            #ax3[3].set_xlim(cf.xmin / cf.dx, cf.xmax  / cf.dx)
-            
-            filename3 = 'vcomp_vs_x_idx_%07d.png' % lval[ii]
-            fig3.savefig(particle_path + filename3)
-            plt.close('all') 
-        
-        # Fig 4 : x, v vs. t (4-5 plot)
-        if True:
-            fn_idx = np.argmax(lost_idx[:, ii] < 0)
-            
-            ax4[0].plot(ptime, lost_pos[:, 0, ii], c=cf.temp_color[lost_idx[0, ii]])
-            ax4[1].plot(ptime, lost_pos[:, 1, ii], c=cf.temp_color[lost_idx[0, ii]], label='y')
-            ax4[1].plot(ptime, lost_pos[:, 2, ii], c=cf.temp_color[lost_idx[0, ii]], label='z')
-            ax4[2].plot(ptime,          rL[:, ii], c=cf.temp_color[lost_idx[0, ii]])
-            ax4[3].plot(ptime,      v_perp[:, ii], c=cf.temp_color[lost_idx[0, ii]])
-            ax4[4].plot(ptime,       pitch[:, ii], c=cf.temp_color[lost_idx[0, ii]])
+        fig, [ax1, ax2] = plt.subplots(2, sharex=True, figsize=(15, 10))
 
-            ax4[0].set_ylabel('$x_\parallel (dx^{-1})$')
-            ax4[1].set_ylabel('$x_\perp (dx^{-1})$')
-            ax4[2].set_ylabel('$r_L (dx^{-1})$')
-            ax4[3].set_ylabel('$v_\perp (v_A^{-1})$')
-            ax4[4].set_ylabel(r'$\alpha$ (deg)')
-            
-            ax4[0].set_title('Position and Transverse Quantities vs. Time :: {:07}' % lval[ii])
-            ax4[4].set_xlabel('Time (s)')
-            ax4[4].set_xlim(0, ptime[-1])
-            
-            ax4[1].legend()
-            for ax in ax4:
-                ax.axvline(ptime[fn_idx], c='k', ls='--', alpha=0.5)
-            
-            filename4 = 'components_vs_time_idx_%07d.png' % lval[ii]
-            fig4.savefig(particle_path + filename4)
-            plt.close('all') 
+        # PA/rad diagram
+        ax1.set_title('Pitch Angle/Gyroradius of lost particle {}'.format(lval[ii]))
+        
+        ax1.plot(ptime, pitch, c=cf.temp_color[lost_idx[0, ii]])
+        ax1.set_ylabel(r'$\alpha$ (deg)')
+        ax2.set_ylim(0, 90)        
+        
+        ax2.plot(ptime, radius, c=cf.temp_color[lost_idx[0, ii]])
+        
+        ax2.set_ylim(0, None)
+        ax2.set_ylabel(r'$r_L$')
+        ax2.set_xlim(0, ptime[-1])
+        ax2.set_xlabel('$v_\perp$ (m/s)')
+        
+        filename1 = 'velocity_space_idx_%07d.png' % lval[ii]
+        fig.savefig(particle_path + filename1)
+        plt.close('all')  
+
+
     return
 
 #%% MAIN
@@ -2436,10 +2508,8 @@ if __name__ == '__main__':
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
-        plot_loss_paths(it_max=200)
-        
-        #plot_pitch_and_radius_with_time(skip=5)
-        #plot_initial_configurations_loss_with_time(save=True, skip=5)
+        plot_pitch_and_radius_with_time(skip=5)
+        plot_initial_configurations_loss_with_time(save=True, skip=5)
         
         #plot_adiabatic_parameter()
         
@@ -2448,7 +2518,7 @@ if __name__ == '__main__':
         # Particle Loss Analysis :: For Every Time (really time consuming)
         #analyse_particle_motion()
         
-        
+        #plot_loss_paths()
         #plot_B0()
         #analyse_particle_motion_manual()
         
@@ -2466,14 +2536,12 @@ if __name__ == '__main__':
 #             pass
 # =============================================================================
         
-# =============================================================================
-#         try:
-#             plot_initial_configurations()
-#             plot_particle_loss_with_time()
-#             #plot_phase_space_with_time()
-#         except:
-#             pass
-# =============================================================================
+        try:
+            plot_initial_configurations()
+            plot_particle_loss_with_time()
+            #plot_phase_space_with_time()
+        except:
+            pass
         
         #check_fields()
         #plot_energies(normalize=False, save=True)
