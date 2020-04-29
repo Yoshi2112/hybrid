@@ -17,7 +17,7 @@ import auxilliary_1D as aux
 
 from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, B_eq, va, \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
-                                     Bc, qm_ratios, freq_res, rc_hwidth, temp_type, Te0
+                                     Bc, qm_ratios, freq_res, rc_hwidth, temp_type, Te0, B_xmax
 
 #@nb.njit()
 def calc_losses(v_para, v_perp, st=0):
@@ -29,6 +29,22 @@ def calc_losses(v_para, v_perp, st=0):
     '''
     alpha        = np.arctan(v_perp / v_para) * 180. / np.pi    # Calculate particle PA's
     in_loss_cone = (abs(alpha) < const.loss_cone)               # Determine if particle in loss cone
+    N_loss       = in_loss_cone.sum()                           # Count number that are
+    loss_idx     = np.where(in_loss_cone == True)[0]            # Find their indices
+    loss_idx    += st                                           # Offset indices to account for position in master array
+    return N_loss, loss_idx
+
+
+def calc_losses_new(v_para, v_perp, B0x, st=0):
+    '''
+    For arrays of parallel and perpendicular velocities, finds the number and 
+    indices of particles outside the loss cone.
+    
+    Calculation of in_loss_cone not compatible with njit(). Recode later if you want.
+    '''
+    alpha        = np.arctan(v_perp / v_para)                   # Calculate particle PA's
+    loss_cone    = np.arcsin(np.sqrt(B0x / B_xmax))             # Loss cone per particle (based on B0 at particle)
+    in_loss_cone = (abs(alpha) < loss_cone)                     # Determine if particle in loss cone
     N_loss       = in_loss_cone.sum()                           # Count number that are
     loss_idx     = np.where(in_loss_cone == True)[0]            # Find their indices
     loss_idx    += st                                           # Offset indices to account for position in master array
@@ -112,6 +128,109 @@ def uniform_gaussian_distribution_quiet():
                     v_para_eq   = np.sqrt(v_mag - v_perp_eq ** 2)
 
                     N_loss, loss_idx = calc_losses(v_para_eq, v_perp_eq, st=st)
+                    
+                    # Catch for a particle on the boundary : Set 90 degree pitch angle (gyrophase shouldn't overly matter)
+                    if N_loss == 1:
+                        if abs(pos[0, loss_idx[0]]) == const.xmax:
+                            ww = loss_idx[0]
+                            vel[0, loss_idx[0]] = 0.
+                            vel[1, loss_idx[0]] = np.sqrt(vel[0, ww] ** 2 + vel[1, ww] ** 2 + vel[2, ww] ** 2)
+                            vel[2, loss_idx[0]] = 0.
+                            N_loss = 0
+                                        
+                    if N_loss != 0:                        
+                        vel[0, loss_idx] = np.random.normal(0., sf_par, N_loss)
+                        vel[1, loss_idx] = np.random.normal(0., sf_per, N_loss)
+                        vel[2, loss_idx] = np.random.normal(0., sf_per, N_loss)
+            else:
+                v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
+        
+            pos[1, st: en]  = v_perp / (qm_ratios[jj] * B0x)    # Set initial Larmor radius   
+            
+            vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Invert velocities (v2 = -v1)
+            vel[1, en: en + half_n] = vel[1, st: en] * -1.0
+            vel[2, en: en + half_n] = vel[2, st: en] * -1.0
+            pos[1, en: en + half_n] = pos[1, st: en] * -1.0     # Move gyrophase 180 degrees (doesn't do anything)
+            
+            pos[0, en: en + half_n] = pos[0, st: en]            # Other half, same position
+            
+            acc                    += half_n * 2
+        
+    return pos, vel, idx
+
+
+def uniform_gaussian_distribution_quiet_new():
+    '''Creates an N-sampled normal distribution across all particle species within each simulation cell
+
+    OUTPUT:
+        pos -- 3xN array of particle positions. Pos[0] is uniformly distributed with boundaries depending on its temperature type
+        vel -- 3xN array of particle velocities. Each component initialized as a Gaussian with a scale factor determined by the species perp/para temperature
+        idx -- N   array of particle indexes, indicating which species it belongs to. Coded as an 8-bit signed integer, allowing values between +/-128
+    
+    Note: y,z components of particle positions intialized with identical gyrophases, since only the projection
+    onto the x-axis interacts with the simulation fields. pos y,z are kept ONLY to calculate/track the Larmor radius 
+    of each particle. This initial position suffers the same issue as trying to update the radial field using 
+    B0r = 0 for the Larmor radius approximation, however because this is only an initial condition, at worst this
+    will just cause a variation in the Larmor radius with position in x, but this will at least be conserved 
+    throughout the simulation, and not drift with time.
+    
+    CHECK THIS LATER: BUT ITS ONLY AN INITIAL CONDITION SO IT SHOULD BE OK FOR NOW
+
+    # Could use temp_type[jj] == 1 for RC LCD only
+    '''
+    pos = np.zeros((3, N), dtype=np.float64)
+    vel = np.zeros((3, N), dtype=np.float64)
+    idx = np.zeros(N,      dtype=np.int8)
+    np.random.seed(seed)
+
+    for jj in range(Nj):
+        idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle idx
+                
+        half_n = nsp_ppc[jj] // 2                     # Half particles per cell - doubled later
+        sf_par = np.sqrt(kB *  Tpar[jj] /  mass[jj])  # Scale factors for velocity initialization
+        sf_per = np.sqrt(kB *  Tper[jj] /  mass[jj])
+       
+        if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
+            NC_load = NX
+        else:
+            if rc_hwidth == 0:
+                NC_load = NX
+            else:
+                NC_load = 2*rc_hwidth
+        
+        # Load particles in each applicable cell
+        acc = 0; offset  = 0
+        for ii in range(NC_load):
+            # Add particle if last cell (for symmetry)
+            if ii == NC_load - 1:
+                half_n += 1
+                offset  = 1
+                
+            # Particle index ranges
+            st = idx_start[jj] + acc
+            en = idx_start[jj] + acc + half_n
+            
+            # Set position for half: Analytically uniform
+            for kk in range(half_n):
+                pos[0, st + kk] = dx*(float(kk) / (half_n - offset) + ii)
+            
+            # Turn [0, NC] distro into +/- NC/2 distro
+            pos[0, st: en]-= NC_load*dx/2              
+            
+            # Set velocity for half: Randomly Maxwellian
+            vel[0, st: en] = np.random.normal(0, sf_par, half_n) +  drift_v[jj]
+            vel[1, st: en] = np.random.normal(0, sf_per, half_n)
+            vel[2, st: en] = np.random.normal(0, sf_per, half_n)
+
+            # Set Loss Cone Distribution: Reinitialize particles in loss cone
+            B0x = fields.eval_B0x(pos[0, st: en])
+            if const.homogenous == False:
+                N_loss = const.N_species[jj]
+                
+                while N_loss > 0:
+                    v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
+                    
+                    N_loss, loss_idx = calc_losses_new(vel[0, st: en], v_perp, B0x, st=st)
                     
                     # Catch for a particle on the boundary : Set 90 degree pitch angle (gyrophase shouldn't overly matter)
                     if N_loss == 1:
@@ -359,49 +478,52 @@ def set_timestep(vel, E):
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    
+   
     POS, VEL, IDX = uniform_gaussian_distribution_quiet()
-    pdb.set_trace()
-    V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2)
-    V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2)
-    V_PARA = VEL[0]
+
+    V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
+    V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
+    V_PARA = VEL[0] / va
     
     plt.ioff()
     fig1, ax1 = plt.subplots()
-    fig2, ax2 = plt.subplots()
-    fig3, ax3 = plt.subplots(3, sharex=True)
+    #fig2, ax2 = plt.subplots()
+    #fig3, ax3 = plt.subplots(3, sharex=True)
     
     node_number = 0
     
     for jj in [1]:#range(cf.Nj):
-        if False:
+        if True:
             # Loss cone diagram
             ax1.scatter(V_PERP[idx_start[jj]: idx_end[jj]], V_PARA[idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
 
-            ax1.set_title('Loss Cone Distribution')
-            ax1.set_ylabel('$v_\parallel$ (m/s)')
-            ax1.set_xlabel('$v_\perp$ (m/s)')
+            ax1.set_title('Loss Cone Distribution :: New Function :: Warm Hydrogen Species')
+            ax1.set_ylabel('$v_\parallel (/v_A)$')
+            ax1.set_xlabel('$v_\perp (/v_A)$')
+            ax1.axis('equal')
         
-        if False:
-            # v_mag vs. x
-            ax2.scatter(POS[0, idx_start[jj]: idx_end[jj]], V_MAG[idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
-
-            ax2.set_title('Velocity vs. Position')
-            ax2.set_xlabel('Position (m)')
-            ax2.set_ylabel('Velocity |v| (m/s)')
-        
-        if False:
-            # v components vs. x (3 plots)
-            ax3[0].scatter(POS[0, idx_start[jj]: idx_end[jj]], VEL[0, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
-            ax3[1].scatter(POS[0, idx_start[jj]: idx_end[jj]], VEL[1, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
-            ax3[2].scatter(POS[0, idx_start[jj]: idx_end[jj]], VEL[2, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
-
-            ax3[0].set_ylabel('$v_x$ (m/s)')
-            ax3[1].set_ylabel('$v_y$ (m/s)')
-            ax3[2].set_ylabel('$v_z$ (m/s)')
-            
-            ax3[0].set_title('Velocity Components vs. Position')
-            ax3[2].set_xlabel('Position (m)')
+# =============================================================================
+#         if False:
+#             # v_mag vs. x
+#             ax2.scatter(POS[0, idx_start[jj]: idx_end[jj]], V_MAG[idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+# 
+#             ax2.set_title('Velocity vs. Position')
+#             ax2.set_xlabel('Position (m)')
+#             ax2.set_ylabel('Velocity |v| (m/s)')
+#         
+#         if False:
+#             # v components vs. x (3 plots)
+#             ax3[0].scatter(POS[0, idx_start[jj]: idx_end[jj]], VEL[0, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+#             ax3[1].scatter(POS[0, idx_start[jj]: idx_end[jj]], VEL[1, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+#             ax3[2].scatter(POS[0, idx_start[jj]: idx_end[jj]], VEL[2, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+# 
+#             ax3[0].set_ylabel('$v_x$ (m/s)')
+#             ax3[1].set_ylabel('$v_y$ (m/s)')
+#             ax3[2].set_ylabel('$v_z$ (m/s)')
+#             
+#             ax3[0].set_title('Velocity Components vs. Position')
+#             ax3[2].set_xlabel('Position (m)')
+# =============================================================================
             
         if False:
             fig = plt.figure(figsize=(12,10))
@@ -417,38 +539,40 @@ if __name__ == '__main__':
             ax_x.set_xlabel(r'$x_p (m)$')
             ax_x.set_xlim(const.xmin, const.xmax)
             
-        if True:
-            '''
-            Is there a way to get a 2D contour plot of velocity distribution (of a component)
-            across space?
-            '''            
-            # Account for damping nodes. Node_number should be "real" node count.
-            num_bins = const.nsp_ppc[jj] // 20
-            
-            distro_function = np.zeros((3, NX, num_bins))
-            
-            for ii in range(NX):
-                node_number = const.ND + ii
-                x_node      = const.E_nodes[node_number]
-                f           = np.zeros((1, 3))
-                
-                count = 0
-                for ii in np.arange(const.idx_start[jj], const.idx_end[jj]):
-                    if (abs(POS[0, ii] - x_node) <= 0.5*const.dx):
-                        f = np.append(f, [VEL[0:3, ii]], axis=0)
-                        count += 1
-          
-                xs, BinEdgesx = np.histogram((f[:, 0] - const.drift_v[jj]) / const.va, bins=num_bins)
-                bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
-                ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
-            
-                ys, BinEdgesy = np.histogram(f[:, 1] / const.va, bins=num_bins)
-                by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
-                ax_y.plot(by, ys, '-', c='c', drawstyle='steps')
-            
-                zs, BinEdgesz = np.histogram(f[:, 2] / const.va, bins=num_bins)
-                bz = 0.5 * (BinEdgesz[1:] + BinEdgesz[:-1])
-                ax_z.plot(bz, zs, '-', c='c', drawstyle='steps')
+# =============================================================================
+#         if True:
+#             '''
+#             Is there a way to get a 2D contour plot of velocity distribution (of a component)
+#             across space?
+#             '''            
+#             # Account for damping nodes. Node_number should be "real" node count.
+#             num_bins = const.nsp_ppc[jj] // 20
+#             
+#             distro_function = np.zeros((3, NX, num_bins))
+#             
+#             for ii in range(NX):
+#                 node_number = const.ND + ii
+#                 x_node      = const.E_nodes[node_number]
+#                 f           = np.zeros((1, 3))
+#                 
+#                 count = 0
+#                 for ii in np.arange(const.idx_start[jj], const.idx_end[jj]):
+#                     if (abs(POS[0, ii] - x_node) <= 0.5*const.dx):
+#                         f = np.append(f, [VEL[0:3, ii]], axis=0)
+#                         count += 1
+#           
+#                 xs, BinEdgesx = np.histogram((f[:, 0] - const.drift_v[jj]) / const.va, bins=num_bins)
+#                 bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
+#                 ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
+#             
+#                 ys, BinEdgesy = np.histogram(f[:, 1] / const.va, bins=num_bins)
+#                 by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
+#                 ax_y.plot(by, ys, '-', c='c', drawstyle='steps')
+#             
+#                 zs, BinEdgesz = np.histogram(f[:, 2] / const.va, bins=num_bins)
+#                 bz = 0.5 * (BinEdgesz[1:] + BinEdgesz[:-1])
+#                 ax_z.plot(bz, zs, '-', c='c', drawstyle='steps')
+# =============================================================================
 
     
 

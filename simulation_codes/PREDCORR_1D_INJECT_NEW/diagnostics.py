@@ -1466,14 +1466,10 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
     B_test = np.zeros((const.NC + 1, 3), dtype=np.float64) 
     E_test = np.zeros((const.NC, 3),     dtype=np.float64) 
     
-    # Set initial velocity based on pitch angle and particle energy
-    #vel[0, 0] = v_mag * const.va * np.cos(pitch * np.pi / 180.)
-    #vel[1, 0] = v_mag * const.va * np.sin(pitch * np.pi / 180.)
-    
     vel       = np.zeros((3, Np), dtype=np.float64)
     pos       = np.zeros((3, Np), dtype=np.float64)
     
-    if True:
+    if False:
         # Load particle config from file
         print('Loading parameters from simulation run...')
         fpath     = 'F:/runs/validation_runs/run_0/extracted/lost_particle_info.npz'
@@ -1491,25 +1487,22 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
 
         pdb.set_trace()
     else:
-        # Specify manually
-        vel[0, 0] = -170840.94864185
-        vel[1, 0] = -8695629.67092295
-        vel[2, 0] = 3474619.54765129
+        # Set initial velocity based on pitch angle and particle energy
+        vel[0, 0] = v_mag * const.va * np.cos(pitch * np.pi / 180.)
+        vel[1, 0] = v_mag * const.va * np.sin(pitch * np.pi / 180.)
+                
+        rL = const.mp * vel[1, 0] / (const.q * const.B_eq)
         
-        pos[0, 0] = -1020214.38977955
-        pos[1, 0] = -100874.673573
-        pos[2, 0] = 0.
-        
-        #pos[:, 1] = pos[:, 0]
-        #vel[:, 1] = vel[:, 0]
-        #vel[2, 1] = vel[2, 0] * 0.5    # Same particle, lower vx
+        pos[0, 0] = 0.0
+        pos[1, 0] = 0.0
+        pos[2, 0] = rL
     
     # Initial quantities
     init_pos = pos.copy() 
     init_vel = vel.copy()
     gyfreq   = const.gyfreq / (2 * np.pi)
     ion_ts   = const.orbit_res / gyfreq
-    vel_ts   = 0.6 * const.dx / np.max(np.abs(vel[0, :]))
+    vel_ts   = 0.5 * const.dx / np.max(np.abs(vel[0, :]))
 
     DT       = min(ion_ts, vel_ts) * dt_mult
     
@@ -2568,11 +2561,11 @@ if __name__ == '__main__':
     #smart_plot_2D_planes()
     #smart_plot_3D()
     #check_directions()
-    DT_MULT = 1.00
+
     init_pos, init_vel, time, pos_history, vel_history, mag_history,\
-        DT, max_t = do_particle_run(max_rev=100, dt_mult=DT_MULT)
+        DT, max_t = do_particle_run(max_rev=100, v_mag=1.0, pitch=45.0, dt_mult=1.0)
         
-    if True:
+    if False:
         larmor = np.sqrt(pos_history[:, 0, 1] ** 2 + pos_history[:, 0, 2] ** 2) * 1e-3
         
         fig, axes = plt.subplots(2, sharex=True)

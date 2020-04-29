@@ -18,11 +18,11 @@ import analysis_config  as cf
 import dispersions      as disp
 import get_growth_rates as ggg
 
-q   = 1.602e-19               # Elementary charge (C)
+qi  = 1.602e-19               # Elementary charge (C)
 c   = 3e8                     # Speed of light (m/s)
 me  = 9.11e-31                # Mass of electron (kg)
 mp  = 1.67e-27                # Mass of proton (kg)
-e   = -q                      # Electron charge (C)
+e   = -qi                     # Electron charge (C)
 mu0 = (4e-7) * np.pi          # Magnetic Permeability of Free Space (SI units)
 kB  = 1.38065e-23             # Boltzmann's Constant (J/K)
 e0  = 8.854e-12               # Epsilon naught - permittivity of free space
@@ -268,7 +268,7 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
     
     for ii in range(3):
         if cf.species_present[ii] == True:
-            cyc    = q * cf.Bc[:, 0] / (2 * np.pi * mp * M[ii])
+            cyc    = qi * cf.Bc[:, 0] / (2 * np.pi * mp * M[ii])
             ax.plot(cf.B_nodes, cyc, linestyle='--', c=clr[ii], label=lbl[ii])
     
     if linear_overlay == True:
@@ -409,7 +409,7 @@ def plot_wk_AGU(component='By', saveas='wk_plot' , dispersion_overlay=False, sav
     clr  = ['black', 'green', 'red'] 
     lbl  = [r'$f_{H^+}$', r'$f_{He^+}$', r'$f_{O^+}$']
     M    = np.array([1., 4., 16.])
-    cyc  = q * cf.B0 / (2 * np.pi * mp * M)
+    cyc  = qi * cf.B0 / (2 * np.pi * mp * M)
     for ii in range(3):
         if cf.species_present[ii] == True:
             ax.axhline(cyc[ii], linestyle='--', c=clr[ii], label=lbl[ii])
@@ -1592,7 +1592,7 @@ def check_fields(save=True):
     # Convert to plot units
     bx *= 1e9; by *= 1e9; bz *= 1e9
     ex *= 1e3; ey *= 1e3; ez *= 1e3
-    qdens *= 1e-6/q
+    qdens *= 1e-6/qi
     te /= 11603.
     
     for ii in range(bx.shape[0]):
@@ -1843,7 +1843,7 @@ def plot_initial_configurations(it_max=None, save=True, plot_lost=True):
         fig2, ax2 = plt.subplots(figsize=(15, 10))
         fig3, ax3 = plt.subplots(3, sharex=True, figsize=(15, 10))
     
-        lost_vals = lost_indices[cf.idx_start[jj]: cf.idx_end[jj]].nonzero()[0]
+        lost_vals = lost_indices[cf.idx_start[jj]: cf.idx_end[jj]].nonzero()[0] + cf.idx_start[jj]
 
         # Loss cone diagram
         ax1.scatter(v_perp[cf.idx_start[jj]: cf.idx_end[jj]], v_para[cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
@@ -1897,6 +1897,102 @@ def plot_initial_configurations(it_max=None, save=True, plot_lost=True):
     return
 
 
+def plot_initial_configurations_loss_with_time(it_max=None, save=True, skip=1):
+    ## Count those that have been lost by the end of the simulation
+    ## and plot that against initial distro phase spaces
+    #
+    ## Notes:
+    ##  -- Why are lost particles only in the negative side of the simulation space?
+    ##  -- Why is there seemingly no connection between lost particles and loss cone?
+    if it_max is None:
+        it_max = len(os.listdir(cf.particle_dir))
+    
+    savedir = cf.anal_dir + '/Particle_Loss_Analysis/Phase Space Loss with Time/'
+    
+    dir1 = savedir + '/velocity_space/'
+    dir2 = savedir + '/v_mag_vs_x/'
+    dir3 = savedir + '/v_components_vs_x/'
+    
+    for this_dir in[dir1, dir2, dir3]:
+        for ii in range(cf.Nj):
+            this_path = this_dir + '/species_{}/'.format(ii)
+            if os.path.exists(this_path) == False:                                   # Create directories
+                os.makedirs(this_path)
+    
+    init_pos , init_vel , init_idx , ptime1 = cf.load_particles(0)
+    
+    v_mag  = np.sqrt(init_vel[0] ** 2 + init_vel[1] ** 2 + init_vel[2] ** 2) / cf.va
+    v_perp = np.sign(init_vel[2]) * np.sqrt(init_vel[1] ** 2 + init_vel[2] ** 2)
+    v_para = init_vel[0]
+    
+    plt.ioff()
+    cf.temp_color[0] = 'c'
+    
+    plt.ioff()
+    for ii in range(0, it_max, skip):
+        final_pos, final_vel, final_idx, ptime2 = cf.load_particles(ii)
+        lost_indices, N_lost = locate_lost_ions(final_idx)
+
+        for jj in range(cf.Nj):
+            lost_vals = lost_indices[cf.idx_start[jj]: cf.idx_end[jj]].nonzero()[0] + cf.idx_start[jj]
+
+            print('Plotting phase spaces for species {}'.format(jj))
+            fig1, ax1 = plt.subplots(figsize=(15, 10))
+            fig2, ax2 = plt.subplots(figsize=(15, 10))
+            fig3, ax3 = plt.subplots(3, sharex=True, figsize=(15, 10))
+        
+            # Loss cone diagram
+            ax1.scatter(v_perp[cf.idx_start[jj]: cf.idx_end[jj]], v_para[cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
+            ax1.scatter(v_perp[lost_vals], v_para[lost_vals], c='k', marker='x', s=20, label='Lost particles')
+            
+            ax1.set_title('Initial Velocity Distribution :: {} :: Lost Particles at t={:.2f}s'.format(cf.species_lbl[jj], ptime2))
+            ax1.set_ylabel('$v_\parallel$ (m/s)')
+            ax1.set_xlabel('$v_\perp$ (m/s)')
+            ax1.legend()
+            
+            # v_mag vs. x
+            ax2.scatter(init_pos[0, cf.idx_start[jj]: cf.idx_end[jj]], v_mag[cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
+            ax2.scatter(init_pos[0, lost_vals], v_mag[lost_vals], c='k', marker='x', s=20, label='Lost particles')
+            
+            ax2.set_title('Initial Velocity vs. Position :: {} :: Lost Particles at t={:.2f}s'.format(cf.species_lbl[jj], ptime2))
+            ax2.set_xlabel('Position (m)')
+            ax2.set_ylabel('Velocity |v| (/vA)')
+            ax2.legend()
+                
+            # v components vs. x (3 plots)
+            ax3[0].scatter(init_pos[0, cf.idx_start[jj]: cf.idx_end[jj]], init_vel[0, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
+            ax3[1].scatter(init_pos[0, cf.idx_start[jj]: cf.idx_end[jj]], init_vel[1, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
+            ax3[2].scatter(init_pos[0, cf.idx_start[jj]: cf.idx_end[jj]], init_vel[2, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
+       
+            ax3[0].scatter(init_pos[0, lost_vals], init_vel[0, lost_vals], c='k', marker='x', s=20, label='Lost particles')
+            ax3[1].scatter(init_pos[0, lost_vals], init_vel[1, lost_vals], c='k', marker='x', s=20, label='Lost particles')
+            ax3[2].scatter(init_pos[0, lost_vals], init_vel[2, lost_vals], c='k', marker='x', s=20, label='Lost particles')
+            
+            ax3[0].set_ylabel('$v_x$ (m/s)')
+            ax3[1].set_ylabel('$v_y$ (m/s)')
+            ax3[2].set_ylabel('$v_z$ (m/s)')
+            
+            ax3[0].set_title('Initial Velocity Components vs. Position :: {} :: Lost Particles at t={:.2f}s'.format(cf.species_lbl[jj], ptime2))
+            ax3[2].set_xlabel('Position (m)')
+            
+            for ax in ax3:
+                ax.legend()
+                
+            if save == True:
+                savedir1 = dir1 + '/species_{}/'.format(jj)
+                savedir2 = dir2 + '/species_{}/'.format(jj)
+                savedir3 = dir3 + '/species_{}/'.format(jj)
+                
+                fig1.savefig(savedir1 + 'loss_velocity_space_species_{}_t{:05}'.format(jj, ii))
+                fig2.savefig(savedir2 + 'loss_position_velocity_magnitude_species_{}_t{:05}'.format(jj, ii))
+                fig3.savefig(savedir3 + 'loss_position_velocity_components_species_{}_t{:05}'.format(jj, ii))
+                print('Plots saved for species {}'.format(jj))
+                plt.close('all')
+            else:
+                plt.show()
+    return
+
+
 def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True, skip=1):
     ## Same plotting routines as above, just for all times, and saving output
     ## to a file
@@ -1936,7 +2032,7 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True, skip
             else:
                 lc = cf.temp_color[jj]
         
-            lost_vals = lost_indices[cf.idx_start[jj]: cf.idx_end[jj]].nonzero()[0]
+            lost_vals = lost_indices[cf.idx_start[jj]: cf.idx_end[jj]].nonzero()[0] + cf.idx_start[jj]
     
             if True:
                 # Loss cone diagram
@@ -2231,6 +2327,32 @@ def plot_B0():
         plt.close('all')    
     return
 
+
+def plot_adiabatic_parameter():
+    '''
+    Change later to plot for each species charge/mass ratio, but for now its just protons
+    
+    What are the units for this? Does it require some sort of normalization? No, because its
+    just larmor radius (mv/qB) divided by spatial length
+    '''
+    max_v  = 20 * cf.va
+    N_plot = 1000
+    B_av   = 0.5 * (cf.B_xmax + cf.B_eq)
+    z0     = cf.xmax
+    
+    v_perp = np.linspace(0, max_v, N_plot)
+    
+    epsilon = mp * v_perp / (qi * B_av * z0)
+    
+    plt.title(r'Adiabatic Parameter $\epsilon$ vs. Expected v_perp range :: {}[{}]'.format(series, run_num))
+    plt.ylabel(r'$\epsilon$', rotation=0)
+    plt.xlabel(r'$v_\perp (/v_A)$')
+    plt.xlim(0, max_v/cf.va)
+    plt.plot(v_perp/cf.va, epsilon)
+    plt.show()
+    return
+
+
 #%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
@@ -2245,9 +2367,13 @@ if __name__ == '__main__':
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [1]:#range(num_runs):
+    for run_num in [3]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
+        
+        #plot_adiabatic_parameter()
+        
+        #plot_initial_configurations_loss_with_time(save=True, skip=5)
         
         # Particle Loss Analysis :: For Every Time (really time consuming)
         #analyse_particle_motion()

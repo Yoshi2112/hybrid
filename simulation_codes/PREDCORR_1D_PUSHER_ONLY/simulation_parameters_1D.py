@@ -13,37 +13,27 @@ run_description = '''This is the NEW code, but with a fixed (?) cubic spline. Se
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//small_bottle_test_v3'  # Series save dir   : Folder containing all runs of a series
+save_path         = 'runs//pusher_only_test'      # Series save dir   : Folder containing all runs of a series
 run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
-save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
 
-## DIAGNOSTIC FLAGS :: DOUBLE CHECK BEFORE EACH RUN! ##
-## THESE FLAGS NO LONGER TRIGGER THE SETTING, ONLY THE SAVE PARAMETER.
-## SETTING MUST BE CHANGED IN THE PARTICLES.PY FILE BY UNCOMMENTING THE APPROPRIATE CODE
 supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
-disable_waves     = True                          # Disables solutions to wave fields. Only background magnetic field exists
 particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Periodic
 
 
 ### SIMULATION PARAMETERS ###
 NX        = 128                             # Number of cells - doesn't include ghost cells
-ND        = 8                               # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 100                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+max_rev   = 200                             # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 4.00                            # Field line L shell
-
-ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
 B_eq      = None                            # Initial magnetic field at equator: None for L-determined value (in T)
 rc_hwidth = 0                               # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
-  
+
 orbit_res = 0.02                            # Orbit resolution
-freq_res  = 1.00                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
-part_res  = 0.10                            # Data capture resolution in gyroperiod fraction: Particle information
-field_res = 0.20                            # Data capture resolution in gyroperiod fraction: Field information
+part_res  = 0.25                            # Data capture resolution in gyroperiod fraction: Particle information
 
 
 ### PARTICLE PARAMETERS ###
@@ -62,14 +52,7 @@ anisotropy = np.array([0.0, 5.0])                           # Particle anisotrop
 # Particle energy: Choose one                                    
 E_per      = np.array([5.0, 50000.])                        # Perpendicular energy in eV
 beta_par   = np.array([1., 10.])                            # Overrides E_per if not None. Uses B_eq for conversion
-
-# External current properties (not yet implemented)
-J_amp          = 1.0                                        # External current : Amplitude  (A)
-J_freq         = 0.02                                       # External current : Frequency  (Hz)
-J_k            = 1e-7                                       # External current : Wavenumber (/m)
-
-min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
-E_e            = 10.0                                       # Electron energy (eV)
+E_e        = 10.0                                       # Electron energy (eV)
 
 # This will be fixed by subcycling later on, hopefully
 account_for_dispersion = False                              # Flag (True/False) whether or not to reduce timestep to prevent dispersion getting too high
@@ -88,7 +71,6 @@ mu0    = (4e-7) * np.pi                     # Magnetic Permeability of Free Spac
 RE     = 6.371e6                            # Earth radius in metres
 B_surf = 3.12e-5                            # Magnetic field strength at Earth surface
 
-NC         = NX + 2*ND
 ne         = density.sum()
 E_par      = E_per / (anisotropy + 1)
 
@@ -108,7 +90,6 @@ else:
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma
-
 dx         = dxm * c / wpi                               # Spatial cadence, based on ion inertial length
 xmax       = NX // 2 * dx                                # Maximum simulation length, +/-ve on each side
 xmin       =-NX // 2 * dx
@@ -118,7 +99,6 @@ mass      *= mp                                          # Cast species mass to 
 drift_v   *= va                                          # Cast species velocity to m/s
 
 Nj         = len(mass)                                   # Number of species
-n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
 
 # Number of sim particles for each species, total
 N_species  = np.zeros(Nj, dtype=np.int64)
@@ -141,9 +121,6 @@ idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)]
 ############################
 ### MAGNETIC FIELD STUFF ###
 ############################
-B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx      # B grid points position in space
-E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
-
 theta_xmax  = xmax/(L*RE)                                # Latitudinal extent of simulation , based on xmax
 r_xmax      = L * np.sin(np.pi / 2 - theta_xmax) ** 2    # Calculate radial distance of boundary in dipole and get field intensity
 cos_bit     = np.sqrt(3*np.cos(theta_xmax)**2 + 1)       # Intermediate variable (angular scale factor)
@@ -154,18 +131,12 @@ if homogenous == True:
     a      = 0
     B_xmax = B_eq
 
-Bc           = np.zeros((NC + 1, 3), dtype=np.float64)   # Constant components of magnetic field based on theta and B0
-Bc[:, 0]     = B_eq * (1 + a * B_nodes**2)               # Set constant Bx
-Bc[:ND]      = Bc[ND]                                    # Set B0 in damping cells (same as last spatial cell)
-Bc[ND+NX+1:] = Bc[ND+NX]
-
 # Freqs based on highest magnetic field value (at simulation boundaries)
 gyfreq     = q*B_xmax/ mp                                # Proton Gyrofrequency (rad/s) at boundary (highest)
 gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
-k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
-
 loss_cone  = np.arcsin(np.sqrt(B_eq / B_xmax))*180 / np.pi
+ion_ts     = orbit_res / gyfreq                          # Timestep to resolve gyromotion
 
 
 #%%### INPUT TESTS AND CHECKS
@@ -178,7 +149,6 @@ if supress_text == False:
     print('Run Started')
     print('Run Series         : {}'.format(save_path.split('//')[-1]))
     print('Run Number         : {}'.format(run))
-    print('Field save flag    : {}'.format(save_fields))
     print('Particle save flag : {}\n'.format(save_particles))
     
     print('Sim domain length  : {:5.2f}R_E'.format(2 * xmax / RE))
@@ -192,8 +162,7 @@ if supress_text == False:
     print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 3)))
     print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_rev * 2. * np.pi / gyfreq_eq, 2), max_rev))
     
-    print('{} spatial cells, {} with ring current, 2x{} damped cells'.format(NX, rc_print, ND))
-    print('{} cells total'.format(NC))
+    print('{} spatial cells, {} with ring current'.format(NX, rc_print))
     print('{} particles total\n'.format(N))
     
     if None not in cpu_affin:
@@ -204,27 +173,7 @@ if supress_text == False:
             print('CPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
         else:
             print('CPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
-    
-density_normal_sum = (charge / q) * (density / ne)
 
-if round(density_normal_sum.sum(), 5) != 1.0:
-    print('-------------------------------------------------------------------------')
-    print('WARNING: ION DENSITIES DO NOT SUM TO 1.0. SIMULATION WILL NOT BE ACCURATE')
-    print('-------------------------------------------------------------------------')
-    print('')
-    print('ABORTING...')
-    sys.exit()
-    
-simulated_density_per_cell = (n_contr * charge * nsp_ppc).sum()
-real_density_per_cell      = ne*q
-
-if abs(simulated_density_per_cell - real_density_per_cell) / real_density_per_cell > 1e-10:
-    print('--------------------------------------------------------------------------------')
-    print('WARNING: DENSITY CALCULATION ISSUE: RECHECK HOW MACROPARTICLE CONTRIBUTIONS WORK')
-    print('--------------------------------------------------------------------------------')
-    print('')
-    print('ABORTING...')
-    sys.exit()
 
 if particle_boundary != 0:
     if particle_boundary != 1:
@@ -232,9 +181,3 @@ if particle_boundary != 0:
             sys.exit('Paramter particle_boundary must be 0,1,2, not {}'.format(particle_boundary))
 
 system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
-# =============================================================================
-# if beta == True:
-#     Te0        = B0 ** 2 * beta_e   / (2 * mu0 * ne * kB)    # Temperatures of species in Kelvin (used for particle velocity initialization)
-#     Tpar       = B0 ** 2 * beta_par / (2 * mu0 * ne * kB)
-#     Tper       = B0 ** 2 * beta_per / (2 * mu0 * ne * kB)
-# =============================================================================

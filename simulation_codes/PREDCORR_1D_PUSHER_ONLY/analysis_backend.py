@@ -211,13 +211,7 @@ def get_helical_components(overwrite=False, field='B'):
     temp_dir = cf.temp_dir
     
     # Note: Are these definitions valid for ABC's? Or should I just be using the spatial section?
-    # Would rely on cutting off the end bits of the field as well (i.e. must be same length as Fy, Fz)
-    
-    if field == 'B':
-        N_cells = cf.NC + 1
-    else:
-        N_cells = cf.NC
-    
+    # Would rely on cutting off the end bits of the field as well (i.e. must be same length as Fy, Fz)    
     print('Getting helical components for {} field'.format(field))
     if os.path.exists(temp_dir + '{}_positive_helicity.npy'.format(field)) == False or overwrite == True:
         ftime, Fy = cf.get_array('{}y'.format(field))
@@ -226,12 +220,9 @@ def get_helical_components(overwrite=False, field='B'):
         Ft_pos = np.zeros(Fy.shape, dtype=np.complex128)
         Ft_neg = np.zeros(Fy.shape, dtype=np.complex128)
         
-        try:
-            for ii in range(Fy.shape[0]):
-                print('Analysing time step {}'.format(ii))
-                Ft_pos[ii, :], Ft_neg[ii, :] = calculate_helicity(Fy[ii], Fz[ii], N_cells, cf.dx)
-        except:
-            pdb.set_trace()
+        for ii in range(Fy.shape[0]):
+            print('Analysing time step {}'.format(ii))
+            Ft_pos[ii, :], Ft_neg[ii, :] = calculate_helicity(Fy[ii], Fz[ii], cf.dx)
         
         print('Saving {}-helicities to file'.format(field))
         np.save(temp_dir + '{}_positive_helicity.npy'.format(field), Ft_pos)
@@ -245,40 +236,42 @@ def get_helical_components(overwrite=False, field='B'):
     return ftime, Bt_pos, Bt_neg
 
 
-def calculate_helicity(By, Bz, NX, dx):
+def calculate_helicity(Fy, Fz, dx):
     '''
     For a single snapshot in time, calculate the positive and negative helicity
     components from the y, z components of a field.
     
-    This code has been checked by comparing the transverse field magnitude of the inputs and outputs,
-    as this should be conserved (and it is).
+    This code has been checked by comparing the transverse field magnitude of
+    the inputs and outputs, as this should be conserved (and it is).
     '''
-    x       = np.arange(0, NX*dx, dx)
-    
+    NX      = Fy.shape[0]
+    x       = np.linspace(0, NX*dx, NX)
+
     k_modes = np.fft.rfftfreq(x.shape[0], d=dx)
-    By_fft  = (1 / k_modes.shape[0]) * np.fft.rfft(By)
-    Bz_fft  = (1 / k_modes.shape[0]) * np.fft.rfft(Bz)
+    Fy_fft  = (1 / k_modes.shape[0]) * np.fft.rfft(Fy)
+    Fz_fft  = (1 / k_modes.shape[0]) * np.fft.rfft(Fz)
     
     # Four fourier coefficients from FFT (since real inputs give symmetric outputs)
     # If there are any sign issues, it'll be with the sin components, here
-    By_cos = By_fft.real
-    By_sin = By_fft.imag
-    Bz_cos = Bz_fft.real
-    Bz_sin = Bz_fft.imag
+    Fy_cos = Fy_fft.real
+    Fy_sin = Fy_fft.imag
+    Fz_cos = Fz_fft.real
+    Fz_sin = Fz_fft.imag
     
     # Construct spiral mode k-coefficients
-    Bk_pos = 0.5 * ( (By_cos + Bz_sin) + 1j * (Bz_cos - By_sin ) )
-    Bk_neg = 0.5 * ( (By_cos - Bz_sin) + 1j * (Bz_cos + By_sin ) )
+    Fk_pos = 0.5 * ( (Fy_cos + Fz_sin) + 1j * (Fz_cos - Fy_sin ) )
+    Fk_neg = 0.5 * ( (Fy_cos - Fz_sin) + 1j * (Fz_cos + Fy_sin ) )
     
     # Construct spiral mode timeseries
-    Bt_pos = np.zeros(x.shape[0], dtype=np.complex128)
-    Bt_neg = np.zeros(x.shape[0], dtype=np.complex128)
+    Ft_pos = np.zeros(x.shape[0], dtype=np.complex128)
+    Ft_neg = np.zeros(x.shape[0], dtype=np.complex128)
     
     # The sign of the exponential may also be another issue, should check.
     for ii in range(k_modes.shape[0]):
-        Bt_pos += Bk_pos[ii] * np.exp(-2j*np.pi*k_modes[ii]*x)
-        Bt_neg += Bk_neg[ii] * np.exp( 2j*np.pi*k_modes[ii]*x)
-    return Bt_pos, Bt_neg
+        Ft_pos += Fk_pos[ii] * np.exp(-2j*np.pi*k_modes[ii]*x)
+        Ft_neg += Fk_neg[ii] * np.exp( 2j*np.pi*k_modes[ii]*x)
+
+    return Ft_pos, Ft_neg
 
 
 

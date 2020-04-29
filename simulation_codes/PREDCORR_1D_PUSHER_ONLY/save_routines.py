@@ -11,14 +11,14 @@ import os
 import sys
 from shutil import rmtree
 import simulation_parameters_1D as const
-from   simulation_parameters_1D import drive, save_path, NX, ND, NC, ne, density, save_particles, save_fields
+from   simulation_parameters_1D import drive, save_path, NX, ne, density, save_particles
 from   simulation_parameters_1D import idx_start, idx_end, Nj, species_lbl, temp_type, dist_type, mass, charge,\
-                                       drift_v, Tpar, Tper, temp_color, nsp_ppc, Bc, N_species, orbit_res, particle_boundary
+                                       drift_v, Tpar, Tper, temp_color, nsp_ppc, N_species, orbit_res, particle_boundary
 
 
 def manage_directories():
     print('Checking directories...')
-    if (save_particles == 1 or save_fields == 1) == True:
+    if (save_particles == 1) == True:
         if os.path.exists('%s/%s' % (drive, save_path)) == False:
             os.makedirs('%s/%s' % (drive, save_path))                        # Create master test series directory
             print('Master directory created')
@@ -41,14 +41,13 @@ def manage_directories():
     return
 
 
-def store_run_parameters(dt, part_save_iter, field_save_iter):
+def store_run_parameters(dt, part_save_iter):
     d_path = ('%s/%s/run_%d/data/' % (drive, save_path, const.run))    # Set path for data
-    f_path = d_path + '/fields/'
     p_path = d_path + '/particles/'
     
     manage_directories()
 
-    for folder in [d_path, f_path, p_path]:
+    for folder in [d_path, p_path]:
         if os.path.exists(folder) == False:                               # Create data directories
             os.makedirs(folder)
     
@@ -64,8 +63,6 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                    ('Nj', Nj),
                    ('dt', dt),
                    ('NX', NX),
-                   ('ND', ND),
-                   ('NC', NC),
                    ('N' , const.N),
                    ('dxm', const.dxm),
                    ('dx', const.dx),
@@ -79,12 +76,8 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                    ('theta_xmax', const.theta_xmax),
                    ('rc_hwidth', const.rc_hwidth),
                    ('ne', ne),
-                   ('Te0', const.Te0),
-                   ('ie', const.ie),
                    ('part_save_iter', part_save_iter),
-                   ('field_save_iter', field_save_iter),
                    ('max_rev', const.max_rev),
-                   ('freq_res', const.freq_res),
                    ('orbit_res', orbit_res),
                    ('run_desc', const.run_description),
                    ('method_type', 'PREDCORR_PARABOLIC'),
@@ -113,22 +106,9 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                      density     = density,
                      N_species   = N_species,
                      Tpar        = Tpar,
-                     Tper        = Tper,
-                     Bc          = Bc)
+                     Tper        = Tper)
     print('Particle data saved')
     return
-
-
-def save_field_data(sim_time, dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, damping_array):
-    d_path   = '%s/%s/run_%d/data/fields/' % (drive, save_path, const.run)
-    r        = qq / field_save_iter
-
-    d_fullpath = d_path + 'data%05d' % r
-    
-    np.savez(d_fullpath, E = E[:, 0:3], B = B[:, 0:3],   J = Ji[:, 0:3],
-                       dns = dns,      Ve = Ve[:, 0:3], Te = Te, sim_time = sim_time,
-                       damping_array = damping_array)
-    print('Field data saved')
     
     
 def save_particle_data(sim_time, dt, part_save_iter, qq, pos, vel, idx):

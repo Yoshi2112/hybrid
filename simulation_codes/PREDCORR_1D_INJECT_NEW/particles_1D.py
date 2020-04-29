@@ -6,7 +6,7 @@ Created on Fri Sep 22 17:23:44 2017
 """
 import numba as nb
 import numpy as np
-from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, B_eq, a, disable_waves
+from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, B_eq, a, disable_waves, particle_boundary
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -169,7 +169,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
 
 
 @nb.njit()
-def position_update(pos, vel, idx, dt, Ie, W_elec, diag=False):
+def position_update(pos, vel, idx, dt):
     '''Updates the position of the particles using x = x0 + vt. 
     Also updates particle nearest node and weighting.
 
@@ -191,33 +191,60 @@ def position_update(pos, vel, idx, dt, Ie, W_elec, diag=False):
             pos[0, ii] += vel[0, ii] * dt
             pos[1, ii] += vel[1, ii] * dt
             pos[2, ii] += vel[2, ii] * dt
-    
-            # Particle boundary conditions: Absorb particles
+            
+            # Particle boundary conditions (0: Absorb, 1: Reflect, 2: Periodic)
             if (pos[0, ii] < xmin or pos[0, ii] > xmax):
-                vel[:, ii] *= 0          # Zero particle velocity
-                idx[ii]    -= 128        # Fold index to negative values (preserves species ID)
-
-    assign_weighting_TSC(pos, Ie, W_elec)
+                
+                if particle_boundary == 0:              # Absorb
+                    vel[:, ii] *= 0          			# Zero particle velocity
+                    idx[ii]     = -128 + idx[ii]        # Fold index to negative values (preserves species ID)
+                    
+                elif particle_boundary == 1:            # Reflect
+                    if pos[0, ii] > xmax:
+                        pos[0, ii] = 2*xmax - pos[0, ii]
+                    elif pos[0, ii] < xmin:
+                        pos[0, ii] = 2*xmin - pos[0, ii]
+                    vel[:, ii] *= -1.0                  # 'Reflect' velocities as well. 
+                    
+                elif particle_boundary == 2:            # Mario (Periodic)
+                    if pos[0, ii] > xmax:
+                        pos[0, ii] = pos[0, ii] - xmax + xmin
+                    elif pos[0, ii] < xmin:
+                        pos[0, ii] = pos[0, ii] + xmax - xmin    
     return
 
-
 # =============================================================================
-#                 # Mario particles (Periodic :: Mainly for use with homogenous B0)
-#                 if pos[0, ii] > xmax:
-#                     pos[0, ii] = pos[0, ii] - xmax + xmin
-#                 elif pos[0, ii] < xmin:
-#                     pos[0, ii] = pos[0, ii] + xmax - xmin
-# =============================================================================
-                    
-# =============================================================================
-#                 # Reflect particles
-#                 if pos[0, ii] > xmax:
-#                     pos[0, ii] = 2*xmax - pos[0, ii]
-#                 elif pos[0, ii] < xmin:
-#                     pos[0, ii] = 2*xmin - pos[0, ii]
+# @nb.njit()
+# def position_update(pos, vel, idx, dt, Ie, W_elec, diag=False):
+#     '''Updates the position of the particles using x = x0 + vt. 
+#     Also updates particle nearest node and weighting.
 # 
-#                 # 'Reflect' velocities as well. 
-#                 # vel[0]   to make it travel in opposite directoin
-#                 # vel[1:2] to keep it resonant with ions travelling in that direction
-#                 vel[:, ii] *= -1.0
+#     INPUT:
+#         part   -- Particle array with positions to be updated
+#         dt     -- Time cadence of simulation
+# 
+#     OUTPUT:
+#         pos    -- Particle updated positions
+#         W_elec -- (0) Updated nearest E-field node value and (1-2) left/centre weights
+#         
+#     Reflective boundaries to simulate the "open ends" that would have flux coming in from the ionosphere side.
+#     
+#     These equations aren't quite right for xmax != xmin, but they'll do for now
+#     '''
+#     for ii in nb.prange(pos.shape[1]):
+#         # Only update particles that haven't been absorbed (positive species index)
+#         if idx[ii] >= 0:
+#             pos[0, ii] += vel[0, ii] * dt
+#             pos[1, ii] += vel[1, ii] * dt
+#             pos[2, ii] += vel[2, ii] * dt
+#     
+#             # Particle boundary conditions: Absorb particles
+#             if (pos[0, ii] < xmin or pos[0, ii] > xmax):
+#                 vel[:, ii] *= 0          			# Zero particle velocity
+#                 idx[ii]     = -128 + idx[ii]        # Fold index to negative values (preserves species ID)
+# 
+#     assign_weighting_TSC(pos, Ie, W_elec)
+#     return
 # =============================================================================
+
+
