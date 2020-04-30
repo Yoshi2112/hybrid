@@ -1478,7 +1478,7 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
         #lval      = data['lval']
         lost_pos  = data['lost_pos']
         lost_vel  = data['lost_vel']
-        lost_idx  = data['lost_idx']
+        #lost_idx  = data['lost_idx']
         
         lost_ii   = 0
         
@@ -1488,15 +1488,22 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
         pdb.set_trace()
     else:
         # Set initial velocity based on pitch angle and particle energy
-        vel[0, 0] = v_mag * const.va * np.cos(pitch * np.pi / 180.)
-        vel[1, 0] = v_mag * const.va * np.sin(pitch * np.pi / 180.)
+        v_par  = v_mag * const.va * np.cos(pitch * np.pi / 180.)
+        v_perp = v_mag * const.va * np.sin(pitch * np.pi / 180.)
+        
+        #initial_gyrophase  = 270            # degrees
+        #initial_gyrophase *= np.pi / 180.   # convert to radians
+        
+        vel[0, 0] =  v_par
+        vel[1, 0] = 0.0  #- v_perp * np.sin(initial_gyrophase)
+        vel[2, 0] = v_perp  #v_perp * np.cos(initial_gyrophase)
                 
-        rL = const.mp * vel[1, 0] / (const.q * const.B_eq)
+        rL = const.mp * v_perp / (const.q * const.B_eq)
         
         pos[0, 0] = 0.0
-        pos[1, 0] = 0.0
-        pos[2, 0] = rL
-    
+        pos[1, 0] = rL   #rL * np.cos(initial_gyrophase)
+        pos[2, 0] = 0.0  #rL * np.sin(initial_gyrophase)
+
     # Initial quantities
     init_pos = pos.copy() 
     init_vel = vel.copy()
@@ -1516,7 +1523,7 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
     mag_history = np.zeros((max_inc, 3))
 
     # Retard velocity for stability
-    particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, -0.5*DT)
+    #particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, -0.5*DT)
     
     # Record initial values
     time[       0      ] = 0.                      # t = 0
@@ -1529,13 +1536,19 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
         tt      += 1
         t_total += DT
         
+        pos_gphase = np.arctan2(pos[2,0], pos[1,0])
+        vel_gphase = np.pi / 2 - np.arctan2(vel[2,0], vel[1,0])
+
+        print('P/V Gyrophase :: {:.2f}, {:.2f}'.format(pos_gphase, vel_gphase))
+        
         particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B_test, E_test, DT)
         particles.position_update(pos, vel, idx, DT, Ie, W_elec)
         
         time[         tt]       = t_total
         pos_history[  tt, :, :] = pos[:, :].T
         vel_history[  tt, :, :] = vel[:, :].T
-
+        
+        
     return init_pos, init_vel, time, pos_history, vel_history, mag_history, DT, max_t
 
 
@@ -2563,7 +2576,18 @@ if __name__ == '__main__':
     #check_directions()
 
     init_pos, init_vel, time, pos_history, vel_history, mag_history,\
-        DT, max_t = do_particle_run(max_rev=100, v_mag=1.0, pitch=45.0, dt_mult=1.0)
+        DT, max_t = do_particle_run(max_rev=1, v_mag=10.0, pitch=41.0, dt_mult=1.0)
+        
+    if True:
+        fig, ax = plt.subplots()
+        ax.set_title('Velocity history')
+        ax.scatter(vel_history[:, 0, 1], vel_history[:, 0, 2], c='r', marker='o')
+        ax.axis('equal')
+        
+        fig, ax = plt.subplots()
+        ax.set_title('Position history')
+        ax.scatter(pos_history[:, 0, 1], pos_history[:, 0, 2], c='b', marker='o')
+        ax.axis('equal')
         
     if False:
         larmor = np.sqrt(pos_history[:, 0, 1] ** 2 + pos_history[:, 0, 2] ** 2) * 1e-3

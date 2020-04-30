@@ -2299,6 +2299,7 @@ def plot_loss_paths(it_max=None, save_to_file=True):
     # Find lost particles        
     final_pos, final_vel, final_idx, ptime2 = cf.load_particles(it_max-1)
     lost_indices, N_lost                    = locate_lost_ions(final_idx)
+    lval                                    = lost_indices.nonzero()[0]
     
     ptime    = np.zeros(it_max) 
     lost_pos = np.zeros((it_max, 3, N_lost.sum())) 
@@ -2307,7 +2308,6 @@ def plot_loss_paths(it_max=None, save_to_file=True):
     
     for ii in range(it_max):
         print('Getting particle loss data from dump file {}'.format(ii))
-        lval = lost_indices.nonzero()[0]
         pos, vel, idx, ptime[ii] = cf.load_particles(ii)
 
         lost_pos[ii, :, :] = pos[:, lval]
@@ -2418,6 +2418,65 @@ def plot_loss_paths(it_max=None, save_to_file=True):
             plt.close('all') 
     return
 
+
+def plot_average_GC(it_max=None, save=True):
+    '''
+    In a perfect guiding center approximation, the average of the y, z positions
+    should tend towards zero (and be exactly zero at each full revolution)
+    
+    By adding together all the y and z components, can we get an average GC position
+    for each particle? See if the lost particles are the ones furthest away from the
+    origin
+    '''
+    if it_max is None:
+        it_max = len(os.listdir(cf.particle_dir))
+    
+    final_pos, final_vel, final_idx, ptime2 = cf.load_particles(it_max-1)
+    lost_indices, N_lost = locate_lost_ions(final_idx)
+        
+    plt.ioff()
+    cf.temp_color[0] = 'c'
+    
+    gc_av = np.zeros((2, cf.N))
+    
+    plt.ioff()
+    for ii in range(it_max):
+        print('Getting particle loss data from dump file {}'.format(ii))
+        pos, vel, idx, ptime = cf.load_particles(ii)
+        
+        for kk in range(cf.N):
+            if idx[kk] >= 0:
+                gc_av[0, kk] += pos[1, kk] / it_max
+                gc_av[1, kk] += pos[2, kk] / it_max
+   
+    gc_av *= 1e-3
+    
+    plt.ioff()
+
+    for black, suff in zip([True, False], ['_loss', '']):
+        for jj in range(cf.Nj):
+            fig, ax = plt.subplots(figsize=(15, 10))
+            
+            lost_vals = lost_indices[cf.idx_start[jj]: cf.idx_end[jj]].nonzero()[0] + cf.idx_start[jj]
+            
+            ax.scatter(gc_av[0, cf.idx_start[jj]: cf.idx_end[jj]], gc_av[1, cf.idx_start[jj]: cf.idx_end[jj]], c=cf.temp_color[jj], s=1)
+            
+            if black == True:
+                ax.scatter(gc_av[0, lost_vals], gc_av[1, lost_vals], c='k', marker='x', label='Lost Particles', s=20)
+            
+            ax.set_title('Average gyrocenters :: {}'.format(cf.species_lbl[jj]))
+            ax.set_xlabel('y (km)')
+            ax.set_ylabel('z (km)')
+                        
+            if save == True:
+                fpath = cf.anal_dir + 'particle_average_GC_sp{}{}.png'.format(jj, suff)
+                fig.savefig(fpath)
+                plt.close('all')
+                print('Particle loss graph saved as {}'.format(fpath))
+            else:
+                plt.show()
+    return
+
 #%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
@@ -2436,7 +2495,9 @@ if __name__ == '__main__':
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
-        plot_loss_paths(it_max=200)
+        plot_average_GC()
+        
+        #plot_loss_paths(it_max=200)
         
         #plot_pitch_and_radius_with_time(skip=5)
         #plot_initial_configurations_loss_with_time(save=True, skip=5)

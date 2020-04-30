@@ -107,7 +107,7 @@ def eval_B0_particle(pos, Bp):
 
 
 @nb.njit()
-def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
+def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT):
     '''
     updates velocities using a Boris particle pusher.
     Based on Birdsall & Langdon (1985), pp. 59-63.
@@ -133,7 +133,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     
     for ii in nb.prange(vel.shape[1]):  
         if idx[ii] >= 0:
-            qmi = 0.5 * dt * qm_ratios[idx[ii]]                                 # Charge-to-mass ration for ion of species idx[ii]
+            qmi = 0.5 * DT * qm_ratios[idx[ii]]                                 # Charge-to-mass ration for ion of species idx[ii]
     
             # These create two new length 3 arrays
             if disable_waves == False:
@@ -169,7 +169,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
 
 
 @nb.njit()
-def position_update(pos, vel, idx, dt):
+def position_update(pos, vel, idx, DT, Ie, W_elec):
     '''Updates the position of the particles using x = x0 + vt. 
     Also updates particle nearest node and weighting.
 
@@ -188,9 +188,9 @@ def position_update(pos, vel, idx, dt):
     for ii in nb.prange(pos.shape[1]):
         # Only update particles that haven't been absorbed (positive species index)
         if idx[ii] >= 0:
-            pos[0, ii] += vel[0, ii] * dt
-            pos[1, ii] += vel[1, ii] * dt
-            pos[2, ii] += vel[2, ii] * dt
+            pos[0, ii] += vel[0, ii] * DT
+            pos[1, ii] += vel[1, ii] * DT
+            pos[2, ii] += vel[2, ii] * DT
             
             # Particle boundary conditions (0: Absorb, 1: Reflect, 2: Periodic)
             if (pos[0, ii] < xmin or pos[0, ii] > xmax):

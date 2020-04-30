@@ -145,6 +145,9 @@ def uniform_gaussian_distribution_quiet():
             else:
                 v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
         
+            
+            
+            
             pos[1, st: en]  = v_perp / (qm_ratios[jj] * B0x)    # Set initial Larmor radius   
             
             vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Invert velocities (v2 = -v1)
