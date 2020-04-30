@@ -15,27 +15,12 @@ import particles_1D as particles
 import fields_1D    as fields
 import auxilliary_1D as aux
 
-from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, B_eq, va, \
+from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
                                      Bc, qm_ratios, freq_res, rc_hwidth, temp_type, Te0, B_xmax
 
-#@nb.njit()
-def calc_losses(v_para, v_perp, st=0):
-    '''
-    For arrays of parallel and perpendicular velocities, finds the number and 
-    indices of particles outside the loss cone.
-    
-    Calculation of in_loss_cone not compatible with njit(). Recode later if you want.
-    '''
-    alpha        = np.arctan(v_perp / v_para) * 180. / np.pi    # Calculate particle PA's
-    in_loss_cone = (abs(alpha) < const.loss_cone)               # Determine if particle in loss cone
-    N_loss       = in_loss_cone.sum()                           # Count number that are
-    loss_idx     = np.where(in_loss_cone == True)[0]            # Find their indices
-    loss_idx    += st                                           # Offset indices to account for position in master array
-    return N_loss, loss_idx
 
-
-def calc_losses_new(v_para, v_perp, B0x, st=0):
+def calc_losses(v_para, v_perp, B0x, st=0):
     '''
     For arrays of parallel and perpendicular velocities, finds the number and 
     indices of particles outside the loss cone.
@@ -51,7 +36,34 @@ def calc_losses_new(v_para, v_perp, B0x, st=0):
     return N_loss, loss_idx
 
 
-#@nb.njit()
+@nb.njit()
+def get_atan(y, x):
+    v = np.zeros(N)
+    for ii in range(N):
+        if x[ii] > 0:
+            v[ii] = np.arctan(y[ii] / x[ii])
+        elif y[ii] >= 0 and x[ii] < 0:
+            v[ii] = np.pi + np.arctan(y[ii] / x[ii])
+        elif y[ii] < 0 and x[ii] < 0:
+            v[ii] = -np.pi + np.arctan(y[ii] / x[ii])
+        elif y[ii] > 0 and x[ii] == 0:
+            v[ii] = np.pi/2
+        elif y[ii] < 0 and x[ii] == 0:
+            v[ii] = -np.pi/2
+            
+        if v[ii] < 0:
+            v[ii] += 2*np.pi
+    return v
+    
+
+def get_gyroangle_from_velocity(vel):
+    '''
+    Vel is a (3,N) vector of particle velocities in 3-space
+    '''
+    vel_gphase = (get_atan(vel[2], vel[1]) * 180. / np.pi + 90.)%360.
+    return (vel_gphase * np.pi / 180.)
+
+
 def uniform_gaussian_distribution_quiet():
     '''Creates an N-sampled normal distribution across all particle species within each simulation cell
 
@@ -121,13 +133,9 @@ def uniform_gaussian_distribution_quiet():
                 N_loss = const.N_species[jj]
                 
                 while N_loss > 0:
-                    v_mag       = vel[0, st: en] ** 2 + vel[1, st: en] ** 2 + vel[2, st: en] ** 2
                     v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
                     
-                    v_perp_eq   = v_perp * np.sqrt(B_eq / B0x)
-                    v_para_eq   = np.sqrt(v_mag - v_perp_eq ** 2)
-
-                    N_loss, loss_idx = calc_losses(v_para_eq, v_perp_eq, st=st)
+                    N_loss, loss_idx = calc_losses(vel[0, st: en], v_perp, B0x, st=st)
                     
                     # Catch for a particle on the boundary : Set 90 degree pitch angle (gyrophase shouldn't overly matter)
                     if N_loss == 1:
@@ -144,124 +152,24 @@ def uniform_gaussian_distribution_quiet():
                         vel[2, loss_idx] = np.random.normal(0., sf_per, N_loss)
             else:
                 v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
-        
-            
-            
-            
-            pos[1, st: en]  = v_perp / (qm_ratios[jj] * B0x)    # Set initial Larmor radius   
             
             vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Invert velocities (v2 = -v1)
             vel[1, en: en + half_n] = vel[1, st: en] * -1.0
             vel[2, en: en + half_n] = vel[2, st: en] * -1.0
-            pos[1, en: en + half_n] = pos[1, st: en] * -1.0     # Move gyrophase 180 degrees (doesn't do anything)
             
             pos[0, en: en + half_n] = pos[0, st: en]            # Other half, same position
             
             acc                    += half_n * 2
-        
-    return pos, vel, idx
-
-
-def uniform_gaussian_distribution_quiet_new():
-    '''Creates an N-sampled normal distribution across all particle species within each simulation cell
-
-    OUTPUT:
-        pos -- 3xN array of particle positions. Pos[0] is uniformly distributed with boundaries depending on its temperature type
-        vel -- 3xN array of particle velocities. Each component initialized as a Gaussian with a scale factor determined by the species perp/para temperature
-        idx -- N   array of particle indexes, indicating which species it belongs to. Coded as an 8-bit signed integer, allowing values between +/-128
     
-    Note: y,z components of particle positions intialized with identical gyrophases, since only the projection
-    onto the x-axis interacts with the simulation fields. pos y,z are kept ONLY to calculate/track the Larmor radius 
-    of each particle. This initial position suffers the same issue as trying to update the radial field using 
-    B0r = 0 for the Larmor radius approximation, however because this is only an initial condition, at worst this
-    will just cause a variation in the Larmor radius with position in x, but this will at least be conserved 
-    throughout the simulation, and not drift with time.
-    
-    CHECK THIS LATER: BUT ITS ONLY AN INITIAL CONDITION SO IT SHOULD BE OK FOR NOW
+    # Set initial Larmor radius - rL from v_perp, distributed to y,z based on velocity gyroangle
+    print('Initializing particles off-axis')
+    B0x     = fields.eval_B0x(pos[0])
+    v_perp  = np.sqrt(vel[1] ** 2 + vel[2] ** 2)
+    gyangle = get_gyroangle_from_velocity(vel)
+    rL      = v_perp / (qm_ratios[idx] * B0x)
+    pos[1]  = rL * np.cos(gyangle)
+    pos[2]  = rL * np.sin(gyangle)
 
-    # Could use temp_type[jj] == 1 for RC LCD only
-    '''
-    pos = np.zeros((3, N), dtype=np.float64)
-    vel = np.zeros((3, N), dtype=np.float64)
-    idx = np.zeros(N,      dtype=np.int8)
-    np.random.seed(seed)
-
-    for jj in range(Nj):
-        idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle idx
-                
-        half_n = nsp_ppc[jj] // 2                     # Half particles per cell - doubled later
-        sf_par = np.sqrt(kB *  Tpar[jj] /  mass[jj])  # Scale factors for velocity initialization
-        sf_per = np.sqrt(kB *  Tper[jj] /  mass[jj])
-       
-        if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
-            NC_load = NX
-        else:
-            if rc_hwidth == 0:
-                NC_load = NX
-            else:
-                NC_load = 2*rc_hwidth
-        
-        # Load particles in each applicable cell
-        acc = 0; offset  = 0
-        for ii in range(NC_load):
-            # Add particle if last cell (for symmetry)
-            if ii == NC_load - 1:
-                half_n += 1
-                offset  = 1
-                
-            # Particle index ranges
-            st = idx_start[jj] + acc
-            en = idx_start[jj] + acc + half_n
-            
-            # Set position for half: Analytically uniform
-            for kk in range(half_n):
-                pos[0, st + kk] = dx*(float(kk) / (half_n - offset) + ii)
-            
-            # Turn [0, NC] distro into +/- NC/2 distro
-            pos[0, st: en]-= NC_load*dx/2              
-            
-            # Set velocity for half: Randomly Maxwellian
-            vel[0, st: en] = np.random.normal(0, sf_par, half_n) +  drift_v[jj]
-            vel[1, st: en] = np.random.normal(0, sf_per, half_n)
-            vel[2, st: en] = np.random.normal(0, sf_per, half_n)
-
-            # Set Loss Cone Distribution: Reinitialize particles in loss cone
-            B0x = fields.eval_B0x(pos[0, st: en])
-            if const.homogenous == False:
-                N_loss = const.N_species[jj]
-                
-                while N_loss > 0:
-                    v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
-                    
-                    N_loss, loss_idx = calc_losses_new(vel[0, st: en], v_perp, B0x, st=st)
-                    
-                    # Catch for a particle on the boundary : Set 90 degree pitch angle (gyrophase shouldn't overly matter)
-                    if N_loss == 1:
-                        if abs(pos[0, loss_idx[0]]) == const.xmax:
-                            ww = loss_idx[0]
-                            vel[0, loss_idx[0]] = 0.
-                            vel[1, loss_idx[0]] = np.sqrt(vel[0, ww] ** 2 + vel[1, ww] ** 2 + vel[2, ww] ** 2)
-                            vel[2, loss_idx[0]] = 0.
-                            N_loss = 0
-                                        
-                    if N_loss != 0:                        
-                        vel[0, loss_idx] = np.random.normal(0., sf_par, N_loss)
-                        vel[1, loss_idx] = np.random.normal(0., sf_per, N_loss)
-                        vel[2, loss_idx] = np.random.normal(0., sf_per, N_loss)
-            else:
-                v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
-        
-            pos[1, st: en]  = v_perp / (qm_ratios[jj] * B0x)    # Set initial Larmor radius   
-            
-            vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Invert velocities (v2 = -v1)
-            vel[1, en: en + half_n] = vel[1, st: en] * -1.0
-            vel[2, en: en + half_n] = vel[2, st: en] * -1.0
-            pos[1, en: en + half_n] = pos[1, st: en] * -1.0     # Move gyrophase 180 degrees (doesn't do anything)
-            
-            pos[0, en: en + half_n] = pos[0, st: en]            # Other half, same position
-            
-            acc                    += half_n * 2
-        
     return pos, vel, idx
 
 
@@ -488,23 +396,46 @@ if __name__ == '__main__':
     V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
     V_PARA = VEL[0] / va
     
-    plt.ioff()
-    fig1, ax1 = plt.subplots()
-    #fig2, ax2 = plt.subplots()
-    #fig3, ax3 = plt.subplots(3, sharex=True)
+    # Test gyrophase transformation
+    pos_gphase  = get_atan(POS[2], POS[1]) * 180. / np.pi
+    vel_gphase  = (get_atan(VEL[2], VEL[1]) * 180. / np.pi + 90.)%360.
     
-    node_number = 0
+    dot_product = POS[1] * VEL[1] + POS[2] * VEL[2]
+    mag_a       = np.sqrt(POS[1] ** 2 + POS[2] ** 2)
+    mag_b       = np.sqrt(VEL[1] ** 2 + VEL[2] ** 2)
+    rel_angle   = np.arccos(dot_product / (mag_a * mag_b)) * 180. / np.pi
     
-    for jj in [1]:#range(cf.Nj):
-        if True:
-            # Loss cone diagram
-            ax1.scatter(V_PERP[idx_start[jj]: idx_end[jj]], V_PARA[idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
-
-            ax1.set_title('Loss Cone Distribution :: New Function :: Warm Hydrogen Species')
-            ax1.set_ylabel('$v_\parallel (/v_A)$')
-            ax1.set_xlabel('$v_\perp (/v_A)$')
-            ax1.axis('equal')
-        
+    print(rel_angle.min())
+# =============================================================================
+#     plt.ioff()
+#     fig1, ax1 = plt.subplots()
+#     fig2, ax2 = plt.subplots()
+#     fig3, ax3 = plt.subplots()
+#     
+#     node_number = 0
+#     
+#     for jj in [1]:#range(cf.Nj):
+#         if True:
+#             # Loss cone diagram
+#             ax1.scatter(V_PERP[idx_start[jj]: idx_end[jj]], V_PARA[idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+# 
+#             ax1.set_title('Loss Cone Distribution :: {}'.format(const.species_lbl[jj]))
+#             ax1.set_ylabel('$v_\parallel (/v_A)$')
+#             ax1.set_xlabel('$v_\perp (/v_A)$')
+#             ax1.axis('equal')
+#      
+#             ax2.scatter(POS[1, idx_start[jj]: idx_end[jj]], POS[2, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+#             ax2.set_title('Gyroposition :: {}'.format(const.species_lbl[jj]))
+#             ax2.set_ylabel('$y (m)$')
+#             ax2.set_xlabel('$z (m)$')
+#             ax2.axis('equal')
+#             
+#             ax3.scatter(POS[1, idx_start[jj]: idx_end[jj]], POS[2, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+#             ax3.set_title('Gyrovelocity :: {}'.format(const.species_lbl[jj]))
+#             ax3.set_ylabel('$v_y (m/s)$')
+#             ax3.set_xlabel('$v_z (m/s)$')
+#             ax3.axis('equal')
+# =============================================================================
 # =============================================================================
 #         if False:
 #             # v_mag vs. x
@@ -528,19 +459,21 @@ if __name__ == '__main__':
 #             ax3[2].set_xlabel('Position (m)')
 # =============================================================================
             
-        if False:
-            fig = plt.figure(figsize=(12,10))
-            fig.suptitle('Configuration space distribution of {}'.format(const.species_lbl[jj]))
-            fig.patch.set_facecolor('w')
-            num_bins = const.NX * 8
-        
-            ax_x = plt.subplot()
-        
-            xs, BinEdgesx = np.histogram(POS[0, const.idx_start[jj]: const.idx_end[jj]], bins=num_bins)
-            bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
-            ax_x.plot(bx, xs, '-', c=const.temp_color[const.temp_type[jj]], drawstyle='steps')
-            ax_x.set_xlabel(r'$x_p (m)$')
-            ax_x.set_xlim(const.xmin, const.xmax)
+# =============================================================================
+#         if False:
+#             fig = plt.figure(figsize=(12,10))
+#             fig.suptitle('Configuration space distribution of {}'.format(const.species_lbl[jj]))
+#             fig.patch.set_facecolor('w')
+#             num_bins = const.NX * 8
+#         
+#             ax_x = plt.subplot()
+#         
+#             xs, BinEdgesx = np.histogram(POS[0, const.idx_start[jj]: const.idx_end[jj]], bins=num_bins)
+#             bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
+#             ax_x.plot(bx, xs, '-', c=const.temp_color[const.temp_type[jj]], drawstyle='steps')
+#             ax_x.set_xlabel(r'$x_p (m)$')
+#             ax_x.set_xlim(const.xmin, const.xmax)
+# =============================================================================
             
 # =============================================================================
 #         if True:

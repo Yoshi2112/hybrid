@@ -1572,7 +1572,6 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
         pos_history[  tt, :, :] = pos[:, :].T
         vel_history[  tt, :, :] = vel[:, :].T
         
-        
     return init_pos, init_vel, time, pos_history, vel_history, mag_history, DT, max_t, pos_gphase, vel_gphase
 
 
