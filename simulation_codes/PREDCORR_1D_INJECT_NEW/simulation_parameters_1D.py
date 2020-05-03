@@ -9,11 +9,11 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Testing particle boundary conditions'''
+run_description = '''Winske params, absorptive, constrained RC'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//particle_boundary_test'# Series save dir   : Folder containing all runs of a series
+save_path         = 'runs//new_ideas_test_v1'     # Series save dir   : Folder containing all runs of a series
 run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
@@ -26,7 +26,7 @@ cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU 
 supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 disable_waves     = False                         # Disables solutions to wave fields. Only background magnetic field exists
-particle_boundary = run                           # 0: Absorb, 1: Reflect, 2: Periodic
+particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Periodic
 
 
 ### SIMULATION PARAMETERS ###
@@ -43,7 +43,7 @@ rc_hwidth = 0                               # Ring current half-width in number 
 orbit_res = 0.02                            # Orbit resolution
 freq_res  = 0.02                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
 part_res  = 0.50                            # Data capture resolution in gyroperiod fraction: Particle information
-field_res = 0.10                            # Data capture resolution in gyroperiod fraction: Field information
+field_res = 0.1                             # Data capture resolution in gyroperiod fraction: Field information
 
 
 ### PARTICLE PARAMETERS ###

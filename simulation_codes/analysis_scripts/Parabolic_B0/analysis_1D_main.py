@@ -2195,7 +2195,7 @@ def plot_B0():
     return
 
 
-def plot_adiabatic_parameter():
+def plot_adiabatic_parameter(save=True):
     '''
     Change later to plot for each species charge/mass ratio, but for now its just protons
     
@@ -2211,12 +2211,20 @@ def plot_adiabatic_parameter():
     
     epsilon = mp * v_perp / (qi * B_av * z0)
     
-    plt.title(r'Adiabatic Parameter $\epsilon$ vs. Expected v_perp range :: {}[{}]'.format(series, run_num))
-    plt.ylabel(r'$\epsilon$', rotation=0)
-    plt.xlabel(r'$v_\perp (/v_A)$')
-    plt.xlim(0, max_v/cf.va)
-    plt.plot(v_perp/cf.va, epsilon)
-    plt.show()
+    fig, ax = plt.subplots(figsize=(15, 10))
+    
+    ax.set_title(r'Adiabatic Parameter $\epsilon$ vs. Expected v_perp range :: {}[{}]'.format(series, run_num))
+    ax.set_ylabel(r'$\epsilon$', rotation=0)
+    ax.set_xlabel(r'$v_\perp (/v_A)$')
+    ax.set_xlim(0, max_v/cf.va)
+    ax.plot(v_perp/cf.va, epsilon)
+    
+    if save == True:
+        fig.savefig(cf.anal_dir + 'adiabatic_parameter.png')
+        print('Adiabatic parameter plot saved')
+        plt.close('all') 
+    else:
+        plt.show()
     return
 
 
@@ -2477,6 +2485,73 @@ def plot_average_GC(it_max=None, save=True):
                 plt.show()
     return
 
+
+def plot_average_mu(it_max=None, save=True):
+    '''
+    Calculate the average mu for every particle, as well as the total average 
+    at the end
+    
+    Probably also need to plot a random sampling of mu histories (Ns for each species?)
+    Just to check on the time variation of each one
+    
+    mu = W_perp / |B| = 0.5 * mi * v_perp ** 2 / |B|
+    '''
+    if it_max is None:
+        it_max = len(os.listdir(cf.particle_dir))
+            
+    plt.ioff()
+    cf.temp_color[0] = 'c'
+    
+    # Get Ns sample indexes from each species
+    Ns    = 5  
+    sidx  = np.zeros(Ns * cf.Nj, dtype=int)
+    for ii in range(cf.Nj):
+        sidx[Ns*ii:Ns*(ii + 1)] = np.random.randint(cf.idx_start[ii], cf.idx_end[ii], Ns)
+    
+    Bp    = np.zeros((3, cf.N))         # Temp array used for each particle
+    mu_s  = np.zeros((it_max, Ns * cf.Nj))
+    mu_av = np.zeros(it_max)
+    ptime = np.zeros(it_max)
+    
+    
+    for ii in range(it_max):
+        print('Calculating mu from particle file {}'.format(ii))
+        pos, vel, idx, ptime[ii] = cf.load_particles(ii)
+        
+        v_perp2 = vel[1] ** 2 + vel[2] ** 2
+        bk.eval_B0_particle(pos, Bp)
+        B_mag   = np.sqrt(Bp[0] ** 2 + Bp[1] ** 2 + Bp[2] ** 2)
+        
+        mu        = 0.5 * cf.mass[idx[ii]] * v_perp2 / B_mag
+        mu_s[ii]  = mu[sidx]
+        mu_av[ii] = mu.mean()
+        
+    plt.ioff()
+    fig, axes = plt.subplots(2, figsize=(15, 10), sharex=True)
+    
+    axes[0].set_title('First Adiabatic Invariant :: N-Average and Samples :: N = {} ::{}[{}]'.format(cf.N_species, series, run_num),
+                      fontsize=16)
+    axes[0].plot(ptime, mu_av*1e10)
+    axes[0].set_ylabel('$\mu_{av} \\times 10^{10}$', rotation=0, labelpad=50, fontsize=14)
+    
+    for ii in range(Ns * cf.Nj):
+        axes[1].plot(ptime, mu_s[:, ii]*1e10, label='idx {}'.format(sidx[ii]))
+    
+    axes[1].set_ylabel('$\mu \\times 10^{10}$\nsamp.', rotation=0, labelpad=50, fontsize=14)
+    axes[1].set_xlabel('Time (s)', fontsize=14)
+    axes[1].set_xlim(0, ptime[-1])
+    axes[1].legend(loc="upper left", bbox_to_anchor=(1,1))
+    
+    if save == True:
+        fpath = cf.anal_dir + 'magnetic_moment_average_and_samples.png'
+        fig.savefig(fpath)
+        plt.close('all')
+        print('Magnetic moment graph saved as {}'.format(fpath))
+    else:
+        plt.show()
+    return
+
+
 #%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
@@ -2485,7 +2560,7 @@ if __name__ == '__main__':
     #series      = 'ABC_test_lowres_v5'
     #series      = 'small_bottle_test'
     #series      = 'validation_runs_v2'
-    series      = 'small_bottle_test_v2'
+    series      = 'fixed_loss_test'
     #series       = 'old_new_compare'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
@@ -2495,15 +2570,24 @@ if __name__ == '__main__':
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
-        plot_average_GC()
+# =============================================================================
+#         try:
+#             standard_analysis_package()
+#         except:
+#             pass
+#         
+#         plot_particle_loss_with_time()
+#         plot_average_GC()
+#         plot_average_mu()
+#         
+#         plot_initial_configurations()
+#         plot_adiabatic_parameter()
+# =============================================================================
         
         #plot_loss_paths(it_max=200)
-        
-        #plot_pitch_and_radius_with_time(skip=5)
-        #plot_initial_configurations_loss_with_time(save=True, skip=5)
-        
-        #plot_adiabatic_parameter()
-        
+        #plot_initial_configurations_loss_with_time(save=True)
+        #plot_phase_space_with_time()
+        #plot_pitch_and_radius_with_time()
         
         
         # Particle Loss Analysis :: For Every Time (really time consuming)
@@ -2513,28 +2597,13 @@ if __name__ == '__main__':
         #plot_B0()
         #analyse_particle_motion_manual()
         
-# =============================================================================
-#         try:
-#             standard_analysis_package()
-#         except:
-#             pass
-# =============================================================================
         
-# =============================================================================
-#         try:
-#             summary_plots(save=True, histogram=False)
-#         except:
-#             pass
-# =============================================================================
         
-# =============================================================================
-#         try:
-#             plot_initial_configurations()
-#             plot_particle_loss_with_time()
-#             #plot_phase_space_with_time()
-#         except:
-#             pass
-# =============================================================================
+        try:
+            summary_plots(save=True, histogram=False)
+        except:
+            pass
+        
         
         #check_fields()
         #plot_energies(normalize=False, save=True)

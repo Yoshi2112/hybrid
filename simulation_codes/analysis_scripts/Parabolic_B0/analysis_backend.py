@@ -41,6 +41,9 @@ def eval_B0_particle(pos, Bp):
         
     Could totally vectorise this. Would have to change to give a particle_temp
     array for memory allocation or something
+    
+    Technically already vectorized but calculating rL would create a new array which
+    would kill performance (and require the temp array). Bp would also need to be (3, N)
     '''
     rL     = np.sqrt(pos[1]**2 + pos[2]**2)
     B0_r   = - cf.a * cf.B_eq * pos[0] * rL

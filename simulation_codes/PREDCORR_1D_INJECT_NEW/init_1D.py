@@ -405,6 +405,7 @@ if __name__ == '__main__':
     mag_b       = np.sqrt(VEL[1] ** 2 + VEL[2] ** 2)
     rel_angle   = np.arccos(dot_product / (mag_a * mag_b)) * 180. / np.pi
     
+    print(dot_product.max())
     print(rel_angle.min())
 # =============================================================================
 #     plt.ioff()

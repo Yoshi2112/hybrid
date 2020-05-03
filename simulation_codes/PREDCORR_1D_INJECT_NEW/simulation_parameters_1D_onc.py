@@ -13,8 +13,8 @@ run_description = '''This is the NEW code, but with a fixed (?) cubic spline. Se
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//old_new_compare'       # Series save dir   : Folder containing all runs of a series
-run               = 2                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path         = 'runs//fixed_loss_test'       # Series save dir   : Folder containing all runs of a series
+run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
@@ -25,9 +25,8 @@ cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU 
 ## SETTING MUST BE CHANGED IN THE PARTICLES.PY FILE BY UNCOMMENTING THE APPROPRIATE CODE
 supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
-reflect           = False                         # Reflect particles when they hit boundary (Default: Absorb)
-disable_waves     = False                          # Disables solutions to wave fields. Only background magnetic field exists
-periodic          = False                         # Set periodic boundary conditions for particles. Overrides reflection flag.
+disable_waves     = False                         # Disables solutions to wave fields. Only background magnetic field exists
+particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Periodic
 
 
 ### SIMULATION PARAMETERS ###
@@ -227,6 +226,11 @@ if abs(simulated_density_per_cell - real_density_per_cell) / real_density_per_ce
     print('ABORTING...')
     sys.exit()
 
+if particle_boundary != 0:
+    if particle_boundary != 1:
+        if particle_boundary != 2:
+            sys.exit('Paramter particle_boundary must be 0,1,2, not {}'.format(particle_boundary))
+            
 system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
 # =============================================================================
 # if beta == True:
