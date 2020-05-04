@@ -91,6 +91,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                    ('particle_shape', 'TSC'),
                    ('boundary_type', 'damped'),
                    ('particle_boundary', rstring),
+                   ('run_time', None),
                    ])
 
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:
@@ -139,3 +140,21 @@ def save_particle_data(sim_time, dt, part_save_iter, qq, pos, vel, idx):
     
     np.savez(d_fullpath, pos = pos, vel = vel, idx=idx, sim_time = sim_time)
     print('Particle data saved')
+    
+    
+def add_runtime_to_header(runtime):
+    d_path = ('%s/%s/run_%d/data/' % (drive, save_path, const.run))     # Data path
+    
+    h_name = os.path.join(d_path, 'simulation_parameters.pckl')         # Header file path
+    f      = open(h_name, 'rb')                                         # Open header file
+    params = pickle.load(f)                                             # Load variables from header file into dict
+    f.close()  
+    
+    params['run_time'] = runtime
+    
+    # Re-save
+    with open(d_path + 'simulation_parameters.pckl', 'wb') as f:
+        pickle.dump(params, f)
+        f.close()
+        print('Run time appended to simulation header file')
+    return

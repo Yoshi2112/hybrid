@@ -98,7 +98,7 @@ def uniform_gaussian_distribution_quiet():
         if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
             NC_load = NX
         else:
-            if rc_hwidth == 0:
+            if rc_hwidth == 0 or rc_hwidth > NX//2:
                 NC_load = NX
             else:
                 NC_load = 2*rc_hwidth
@@ -392,21 +392,23 @@ if __name__ == '__main__':
    
     POS, VEL, IDX = uniform_gaussian_distribution_quiet()
 
-    V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
-    V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
-    V_PARA = VEL[0] / va
-    
-    # Test gyrophase transformation
-    pos_gphase  = get_atan(POS[2], POS[1]) * 180. / np.pi
-    vel_gphase  = (get_atan(VEL[2], VEL[1]) * 180. / np.pi + 90.)%360.
-    
-    dot_product = POS[1] * VEL[1] + POS[2] * VEL[2]
-    mag_a       = np.sqrt(POS[1] ** 2 + POS[2] ** 2)
-    mag_b       = np.sqrt(VEL[1] ** 2 + VEL[2] ** 2)
-    rel_angle   = np.arccos(dot_product / (mag_a * mag_b)) * 180. / np.pi
-    
-    print(dot_product.max())
-    print(rel_angle.min())
+# =============================================================================
+#     V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
+#     V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
+#     V_PARA = VEL[0] / va
+#     
+#     # Test gyrophase transformation
+#     pos_gphase  = get_atan(POS[2], POS[1]) * 180. / np.pi
+#     vel_gphase  = (get_atan(VEL[2], VEL[1]) * 180. / np.pi + 90.)%360.
+#     
+#     dot_product = POS[1] * VEL[1] + POS[2] * VEL[2]
+#     mag_a       = np.sqrt(POS[1] ** 2 + POS[2] ** 2)
+#     mag_b       = np.sqrt(VEL[1] ** 2 + VEL[2] ** 2)
+#     rel_angle   = np.arccos(dot_product / (mag_a * mag_b)) * 180. / np.pi
+#     
+#     print(dot_product.max())
+#     print(rel_angle.min())
+# =============================================================================
 # =============================================================================
 #     plt.ioff()
 #     fig1, ax1 = plt.subplots()

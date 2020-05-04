@@ -12,7 +12,7 @@ import fields_1D    as fields
 import init_1D      as init
 
 from simulation_parameters_1D import dx, mu0, NC, NX, ND, qm_ratios, freq_res, orbit_res,\
-                                     account_for_dispersion, dispersion_allowance, E_nodes, disable_waves
+                                     account_for_dispersion, dispersion_allowance, E_nodes
 
 @nb.njit()
 def cross_product(A, B, C):
@@ -187,66 +187,65 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
                                             B, E_int, DT, q_dens_adv, Ji, ni, nu, temp1D)
     
-    if disable_waves == False:
-        # Average N, N + 1 densities (q_dens at N + 1/2)
-        q_dens *= 0.5
-        q_dens += 0.5 * q_dens_adv
-        
-        # Push B from N to N + 1/2
-        fields.push_B(B, E_int, temp3Db, DT, qq, damping_array, half_flag=1)
-        
-        # Calculate E at N + 1/2
-        fields.calculate_E(B, Ji, q_dens, E_half, Ve, Te, temp3De, temp3Db, temp1D)
+    # Average N, N + 1 densities (q_dens at N + 1/2)
+    q_dens *= 0.5
+    q_dens += 0.5 * q_dens_adv
     
-        ###################################
-        ### PREDICTOR CORRECTOR SECTION ###
-        ###################################
+    # Push B from N to N + 1/2
+    fields.push_B(B, E_int, temp3Db, DT, qq, damping_array, half_flag=1)
     
-        # Store old values
-        old_particles[0:3 , :] = pos
-        old_particles[3:6 , :] = vel
-        old_particles[6   , :] = Ie
-        old_particles[7:10, :] = W_elec
-        old_particles[10  , :] = idx
-        
-        old_fields[:,   0:3]  = B
-        old_fields[:NC, 3:6]  = Ji
-        old_fields[:NC, 6:9]  = Ve
-        old_fields[:NC,   9]  = Te
-        
-        # Predict fields
-        E_int *= -1.0
-        E_int +=  2.0 * E_half
-        
-        fields.push_B(B, E_int, temp3Db, DT, qq, damping_array, half_flag=0)
+    # Calculate E at N + 1/2
+    fields.calculate_E(B, Ji, q_dens, E_half, Ve, Te, temp3De, temp3Db, temp1D)
+
+    ###################################
+    ### PREDICTOR CORRECTOR SECTION ###
+    ###################################
+
+    # Store old values
+    old_particles[0:3 , :] = pos
+    old_particles[3:6 , :] = vel
+    old_particles[6   , :] = Ie
+    old_particles[7:10, :] = W_elec
+    old_particles[10  , :] = idx
     
-        # Advance particles to obtain source terms at N + 3/2
-        particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
-                                                B, E_int, DT, q_dens, Ji, ni, nu, temp1D, pc=1)
-        
-        q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
-        
-        # Compute predicted fields at N + 3/2
-        fields.push_B(B, E_int, temp3Db, DT, qq + 1, damping_array, half_flag=1)
-        fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D)
-        
-        # Determine corrected fields at N + 1 
-        E_int *= 0.5;    E_int += 0.5 * E_half
+    old_fields[:,   0:3]  = B
+    old_fields[:NC, 3:6]  = Ji
+    old_fields[:NC, 6:9]  = Ve
+    old_fields[:NC,   9]  = Te
     
-        # Restore old values: [:] allows reference to same memory (instead of creating new, local instance)
-        pos[:]    = old_particles[0:3 , :]
-        vel[:]    = old_particles[3:6 , :]
-        Ie[:]     = old_particles[6   , :]
-        W_elec[:] = old_particles[7:10, :]
-        idx[:]    = old_particles[10  , :]
-        
-        B[:]      = old_fields[:,   0:3]
-        Ji[:]     = old_fields[:NC, 3:6]
-        Ve[:]     = old_fields[:NC, 6:9]
-        Te[:]     = old_fields[:NC,   9]
-        
-        fields.push_B(B, E_int, temp3Db, DT, qq, damping_array, half_flag=0)   # Advance the original B
+    # Predict fields
+    E_int *= -1.0
+    E_int +=  2.0 * E_half
     
-        q_dens[:] = q_dens_adv
+    fields.push_B(B, E_int, temp3Db, DT, qq, damping_array, half_flag=0)
+
+    # Advance particles to obtain source terms at N + 3/2
+    particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
+                                            B, E_int, DT, q_dens, Ji, ni, nu, temp1D, pc=1)
+    
+    q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
+    
+    # Compute predicted fields at N + 3/2
+    fields.push_B(B, E_int, temp3Db, DT, qq + 1, damping_array, half_flag=1)
+    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D)
+    
+    # Determine corrected fields at N + 1 
+    E_int *= 0.5;    E_int += 0.5 * E_half
+
+    # Restore old values: [:] allows reference to same memory (instead of creating new, local instance)
+    pos[:]    = old_particles[0:3 , :]
+    vel[:]    = old_particles[3:6 , :]
+    Ie[:]     = old_particles[6   , :]
+    W_elec[:] = old_particles[7:10, :]
+    idx[:]    = old_particles[10  , :]
+    
+    B[:]      = old_fields[:,   0:3]
+    Ji[:]     = old_fields[:NC, 3:6]
+    Ve[:]     = old_fields[:NC, 6:9]
+    Te[:]     = old_fields[:NC,   9]
+    
+    fields.push_B(B, E_int, temp3Db, DT, qq, damping_array, half_flag=0)   # Advance the original B
+
+    q_dens[:] = q_dens_adv
 
     return qq, DT, max_inc, part_save_iter, field_save_iter

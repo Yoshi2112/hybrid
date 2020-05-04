@@ -24,7 +24,7 @@ if __name__ == '__main__':
     
     # Collect initial moments and save initial state
     sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D) 
-    #init.set_equilibrium_te0(q_dens)
+
     fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D)
     
     DT, max_inc, part_save_iter, field_save_iter, damping_array = init.set_timestep(vel, E_int)
@@ -68,5 +68,7 @@ if __name__ == '__main__':
             
         qq       += 1
         sim_time += DT
-        
-    print("Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2)))
+    
+    runtime = round(timer() - start_time,2)
+    save.add_runtime_to_header(runtime)
+    print("Time to execute program: {0:.2f} seconds".format(runtime))

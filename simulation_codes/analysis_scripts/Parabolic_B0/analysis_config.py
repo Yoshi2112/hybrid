@@ -94,13 +94,14 @@ def load_simulation_params():
            ie, run_desc, orbit_res, freq_res, method_type,    \
            particle_shape, part_save_iter, field_save_iter, dt_field, dt_particle,  \
            ND, NC, N, loss_cone, xmax, B_xmax, B_eq, theta_xmax, a, boundary_type,     \
-           particle_boundary, rc_hwidth, L, B_nodes, E_nodes, xmin, grid_min, grid_max, grid_mid
+           particle_boundary, rc_hwidth, L, B_nodes, E_nodes, xmin, grid_min, grid_max, \
+           grid_mid, run_time, run_time_str
 
     h_name = os.path.join(data_dir, 'simulation_parameters.pckl')       # Load header file
     f      = open(h_name, 'rb')                                         # Open header file
-    obj    = pickle.load(f)                                             # Load variables from header file into python object
+    obj    = pickle.load(f)                                             # Load variables from header file into dict
     f.close()                                                           # Close header file
-    
+
     seed              = obj['seed']
     Nj                = obj['Nj']
     dt_sim            = obj['dt']
@@ -148,6 +149,19 @@ def load_simulation_params():
     except:
         loss_cone = 0.0
         
+    try:
+        run_time = obj['run_time']
+        
+        hrs      = int(run_time // 3600)
+        rem      = run_time %  3600
+        
+        mins     = int(rem // 60)
+        sec      = rem %  60
+        run_time_str = '{:02}:{:02}:{:02}'.format(hrs, mins, sec)
+    except:
+        run_time     = -1.0
+        run_time_str = ''
+        
     grid_min = B_nodes[0]
     grid_max = B_nodes[-1]
     grid_mid = 0
@@ -186,19 +200,21 @@ def output_simulation_parameter_file(series, run):
             print('Hybrid Type  :: {}'.format(method_type), file=f)
             print('Random Seed  :: {}'.format(seed), file=f)
             print('', file=f)
-            print('Temporal Paramters', file=f)
-            print('Maximum Sim. Time : {} GPeriods'.format(max_rev), file=f)
-            print('Simulation cadence: {} seconds'.format(dt_sim), file=f)
-            print('Particle Dump Time: {} seconds'.format(dt_particle), file=f)
-            print('Field Dump Time   : {} seconds'.format(dt_field), file=f)
-            print('Frequency Resol.  : {} GPeriods'.format(freq_res), file=f)
-            print('Gyperiod Resol.   : {}'.format(orbit_res), file=f)
+            print('Temporal Parameters', file=f)
+            print('Maximum Sim. Time  :: {} GPeriods'.format(max_rev), file=f)
+            print('Simulation cadence :: {} seconds'.format(dt_sim), file=f)
+            print('Particle Dump Time :: {} seconds'.format(dt_particle), file=f)
+            print('Field Dump Time    :: {} seconds'.format(dt_field), file=f)
+            print('Frequency Resol.   :: {} GPeriods'.format(freq_res), file=f)
+            print('Gyperiod Resol.    :: {}'.format(orbit_res), file=f)
+            print('Final runtime      :: {}'.format(run_time_str), file=f)
             print('', file=f)
             print('Simulation Parameters', file=f)
             print('# Spatial Cells :: {}'.format(NX), file=f)
             print('# Damping Cells :: {}'.format(ND), file=f)
             print('# Cells Total   :: {}'.format(NC), file=f)
             print('Ion L per cell  :: {}'.format(dxm), file=f)
+            print('# RC Cells      :: {}'.format(rc_hwidth*2), file=f)
             print('Cell width      :: {} m'.format(dx), file=f)
             print('Simulation Min  :: {} m'.format(xmin), file=f)
             print('Simulation Max  :: {} m'.format(xmax), file=f)
@@ -207,30 +223,33 @@ def output_simulation_parameter_file(series, run):
             print('Boundary   Field Strength :: {} nT'.format(B_xmax*1e9), file=f)
             print('MLAT max/min extent       :: {} deg'.format(theta_xmax), file=f)
             print('McIlwain L value equiv.   :: {}'.format(L), file=f)
+            print('Parabolic scale factor, a :: {}'.format(a), file=f)
+            
             print('', file=f)
-            print('Electron Density   : {} /cc'.format(ne*1e-6), file=f)
-            print('Electron Treatment : {}'.format(ie), file=f)
-            print('Electron Temperature : {}K'.format(Te0), file=f)
+            print('Electron Density     :: {} /cc'.format(ne*1e-6), file=f)
+            print('Electron Treatment   :: {}'.format(ie), file=f)
+            print('Electron Temperature :: {}K'.format(Te0), file=f)
             print('', file=f)
             print('Particle Parameters', file=f)
             print('Number of Species   :: {}'.format(Nj), file=f)
             print('Number of Particles :: {}'.format(N), file=f)
             print('Species Per Cell    :: {}'.format(nsp_ppc), file=f)
             print('Species Particles # :: {}'.format(N_species), file=f)
+            print('Particle Shape Func :: {}'.format(particle_shape), file=f)
+            print('Particle Bound. Cond:: {}'.format(particle_boundary), file=f)
             print('', file=f)
             print('Ion Composition', file=f)
-            print('Species Name :: {}'.format(species_lbl), file=f)
-            print('Species Type :: {}'.format(temp_type), file=f)
-            print('Species Dens :: {} /cc'.format(density*1e-6), file=f)
-            print('Species Charge :: {}'.format(charge), file=f)
-            print('Species Mass  :: {} kg'.format(mass), file=f)
-            print('Drift Velocity :: {} m/s'.format(drift_v), file=f)
-            print('Perp Temp :: {}'.format(Tper), file=f)
-            print('Para Temp :: {}'.format(Tpar), file=f)
-        
-       #particle_shape, part_save_iter, field_save_iter, a, boundary_type,     \
-        #particle_boundary, rc_hwidth
-       # n_contr,  \
+            print('Species Name    :: {}'.format(species_lbl), file=f)
+            print('Species Type    :: {}'.format(temp_type), file=f)
+            print('Species Dens    :: {} /cc'.format(density*1e-6), file=f)
+            print('Species Charge  :: {}'.format(charge), file=f)
+            print('Species Mass    :: {} kg'.format(mass), file=f)
+            print('Drift Velocity  :: {} m/s'.format(drift_v), file=f)
+            print('Perp Temp       :: {} K'.format(Tper), file=f)
+            print('Para Temp       :: {} K'.format(Tpar), file=f)
+            print('MParticle Contr.:: {} real particles/macroparticle'.format(n_contr), file=f)
+            
+       # ,  \
        # idx_start, idx_end
     return
 

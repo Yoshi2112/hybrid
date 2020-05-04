@@ -6,7 +6,7 @@ Created on Fri Sep 22 17:23:44 2017
 """
 import numba as nb
 import numpy as np
-from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, B_eq, a, disable_waves, particle_boundary
+from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, B_eq, a, particle_boundary
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -20,9 +20,7 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, \
     '''
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT)
     position_update(pos, vel, idx, DT, Ie, W_elec)  
-    
-    if disable_waves == False:
-        collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, ni, nu, temp1D)
+    collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, ni, nu, temp1D)
     return
 
 
@@ -136,16 +134,13 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT):
             qmi = 0.5 * DT * qm_ratios[idx[ii]]                                 # Charge-to-mass ration for ion of species idx[ii]
     
             # These create two new length 3 arrays
-            if disable_waves == False:
-                Ep = E[Ie[ii]    , 0:3] * W_elec[0, ii]                             \
-                   + E[Ie[ii] + 1, 0:3] * W_elec[1, ii]                             \
-                   + E[Ie[ii] + 2, 0:3] * W_elec[2, ii]                             # Vector E-field at particle location
-        
-                Bp = B[Ib[ii]    , 0:3] * W_mag[0, ii]                              \
-                   + B[Ib[ii] + 1, 0:3] * W_mag[1, ii]                              \
-                   + B[Ib[ii] + 2, 0:3] * W_mag[2, ii]                              # b1 at particle location
-            else:
-                Ep = np.zeros(3); Bp = np.zeros(3)
+            Ep = E[Ie[ii]    , 0:3] * W_elec[0, ii]                             \
+               + E[Ie[ii] + 1, 0:3] * W_elec[1, ii]                             \
+               + E[Ie[ii] + 2, 0:3] * W_elec[2, ii]                             # Vector E-field at particle location
+    
+            Bp = B[Ib[ii]    , 0:3] * W_mag[0, ii]                              \
+               + B[Ib[ii] + 1, 0:3] * W_mag[1, ii]                              \
+               + B[Ib[ii] + 2, 0:3] * W_mag[2, ii]                              # b1 at particle location
                 
             v_minus    = vel[:, ii] + qmi * Ep                                  # First E-field half-push
             
@@ -192,25 +187,28 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
             pos[1, ii] += vel[1, ii] * DT
             pos[2, ii] += vel[2, ii] * DT
             
-            # Particle boundary conditions (0: Absorb, 1: Reflect, 2: Periodic)
+            # Particle boundary conditions
             if (pos[0, ii] < xmin or pos[0, ii] > xmax):
                 
-                if particle_boundary == 0:              # Absorb
+                # Absorb
+                if particle_boundary == 0:              
                     vel[:, ii] *= 0          			# Zero particle velocity
-                    idx[ii]     = -128 + idx[ii]        # Fold index to negative values (preserves species ID)
+                    idx[ii]    -= 128                   # Fold index to negative values (preserves species ID)
                     
-                elif particle_boundary == 1:            # Reflect
+                # Reflect
+                elif particle_boundary == 1:            
                     if pos[0, ii] > xmax:
                         pos[0, ii] = 2*xmax - pos[0, ii]
                     elif pos[0, ii] < xmin:
                         pos[0, ii] = 2*xmin - pos[0, ii]
                     vel[0, ii] *= -1.0                  # 'Reflect' velocities as well (Only vx: Reflecting vy,z is not physical)
                     
-                elif particle_boundary == 2:            # Mario (Periodic)
+                # Mario (Periodic)
+                elif particle_boundary == 2:            
                     if pos[0, ii] > xmax:
-                        pos[0, ii] = pos[0, ii] - xmax + xmin
+                        pos[0, ii] += xmin - xmax
                     elif pos[0, ii] < xmin:
-                        pos[0, ii] = pos[0, ii] + xmax - xmin    
+                        pos[0, ii] += xmax - xmin    
     return
 
 # =============================================================================

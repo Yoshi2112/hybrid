@@ -2490,21 +2490,21 @@ def plot_average_GC(it_max=None, save=True):
 
 
 @nb.njit()
-def calc_mu(pos, vel, idx, sidx, Bp, mu_av, mu_s, ii, mass):
+def calc_mu(pos, vel, idx, sidx, Bp, mu_av, mu_s, ii):
     
     lost_indices, N_lost = locate_lost_ions(idx, cf.Nj)
     
     bk.eval_B0_particle(pos, Bp)
     v_perp2 = vel[1] ** 2 + vel[2] ** 2
     B_mag   = np.sqrt(Bp[0] ** 2 + Bp[1] ** 2 + Bp[2] ** 2)
-
-    for jj in range(pos.shape[1]):
+    
+    for jj in range(cf.N):
         if idx[jj] >= 0:
             # Calculate mu for this particle
-            mu = 0.5 * mass[idx[jj]]  * v_perp2[jj] / B_mag[jj]
+            mu = 0.5 * cf.mass[idx[jj]] * v_perp2[jj] / B_mag[jj]
             
             # Add it to total mean
-            mu_av[ii] += mu / (pos.shape[1] - N_lost.sum())
+            mu_av[ii] += mu / (cf.N - N_lost.sum())
         else:
             # If lost, mu doesn't exist
             mu = np.nan
@@ -2513,6 +2513,7 @@ def calc_mu(pos, vel, idx, sidx, Bp, mu_av, mu_s, ii, mass):
         for kk in range(sidx.shape[0]):
             if sidx[kk] == jj:
                 mu_s[ii, kk]  = mu
+    
     return
     
 
@@ -2551,8 +2552,8 @@ def plot_average_mu(it_max=None, save=True):
     for ii in range(it_max):
         print('Calculating mu from particle file {}'.format(ii))
         pos, vel, idx, ptime[ii] = cf.load_particles(ii)
-        calc_mu(pos, vel, idx, sidx, Bp, mu_av, mu_s, ii, cf.mass)
-
+        calc_mu(pos, vel, idx, sidx, Bp, mu_av, mu_s, ii)
+    pdb.set_trace()
     plt.ioff()
     fig, axes = plt.subplots(2, figsize=(15, 10), sharex=True)
     
@@ -2594,7 +2595,7 @@ if __name__ == '__main__':
     for run_num in [0, 2]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
-
+        
 # =============================================================================
 #         try:
 #             summary_plots(save=True, histogram=False)

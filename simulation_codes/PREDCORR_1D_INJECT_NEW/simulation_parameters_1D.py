@@ -9,23 +9,21 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Winske params, absorptive, constrained RC'''
+run_description = '''Testing mu conservation'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//new_ideas_test_v1'     # Series save dir   : Folder containing all runs of a series
-run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path         = 'runs//small_bottle_test_v3'# Series save dir   : Folder containing all runs of a series
+run               = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
-save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
+save_fields       = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
 
 ## DIAGNOSTIC FLAGS :: DOUBLE CHECK BEFORE EACH RUN! ##
-## THESE FLAGS NO LONGER TRIGGER THE SETTING, ONLY THE SAVE PARAMETER.
-## SETTING MUST BE CHANGED IN THE PARTICLES.PY FILE BY UNCOMMENTING THE APPROPRIATE CODE
 supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
-disable_waves     = False                         # Disables solutions to wave fields. Only background magnetic field exists
+disable_waves     = True                          # Zeroes electric field solution at each timestep
 particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Periodic
 
 
@@ -43,7 +41,7 @@ rc_hwidth = 0                               # Ring current half-width in number 
 orbit_res = 0.02                            # Orbit resolution
 freq_res  = 0.02                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
 part_res  = 0.50                            # Data capture resolution in gyroperiod fraction: Particle information
-field_res = 0.1                             # Data capture resolution in gyroperiod fraction: Field information
+field_res = 0.20                            # Data capture resolution in gyroperiod fraction: Field information
 
 
 ### PARTICLE PARAMETERS ###

@@ -2489,33 +2489,6 @@ def plot_average_GC(it_max=None, save=True):
     return
 
 
-@nb.njit()
-def calc_mu(pos, vel, idx, sidx, Bp, mu_av, mu_s, ii, mass):
-    
-    lost_indices, N_lost = locate_lost_ions(idx, cf.Nj)
-    
-    bk.eval_B0_particle(pos, Bp)
-    v_perp2 = vel[1] ** 2 + vel[2] ** 2
-    B_mag   = np.sqrt(Bp[0] ** 2 + Bp[1] ** 2 + Bp[2] ** 2)
-
-    for jj in range(pos.shape[1]):
-        if idx[jj] >= 0:
-            # Calculate mu for this particle
-            mu = 0.5 * mass[idx[jj]]  * v_perp2[jj] / B_mag[jj]
-            
-            # Add it to total mean
-            mu_av[ii] += mu / (pos.shape[1] - N_lost.sum())
-        else:
-            # If lost, mu doesn't exist
-            mu = np.nan
-        
-        # Check if this particle is to be sampled
-        for kk in range(sidx.shape[0]):
-            if sidx[kk] == jj:
-                mu_s[ii, kk]  = mu
-    return
-    
-
 def plot_average_mu(it_max=None, save=True):
     '''
     Calculate the average mu for every particle, as well as the total average 
@@ -2530,7 +2503,6 @@ def plot_average_mu(it_max=None, save=True):
     # If -ve, make mu at that point nan
     # But won't be able to mean - will have to do that manually
     '''
-    print('Collecting adiabatic invariant from particle data.')
     if it_max is None:
         it_max = len(os.listdir(cf.particle_dir))
             
@@ -2544,6 +2516,7 @@ def plot_average_mu(it_max=None, save=True):
         sidx[Ns*ii:Ns*(ii + 1)] = np.random.randint(cf.idx_start[ii], cf.idx_end[ii], Ns)
     
     Bp    = np.zeros((3, cf.N))                 # Temp array used for each particle
+    mu    = np.zeros(cf.N, dtype=float)         # mu array for each step (temp array, kinda)
     mu_s  = np.zeros((it_max, Ns * cf.Nj))
     mu_av = np.zeros(it_max)
     ptime = np.zeros(it_max)
@@ -2551,8 +2524,22 @@ def plot_average_mu(it_max=None, save=True):
     for ii in range(it_max):
         print('Calculating mu from particle file {}'.format(ii))
         pos, vel, idx, ptime[ii] = cf.load_particles(ii)
-        calc_mu(pos, vel, idx, sidx, Bp, mu_av, mu_s, ii, cf.mass)
+        lost_indices, N_lost     = locate_lost_ions(idx, cf.Nj)
 
+        # Need to njit() this
+        v_perp2 = vel[1] ** 2 + vel[2] ** 2
+        bk.eval_B0_particle(pos, Bp)
+        B_mag   = np.sqrt(Bp[0] ** 2 + Bp[1] ** 2 + Bp[2] ** 2)
+        
+        for jj in range(cf.N):
+            if idx[ii] >= 0:
+                mu[ii]     = 0.5 * cf.mass[idx[ii]] * v_perp2[ii] / B_mag[ii]
+                mu_av[ii] += mu[ii] / (cf.N - N_lost.sum())
+            else:
+                mu[ii] = np.nan
+                
+        mu_s[ii]  = mu[sidx]
+        
     plt.ioff()
     fig, axes = plt.subplots(2, figsize=(15, 10), sharex=True)
     
@@ -2573,7 +2560,7 @@ def plot_average_mu(it_max=None, save=True):
         fpath = cf.anal_dir + 'magnetic_moment_average_and_samples.png'
         fig.savefig(fpath)
         plt.close('all')
-        print('1st adiabatic invariant graph saved as {}'.format(fpath))
+        print('Magnetic moment graph saved as {}'.format(fpath))
     else:
         plt.show()
     return
@@ -2591,16 +2578,14 @@ if __name__ == '__main__':
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [0, 2]:#range(num_runs):
+    for run_num in [3]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
-
-# =============================================================================
-#         try:
-#             summary_plots(save=True, histogram=False)
-#         except:
-#             pass
-# =============================================================================
+        
+        try:
+            summary_plots(save=True, histogram=False)
+        except:
+            pass
         
 # =============================================================================
 #         try:
@@ -2609,13 +2594,11 @@ if __name__ == '__main__':
 #             pass
 # =============================================================================
         
-# =============================================================================
-#         plot_particle_loss_with_time()
-#         plot_average_GC()
-#         
-#         plot_initial_configurations()
-#         plot_adiabatic_parameter()
-# =============================================================================
+        plot_particle_loss_with_time()
+        plot_average_GC()
+        
+        plot_initial_configurations()
+        plot_adiabatic_parameter()
         plot_average_mu()
                 
 # =============================================================================
