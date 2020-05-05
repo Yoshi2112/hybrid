@@ -515,8 +515,8 @@ if __name__ == '__main__':
 
     
     import diagnostics       as diag
-    #diag.check_velocity_distribution(VEL)
-    diag.check_cell_velocity_distribution(POS, VEL, node_number=0, j=0)
+    diag.check_velocity_distribution(VEL)
+    #diag.check_cell_velocity_distribution(POS, VEL, node_number=0, j=0)
 # =============================================================================
 #     if True:
 #         for jj in range(const.Nj):

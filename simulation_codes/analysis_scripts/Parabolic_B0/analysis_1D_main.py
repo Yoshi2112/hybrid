@@ -1349,7 +1349,7 @@ def summary_plots(save=True, histogram=True):
                 ax_vx.scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[0, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj], lw=0, label=cf.species_lbl[jj])
                 ax_vy.scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[1, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj], lw=0)
         
-            ax_vx.legend()
+            ax_vx.legend(loc='upper right')
             ax_vx.set_title(r'Particle velocities vs. Position (x)')
             ax_vy.set_xlabel(r'Cell', labelpad=10)
             ax_vx.set_ylabel(r'$\frac{v_x}{v_A}$', rotation=0)
@@ -1380,7 +1380,7 @@ def summary_plots(save=True, histogram=True):
         ax_Ex.plot(E_nodes, pez[ii]*1e3, color='black', label=r'$E_z$')
         ax_Ex.set_ylabel(r'$E (mV/m)$', labelpad=25, rotation=0, fontsize=14)
         
-        ax_Ex.legend(loc=4, ncol=3)
+        ax_Ex.legend(loc='upper right', ncol=3)
         
         ax_By  = plt.subplot2grid(fig_size, (2, 3), colspan=3, sharex=ax_den)
         ax_B   = plt.subplot2grid(fig_size, (3, 3), colspan=3, sharex=ax_den)
@@ -1394,7 +1394,7 @@ def summary_plots(save=True, histogram=True):
         ax_B.plot( B_nodes, mag_B*1e9, color='g')
         ax_By.plot(B_nodes, pby[ii]*1e9, color='g',   label=r'$B_y$') 
         ax_By.plot(B_nodes, pbz[ii]*1e9, color='b',   label=r'$B_z$') 
-        ax_By.legend(loc=4, ncol=2)
+        ax_By.legend(loc='upper right', ncol=2)
         
         ax_B.set_ylabel( r'$B_\perp (nT)$', rotation=0, labelpad=30, fontsize=14)
         ax_By.set_ylabel(r'$B_{y,z} (nT)$', rotation=0, labelpad=20, fontsize=14)
@@ -2580,43 +2580,37 @@ def plot_average_mu(it_max=None, save=True):
 
 #%% MAIN
 if __name__ == '__main__':
-    #drive       = 'F:'
-    drive       = 'G://MODEL_RUNS//Josh_Runs//'
+    drive       = 'F:'
+    #drive       = 'G://MODEL_RUNS//Josh_Runs//'
     
     #series      = 'second_tests'
     #series      = 'new_ideas_test_v1'
-    series      = 'old_new_compare'
+    series      = 'old_new_compare_v2'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [3]:#range(num_runs):
+    for run_num in range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
 
-        #plot_particle_loss_with_time()
+        plot_particle_loss_with_time()
         plot_average_GC()
         
-        #plot_initial_configurations()
-        #plot_adiabatic_parameter()
+        plot_initial_configurations()
+        plot_adiabatic_parameter()
         plot_average_mu()
 
-# =============================================================================
-#         try:
-#             standard_analysis_package()
-#         except:
-#             pass
-# =============================================================================
+        try:
+            standard_analysis_package()
+        except:
+            pass
 
         try:
             summary_plots(save=True, histogram=False)
         except:
             pass
         
-        
-        
-        
-                
 # =============================================================================
 #         
 #     # For things that take ages so they don't have to go sequentially
