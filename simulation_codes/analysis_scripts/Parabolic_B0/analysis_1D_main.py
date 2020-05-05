@@ -1769,10 +1769,9 @@ def plot_particle_loss_with_time(it_max=None, save=True):
     for ii in range(it_max):
         print('Loading data for particle file {}'.format(ii))
         pos, vel, idx, ptime[ii] = cf.load_particles(ii)
-        try:
-            lost_idx, N_lost[ii, :]  = locate_lost_ions(idx, cf.Nj)
-        except:
-            pdb.set_trace()
+
+        lost_idx, N_lost[ii, :]  = locate_lost_ions(idx, cf.Nj)
+
     
     plt.ioff()
     # N_lost per species with time
@@ -2457,10 +2456,10 @@ def plot_average_GC(it_max=None, save=True):
         
         for kk in range(cf.N):
             if idx[kk] >= 0:
-                gc_av[0, kk] += pos[1, kk] / it_max
-                gc_av[1, kk] += pos[2, kk] / it_max
+                gc_av[0, kk] += pos[1, kk]
+                gc_av[1, kk] += pos[2, kk]
    
-    gc_av *= 1e-3
+    gc_av *= 1e-3  / it_max
     
     plt.ioff()
 
@@ -2584,39 +2583,37 @@ if __name__ == '__main__':
     drive       = 'F:'
     #drive       = 'G://MODEL_RUNS//Josh_Runs//'
     
-    #series      = 'small_bottle_test_v3'
-    series      = 'new_ideas_test_v1'
+    series      = 'second_tests'
+    #series      = 'new_ideas_test_v1'
     #series      = 'fixed_loss_test'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [0, 2]:#range(num_runs):
+    for run_num in [0, 1, 2]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
 
-# =============================================================================
-#         try:
-#             summary_plots(save=True, histogram=False)
-#         except:
-#             pass
-# =============================================================================
+        plot_particle_loss_with_time()
+        plot_average_GC()
         
-# =============================================================================
-#         try:
-#             standard_analysis_package()
-#         except:
-#             pass
-# =============================================================================
-        
-# =============================================================================
-#         plot_particle_loss_with_time()
-#         plot_average_GC()
-#         
-#         plot_initial_configurations()
-#         plot_adiabatic_parameter()
-# =============================================================================
+        plot_initial_configurations()
+        plot_adiabatic_parameter()
         plot_average_mu()
+
+        try:
+            standard_analysis_package()
+        except:
+            pass
+
+        try:
+            summary_plots(save=True, histogram=False)
+        except:
+            pass
+        
+        
+        
+        
                 
 # =============================================================================
 #         

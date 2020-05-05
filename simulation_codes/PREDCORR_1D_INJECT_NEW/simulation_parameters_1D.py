@@ -9,21 +9,22 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Testing mu conservation'''
+run_description = '''Test :: Cold velocity update enabled. Control run.'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//small_bottle_test_v3'# Series save dir   : Folder containing all runs of a series
-run               = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path         = 'runs//second_tests'          # Series save dir   : Folder containing all runs of a series
+run               = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
-save_fields       = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
+save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
 
 ## DIAGNOSTIC FLAGS :: DOUBLE CHECK BEFORE EACH RUN! ##
 supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
-disable_waves     = True                          # Zeroes electric field solution at each timestep
+disable_waves     = False                         # Zeroes electric field solution at each timestep
+shoji_approx      = False
 particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Periodic
 
 

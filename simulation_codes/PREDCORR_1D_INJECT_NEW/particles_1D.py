@@ -6,7 +6,7 @@ Created on Fri Sep 22 17:23:44 2017
 """
 import numba as nb
 import numpy as np
-from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, B_eq, a, particle_boundary
+from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, B_eq, a, particle_boundary, shoji_approx
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -105,6 +105,27 @@ def eval_B0_particle(pos, Bp):
 
 
 @nb.njit()
+def eval_B0_particle_1D(pos, vel, Bp, qm):
+    '''
+    Calculates the B0 magnetic field at the position of a particle. B0x is
+    non-uniform in space, and B0r (split into y,z components) is the required
+    value to keep div(B) = 0
+    
+    These values are added onto the existing value of B at the particle location,
+    Bp. B0x is simply equated since we never expect a non-zero wave field in x.
+        
+    Could totally vectorise this. Would have to change to give a particle_temp
+    array for memory allocation or something
+    '''
+    Bp[0]   = eval_B0x(pos[0]) 
+    cyc_fac = a * B_eq * pos[0] / (qm * Bp[0])
+    
+    Bp[1] += vel[2] * cyc_fac
+    Bp[2] -= vel[1] * cyc_fac
+    return
+
+
+@nb.njit()
 def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT):
     '''
     updates velocities using a Boris particle pusher.
@@ -144,7 +165,11 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT):
                 
             v_minus    = vel[:, ii] + qmi * Ep                                  # First E-field half-push
             
-            eval_B0_particle(pos[:, ii], Bp)                                    # Add B0 at particle location
+            # Add B0 at particle location
+            if shoji_approx == False:
+                eval_B0_particle(pos[:, ii], Bp)                                    
+            else:
+                eval_B0_particle_1D(pos[:, ii], vel[:, ii], Bp, qm_ratios[idx[ii]])
             
             T = qmi * Bp                                                        # Vector Boris variable
             S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable
