@@ -2580,31 +2580,33 @@ def plot_average_mu(it_max=None, save=True):
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'F:'
-    #drive       = 'G://MODEL_RUNS//Josh_Runs//'
+    #drive       = 'F:'
+    drive       = 'G://MODEL_RUNS//Josh_Runs//'
     
-    series      = 'second_tests'
+    #series      = 'second_tests'
     #series      = 'new_ideas_test_v1'
-    #series      = 'fixed_loss_test'
+    series      = 'old_new_compare'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [0, 1, 2]:#range(num_runs):
+    for run_num in [3]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
 
-        plot_particle_loss_with_time()
+        #plot_particle_loss_with_time()
         plot_average_GC()
         
-        plot_initial_configurations()
-        plot_adiabatic_parameter()
+        #plot_initial_configurations()
+        #plot_adiabatic_parameter()
         plot_average_mu()
 
-        try:
-            standard_analysis_package()
-        except:
-            pass
+# =============================================================================
+#         try:
+#             standard_analysis_package()
+#         except:
+#             pass
+# =============================================================================
 
         try:
             summary_plots(save=True, histogram=False)

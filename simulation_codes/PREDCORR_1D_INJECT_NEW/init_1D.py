@@ -392,11 +392,11 @@ if __name__ == '__main__':
    
     POS, VEL, IDX = uniform_gaussian_distribution_quiet()
 
+    V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
+    V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
+    V_PARA = VEL[0] / va
+    
 # =============================================================================
-#     V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
-#     V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
-#     V_PARA = VEL[0] / va
-#     
 #     # Test gyrophase transformation
 #     pos_gphase  = get_atan(POS[2], POS[1]) * 180. / np.pi
 #     vel_gphase  = (get_atan(VEL[2], VEL[1]) * 180. / np.pi + 90.)%360.
@@ -514,15 +514,10 @@ if __name__ == '__main__':
 # =============================================================================
 
     
-
-    plt.show()
-    
+    import diagnostics       as diag
+    #diag.check_velocity_distribution(VEL)
+    diag.check_cell_velocity_distribution(POS, VEL, node_number=0, j=0)
 # =============================================================================
-#     import matplotlib.pyplot as plt
-#     
-#     #import diagnostics       as diag
-#     #diag.check_velocity_distribution(VEL)
-#     
 #     if True:
 #         for jj in range(const.Nj):
 #             plt.figure(jj)

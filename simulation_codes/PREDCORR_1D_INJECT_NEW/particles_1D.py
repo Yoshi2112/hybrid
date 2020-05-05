@@ -169,7 +169,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT):
             if shoji_approx == False:
                 eval_B0_particle(pos[:, ii], Bp)                                    
             else:
-                eval_B0_particle_1D(pos[:, ii], vel[:, ii], Bp, qm_ratios[idx[ii]])
+                eval_B0_particle_1D(pos[:, ii], v_minus, Bp, qm_ratios[idx[ii]])
             
             T = qmi * Bp                                                        # Vector Boris variable
             S = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)                 # Vector Boris variable

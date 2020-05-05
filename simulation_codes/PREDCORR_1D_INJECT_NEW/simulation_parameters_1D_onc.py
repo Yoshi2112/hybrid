@@ -9,7 +9,7 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''This is the NEW code, but with a fixed (?) cubic spline. See if there are any differences.'''
+run_description = '''This is the NEW code, with fixed (?) particle loading. See if there are any differences.'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
@@ -21,11 +21,10 @@ seed              = 3216587                       # RNG Seed          : Set to e
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
 
 ## DIAGNOSTIC FLAGS :: DOUBLE CHECK BEFORE EACH RUN! ##
-## THESE FLAGS NO LONGER TRIGGER THE SETTING, ONLY THE SAVE PARAMETER.
-## SETTING MUST BE CHANGED IN THE PARTICLES.PY FILE BY UNCOMMENTING THE APPROPRIATE CODE
 supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 disable_waves     = False                         # Disables solutions to wave fields. Only background magnetic field exists
+shoji_approx      = False
 particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Periodic
 
 
