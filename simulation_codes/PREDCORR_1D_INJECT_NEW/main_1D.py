@@ -9,7 +9,7 @@ import fields_1D     as fields
 import sources_1D    as sources
 import save_routines as save
 
-from simulation_parameters_1D import save_particles, save_fields
+from simulation_parameters_1D import save_particles, save_fields, te0_equil
 
 
 if __name__ == '__main__':
@@ -24,11 +24,29 @@ if __name__ == '__main__':
     # Collect initial moments and save initial state
     sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D) 
     
-    ## TEST ##
-    init.set_equilibrium_te0(q_dens, Te0)
-    ##------##
+    if te0_equil == True:
+        init.set_equilibrium_te0(q_dens, Te0)
     
     fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D)
+    
+# =============================================================================
+#     if False:
+#         import matplotlib.pyplot as plt
+#         import sys
+#         
+#         fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
+#         axes[0].set_title('Initial E field with zero derivative at ND-NX interface')
+#                 
+#         axes[0].plot(E_int[:, 0])
+#         axes[0].set_ylabel('Ex (mV/m)')
+#         axes[1].plot(E_int[:, 1])
+#         axes[1].set_ylabel('Ey (mV/m)')
+#         axes[2].plot(E_int[:, 2])
+#         axes[2].set_ylabel('Ez (mV/m)')
+#         
+#         axes[2].set_xlabel('Cell #')
+#         sys.exit()
+# =============================================================================
     
     DT, max_inc, part_save_iter, field_save_iter, damping_array = init.set_timestep(vel, E_int)
     
@@ -71,5 +89,7 @@ if __name__ == '__main__':
         sim_time += DT
     
     runtime = round(timer() - start_time,2)
-    save.add_runtime_to_header(runtime)
+    
+    if save_fields == 1 or save_particles == 1:
+        save.add_runtime_to_header(runtime)
     print("Time to execute program: {0:.2f} seconds".format(runtime))

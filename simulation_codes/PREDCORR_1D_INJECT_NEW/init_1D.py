@@ -16,7 +16,7 @@ import fields_1D    as fields
 
 from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_xmax, Bc,   \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
-                                     qm_ratios, freq_res, rc_hwidth, temp_type, Te0_scalar 
+                                     qm_ratios, freq_res, rc_hwidth, temp_type, Te0_scalar, ne, q
 
 
 def calc_losses(v_para, v_perp, B0x, st=0):
@@ -253,8 +253,8 @@ def initialize_fields():
     B[:, 2] = Bc[:, 2]
     
     Ve      = np.zeros((NC, 3), dtype=np.float64)
-    Te      = np.zeros( NC,     dtype=np.float64)
-    Te0     = np.zeros( NC,     dtype=np.float64)
+    Te      = np.ones(  NC,     dtype=np.float64) * Te0_scalar
+    Te0     = np.ones(  NC,     dtype=np.float64) * Te0_scalar
     return B, E_int, E_half, Ve, Te, Te0
 
 
@@ -357,10 +357,11 @@ def set_equilibrium_te0(q_dens, Te0):
         import matplotlib.pyplot as plt
         import sys
         
-        fig, axes = plt.subplots(4, sharex=True)
+        fig, axes = plt.subplots(4, sharex=True, figsize=(15, 10))
         
-        axes[0].plot(q_dens)
-        axes[0].set_ylabel('ne')
+        axes[0].set_title('Initial Temp/Dens with zero derivative at ND-NX interface')
+        axes[0].plot(q_dens / (q*ne))
+        axes[0].set_ylabel('ne / ne0')
         
         axes[1].plot(qdens_gradient)
         axes[1].set_ylabel('dne/dx')

@@ -25,6 +25,10 @@ def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
         
     13/03/2020 :: Modified to ignore contributions from particles with negative
                     indices (i.e. "deactivated" particles)
+                    
+    07/05/2020 :: Modified to allow contributions from negatively indexed particles
+                    if reflection is enabled - these *were* hot particles, now
+                    counted as cold.
     '''
     for ii in nb.prange(vel.shape[1]):
         I   = Ie[ii]
@@ -65,6 +69,10 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D):
     Source terms in damping region set to be equal to last valid cell value. 
     Smoothing routines deleted (can be found in earlier versions) since TSC 
     weighting effectively also performs smoothing.
+    
+    07/05/2020 :: Changed damped source terms to give zero gradient at ND-NX
+                    boundary. Remaining gradient probably a particle
+                    initialization error.
     '''
     q_dens *= 0.
     Ji     *= 0.
@@ -84,20 +92,55 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D):
     # some sort of source on the outside of the physical space boundary.
     q_dens[ND]          += q_dens[ND - 1]
     q_dens[ND + NX - 1] += q_dens[ND + NX]
-
-    # Set damping cell source values
-    q_dens[:ND]    = q_dens[ND]
-    q_dens[ND+NX:] = q_dens[ND+NX-1]
     
     for ii in range(3):
+        # Mirror source term contributions
         Ji[ND, ii]          += Ji[ND - 1, ii]
         Ji[ND + NX - 1, ii] += Ji[ND + NX, ii]
-    
-        Ji[:ND, ii] = Ji[ND, ii]
-        Ji[ND+NX:]  = Ji[ND+NX-1]
+
+        # Set damping cell source values (zero gradient)
+        Ji[:ND, ii] = Ji[ND + 1, ii]
+        Ji[ND+NX:, ii]  = Ji[ND+NX - 2, ii]
+        
+    # Set damping cell source values
+    q_dens[:ND]    = q_dens[ND + 1]
+    q_dens[ND+NX:] = q_dens[ND+NX - 2]
         
     # Set density minimum
     for ii in range(q_dens.shape[0]):
         if q_dens[ii] < min_dens * ne * q:
             q_dens[ii] = min_dens * ne * q
     return
+
+
+
+
+
+
+
+
+
+
+
+
+
+# OLD CODE
+
+# =============================================================================
+#         # Set damping cell source values (zero second derivative)
+#         Ji[:ND, ii]    = 2*Ji[ND,      ii] - Ji[ND + 1     , ii]
+#         Ji[ND+NX:, ii] = 2*Ji[ND+NX-1, ii] - Ji[ND + NX - 2, ii]
+#         
+#     # Set damping cell source values
+#     q_dens[:ND]    = 2*q_dens[ND]      - q_dens[ND + 1]
+#     q_dens[ND+NX:] = 2*q_dens[ND+NX-1] - q_dens[ND+NX-2]
+# =============================================================================
+# =============================================================================
+#         # Set damping cell source values (copy last)
+#         Ji[:ND, ii] = Ji[ND, ii]
+#         Ji[ND+NX:]  = Ji[ND+NX-1]
+#         
+#     # Set damping cell source values
+#     q_dens[:ND]    = q_dens[ND]
+#     q_dens[ND+NX:] = q_dens[ND+NX-1]
+# =============================================================================
