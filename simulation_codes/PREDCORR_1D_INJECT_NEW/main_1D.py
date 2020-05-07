@@ -17,14 +17,18 @@ if __name__ == '__main__':
     
     # Initialize simulation: Allocate memory and set time parameters
     pos, vel, Ie, W_elec, Ib, W_mag, idx                = init.initialize_particles()
-    B, E_int, E_half, Ve, Te                            = init.initialize_fields()
+    B, E_int, E_half, Ve, Te, Te0                       = init.initialize_fields()
     q_dens, q_dens_adv, Ji, ni, nu                      = init.initialize_source_arrays()
     old_particles, old_fields, temp3De, temp3Db, temp1D = init.initialize_tertiary_arrays()
     
     # Collect initial moments and save initial state
     sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D) 
     
-    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D)
+    ## TEST ##
+    init.set_equilibrium_te0(q_dens, Te0)
+    ##------##
+    
+    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D)
     
     DT, max_inc, part_save_iter, field_save_iter, damping_array = init.set_timestep(vel, E_int)
     
@@ -43,7 +47,7 @@ if __name__ == '__main__':
         qq, DT, max_inc, part_save_iter, field_save_iter =               \
         aux.main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,              \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
-              Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,\
+              Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields,\
               damping_array, qq, DT, max_inc, part_save_iter, field_save_iter)
 
         if qq%part_save_iter == 0 and save_particles == 1:

@@ -95,7 +95,7 @@ if B_eq is None:
     B_eq      = (B_surf / (L ** 3))                      # Magnetic field at equator, based on L value
     
 if beta_par is None:
-    Te0        = E_e   * 11603.
+    Te0_scalar = E_e   * 11603.
     Tpar       = E_par * 11603.
     Tper       = E_per * 11603.
 else:
@@ -103,7 +103,7 @@ else:
     
     Tpar       = beta_par    * B_eq ** 2 / (2 * mu0 * ne * kB)
     Tper       = beta_per    * B_eq ** 2 / (2 * mu0 * ne * kB)
-    Te0        = beta_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Te0_scalar = beta_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma
@@ -254,9 +254,3 @@ if particle_boundary != 0:
             sys.exit('Paramter particle_boundary must be 0,1,2, not {}'.format(particle_boundary))
 
 system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
-# =============================================================================
-# if beta == True:
-#     Te0        = B0 ** 2 * beta_e   / (2 * mu0 * ne * kB)    # Temperatures of species in Kelvin (used for particle velocity initialization)
-#     Tpar       = B0 ** 2 * beta_par / (2 * mu0 * ne * kB)
-#     Tper       = B0 ** 2 * beta_per / (2 * mu0 * ne * kB)
-# =============================================================================

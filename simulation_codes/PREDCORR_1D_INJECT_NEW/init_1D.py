@@ -14,9 +14,9 @@ import save_routines as save
 import particles_1D as particles
 import fields_1D    as fields
 
-from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, \
+from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_xmax, Bc,   \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
-                                     Bc, qm_ratios, freq_res, rc_hwidth, temp_type, Te0, B_xmax
+                                     qm_ratios, freq_res, rc_hwidth, temp_type, Te0_scalar 
 
 
 def calc_losses(v_para, v_perp, B0x, st=0):
@@ -253,9 +253,9 @@ def initialize_fields():
     B[:, 2] = Bc[:, 2]
     
     Ve      = np.zeros((NC, 3), dtype=np.float64)
-    Te      = np.ones(  NC,     dtype=np.float64) * Te0
-    
-    return B, E_int, E_half, Ve, Te
+    Te      = np.zeros( NC,     dtype=np.float64)
+    Te0     = np.zeros( NC,     dtype=np.float64)
+    return B, E_int, E_half, Ve, Te, Te0
 
 
 @nb.njit()
@@ -305,35 +305,75 @@ def initialize_tertiary_arrays():
     return old_particles, old_fields, temp3De, temp3Db, temp1D
 
 
-def set_equilibrium_te0(qdens):
+def set_equilibrium_te0(q_dens, Te0):
     '''
     Modifies the initial Te array to allow grad(P_e) = grad(nkT) = 0
     
     Iterative? Analytic?
+    
+    NOTE: Removed factors 2dx from qdens_gradient and m_arr, since they cancel out
+    
+    Note: Could probably calculate Te0 from some sort of density/temperature relationship
+    with the ions, rather than defining it a priori, for now it should be ok (set via beta
+    same as cold ions)
     '''
-    LC             = NX + ND - 1
     qdens_gradient = np.zeros(NC    , dtype=np.float64)
-    temp           = np.zeros(NC + 1, dtype=np.float64)
     
-    # Get density gradient:
+    # Get density gradient: Central differencing, internal points
+    for ii in nb.prange(1, NC - 1):
+        qdens_gradient[ii] = (q_dens[ii + 1] - q_dens[ii - 1])
     
-    # Central differencing, internal points
-    for ii in nb.prange(ND + 1, LC - 1):
-        qdens_gradient[ii] = (qdens[ii + 1] - qdens[ii - 1])
+    # Forwards/Backwards difference at physical boundaries (In this case, the gradient will be zero)
+    qdens_gradient[0]      = 0
+    qdens_gradient[NC - 1] = 0
     
-    # Forwards/Backwards difference at physical boundaries
-    qdens_gradient[ND] = -3*qdens[ND] + 4*qdens[ND + 1] - qdens[ND + 2]
-    qdens_gradient[LC] =  3*qdens[LC] - 4*qdens[LC - 1] + qdens[LC - 2]
-    qdens_gradient    /= (2*dx)
+    m_arr = (qdens_gradient/q_dens)
     
-    # Work out equilibrium temperature
-    te0_arr = np.ones(NC, dtype=np.float64) * Te0
+    # Construct solution array to work out Te
+    soln_array = np.zeros((NC, NC), dtype=np.float64)
+    ans_arr    = np.zeros(NC, dtype=np.float64)
     
-    for ii in range(ND, ND + NX):
-        te0_arr[ii + 1] = - 2.0 * dx * te0_arr[ii] * qdens_gradient[ii] * qdens[ii] + te0_arr[ii - 1]
+    # Construct central points (Centered finite difference with constant)
+    for ii in range(1, NC-1):
+        soln_array[ii, ii - 1] = -1.0
+        soln_array[ii, ii    ] =  1.0 * m_arr[ii]
+        soln_array[ii, ii + 1] =  1.0
+    
+    # Enter boundary points : Neumann boundary conditions
+    soln_array[0, 0]           = 1.0
+    soln_array[NC - 1, NC - 1] = 1.0
+    
+    ans_arr[0]      = Te0_scalar
+    ans_arr[NC - 1] = Te0_scalar
+    
+    Te0[:] = np.dot(np.linalg.inv(soln_array), ans_arr)
+    
+    if False:
+        # Test: This should be zero if working
+        grad_P   = np.zeros(NC    , dtype=np.float64)
+        temp     = np.zeros(NC + 1, dtype=np.float64)
+        fields.get_grad_P(q_dens, Te0, grad_P, temp)
         
-    fields.get_grad_P(qdens, te0_arr, qdens_gradient, temp)
-    #pdb.set_trace()
+        import matplotlib.pyplot as plt
+        import sys
+        
+        fig, axes = plt.subplots(4, sharex=True)
+        
+        axes[0].plot(q_dens)
+        axes[0].set_ylabel('ne')
+        
+        axes[1].plot(qdens_gradient)
+        axes[1].set_ylabel('dne/dx')
+        
+        axes[2].plot(Te0)
+        axes[2].set_ylabel('Te')
+        
+        axes[3].plot(grad_P)
+        axes[3].set_ylabel('grad(P)')
+        
+        axes[3].set_xlabel('Cell number')
+        
+        sys.exit()
     return
 
 

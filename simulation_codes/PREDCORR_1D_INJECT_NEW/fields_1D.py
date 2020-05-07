@@ -8,7 +8,7 @@ import numpy as np
 import numba as nb
 
 import auxilliary_1D as aux
-from simulation_parameters_1D import dx, Te0, ne, q, mu0, kB, ie, B_eq, a, ND, NX, disable_waves
+from simulation_parameters_1D import dx, ne, q, mu0, kB, ie, B_eq, a, ND, NX, disable_waves
 
 
 @nb.njit()
@@ -100,7 +100,7 @@ def curl_B_term(B, curlB):
 
 
 @nb.njit()
-def get_electron_temp(qn, Te):
+def get_electron_temp(qn, Te, Te0):
     '''
     Calculate the electron temperature in each cell. Depends on the charge density of each cell
     and the treatment of electrons: i.e. isothermal (ie=0) or adiabatic (ie=1)
@@ -149,7 +149,7 @@ def get_grad_P(qn, te, grad_P, temp):
 
 
 @nb.njit()
-def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P):
+def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
     and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
@@ -175,7 +175,7 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P):
     Ve[:, 1] = (Ji[:, 1] - temp3De[:, 1]) / q_dens
     Ve[:, 2] = (Ji[:, 2] - temp3De[:, 2]) / q_dens
 
-    get_electron_temp(q_dens, Te)
+    get_electron_temp(q_dens, Te, Te0)
 
     get_grad_P(q_dens, Te, grad_P, temp3Db[:, 0])            # temp1D is now del_p term, temp3D2 slice used for computation
     aux.interpolate_edges_to_center(B, temp3Db)              # temp3db is now B_center

@@ -165,7 +165,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, \
 @nb.njit()
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
-              Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,\
+              Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields,\
               damping_array, qq, DT, max_inc, part_save_iter, field_save_iter):
     '''
     Main loop separated from __main__ function, since this is the actual computation bit.
@@ -196,7 +196,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     fields.push_B(B, E_int, temp3Db, DT, qq, damping_array, half_flag=1)
     
     # Calculate E at N + 1/2
-    fields.calculate_E(B, Ji, q_dens, E_half, Ve, Te, temp3De, temp3Db, temp1D)
+    fields.calculate_E(B, Ji, q_dens, E_half, Ve, Te, Te0, temp3De, temp3Db, temp1D)
 
     ###################################
     ### PREDICTOR CORRECTOR SECTION ###
@@ -228,7 +228,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
     
     # Compute predicted fields at N + 3/2
     fields.push_B(B, E_int, temp3Db, DT, qq + 1, damping_array, half_flag=1)
-    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D)
+    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D)
     
     # Determine corrected fields at N + 1 
     E_int *= 0.5;    E_int += 0.5 * E_half
