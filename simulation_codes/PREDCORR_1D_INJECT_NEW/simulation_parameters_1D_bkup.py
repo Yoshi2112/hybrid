@@ -9,12 +9,12 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Finding ways to avoid loss :: '''
+run_description = '''Testing the new equilibria and ND-NX interfaces :: Absorb, equilibrium on, constrained RC'''
 
 ### RUN PARAMETERS ###
-drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//loss_test_nppc'        # Series save dir   : Folder containing all runs of a series
-run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+drive             = 'D:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
+save_path         = 'runs//equilibrium_test'      # Series save dir   : Folder containing all runs of a series
+run               = 2                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
@@ -24,20 +24,21 @@ cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU 
 supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
-shoji_approx      = False
-particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Periodic (This has been disabled)
-
+shoji_approx      = False                         # Changes solution used for calculating particle B0r (1D vs. 3D)
+te0_equil         = True                          # Initialize te0 to be in equilibrium with density
+particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Periodic
+                                                  # Only reflects cold particles. Hot particles converted to cold
 
 ### SIMULATION PARAMETERS ###
 NX        = 1024                            # Number of cells - doesn't include ghost cells
-ND        = 128                             # Damping region length: Multiple of NX (on each side of simulation domain)
+ND        = 512                             # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev   = 50                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
 B_eq      = 200e-9                          # Initial magnetic field at equator: None for L-determined value (in T)
-rc_hwidth = 128                             # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
+rc_hwidth = 256                               # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
   
 orbit_res = 0.02                            # Orbit resolution
 freq_res  = 0.02                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
@@ -95,7 +96,7 @@ if B_eq is None:
     B_eq      = (B_surf / (L ** 3))                      # Magnetic field at equator, based on L value
     
 if beta_par is None:
-    Te0        = E_e   * 11603.
+    Te0_scalar = E_e   * 11603.
     Tpar       = E_par * 11603.
     Tper       = E_per * 11603.
 else:
@@ -103,7 +104,7 @@ else:
     
     Tpar       = beta_par    * B_eq ** 2 / (2 * mu0 * ne * kB)
     Tper       = beta_per    * B_eq ** 2 / (2 * mu0 * ne * kB)
-    Te0        = beta_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Te0_scalar = beta_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma
@@ -136,6 +137,7 @@ N = N_species.sum()
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
+
 
 ############################
 ### MAGNETIC FIELD STUFF ###
@@ -253,9 +255,3 @@ if particle_boundary != 0:
             sys.exit('Paramter particle_boundary must be 0,1,2, not {}'.format(particle_boundary))
 
 system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
-# =============================================================================
-# if beta == True:
-#     Te0        = B0 ** 2 * beta_e   / (2 * mu0 * ne * kB)    # Temperatures of species in Kelvin (used for particle velocity initialization)
-#     Tpar       = B0 ** 2 * beta_par / (2 * mu0 * ne * kB)
-#     Tper       = B0 ** 2 * beta_per / (2 * mu0 * ne * kB)
-# =============================================================================

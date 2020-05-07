@@ -9,12 +9,12 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Finding ways to avoid loss :: Test loss amount with N_ppc (more particles, less noise, less loss?)'''
+run_description = '''Finding ways to avoid loss :: Test loss amount with N_ppc :: This run has a new ND-NX interface'''
 
 ### RUN PARAMETERS ###
-drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
+drive             = 'D:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path         = 'runs//loss_test_nppc'        # Series save dir   : Folder containing all runs of a series
-run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+run               = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
@@ -25,6 +25,7 @@ supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
 shoji_approx      = False
+te0_equil         = True                          # Initialize te0 to be in equilibrium with density
 particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Periodic (This has been disabled)
 
 
@@ -49,8 +50,8 @@ field_res = 0.20                            # Data capture resolution in gyroper
 species_lbl= [r'$H^+$ cold']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
 temp_color = ['blue']
 temp_type  = np.array([0])             	                # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-dist_type  = np.array([0])                               # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.array([200])                           # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+dist_type  = np.array([0])                              # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+nsp_ppc    = np.array([2500])                           # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 
 mass       = np.array([1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1.])    			                # Species ion charge (elementary charge units)
@@ -95,7 +96,7 @@ if B_eq is None:
     B_eq      = (B_surf / (L ** 3))                      # Magnetic field at equator, based on L value
     
 if beta_par is None:
-    Te0        = E_e   * 11603.
+    Te0_scalar = E_e   * 11603.
     Tpar       = E_par * 11603.
     Tper       = E_per * 11603.
 else:
@@ -103,7 +104,7 @@ else:
     
     Tpar       = beta_par    * B_eq ** 2 / (2 * mu0 * ne * kB)
     Tper       = beta_per    * B_eq ** 2 / (2 * mu0 * ne * kB)
-    Te0        = beta_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Te0_scalar = beta_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma
@@ -168,7 +169,7 @@ loss_cone  = np.arcsin(np.sqrt(B_eq / B_xmax))*180 / np.pi # Loss cone in degree
 
 
 #%%### INPUT TESTS AND CHECKS
-if True:
+if False:
     import matplotlib.pyplot as plt
     
     max_v  = 20 * va
