@@ -20,11 +20,11 @@ def load_run(drive, series, run_num, extract_arrays=True, print_summary=True):
     load_species_params()
     initialize_simulation_variables()
     
-    if extract_arrays == True:
-        extract_all_arrays()
-        
     if print_summary == True:
         output_simulation_parameter_file(series, run_num)
+        
+    if extract_arrays == True:
+        extract_all_arrays()
     return
 
 
@@ -53,7 +53,7 @@ def manage_dirs(drive, series, run_num):
 def load_species_params():
     global species_present, density, dist_type, charge, mass, Tper,      \
            temp_type, temp_color, Tpar, species_lbl, n_contr,  \
-           drift_v, idx_start, idx_end, N_species, Bc, nsp_ppc
+           drift_v, idx_start, idx_end, N_species, Bc, nsp_ppc, Te0_arr
 
     p_path = os.path.join(data_dir, 'particle_parameters.npz')                  # File location
     p_data = np.load(p_path)                                                    # Load file
@@ -75,6 +75,11 @@ def load_species_params():
     Tpar       = p_data['Tpar']
     Tper       = p_data['Tper']
     Bc         = p_data['Bc']
+    
+    try:
+        Te0_arr = p_data['Te0']
+    except:
+        Te0_arr = np.ones(NC, dtype=np.float64) * Te0
 
     n_contr    = density / nsp_ppc  
     species_present = [False, False, False]                # Test for the presence of singly charged H, He, O
@@ -161,7 +166,7 @@ def load_simulation_params():
     except:
         run_time     = -1.0
         run_time_str = ''
-        
+
     grid_min = B_nodes[0]
     grid_max = B_nodes[-1]
     grid_mid = 0
@@ -248,9 +253,6 @@ def output_simulation_parameter_file(series, run):
             print('Perp Temp       :: {} K'.format(Tper), file=f)
             print('Para Temp       :: {} K'.format(Tpar), file=f)
             print('MParticle Contr.:: {} real particles/macroparticle'.format(n_contr), file=f)
-            
-       # ,  \
-       # idx_start, idx_end
     return
 
 def load_fields(ii):
@@ -461,8 +463,7 @@ def interpolate_fields_to_particle_time(num_particle_steps, timebase=None):
 
 @nb.njit()
 def create_idx():
-    N_part = cellpart * NX
-    idx    = np.zeros(N_part, dtype=nb.int32)
+    idx    = np.zeros(N, dtype=nb.int32)
     
     for jj in range(Nj):
         idx[idx_start[jj]: idx_end[jj]] = jj
@@ -518,7 +519,7 @@ def assign_weighting_TSC(pos, E_nodes=True):
 
 @nb.njit()
 def collect_moments(Ie, W_elec, idx):
-    n_contr   = density / (cellpart*sim_repr)
+    n_contr   = density / nsp_ppc
     size      = NX + 3
     n_i       = np.zeros((size, Nj))
     

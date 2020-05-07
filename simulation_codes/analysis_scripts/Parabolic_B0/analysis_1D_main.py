@@ -2610,14 +2610,12 @@ def check_posvel_ortho():
 if __name__ == '__main__':
     drive       = 'F:'
     
-    #series      = 'second_tests'
-    #series      = 'new_ideas_test_v1'
-    series      = 'old_new_compare_v2'
+    series      = 'loose_the_loss'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [5, 6]:#range(num_runs):
+    for run_num in range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
 
@@ -2662,10 +2660,10 @@ if __name__ == '__main__':
         
         # Particle Loss Analysis :: For Every Time (really time consuming)
         #analyse_particle_motion()
-        
+        #analyse_particle_motion_manual()
         
         #plot_B0()
-        #analyse_particle_motion_manual()
+        
         
         
         #check_fields()
