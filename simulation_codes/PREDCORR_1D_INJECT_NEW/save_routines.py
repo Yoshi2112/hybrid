@@ -41,7 +41,7 @@ def manage_directories():
     return
 
 
-def store_run_parameters(dt, part_save_iter, field_save_iter):
+def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
     d_path = ('%s/%s/run_%d/data/' % (drive, save_path, const.run))    # Set path for data
     f_path = d_path + '/fields/'
     p_path = d_path + '/particles/'
@@ -79,7 +79,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                    ('loss_cone', const.loss_cone),
                    ('rc_hwidth', const.rc_hwidth),
                    ('ne', ne),
-                   ('Te0', const.Te0),
+                   ('Te0', const.Te0_scalar),
                    ('ie', const.ie),
                    ('part_save_iter', part_save_iter),
                    ('field_save_iter', field_save_iter),
@@ -115,7 +115,8 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                      N_species   = N_species,
                      Tpar        = Tpar,
                      Tper        = Tper,
-                     Bc          = Bc)
+                     Bc          = Bc,
+                     Te0         = Te0)
     print('Particle data saved')
     return
 

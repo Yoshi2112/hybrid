@@ -9,14 +9,14 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Finding ways to avoid loss :: Reflecting cold particles and converting hot particles to cold'''
+run_description = '''Testing the new equilibria and ND-NX interfaces :: Absorb, equilibrium on, constrained RC'''
 
 ### RUN PARAMETERS ###
-drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//loose_the_loss'        # Series save dir   : Folder containing all runs of a series
-run               = 4                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles    = 0                             # Save data flag    : For later analysis
-save_fields       = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
+drive             = 'D:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
+save_path         = 'runs//equilibrium_test'      # Series save dir   : Folder containing all runs of a series
+run               = 2                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_particles    = 1                             # Save data flag    : For later analysis
+save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
 
@@ -26,7 +26,7 @@ homogenous        = False                         # Set B0 to homogenous (as tes
 disable_waves     = False                         # Zeroes electric field solution at each timestep
 shoji_approx      = False                         # Changes solution used for calculating particle B0r (1D vs. 3D)
 te0_equil         = True                          # Initialize te0 to be in equilibrium with density
-particle_boundary = 1                             # 0: Absorb, 1: Reflect, 2: Periodic
+particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Periodic
                                                   # Only reflects cold particles. Hot particles converted to cold
 
 ### SIMULATION PARAMETERS ###
@@ -38,7 +38,7 @@ L         = 5.35                            # Field line L shell
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
 B_eq      = 200e-9                          # Initial magnetic field at equator: None for L-determined value (in T)
-rc_hwidth = 256                             # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
+rc_hwidth = 256                               # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
   
 orbit_res = 0.02                            # Orbit resolution
 freq_res  = 0.02                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values

@@ -378,7 +378,7 @@ def set_equilibrium_te0(q_dens, Te0):
     return
 
 
-def set_timestep(vel, E):
+def set_timestep(vel, E, Te0):
     '''
     INPUT:
         vel -- Initial particle velocities
@@ -417,7 +417,7 @@ def set_timestep(vel, E):
         field_save_iter = int(const.field_res*gyperiod / DT)
 
     if const.save_fields == 1 or const.save_particles == 1:
-        save.store_run_parameters(DT, part_save_iter, field_save_iter)
+        save.store_run_parameters(DT, part_save_iter, field_save_iter, Te0)
 
     damping_array = np.ones(NC + 1)
     set_damping_array(damping_array, DT)
