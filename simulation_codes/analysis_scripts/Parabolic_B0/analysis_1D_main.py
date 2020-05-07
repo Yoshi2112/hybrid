@@ -1350,10 +1350,10 @@ def summary_plots(save=True, histogram=True):
                 ax_vy.scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[1, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj], lw=0)
         
             ax_vx.legend(loc='upper right')
-            ax_vx.set_title(r'Particle velocities vs. Position (x)')
+            ax_vx.set_title(r'Particle velocities (in $v_A$) vs. Position (x)')
             ax_vy.set_xlabel(r'Cell', labelpad=10)
-            ax_vx.set_ylabel(r'$\frac{v_x}{v_A}$', rotation=0)
-            ax_vy.set_ylabel(r'$\frac{v_y}{v_A}$', rotation=0)
+            ax_vx.set_ylabel(r'$v_x$', rotation=0)
+            ax_vy.set_ylabel(r'$v_y$', rotation=0)
             
             plt.setp(ax_vx.get_xticklabels(), visible=False)
             ax_vx.set_yticks(ax_vx.get_yticks()[1:])
@@ -1856,7 +1856,7 @@ def plot_initial_configurations(it_max=None, save=True, plot_lost=True):
         ax1.set_title('Initial Loss Cone Distribution :: {}'.format(cf.species_lbl[jj]))
         ax1.set_ylabel('$v_\parallel$ (m/s)')
         ax1.set_xlabel('$v_\perp$ (m/s)')
-        ax1.legend()
+        ax1.legend(loc='upper right')
         
         # v_mag vs. x
         ax2.scatter(init_pos[0, cf.idx_start[jj]: cf.idx_end[jj]], v_mag[cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
@@ -1866,7 +1866,7 @@ def plot_initial_configurations(it_max=None, save=True, plot_lost=True):
         ax2.set_title('Initial Velocity vs. Position :: {}'.format(cf.species_lbl[jj]))
         ax2.set_xlabel('Position (m)')
         ax2.set_ylabel('Velocity |v| (m/s)')
-        ax2.legend()
+        ax2.legend(loc='upper right')
             
         # v components vs. x (3 plots)
         ax3[0].scatter(init_pos[0, cf.idx_start[jj]: cf.idx_end[jj]], init_vel[0, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
@@ -1886,7 +1886,7 @@ def plot_initial_configurations(it_max=None, save=True, plot_lost=True):
         ax3[2].set_xlabel('Position (m)')
         
         for ax in ax3:
-            ax.legend()
+            ax.legend(loc='upper right')
             
         if save == True:
             fig1.savefig(savedir + 'loss_velocity_space_species_{}'.format(jj))
@@ -1950,7 +1950,7 @@ def plot_initial_configurations_loss_with_time(it_max=None, save=True, skip=1):
             ax1.set_title('Initial Velocity Distribution :: {} :: Lost Particles at t={:.2f}s'.format(cf.species_lbl[jj], ptime2))
             ax1.set_ylabel('$v_\parallel$ (m/s)')
             ax1.set_xlabel('$v_\perp$ (m/s)')
-            ax1.legend()
+            ax1.legend(loc='upper right')
             
             # v_mag vs. x
             ax2.scatter(init_pos[0, cf.idx_start[jj]: cf.idx_end[jj]], v_mag[cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
@@ -1959,7 +1959,7 @@ def plot_initial_configurations_loss_with_time(it_max=None, save=True, skip=1):
             ax2.set_title('Initial Velocity vs. Position :: {} :: Lost Particles at t={:.2f}s'.format(cf.species_lbl[jj], ptime2))
             ax2.set_xlabel('Position (m)')
             ax2.set_ylabel('Velocity |v| (/vA)')
-            ax2.legend()
+            ax2.legend(loc='upper right')
                 
             # v components vs. x (3 plots)
             ax3[0].scatter(init_pos[0, cf.idx_start[jj]: cf.idx_end[jj]], init_vel[0, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
@@ -1978,7 +1978,7 @@ def plot_initial_configurations_loss_with_time(it_max=None, save=True, skip=1):
             ax3[2].set_xlabel('Position (m)')
             
             for ax in ax3:
-                ax.legend()
+                ax.legend(loc='upper right')
                 
             if save == True:
                 savedir1 = dir1 + '/species_{}/'.format(jj)
@@ -2419,13 +2419,22 @@ def plot_loss_paths(it_max=None, save_to_file=True):
             ax4[4].set_xlabel('Time (s)')
             ax4[4].set_xlim(0, ptime[-1])
             
-            ax4[1].legend()
+            ax4[1].legend(loc='upper right')
             for ax in ax4:
                 ax.axvline(ptime[fn_idx], c='k', ls='--', alpha=0.5)
             
             filename4 = 'components_vs_time_idx_%07d.png' % lval[ii]
             fig4.savefig(particle_path + filename4)
             plt.close('all') 
+    return
+
+
+@nb.njit()
+def accrue_vector_information(inarr, idxarr, outarr, firstcomp=1, lastcomp=2):
+    for kk in range(outarr.shape[1]):
+        if idxarr[kk] >= 0:
+            for ii in range(firstcomp, lastcomp+1):
+                outarr[ii, kk] += inarr[ii, kk]
     return
 
 
@@ -2453,11 +2462,14 @@ def plot_average_GC(it_max=None, save=True):
     for ii in range(it_max):
         print('Getting particle loss data from dump file {}'.format(ii))
         pos, vel, idx, ptime = cf.load_particles(ii)
+        accrue_vector_information(pos, idx, gc_av)
         
-        for kk in range(cf.N):
-            if idx[kk] >= 0:
-                gc_av[0, kk] += pos[1, kk]
-                gc_av[1, kk] += pos[2, kk]
+# =============================================================================
+#         for kk in range(cf.N):
+#             if idx[kk] >= 0:
+#                 gc_av[0, kk] += pos[1, kk]
+#                 gc_av[1, kk] += pos[2, kk]
+# =============================================================================
    
     gc_av *= 1e-3  / it_max
     
@@ -2597,7 +2609,6 @@ def check_posvel_ortho():
 #%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
-    #drive       = 'G://MODEL_RUNS//Josh_Runs//'
     
     #series      = 'second_tests'
     #series      = 'new_ideas_test_v1'
@@ -2606,29 +2617,27 @@ if __name__ == '__main__':
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in [3, 4]:#range(num_runs):
+    for run_num in [5, 6]:#range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
 
         plot_adiabatic_parameter()
+        plot_particle_loss_with_time()
+        plot_average_GC()
+        
+        plot_initial_configurations()
+        plot_adiabatic_parameter()
+        plot_average_mu()
 
-        if False:
-            plot_particle_loss_with_time()
-            plot_average_GC()
-            
-            plot_initial_configurations()
-            plot_adiabatic_parameter()
-            plot_average_mu()
-    
-            try:
-                standard_analysis_package()
-            except:
-                pass
-    
-            try:
-                summary_plots(save=True, histogram=False)
-            except:
-                pass
+        try:
+            standard_analysis_package()
+        except:
+            pass
+
+        try:
+            summary_plots(save=True, histogram=False)
+        except:
+            pass
         
 # =============================================================================
 #         

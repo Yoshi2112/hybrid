@@ -9,41 +9,40 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Testing mu conservation'''
+run_description = '''Finding ways to avoid loss :: '''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//small_bottle_test_v3'# Series save dir   : Folder containing all runs of a series
-run               = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path         = 'runs//loss_test_nppc'        # Series save dir   : Folder containing all runs of a series
+run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
-save_fields       = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
+save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
 
 ## DIAGNOSTIC FLAGS :: DOUBLE CHECK BEFORE EACH RUN! ##
-## THESE FLAGS NO LONGER TRIGGER THE SETTING, ONLY THE SAVE PARAMETER.
-## SETTING MUST BE CHANGED IN THE PARTICLES.PY FILE BY UNCOMMENTING THE APPROPRIATE CODE
 supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
-disable_waves     = True                          # Disables solutions to wave fields. Only background magnetic field exists
-particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Periodic
+disable_waves     = False                         # Zeroes electric field solution at each timestep
+shoji_approx      = False
+particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Periodic (This has been disabled)
 
 
 ### SIMULATION PARAMETERS ###
-NX        = 512                             # Number of cells - doesn't include ghost cells
-ND        = 8                               # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 100                             # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+NX        = 1024                            # Number of cells - doesn't include ghost cells
+ND        = 128                             # Damping region length: Multiple of NX (on each side of simulation domain)
+max_rev   = 50                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
-L         = 4.00                            # Field line L shell
+L         = 5.35                            # Field line L shell
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
-B_eq      = None                          # Initial magnetic field at equator: None for L-determined value (in T)
-rc_hwidth = 0                               # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
+B_eq      = 200e-9                          # Initial magnetic field at equator: None for L-determined value (in T)
+rc_hwidth = 128                             # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
   
 orbit_res = 0.02                            # Orbit resolution
 freq_res  = 0.02                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
-part_res  = 0.10                            # Data capture resolution in gyroperiod fraction: Particle information
-field_res = 1.00                            # Data capture resolution in gyroperiod fraction: Field information
+part_res  = 0.50                            # Data capture resolution in gyroperiod fraction: Particle information
+field_res = 0.20                            # Data capture resolution in gyroperiod fraction: Field information
 
 
 ### PARTICLE PARAMETERS ###
@@ -51,7 +50,7 @@ species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/label
 temp_color = ['blue', 'red']
 temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
 dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.array([100, 100])                           # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+nsp_ppc    = np.array([200, 200])                           # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
@@ -169,6 +168,28 @@ loss_cone  = np.arcsin(np.sqrt(B_eq / B_xmax))*180 / np.pi # Loss cone in degree
 
 
 #%%### INPUT TESTS AND CHECKS
+if False:
+    import matplotlib.pyplot as plt
+    
+    max_v  = 20 * va
+    N_plot = 1000
+    B_av   = 0.5 * (B_xmax + B_eq)
+    z0     = xmax
+    
+    v_perp = np.linspace(0, max_v, N_plot)
+    
+    epsilon = mp * v_perp / (q * B_av * z0)
+    
+    fig, ax = plt.subplots(figsize=(15, 10))
+    
+    ax.set_title(r'Adiabatic Parameter $\epsilon$ vs. Expected v_perp range :: NX = {} :: L = {}'.format(NX, L))
+    ax.set_ylabel(r'$\epsilon$', rotation=0)
+    ax.set_xlabel(r'$v_\perp (/v_A)$')
+    ax.set_xlim(0, max_v/va)
+    ax.plot(v_perp/va, epsilon)
+
+
+
 if rc_hwidth == 0:
     rc_print = NX
 else:
