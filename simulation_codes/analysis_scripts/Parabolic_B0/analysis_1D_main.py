@@ -2578,6 +2578,22 @@ def plot_average_mu(it_max=None, save=True):
     return
 
 
+def check_posvel_ortho():
+    init_pos, init_vel, init_idx, ptime = cf.load_particles(0)
+
+    dot_product = init_pos[1] * init_vel[1] + init_pos[2] * init_vel[2]
+    mag_a       = np.sqrt(init_pos[1] ** 2 + init_pos[2] ** 2)
+    mag_b       = np.sqrt(init_vel[1] ** 2 + init_vel[2] ** 2)
+    rel_angle   = np.arccos(dot_product / (mag_a * mag_b)) * 180. / np.pi
+
+    print('------------------')
+    print('Perpendicular Position/Velocity Initiation')
+    print('Maximum dot product    : {}'.format(dot_product.max()))
+    print('Minimum relative angle : {}'.format(rel_angle.min()))
+    print('------------------')
+    return
+
+
 #%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
@@ -2590,26 +2606,29 @@ if __name__ == '__main__':
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     
-    for run_num in range(num_runs):
-        print('Run {}'.format(run_num))
+    for run_num in [3, 4]:#range(num_runs):
+        print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
 
-        plot_particle_loss_with_time()
-        plot_average_GC()
-        
-        plot_initial_configurations()
         plot_adiabatic_parameter()
-        plot_average_mu()
 
-        try:
-            standard_analysis_package()
-        except:
-            pass
-
-        try:
-            summary_plots(save=True, histogram=False)
-        except:
-            pass
+        if False:
+            plot_particle_loss_with_time()
+            plot_average_GC()
+            
+            plot_initial_configurations()
+            plot_adiabatic_parameter()
+            plot_average_mu()
+    
+            try:
+                standard_analysis_package()
+            except:
+                pass
+    
+            try:
+                summary_plots(save=True, histogram=False)
+            except:
+                pass
         
 # =============================================================================
 #         

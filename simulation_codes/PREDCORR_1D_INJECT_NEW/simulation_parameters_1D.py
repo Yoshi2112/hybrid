@@ -9,11 +9,11 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''This is the NEW code, with fixed (?) particle loading. See if there are any differences.'''
+run_description = '''Finding ways to avoid loss :: '''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//zero_parallel_run'    # Series save dir   : Folder containing all runs of a series
+save_path         = 'runs//hoard_density_v1'      # Series save dir   : Folder containing all runs of a series
 run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 0                             # Save data flag    : For later analysis
 save_fields       = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
@@ -24,7 +24,7 @@ cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU 
 supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
-shoji_approx      = True
+shoji_approx      = False
 particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Periodic (This has been disabled)
 
 
@@ -37,7 +37,7 @@ L         = 5.35                            # Field line L shell
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
 B_eq      = 200e-9                          # Initial magnetic field at equator: None for L-determined value (in T)
-rc_hwidth = 0                               # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
+rc_hwidth = 128                             # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
   
 orbit_res = 0.02                            # Orbit resolution
 freq_res  = 0.02                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
@@ -168,6 +168,28 @@ loss_cone  = np.arcsin(np.sqrt(B_eq / B_xmax))*180 / np.pi # Loss cone in degree
 
 
 #%%### INPUT TESTS AND CHECKS
+if False:
+    import matplotlib.pyplot as plt
+    
+    max_v  = 20 * va
+    N_plot = 1000
+    B_av   = 0.5 * (B_xmax + B_eq)
+    z0     = xmax
+    
+    v_perp = np.linspace(0, max_v, N_plot)
+    
+    epsilon = mp * v_perp / (q * B_av * z0)
+    
+    fig, ax = plt.subplots(figsize=(15, 10))
+    
+    ax.set_title(r'Adiabatic Parameter $\epsilon$ vs. Expected v_perp range :: NX = {} :: L = {}'.format(NX, L))
+    ax.set_ylabel(r'$\epsilon$', rotation=0)
+    ax.set_xlabel(r'$v_\perp (/v_A)$')
+    ax.set_xlim(0, max_v/va)
+    ax.plot(v_perp/va, epsilon)
+
+
+
 if rc_hwidth == 0:
     rc_print = NX
 else:

@@ -13,7 +13,6 @@ import save_routines as save
 
 import particles_1D as particles
 import fields_1D    as fields
-import auxilliary_1D as aux
 
 from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
@@ -181,7 +180,7 @@ def initialize_particles():
         <NONE>
         
     OUTPUT:
-        pos    -- Particle position array (1, N)
+        pos    -- Particle position array (3, N)
         vel    -- Particle velocity array (3, N)
         Ie     -- Initial particle positions by leftmost E-field node
         W_elec -- Initial particle weights on E-grid
@@ -387,230 +386,248 @@ def set_timestep(vel, E):
 
 
 
-if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-   
-    POS, VEL, IDX = uniform_gaussian_distribution_quiet()
-
-    V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
-    V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
-    V_PARA = VEL[0] / va
-    
 # =============================================================================
-#     # Test gyrophase transformation
-#     pos_gphase  = get_atan(POS[2], POS[1]) * 180. / np.pi
-#     vel_gphase  = (get_atan(VEL[2], VEL[1]) * 180. / np.pi + 90.)%360.
+# if __name__ == '__main__':
+#     import matplotlib.pyplot as plt
+#    
+#     POS,         VEL,     IDX =     uniform_gaussian_distribution_quiet()
+#     OLD_POS, OLD_VEL, OLD_IDX = OLD_uniform_gaussian_distribution_quiet()
+#     
+#     V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
+#     V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
+#     V_PARA = VEL[0] / va
+#     
+#     OV_MAG  = np.sqrt(OLD_VEL[0] ** 2 + OLD_VEL[1] ** 2 + OLD_VEL[2] ** 2) / va 
+#     OV_PERP = np.sign(OLD_VEL[2]) * np.sqrt(OLD_VEL[1] ** 2 + OLD_VEL[2] ** 2) / va
+#     OV_PARA = OLD_VEL[0] / va
+#     
+# # =============================================================================
+# #     # Test gyrophase transformation
+# #     pos_gphase  = get_atan(POS[2], POS[1]) * 180. / np.pi
+# #     vel_gphase  = (get_atan(VEL[2], VEL[1]) * 180. / np.pi + 90.)%360.
+# # =============================================================================
 #     
 #     dot_product = POS[1] * VEL[1] + POS[2] * VEL[2]
 #     mag_a       = np.sqrt(POS[1] ** 2 + POS[2] ** 2)
 #     mag_b       = np.sqrt(VEL[1] ** 2 + VEL[2] ** 2)
 #     rel_angle   = np.arccos(dot_product / (mag_a * mag_b)) * 180. / np.pi
 #     
+#     odot_product = OLD_POS[1] * OLD_VEL[1] + OLD_POS[2] * OLD_VEL[2]
+#     omag_a       = np.sqrt(OLD_POS[1] ** 2 + OLD_POS[2] ** 2)
+#     omag_b       = np.sqrt(OLD_VEL[1] ** 2 + OLD_VEL[2] ** 2)
+#     orel_angle   = np.arccos(odot_product / (omag_a * omag_b)) * 180. / np.pi
+#     
 #     print(dot_product.max())
 #     print(rel_angle.min())
-# =============================================================================
-# =============================================================================
-#     plt.ioff()
-#     fig1, ax1 = plt.subplots()
-#     fig2, ax2 = plt.subplots()
-#     fig3, ax3 = plt.subplots()
 #     
-#     node_number = 0
-#     
-#     for jj in [1]:#range(cf.Nj):
-#         if True:
-#             # Loss cone diagram
-#             ax1.scatter(V_PERP[idx_start[jj]: idx_end[jj]], V_PARA[idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
-# 
-#             ax1.set_title('Loss Cone Distribution :: {}'.format(const.species_lbl[jj]))
-#             ax1.set_ylabel('$v_\parallel (/v_A)$')
-#             ax1.set_xlabel('$v_\perp (/v_A)$')
-#             ax1.axis('equal')
-#      
-#             ax2.scatter(POS[1, idx_start[jj]: idx_end[jj]], POS[2, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
-#             ax2.set_title('Gyroposition :: {}'.format(const.species_lbl[jj]))
-#             ax2.set_ylabel('$y (m)$')
-#             ax2.set_xlabel('$z (m)$')
-#             ax2.axis('equal')
+#     print(odot_product.max())
+#     print(orel_angle.min())
+# # =============================================================================
+# #     plt.ioff()
+# #     fig1, ax1 = plt.subplots()
+# #     fig2, ax2 = plt.subplots()
+# #     fig3, ax3 = plt.subplots()
+# #     
+# #     node_number = 0
+# #     
+# #     for jj in [1]:#range(cf.Nj):
+# #         if True:
+# #             # Loss cone diagram
+# #             ax1.scatter(V_PERP[idx_start[jj]: idx_end[jj]], V_PARA[idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+# # 
+# #             ax1.set_title('Loss Cone Distribution :: {}'.format(const.species_lbl[jj]))
+# #             ax1.set_ylabel('$v_\parallel (/v_A)$')
+# #             ax1.set_xlabel('$v_\perp (/v_A)$')
+# #             ax1.axis('equal')
+# #      
+# #             ax2.scatter(POS[1, idx_start[jj]: idx_end[jj]], POS[2, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+# #             ax2.set_title('Gyroposition :: {}'.format(const.species_lbl[jj]))
+# #             ax2.set_ylabel('$y (m)$')
+# #             ax2.set_xlabel('$z (m)$')
+# #             ax2.axis('equal')
+# #             
+# #             ax3.scatter(POS[1, idx_start[jj]: idx_end[jj]], POS[2, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+# #             ax3.set_title('Gyrovelocity :: {}'.format(const.species_lbl[jj]))
+# #             ax3.set_ylabel('$v_y (m/s)$')
+# #             ax3.set_xlabel('$v_z (m/s)$')
+# #             ax3.axis('equal')
+# # =============================================================================
+# # =============================================================================
+# #         if False:
+# #             # v_mag vs. x
+# #             ax2.scatter(POS[0, idx_start[jj]: idx_end[jj]], V_MAG[idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+# # 
+# #             ax2.set_title('Velocity vs. Position')
+# #             ax2.set_xlabel('Position (m)')
+# #             ax2.set_ylabel('Velocity |v| (m/s)')
+# #         
+# #         if False:
+# #             # v components vs. x (3 plots)
+# #             ax3[0].scatter(POS[0, idx_start[jj]: idx_end[jj]], VEL[0, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+# #             ax3[1].scatter(POS[0, idx_start[jj]: idx_end[jj]], VEL[1, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+# #             ax3[2].scatter(POS[0, idx_start[jj]: idx_end[jj]], VEL[2, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+# # 
+# #             ax3[0].set_ylabel('$v_x$ (m/s)')
+# #             ax3[1].set_ylabel('$v_y$ (m/s)')
+# #             ax3[2].set_ylabel('$v_z$ (m/s)')
+# #             
+# #             ax3[0].set_title('Velocity Components vs. Position')
+# #             ax3[2].set_xlabel('Position (m)')
+# # =============================================================================
 #             
-#             ax3.scatter(POS[1, idx_start[jj]: idx_end[jj]], POS[2, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
-#             ax3.set_title('Gyrovelocity :: {}'.format(const.species_lbl[jj]))
-#             ax3.set_ylabel('$v_y (m/s)$')
-#             ax3.set_xlabel('$v_z (m/s)$')
-#             ax3.axis('equal')
-# =============================================================================
-# =============================================================================
-#         if False:
-#             # v_mag vs. x
-#             ax2.scatter(POS[0, idx_start[jj]: idx_end[jj]], V_MAG[idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
-# 
-#             ax2.set_title('Velocity vs. Position')
-#             ax2.set_xlabel('Position (m)')
-#             ax2.set_ylabel('Velocity |v| (m/s)')
-#         
-#         if False:
-#             # v components vs. x (3 plots)
-#             ax3[0].scatter(POS[0, idx_start[jj]: idx_end[jj]], VEL[0, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
-#             ax3[1].scatter(POS[0, idx_start[jj]: idx_end[jj]], VEL[1, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
-#             ax3[2].scatter(POS[0, idx_start[jj]: idx_end[jj]], VEL[2, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
-# 
-#             ax3[0].set_ylabel('$v_x$ (m/s)')
-#             ax3[1].set_ylabel('$v_y$ (m/s)')
-#             ax3[2].set_ylabel('$v_z$ (m/s)')
+# # =============================================================================
+# #         if False:
+# #             fig = plt.figure(figsize=(12,10))
+# #             fig.suptitle('Configuration space distribution of {}'.format(const.species_lbl[jj]))
+# #             fig.patch.set_facecolor('w')
+# #             num_bins = const.NX * 8
+# #         
+# #             ax_x = plt.subplot()
+# #         
+# #             xs, BinEdgesx = np.histogram(POS[0, const.idx_start[jj]: const.idx_end[jj]], bins=num_bins)
+# #             bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
+# #             ax_x.plot(bx, xs, '-', c=const.temp_color[const.temp_type[jj]], drawstyle='steps')
+# #             ax_x.set_xlabel(r'$x_p (m)$')
+# #             ax_x.set_xlim(const.xmin, const.xmax)
+# # =============================================================================
 #             
-#             ax3[0].set_title('Velocity Components vs. Position')
-#             ax3[2].set_xlabel('Position (m)')
-# =============================================================================
-            
-# =============================================================================
-#         if False:
-#             fig = plt.figure(figsize=(12,10))
-#             fig.suptitle('Configuration space distribution of {}'.format(const.species_lbl[jj]))
-#             fig.patch.set_facecolor('w')
-#             num_bins = const.NX * 8
-#         
-#             ax_x = plt.subplot()
-#         
-#             xs, BinEdgesx = np.histogram(POS[0, const.idx_start[jj]: const.idx_end[jj]], bins=num_bins)
-#             bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
-#             ax_x.plot(bx, xs, '-', c=const.temp_color[const.temp_type[jj]], drawstyle='steps')
-#             ax_x.set_xlabel(r'$x_p (m)$')
-#             ax_x.set_xlim(const.xmin, const.xmax)
-# =============================================================================
-            
-# =============================================================================
-#         if True:
-#             '''
-#             Is there a way to get a 2D contour plot of velocity distribution (of a component)
-#             across space?
-#             '''            
-#             # Account for damping nodes. Node_number should be "real" node count.
-#             num_bins = const.nsp_ppc[jj] // 20
-#             
-#             distro_function = np.zeros((3, NX, num_bins))
-#             
-#             for ii in range(NX):
-#                 node_number = const.ND + ii
-#                 x_node      = const.E_nodes[node_number]
-#                 f           = np.zeros((1, 3))
-#                 
-#                 count = 0
-#                 for ii in np.arange(const.idx_start[jj], const.idx_end[jj]):
-#                     if (abs(POS[0, ii] - x_node) <= 0.5*const.dx):
-#                         f = np.append(f, [VEL[0:3, ii]], axis=0)
-#                         count += 1
-#           
-#                 xs, BinEdgesx = np.histogram((f[:, 0] - const.drift_v[jj]) / const.va, bins=num_bins)
-#                 bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
-#                 ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
-#             
-#                 ys, BinEdgesy = np.histogram(f[:, 1] / const.va, bins=num_bins)
-#                 by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
-#                 ax_y.plot(by, ys, '-', c='c', drawstyle='steps')
-#             
-#                 zs, BinEdgesz = np.histogram(f[:, 2] / const.va, bins=num_bins)
-#                 bz = 0.5 * (BinEdgesz[1:] + BinEdgesz[:-1])
-#                 ax_z.plot(bz, zs, '-', c='c', drawstyle='steps')
-# =============================================================================
-
-    
-    import diagnostics       as diag
-    diag.check_velocity_distribution(VEL)
-    #diag.check_cell_velocity_distribution(POS, VEL, node_number=0, j=0)
-# =============================================================================
-#     if True:
-#         for jj in range(const.Nj):
-#             plt.figure(jj)
-#             v_perp = np.sign(VEL[2, const.idx_start[jj]:idx_end[jj]]) * \
-#                      np.sqrt(VEL[1, const.idx_start[jj]:idx_end[jj]] ** 2 +
-#                              VEL[2, const.idx_start[jj]:idx_end[jj]] ** 2) / const.va
-#             
-#             v_para = VEL[0, const.idx_start[jj]:idx_end[jj]] / const.va
-#             
-#             plt.scatter(v_perp, v_para, c=const.temp_color[jj], s=1)
-#             plt.title(r'Total Velocity Distribution Functions (%s) :: $\alpha_L$ = %.1f$^\circ$' % (const.species_lbl[jj], const.loss_cone))
-#             plt.xlabel('$v_\perp / v_A$')
-#             plt.ylabel('$v_\parallel / v_A$')
-#             
-#             gradient = np.tan(np.pi/2 - const.loss_cone * np.pi / 180.)
-#             lmin, lmax = plt.gca().get_xlim()
-#             lcx  = np.linspace(lmin, lmax, 100, endpoint=True)
-#             lcy1 =  gradient * lcx
-#             lcy2 = -gradient * lcx
-#             
-#             plt.plot(lcx, lcy1, c='k', alpha=0.5, ls=':')
-#             plt.plot(lcx, lcy2, c='k', alpha=0.5, ls=':')
-#             
-#             plt.axvline(0, c='k')
-#             plt.axhline(0, c='k')
-# =============================================================================
-# =============================================================================
-#     if False:
-#         for jj in range(const.Nj):
-#             plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
-#                         rL[const.idx_start[jj]:idx_end[jj]],
-#                         c=const.temp_color[jj],
-#                         label=const.species_lbl[jj], s=1)
-#         plt.legend()
-#         plt.title('Larmor radius with position')
-#         
-#     if False:
-#         plt.figure()
-#         for jj in range(const.Nj):
-#             plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
-#                         VPERP_OLD[const.idx_start[jj]:idx_end[jj]],
-#                         c=const.temp_color[jj],
-#                         label=const.species_lbl[jj], s=4)
-#         plt.legend()
-#         plt.title('$v_\perp$ before transformation, with position')
-#         
-#         plt.figure()
-#         for jj in range(const.Nj):
-#             plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
-#                         VPERP_NEW[const.idx_start[jj]:idx_end[jj]],
-#                         c=const.temp_color[jj],
-#                         label=const.species_lbl[jj], s=4)
-#         plt.legend()
-#         plt.title('$v_\perp$ after transformation, with position')
-#         
-#     if False:
-#         jj = 1
-#         v_perp_old = np.sqrt(IDX[1] ** 2 + IDX[2] ** 2)
-#         plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
-#                     v_perp[const.idx_start[jj]:idx_end[jj]],
-#                     c='r',
-#                     label=const.species_lbl[jj])
-#         
-#         plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
-#                     v_perp_old[const.idx_start[jj]:idx_end[jj]],
-#                     c='k',
-#                     label=const.species_lbl[jj])
-#         
-#         plt.legend()
-#         plt.title('v_perp with position: Initial (Black) and adjusted for position (Red)')
-#     
-#     
-#     if False:
-#         jj = 1
-#         plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
-#                     np.log10(VEL[const.idx_start[jj]:idx_end[jj]]),
-#                     c='k',
-#                     label='$v_\perp/v_\parallel$ old',
-#                     marker='o', s=1)
-#         
-#         plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
-#                     np.log10(IDX[const.idx_start[jj]:idx_end[jj]]),
-#                     c='r',
-#                     label='$v_\perp/v_\parallel$ new',
-#                     marker='x', s=1)
-#         
-#         plt.ylim(-2, 6)
-#         plt.legend()
-#         plt.title('perp/parallel velocity ratios before/after transformation')
+# # =============================================================================
+# #         if True:
+# #             '''
+# #             Is there a way to get a 2D contour plot of velocity distribution (of a component)
+# #             across space?
+# #             '''            
+# #             # Account for damping nodes. Node_number should be "real" node count.
+# #             num_bins = const.nsp_ppc[jj] // 20
+# #             
+# #             distro_function = np.zeros((3, NX, num_bins))
+# #             
+# #             for ii in range(NX):
+# #                 node_number = const.ND + ii
+# #                 x_node      = const.E_nodes[node_number]
+# #                 f           = np.zeros((1, 3))
+# #                 
+# #                 count = 0
+# #                 for ii in np.arange(const.idx_start[jj], const.idx_end[jj]):
+# #                     if (abs(POS[0, ii] - x_node) <= 0.5*const.dx):
+# #                         f = np.append(f, [VEL[0:3, ii]], axis=0)
+# #                         count += 1
+# #           
+# #                 xs, BinEdgesx = np.histogram((f[:, 0] - const.drift_v[jj]) / const.va, bins=num_bins)
+# #                 bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
+# #                 ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
+# #             
+# #                 ys, BinEdgesy = np.histogram(f[:, 1] / const.va, bins=num_bins)
+# #                 by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
+# #                 ax_y.plot(by, ys, '-', c='c', drawstyle='steps')
+# #             
+# #                 zs, BinEdgesz = np.histogram(f[:, 2] / const.va, bins=num_bins)
+# #                 bz = 0.5 * (BinEdgesz[1:] + BinEdgesz[:-1])
+# #                 ax_z.plot(bz, zs, '-', c='c', drawstyle='steps')
+# # =============================================================================
 # 
 #     
-#     #diag.check_cell_velocity_distribution(POS, VEL, j=1, node_number=0)
-#     #diag.check_position_distribution(POS)
-# 
+# # =============================================================================
+# #     import diagnostics       as diag
+# #     diag.check_velocity_distribution(VEL)
+# # =============================================================================
+#     #diag.check_cell_velocity_distribution(POS, VEL, node_number=0, j=0)
+# # =============================================================================
+# #     if True:
+# #         for jj in range(const.Nj):
+# #             plt.figure(jj)
+# #             v_perp = np.sign(VEL[2, const.idx_start[jj]:idx_end[jj]]) * \
+# #                      np.sqrt(VEL[1, const.idx_start[jj]:idx_end[jj]] ** 2 +
+# #                              VEL[2, const.idx_start[jj]:idx_end[jj]] ** 2) / const.va
+# #             
+# #             v_para = VEL[0, const.idx_start[jj]:idx_end[jj]] / const.va
+# #             
+# #             plt.scatter(v_perp, v_para, c=const.temp_color[jj], s=1)
+# #             plt.title(r'Total Velocity Distribution Functions (%s) :: $\alpha_L$ = %.1f$^\circ$' % (const.species_lbl[jj], const.loss_cone))
+# #             plt.xlabel('$v_\perp / v_A$')
+# #             plt.ylabel('$v_\parallel / v_A$')
+# #             
+# #             gradient = np.tan(np.pi/2 - const.loss_cone * np.pi / 180.)
+# #             lmin, lmax = plt.gca().get_xlim()
+# #             lcx  = np.linspace(lmin, lmax, 100, endpoint=True)
+# #             lcy1 =  gradient * lcx
+# #             lcy2 = -gradient * lcx
+# #             
+# #             plt.plot(lcx, lcy1, c='k', alpha=0.5, ls=':')
+# #             plt.plot(lcx, lcy2, c='k', alpha=0.5, ls=':')
+# #             
+# #             plt.axvline(0, c='k')
+# #             plt.axhline(0, c='k')
+# # =============================================================================
+# # =============================================================================
+# #     if False:
+# #         for jj in range(const.Nj):
+# #             plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+# #                         rL[const.idx_start[jj]:idx_end[jj]],
+# #                         c=const.temp_color[jj],
+# #                         label=const.species_lbl[jj], s=1)
+# #         plt.legend()
+# #         plt.title('Larmor radius with position')
+# #         
+# #     if False:
+# #         plt.figure()
+# #         for jj in range(const.Nj):
+# #             plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+# #                         VPERP_OLD[const.idx_start[jj]:idx_end[jj]],
+# #                         c=const.temp_color[jj],
+# #                         label=const.species_lbl[jj], s=4)
+# #         plt.legend()
+# #         plt.title('$v_\perp$ before transformation, with position')
+# #         
+# #         plt.figure()
+# #         for jj in range(const.Nj):
+# #             plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+# #                         VPERP_NEW[const.idx_start[jj]:idx_end[jj]],
+# #                         c=const.temp_color[jj],
+# #                         label=const.species_lbl[jj], s=4)
+# #         plt.legend()
+# #         plt.title('$v_\perp$ after transformation, with position')
+# #         
+# #     if False:
+# #         jj = 1
+# #         v_perp_old = np.sqrt(IDX[1] ** 2 + IDX[2] ** 2)
+# #         plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+# #                     v_perp[const.idx_start[jj]:idx_end[jj]],
+# #                     c='r',
+# #                     label=const.species_lbl[jj])
+# #         
+# #         plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+# #                     v_perp_old[const.idx_start[jj]:idx_end[jj]],
+# #                     c='k',
+# #                     label=const.species_lbl[jj])
+# #         
+# #         plt.legend()
+# #         plt.title('v_perp with position: Initial (Black) and adjusted for position (Red)')
+# #     
+# #     
+# #     if False:
+# #         jj = 1
+# #         plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+# #                     np.log10(VEL[const.idx_start[jj]:idx_end[jj]]),
+# #                     c='k',
+# #                     label='$v_\perp/v_\parallel$ old',
+# #                     marker='o', s=1)
+# #         
+# #         plt.scatter(POS[0, const.idx_start[jj]:idx_end[jj]], 
+# #                     np.log10(IDX[const.idx_start[jj]:idx_end[jj]]),
+# #                     c='r',
+# #                     label='$v_\perp/v_\parallel$ new',
+# #                     marker='x', s=1)
+# #         
+# #         plt.ylim(-2, 6)
+# #         plt.legend()
+# #         plt.title('perp/parallel velocity ratios before/after transformation')
+# # 
+# #     
+# #     #diag.check_cell_velocity_distribution(POS, VEL, j=1, node_number=0)
+# #     #diag.check_position_distribution(POS)
+# # 
+# # 
+# # =============================================================================
 # 
 # =============================================================================
