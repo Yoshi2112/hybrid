@@ -6,7 +6,8 @@ Created on Fri Sep 22 17:23:44 2017
 """
 import numba as nb
 import numpy as np
-from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ratios, B_eq, a, shoji_approx, particle_boundary
+from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ratios, kB,\
+                                        B_eq, a, shoji_approx, particle_boundary, mass, Tper
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -151,7 +152,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT):
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)                     # Calculate magnetic node weights
     
     for ii in nb.prange(vel.shape[1]):  
-        if idx[ii] >= 0:
+        if idx[ii] >= 0 or particle_boundary == 1:
             qmi = 0.5 * DT * qm_ratios[idx[ii]]                                 # Charge-to-mass ration for ion of species idx[ii]
     
             # These create two new length 3 arrays
@@ -235,24 +236,40 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT):
 
 @nb.njit()
 def position_update(pos, vel, idx, DT, Ie, W_elec):
-    '''Updates the position of the particles using x = x0 + vt. 
+    '''
+    Updates the position of the particles using x = x0 + vt. 
     Also updates particle nearest node and weighting.
 
     INPUT:
-        part   -- Particle array with positions to be updated
-        dt     -- Time cadence of simulation
-
-    OUTPUT:
-        pos    -- Particle updated positions
-        W_elec -- (0) Updated nearest E-field node value and (1-2) left/centre weights
+        pos    -- Particle position array (Also output) 
+        vel    -- Particle velocity array (Also output for reflection)
+        idx    -- Particle index    array (Also output for reflection)
+        DT     -- Simulation time step
+        Ie     -- Particle leftmost to nearest node array (Also output)
+        W_elec -- Particle weighting array (Also output)
         
-    Reflective boundaries to simulate the "open ends" that would have flux coming in from the ionosphere side.
+    Note: This function also controls what happens when a particle leaves the 
+    simulation boundary with the particle_boundary variable:
+        
+    particle_boundary == 0 :: Particle is "absorbed", velocity set to zero and
+    index becomes negative
     
-    These equations aren't quite right for xmax != xmin, but they'll do for now
+    particle_boundary == 1 :: Particle is "reflected". Cold particles are truly
+    reflected (vx changes sign). Hot particles are converted to cold particles
+    by folding their index negative, zeroing their parallel velocity, and
+    randomly reinitializing their perpendicular velocity. 
+    
+    particle_boundary == 2 :: "Mario" particles that come out of the opposite
+    boundary that they disappear into. Only used for homogenous B-field.    
+    
+    NOTE :: Currently this reinit is hardcoded for the cold proton values. More
+    changes will be required if multiple hot species (helium, oxygen, etc.)
+    become included. Maybe include a "cooldown" array stating at what T_per
+    they'll be reinit at.
     '''
     for ii in nb.prange(pos.shape[1]):
         # Only update particles that haven't been absorbed (positive species index)
-        if idx[ii] >= 0:
+        if idx[ii] >= 0 or particle_boundary == 1:
             pos[0, ii] += vel[0, ii] * DT
             pos[1, ii] += vel[1, ii] * DT
             pos[2, ii] += vel[2, ii] * DT
@@ -271,8 +288,18 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
                         pos[0, ii] = 2*xmax - pos[0, ii]
                     elif pos[0, ii] < xmin:
                         pos[0, ii] = 2*xmin - pos[0, ii]
-                    vel[0, ii] *= 0.0                   # 'Reflect' velocities as well (Only vx: Reflecting vy,z is not physical)
-                                                        # CHANGE 2020/05/07 :: Set to 0.0 so not out of loss cone
+                        
+                    if temp_type[idx[ii]] == 0 or idx[ii] < 0:
+                        # Reflect cold particle
+                        vel[0, ii] *= -1.0              
+                    else:
+                        # Convert hot particle to cold
+                        idx[ii]   -= 128                               
+                        sf_per     = np.sqrt(kB *  Tper[0] /  mass[0]) # Re-init velocity with cold sf and heading away from boundary
+                        vel[0, ii] = 0.0
+                        vel[1, ii] = np.random.normal(0, sf_per)
+                        vel[2, ii] = np.random.normal(0, sf_per)
+                        
                 # Mario (Periodic)
                 elif particle_boundary == 2:            
                     if pos[0, ii] > xmax:

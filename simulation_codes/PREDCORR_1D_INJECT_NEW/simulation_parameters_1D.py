@@ -9,14 +9,14 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Finding ways to avoid loss :: Modified reflection setting :: vx = 0 on reflection'''
+run_description = '''Finding ways to avoid loss :: Reflecting cold particles and converting hot particles to cold'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path         = 'runs//loose_the_loss'        # Series save dir   : Folder containing all runs of a series
-run               = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles    = 1                             # Save data flag    : For later analysis
-save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
+run               = 4                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_particles    = 0                             # Save data flag    : For later analysis
+save_fields       = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
 
@@ -25,9 +25,8 @@ supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
 shoji_approx      = False                         # Changes solution used for calculating particle B0r (1D vs. 3D)
-convert_cold      = True                          # Converts absorbed hot RC particles into cold particles
 particle_boundary = 1                             # 0: Absorb, 1: Reflect, 2: Periodic
-
+                                                  # Only reflects cold particles. Hot particles converted to cold
 
 ### SIMULATION PARAMETERS ###
 NX        = 1024                            # Number of cells - doesn't include ghost cells
@@ -137,6 +136,7 @@ N = N_species.sum()
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
+
 
 ############################
 ### MAGNETIC FIELD STUFF ###
