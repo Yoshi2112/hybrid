@@ -139,6 +139,140 @@ def interpolate_B_to_center(bx, by, bz, zero_boundaries=False):
     return bxi, byi, bzi
 
 
+@nb.njit()
+def get_electron_temp(q_dens, Te0):
+    '''
+    Calculate the electron temperature in each cell. Depends on the charge density of each cell
+    and the treatment of electrons: i.e. isothermal (ie=0) or adiabatic (ie=1)
+    
+    q_dens is a (time, space) ndarray
+    '''
+    if   cf.ie == 0:
+        Te      = np.ones(q_dens.shape) * Te0
+    elif cf.ie == 1:
+        Te      = np.zeros(q_dens.shape)
+        gamma_e = 5./3. - 1.
+        
+        for ii in range(Te.shape[0]):
+            Te[ii] = Te0 * np.power(q_dens[ii] / (cf.q*cf.ne), gamma_e)
+    return Te
+
+
+@nb.njit()
+def get_grad_P(qn, te, grad_P, temp):
+    '''
+    Returns the electron pressure gradient (in 1D) on the E-field grid using P = nkT and 
+    finite difference.
+     
+    INPUT:
+        qn     -- Grid charge density
+        te     -- Grid electron temperature
+        grad_P -- Output array for electron pressure gradient
+        temp   -- intermediary array used to store electron pressure, since both
+                  density and temperature may vary (with adiabatic approx.)
+        
+    Forwards/backwards differencing at the simulation cells at the edge of the
+    physical space domain. Guard cells set to zero.
+    '''
+    temp     *= 0; grad_P *= 0
+    nc        = qn.shape[0]
+    grad_P[:] = qn * kB * te / q       # Store Pe in grad_P array for calculation
+    LC        = NX + ND - 1
+
+    # Central differencing, internal points
+    for ii in nb.prange(ND + 1, LC - 1):
+        temp[ii] = (grad_P[ii + 1] - grad_P[ii - 1])
+    
+    # Forwards/Backwards difference at physical boundaries
+    temp[ND] = -3*grad_P[ND] + 4*grad_P[ND + 1] - grad_P[ND + 2]
+    temp[LC] =  3*grad_P[LC] - 4*grad_P[LC - 1] + grad_P[LC - 2]
+    temp    /= (2*dx)
+    
+    # Return value
+    grad_P[:]    = temp[:nc]
+    return
+
+
+@nb.njit()
+def get_curl_B(bx, by, bz):
+    '''
+    Each b component is a (time, space) ndarray
+    '''
+    curl_B = np.zeros((bx.shape[0], bx.shape[1] - 1, 3), dtype=nb.float64)
+    
+    for ii in nb.prange(bx.shape[1] - 1):
+        curl_B[:, ii, 1] = -(bz[:, ii + 1] - bz[:, ii])
+        curl_B[:, ii, 2] =   by[:, ii + 1] - by[:, ii]
+    
+    curl_B /= (cf.dx * cf.mu0)
+    return curl_B
+
+
+@nb.njit()
+def cross_product(ax, ay, az, bx, by, bz):
+    '''
+    Vector (cross) product between two vectors, A and B of same dimensions.
+    all ai, bi are expected to be (time, space) ndarrays
+    '''
+    C = np.zeros((az.shape[0], az.shape[1], 3), dtype=nb.float64)
+    for ii in nb.prange(az.shape[0]):
+        C[:, ii, 0] = ay[:, ii] * bz[:, ii] - az[:, ii] * by[:, ii]
+        C[:, ii, 1] = az[:, ii] * bx[:, ii] - ax[:, ii] * bz[:, ii]
+        C[:, ii, 2] = ax[:, ii] * by[:, ii] - ay[:, ii] * bx[:, ii]
+    return C
+
+
+@nb.njit()
+def calculate_E_components(bx, by, bz, bxi, byi, bzi, jx, jy, jz, q_dens):
+    '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
+    electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
+    and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
+    
+    INPUT:
+        B   -- Magnetic field array. Displaced from E-field array by half a spatial step.
+        Ji  -- Ion current density. Source term, based on particle velocities
+        qn  -- Charge density. Source term, based on particle positions
+        
+    OUTPUT:
+        E   -- Updated electric field array
+        Ve  -- Electron velocity moment
+        Te  -- Electron temperature
+    
+    arr3D, arr1D are tertiary arrays used for intermediary computations
+    
+    To Do: In the interpolation function, add on B0 along with the 
+    spline interpolation. No other part of the code requires B0 in the nodes.
+    '''
+    # Need to calculate:
+    # Ji x B / qn
+    # del(p) / qn
+    # Bx(curl B) / qn*mu0
+    
+    curl_B = get_curl_B(bx, by, bz)                                   # temp3De is now curl B term
+    BdB    = cross_product(bxi, byi, bzi, curl_B[:, :, 0], curl_B[:, :, 1], curl_B[:, :, 2])
+    BdB   /= q_dens
+    
+    get_electron_temp(q_dens, Te, Te0)
+
+    get_grad_P(q_dens, Te, grad_P, temp3Db[:, 0])            # temp1D is now del_p term, temp3D2 slice used for computation
+    aux.interpolate_edges_to_center(B, temp3Db)              # temp3db is now B_center
+
+    aux.cross_product(Ve, temp3Db, temp3De)                  # temp3De is now Ve x B term
+
+    E[:, 0]  = - temp3De[:, 0] - grad_P[:] / q_dens[:]
+    E[:, 1]  = - temp3De[:, 1]
+    E[:, 2]  = - temp3De[:, 2]
+    
+    # Diagnostic flag for testing
+    if disable_waves == True:   
+        E *= 0.
+    return 
+
+
+
+
+
+
 def get_energies(): 
     '''
     Computes and saves field and particle energies at each field/particle timestep.
@@ -232,11 +366,11 @@ def get_helical_components(overwrite=False, field='B'):
         np.save(temp_dir + '{}_negative_helicity.npy'.format(field), Ft_neg)
     else:
         print('Loading {}-elicities from file'.format(field))
-        ftime, By = cf.get_array('{}y'.format(field))
+        ftime, Fy = cf.get_array('{}y'.format(field))
         
-        Bt_pos = np.load(temp_dir + '{}_positive_helicity.npy'.format(field))
-        Bt_neg = np.load(temp_dir + '{}_negative_helicity.npy'.format(field))
-    return ftime, Bt_pos, Bt_neg
+        Ft_pos = np.load(temp_dir + '{}_positive_helicity.npy'.format(field))
+        Ft_neg = np.load(temp_dir + '{}_negative_helicity.npy'.format(field))
+    return ftime, Ft_pos, Ft_neg
 
 
 def calculate_helicity(Fy, Fz, dx):

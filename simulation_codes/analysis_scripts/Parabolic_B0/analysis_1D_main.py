@@ -115,7 +115,12 @@ def plot_spatial_poynting(saveas='poynting_space_plot', save=False, log=False):
             ax.axvline(cf.grid_mid, c='w', ls=':', alpha=0.75)   
                 
             if save == True:
-                fullpath = cf.anal_dir + saveas + '_s{}_{}'.format(comp, lbl) + suffix + '.png'
+                save_folder = cf.anal_dir + '/spatial_poynting_flux/'
+                
+                if os.path.exists(save_folder) == False:
+                    os.makedirs(save_folder)
+                
+                fullpath = save_folder + saveas + '_s{}_{}'.format(comp, lbl) + suffix + '.png'
                 plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
                 plt.close('all')
     return
@@ -190,7 +195,12 @@ def plot_spatial_poynting_helical(saveas='poynting_helical_plot', save=False, lo
             ax.axvline(cf.grid_mid, c='w', ls=':', alpha=0.75)   
                 
             if save == True:
-                fullpath = cf.anal_dir + saveas + '_s{}_{}'.format(comp, lbl) + suffix + '.png'
+                save_folder = cf.anal_dir + '/spatial_poynting_flux/helical_components/'
+                
+                if os.path.exists(save_folder) == False:
+                    os.makedirs(save_folder)
+                    
+                fullpath = save_folder + saveas + '_s{}_{}'.format(comp, lbl) + suffix + '.png'
                 plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
                 plt.close('all')
     return
@@ -1511,8 +1521,8 @@ def standard_analysis_package():
         plot_wk(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=False, pcyc_mult=1.1)
         plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
         
-    #plot_spatial_poynting(save=True, log=True)
-    #plot_spatial_poynting_helical(save=True, log=True)
+    plot_spatial_poynting(save=True, log=True)
+    plot_spatial_poynting_helical(save=True, log=True)
     #plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
     
     plot_particle_loss_with_time()
@@ -1751,6 +1761,7 @@ def plot_particle_loss_with_time(it_max=None, save=True):
     # 1) Plot of N particles lost vs. time (per species in color)
     # 2) Some sort of 2D plot to look at the (initial equatorial?) pitch angle of the particles lost?
     # 3) Do the mu thing, also by species?
+    print('Calculating particle loss during run...')
     savedir = cf.anal_dir + '/Particle_Loss_Analysis/'
     
     if os.path.exists(savedir) == False:
@@ -1767,30 +1778,30 @@ def plot_particle_loss_with_time(it_max=None, save=True):
 
     ## Load up species index and particle position, velocity for calculations
     for ii in range(it_max):
-        print('Loading data for particle file {}'.format(ii))
         pos, vel, idx, ptime[ii] = cf.load_particles(ii)
 
         lost_idx, N_lost[ii, :]  = locate_lost_ions(idx, cf.Nj)
 
-    
+    norm = np.ones(cf.Nj)
+
     plt.ioff()
-    # N_lost per species with time
-    if True:
+    
+    for div, suff, lbl in zip([norm, 0.01*cf.N_species], ['', '_percent'], ['N', 'Percent']): 
         fig, axes = plt.subplots(figsize=(15, 10))
         for ii in range(cf.Nj):
-            axes.plot(ptime, N_lost[:, ii], c=cf.temp_color[ii], label=cf.species_lbl[ii])
+            axes.plot(ptime, N_lost[:, ii] / div[ii], c=cf.temp_color[ii], label=cf.species_lbl[ii])
             
         axes.set_title('# Particles Lost from Simulation :: N_species {}'.format(cf.N_species))
-        axes.set_xlabel('Time (s)')
-        axes.set_ylabel('N', rotation=0)
-        
-    if save == True:
-        fpath = savedir + 'particle_loss_vs_time.png'
-        fig.savefig(fpath)
-        plt.close('all')
-        print('Particle loss graph saved as {}'.format(fpath))
-    else:
-        plt.show()
+        axes.set_xlabel('Time (s)', fontsize=14)
+        axes.set_ylabel(lbl, rotation=0, labelpad=20, fontsize=14)
+            
+        if save == True:
+            fpath = savedir + 'particle_loss_vs_time{}.png'.format(suff)
+            fig.savefig(fpath)
+            plt.close('all')
+            print('Saved as {}'.format(fpath))
+        else:
+            plt.show()
     return
 
 
@@ -1818,6 +1829,7 @@ def plot_initial_configurations(it_max=None, save=True, plot_lost=True):
     ## Notes:
     ##  -- Why are lost particles only in the negative side of the simulation space?
     ##  -- Why is there seemingly no connection between lost particles and loss cone?
+    print('Plotting particle initial phase space configs...')
     if it_max is None:
         it_max = len(os.listdir(cf.particle_dir))
     
@@ -1840,7 +1852,6 @@ def plot_initial_configurations(it_max=None, save=True, plot_lost=True):
     
     plt.ioff()
     for jj in range(cf.Nj):
-        print('Plotting phase spaces for species {}'.format(jj))
         fig1, ax1 = plt.subplots(figsize=(15, 10))
         fig2, ax2 = plt.subplots(figsize=(15, 10))
         fig3, ax3 = plt.subplots(3, sharex=True, figsize=(15, 10))
@@ -2204,6 +2215,7 @@ def plot_adiabatic_parameter(save=True):
     What are the units for this? Does it require some sort of normalization? No, because its
     just larmor radius (mv/qB) divided by spatial length
     '''
+    print('Plotting spatial adiabatic parameter...')
     max_v  = 20 * cf.va
     N_plot = 1000
     B_av   = 0.5 * (cf.B_xmax + cf.B_eq)
@@ -2223,7 +2235,7 @@ def plot_adiabatic_parameter(save=True):
     
     if save == True:
         fig.savefig(cf.anal_dir + 'adiabatic_parameter.png')
-        print('Adiabatic parameter plot saved')
+        print('Saved.')
         plt.close('all') 
     else:
         plt.show()
@@ -2447,6 +2459,7 @@ def plot_average_GC(it_max=None, save=True):
     for each particle? See if the lost particles are the ones furthest away from the
     origin
     '''
+    print('Calculating average particle guiding center...')
     if it_max is None:
         it_max = len(os.listdir(cf.particle_dir))
     
@@ -2460,7 +2473,6 @@ def plot_average_GC(it_max=None, save=True):
     
     plt.ioff()
     for ii in range(it_max):
-        print('Getting particle loss data from dump file {}'.format(ii))
         pos, vel, idx, ptime = cf.load_particles(ii)
         accrue_vector_information(pos, idx, gc_av)
         
@@ -2494,7 +2506,7 @@ def plot_average_GC(it_max=None, save=True):
                 fpath = cf.anal_dir + 'particle_average_GC_sp{}{}.png'.format(jj, suff)
                 fig.savefig(fpath)
                 plt.close('all')
-                print('Particle loss graph saved as {}'.format(fpath))
+                print('Guiding centre graph saved as {}'.format(fpath))
             else:
                 plt.show()
     return
@@ -2541,7 +2553,7 @@ def plot_average_mu(it_max=None, save=True):
     # If -ve, make mu at that point nan
     # But won't be able to mean - will have to do that manually
     '''
-    print('Collecting adiabatic invariant from particle data.')
+    print('Collecting particle first invariants...')
     if it_max is None:
         it_max = len(os.listdir(cf.particle_dir))
             
@@ -2560,7 +2572,6 @@ def plot_average_mu(it_max=None, save=True):
     ptime = np.zeros(it_max)
     
     for ii in range(it_max):
-        print('Calculating mu from particle file {}'.format(ii))
         pos, vel, idx, ptime[ii] = cf.load_particles(ii)
         calc_mu(pos, vel, idx, sidx, Bp, mu_av, mu_s, ii, cf.mass)
 
@@ -2606,14 +2617,29 @@ def check_posvel_ortho():
     return
 
 
+def plot_E_components():
+    
+    ftime, bx, by, bz, ex, ey, ez, vex, vey, vez,\
+    te, jx, jy, jz, qdens, fsim_time, rD = cf.get_array(get_all=True)
+    
+    bxi, byi, bzi = bk.interpolate_B_to_center(bx, by, bz)
+    
+    return
+
+
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'F:'
+    drive       = 'G:'
     
-    series      = 'loose_the_loss'
+    series      = 'equilibrium_test'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+    print('{} runs in series {}'.format(num_runs, series))
+    
+    # To do : A plot that breaks apart the components of E : JxB, Bx(curl B), del(P)
+    # To do : A comparison plot of the loss per time of the cold plasma runs
+    # To do : Fix the Poynting plots (why are they broke in the first place?)
     
     for run_num in range(num_runs):
         print('\nRun {}'.format(run_num))
@@ -2621,10 +2647,9 @@ if __name__ == '__main__':
 
         plot_adiabatic_parameter()
         plot_particle_loss_with_time()
-        plot_average_GC()
+        #plot_average_GC()
         
         plot_initial_configurations()
-        plot_adiabatic_parameter()
         plot_average_mu()
 
         try:

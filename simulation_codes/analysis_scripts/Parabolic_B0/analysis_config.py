@@ -20,11 +20,11 @@ def load_run(drive, series, run_num, extract_arrays=True, print_summary=True):
     load_species_params()
     initialize_simulation_variables()
     
-    if print_summary == True:
-        output_simulation_parameter_file(series, run_num)
-        
     if extract_arrays == True:
         extract_all_arrays()
+        
+    if print_summary == True:
+        output_simulation_parameter_file(series, run_num)
     return
 
 
@@ -161,7 +161,7 @@ def load_simulation_params():
         rem      = run_time %  3600
         
         mins     = int(rem // 60)
-        sec      = rem %  60
+        sec      = round(rem %  60, 2)
         run_time_str = '{:02}:{:02}:{:02}'.format(hrs, mins, sec)
     except:
         run_time     = -1.0
@@ -172,7 +172,7 @@ def load_simulation_params():
     grid_mid = 0
     
     if rc_hwidth == 0: 
-        rc_hwidth = NX
+        rc_hwidth = NX//2
         
     return 
 
@@ -193,7 +193,7 @@ def initialize_simulation_variables():
 
 def output_simulation_parameter_file(series, run):
     output_file = run_dir + 'simulation_parameter_file.txt'
-    
+
     if os.path.exists(output_file) == True:
         pass
     else:
@@ -226,7 +226,7 @@ def output_simulation_parameter_file(series, run):
             print('', file=f)
             print('Equatorial Field Strength :: {} nT'.format(B_eq*1e9), file=f)
             print('Boundary   Field Strength :: {} nT'.format(B_xmax*1e9), file=f)
-            print('MLAT max/min extent       :: {} deg'.format(theta_xmax), file=f)
+            print('MLAT max/min extent       :: {} deg'.format(theta_xmax * 180. / np.pi), file=f)
             print('McIlwain L value equiv.   :: {}'.format(L), file=f)
             print('Parabolic scale factor, a :: {}'.format(a), file=f)
             

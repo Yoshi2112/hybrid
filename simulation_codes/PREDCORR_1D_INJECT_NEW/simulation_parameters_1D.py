@@ -9,12 +9,12 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Testing the new equilibria and ND-NX interfaces :: Absorb, equilibrium on, constrained RC'''
+run_description = '''Testing the model running on AMPERE :: This is the LOCAL DESKTOP HOME run'''
 
 ### RUN PARAMETERS ###
 drive             = 'D:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//equilibrium_test'      # Series save dir   : Folder containing all runs of a series
-run               = 2                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path         = 'runs//ampere_test'           # Series save dir   : Folder containing all runs of a series
+run               = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
@@ -25,7 +25,7 @@ supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
 shoji_approx      = False                         # Changes solution used for calculating particle B0r (1D vs. 3D)
-te0_equil         = True                          # Initialize te0 to be in equilibrium with density
+te0_equil         = False                          # Initialize te0 to be in equilibrium with density
 particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Periodic
                                                   # Only reflects cold particles. Hot particles converted to cold
 
