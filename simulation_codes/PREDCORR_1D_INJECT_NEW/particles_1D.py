@@ -11,6 +11,7 @@ from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ra
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
+import pdb
 
 
 @nb.njit()
@@ -168,7 +169,8 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT):
             
             # Add B0 at particle location
             #if shoji_approx == False:
-            eval_B0_particle(pos[:, ii], Bp)                                    
+            eval_B0_particle(pos[:, ii], Bp)     
+            #pdb.set_trace()                               
 # =============================================================================
 #             else:
 #                 eval_B0_particle_1D(pos[:, ii], v_minus, Bp, qm_ratios[idx[ii]])
@@ -190,49 +192,6 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT):
             vel[:, ii] = v_plus +  qmi * Ep                                     # Second E-field half-push
     return
 
-
-# =============================================================================
-# @nb.njit()
-# def position_update(pos, vel, idx, DT, Ie, W_elec):
-#     '''Updates the position of the particles using x = x0 + vt. 
-#     Also updates particle nearest node and weighting.
-# 
-#     INPUT:
-#         part   -- Particle array with positions to be updated
-#         dt     -- Time cadence of simulation
-# 
-#     OUTPUT:
-#         pos    -- Particle updated positions
-#         W_elec -- (0) Updated nearest E-field node value and (1-2) left/centre weights
-#         
-#     Reflective boundaries to simulate the "open ends" that would have flux coming in from the ionosphere side.
-#     
-#     These equations aren't quite right for xmax != xmin, but they'll do for now
-#     '''
-#     for ii in nb.prange(pos.shape[1]):
-#         # Only update particles that haven't been absorbed (positive species index)
-#         if idx[ii] >= 0:
-#             pos[0, ii] += vel[0, ii] * DT
-#             pos[1, ii] += vel[1, ii] * DT
-#             pos[2, ii] += vel[2, ii] * DT
-#             
-#             # Particle boundary conditions
-#             if (pos[0, ii] < xmin or pos[0, ii] > xmax):
-#                 
-#                 # Absorb hot particles (maybe reinitialize later)
-#                 if temp_type[idx[ii]] == 1:              
-#                     vel[:, ii] *= 0          			# Zero particle velocity
-#                     idx[ii]    -= 128                   # Fold index to negative values (preserves species ID)
-#                     
-#                 # Reflect cold particles
-#                 elif temp_type[idx[ii]] == 0:            
-#                     if pos[0, ii] > xmax:
-#                         pos[0, ii] = 2*xmax - pos[0, ii]
-#                     elif pos[0, ii] < xmin:
-#                         pos[0, ii] = 2*xmin - pos[0, ii]
-#                     vel[0, ii] *= -1.0
-#     return
-# =============================================================================
 
 @nb.njit()
 def position_update(pos, vel, idx, DT, Ie, W_elec):
@@ -309,3 +268,48 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
     
     assign_weighting_TSC(pos, Ie, W_elec)
     return
+
+
+
+# =============================================================================
+# @nb.njit()
+# def position_update(pos, vel, idx, DT, Ie, W_elec):
+#     '''Updates the position of the particles using x = x0 + vt. 
+#     Also updates particle nearest node and weighting.
+# 
+#     INPUT:
+#         part   -- Particle array with positions to be updated
+#         dt     -- Time cadence of simulation
+# 
+#     OUTPUT:
+#         pos    -- Particle updated positions
+#         W_elec -- (0) Updated nearest E-field node value and (1-2) left/centre weights
+#         
+#     Reflective boundaries to simulate the "open ends" that would have flux coming in from the ionosphere side.
+#     
+#     These equations aren't quite right for xmax != xmin, but they'll do for now
+#     '''
+#     for ii in nb.prange(pos.shape[1]):
+#         # Only update particles that haven't been absorbed (positive species index)
+#         if idx[ii] >= 0:
+#             pos[0, ii] += vel[0, ii] * DT
+#             pos[1, ii] += vel[1, ii] * DT
+#             pos[2, ii] += vel[2, ii] * DT
+#             
+#             # Particle boundary conditions
+#             if (pos[0, ii] < xmin or pos[0, ii] > xmax):
+#                 
+#                 # Absorb hot particles (maybe reinitialize later)
+#                 if temp_type[idx[ii]] == 1:              
+#                     vel[:, ii] *= 0          			# Zero particle velocity
+#                     idx[ii]    -= 128                   # Fold index to negative values (preserves species ID)
+#                     
+#                 # Reflect cold particles
+#                 elif temp_type[idx[ii]] == 0:            
+#                     if pos[0, ii] > xmax:
+#                         pos[0, ii] = 2*xmax - pos[0, ii]
+#                     elif pos[0, ii] < xmin:
+#                         pos[0, ii] = 2*xmin - pos[0, ii]
+#                     vel[0, ii] *= -1.0
+#     return
+# =============================================================================

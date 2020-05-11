@@ -251,10 +251,12 @@ def initialize_fields():
     E_int   = np.zeros((NC    , 3), dtype=np.float64)
     E_half  = np.zeros((NC    , 3), dtype=np.float64)
 
-    # Set initial B0
-    B[:, 0] = Bc[:, 0]
-    B[:, 1] = Bc[:, 1]
-    B[:, 2] = Bc[:, 2]
+# =============================================================================
+#     # Set initial B0
+#     B[:, 0] = Bc[:, 0]
+#     B[:, 1] = Bc[:, 1]
+#     B[:, 2] = Bc[:, 2]
+# =============================================================================
     
     Ve      = np.zeros((NC, 3), dtype=np.float64)
     Te      = np.ones(  NC,     dtype=np.float64) * Te0_scalar

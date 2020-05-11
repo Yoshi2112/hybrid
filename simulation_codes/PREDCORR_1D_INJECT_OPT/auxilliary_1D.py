@@ -83,7 +83,7 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
 
 
 @nb.njit()
-def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, Bp, v_prime, S, T, \
+def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, Bp, v_prime, S, T, temp_N,\
                      qq, DT, max_inc, part_save_iter, field_save_iter, idx, damping_array):
     '''
     Evaluates all the things that could cause a violation of the timestep:
@@ -131,7 +131,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
     
     if DT_part < 0.9*DT:
 
-        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T,0.5*DT)    # Re-sync vel/pos       
+        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T,temp_N,0.5*DT)    # Re-sync vel/pos       
 
         DT         *= 0.5
         max_inc    *= 2
@@ -140,7 +140,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
         field_save_iter *= 2
         part_save_iter *= 2
 
-        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T,-0.5*DT)   # De-sync vel/pos 
+        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T,temp_N,-0.5*DT)   # De-sync vel/pos 
         print('Timestep halved. Syncing particle velocity...')
         init.set_damping_array(damping_array, DT)
             

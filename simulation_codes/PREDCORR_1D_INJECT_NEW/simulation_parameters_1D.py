@@ -9,14 +9,14 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Testing the model running on AMPERE :: This is the LOCAL DESKTOP HOME run'''
+run_description = '''Test velocity_update() changes for speed :: This is the OLD version for control'''
 
 ### RUN PARAMETERS ###
-drive             = 'D:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//ampere_test'           # Series save dir   : Folder containing all runs of a series
+drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
+save_path         = 'runs//vel_test_v2'           # Series save dir   : Folder containing all runs of a series
 run               = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles    = 1                             # Save data flag    : For later analysis
-save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
+save_particles    = 0                             # Save data flag    : For later analysis
+save_fields       = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
 
@@ -31,14 +31,14 @@ particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Pe
 
 ### SIMULATION PARAMETERS ###
 NX        = 1024                            # Number of cells - doesn't include ghost cells
-ND        = 512                             # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 50                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+ND        = 128                             # Damping region length: Multiple of NX (on each side of simulation domain)
+max_rev   = 10                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
 B_eq      = 200e-9                          # Initial magnetic field at equator: None for L-determined value (in T)
-rc_hwidth = 256                               # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
+rc_hwidth = 0                               # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
   
 orbit_res = 0.02                            # Orbit resolution
 freq_res  = 0.02                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values

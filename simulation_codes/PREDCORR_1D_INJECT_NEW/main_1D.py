@@ -11,6 +11,7 @@ import save_routines as save
 
 from simulation_parameters_1D import save_particles, save_fields, te0_equil
 
+import pdb
 
 if __name__ == '__main__':
     start_time = timer()
@@ -57,8 +58,10 @@ if __name__ == '__main__':
         save.save_field_data(0, DT, field_save_iter, 0, Ji, E_int, B, Ve, Te, q_dens, damping_array)
     
     # Retard velocity
-    particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT)
     
+    print('Retarding velocity...')
+    particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT)
+    pdb.set_trace()
     qq       = 1;    sim_time = DT
     print('Starting main loop...')
     while qq < max_inc:

@@ -11,6 +11,7 @@ import save_routines as save
 
 from simulation_parameters_1D import save_particles, save_fields, te0_equil
 
+import pdb
 
 if __name__ == '__main__':
     start_time = timer()
@@ -38,16 +39,17 @@ if __name__ == '__main__':
         save.save_field_data(0, DT, field_save_iter, 0, Ji, E_int, B, Ve, Te, q_dens, damping_array)
     
     # Retard velocity
+    
     print('Retarding velocity...')
     particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E_int, v_prime, S, T, temp_N, -0.5*DT)
-    
-    qq       = 1;    sim_time = DT; max_inc = 1
+    pdb.set_trace()
+    qq       = 1;    sim_time = DT
     print('Starting main loop...')
     while qq < max_inc:
-        qq, DT, max_inc, part_save_iter, field_save_iter =               \
-        aux.main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T, temp_N,            \
-              B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
-              Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields,\
+        qq, DT, max_inc, part_save_iter, field_save_iter =                                \
+        aux.main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T, temp_N,\
+              B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,                           \
+              Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields,           \
               damping_array, qq, DT, max_inc, part_save_iter, field_save_iter)
 
         if qq%part_save_iter == 0 and save_particles == 1:

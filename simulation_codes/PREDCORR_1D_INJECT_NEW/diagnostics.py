@@ -1561,9 +1561,11 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
     tt = 0; t_total = 0
     start_time = timer()
     while tt < max_inc - 1:
-        pos_gphase[tt] = get_atan(pos[2,0], pos[1,0]) * 180. / np.pi
-        vel_gphase[tt] = (get_atan(vel[2,0], vel[1,0]) * 180. / np.pi + 90.)%360.
-        print('P/V Gyrophase :: {:.2f}, {:.2f}'.format(pos_gphase[tt], vel_gphase[tt]))
+# =============================================================================
+#         pos_gphase[tt] = get_atan(pos[2,0], pos[1,0]) * 180. / np.pi
+#         vel_gphase[tt] = (get_atan(vel[2,0], vel[1,0]) * 180. / np.pi + 90.)%360.
+#         print('P/V Gyrophase :: {:.2f}, {:.2f}'.format(pos_gphase[tt], vel_gphase[tt]))
+# =============================================================================
         
         # Increment so first loop is at t = 1*DT
         tt      += 1

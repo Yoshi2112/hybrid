@@ -11,6 +11,7 @@ from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ra
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
+import pdb
 
 
 @nb.njit()
@@ -124,27 +125,26 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
     Removed the "cross product" and "field interpolation" functions because I'm
     not convinced they helped.
     
-    4 temp arrays of length 3 used.
+    NOTE: Check out each intermediary value one step at a time. Even though this is vectorized,
+    the first loop value of the other code should equal the first result in this array.
     '''
     Bp *= 0
     Ep *= 0
     
-    assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)                     # Calculate magnetic node weights
+    assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)                 # Calculate magnetic node weights
     eval_B0_particle(pos, Bp)  
     
-    # This could be looped/vectorised
-    for ii in nb.prange(vel.shape[1]):
+    for ii in range(vel.shape[1]):
         qmi[ii] = 0.5 * DT * qm_ratios[idx[ii]]                         # q/m for ion of species idx[ii]
         for jj in range(3):                                             # Nodes
             for kk in range(3):                                         # Components
                 Ep[kk, ii] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]       # Vector E-field  at particle location
                 Bp[kk, ii] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]       # Vector b1-field at particle location
- 
-        
+    #pdb.set_trace()   
     vel[:, :] += qmi[:] * Ep[:, :]                                      # First E-field half-push IS NOW V_MINUS
 
-    T[:, :] = qmi[:] * Bp[:, :]                                                 # Vector Boris variable
-    S[:, :] = 2.*T[:, :] / (1. + T[0, :] ** 2 + T[1, :] ** 2 + T[2, :] ** 2)                 # Vector Boris variable
+    T[:, :] = qmi[:] * Bp[:, :]                                               # Vector Boris variable
+    S[:, :] = 2.*T[:, :] / (1. + T[0, :] ** 2 + T[1, :] ** 2 + T[2, :] ** 2)  # Vector Boris variable
     
     v_prime[0, :] = vel[0, :] + vel[1, :] * T[2, :] - vel[2, :] * T[1, :]     # Magnetic field rotation
     v_prime[1, :] = vel[1, :] + vel[2, :] * T[0, :] - vel[0, :] * T[2, :]
@@ -154,54 +154,15 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
     vel[1, :] += v_prime[2, :] * S[0, :] - v_prime[0, :] * S[2, :]
     vel[2, :] += v_prime[0, :] * S[1, :] - v_prime[1, :] * S[0, :]
     
-    vel[:, :] += qmi[:] * Ep[:, :]                                     # Second E-field half-push
+    vel[:, :] += qmi[:] * Ep[:, :]                                           # Second E-field half-push
     
-    #if idx[ii] >= 0 or particle_boundary == 1:                         # Put a check for this at the end
+    # Zero velocity of killed particles if reflection not enabled
+    if particle_boundary != 1:
+        for ii in range(vel.shape[1]):
+            if idx[ii] < 0:                         # Put a check for this at the end
+                vel[:, ii] *= 0.
     return
 
-
-# =============================================================================
-# @nb.njit()
-# def position_update(pos, vel, idx, DT, Ie, W_elec):
-#     '''Updates the position of the particles using x = x0 + vt. 
-#     Also updates particle nearest node and weighting.
-# 
-#     INPUT:
-#         part   -- Particle array with positions to be updated
-#         dt     -- Time cadence of simulation
-# 
-#     OUTPUT:
-#         pos    -- Particle updated positions
-#         W_elec -- (0) Updated nearest E-field node value and (1-2) left/centre weights
-#         
-#     Reflective boundaries to simulate the "open ends" that would have flux coming in from the ionosphere side.
-#     
-#     These equations aren't quite right for xmax != xmin, but they'll do for now
-#     '''
-#     for ii in nb.prange(pos.shape[1]):
-#         # Only update particles that haven't been absorbed (positive species index)
-#         if idx[ii] >= 0:
-#             pos[0, ii] += vel[0, ii] * DT
-#             pos[1, ii] += vel[1, ii] * DT
-#             pos[2, ii] += vel[2, ii] * DT
-#             
-#             # Particle boundary conditions
-#             if (pos[0, ii] < xmin or pos[0, ii] > xmax):
-#                 
-#                 # Absorb hot particles (maybe reinitialize later)
-#                 if temp_type[idx[ii]] == 1:              
-#                     vel[:, ii] *= 0          			# Zero particle velocity
-#                     idx[ii]    -= 128                   # Fold index to negative values (preserves species ID)
-#                     
-#                 # Reflect cold particles
-#                 elif temp_type[idx[ii]] == 0:            
-#                     if pos[0, ii] > xmax:
-#                         pos[0, ii] = 2*xmax - pos[0, ii]
-#                     elif pos[0, ii] < xmin:
-#                         pos[0, ii] = 2*xmin - pos[0, ii]
-#                     vel[0, ii] *= -1.0
-#     return
-# =============================================================================
 
 @nb.njit()
 def position_update(pos, vel, idx, DT, Ie, W_elec):
