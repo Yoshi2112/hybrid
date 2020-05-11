@@ -9,14 +9,14 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Test velocity_update() changes for speed :: This is the NEW version with changes'''
+run_description = '''Test velocity_update() changes for speed :: This is the NEW version, second run, removed B0x from wave fields'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//vel_test_v2'           # Series save dir   : Folder containing all runs of a series
-run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles    = 0                             # Save data flag    : For later analysis
-save_fields       = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
+save_path         = 'runs//vel_test'              # Series save dir   : Folder containing all runs of a series
+run               = 2                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_particles    = 1                             # Save data flag    : For later analysis
+save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
 
