@@ -11,7 +11,6 @@ import save_routines as save
 
 from simulation_parameters_1D import save_particles, save_fields, te0_equil
 
-import pdb
 
 if __name__ == '__main__':
     start_time = timer()

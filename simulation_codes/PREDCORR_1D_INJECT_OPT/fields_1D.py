@@ -135,7 +135,8 @@ def get_grad_P(qn, te, grad_P, temp):
     LC        = NX + ND - 1
 
     # Central differencing, internal points
-    for ii in nb.prange(ND + 1, LC - 1):
+    # 2020-05-12 :: Changed limits from (ND + 1, LC - 1), removed F/B FD.
+    for ii in nb.prange(1, nc - 1):
         temp[ii] = (grad_P[ii + 1] - grad_P[ii - 1])
     
     # Forwards/Backwards difference at physical boundaries

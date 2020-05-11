@@ -2642,7 +2642,7 @@ if __name__ == '__main__':
     # To do : A comparison plot of the loss per time of the cold plasma runs
     # To do : Fix the Poynting plots (why are they broke in the first place?)
     
-    for run_num in [2]:#range(num_runs):
+    for run_num in [3]:#range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
 
@@ -2653,15 +2653,17 @@ if __name__ == '__main__':
         plot_initial_configurations()
         plot_average_mu()
 
-        try:
-            standard_analysis_package()
-        except:
-            pass
-
-        try:
-            summary_plots(save=True, histogram=False)
-        except:
-            pass
+# =============================================================================
+#         try:
+#             standard_analysis_package()
+#         except:
+#             pass
+# 
+#         try:
+#             summary_plots(save=True, histogram=False)
+#         except:
+#             pass
+# =============================================================================
         
 # =============================================================================
 #         

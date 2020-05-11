@@ -11,7 +11,7 @@ from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ra
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
-import pdb
+
 
 
 @nb.njit()
@@ -140,7 +140,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
             for kk in range(3):                                         # Components
                 Ep[kk, ii] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]       # Vector E-field  at particle location
                 Bp[kk, ii] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]       # Vector b1-field at particle location
-    #pdb.set_trace()   
+
     vel[:, :] += qmi[:] * Ep[:, :]                                      # First E-field half-push IS NOW V_MINUS
 
     T[:, :] = qmi[:] * Bp[:, :]                                               # Vector Boris variable
