@@ -9,11 +9,11 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Vel test again, optimized, but why the fuck am I still losing so many particles from the edges? NO WAVES TEST.'''
+run_description = '''Equilibrium test :: New interface, no equilibrium (control), but with changed grad_P calculation. Also using OPT code.'''
 
 ### RUN PARAMETERS ###
-drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//vel_test'              # Series save dir   : Folder containing all runs of a series
+drive             = 'G:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
+save_path         = 'runs//equilibrium_test'      # Series save dir   : Folder containing all runs of a series
 run               = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
@@ -23,7 +23,7 @@ cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU 
 ## DIAGNOSTIC FLAGS :: DOUBLE CHECK BEFORE EACH RUN! ##
 supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
-disable_waves     = True                          # Zeroes electric field solution at each timestep
+disable_waves     = False                         # Zeroes electric field solution at each timestep
 shoji_approx      = False                         # Changes solution used for calculating particle B0r (1D vs. 3D)
 te0_equil         = False                         # Initialize te0 to be in equilibrium with density
 particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Periodic
@@ -31,8 +31,8 @@ particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Pe
 
 ### SIMULATION PARAMETERS ###
 NX        = 1024                            # Number of cells - doesn't include ghost cells
-ND        = 128                             # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 10                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+ND        = 512                             # Damping region length: Multiple of NX (on each side of simulation domain)
+max_rev   = 50                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell
 

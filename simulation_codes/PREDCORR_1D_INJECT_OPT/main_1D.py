@@ -19,7 +19,8 @@ if __name__ == '__main__':
     pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp,temp_N = init.initialize_particles()
     B, E_int, E_half, Ve, Te, Te0                       = init.initialize_fields()
     q_dens, q_dens_adv, Ji, ni, nu                      = init.initialize_source_arrays()
-    old_particles, old_fields, temp3De, temp3Db, temp1D,v_prime, S, T = init.initialize_tertiary_arrays()
+    old_particles, old_fields, temp3De, temp3Db, temp1D,\
+                                          v_prime, S, T = init.initialize_tertiary_arrays()
     
     # Collect initial moments and save initial state
     sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D) 

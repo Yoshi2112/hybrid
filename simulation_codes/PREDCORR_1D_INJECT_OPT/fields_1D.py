@@ -132,7 +132,7 @@ def get_grad_P(qn, te, grad_P, temp):
     temp     *= 0; grad_P *= 0
     nc        = qn.shape[0]
     grad_P[:] = qn * kB * te / q       # Store Pe in grad_P array for calculation
-    LC        = NX + ND - 1
+    #LC        = NX + ND - 1
 
     # Central differencing, internal points
     # 2020-05-12 :: Changed limits from (ND + 1, LC - 1), removed F/B FD.
@@ -140,8 +140,8 @@ def get_grad_P(qn, te, grad_P, temp):
         temp[ii] = (grad_P[ii + 1] - grad_P[ii - 1])
     
     # Forwards/Backwards difference at physical boundaries
-    temp[ND] = -3*grad_P[ND] + 4*grad_P[ND + 1] - grad_P[ND + 2]
-    temp[LC] =  3*grad_P[LC] - 4*grad_P[LC - 1] + grad_P[LC - 2]
+    #temp[ND] = -3*grad_P[ND] + 4*grad_P[ND + 1] - grad_P[ND + 2]
+    #temp[LC] =  3*grad_P[LC] - 4*grad_P[LC - 1] + grad_P[LC - 2]
     temp    /= (2*dx)
     
     # Return value

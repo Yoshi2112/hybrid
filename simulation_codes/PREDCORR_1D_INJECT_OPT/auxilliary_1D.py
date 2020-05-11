@@ -187,7 +187,6 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
                                             B, E_int, DT, q_dens_adv, Ji, ni, nu, temp1D)
     
-    
     # Average N, N + 1 densities (q_dens at N + 1/2)
     q_dens *= 0.5
     q_dens += 0.5 * q_dens_adv
