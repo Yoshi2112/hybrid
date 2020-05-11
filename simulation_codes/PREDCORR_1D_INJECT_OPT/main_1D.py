@@ -16,7 +16,7 @@ if __name__ == '__main__':
     start_time = timer()
     
     # Initialize simulation: Allocate memory and set time parameters
-    pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp        = init.initialize_particles()
+    pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp,temp_N = init.initialize_particles()
     B, E_int, E_half, Ve, Te, Te0                       = init.initialize_fields()
     q_dens, q_dens_adv, Ji, ni, nu                      = init.initialize_source_arrays()
     old_particles, old_fields, temp3De, temp3Db, temp1D,v_prime, S, T = init.initialize_tertiary_arrays()
@@ -39,13 +39,13 @@ if __name__ == '__main__':
     
     # Retard velocity
     print('Retarding velocity...')
-    particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E_int, v_prime, S, T, -0.5*DT)
+    particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E_int, v_prime, S, T, temp_N, -0.5*DT)
     
     qq       = 1;    sim_time = DT; max_inc = 1
     print('Starting main loop...')
     while qq < max_inc:
         qq, DT, max_inc, part_save_iter, field_save_iter =               \
-        aux.main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,             \
+        aux.main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T, temp_N,            \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
               Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields,\
               damping_array, qq, DT, max_inc, part_save_iter, field_save_iter)
@@ -75,3 +75,4 @@ if __name__ == '__main__':
     if save_fields == 1 or save_particles == 1:
         save.add_runtime_to_header(runtime)
     print("Time to execute program: {0:.2f} seconds".format(runtime))
+

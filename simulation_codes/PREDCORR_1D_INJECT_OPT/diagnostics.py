@@ -1492,6 +1492,7 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
     T      = np.zeros((3, Np))
     Ie     = np.zeros(Np, dtype=int)
     Ib     = np.zeros(Np, dtype=int)
+    qmi    = np.zeros(Np)
     B_test = np.zeros((const.NC + 1, 3), dtype=np.float64) 
     E_test = np.zeros((const.NC, 3),     dtype=np.float64) 
     
@@ -1554,7 +1555,7 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
     vel_gphase  = np.zeros((max_inc - 1))
 
     # Retard velocity for stability
-    particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B_test, E_test, v_prime, S, T, -0.5*DT)
+    particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B_test, E_test, v_prime, S, T, qmi, -0.5*DT)
     
     # Record initial values
 # =============================================================================
@@ -1574,7 +1575,7 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
         tt      += 1
         t_total += DT
         
-        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B_test, E_test, v_prime, S, T, DT)
+        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B_test, E_test, v_prime, S, T, qmi, DT)
         particles.position_update(pos, vel, idx, DT, Ie, W_elec)
         
 # =============================================================================

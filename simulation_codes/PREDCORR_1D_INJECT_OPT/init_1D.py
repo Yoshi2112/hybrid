@@ -197,9 +197,10 @@ def initialize_particles():
     
     Bp      = np.zeros((3, N), dtype=np.float64)
     Ep      = np.zeros((3, N), dtype=np.float64)
+    temp_N  = np.zeros((N),    dtype=np.float64)
     
     particles.assign_weighting_TSC(pos, Ie, W_elec)
-    return pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp
+    return pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, temp_N
 
 
 @nb.njit()
@@ -306,7 +307,7 @@ def initialize_tertiary_arrays():
     v_prime = np.zeros((3, N),      dtype=nb.float64)
     S       = np.zeros((3, N),      dtype=nb.float64)
     T       = np.zeros((3, N),      dtype=nb.float64)
-    
+        
     old_particles = np.zeros((11, N),      dtype=nb.float64)
         
     return old_particles, old_fields, temp3De, temp3Db, temp1D, v_prime, S, T

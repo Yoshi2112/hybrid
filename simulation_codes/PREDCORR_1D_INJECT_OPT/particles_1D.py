@@ -14,12 +14,12 @@ from fields_1D import eval_B0x
 
 
 @nb.njit()
-def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,\
+def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T, temp_N,\
                                   B, E, DT, q_dens_adv, Ji, ni, nu, temp1D, pc=0):
     '''
     Helper function to group the particle advance and moment collection functions
     '''
-    velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, DT)
+    velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, temp_N, DT)
     position_update(pos, vel, idx, DT, Ie, W_elec)  
     collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, ni, nu, temp1D)
     return
@@ -104,7 +104,7 @@ def eval_B0_particle(pos, Bp):
 
 
 @nb.njit()
-def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, DT):
+def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, qmi, DT):
     '''
     updates velocities using a Boris particle pusher.
     Based on Birdsall & Langdon (1985), pp. 59-63.
@@ -132,29 +132,31 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)                     # Calculate magnetic node weights
     eval_B0_particle(pos, Bp)  
     
-    for ii in nb.prange(vel.shape[1]):  
-        #if idx[ii] >= 0 or particle_boundary == 1:
-            qmi = 0.5 * DT * qm_ratios[idx[ii]]                                 # Charge-to-mass ration for ion of species idx[ii]
-    
-            for jj in range(3):                                             # Nodes
-                for kk in range(3):                                         # Components
-                    Ep[kk, ii] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]       # Vector E-field  at particle location
-                    Bp[kk, ii] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]       # Vector b1-field at particle location
-                
-            vel[:, ii] += qmi * Ep[:, ii]                                   # First E-field half-push IS NOW V_MINUS
+    # This could be looped/vectorised
+    for ii in nb.prange(vel.shape[1]):
+        qmi[ii] = 0.5 * DT * qm_ratios[idx[ii]]                         # q/m for ion of species idx[ii]
+        for jj in range(3):                                             # Nodes
+            for kk in range(3):                                         # Components
+                Ep[kk, ii] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]       # Vector E-field  at particle location
+                Bp[kk, ii] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]       # Vector b1-field at particle location
+ 
+        
+    vel[:, :] += qmi[:] * Ep[:, :]                                      # First E-field half-push IS NOW V_MINUS
 
-            T[:, ii] = qmi * Bp[:, ii]                                                 # Vector Boris variable
-            S[:, ii] = 2.*T[:, ii] / (1. + T[0, ii] ** 2 + T[1, ii] ** 2 + T[2, ii] ** 2)                 # Vector Boris variable
+    T[:, :] = qmi[:] * Bp[:, :]                                                 # Vector Boris variable
+    S[:, :] = 2.*T[:, :] / (1. + T[0, :] ** 2 + T[1, :] ** 2 + T[2, :] ** 2)                 # Vector Boris variable
+    
+    v_prime[0, :] = vel[0, :] + vel[1, :] * T[2, :] - vel[2, :] * T[1, :]     # Magnetic field rotation
+    v_prime[1, :] = vel[1, :] + vel[2, :] * T[0, :] - vel[0, :] * T[2, :]
+    v_prime[2, :] = vel[2, :] + vel[0, :] * T[1, :] - vel[1, :] * T[0, :]
             
-            v_prime[0, ii] = vel[0, ii] + vel[1, ii] * T[2, ii] - vel[2, ii] * T[1, ii]     # Magnetic field rotation
-            v_prime[1, ii] = vel[1, ii] + vel[2, ii] * T[0, ii] - vel[0, ii] * T[2, ii]
-            v_prime[2, ii] = vel[2, ii] + vel[0, ii] * T[1, ii] - vel[1, ii] * T[0, ii]
-                    
-            vel[0, ii] += v_prime[1, ii] * S[2, ii] - v_prime[2, ii] * S[1, ii]
-            vel[1, ii] += v_prime[2, ii] * S[0, ii] - v_prime[0, ii] * S[2, ii]
-            vel[2, ii] += v_prime[0, ii] * S[1, ii] - v_prime[1, ii] * S[0, ii]
-            
-            vel[:, ii] += qmi * Ep[:, ii]                                     # Second E-field half-push
+    vel[0, :] += v_prime[1, :] * S[2, :] - v_prime[2, :] * S[1, :]
+    vel[1, :] += v_prime[2, :] * S[0, :] - v_prime[0, :] * S[2, :]
+    vel[2, :] += v_prime[0, :] * S[1, :] - v_prime[1, :] * S[0, :]
+    
+    vel[:, :] += qmi[:] * Ep[:, :]                                     # Second E-field half-push
+    
+    #if idx[ii] >= 0 or particle_boundary == 1:                         # Put a check for this at the end
     return
 
 
