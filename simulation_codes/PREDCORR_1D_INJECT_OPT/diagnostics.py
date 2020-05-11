@@ -20,6 +20,7 @@ import fields_1D                as fields
 import auxilliary_1D            as aux
 import init_1D as init
 
+from timeit import default_timer as timer
 
 @nb.njit()
 def roundup(x, nearest=10.):
@@ -1478,14 +1479,17 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
     # Init position: [-1020214.38977955,  -100874.673573  ,        0.        ]
     # Init velocity: [ -170840.94864185, -8695629.67092295,  3474619.54765129]
     
-    Np     = 1
-    
+    Np     = 500000
+    print('Simulating {} particles for {} gyroperiods'.format(Np, max_rev))
     idx    = np.zeros(Np, dtype=int)
     
     W_elec = np.zeros((3, Np))
     W_mag  = np.zeros((3, Np))
     Ep     = np.zeros((3, Np))
     Bp     = np.zeros((3, Np))
+    v_prime= np.zeros((3, Np))
+    S      = np.zeros((3, Np))
+    T      = np.zeros((3, Np))
     Ie     = np.zeros(Np, dtype=int)
     Ib     = np.zeros(Np, dtype=int)
     B_test = np.zeros((const.NC + 1, 3), dtype=np.float64) 
@@ -1519,15 +1523,15 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
         #initial_gyrophase  = 270            # degrees
         #initial_gyrophase *= np.pi / 180.   # convert to radians
         
-        vel[0, 0] =  v_par
-        vel[1, 0] = 0.0  #- v_perp * np.sin(initial_gyrophase)
-        vel[2, 0] = -v_perp  #v_perp * np.cos(initial_gyrophase)
+        vel[0, :] =  v_par
+        vel[1, :] = 0.0  #- v_perp * np.sin(initial_gyrophase)
+        vel[2, :] = -v_perp  #v_perp * np.cos(initial_gyrophase)
                 
         rL = const.mp * v_perp / (const.q * const.B_eq)
         
-        pos[0, 0] = 0.0  
-        pos[1, 0] = rL   #rL * np.cos(initial_gyrophase)
-        pos[2, 0] = 0.0  #rL * np.sin(initial_gyrophase)
+        pos[0, :] = 0.0  
+        pos[1, :] = rL   #rL * np.cos(initial_gyrophase)
+        pos[2, :] = 0.0  #rL * np.sin(initial_gyrophase)
 
     # Initial quantities
     init_pos = pos.copy() 
@@ -1542,22 +1546,25 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
     max_t    = max_rev / gyfreq
     max_inc  = int(max_t / DT) + 1
 
-    time        = np.zeros((max_inc))
-    pos_history = np.zeros((max_inc, Np, 3))
-    vel_history = np.zeros((max_inc, Np, 3))
-    mag_history = np.zeros((max_inc, 3))
+    time        = None#np.zeros((max_inc))
+    pos_history = None#np.zeros((max_inc, Np, 3))
+    vel_history = None#np.zeros((max_inc, Np, 3))
+    mag_history = None#np.zeros((max_inc, 3))
     pos_gphase  = np.zeros((max_inc - 1))
     vel_gphase  = np.zeros((max_inc - 1))
 
     # Retard velocity for stability
-    particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B_test, E_test, -0.5*DT)
+    particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B_test, E_test, v_prime, S, T, -0.5*DT)
     
     # Record initial values
-    time[       0      ] = 0.                      # t = 0
-    pos_history[0, :, :] = pos[:, :].T             # t = 0
-    vel_history[0, :, :] = vel[:, :].T             # t = -0.5
+# =============================================================================
+#     time[       0      ] = 0.                      # t = 0
+#     pos_history[0, :, :] = pos[:, :].T             # t = 0
+#     vel_history[0, :, :] = vel[:, :].T             # t = -0.5
+# =============================================================================
 
     tt = 0; t_total = 0
+    start_time = timer()
     while tt < max_inc - 1:
         pos_gphase[tt] = get_atan(pos[2,0], pos[1,0]) * 180. / np.pi
         vel_gphase[tt] = (get_atan(vel[2,0], vel[1,0]) * 180. / np.pi + 90.)%360.
@@ -1567,13 +1574,16 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
         tt      += 1
         t_total += DT
         
-        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B_test, E_test, DT)
+        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B_test, E_test, v_prime, S, T, DT)
         particles.position_update(pos, vel, idx, DT, Ie, W_elec)
         
-        time[         tt]       = t_total
-        pos_history[  tt, :, :] = pos[:, :].T
-        vel_history[  tt, :, :] = vel[:, :].T
-        
+# =============================================================================
+#         time[         tt]       = t_total
+#         pos_history[  tt, :, :] = pos[:, :].T
+#         vel_history[  tt, :, :] = vel[:, :].T
+# =============================================================================
+    runtime = timer() - start_time
+    print('Particle push time : {}s'.format(runtime))
     return init_pos, init_vel, time, pos_history, vel_history, mag_history, DT, max_t, pos_gphase, vel_gphase
 
 
@@ -2601,9 +2611,9 @@ if __name__ == '__main__':
     #check_directions()
 
     init_pos, init_vel, time, pos_history, vel_history, mag_history,\
-        DT, max_t, POS_gphase, VEL_gphase = do_particle_run(max_rev=5, v_mag=10.0, pitch=41.0, dt_mult=1.0)
+        DT, max_t, POS_gphase, VEL_gphase = do_particle_run(max_rev=1, v_mag=10.0, pitch=41.0, dt_mult=1.0)
         
-    if True:
+    if False:
         fig, ax = plt.subplots()
         ax.set_title('Velocity history')
         ax.scatter(vel_history[:, 0, 1], vel_history[:, 0, 2], c='r', marker='o')

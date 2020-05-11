@@ -83,7 +83,7 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
 
 
 @nb.njit()
-def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, Bp,  \
+def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, Bp, v_prime, S, T, \
                      qq, DT, max_inc, part_save_iter, field_save_iter, idx, damping_array):
     '''
     Evaluates all the things that could cause a violation of the timestep:
@@ -131,7 +131,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
     
     if DT_part < 0.9*DT:
 
-        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, 0.5*DT)    # Re-sync vel/pos       
+        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T,0.5*DT)    # Re-sync vel/pos       
 
         DT         *= 0.5
         max_inc    *= 2
@@ -140,7 +140,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
         field_save_iter *= 2
         part_save_iter *= 2
 
-        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, -0.5*DT)   # De-sync vel/pos 
+        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T,-0.5*DT)   # De-sync vel/pos 
         print('Timestep halved. Syncing particle velocity...')
         init.set_damping_array(damping_array, DT)
             
@@ -163,7 +163,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
 
 
 @nb.njit()
-def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp,                      \
+def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,                      \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
               Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields,\
               damping_array, qq, DT, max_inc, part_save_iter, field_save_iter):
@@ -180,11 +180,11 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp,                     
     '''
     # Check timestep
     qq, DT, max_inc, part_save_iter, field_save_iter, damping_array \
-    = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, Ep, Bp, \
+    = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, Ep, Bp, v_prime, S, T,\
                      qq, DT, max_inc, part_save_iter, field_save_iter, idx, damping_array)
     
     # Move particles, collect moments
-    particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, \
+    particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,\
                                             B, E_int, DT, q_dens_adv, Ji, ni, nu, temp1D)
     
     
@@ -221,7 +221,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp,                     
     fields.push_B(B, E_int, temp3Db, DT, qq, damping_array, half_flag=0)
 
     # Advance particles to obtain source terms at N + 3/2
-    particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, \
+    particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,\
                                             B, E_int, DT, q_dens, Ji, ni, nu, temp1D, pc=1)
     
     q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
