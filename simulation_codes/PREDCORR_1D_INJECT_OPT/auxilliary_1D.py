@@ -28,10 +28,13 @@ def cross_product(A, B, C):
     Could be more memory efficient to "accumulate" operation, but would involve rewriting
     for each specific instance.
     '''
-    for ii in nb.prange(A.shape[0]):
-        C[ii, 0] = A[ii, 1] * B[ii, 2] - A[ii, 2] * B[ii, 1]
-        C[ii, 1] = A[ii, 2] * B[ii, 0] - A[ii, 0] * B[ii, 2]
-        C[ii, 2] = A[ii, 0] * B[ii, 1] - A[ii, 1] * B[ii, 0]
+    C[:, 0] += A[:, 1] * B[:, 2]
+    C[:, 1] += A[:, 2] * B[:, 0]
+    C[:, 2] += A[:, 0] * B[:, 1]
+    
+    C[:, 0] -= A[:, 2] * B[:, 1]
+    C[:, 1] -= A[:, 0] * B[:, 2]
+    C[:, 2] -= A[:, 1] * B[:, 0]
     return
 
 

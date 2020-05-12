@@ -662,9 +662,16 @@ def test_cross_product():
     anal_result[:, 1] = -(s1x*c3x - c1x*s3x)
     anal_result[:, 2] =   s2x*c3x - c2x*s3x
 
-    test_result = aux.cross_product(A, B)
-    diff        = test_result - anal_result
-    print(diff)
+    test_result = np.zeros(A.shape)
+    aux.cross_product(A, B, test_result)
+    
+    plt.plot(anal_result[:, 0], marker='o')
+    plt.plot(test_result[:, 0], marker='x')
+    plt.show()
+# =============================================================================
+#     diff        = test_result - anal_result
+#     print(diff)
+# =============================================================================
 
     return
 
@@ -2588,7 +2595,7 @@ if __name__ == '__main__':
     #visualize_inhomogenous_B()
     #plot_dipole_field_line()
     #check_particle_position_individual()
-    #test_cross_product()
+    test_cross_product()
     #test_cspline_interpolation()
     #test_E_convective()
     #test_E_hall()
@@ -2613,80 +2620,82 @@ if __name__ == '__main__':
     #smart_plot_3D()
     #check_directions()
 
-    init_pos, init_vel, time, pos_history, vel_history, mag_history,\
-        DT, max_t, POS_gphase, VEL_gphase = do_particle_run(max_rev=1, v_mag=10.0, pitch=41.0, dt_mult=1.0)
-        
-    if False:
-        fig, ax = plt.subplots()
-        ax.set_title('Velocity history')
-        ax.scatter(vel_history[:, 0, 1], vel_history[:, 0, 2], c='r', marker='o')
-        ax.axis('equal')
-        
-        fig, ax = plt.subplots()
-        ax.set_title('Position history')
-        ax.scatter(pos_history[:, 0, 1], pos_history[:, 0, 2], c='b', marker='o')
-        ax.axis('equal')
-        
-        fig, ax = plt.subplots(2, sharex=True)
-        
-        ax[0].plot(time[:-1], POS_gphase, marker='o')
-        ax[1].plot(time[:-1], VEL_gphase, marker='o')
-        
-    if False:
-        larmor = np.sqrt(pos_history[:, 0, 1] ** 2 + pos_history[:, 0, 2] ** 2) * 1e-3
-        
-        fig, axes = plt.subplots(2, sharex=True)
-        
-        for jj, comp in zip(range(3), ['x', 'y', 'z']):
-            axes[0].plot(time, pos_history[:, 0, jj]* 1e-3, label= '{}'.format(comp))
-            axes[1].plot(time, vel_history[:, 0, jj]* 1e-3, label='v{}'.format(comp))
-        
-        axes[0].plot(time, larmor, c='k', label='r_L')
-        
-        axes[0].set_title('Test :: Single Particle :: NX = {}'.format(const.NX))
-        axes[0].set_ylabel('x (km)')
-        axes[1].set_ylabel('v (km/s)')
-        axes[1].set_xlabel('t (s)')    
-        axes[1].set_xlim(0, None)
-        axes[0].legend()
-        axes[1].legend()
-        
-    if False:
-        fig, axes = plt.subplots(2, sharex=True)
-        
-        for ii, lbl in zip(range(2), ['fast', 'slow']):
-            axes[0].plot(time, pos_history[:, ii, 0]* 1e-3, label='{}'.format(lbl), marker='o')
-            axes[1].plot(time, vel_history[:, ii, 0]* 1e-3, label='{}'.format(lbl), marker='o')
-        
-        axes[0].set_title('Test :: Two particles, one with half vz, DT = {:05f}s'.format(DT))
-        axes[0].set_ylabel('x (m)')
-        axes[1].set_ylabel('v (km)')
-        axes[1].set_xlabel('t (s)')    
-        axes[1].set_xlim(0, None)
-        axes[0].legend()
-        axes[1].legend()
-            
-    elif False:
-        # 3D position plot
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        
-        pos_history *= 1e-3
-        ax.plot(pos_history[:, 0, 0], pos_history[:, 0, 1], pos_history[:, 0, 2], marker='o')
-            
-        ax.set_title('Particle Position in 3D')
-        ax.set_xlabel('x (km)')
-        ax.set_ylabel('y (km)')
-        ax.set_zlabel('z (km)')
-            
-        fig = plt.figure()
-        ax  = fig.add_subplot(111, projection='3d')
-        
-        vel_history *= 1e-3
-        ax.plot(pos_history[:, 0, 0], vel_history[:, 0, 1], pos_history[:, 0, 2], marker='o')
-        
-        ax.set_title('Particle Velocity in 2D (along x)')
-        ax.set_xlabel('x (km)')
-        ax.set_ylabel('vy (km/s)')
-        ax.set_zlabel('vz (km/s)')
+# =============================================================================
+#     init_pos, init_vel, time, pos_history, vel_history, mag_history,\
+#         DT, max_t, POS_gphase, VEL_gphase = do_particle_run(max_rev=1, v_mag=10.0, pitch=41.0, dt_mult=1.0)
+#         
+#     if False:
+#         fig, ax = plt.subplots()
+#         ax.set_title('Velocity history')
+#         ax.scatter(vel_history[:, 0, 1], vel_history[:, 0, 2], c='r', marker='o')
+#         ax.axis('equal')
+#         
+#         fig, ax = plt.subplots()
+#         ax.set_title('Position history')
+#         ax.scatter(pos_history[:, 0, 1], pos_history[:, 0, 2], c='b', marker='o')
+#         ax.axis('equal')
+#         
+#         fig, ax = plt.subplots(2, sharex=True)
+#         
+#         ax[0].plot(time[:-1], POS_gphase, marker='o')
+#         ax[1].plot(time[:-1], VEL_gphase, marker='o')
+#         
+#     if False:
+#         larmor = np.sqrt(pos_history[:, 0, 1] ** 2 + pos_history[:, 0, 2] ** 2) * 1e-3
+#         
+#         fig, axes = plt.subplots(2, sharex=True)
+#         
+#         for jj, comp in zip(range(3), ['x', 'y', 'z']):
+#             axes[0].plot(time, pos_history[:, 0, jj]* 1e-3, label= '{}'.format(comp))
+#             axes[1].plot(time, vel_history[:, 0, jj]* 1e-3, label='v{}'.format(comp))
+#         
+#         axes[0].plot(time, larmor, c='k', label='r_L')
+#         
+#         axes[0].set_title('Test :: Single Particle :: NX = {}'.format(const.NX))
+#         axes[0].set_ylabel('x (km)')
+#         axes[1].set_ylabel('v (km/s)')
+#         axes[1].set_xlabel('t (s)')    
+#         axes[1].set_xlim(0, None)
+#         axes[0].legend()
+#         axes[1].legend()
+#         
+#     if False:
+#         fig, axes = plt.subplots(2, sharex=True)
+#         
+#         for ii, lbl in zip(range(2), ['fast', 'slow']):
+#             axes[0].plot(time, pos_history[:, ii, 0]* 1e-3, label='{}'.format(lbl), marker='o')
+#             axes[1].plot(time, vel_history[:, ii, 0]* 1e-3, label='{}'.format(lbl), marker='o')
+#         
+#         axes[0].set_title('Test :: Two particles, one with half vz, DT = {:05f}s'.format(DT))
+#         axes[0].set_ylabel('x (m)')
+#         axes[1].set_ylabel('v (km)')
+#         axes[1].set_xlabel('t (s)')    
+#         axes[1].set_xlim(0, None)
+#         axes[0].legend()
+#         axes[1].legend()
+#             
+#     elif False:
+#         # 3D position plot
+#         fig = plt.figure()
+#         ax = fig.add_subplot(111, projection='3d')
+#         
+#         pos_history *= 1e-3
+#         ax.plot(pos_history[:, 0, 0], pos_history[:, 0, 1], pos_history[:, 0, 2], marker='o')
+#             
+#         ax.set_title('Particle Position in 3D')
+#         ax.set_xlabel('x (km)')
+#         ax.set_ylabel('y (km)')
+#         ax.set_zlabel('z (km)')
+#             
+#         fig = plt.figure()
+#         ax  = fig.add_subplot(111, projection='3d')
+#         
+#         vel_history *= 1e-3
+#         ax.plot(pos_history[:, 0, 0], vel_history[:, 0, 1], pos_history[:, 0, 2], marker='o')
+#         
+#         ax.set_title('Particle Velocity in 2D (along x)')
+#         ax.set_xlabel('x (km)')
+#         ax.set_ylabel('vy (km/s)')
+#         ax.set_zlabel('vz (km/s)')
+# =============================================================================
     

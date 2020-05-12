@@ -51,6 +51,9 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
            upper boundary sometimes. Note sure how big I can make this and still have it
            be valid/not cause issues, but considering the scale of normal particle runs (speeds
            on the order of va) it should be plenty fine.
+           
+    Could vectorize this with the temp_N array, then check for particles on the boundaries (for
+    manual setting)
     '''
     Np         = pos.shape[1]
     epsil      = 1e-15

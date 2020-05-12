@@ -8,7 +8,7 @@ import numpy as np
 import numba as nb
 
 import auxilliary_1D as aux
-from simulation_parameters_1D import dx, ne, q, mu0, kB, ie, B_eq, a, ND, NX, disable_waves
+from simulation_parameters_1D import dx, ne, q, mu0, kB, ie, B_eq, a, disable_waves
 
 
 @nb.njit()
