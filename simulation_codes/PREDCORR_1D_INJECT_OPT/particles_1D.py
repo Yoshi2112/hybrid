@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ratios, kB,\
-                                        B_eq, a, particle_boundary, mass, Tper
+                                        B_eq, a, particle_boundary, mass, Tper, Tpar
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -93,14 +93,34 @@ def eval_B0_particle(pos, Bp):
     
     These values are added onto the existing value of B at the particle location,
     Bp. B0x is simply equated since we never expect a non-zero wave field in x.
+    '''
+    constant = - a * B_eq 
+    Bp[0]    =   eval_B0x(pos[0])   
+    Bp[1]   += constant * pos[0] * pos[1]
+    Bp[2]   += constant * pos[0] * pos[2]
+    return
+
+
+@nb.njit()
+def eval_B0_particle_1D(pos, vel, idx, Bp):
+    '''
+    Calculates the B0 magnetic field at the position of a particle. B0x is
+    non-uniform in space, and B0r (split into y,z components) is the required
+    value to keep div(B) = 0
+    
+    These values are added onto the existing value of B at the particle location,
+    Bp. B0x is simply equated since we never expect a non-zero wave field in x.
         
     Could totally vectorise this. Would have to change to give a particle_temp
     array for memory allocation or something
     '''
-    constant = - a * B_eq 
-    Bp[0]   +=   eval_B0x(pos[0])   
-    Bp[1]   += constant * pos[0] * pos[1]
-    Bp[2]   += constant * pos[0] * pos[2]
+    Bp[0]    =   eval_B0x(pos[0])  
+    constant = a * B_eq 
+    for ii in range(idx.shape[0]):
+        l_cyc      = qm_ratios[idx[ii]] * Bp[0, ii]
+        
+        Bp[1, ii] += constant * pos[0, ii] * vel[2, ii] / l_cyc
+        Bp[2, ii] -= constant * pos[0, ii] * vel[1, ii] / l_cyc
     return
 
 
@@ -124,9 +144,6 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
     Probably need to do it more algebraically? Find some way to not create those temp arrays.
     Removed the "cross product" and "field interpolation" functions because I'm
     not convinced they helped.
-    
-    NOTE: Check out each intermediary value one step at a time. Even though this is vectorized,
-    the first loop value of the other code should equal the first result in this array.
     '''
     Bp *= 0
     Ep *= 0
@@ -159,7 +176,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
     # Zero velocity of killed particles if reflection not enabled
     if particle_boundary != 1:
         for ii in range(vel.shape[1]):
-            if idx[ii] < 0:                         # Put a check for this at the end
+            if idx[ii] < 0:
                 vel[:, ii] *= 0.
     return
 
@@ -197,45 +214,49 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
     become included. Maybe include a "cooldown" array stating at what T_per
     they'll be reinit at.
     '''
-    for ii in nb.prange(pos.shape[1]):
-        # Only update particles that haven't been absorbed (positive species index)
-        if idx[ii] >= 0 or particle_boundary == 1:
-            pos[0, ii] += vel[0, ii] * DT
-            pos[1, ii] += vel[1, ii] * DT
-            pos[2, ii] += vel[2, ii] * DT
+    pos[0, :] += vel[0, :] * DT
+    pos[1, :] += vel[1, :] * DT
+    pos[2, :] += vel[2, :] * DT
             
-            # Particle boundary conditions
-            if (pos[0, ii] < xmin or pos[0, ii] > xmax):
+    for ii in nb.prange(pos.shape[1]):
+        # Particle boundary conditions
+        if (pos[0, ii] < xmin or pos[0, ii] > xmax):
+            
+            # Absorb
+            if particle_boundary == 0:              
+                vel[:, ii] *= 0          			       # Zero particle velocity
+                idx[ii]    -= 128                          # Fold index to negative values (preserves species ID)
+                pos[0, ii]  = np.sign(pos[0, ii]) * xmax   # Put particle directly on boundary (this assumes xmin = xmax)
                 
-                # Absorb
-                if particle_boundary == 0:              
-                    vel[:, ii] *= 0          			# Zero particle velocity
-                    idx[ii]    -= 128                   # Fold index to negative values (preserves species ID)
+            # Reflect
+            elif particle_boundary == 1:            
+                if pos[0, ii] > xmax:
+                    pos[0, ii] = 2*xmax - pos[0, ii]
+                elif pos[0, ii] < xmin:
+                    pos[0, ii] = 2*xmin - pos[0, ii]
                     
-                # Reflect
-                elif particle_boundary == 1:            
-                    if pos[0, ii] > xmax:
-                        pos[0, ii] = 2*xmax - pos[0, ii]
-                    elif pos[0, ii] < xmin:
-                        pos[0, ii] = 2*xmin - pos[0, ii]
-                        
-                    if temp_type[idx[ii]] == 0 or idx[ii] < 0:
-                        # Reflect cold particle
-                        vel[0, ii] *= -1.0              
-                    else:
-                        # Convert hot particle to cold
-                        idx[ii]   -= 128                               
-                        sf_per     = np.sqrt(kB *  Tper[0] /  mass[0]) # Re-init velocity with cold sf and heading away from boundary
-                        vel[0, ii] = 0.0
-                        vel[1, ii] = np.random.normal(0, sf_per)
-                        vel[2, ii] = np.random.normal(0, sf_per)
-                        
-                # Mario (Periodic)
-                elif particle_boundary == 2:            
-                    if pos[0, ii] > xmax:
-                        pos[0, ii] += xmin - xmax
-                    elif pos[0, ii] < xmin:
-                        pos[0, ii] += xmax - xmin    
+                if temp_type[idx[ii]] == 0 or idx[ii] < 0:
+                    # Reflect cold particle
+                    vel[0, ii] *= -1.0              
+                else:
+                    # Convert hot particle to cold
+                    idx[ii]   -= 128                               
+                    sf_per     = np.sqrt(kB *  Tper[0] /  mass[0]) # Re-init velocity with cold sf and heading away from boundary
+                    sf_par     = np.sqrt(kB *  Tpar[0] /  mass[0]) # Re-init velocity with cold sf and heading away from boundary
+                    
+                    # If posx negative, velx positive.
+                    # Vel always opposite of pos sign
+                    vel[0, ii] = np.abs(np.random.normal(0, sf_par)) * (- np.sign(pos[0, ii]))
+                    vel[1, ii] = np.random.normal(0, sf_per)
+                    vel[2, ii] = np.random.normal(0, sf_per)
+                    
+                    
+            # Mario (Periodic)
+            elif particle_boundary == 2:            
+                if pos[0, ii] > xmax:
+                    pos[0, ii] += xmin - xmax
+                elif pos[0, ii] < xmin:
+                    pos[0, ii] += xmax - xmin    
     
     assign_weighting_TSC(pos, Ie, W_elec)
     return

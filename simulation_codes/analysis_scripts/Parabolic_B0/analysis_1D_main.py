@@ -2630,9 +2630,9 @@ def plot_E_components():
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'F:'
+    drive       = 'G:'
     
-    series      = 'veL_test'
+    series      = 'equilibrium_test'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
@@ -2653,17 +2653,15 @@ if __name__ == '__main__':
         plot_initial_configurations()
         plot_average_mu()
 
-# =============================================================================
-#         try:
-#             standard_analysis_package()
-#         except:
-#             pass
-# 
-#         try:
-#             summary_plots(save=True, histogram=False)
-#         except:
-#             pass
-# =============================================================================
+        try:
+            standard_analysis_package()
+        except:
+            pass
+
+        try:
+            summary_plots(save=True, histogram=False)
+        except:
+            pass
         
 # =============================================================================
 #         
