@@ -13,8 +13,8 @@ run_description = '''Finding ways to avoid loss :: Test loss amount with N_ppc :
 
 ### RUN PARAMETERS ###
 drive             = 'D:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//loss_test_nppc_v2'     # Series save dir   : Folder containing all runs of a series
-run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path         = 'runs//loss_test_nppc'        # Series save dir   : Folder containing all runs of a series
+run               = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
@@ -30,14 +30,14 @@ particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Pe
 
 
 ### SIMULATION PARAMETERS ###
-NX        = 512                             # Number of cells - doesn't include ghost cells
+NX        = 256                             # Number of cells - doesn't include ghost cells
 ND        = 64                              # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev   = 50                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
-B_eq      = None                            # Initial magnetic field at equator: None for L-determined value (in T)
+B_eq      = 200e-9                          # Initial magnetic field at equator: None for L-determined value (in T)
 rc_hwidth = 0                               # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
   
 orbit_res = 0.02                            # Orbit resolution
@@ -57,11 +57,11 @@ mass       = np.array([1.])    			                # Species ion mass (proton mas
 charge     = np.array([1.])    			                # Species ion charge (elementary charge units)
 drift_v    = np.array([0.])                             # Species parallel bulk velocity (alfven velocity units)
 density    = np.array([180.]) * 1e6                    # Species density in /cc (cast to /m3)
-anisotropy = np.array([0.0])                                # Particle anisotropy: A = T_per/T_par - 1
+anisotropy = np.array([0.0])                           # Particle anisotropy: A = T_per/T_par - 1
 
 # Particle energy: Choose one                                    
-E_per      = np.array([50.0])                               # Perpendicular energy in eV
-beta_par   = None                                           # Overrides E_per if not None. Uses B_eq for conversion
+E_per      = np.array([5.0])                        # Perpendicular energy in eV
+beta_par   = np.array([1.])                            # Overrides E_per if not None. Uses B_eq for conversion
 
 # External current properties (not yet implemented)
 J_amp          = 1.0                                        # External current : Amplitude  (A)

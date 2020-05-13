@@ -9,11 +9,11 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Finding ways to avoid loss :: Test loss amount with N_ppc :: This run has a new ND-NX interface'''
+run_description = '''Just a random run to check out runtime and make sure no serious errors from minor changes.'''
 
 ### RUN PARAMETERS ###
-drive             = 'D:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//loss_test_nppc_v2'     # Series save dir   : Folder containing all runs of a series
+drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
+save_path         = 'runs//random_check_test'     # Series save dir   : Folder containing all runs of a series
 run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
@@ -24,20 +24,20 @@ cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU 
 supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
-shoji_approx      = False
+shoji_approx      = False                         # Changes solution used for calculating particle B0r (1D vs. 3D)
 te0_equil         = True                          # Initialize te0 to be in equilibrium with density
-particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Periodic (This has been disabled)
-
+particle_boundary = 1                             # 0: Absorb, 1: Reflect, 2: Periodic
+                                                  # Only reflects cold particles. Hot particles converted to cold
 
 ### SIMULATION PARAMETERS ###
-NX        = 512                             # Number of cells - doesn't include ghost cells
-ND        = 64                              # Damping region length: Multiple of NX (on each side of simulation domain)
+NX        = 1024                            # Number of cells - doesn't include ghost cells
+ND        = 128                             # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev   = 50                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
-B_eq      = None                            # Initial magnetic field at equator: None for L-determined value (in T)
+B_eq      = 200e-9                          # Initial magnetic field at equator: None for L-determined value (in T)
 rc_hwidth = 0                               # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
   
 orbit_res = 0.02                            # Orbit resolution
@@ -47,21 +47,21 @@ field_res = 0.20                            # Data capture resolution in gyroper
 
 
 ### PARTICLE PARAMETERS ###
-species_lbl= [r'$H^+$ cold']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
-temp_color = ['blue']
-temp_type  = np.array([0])             	                # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-dist_type  = np.array([0])                              # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.array([2500])                           # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
+temp_color = ['blue', 'red']
+temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+nsp_ppc    = np.array([200, 200])                           # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 
-mass       = np.array([1.])    			                # Species ion mass (proton mass units)
-charge     = np.array([1.])    			                # Species ion charge (elementary charge units)
-drift_v    = np.array([0.])                             # Species parallel bulk velocity (alfven velocity units)
-density    = np.array([180.]) * 1e6                    # Species density in /cc (cast to /m3)
-anisotropy = np.array([0.0])                                # Particle anisotropy: A = T_per/T_par - 1
+mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
+charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
+drift_v    = np.array([0., 0.])                             # Species parallel bulk velocity (alfven velocity units)
+density    = np.array([180., 20.]) * 1e6                    # Species density in /cc (cast to /m3)
+anisotropy = np.array([0.0, 5.0])                           # Particle anisotropy: A = T_per/T_par - 1
 
 # Particle energy: Choose one                                    
-E_per      = np.array([50.0])                               # Perpendicular energy in eV
-beta_par   = None                                           # Overrides E_per if not None. Uses B_eq for conversion
+E_per      = np.array([5.0, 50000.])                        # Perpendicular energy in eV
+beta_par   = np.array([1., 10.])                            # Overrides E_per if not None. Uses B_eq for conversion
 
 # External current properties (not yet implemented)
 J_amp          = 1.0                                        # External current : Amplitude  (A)

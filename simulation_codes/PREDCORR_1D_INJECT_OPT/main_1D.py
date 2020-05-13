@@ -3,8 +3,8 @@ from timeit import default_timer as timer
 
 ## HYBRID MODULES ##
 import init_1D       as init
-#import auxilliary_1D as aux
-#import particles_1D  as particles
+import auxilliary_1D as aux
+import particles_1D  as particles
 import fields_1D     as fields
 import sources_1D    as sources
 import save_routines as save
