@@ -30,8 +30,8 @@ particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Pe
                                                   # Only reflects cold particles. Hot particles converted to cold
 
 ### SIMULATION PARAMETERS ###
-NX        = 1024                            # Number of cells - doesn't include ghost cells
-ND        = 512                             # Damping region length: Multiple of NX (on each side of simulation domain)
+NX        = 64                            # Number of cells - doesn't include ghost cells
+ND        = 16                             # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev   = 50                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell

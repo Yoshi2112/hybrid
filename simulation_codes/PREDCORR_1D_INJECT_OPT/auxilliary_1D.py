@@ -188,7 +188,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     
     # Move particles, collect moments
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
-                                            B, E_int, DT, q_dens_adv, Ji, ni, nu, temp1D)
+                                            B, E_int, DT, q_dens_adv, Ji, ni, nu)
     
     # Average N, N + 1 densities (q_dens at N + 1/2)
     q_dens *= 0.5
@@ -224,7 +224,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
 
     # Advance particles to obtain source terms at N + 3/2
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
-                                            B, E_int, DT, q_dens, Ji, ni, nu, temp1D, pc=1)
+                                            B, E_int, DT, q_dens, Ji, ni, nu, pc=1)
     
     q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
     

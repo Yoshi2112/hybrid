@@ -491,51 +491,44 @@ def test_curl_B():
     '''
     Confirmed
     '''
-    NX   = 50     
-    ND   = 10
-    NC   = NX + 2*ND
-    xmin = 0.0    
-    xmax = 2*np.pi
-    
-    dx   = xmax / NX
-    k    = 1.0
-
-    E_nodes  = (np.arange(NC    ) - ND  + 0.5) * dx
-    B_nodes  = (np.arange(NC + 1) - ND  - 0.0) * dx
+    NC   = const.NC   
+    k    = 2 * np.pi / (2 * const.xmax)
 
     # Inputs and analytic solutions
     B_input       = np.zeros((NC + 1, 3))
-    B_input[:, 0] = np.cos(1.0*k*B_nodes)
-    B_input[:, 1] = np.cos(1.5*k*B_nodes)
-    B_input[:, 2] = np.cos(2.0*k*B_nodes)
+    B_input[:, 0] = np.cos(1.0*k*const.B_nodes)
+    B_input[:, 1] = np.cos(1.5*k*const.B_nodes)
+    B_input[:, 2] = np.cos(2.0*k*const.B_nodes)
     
     curl_B_anal       = np.zeros((NC, 3))
-    curl_B_anal[:, 1] =  2.0 * k * np.sin(2.0*k*E_nodes) * dx
-    curl_B_anal[:, 2] = -1.5 * k * np.sin(1.5*k*E_nodes) * dx
+    curl_B_anal[:, 1] =  2.0 * k * np.sin(2.0*k*const.E_nodes)
+    curl_B_anal[:, 2] = -1.5 * k * np.sin(1.5*k*const.E_nodes)
     
     curl_B_FD = np.zeros((NC, 3))
     fields.curl_B_term(B_input, curl_B_FD)
+    
+    curl_B_FD *= const.mu0
     
     ## DO THE PLOTTING ##
     plt.figure(figsize=(15, 15))
     marker_size = None
         
-    plt.scatter(E_nodes, curl_B_anal[:, 1], marker='o', c='k', s=marker_size, label='By Node Solution')
-    plt.scatter(E_nodes, curl_B_FD[  :, 1], marker='x', c='b', s=marker_size,   label='By Finite Difference')
+    plt.scatter(const.E_nodes, curl_B_anal[:, 1], marker='o', c='k', s=marker_size, label='By Node Solution')
+    plt.scatter(const.E_nodes, curl_B_FD[  :, 1], marker='x', c='b', s=marker_size, label='By Finite Difference')
       
-    plt.scatter(E_nodes, curl_B_anal[:, 2], marker='o', c='k', s=marker_size, label='Bz Node Solution')
-    plt.scatter(E_nodes, curl_B_FD[  :, 2], marker='x', c='r', s=marker_size,   label='Bz Finite Difference')   
+    plt.scatter(const.E_nodes, curl_B_anal[:, 2], marker='o', c='k', s=marker_size, label='Bz Node Solution')
+    plt.scatter(const.E_nodes, curl_B_FD[  :, 2], marker='x', c='r', s=marker_size, label='Bz Finite Difference')   
     plt.title(r'Test of $\nabla \times B$')
 
-    for ii in range(E_nodes.shape[0]):
-        plt.axvline(E_nodes[ii], linestyle='--', c='r', alpha=0.2)
-        plt.axvline(B_nodes[ii], linestyle='--', c='b', alpha=0.2)
+    for ii in range(const.E_nodes.shape[0]):
+        plt.axvline(const.E_nodes[ii], linestyle='--', c='r', alpha=0.2)
+        plt.axvline(const.B_nodes[ii], linestyle='--', c='b', alpha=0.2)
      
-    plt.axvline(B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
-    plt.axvline(B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(const.B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(const.B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
     
-    plt.axvline(xmin, linestyle=':', c='k', alpha=0.5)
-    plt.axvline(xmax, linestyle=':', c='k', alpha=0.5)
+    plt.axvline(const.xmin, linestyle=':', c='k', alpha=0.5)
+    plt.axvline(const.xmax, linestyle=':', c='k', alpha=0.5)
     plt.xlabel('x (km)')
     
     plt.legend()
@@ -544,97 +537,112 @@ def test_curl_B():
 
 def test_curl_E():
     '''
-    Confirmed
+    Confirmed with parabolic B0 code
     '''
-    NX   = 50     
-    ND   = 10
-    NC   = NX + 2*ND
-    xmin = 0.0    
-    xmax = 2*np.pi
-    
-    dx   = xmax / NX
-    k    = 1.0
-
-    E_nodes  = (np.arange(NC    ) - ND  + 0.5) * dx
-    B_nodes  = (np.arange(NC + 1) - ND  - 0.0) * dx
+    NC   = const.NC   
+    k    = 2 * np.pi / (2 * const.xmax)
 
     # Inputs and analytic solutions
     E_input       = np.zeros((NC, 3))
-    E_input[:, 0] = np.cos(1.0*k*E_nodes)
-    E_input[:, 1] = np.cos(1.5*k*E_nodes)
-    E_input[:, 2] = np.cos(2.0*k*E_nodes)
+    E_input[:, 0] = np.cos(1.0*k*const.E_nodes)
+    E_input[:, 1] = np.cos(1.5*k*const.E_nodes)
+    E_input[:, 2] = np.cos(2.0*k*const.E_nodes)
 
     curl_E_FD = np.zeros((NC + 1, 3))
-    fields.get_curl_E(E_input, curl_E_FD, DX=1)
+    fields.get_curl_E(E_input, curl_E_FD)
     
     curl_E_anal       = np.zeros((NC + 1, 3))
-    curl_E_anal[:, 1] =  2.0 * k * np.sin(2.0*k*B_nodes) * dx
-    curl_E_anal[:, 2] = -1.5 * k * np.sin(1.5*k*B_nodes) * dx
+    curl_E_anal[:, 1] =  2.0 * k * np.sin(2.0*k*const.B_nodes)
+    curl_E_anal[:, 2] = -1.5 * k * np.sin(1.5*k*const.B_nodes)
     
     
     ## PLOT
     plt.figure(figsize=(15, 15))
     marker_size = None
 
-    plt.scatter(B_nodes, curl_E_anal[:, 1], marker='o', c='k', s=marker_size, label='By Node Solution')
-    plt.scatter(B_nodes, curl_E_FD[  :, 1], marker='x', c='b', s=marker_size, label='By Finite Difference')
-      
-    plt.scatter(B_nodes, curl_E_anal[:, 2], marker='o', c='k', s=marker_size, label='Bz Node Solution')
-    plt.scatter(B_nodes, curl_E_FD[  :, 2], marker='x', c='r', s=marker_size, label='Bz Finite Difference')   
+    if False:
+        plt.scatter(const.E_nodes, E_input[:, 0], marker='o', c='k', s=marker_size, label='Ex Node Solution')
+        plt.scatter(const.E_nodes, E_input[:, 1], marker='o', c='k', s=marker_size, label='Ey Node Solution')
+        plt.scatter(const.E_nodes, E_input[:, 2], marker='o', c='k', s=marker_size, label='Ez Node Solution')
+
+    if True:
+        plt.scatter(const.B_nodes, curl_E_anal[:, 1], marker='o', c='k', s=marker_size, label='By Node Solution')
+        plt.scatter(const.B_nodes, curl_E_FD[  :, 1], marker='x', c='b', s=marker_size, label='By Finite Difference')
+          
+        plt.scatter(const.B_nodes, curl_E_anal[:, 2], marker='o', c='k', s=marker_size, label='Bz Node Solution')
+        plt.scatter(const.B_nodes, curl_E_FD[  :, 2], marker='x', c='r', s=marker_size, label='Bz Finite Difference')   
+    
     plt.title(r'Test of $\nabla \times E$')
 
+    ## Add node markers and boundaries
     for kk in range(NC):
-        plt.axvline(E_nodes[kk], linestyle='--', c='r', alpha=0.2)
-        plt.axvline(B_nodes[kk], linestyle='--', c='b', alpha=0.2)
+        plt.axvline(const.E_nodes[kk], linestyle='--', c='r', alpha=0.2)
+        plt.axvline(const.B_nodes[kk], linestyle='--', c='b', alpha=0.2)
     
-    plt.axvline(B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
-    plt.axvline(B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
-    
-    plt.axvline(xmin, linestyle='-', c='k', alpha=0.2)
-    plt.axvline(xmax, linestyle='-', c='k', alpha=0.2)
-    
-    plt.legend()
-    return
-
-
-def test_grad_P_varying_qn():
-    k    = 2.0
-
-    E_nodes  = (np.arange(const.NC    ) - const.ND  + 0.5) * const.dx
-    B_nodes  = (np.arange(const.NC + 1) - const.ND  - 0.0) * const.dx
-
-    # Set analytic solutions (input/output)
-    qn_input   = np.cos(  2 * np.pi * k * E_nodes / const.xmax)  * const.q * const.ne
-    te_input   = np.ones( const.NC)*const.Te0
-    gp_diff    = np.zeros(const.NC)
-    temp       = np.zeros(const.NC + 1)
-    
-    dne_anal   = -2 * np.pi * k * np.sin(2 * np.pi*k*E_nodes / const.xmax) * const.ne / const.xmax / const.dx
-    gp_anal    = const.kB * const.Te0 * dne_anal * const.dx          # Analytic solution at nodes 
-
-    # Finite differences
-    fields.get_grad_P(qn_input, te_input, gp_diff, temp)
-
-    ## PLOT ##
-    plt.figure(figsize=(15, 15))
-    marker_size = None
-
-    plt.scatter(E_nodes, gp_anal*1e13, marker='o', c='k', s=marker_size, label='Node Solution')
-    plt.scatter(E_nodes, gp_diff*1e13, marker='x', c='r', s=marker_size, label='Finite Difference')
-    
-    plt.title(r'Test of $\nabla p_e$')
-
-    for kk in range(const.NC):
-        plt.axvline(E_nodes[kk], linestyle='--', c='r', alpha=0.2)
-        plt.axvline(B_nodes[kk], linestyle='--', c='b', alpha=0.2)
-    
-    plt.axvline(B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
-    plt.axvline(B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(const.B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(const.B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
     
     plt.axvline(const.xmin, linestyle='-', c='k', alpha=0.2)
     plt.axvline(const.xmax, linestyle='-', c='k', alpha=0.2)
     
     plt.legend()
+    return
+
+
+def test_grad_P():
+    '''
+    Verified for parabolic B0 :: Analytic solutions are a pain, but these come
+    out looking sinusoidal as expected
+    '''
+    k    = 2 * np.pi / (2 * const.xmax)
+    
+    # Set analytic solutions (input/output)
+    if False:
+        q_dens    = np.cos(1.0 * k * const.E_nodes)  * const.q * const.ne
+        te_input  = np.ones(const.NC)*const.Te0_scalar
+    elif False:
+        q_dens    = np.ones(const.NC) * const.q * const.ne
+        te_input  = np.cos(1.0 * k * const.E_nodes)*const.Te0_scalar
+    else:
+        q_dens    = np.cos(1.0 * k * const.E_nodes)* const.q * const.ne
+        te_input  = np.cos(1.0 * k * const.E_nodes)*const.Te0_scalar
+    
+    gp_diff   = np.zeros(const.NC)
+    temp      = np.zeros(const.NC + 1)
+    
+    # Finite differences
+    fields.get_grad_P(q_dens, te_input, gp_diff, temp)
+
+    ## PLOT ##
+    plt.figure(figsize=(15, 15))
+    marker_size = None
+
+    plt.scatter(const.E_nodes, gp_diff, marker='x', c='r', s=marker_size, label='Finite Difference')
+    
+    plt.title(r'Test of $\nabla p_e$')
+
+    for kk in range(const.NC):
+        plt.axvline(const.E_nodes[kk], linestyle='--', c='r', alpha=0.2)
+        plt.axvline(const.B_nodes[kk], linestyle='--', c='b', alpha=0.2)
+    
+    plt.axvline(const.B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(const.B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
+    
+    plt.axvline(const.xmin, linestyle='-', c='k', alpha=0.2)
+    plt.axvline(const.xmax, linestyle='-', c='k', alpha=0.2)
+    
+    plt.legend()
+    return
+
+
+def test_grad_P_with_init_loading():
+    
+    pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, temp_N = init.initialize_particles()
+    q_dens, q_dens2, Ji, ni, nu                          = init.initialize_source_arrays()
+    
+    sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu)
+    
+    pdb.set_trace()
     return
 
 
@@ -1065,187 +1073,6 @@ def test_interp_cross_manual():
     return
 
 
-def test_varying_background_function():
-    t  = np.arange(0, 1000)
-    Bv = np.zeros((t.shape[0], const.NX + 3, 3), dtype=float)
-    
-    for ii in range(t.shape[0]):
-        Bv[ii, :, :] = fields.uniform_time_varying_background(t[ii])
-
-    plt.plot(t, Bv[:, 0, 0])
-    return
-
-
-
-def save_diagnostic_plots(qq, pos, vel, B, E, q_dens, Ji, sim_time, DT, histogram=True):
-    
-    plt.ioff()
-
-    fig_size = 4, 7                                                             # Set figure grid dimensions
-    fig = plt.figure(figsize=(20,10))                                           # Initialize Figure Space
-    fig.patch.set_facecolor('w')                                                # Set figure face color
-
-    nvel       = vel / const.va                                                 # Normalized velocity
-
-    vel_lim = 20
-    B_lim   = const.B_eq*1e9
-    E_lim   = 30
-    den_lim = 2.0
-
-    qdens_norm = q_dens / (const.density*const.charge).sum()                    # Normalized change density
-     
-#----- Velocity (x, y) Plots: Hot Species
-    ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
-    ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
-
-    if histogram == True:
-            
-        vel_tr = np.sqrt(nvel[1] ** 2 + nvel[2] ** 2)
-        
-        for jj in range(const.Nj):
-            num_bins = const.nsp_ppc[jj] // 5
-            
-            xs, BinEdgesx = np.histogram(nvel[0, const.idx_start[jj]: const.idx_end[jj]], bins=num_bins)
-            bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
-            ax_vx.plot(bx, xs, '-', c=const.temp_color[jj], drawstyle='steps', label=const.species_lbl[jj])
-            
-            ys, BinEdgesy = np.histogram(vel_tr[const.idx_start[jj]: const.idx_end[jj]], bins=num_bins)
-            by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
-            ax_vy.plot(by, ys, '-', c=const.temp_color[jj], drawstyle='steps', label=const.species_lbl[jj])
-            
-            ax_vx.set_ylabel(r'$n_{v_\parallel}$')
-            ax_vx.set_ylabel(r'$n_{v_\perp}$')
-            
-            ax_vx.set_title('Velocity distribution of each species in simulation domain')
-            ax_vy.set_xlabel(r'$v / v_A$')
-            
-            ax_vx.set_xlim(-vel_lim, vel_lim)
-            ax_vy.set_xlim(0, np.sqrt(2)*vel_lim)
-            
-            for ax, comp in zip([ax_vx, ax_vy], ['v_\parallel', 'v_\perp']):
-                ax.set_ylim(0, int(const.N / const.NX) * 2.0)
-                ax.legend(loc='upper right')
-                ax.set_ylabel('$n_{%s}$'%comp, rotation=0)
-
-#----- Density Plot
-    ax_den = plt.subplot2grid((fig_size), (0, 3), colspan=3)                     # Initialize axes
-    
-    ax_den.plot(qdens_norm, color='green')                                       # Create overlayed plots for densities of each species
-
-    for jj in range(const.Nj):
-        ax_den.plot(qdens_norm, color=const.temp_color[jj])
-        
-    ax_den.set_title('Normalized Densities and Fields')                          # Axes title (For all, since density plot is on top
-    ax_den.set_ylabel(r'$\frac{n_i}{n_0}$', fontsize=14, rotation=0, labelpad=5) # Axis (y) label for this specific axes
-    ax_den.set_ylim(0, 2)
-    
-#----- E-field (Ex) Plot
-    ax_Ex = plt.subplot2grid(fig_size, (1, 3), colspan=3, sharex=ax_den)
-
-    ax_Ex.plot(E[:, 0], color='red', label=r'$E_x$')
-    ax_Ex.plot(E[:, 1], color='cyan', label=r'$E_x$')
-    ax_Ex.plot(E[:, 2], color='black', label=r'$E_x$')
-
-    ax_Ex.set_xlim(0, const.NC)
-
-    #ax_Jx.set_yticks(np.arange(-200e-5, 201e-5, 50e-5))
-    #ax_Jx.set_yticklabels(np.arange(-150, 201, 50))
-    ax_Ex.set_ylabel(r'$E$', labelpad=25, rotation=0, fontsize=14)
-
-#----- Magnetic Field (By) and Magnitude (|B|) Plots
-    ax_By = plt.subplot2grid((fig_size), (2, 3), colspan=3, sharex=ax_den)
-    ax_B  = plt.subplot2grid((fig_size), (3, 3), colspan=3, sharex=ax_den)
-
-    mag_B  = np.sqrt(B[:, 0] ** 2 + B[:, 1] ** 2 + B[:, 2] ** 2)
-
-    ax_B.plot(mag_B, color='g')
-    ax_By.plot(B[:, 1], color='g') 
-    ax_By.plot(B[:, 2], color='b') 
-
-    ax_B.set_xlim(0,  const.NC + 1)
-    ax_By.set_xlim(0, const.NC + 1)
-
-    ax_B.set_ylim(0, const.B_eq)
-    ax_By.set_ylim(-const.B_eq, const.B_eq)
-
-    ax_B.set_ylabel( r'$|B|$', rotation=0, labelpad=20, fontsize=14)
-    ax_By.set_ylabel(r'$\frac{B_{y,z}}{B_0}$', rotation=0, labelpad=10, fontsize=14)
-    ax_B.set_xlabel('Cell Number')
-
-    for ax in [ax_den, ax_Ex, ax_By]:
-        plt.setp(ax.get_xticklabels(), visible=False)
-        ax.set_yticks(ax.get_yticks()[1:])
-
-    for ax in [ax_den, ax_Ex, ax_By, ax_B]:
-        qrt = const.NC / (4.)
-        ax.set_xticks(np.arange(0, const.NC + qrt, qrt))
-        ax.grid()
-
-#----- Plot Adjustments
-    plt.tight_layout(pad=1.0, w_pad=1.8)
-    fig.subplots_adjust(hspace=0)
-    
-    plt.figtext(0.855, 0.94, 'Step : {:>7d}     '.format( qq     ), fontname='monospace', fontsize=14)
-    plt.figtext(0.855, 0.90, 'Time : {:>7.3f} s '.format(sim_time), fontname='monospace', fontsize=14)
-    plt.figtext(0.855, 0.86, 'DT   : {:>7.3f} ms'.format(DT * 1e3), fontname='monospace', fontsize=14)
-
-    filename = 'diag%05d.png' % qq
-    path     = const.drive + '//' + const.save_path + '//run_{}'.format(const.run) + '//diagnostic_plots//'
-
-    if os.path.exists(path) == False:                                   # Create data directory
-        os.makedirs(path)
-
-    fullpath = path + filename
-    plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-    print('Plot saved'.format(qq))
-    plt.close('all')
-    return
-
-
-def visualize_inhomogenous_B():
-    '''
-    This isn't right, or is it? Work it out later
-    '''
-    L    = 4.3      ;   q = 1.602e-19
-    RE   = 6371000  ;   m = 1.673e-27
-    
-    B_eq  = 200e-9               # Tesla at equator (Br = 0)
-    a     = 4.5 / (L * RE)       # Where does the 4.5 come from? 1/s variation, but derivation?
-    Wx_eq = 30e3 * q             # Initial perp energy in Joules
-    vx_
-    mu_eq = Wx_eq / B_eq         # First adiabatic invariant
-    
-    xmax = 1*RE                  # How long should this be?
-    x    = np.linspace(-xmax, xmax, 1000)
-    Nx   = x.shape[0]
-    
-    B_x = B_eq * (1 + a * x**2)
-    B_r = np.zeros((Nx, 3))
-    
-    for ii in range(Nx):
-        aa = 1.0   
-        bb = B_x[ii] ** 2
-        cc = a * m * 1
-
-        
-    pdb.set_trace()
-    plt.figure()
-    plt.plot(x / RE, B_x, c='k', label=r'$B_\parallel$')
-    plt.plot(x / RE, B_r, c='r', label=r'$B_\perp$')
-    plt.xlabel('x (RE)')
-    plt.ylabel('nT')
-    plt.legend()
-    plt.show()
-    
-# =============================================================================
-#     plt.figure()
-#     plt.title('Percentage of main field composed of radial component')
-#     plt.scatter(x / RE, pct)
-#     plt.ylabel(r'%')
-# =============================================================================
-    
-    return
-
 
 def plot_dipole_field_line(length=True):
     '''
@@ -1284,6 +1111,7 @@ def plot_dipole_field_line(length=True):
             length += r[ii] * dtheta * np.pi / 180
         plt.title('Arclength from {} deg to {} deg at L = {} : {:>5.2f} R_E'.format(lat_st, lat_en, L, length))
     return
+
 
 def check_particle_position_individual():
     '''
@@ -2589,13 +2417,14 @@ if __name__ == '__main__':
     #test_particle_orbit()
     #test_curl_B()
     #test_curl_E()
-    #test_grad_P_varying_qn()
+    #test_grad_P()
+    test_grad_P_with_init_loading()
     #test_density_and_velocity_deposition()
     #check_density_deposition()
     #visualize_inhomogenous_B()
     #plot_dipole_field_line()
     #check_particle_position_individual()
-    test_cross_product()
+    #test_cross_product()
     #test_cspline_interpolation()
     #test_E_convective()
     #test_E_hall()

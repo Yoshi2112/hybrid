@@ -23,7 +23,7 @@ if __name__ == '__main__':
                                           v_prime, S, T = init.initialize_tertiary_arrays()
     
     # Collect initial moments and save initial state
-    sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D) 
+    sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu) 
     
     if te0_equil == True:
         init.set_equilibrium_te0(q_dens, Te0)

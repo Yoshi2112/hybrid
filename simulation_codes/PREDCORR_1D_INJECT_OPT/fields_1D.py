@@ -17,7 +17,7 @@ def eval_B0x(x):
 
 
 @nb.njit()
-def get_curl_E(E, dE, DX=dx):
+def get_curl_E(E, dE):
     ''' Returns a vector quantity for the curl of a field valid at the
     positions between its gridpoints (i.e. curl(E) -> B-grid, etc.)
     
@@ -127,12 +127,12 @@ def get_grad_P(qn, te, grad_P, temp):
                   density and temperature may vary (with adiabatic approx.)
         
     Forwards/backwards differencing at the simulation cells at the edge of the
-    physical space domain. Guard cells set to zero.
+    physical space domain. Guard cells set to zero. (Actually not anymore. Just take FD over all space)
     '''
     temp     *= 0; grad_P *= 0
+    
     nc        = qn.shape[0]
     grad_P[:] = qn * kB * te / q       # Store Pe in grad_P array for calculation
-    #LC        = NX + ND - 1
 
     # Central differencing, internal points
     # 2020-05-12 :: Changed limits from (ND + 1, LC - 1), removed F/B FD.

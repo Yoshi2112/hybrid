@@ -47,7 +47,7 @@ def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
 
 
 @nb.njit()
-def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D):
+def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
     '''
     Moment (charge/current) collection function.
 

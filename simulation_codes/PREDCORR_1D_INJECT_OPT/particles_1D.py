@@ -16,13 +16,13 @@ from fields_1D import eval_B0x
 
 @nb.njit()
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T, temp_N,\
-                                  B, E, DT, q_dens_adv, Ji, ni, nu, temp1D, pc=0):
+                                  B, E, DT, q_dens_adv, Ji, ni, nu, pc=0):
     '''
     Helper function to group the particle advance and moment collection functions
     '''
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, temp_N, DT)
     position_update(pos, vel, idx, DT, Ie, W_elec)  
-    collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, ni, nu, temp1D)
+    collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, ni, nu)
     return
 
 
