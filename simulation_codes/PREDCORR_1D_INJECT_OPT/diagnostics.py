@@ -636,13 +636,38 @@ def test_grad_P():
 
 
 def test_grad_P_with_init_loading():
+    '''
+    Init density is homogenous :: Confirmed
     
+    '''
     pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, temp_N = init.initialize_particles()
     q_dens, q_dens2, Ji, ni, nu                          = init.initialize_source_arrays()
     
     sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu)
     
-    pdb.set_trace()
+    te_input  = np.ones(const.NC)*const.Te0_scalar
+    gp_diff   = np.zeros(const.NC)
+    temp      = np.zeros(const.NC + 1)
+    
+    fields.get_grad_P(q_dens, te_input, gp_diff, temp)
+    
+    fig, ax = plt.subplots(4, figsize=(15, 10), sharex=True)
+    ax[0].set_title('Particle Moments')
+    ax[0].plot(const.E_nodes, q_dens)
+    ax[1].plot(const.E_nodes, Ji[:, 0])
+    ax[2].plot(const.E_nodes, Ji[:, 1])
+    ax[3].plot(const.E_nodes, Ji[:, 2])
+    
+    ax[0].set_ylabel(r'$\rho_c$')
+    ax[1].set_ylabel(r'$J_x$')
+    ax[2].set_ylabel(r'$J_y$')
+    ax[3].set_ylabel(r'$J_z$')
+    
+    fig2, ax2 = plt.subplots(figsize=(15, 10))
+    
+    ax2.set_title('E-field contribution of initial density loading')
+    ax2.plot(const.E_nodes, gp_diff / q_dens)
+    
     return
 
 

@@ -9,12 +9,12 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Equilibrium test :: New interface, no equilibrium (control), but with changed grad_P calculation. Also using OPT code.'''
+run_description = '''Just a random run to check out runtime and make sure no serious errors from minor changes.'''
 
 ### RUN PARAMETERS ###
-drive             = 'G:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//equilibrium_test'      # Series save dir   : Folder containing all runs of a series
-run               = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
+save_path         = 'runs//random_check_test'     # Series save dir   : Folder containing all runs of a series
+run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
@@ -25,13 +25,13 @@ supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
 shoji_approx      = False                         # Changes solution used for calculating particle B0r (1D vs. 3D)
-te0_equil         = False                         # Initialize te0 to be in equilibrium with density
-particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Periodic
+te0_equil         = True                          # Initialize te0 to be in equilibrium with density
+particle_boundary = 1                             # 0: Absorb, 1: Reflect, 2: Periodic
                                                   # Only reflects cold particles. Hot particles converted to cold
 
 ### SIMULATION PARAMETERS ###
-NX        = 64                            # Number of cells - doesn't include ghost cells
-ND        = 16                             # Damping region length: Multiple of NX (on each side of simulation domain)
+NX        = 1024                            # Number of cells - doesn't include ghost cells
+ND        = 128                             # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev   = 50                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell

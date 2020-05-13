@@ -24,9 +24,6 @@ def cross_product(A, B, C):
 
     OUTPUT:
         C -- The resultant cross product with same dimensions as input vectors
-        
-    Could be more memory efficient to "accumulate" operation, but would involve rewriting
-    for each specific instance.
     '''
     C[:, 0] += A[:, 1] * B[:, 2]
     C[:, 1] += A[:, 2] * B[:, 0]
