@@ -2630,9 +2630,9 @@ def plot_E_components():
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'G:'
+    drive       = 'F:'
     
-    series      = 'equilibrium_test'
+    series      = 'random_check_test'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
@@ -2642,7 +2642,7 @@ if __name__ == '__main__':
     # To do : A comparison plot of the loss per time of the cold plasma runs
     # To do : Fix the Poynting plots (why are they broke in the first place?)
     
-    for run_num in [3]:#range(num_runs):
+    for run_num in range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
 

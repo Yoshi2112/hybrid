@@ -220,9 +220,10 @@ def set_damping_array(damping_array, DT):
     Can just play with r value/damping region length once it doesn't explode.
     
     23/03/2020 Put factor of 0.5 in front of va to set group velocity approx.
+    14/05/2020 Put factor of 0.5 in front of DT since B is only ever pushed 0.5DT
     '''
     dist_from_mp  = np.abs(np.arange(NC + 1) - 0.5*NC)          # Distance of each B-node from midpoint
-    r_damp        = np.sqrt(29.7 * 0.5 * va / ND * (DT / dx))   # Damping coefficient
+    r_damp        = np.sqrt(29.7 * 0.5 * va * (0.5 * DT / dx) / ND)   # Damping coefficient
     
     for ii in range(NC + 1):
         if dist_from_mp[ii] > 0.5*NX:
