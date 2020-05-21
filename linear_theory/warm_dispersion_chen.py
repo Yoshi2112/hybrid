@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from   scipy.optimize    import fsolve
 from   scipy.special     import wofz
-from emperics            import geomagnetic_magnitude, sheely_plasmasphere
+from plasma_lib.emperics import geomagnetic_magnitude, sheely_plasmasphere
 from matplotlib.lines    import Line2D
 import os
 '''

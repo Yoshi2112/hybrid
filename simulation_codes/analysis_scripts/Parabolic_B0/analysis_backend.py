@@ -24,6 +24,15 @@ script is shorter and less painful to work with
 If a method requires more than a few functions, it will be split into its own 
 module, i.e. get_growth_rates
 '''
+qi  = 1.602e-19               # Elementary charge (C)
+c   = 3e8                     # Speed of light (m/s)
+me  = 9.11e-31                # Mass of electron (kg)
+mp  = 1.67e-27                # Mass of proton (kg)
+e   = -qi                     # Electron charge (C)
+mu0 = (4e-7) * np.pi          # Magnetic Permeability of Free Space (SI units)
+kB  = 1.38065e-23             # Boltzmann's Constant (J/K)
+e0  = 8.854e-12               # Epsilon naught - permittivity of free space
+
 @nb.njit()
 def eval_B0x(x):
     return cf.B_eq * (1. + cf.a * x**2)
@@ -96,6 +105,8 @@ def interpolate_B_to_center(bx, by, bz, zero_boundaries=False):
     field is measured). 
     
     bx, by, bz are each (time, space) ndarrays
+    
+    VERIFIED
     '''
     n_times = bx.shape[0]
     NC      = cf.NC                                   # Number of cells
@@ -110,7 +121,10 @@ def interpolate_B_to_center(bx, by, bz, zero_boundaries=False):
     
     # For each time (tt): Calculate second derivative (for each component)
     for tt in range(n_times):
-        print('Interpolating cell centers for time ', tt)
+        y2x *= 0
+        y2y *= 0
+        y2z *= 0
+        
         # Interior B-nodes, Centered difference
         for ii in range(1, NC):
             y2x[ii] = bx[tt, ii + 1] - 2*bx[tt, ii] + bx[tt, ii - 1]
@@ -139,27 +153,24 @@ def interpolate_B_to_center(bx, by, bz, zero_boundaries=False):
     return bxi, byi, bzi
 
 
-@nb.njit()
-def get_electron_temp(q_dens, Te0):
+def get_electron_temp(qn):
     '''
     Calculate the electron temperature in each cell. Depends on the charge density of each cell
     and the treatment of electrons: i.e. isothermal (ie=0) or adiabatic (ie=1)
     
-    q_dens is a (time, space) ndarray
+    qn :: (time, space)
     '''
-    if   cf.ie == 0:
-        Te      = np.ones(q_dens.shape) * Te0
-    elif cf.ie == 1:
-        Te      = np.zeros(q_dens.shape)
-        gamma_e = 5./3. - 1.
-        
-        for ii in range(Te.shape[0]):
-            Te[ii] = Te0 * np.power(q_dens[ii] / (cf.q*cf.ne), gamma_e)
+    Te = np.zeros(qn.shape, dtype=float)
+    for ii in range(qn.shape[0]):
+        if cf.ie == 0:
+            Te[ii, :] = np.ones(qn.shape[0]) * cf.Te0
+        elif cf.ie == 1:
+            gamma_e = 5./3. - 1.
+            Te[ii, :] = cf.Te0 * np.power(qn[ii, :] / (qi * cf.ne), gamma_e)
     return Te
 
 
-@nb.njit()
-def get_grad_P(qn, te, grad_P, temp):
+def get_grad_P(qn, te):
     '''
     Returns the electron pressure gradient (in 1D) on the E-field grid using P = nkT and 
     finite difference.
@@ -173,100 +184,98 @@ def get_grad_P(qn, te, grad_P, temp):
         
     Forwards/backwards differencing at the simulation cells at the edge of the
     physical space domain. Guard cells set to zero.
+    
+    qn, te :: (time, space)
     '''
-    temp     *= 0; grad_P *= 0
-    nc        = qn.shape[0]
-    grad_P[:] = qn * kB * te / q       # Store Pe in grad_P array for calculation
-    LC        = NX + ND - 1
+    Pe     = qn * kB * te / qi       # Store Pe in grad_P array for calculation
 
     # Central differencing, internal points
-    for ii in nb.prange(ND + 1, LC - 1):
-        temp[ii] = (grad_P[ii + 1] - grad_P[ii - 1])
+    grad_P = np.zeros(qn.shape)
+    for ii in nb.prange(1, qn.shape[1] - 1):
+        grad_P[:, ii] = (Pe[:, ii + 1] - Pe[:, ii - 1])
     
     # Forwards/Backwards difference at physical boundaries
-    temp[ND] = -3*grad_P[ND] + 4*grad_P[ND + 1] - grad_P[ND + 2]
-    temp[LC] =  3*grad_P[LC] - 4*grad_P[LC - 1] + grad_P[LC - 2]
-    temp    /= (2*dx)
+    grad_P    /= (2*cf.dx)
     
-    # Return value
-    grad_P[:]    = temp[:nc]
-    return
+    return grad_P
 
 
-@nb.njit()
+
 def get_curl_B(bx, by, bz):
     '''
     Each b component is a (time, space) ndarray
     '''
-    curl_B = np.zeros((bx.shape[0], bx.shape[1] - 1, 3), dtype=nb.float64)
+    curl_B = np.zeros((bx.shape[0], bx.shape[1] - 1, 3), dtype=np.float64)
     
     for ii in nb.prange(bx.shape[1] - 1):
         curl_B[:, ii, 1] = -(bz[:, ii + 1] - bz[:, ii])
         curl_B[:, ii, 2] =   by[:, ii + 1] - by[:, ii]
     
-    curl_B /= (cf.dx * cf.mu0)
+    curl_B /= (cf.dx * mu0)
     return curl_B
 
 
-@nb.njit()
+
 def cross_product(ax, ay, az, bx, by, bz):
     '''
     Vector (cross) product between two vectors, A and B of same dimensions.
     all ai, bi are expected to be (time, space) ndarrays
     '''
-    C = np.zeros((az.shape[0], az.shape[1], 3), dtype=nb.float64)
+    C = np.zeros((az.shape[0], az.shape[1], 3), dtype=np.float64)
     for ii in nb.prange(az.shape[0]):
-        C[:, ii, 0] = ay[:, ii] * bz[:, ii] - az[:, ii] * by[:, ii]
-        C[:, ii, 1] = az[:, ii] * bx[:, ii] - ax[:, ii] * bz[:, ii]
-        C[:, ii, 2] = ax[:, ii] * by[:, ii] - ay[:, ii] * bx[:, ii]
+        C[:, ii, 0] += ay[:, ii] * bz[:, ii]
+        C[:, ii, 1] += az[:, ii] * bx[:, ii]
+        C[:, ii, 2] += ax[:, ii] * by[:, ii]
+        
+        C[:, ii, 0] -= az[:, ii] * by[:, ii]
+        C[:, ii, 1] -= ax[:, ii] * bz[:, ii]
+        C[:, ii, 2] -= ay[:, ii] * bx[:, ii]
     return C
 
 
-@nb.njit()
-def calculate_E_components(bx, by, bz, bxi, byi, bzi, jx, jy, jz, q_dens):
-    '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
-    electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
-    and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
-    
-    INPUT:
-        B   -- Magnetic field array. Displaced from E-field array by half a spatial step.
-        Ji  -- Ion current density. Source term, based on particle velocities
-        qn  -- Charge density. Source term, based on particle positions
-        
-    OUTPUT:
-        E   -- Updated electric field array
-        Ve  -- Electron velocity moment
-        Te  -- Electron temperature
-    
-    arr3D, arr1D are tertiary arrays used for intermediary computations
-    
-    To Do: In the interpolation function, add on B0 along with the 
-    spline interpolation. No other part of the code requires B0 in the nodes.
+
+def calculate_E_components(bx, by, bz, jx, jy, jz, q_dens):
     '''
-    # Need to calculate:
-    # Ji x B / qn
-    # del(p) / qn
-    # Bx(curl B) / qn*mu0
+    '''
+    # Need to calculate (Fatemi, 2017):
+    # Ji x B / qn               Convective Term?
+    # del(p) / qn               Ambipolar term?
+    # Bx(curl B) / qn*mu0       Hall Term?
+    # This version of the code doesn't include an Ohmic term, since eta = 0
+    import sys
+    import matplotlib.pyplot as plt
     
-    curl_B = get_curl_B(bx, by, bz)                                   # temp3De is now curl B term
+    bxi, byi, bzi = interpolate_B_to_center(bx, by, bz)
+    
+    fig, ax = plt.subplots(2, figsize=(15, 10))
+    
+    time  = 120
+    space = bx.shape[1] // 2
+    
+    ax[0].plot(cf.B_nodes, by[ time], marker='o', c='b')
+    ax[0].plot(cf.E_nodes, byi[time], marker='x', c='r')
+    
+    ax[1].plot(by[ :, space], marker='o', c='b')
+    ax[1].plot(byi[:, space], marker='x', c='r')
+    
+    sys.exit()
+    # Hall Term
+    curl_B = get_curl_B(bx, by, bz)
     BdB    = cross_product(bxi, byi, bzi, curl_B[:, :, 0], curl_B[:, :, 1], curl_B[:, :, 2])
-    BdB   /= q_dens
     
-    get_electron_temp(q_dens, Te, Te0)
+    # Ambipolar Term
+    Te     = get_electron_temp(q_dens)
+    grad_P = get_grad_P(q_dens, Te)                           # temp1D is now del_p term, temp3D2 slice used for computation
+    grad_P/= q_dens[:]
 
-    get_grad_P(q_dens, Te, grad_P, temp3Db[:, 0])            # temp1D is now del_p term, temp3D2 slice used for computation
-    aux.interpolate_edges_to_center(B, temp3Db)              # temp3db is now B_center
-
-    aux.cross_product(Ve, temp3Db, temp3De)                  # temp3De is now Ve x B term
-
-    E[:, 0]  = - temp3De[:, 0] - grad_P[:] / q_dens[:]
-    E[:, 1]  = - temp3De[:, 1]
-    E[:, 2]  = - temp3De[:, 2]
+    # Convective Term
+    JxB  = cross_product(jx, jy, jz, bxi, byi, bzi)           # temp3De is now Ve x B term
     
-    # Diagnostic flag for testing
-    if disable_waves == True:   
-        E *= 0.
-    return 
+    for ii in range(3):
+        BdB[:, :, ii] /= q_dens[:]
+        JxB[:, :, ii] /= q_dens[:]
+        
+    return BdB, grad_P, JxB
 
 
 

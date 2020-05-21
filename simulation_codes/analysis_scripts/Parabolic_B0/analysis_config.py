@@ -173,7 +173,13 @@ def load_simulation_params():
     
     if rc_hwidth == 0: 
         rc_hwidth = NX//2
-        
+    
+    try:
+        # Test if scalar
+        print(Te0[0])
+    except:
+        # If it is, make it a vector
+        Te0 = np.ones(NC, dtype=float) * Te0
     return 
 
 

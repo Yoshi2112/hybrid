@@ -6,11 +6,12 @@ Created on Tue Apr 30 13:14:56 2019
 """
 import analysis_config as cf
 import numpy as np
+import os
 import sys
 import pyfftw
-from scipy import signal
-data_scripts_dir = 'C://Users//iarey//Documents//GitHub//hybrid//linear_theory//'
-sys.path.append(data_scripts_dir)
+
+linear_theory_dir = 'C://Users//iarey//Documents//GitHub//hybrid//linear_theory//new_general_DR_solver//'
+sys.path.append(linear_theory_dir)
 
 
 def get_cgr_from_sim(norm_flag=0):
@@ -54,62 +55,28 @@ def get_cgr_from_sim(norm_flag=0):
     return freqs, cgr, stop
 
 
-def get_linear_dispersion_from_sim(k=None, plot=False, save=False):
+def get_linear_dispersion_from_sim(k=None, plot=False, save=False, zero_cold=True):
     '''
     Still not sure how this will work for a H+, O+ mix, but H+-He+ should be fine
+    
+    Extracted values units :: 
+        Density    -- /m3       (Cold, warm densities)
+        Anisotropy -- Number
+        Tper       -- eV
     '''
-    from chen_warm_dispersion   import get_dispersion_relation
+    from dispersion_solver_multispecies import dispersion_relations
+    from analysis_config                import NX, dx, Tper, Tpar, B0
     
-    from analysis_config import species_present, NX, dx, Tper, Tpar, temp_type,\
-                                species_lbl, density, Nj, B0, anal_dir
-                   
+    anisotropy = Tper / Tpar - 1
+    t_perp     = cf.Tper.copy() / 11603.
+    
     if k is None:
-        k         = np.fft.fftfreq(NX, dx)
-        k         = k[k>=0]
+        k         = np.fft.fftfreq(NX, dx)      # DOES THIS NEED A 2pi MULTIPLIER? 
+        k         = k[k>=0]                     # AM I SENDING ANGULAR WAVENUMBER?
     
-    N_present    = species_present.count(True)
-    cold_density = np.zeros(N_present)
-    warm_density = np.zeros(N_present)
-    cgr_ani      = np.zeros(N_present)
-    tempperp     = np.zeros(N_present)
-    anisotropies = Tper / Tpar - 1
-    
-    for ii in range(Nj):
-        if temp_type[ii] == 0:
-            if 'H^+'    in species_lbl[ii]:
-                cold_density[0] = density[ii]
-            elif 'He^+' in species_lbl[ii]:
-                cold_density[1] = density[ii]
-            elif 'O^+'  in species_lbl[ii]:
-                cold_density[2] = density[ii]
-            else:
-                print('WARNING: UNKNOWN ION IN DENSITY MIX')
-                
-        if temp_type[ii] == 1:
-            if 'H^+'    in species_lbl[ii]:
-                warm_density[0] = density[ii]
-                cgr_ani[0]      = anisotropies[ii]
-                tempperp[0]     = Tper[ii] / 11603.
-            elif 'He^+' in species_lbl[ii]:
-                warm_density[1] = density[ii]
-                cgr_ani[1]      = anisotropies[ii]
-                tempperp[1]     = Tper[ii] / 11603
-            elif 'O^+'  in species_lbl[ii]:
-                warm_density[2] = density[ii]
-                cgr_ani[2]      = anisotropies[ii]
-                tempperp[2]     = Tper[ii] / 11603
-            else:
-                print('WARNING: UNKNOWN ION IN DENSITY MIX')
-
-    if save == True:
-        savepath = anal_dir
-    else:
-        savepath = None
-    
-    k_vals, CPDR_solns, warm_solns = get_dispersion_relation(B0, cold_density, warm_density, cgr_ani, tempperp,
-               norm_k=False, norm_w=False, kmin=k[0], kmax=k[-1], k_input_norm=0, plot=plot, save=save, savepath=savepath)
-
-    return k_vals, CPDR_solns, warm_solns
+    k_vals, CPDR_solns, WPDR_solns = dispersion_relations(B0, cf.species_lbl, cf.mass, cf.charge, \
+                                           cf.density, t_perp, anisotropy, norm_k=False, norm_w=False)
+    return k_vals, CPDR_solns, WPDR_solns
 
 
 def get_wx(component):
@@ -145,7 +112,7 @@ def get_wk(component):
     num_times = arr.shape[0]
 
     df = 1. / (num_times * cf.dt_field)
-    dk = 1. / (cf.NX * cf.dx)
+    dk = 1. / (cf.NX     * cf.dx)
 
     f  = np.arange(0, 1. / (2*cf.dt_field), df)
     k  = np.arange(0, 1. / (2*cf.dx), dk)
@@ -229,3 +196,128 @@ def autopower_spectra(component='By', overlap=0.5, win_idx=None, slide_idx=None,
     freq         = np.asarray([df * jj for jj in range(win_idx//2 + 1)])            # Frequency array up to Nyquist
     power        = np.real(FFT_output * np.conj(FFT_output))
     return power, FFT_times, freq
+
+
+def create_WHAMP_inputs_from_run(series, run_num):
+    '''
+    Create input scripts by reading in the simulation and particle parameters
+    of a hybrid run. This will serve as the first part of the interface.
+    
+    k_min should always be zero, k_max will be determined by simulation spacing.
+    Is k in /m ? Is fstart in Hz? Or a fraction of p_cyc? Or radians/s? Find out.
+    
+    k_nyq = 1 / (2*dx)   ---> This is the maximum k to plot up to
+    '''
+    whamp_IO_folder = cf.anal_dir + '/WHAMP/'
+    if os.path.exists(whamp_IO_folder) == False:
+        os.makedirs(whamp_IO_folder)
+
+    # Calculable k-range from simulation grid spacing (/m)
+    Nk     = 500
+    k_min  = 0.0
+    k_nyq  = 1 / (2*cf.dx)
+    k_step = k_nyq / Nk
+        
+    # SIMULATION/RUN PARAMTERS
+    fstart       = 0.15                   # UNITS?? NORMALIZED? I THINK ITS JUST A FIRST GUESS 
+    kpar         = [k_min, k_step, k_nyq] # Start/Step/Stop
+    kperp        = 0.0                    # Scalar in this case (just to see)
+    magfield     = cf.B0 * 1e9            # Background B0 in nT
+
+    # Code quantities (Probably never need to be changed)
+    maxiter      = 50                   # Maximum iterations (for solution convergence?)
+    uselog       = 0                    # Use logarithmic spacing for k values (0: No, 1: Yes)
+    kzfirst      = 0                    # Vary over kz first (Doesn't matter)
+    
+    
+    # SPECIES PARAMETERS :: CONVERT INTO SOMETHING THAT CAN BE PUT INTO WHAMP INPUT FILE
+    mass       = cf.mass.copy() / cf.mp         	            # Species ion mass (proton mass units)
+    density    = cf.density.copy() * 1e-6                       # Species density in /cc
+
+    E_tot      = (cf.Tpar + cf.Tper)/11603.                     # Total plasma  energy in eV
+    E_e        = cf.Te0 / 11603.                                # Electron energy (eV)
+    ne         = density.sum()                                  # Electron density
+    
+    v_therm    = np.sqrt(cf.kB * (cf.Tpar + cf.Tper) / cf.mass) # Array of v_therm for each species
+    new_A      = cf.Tper / cf.Tpar                              # Anisotropy (T_per / T_par) (without the minus one as usual - its a WHAMP thing)
+    new_drift  = cf.drift_v.copy() / v_therm                    # Normalized drift velocity
+    
+    param_file = whamp_IO_folder + 'WHAMP_INPUT_PARAMS.txt'
+    with open(param_file, 'w', newline="\n") as f:
+        f.write('MATLAB-WHAMP INPUT PARAMTER FILE\n')
+        f.write('RUN TITLE {}[{}]\n'.format(series.upper(), run_num))
+        f.write('__________________________\n')
+        f.write('FSTART\t{:10.5e}\n'.format(fstart))
+        f.write('KPAR\t{:10.5e}  {:10.5e}  {:10.5e}\n'.format(kpar[0], kpar[1], kpar[2]))
+        f.write('KPERP\t{:10.5e}\n'.format(kperp))
+        f.write('MAXITER\t{:d}\n'.format(maxiter))
+        f.write('USELOG\t{:d}\n'.format(uselog))
+        f.write('KZ1ST\t{:d}\n'.format(kzfirst))
+        f.write('MAGFIELD_NT\t{:10.5e}'.format(magfield))
+    f.close()
+        
+    species_file = whamp_IO_folder + 'WHAMP_INPUT_SPECIES.txt'
+    with open(species_file, 'w', newline="\n") as f:
+        f.write('MATLAB-WHAMP INPUT SPECIES FILE\n')
+        f.write('RUN TITLE {}[{}]\n'.format(series.upper(), run_num))
+        f.write('__________________________\n')
+        f.write('SPEC#\tMASS/PMASS\tDENSITY (/CM3)\tTEMPR (EV)\tANIS (TP/TX)\tLCPARAM1(D)\tLCPARAM2(B)\tVDRIFT/VTHERM\n')
+    
+        # Line for each species
+        for ii in range(cf.Nj):
+            f.write('{}\t'.format(ii + 1))
+            f.write('{:10.6e}\t'.format(mass[ii]))
+            f.write('{:10.6e}\t'.format(density[ii]))
+            f.write('{:10.6e}\t'.format(E_tot[ii]))
+            f.write('{:10.6e}\t'.format(new_A[ii]))
+            f.write('{:10.6e}\t'.format(1.0))               # Loss cone param 1
+            f.write('{:10.6e}\t'.format(0.0))               # Loss cone param 2
+            f.write('{:10.6e}\n'.format(new_drift[ii]))
+            
+        # Gotta do a line for electrons too   
+        f.write('{}\t'.format(cf.Nj + 1))
+        f.write('{:10.6e}\t'.format(0.0))
+        f.write('{:10.6e}\t'.format(ne))
+        f.write('{:10.6e}\t'.format(E_e))
+        f.write('{:10.6e}\t'.format(1.0))
+        f.write('{:10.6e}\t'.format(1.0))
+        f.write('{:10.6e}\t'.format(0.0))
+        f.write('{:10.6e}\n'.format(0.0))
+    return
+
+
+def read_WHAMP_CLI_dump(textfile):
+    k_perp, k_par, f_real, f_imag = [[] for _ in range(4)]
+    
+    with open(textfile, 'r') as f:
+        for line in f:
+            A = line.split()
+            
+            k_perp.append(float(A[0]))
+            k_par.append(float(A[1]))
+            f_real.append(float(A[2]))
+            f_imag.append(float(A[3]))
+            
+    return np.array(k_perp), np.array(k_par), np.array(f_real), np.array(f_imag)
+
+
+def plot_WHAMP_CLI_dumps():
+    import matplotlib.pyplot as plt
+    
+    main_dir  = r'F:\Google Drive\Uni\PhD 2017\Resources\whamp-master\whamp_runs\WHAMP_CLI_DUMP\First'
+    file_list = os.listdir(main_dir)
+    
+    plt.figure()
+    for file in file_list:
+        textfile = os.path.join(main_dir, file)
+        print('Reading {}'.format(textfile))
+        k_perp, k_par, f_real, f_imag = read_WHAMP_CLI_dump(textfile)
+        plt.plot(k_par, f_real)
+        
+    plt.ylim(0, 1.0)
+    plt.xlim(0, None)
+    return
+
+
+if __name__ == '__main__':
+    plot_WHAMP_CLI_dumps()

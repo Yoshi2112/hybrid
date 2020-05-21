@@ -171,15 +171,11 @@ def plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=False, save=Fa
         ax.set_ylim(0, None)
     
     if dispersion_overlay == True:
-        '''
-        Some weird factor of about 2pi inaccuracy? Is this inherent to the sim? Or a problem
-        with linear theory? Or problem with the analysis?
-        '''
         try:
             k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k)
             for ii in range(CPDR_solns.shape[1]):
-                ax.plot(k_vals, CPDR_solns[:, ii]*2*np.pi,      c='k', linestyle='--', label='CPDR')
-                ax.plot(k_vals, warm_solns[:, ii].real*2*np.pi, c='k', linestyle='-',  label='WPDR')
+                ax.plot(k_vals, CPDR_solns[:, ii],      c='k', linestyle='--', label='CPDR')
+                ax.plot(k_vals, warm_solns[:, ii].real, c='k', linestyle='-',  label='WPDR')
         except:
             pass
         
@@ -190,67 +186,12 @@ def plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=False, save=Fa
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
         print('w-k saved')
         plt.close('all')
-    return
-
-
-def plot_wk_AGU(component='By', saveas='wk_plot' , dispersion_overlay=False, save=False, pcyc_mult=None):
-    plt.ioff()
-    
-    tick_label_size = 14
-    mpl.rcParams['xtick.labelsize'] = tick_label_size 
-    
-    fontsize = 18
-    
-    k, f, wk = disp.get_wk(component)
-
-    xlab = r'$k (\times 10^{-6}m^{-1})$'
-    ylab = r'f (Hz)'
-
-    fig = plt.figure(1, figsize=(15, 10))
-    ax  = fig.add_subplot(111)
-    
-    im1 = ax.pcolormesh(1e6*k[1:], f[1:], np.log10(wk[1:, 1:].real), cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
-    fig.colorbar(im1).set_label(r'$log_{10}$(Power)', rotation=90, fontsize=fontsize)
-    ax.set_title(r'$\omega/k$ Dispersion Plot for {}'.format(component), fontsize=fontsize+4)
-    ax.set_ylabel(ylab, fontsize=fontsize)
-    ax.set_xlabel(xlab, fontsize=fontsize)
-    
-    clr  = ['black', 'green', 'red'] 
-    lbl  = [r'$f_{H^+}$', r'$f_{He^+}$', r'$f_{O^+}$']
-    M    = np.array([1., 4., 16.])
-    cyc  = q * cf.B0 / (2 * np.pi * mp * M)
-    for ii in range(3):
-        if cf.species_present[ii] == True:
-            ax.axhline(cyc[ii], linestyle='--', c=clr[ii], label=lbl[ii])
-    
-    ax.set_xlim(0, None)
-    
-    if pcyc_mult is not None:
-        ax.set_ylim(0, pcyc_mult*cyc[0])
     else:
-        ax.set_ylim(0, None)
-    
-    if dispersion_overlay == True:
-        '''
-        Some weird factor of about 2pi inaccuracy? Is this inherent to the sim? Or a problem
-        with linear theory? Or problem with the analysis?
-        '''
-        try:
-            k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k)
-            for ii in range(CPDR_solns.shape[1]):
-                ax.plot(k_vals, CPDR_solns[:, ii]*2*np.pi,      c='k', linestyle='--', label='CPDR')
-                ax.plot(k_vals, warm_solns[:, ii].real*2*np.pi, c='k', linestyle='-',  label='WPDR')
-        except:
-            pass
-        
-    ax.legend(loc=2, facecolor='white', prop={'size': fontsize})
-        
-    if save == True:
-        fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
-        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-        print('w-k for component {} saved'.format(component.lower()))
-        plt.close('all')
+        plt.show()
     return
+
+
+
 
 
 def plot_dynamic_spectra(component='By', saveas='power_spectra', save=False, ymax=None, cell=None,
@@ -1190,22 +1131,84 @@ def do_all_dynamic_spectra(ymax=None):
     return
 
 
+def plot_wk_AGU(component='By', saveas='wk_plot' , dispersion_overlay=False, save=False, pcyc_mult=None):
+    plt.ioff()
+    
+    tick_label_size = 14
+    mpl.rcParams['xtick.labelsize'] = tick_label_size 
+    
+    fontsize = 18
+    
+    k, f, wk = disp.get_wk(component)
+
+    xlab = r'$k (\times 10^{-6}m^{-1})$'
+    ylab = r'f (Hz)'
+
+    fig = plt.figure(1, figsize=(15, 10))
+    ax  = fig.add_subplot(111)
+    
+    im1 = ax.pcolormesh(1e6*k[1:], f[1:], np.log10(wk[1:, 1:].real), cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
+    fig.colorbar(im1).set_label(r'$log_{10}$(Power)', rotation=90, fontsize=fontsize)
+    ax.set_title(r'$\omega/k$ Dispersion Plot for {}'.format(component), fontsize=fontsize+4)
+    ax.set_ylabel(ylab, fontsize=fontsize)
+    ax.set_xlabel(xlab, fontsize=fontsize)
+    
+    clr  = ['black', 'green', 'red'] 
+    lbl  = [r'$f_{H^+}$', r'$f_{He^+}$', r'$f_{O^+}$']
+    M    = np.array([1., 4., 16.])
+    cyc  = q * cf.B0 / (2 * np.pi * mp * M)
+    for ii in range(3):
+        if cf.species_present[ii] == True:
+            ax.axhline(cyc[ii], linestyle='--', c=clr[ii], label=lbl[ii])
+    
+    ax.set_xlim(0, None)
+    
+    if pcyc_mult is not None:
+        ax.set_ylim(0, pcyc_mult*cyc[0])
+    else:
+        ax.set_ylim(0, None)
+    
+    if dispersion_overlay == True:
+        '''
+        Some weird factor of about 2pi inaccuracy? Is this inherent to the sim? Or a problem
+        with linear theory? Or problem with the analysis?
+        '''
+        k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k)
+        for ii in range(CPDR_solns.shape[1]):
+            ax.plot(k_vals, CPDR_solns[:, ii]*2*np.pi,      c='k', linestyle='--', label='CPDR')
+            ax.plot(k_vals, warm_solns[:, ii].real*2*np.pi, c='k', linestyle='-',  label='WPDR')
+        
+    ax.legend(loc=2, facecolor='white', prop={'size': fontsize})
+        
+    if save == True:
+        fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        print('w-k for component {} saved'.format(component.lower()))
+        plt.close('all')
+    return
+
+
 #%%
 if __name__ == '__main__':
-    drive      = 'G://MODEL_RUNS//Josh_Runs//'
-    series      = 'july_25_lingrowth'
+    drive      = 'G:'
+    series      = 'archive//long_large_run'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
-    dumb_offset = 0
+    dumb_offset = 1
     
-    for run_num in range(num_runs):
+    for run_num in [0]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
         
-        disp_folder = 'dispersion_plots/'
+        plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=True, save=False, pcyc_mult=None)
         
-        for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
-            plot_wk_AGU(component=comp, saveas=disp_folder + 'wk_plot_AGU', save=True, pcyc_mult=1.1)
+        #plot_wk_AGU(component='By', saveas='_new_wk_plot' , dispersion_overlay=True, save=True, pcyc_mult=None)
+                
+        #disp_folder = 'dispersion_plots/'
+# =============================================================================
+#         for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
+#             plot_wk_AGU(component=comp, saveas=disp_folder + 'wk_plot_AGU', save=True, pcyc_mult=1.1)
+# =============================================================================
         
         #single_point_both_fields_AGU()
         

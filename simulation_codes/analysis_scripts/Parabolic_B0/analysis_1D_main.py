@@ -18,14 +18,15 @@ import analysis_config  as cf
 import dispersions      as disp
 import get_growth_rates as ggg
 
-qi  = 1.602e-19               # Elementary charge (C)
-c   = 3e8                     # Speed of light (m/s)
-me  = 9.11e-31                # Mass of electron (kg)
-mp  = 1.67e-27                # Mass of proton (kg)
-e   = -qi                     # Electron charge (C)
-mu0 = (4e-7) * np.pi          # Magnetic Permeability of Free Space (SI units)
-kB  = 1.38065e-23             # Boltzmann's Constant (J/K)
-e0  = 8.854e-12               # Epsilon naught - permittivity of free space
+qi     = 1.602e-19       # Elementary charge (C)
+c      = 3e8             # Speed of light (m/s)
+me     = 9.11e-31        # Mass of electron (kg)
+mp     = 1.67e-27        # Mass of proton (kg)
+e      = -qi             # Electron charge (C)
+mu0    = (4e-7) * np.pi  # Magnetic Permeability of Free Space (SI units)
+kB     = 1.38065e-23     # Boltzmann's Constant (J/K)
+e0     = 8.854e-12       # Epsilon naught - permittivity of free space
+B_surf = 3.12e-5         # Magnetic field strength at Earth surface
 
 '''
 Aim: To populate this script with plotting routines ONLY. Separate out the 
@@ -2622,9 +2623,182 @@ def plot_E_components():
     
     ftime, bx, by, bz, ex, ey, ez, vex, vey, vez,\
     te, jx, jy, jz, qdens, fsim_time, rD = cf.get_array(get_all=True)
+        
+    hall, amb, conv = bk.calculate_E_components(bx, by, bz, jx, jy, jz, qdens)    
+    pdb.set_trace()
+    # Sanity check :: Reconstruct what E should be, compare to real
+    E_reconstruction = np.zeros((hall.shape[0], hall.shape[1], 3), dtype=float)
+    for ii in range(3):
+        E_reconstruction[:, :, ii] = - (hall[:, :, ii] + conv[:, :, ii] + amb[:, :])
     
-    bxi, byi, bzi = bk.interpolate_B_to_center(bx, by, bz)
+    # Plots to do -- Two options,
+    #   1) Component plot vs. time at a particular point (save NX plots to folder)
+    #   2) Component plot vs. space at each time (save NX plots to folder)
+    # 
+    # Probably do both, dump each time comp_vs_time and comp_vs_space folders in E_component_analysis
+    #
+    # Check : If I combine these components, do I get E? I should.
+    #
+    # Each output should be a (time, space, component) array
     
+    xtime_path  = cf.anal_dir + '/E_component_analysis/components_vs_time/'
+    xspace_path = cf.anal_dir + '/E_component_analysis/components_vs_space/'
+    
+    for fpath in [xtime_path, xspace_path]:
+        if os.path.exists(fpath) == False:
+            os.makedirs(fpath)
+    
+    plt.ioff()
+    # Plot components for each point in space (vs. time)
+    if True:
+        for ii in range(cf.NC):
+            fig, axes = plt.subplots(4, sharex=True, figsize=(15, 10))
+            
+            # Ambipolar (del P) term
+            axes[0].plot(ftime, amb[:, ii], c='r')
+            axes[0].set_ylabel('Ambipolar')
+            axes[0].set_title('E components at cell {}'.format(ii))
+            
+            # Convective (JxB) term :: x,y,z components
+            axes[1].plot(ftime, conv[:, ii, 0], c='r', label='x')
+            axes[1].plot(ftime, conv[:, ii, 1], c='b', label='y')
+            axes[1].plot(ftime, conv[:, ii, 2], c='k', label='z')
+            axes[1].set_ylabel('Convective')
+            
+            # Hall (B x curl(B)) term :: x, y, z components
+            axes[2].plot(ftime, hall[:, ii, 0], c='r', label='x')
+            axes[2].plot(ftime, hall[:, ii, 1], c='b', label='y')
+            axes[2].plot(ftime, hall[:, ii, 2], c='k', label='z')
+            axes[2].set_ylabel('Hall')
+            
+            # E recorded vs. E reconstructed (as check)
+            axes[3].plot(ftime, E_reconstruction[:, ii, 0], c='r', ls='--', label='x')
+            axes[3].plot(ftime, E_reconstruction[:, ii, 1], c='b', ls='--', label='y')
+            axes[3].plot(ftime, E_reconstruction[:, ii, 2], c='k', ls='--', label='z')
+            
+            axes[3].plot(ftime, ex[:, ii], c='r', ls='-', label='x')
+            axes[3].plot(ftime, ey[:, ii], c='b', ls='-', label='y')
+            axes[3].plot(ftime, ez[:, ii], c='k', ls='-', label='z')
+            axes[3].set_ylabel('E')
+            axes[3].set_xlabel('Time (s)')
+            
+            filename = 'E_comp_vs_time_{:05}.png'.format(ii)
+            savepath = xtime_path + filename
+            plt.savefig(savepath)
+            print('E components vs. time for cell {} plotted'.format(ii))
+            plt.close('all')
+    
+    # Plot components for each point in time (vs. space)
+    if True:
+        for ii in range(ftime.shape[0]):
+            fig, axes = plt.subplots(4, sharex=True, figsize=(15, 10))
+            
+            # Ambipolar (del P) term
+            axes[0].plot(cf.E_nodes, amb[ii, :], c='r')
+            axes[0].set_ylabel('Ambipolar')
+            axes[0].set_title('E components at time {}s'.format(ftime[ii]))
+            
+            # Convective (JxB) term :: x,y,z components
+            axes[1].plot(cf.E_nodes, conv[ii, :, 0], c='r', label='x')
+            axes[1].plot(cf.E_nodes, conv[ii, :, 1], c='b', label='y')
+            axes[1].plot(cf.E_nodes, conv[ii, :, 2], c='k', label='z')
+            axes[1].set_ylabel('Convective')
+            
+            # Hall (B x curl(B)) term :: x, y, z components
+            axes[2].plot(cf.E_nodes, hall[ii, :, 0], c='r', label='x')
+            axes[2].plot(cf.E_nodes, hall[ii, :, 1], c='b', label='y')
+            axes[2].plot(cf.E_nodes, hall[ii, :, 2], c='k', label='z')
+            axes[2].set_ylabel('Hall')
+            
+            # E recorded vs. E reconstructed (as check)
+            axes[2].plot(cf.E_nodes, E_reconstruction[ii, :, 0], c='r', ls='--', label='x')
+            axes[2].plot(cf.E_nodes, E_reconstruction[ii, :, 1], c='b', ls='--', label='y')
+            axes[2].plot(cf.E_nodes, E_reconstruction[ii, :, 2], c='k', ls='--', label='z')
+            
+            axes[2].plot(cf.E_nodes, ex[ii :,], c='r', ls='-', label='x')
+            axes[2].plot(cf.E_nodes, ey[ii :,], c='b', ls='-', label='y')
+            axes[2].plot(cf.E_nodes, ez[ii :,], c='k', ls='-', label='z')
+            axes[2].set_ylabel('E')
+            axes[3].set_xlabel('Position (m)')
+            
+            filename = 'E_comp_vs_space_{:05}.png'.format(ii)
+            savepath = xspace_path + filename
+            plt.savefig(savepath)
+            print('E components vs. time for timestep {} plotted'.format(ii))
+            plt.close('all')   
+    return
+
+
+def compare_B0_to_dipole():
+    '''
+    To do: Calculate difference in magnetic strength along a field line, test
+    how good this parabolic approx. is. Use dipole code to compare B0_x to
+    B0_mu and the radial component B0_r to mod(B0_nu, B0_phi). Plot for Colin, 
+    along with method Chapter.
+    
+    Shoji has a simulation extent on the order of R_E (0, 800 is about 6.3R_E,
+    but is that symmetric?)
+    
+    Coded my own a based on equivalent values at +-30 degrees off equator. Maybe 
+    alter code to 
+    '''
+    L         = 5.35       # Field line L shell
+    dtheta    = 0.01       # Angle increment
+    
+    min_theta = np.arcsin(np.sqrt(1 / (L))) * 180 / np.pi
+    
+    # Calculate dipole field intensity (nT) and locations in (r, theta)
+    theta = np.arange(min_theta, 180. + dtheta - min_theta, dtheta) * np.pi / 180
+    r     = L * np.sin(theta) ** 2
+    B_mu  = (B_surf / (r ** 3)) * np.sqrt(3*np.cos(theta)**2 + 1) * 1e9
+
+    if False:
+        # Convert to (x,y) for plotting
+        x     = r * np.cos(theta)
+        y     = r * np.sin(theta)
+        
+        plt.figure(1)
+        plt.gcf().gca().add_artist(plt.Circle((0,0), 1.0, color='k', fill=False))
+        
+        plt.scatter(y, x, c=B_mu, s=1)
+        plt.colorbar().set_label('|B| (nT)', rotation=0, labelpad=20, fontsize=14)
+        plt.clim(None, 1000)
+        plt.xlabel(r'x ($R_E$)', rotation=0)
+        plt.ylabel(r'y ($R_E$)', rotation=0, labelpad=10)
+        plt.title('Geomagnetic Field Intensity at L = {}'.format(L))
+        plt.axis('equal')
+        plt.axhline(0, ls=':', alpha=0.2, color='k')
+        plt.axvline(0, ls=':', alpha=0.2, color='k')    
+    
+    else:
+        # Calculate cylindrical/parabolic approximation between lat st/en
+        lat_width = 30         # Latitudinal width (from equator)
+
+        st, en = boundary_idx64(theta * 180 / np.pi, 90 - lat_width, 90 + lat_width)
+        
+        length = 0
+        for ii in range(st, en):
+            length += r[ii] * dtheta * np.pi / 180
+        
+        RE   = 1.0
+        sfac = 1.1
+        z    = np.linspace(-length/2, length/2, en - st, endpoint=True) * RE
+        a    = sfac / (L * RE)
+        B0_z = B_mu.min() * (1 + a * z ** 2)
+        
+        print('Domain length : {:5.2f}RE'.format(length))
+        print('Minimum field : {:5.2f}nT'.format(B_mu.min()))
+        print('Maximum field : {:5.2f}nT'.format(B_mu[st:en].max()))
+        print('Max/Min ratio : {:5.2f}'.format(B_mu[st:en].max() / B_mu.min()))
+        
+        plt.figure(2)
+        plt.scatter(z/RE, B0_z,        label='Cylindrical approximation', s=4)
+        plt.scatter(z/RE, B_mu[st:en], label='Dipole field intensity', s=4)
+        plt.title(r'Approximation for $a = \frac{%.1f}{LR_E}$, lat. width %s deg' % (sfac, lat_width), fontsize=18)
+        plt.xlabel(r'z ($R_E$)',     rotation=0, fontsize=14)
+        plt.ylabel(r'$B_\parallel$', rotation=0, fontsize=14)
+        plt.legend()
+    return
     return
 
 
@@ -2632,36 +2806,37 @@ def plot_E_components():
 if __name__ == '__main__':
     drive       = 'F:'
     
-    series      = 'random_check_test'
+    series      = 'jul_25_lingrowth_PARABOLIC'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
-    # To do : A plot that breaks apart the components of E : JxB, Bx(curl B), del(P)
     # To do : A comparison plot of the loss per time of the cold plasma runs
-    # To do : Fix the Poynting plots (why are they broke in the first place?)
-    
-    for run_num in range(num_runs):
+    for run_num in [0, 1]:#range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
-
-        plot_adiabatic_parameter()
-        plot_particle_loss_with_time()
-        #plot_average_GC()
         
-        plot_initial_configurations()
-        plot_average_mu()
-
-        try:
-            standard_analysis_package()
-        except:
-            pass
-
-        try:
-            summary_plots(save=True, histogram=False)
-        except:
-            pass
+        #plot_E_components()
+        
+# =============================================================================
+#         plot_adiabatic_parameter()
+#         plot_particle_loss_with_time()
+#         #plot_average_GC()
+#         
+#         plot_initial_configurations()
+#         plot_average_mu()
+# 
+#         try:
+#             standard_analysis_package()
+#         except:
+#             pass
+# 
+#         try:
+#             summary_plots(save=True, histogram=False)
+#         except:
+#             pass
+# =============================================================================
         
 # =============================================================================
 #         
@@ -2723,4 +2898,27 @@ if __name__ == '__main__':
 #             pass
 # =============================================================================
         
-
+# =============================================================================
+# # Multithreaded plotting example:
+# import multiprocessing
+# import matplotlib.pyplot as plt
+# import numpy as np
+# 
+# def main():
+#     pool = multiprocessing.Pool()
+#     num_figs = 20
+#     input = zip(np.random.randint(10,1000,num_figs), 
+#                 range(num_figs))
+#     pool.map(plot, input)
+# 
+# def plot(args):
+#     num, i = args
+#     fig = plt.figure()
+#     data = np.random.randn(num).cumsum()
+#     plt.plot(data)
+#     plt.title('Plot of a %i-element brownian noise sequence' % num)
+#     fig.savefig('temp_fig_%02i.png' % i)
+# 
+# if __name__ == '__main__':
+#     main()
+# =============================================================================

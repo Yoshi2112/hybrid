@@ -100,7 +100,14 @@ def load_simulation_params():
     global Nj, cellpart, ne, NX, dxm, seed, B0, dx, Te0, theta, dt_sim, max_rev,\
            ie, run_desc, seed, subcycles, LH_frac, orbit_res, freq_res, method_type,\
            particle_shape, part_save_iter, field_save_iter, dt_field, dt_particle, \
-           HM_amplitude, HM_frequency, nsp_ppc
+           HM_amplitude, HM_frequency, nsp_ppc, q, mp, e0, mu0, kB
+
+    q   = 1.602e-19               # Elementary charge (C)
+    mp  = 1.67e-27                # Mass of proton (kg)
+    e0  = 8.854e-12               # Epsilon naught - permittivity of free space
+    mu0 = (4e-7) * np.pi          # Magnetic Permeability of Free Space (SI units)
+    kB  = 1.380649e-23            # Boltzmann's Constant (J/K)
+
 
     h_name = os.path.join(data_dir, 'simulation_parameters.pckl')       # Load header file
     f      = open(h_name, 'rb')                                         # Open header file
