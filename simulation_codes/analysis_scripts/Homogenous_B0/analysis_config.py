@@ -39,7 +39,7 @@ def manage_dirs(drive, series, run_num, create_new=True):
     particle_dir = data_dir + '/particles/'
     
     num_field_steps    = len(os.listdir(field_dir))                    # Number of field    time slices
-    num_particle_steps = len(os.listdir(particle_dir))                 # Number of particle time slices
+    #num_particle_steps = len(os.listdir(particle_dir))                 # Number of particle time slices
     
    # Make Output folders if they don't exist
     for this_dir in [anal_dir, temp_dir]:
@@ -169,13 +169,13 @@ def initialize_simulation_variables():
     va         = B0 / np.sqrt(mu0*ne*mp)                    # Alfven speed: Assuming pure proton plasma
     
     time_seconds_field    = np.array([ii * dt_field    for ii in range(missing_t0_offset, num_field_steps + missing_t0_offset)])
-    time_seconds_particle = np.array([ii * dt_particle for ii in range(missing_t0_offset, num_particle_steps + missing_t0_offset)])
+    #time_seconds_particle = np.array([ii * dt_particle for ii in range(missing_t0_offset, num_particle_steps + missing_t0_offset)])
     
     time_gperiods_field   = time_seconds_field    / gyperiod
-    time_gperiods_particle= time_seconds_particle / gyperiod
+    #time_gperiods_particle= time_seconds_particle / gyperiod
     
     time_radperiods_field    = time_seconds_field    * gyfreq 
-    time_radperiods_particle = time_seconds_particle * gyfreq
+    #time_radperiods_particle = time_seconds_particle * gyfreq
     return
 
 def load_fields(ii):
