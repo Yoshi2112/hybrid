@@ -6,6 +6,7 @@ Created on Mon Apr  8 12:29:15 2019
 """
 import sys
 import os
+import pdb
 sys.path.append('../')
 import numpy as np
 import matplotlib.pyplot as plt
@@ -112,7 +113,7 @@ def estimate_first_and_complexify(solutions):
     return outarray
 
 
-def get_dispersion_relations(Species, PlasmaParams, norm_k=False, norm_w=False, Nk=1000,
+def get_dispersion_relations(Species, PlasmaParams, norm_k_in=True, norm_k_out=False, norm_w=False, Nk=1000,
                              kmin=0.0, kmax=1.0, plot=False, save=False, savepath=None,
                              return_all=False):
     '''
@@ -120,13 +121,14 @@ def get_dispersion_relations(Species, PlasmaParams, norm_k=False, norm_w=False, 
     PlasmaParams -- Dict containing information about the macroscopic plasma (B0, n0, alven speed, etc.)
     
     *kwargs ::
-    norm_k -- Flag: Normalize wavenumber to units of p_cyc/vA
-    norm_w -- Flag: Normalize frequency to units of p_cyc
-    Nk     -- Number of points in k-space to solve for
-    kmin   -- Minimum k-value, in units of p_cyc/vA
-    kmax   -- Maximum k-value, in units of p_cyc/vA
-    plot   -- Flag: Plot output, show on screen
-    save   -- Flag: Save output to directory kwarg 'savepath', suppresses on-screen plotting
+    norm_k_in -- Flag: kmin/kmax are normalized to units of p_cyc/vA
+    norm_k_in -- Flag: For plot routine, k values are (re)normalized to units of p_cyc/vA
+    norm_w    -- Flag: Normalize frequency to units of p_cyc
+    Nk        -- Number of points in k-space to solve for
+    kmin      -- Minimum k-value, in units of p_cyc/vA
+    kmax      -- Maximum k-value, in units of p_cyc/vA
+    plot      -- Flag: Plot output, show on screen
+    save      -- Flag: Save output to directory kwarg 'savepath', suppresses on-screen plotting
     
     OUTPUT:
         k_vals     -- Wavenumber array for solved k values 
@@ -140,10 +142,13 @@ def get_dispersion_relations(Species, PlasmaParams, norm_k=False, norm_w=False, 
     N_solns = counts.shape[0] - 1
     
     # Initialize k space: (un)Normalized by va/pcyc to get into SI units
-    knorm_fac = PlasmaParams['p_cyc'] / PlasmaParams['va']
-    k_min     = kmin  * knorm_fac
-    k_max     = kmax  * knorm_fac
-    k_vals    = np.linspace(k_min, k_max, Nk, endpoint=False)
+    if norm_k_in == True:
+        knorm_fac = PlasmaParams['p_cyc'] / PlasmaParams['va']
+        k_min     = kmin  * knorm_fac
+        k_max     = kmax  * knorm_fac
+        k_vals    = np.linspace(k_min, k_max, Nk, endpoint=False)
+    else:
+        k_vals    = np.linspace(kmin, kmax, Nk, endpoint=False)
     
     # fsolve arguments
     eps    = 0.01       # Offset used to supply initial guess (since right on w_cyc returns an error)
@@ -187,8 +192,8 @@ def get_dispersion_relations(Species, PlasmaParams, norm_k=False, norm_w=False, 
                     warm_solns[ii, jj] = np.nan
         
     if plot==True or save==True:
-        plot_dispersion(k_vals, CPDR_solns, warm_solns, PlasmaParams, norm_k=norm_k, norm_w=norm_w, save=save, savepath=savepath)
-    
+        plot_dispersion(k_vals, CPDR_solns, warm_solns, PlasmaParams, norm_k=norm_k_out, norm_w=norm_w, save=save, savepath=savepath)
+
     if return_all == False:
         return k_vals, CPDR_solns, warm_solns
     else:
@@ -285,6 +290,7 @@ def create_species_array(B0, name, mass, charge, density, tper, ani):
     mu0       = 4e-7*np.pi
     q         = 1.602e-19
     me        = 9.101e-31
+    mp        = 1.673e-27
     t_par     = q*tper / (ani + 1)            # Convert Perp temp in eV to Par evergy in Joules  
     alpha_par = np.sqrt(2.0 * t_par  / mass)  # Par Thermal velocity in m/s (make relativistic?)
     ne        = density.sum()
@@ -322,7 +328,7 @@ def create_species_array(B0, name, mass, charge, density, tper, ani):
 
 
 def dispersion_relations(B0, name, mass, charge, density, tper, ani, kmin=0.0, kmax=1.0,
-                         norm_k=False, norm_w=False, plot=False):
+                         norm_k_in=True, norm_k_out=False, norm_w=False, plot=False):
     '''
     Wrapper around dispersion solver, taking in general numpy arrays of plasma params
     
@@ -337,14 +343,14 @@ def dispersion_relations(B0, name, mass, charge, density, tper, ani, kmin=0.0, k
     if False:
         # Diagnostic to check residuals
         k_vals, CPDR_solns, cold_ier, cold_msg, warm_solns, warm_ier, warm_msg = \
-            get_dispersion_relations(Species, PP, norm_k=norm_k, norm_w=norm_w, plot=plot, \
+            get_dispersion_relations(Species, PP, norm_k_in=norm_k_in, norm_k_out=norm_k_out, \
+                                     norm_w=norm_w, plot=plot, \
                                      kmin=kmin, kmax=kmax, return_all=True)
 
         back_substitute(k_vals, CPDR_solns, warm_solns, Species)
     else:
-        k_vals, CPDR_solns, warm_solns = get_dispersion_relations(Species, PP, norm_k=norm_k, kmin=kmin, kmax=kmax,
-                                                                  norm_w=norm_w, plot=plot)
-    
+        k_vals, CPDR_solns, warm_solns = get_dispersion_relations(Species, PP, norm_k_in=norm_k_in, norm_k_out=norm_k_out, \
+                                     norm_w=norm_w, plot=plot, kmin=kmin, kmax=kmax)
     return k_vals, CPDR_solns, warm_solns
 
 

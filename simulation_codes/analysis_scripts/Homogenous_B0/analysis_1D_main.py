@@ -138,18 +138,19 @@ def plot_kt(component='By', saveas='kt_plot', save=False):
     return
 
 
-def plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=False, save=False, pcyc_mult=None):
+def plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=False, save=False, pcyc_mult=None, zero_cold=False):
     plt.ioff()
     
     k, f, wk = disp.get_wk(component)
 
+    xfac = 1e6
     xlab = r'$k (\times 10^{-6}m^{-1})$'
     ylab = r'f (Hz)'
 
     fig = plt.figure(1, figsize=(15, 10))
     ax  = fig.add_subplot(111)
     
-    im1 = ax.pcolormesh(1e6*k[1:], f[1:], np.log10(wk[1:, 1:].real), cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
+    im1 = ax.pcolormesh(xfac*k[1:], f[1:], np.log10(wk[1:, 1:].real), cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
     fig.colorbar(im1)
     ax.set_title(r'$\omega/k$ Dispersion Plot for {}'.format(component), fontsize=14)
     ax.set_ylabel(ylab)
@@ -171,16 +172,19 @@ def plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=False, save=Fa
         ax.set_ylim(0, None)
     
     if dispersion_overlay == True:
-        try:
-            k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k)
-            for ii in range(CPDR_solns.shape[1]):
-                ax.plot(k_vals, CPDR_solns[:, ii],      c='k', linestyle='--', label='CPDR')
-                ax.plot(k_vals, warm_solns[:, ii].real, c='k', linestyle='-',  label='WPDR')
-        except:
-            pass
+        # k (actually beta) from FFT linear. LT requires angular k (k = 2pi*beta)
+        k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=zero_cold)
+        for ii in range(CPDR_solns.shape[1]):
+            ax.plot(xfac*k_vals, CPDR_solns[:, ii],      c='k', linestyle='--', label='CPDR')
+            ax.plot(xfac*k_vals, warm_solns[:, ii].real, c='k', linestyle='-',  label='WPDR')
+        
+    if True:
+        # Plot Alfven velocity on here just to see
+        alfven_line = k_vals * cf.va
+        ax.plot(xfac*k_vals, alfven_line, c='blue', linestyle=':', label='$v_A$')
         
     ax.legend(loc=2, facecolor='grey')
-        
+    
     if save == True:
         fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
@@ -1131,7 +1135,12 @@ def do_all_dynamic_spectra(ymax=None):
     return
 
 
-def plot_wk_AGU(component='By', saveas='wk_plot' , dispersion_overlay=False, save=False, pcyc_mult=None):
+def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False, save=False, pcyc_mult=None, zero_cold=False):
+    disp_folder = 'dispersion_plots_thesis/'
+        
+    if os.path.exists(cf.anal_dir + disp_folder) == False:
+        os.makedirs(cf.anal_dir + disp_folder)
+    
     plt.ioff()
     
     tick_label_size = 14
@@ -1141,13 +1150,14 @@ def plot_wk_AGU(component='By', saveas='wk_plot' , dispersion_overlay=False, sav
     
     k, f, wk = disp.get_wk(component)
 
+    xfac = 1e6
     xlab = r'$k (\times 10^{-6}m^{-1})$'
     ylab = r'f (Hz)'
 
     fig = plt.figure(1, figsize=(15, 10))
     ax  = fig.add_subplot(111)
     
-    im1 = ax.pcolormesh(1e6*k[1:], f[1:], np.log10(wk[1:, 1:].real), cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
+    im1 = ax.pcolormesh(xfac*k[1:], f[1:], np.log10(wk[1:, 1:].real), cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
     fig.colorbar(im1).set_label(r'$log_{10}$(Power)', rotation=90, fontsize=fontsize)
     ax.set_title(r'$\omega/k$ Dispersion Plot for {}'.format(component), fontsize=fontsize+4)
     ax.set_ylabel(ylab, fontsize=fontsize)
@@ -1157,9 +1167,17 @@ def plot_wk_AGU(component='By', saveas='wk_plot' , dispersion_overlay=False, sav
     lbl  = [r'$f_{H^+}$', r'$f_{He^+}$', r'$f_{O^+}$']
     M    = np.array([1., 4., 16.])
     cyc  = q * cf.B0 / (2 * np.pi * mp * M)
-    for ii in range(3):
-        if cf.species_present[ii] == True:
-            ax.axhline(cyc[ii], linestyle='--', c=clr[ii], label=lbl[ii])
+    
+# =============================================================================
+#     from matplotlib.transforms import blended_transform_factory
+#     trans = blended_transform_factory(ax.transAxes, ax.transData) # the x coords of this transformation are axes, and the
+#             # y coord are data
+#     
+#     for ii in range(3):
+#         if cf.species_present[ii] == True:
+#             ax.axhline(cyc[ii], linestyle='--', c=clr[ii])
+#             ax.text(0.0, cyc[ii], lbl[ii], transform=trans, ha='center', va='center', color='r')
+# =============================================================================
     
     ax.set_xlim(0, None)
     
@@ -1168,24 +1186,36 @@ def plot_wk_AGU(component='By', saveas='wk_plot' , dispersion_overlay=False, sav
     else:
         ax.set_ylim(0, None)
     
-    if dispersion_overlay == True:
-        '''
-        Some weird factor of about 2pi inaccuracy? Is this inherent to the sim? Or a problem
-        with linear theory? Or problem with the analysis?
-        '''
-        k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k)
-        for ii in range(CPDR_solns.shape[1]):
-            ax.plot(k_vals, CPDR_solns[:, ii]*2*np.pi,      c='k', linestyle='--', label='CPDR')
-            ax.plot(k_vals, warm_solns[:, ii].real*2*np.pi, c='k', linestyle='-',  label='WPDR')
+# =============================================================================
+#     if dispersion_overlay == True:
+#         k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=zero_cold)
+#         for ii in range(CPDR_solns.shape[1]):
+#             ax.plot(xfac*k_vals, CPDR_solns[:, ii],      c='k', linestyle='--', label='CPDR')
+#             ax.plot(xfac*k_vals, warm_solns[:, ii].real, c='k', linestyle='-',  label='WPDR')
+#       
+#     if True:
+#         # Plot Alfven velocity on here just to see
+#         alfven_line = k * cf.va
+#         ax.plot(xfac*k, alfven_line, c='blue', linestyle=':', label='$v_A$')
+# =============================================================================
         
     ax.legend(loc=2, facecolor='white', prop={'size': fontsize})
         
     if save == True:
-        fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
-        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        fullpath  = cf.anal_dir + disp_folder + saveas + '_{}'.format(component.lower())
+        save_path = fullpath + '.png'
+        
+        count = 1
+        while os.path.exists(fullpath + '.png') == True:
+            save_path = fullpath + '_{}.png'.format(count)
+            
+        plt.savefig(save_path, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
         print('w-k for component {} saved'.format(component.lower()))
         plt.close('all')
+    else:
+        plt.show()
     return
+
 
 
 #%%
@@ -1200,10 +1230,10 @@ if __name__ == '__main__':
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
         
-        plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=True, save=False, pcyc_mult=None)
+        #plot_wk(dispersion_overlay=True, zero_cold=False)
         
-        #plot_wk_AGU(component='By', saveas='_new_wk_plot' , dispersion_overlay=True, save=True, pcyc_mult=None)
-                
+        plot_wk_polished(component='By', dispersion_overlay=False, save=True, pcyc_mult=None)
+        
         #disp_folder = 'dispersion_plots/'
 # =============================================================================
 #         for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:

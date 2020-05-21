@@ -8,6 +8,7 @@ import analysis_config as cf
 import numpy as np
 import os
 import sys
+import pdb
 import pyfftw
 
 linear_theory_dir = 'C://Users//iarey//Documents//GitHub//hybrid//linear_theory//new_general_DR_solver//'
@@ -55,7 +56,7 @@ def get_cgr_from_sim(norm_flag=0):
     return freqs, cgr, stop
 
 
-def get_linear_dispersion_from_sim(k=None, plot=False, save=False, zero_cold=True):
+def get_linear_dispersion_from_sim(k, plot=False, save=False, zero_cold=True):
     '''
     Still not sure how this will work for a H+, O+ mix, but H+-He+ should be fine
     
@@ -65,17 +66,29 @@ def get_linear_dispersion_from_sim(k=None, plot=False, save=False, zero_cold=Tru
         Tper       -- eV
     '''
     from dispersion_solver_multispecies import dispersion_relations
-    from analysis_config                import NX, dx, Tper, Tpar, B0
-    
+    from analysis_config                import Tper, Tpar, B0
+        
     anisotropy = Tper / Tpar - 1
-    t_perp     = cf.Tper.copy() / 11603.
+    t_perp     = cf.Tper.copy() / 11603.  
     
-    if k is None:
-        k         = np.fft.fftfreq(NX, dx)      # DOES THIS NEED A 2pi MULTIPLIER? 
-        k         = k[k>=0]                     # AM I SENDING ANGULAR WAVENUMBER?
+    if zero_cold == True:
+        for ii in range(t_perp.shape[0]):
+            if cf.temp_type[ii] == 0:
+                t_perp[ii] = 0.0
+    
+    # Convert from linear units to angular units for k range to solve over
+    kmin = 2*np.pi*k[0]
+    kmax = 2*np.pi*k[-1]
     
     k_vals, CPDR_solns, WPDR_solns = dispersion_relations(B0, cf.species_lbl, cf.mass, cf.charge, \
-                                           cf.density, t_perp, anisotropy, norm_k=False, norm_w=False)
+                                           cf.density, t_perp, anisotropy, norm_k_in=False, norm_w=False,
+                                           kmin=kmin, kmax=kmax)
+    
+    # Convert back from angular units to linear units
+    k_vals     /= 2*np.pi
+    CPDR_solns /= 2*np.pi
+    WPDR_solns /= 2*np.pi
+
     return k_vals, CPDR_solns, WPDR_solns
 
 
@@ -319,5 +332,7 @@ def plot_WHAMP_CLI_dumps():
     return
 
 
-if __name__ == '__main__':
-    plot_WHAMP_CLI_dumps()
+# =============================================================================
+# if __name__ == '__main__':
+#     plot_WHAMP_CLI_dumps()
+# =============================================================================
