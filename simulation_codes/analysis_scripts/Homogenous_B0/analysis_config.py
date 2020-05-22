@@ -14,7 +14,7 @@ The global calls allow variables to be accessed in the main script without
 clogging up its namespace - i.e. run-specific parameters are called by
 using e.g. cf.B0
 '''
-def load_run(drive, series, run_num, lmissing_t0_offset=0, extract_arrays=True):
+def load_run(drive, series, run_num, lmissing_t0_offset=0, extract_arrays=True, output_param_file=True):
     global missing_t0_offset
     missing_t0_offset = lmissing_t0_offset   # Flag for when I thought having a t=0 save file wasn't needed. I was wrong.
     manage_dirs(drive, series, run_num)
@@ -24,6 +24,9 @@ def load_run(drive, series, run_num, lmissing_t0_offset=0, extract_arrays=True):
     
     if extract_arrays == True:
         extract_all_arrays()
+        
+    if output_param_file == True:
+        output_simulation_parameter_file(series, run_num)
     return
 
 def manage_dirs(drive, series, run_num, create_new=True):
@@ -39,7 +42,7 @@ def manage_dirs(drive, series, run_num, create_new=True):
     particle_dir = data_dir + '/particles/'
     
     num_field_steps    = len(os.listdir(field_dir))                    # Number of field    time slices
-    #num_particle_steps = len(os.listdir(particle_dir))                 # Number of particle time slices
+    num_particle_steps = len(os.listdir(particle_dir))                 # Number of particle time slices
     
    # Make Output folders if they don't exist
     for this_dir in [anal_dir, temp_dir]:
@@ -155,6 +158,77 @@ def load_simulation_params():
     dt_particle     = dt_sim * part_save_iter
     return 
 
+
+def output_simulation_parameter_file(series, run, overwrite=True):
+    output_file = run_dir + 'simulation_parameter_file.txt'
+
+    if os.path.exists(output_file) == True and overwrite == False:
+        pass
+    else:
+        xmin = 0.0
+        xmax = NX * dx
+        
+        beta_e   = (2 * mu0 * ne * kB * Te0 ) / B0 ** 2
+        beta_par = (2 * mu0 * ne * kB * Tpar) / B0 ** 2
+        beta_per = (2 * mu0 * ne * kB * Tper) / B0 ** 2
+        
+        with open(output_file, 'w') as f:
+            print('HYBRID SIMULATION :: PARAMETER FILE', file=f)
+            print('', file=f)
+            print('Series[run]  :: {}[{}]'.format(series, run), file=f)
+            print('Series Desc. :: {}'.format(run_desc), file=f)
+            print('Hybrid Type  :: {}'.format(method_type), file=f)
+            print('Random Seed  :: {}'.format(seed), file=f)
+            print('', file=f)
+            print('Temporal Parameters', file=f)
+            print('Maximum Sim. Time  :: {} GPeriods'.format(max_rev), file=f)
+            print('Simulation cadence :: {} seconds'.format(dt_sim), file=f)
+            print('Particle Dump Time :: {} seconds'.format(dt_particle), file=f)
+            print('Field Dump Time    :: {} seconds'.format(dt_field), file=f)
+            print('Frequency Resol.   :: {} GPeriods'.format(freq_res), file=f)
+            print('Gyperiod Resol.    :: {}'.format(orbit_res), file=f)
+            print('', file=f)
+            print('Simulation Parameters', file=f)
+            print('# Spatial Cells :: {}'.format(NX), file=f)
+            print('Ion L per cell  :: {}'.format(dxm), file=f)
+            print('Cell width      :: {} m'.format(dx), file=f)
+            print('Simulation Min  :: {} m'.format(xmin), file=f)
+            print('Simulation Max  :: {} m'.format(xmax), file=f)
+            print('', file=f)
+            print('Background Field Strength :: {} nT'.format(B0*1e9), file=f)
+            
+            try:
+                print('B0 angle to Simulation    :: {} deg'.format(theta * 180. / np.pi), file=f)
+            except:
+                pass
+            
+            print('', file=f)
+            print('Electron Density     :: {} /cc'.format(ne*1e-6), file=f)
+            print('Electron Treatment   :: {}'.format(ie), file=f)
+            print('Electron Temperature :: {}K'.format(Te0), file=f)
+            print('', file=f)
+            print('Particle Parameters', file=f)
+            print('Number of Species   :: {}'.format(Nj), file=f)
+            print('Particles per Cell  :: {}'.format(cellpart), file=f)
+            print('Particle Shape Func :: {}'.format(particle_shape), file=f)
+            print('', file=f)
+            print('Ion Composition', file=f)
+            print('Species Name    :: {}'.format(species_lbl), file=f)
+            print('Species Type    :: {}'.format(temp_type), file=f)
+            print('Species Dens    :: {} /cc'.format(density*1e-6), file=f)
+            print('Species Charge  :: {}'.format(charge), file=f)
+            print('Species Mass    :: {} kg'.format(mass), file=f)
+            print('Drift Velocity  :: {} m/s'.format(drift_v), file=f)
+            print('Perp Temp       :: {} K'.format(Tper), file=f)
+            print('Para Temp       :: {} K'.format(Tpar), file=f)
+            print('MParticle Contr.:: {} real particles/macroparticle'.format(n_contr), file=f)
+            print('', file=f)
+            print('Elec Beta       :: {}'.format(beta_e), file=f)
+            print('Perp Beta       :: {}'.format(beta_per), file=f)
+            print('Para Beta       :: {}'.format(beta_par), file=f)
+    return
+
+
 def initialize_simulation_variables():
     global wpi, gyfreq, gyperiod, time_seconds_field, time_seconds_particle, \
            time_gperiods_field, time_gperiods_particle, time_radperiods_field, time_radperiods_particle, va
@@ -169,13 +243,13 @@ def initialize_simulation_variables():
     va         = B0 / np.sqrt(mu0*ne*mp)                    # Alfven speed: Assuming pure proton plasma
     
     time_seconds_field    = np.array([ii * dt_field    for ii in range(missing_t0_offset, num_field_steps + missing_t0_offset)])
-    #time_seconds_particle = np.array([ii * dt_particle for ii in range(missing_t0_offset, num_particle_steps + missing_t0_offset)])
+    time_seconds_particle = np.array([ii * dt_particle for ii in range(missing_t0_offset, num_particle_steps + missing_t0_offset)])
     
     time_gperiods_field   = time_seconds_field    / gyperiod
-    #time_gperiods_particle= time_seconds_particle / gyperiod
+    time_gperiods_particle= time_seconds_particle / gyperiod
     
     time_radperiods_field    = time_seconds_field    * gyfreq 
-    #time_radperiods_particle = time_seconds_particle * gyfreq
+    time_radperiods_particle = time_seconds_particle * gyfreq
     return
 
 def load_fields(ii):

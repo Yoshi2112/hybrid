@@ -126,7 +126,7 @@ def get_wk(component):
 
     df = 1. / (num_times * cf.dt_field)
     dk = 1. / (cf.NX     * cf.dx)
-
+    
     f  = np.arange(0, 1. / (2*cf.dt_field), df)
     k  = np.arange(0, 1. / (2*cf.dx), dk)
     

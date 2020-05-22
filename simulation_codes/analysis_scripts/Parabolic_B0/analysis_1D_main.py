@@ -2603,6 +2603,86 @@ def plot_average_mu(it_max=None, save=True):
     return
 
 
+def thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True):
+    '''
+    Generate publication quality plot to show average mu of particles
+    as well as the individual mu and locations of sample particles.
+    '''
+    save_data_file = cf.temp_dir + 'thesis_mu_position_data.npz'
+    
+    print('Collecting particle first invariants...')
+    if it_max is None:
+        it_max = len(os.listdir(cf.particle_dir))
+        
+    ################
+    ### GET DATA ###
+    ################
+    if os.path.exists(save_data_file) == False or save_data == False:
+        # Get Ns sample indexes from each species 
+        Ns    = 2  
+        sidx  = np.zeros(Ns * cf.Nj, dtype=int)
+        for ii in range(cf.Nj):
+            sidx[Ns*ii:Ns*(ii + 1)] = np.random.randint(cf.idx_start[ii], cf.idx_end[ii], Ns)
+        
+        # Define arrays
+        Bp    = np.zeros((3, cf.N))
+        mu_s  = np.zeros((it_max, Ns * cf.Nj))
+        pos_s = np.zeros((it_max, 3, Ns * cf.Nj))
+        mu_av = np.zeros(it_max)
+        ptime = np.zeros(it_max)
+        
+        # Retrieve relevant data into arrays
+        for ii in range(it_max):
+            print('Loading particle information at timestep {}'.format(ii))
+            pos, vel, idx, ptime[ii] = cf.load_particles(ii)
+            calc_mu(pos, vel, idx, sidx, Bp, mu_av, mu_s, ii, cf.mass)
+            pos_s[ii, :, :] = pos[:, sidx]
+    else:
+        data = np.load(save_data_file)
+        Bp      = data['Bp']
+        mu_s    = data['mu_s']
+        pos_s   = data['pos_s']
+        mu_av   = data['mu_av']
+        ptime   = data['ptime']
+        sidx    = data['sidx']
+
+    if save_data == True and os.path.exists(save_data_file) == False:
+        np.savez(save_data_file, Bp=Bp, mu_s=mu_s, pos_s=pos_s, mu_av=mu_av, ptime=ptime, sidx=sidx)
+        
+    #################
+    ## Do PLOTTING ##
+    #################
+    cf.temp_color[0] = 'c'
+        
+    plt.ioff()
+    fig, axes = plt.subplots(2, figsize=(15, 10), sharex=True)
+    
+    axes[0].set_title('First Adiabatic Invariant :: N-Average and Samples :: N = {} ::{}[{}]'.format(cf.N_species, series, run_num),
+                      fontsize=16)
+    axes[0].plot(ptime, mu_av*1e10)
+    axes[0].set_ylabel('$\mu_{av}\n(\\times 10^{10})$', rotation=0, labelpad=50, fontsize=14)
+    
+    for ii in range(mu_s.shape[1]):
+        axes[1].plot(ptime, mu_s[:, ii]*1e10, label='idx {}'.format(sidx[ii]))
+    
+    axes[1].set_ylabel('$\mu\n(\\times 10^{10})$', rotation=0, labelpad=50, fontsize=14)
+    axes[1].set_xlabel('Time (s)', fontsize=14)
+    axes[1].set_xlim(0, ptime[-1])
+    #axes[1].legend(loc="upper left", bbox_to_anchor=(1,1))
+    axes[1].legend(loc="upper left")
+    
+    fig.subplots_adjust(hspace=0)
+    
+    if save_plot == True:
+        fpath = cf.anal_dir + 'mu_position_average_and_samples.png'
+        fig.savefig(fpath)
+        plt.close('all')
+        print('1st adiabatic invariant graph saved as {}'.format(fpath))
+    else:
+        plt.show()
+    return
+
+
 def check_posvel_ortho():
     init_pos, init_vel, init_idx, ptime = cf.load_particles(0)
 
@@ -2774,7 +2854,7 @@ def compare_B0_to_dipole():
         # Calculate cylindrical/parabolic approximation between lat st/en
         lat_width = 30         # Latitudinal width (from equator)
 
-        st, en = boundary_idx64(theta * 180 / np.pi, 90 - lat_width, 90 + lat_width)
+        st, en = cf.boundary_idx64(theta * 180 / np.pi, 90 - lat_width, 90 + lat_width)
         
         length = 0
         for ii in range(st, en):
@@ -2799,25 +2879,24 @@ def compare_B0_to_dipole():
         plt.ylabel(r'$B_\parallel$', rotation=0, fontsize=14)
         plt.legend()
     return
-    return
 
 
-#%% MAIN
+##%% MAIN
 if __name__ == '__main__':
-    drive       = 'F:'
+    drive       = 'G:'
     
-    series      = 'jul_25_lingrowth_PARABOLIC'
+    series      = 'small_bottle_test_v3'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
     # To do : A comparison plot of the loss per time of the cold plasma runs
-    for run_num in [0, 1]:#range(num_runs):
+    for run_num in [3]:#range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
-        
-        #plot_E_components()
+             
+        thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True)
         
 # =============================================================================
 #         plot_adiabatic_parameter()

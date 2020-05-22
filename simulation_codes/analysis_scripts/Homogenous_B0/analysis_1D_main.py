@@ -28,12 +28,28 @@ e0  = 8.854e-12               # Epsilon naught - permittivity of free space
 Aim: To populate this script with plotting routines ONLY. Separate out the 
 processing/loading/calculation steps into other modules that can be called.
 '''
-def plot_tx(component='By', saveas='tx_plot', save=False, tmax=600):
-    plt.ioff()
+def plot_tx(component='By', saveas='tx_plot', save=False, tmax=None, yunits='seconds'):
+    plt.ioff()    
+    fontsize = 18
+    font     = 'monospace'
+    
+    tick_label_size = 14
+    mpl.rcParams['xtick.labelsize'] = tick_label_size 
+    mpl.rcParams['ytick.labelsize'] = tick_label_size 
 
     tx = cf.get_array(component)
-    x  = np.arange(cf.NX) * cf.dx
-    t  = cf.time_radperiods_field
+    
+    x  = np.arange(cf.NX) * cf.dx * 1e-6
+    
+    if yunits == 'seconds':
+        t    = cf.time_seconds_field
+        ylab = 't (s)'
+    elif yunits == 'radperiods':
+        t    = cf.time_radperiods_field
+        ylab = 'Time\n$(\Omega^{-1})$'
+    else:
+        t    = cf.time_gperiods_field
+        ylab = 'Time\n$(\f^{-1})$'
     
     if component[0] == 'B':
         tx *= 1e9
@@ -48,19 +64,22 @@ def plot_tx(component='By', saveas='tx_plot', save=False, tmax=600):
     cb  = fig.colorbar(im1)
     
     if component[0] == 'B':
-        cb.set_label('nT', rotation=0)
+        cb.set_label('nT', rotation=0,   family=font, fontsize=fontsize)
     else:
-        cb.set_label('mV/m', rotation=0)
+        cb.set_label('mV/m', rotation=0, family=font, fontsize=fontsize, labelpad=20)
 
-    ax.set_title('t-x Plot for {}'.format(component), fontsize=14)
-    ax.set_ylabel(r't $(\Omega^{-1})$', rotation=0, labelpad=15)
-    ax.set_xlabel('x (m)')
+    ax.set_title('Field Plot :: {} Component'.format(component), fontsize=fontsize, family=font)
+    ax.set_ylabel(ylab   , fontsize=fontsize, family=font, labelpad=15, rotation=0)
+    ax.set_xlabel('x ($\\times10^3$ km)', fontsize=fontsize, family=font)
+    ax.set_ylim(0, tmax)
         
     if save == True:
         fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
         print('t-x Plot saved')
         plt.close('all')
+    else:
+        plt.show()
     return
 
 
@@ -1136,7 +1155,8 @@ def do_all_dynamic_spectra(ymax=None):
     return
 
 
-def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False, save=False, pcyc_mult=None, zero_cold=False):
+def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False, save=False,
+                     pcyc_mult=None, xmax=None, plot_alfven=False, zero_cold=False, overwrite=True):
     disp_folder = 'dispersion_plots_thesis/'
         
     if os.path.exists(cf.anal_dir + disp_folder) == False:
@@ -1144,16 +1164,23 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
     
     plt.ioff()
     
+    fontsize = 18
+    font     = 'monospace'
+    
     tick_label_size = 14
     mpl.rcParams['xtick.labelsize'] = tick_label_size 
-    
-    fontsize = 18
+    mpl.rcParams['ytick.labelsize'] = tick_label_size 
     
     k, f, wk = disp.get_wk(component)
 
     xfac = 1e6
-    xlab = r'$k (\times 10^{-6}m^{-1})$'
-    ylab = r'f (Hz)'
+    xlab = '$\mathtt{k (\\times 10^{-6}m^{-1})}$'
+    ylab = 'f\n(Hz)'
+    
+    if component[0].upper() == 'B':
+        clab = 'Pwr\n$\left(\\frac{nT^2}{Hz}\\right)$'
+    else:
+        clab = 'Pwr\n$\left(\\frac{mV^2}{m^2Hz}\\right)$'
 
     fig = plt.figure(1, figsize=(15, 10))
     ax  = fig.add_subplot(111)
@@ -1161,10 +1188,12 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
     im1 = ax.pcolormesh(xfac*k[1:], f[1:], wk[1:, 1:].real, cmap='jet',
                         norm=colors.LogNorm(vmin=wk[1:, 1:].real.min(),
                                             vmax=wk[1:, 1:].real.max()))      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
-    fig.colorbar(im1).set_label(r'Power', rotation=90, fontsize=fontsize)
-    ax.set_title(r'$\omega/k$ Dispersion Plot for {}'.format(component), fontsize=fontsize+4)
-    ax.set_ylabel(ylab, fontsize=fontsize)
-    ax.set_xlabel(xlab, fontsize=fontsize)
+    
+    fig.colorbar(im1, extend='both', fraction=0.05).set_label(clab, rotation=0, fontsize=fontsize, family=font, labelpad=30)
+    ax.set_title(r'$\omega/k$ Plot :: {} Component :: Linear Theory Overlay'.format(component.upper()),
+                 fontsize=fontsize, family=font)
+    ax.set_ylabel(ylab, fontsize=fontsize, family=font, rotation=0, labelpad=30)
+    ax.set_xlabel(xlab, fontsize=fontsize, family=font)
     
     clr  = ['black', 'green', 'red'] 
     lbl  = [r'$f_{H^+}$', r'$f_{He^+}$', r'$f_{O^+}$']
@@ -1177,39 +1206,41 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
     
     for ii in range(3):
         if cf.species_present[ii] == True:
-            ax.axhline(cyc[ii], linestyle=':', c=clr[ii])
-            ax.text(-0.05, cyc[ii], lbl[ii], transform=trans, ha='center', 
-                    va='center', color=clr[ii], fontsize=18)
+            ax.axhline(cyc[ii], linestyle=':', c='k')
+            ax.text(1.025, cyc[ii], lbl[ii], transform=trans, ha='center', 
+                    va='center', color='k', fontsize=fontsize, family=font)
     
-    ax.set_xlim(0, None)
-    
+    ax.set_xlim(0, xmax)
     if pcyc_mult is not None:
         ax.set_ylim(0, pcyc_mult*cyc[0])
     else:
         ax.set_ylim(0, None)
     
+    alpha=0.5
     if dispersion_overlay == True:
         k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=zero_cold)
         for ii in range(CPDR_solns.shape[1]):
-            ax.plot(xfac*k_vals, CPDR_solns[:, ii],      c='k', linestyle='--', label='CPDR' if ii == 0 else '')
-            ax.plot(xfac*k_vals, warm_solns[:, ii].real, c='k', linestyle='-',  label='WPDR' if ii == 0 else '')
+            ax.plot(xfac*k_vals, CPDR_solns[:, ii],      c='k', linestyle='--', label='CPDR' if ii == 0 else '', alpha=alpha)
+            ax.plot(xfac*k_vals, warm_solns[:, ii].real, c='k', linestyle='-',  label='WPDR' if ii == 0 else '', alpha=alpha)
       
-    if True:
+    if plot_alfven == True:
         # Plot Alfven velocity on here just to see
         alfven_line = k * cf.va
         ax.plot(xfac*k, alfven_line, c='blue', linestyle=':', label='$v_A$')
         
-    ax.legend(loc=2, facecolor='white', prop={'size': fontsize})
+    ax.legend(loc='upper right', facecolor='white', prop={'size': fontsize-2, 'family':font})
         
     if save == True:
-        fullpath  = cf.anal_dir + disp_folder + saveas + '_{}'.format(component.lower())
+        zero_suff = '' if zero_cold is False else 'zero'
+        fullpath  = cf.anal_dir + disp_folder + saveas + '_{}'.format(component.lower()) + '_{}'.format(zero_suff)
         save_path = fullpath + '.png'
         
-        count = 1
-        while os.path.exists(save_path) == True:
-            print('Save file exists, incrementing...')
-            save_path = fullpath + '_{}.png'.format(count)
-            count += 1
+        if overwrite == False:
+            count = 1
+            while os.path.exists(save_path) == True:
+                print('Save file exists, incrementing...')
+                save_path = fullpath + '_{}.png'.format(count)
+                count += 1
             
         plt.savefig(save_path, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
         print('w-k for component {} saved'.format(component.lower()))
@@ -1222,8 +1253,8 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
 
 #%%
 if __name__ == '__main__':
-    drive      = 'D:'
-    series      = '/long_large_run'
+    drive      = 'G:'
+    series      = 'archive/long_large_run'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     dumb_offset = 1
@@ -1232,17 +1263,20 @@ if __name__ == '__main__':
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
         
-        #plot_wk(dispersion_overlay=True, zero_cold=False)
-        
-        plot_wk_polished(component='By', dispersion_overlay=True, save=True, pcyc_mult=1.25)
-        plot_wk_polished(component='Bz', dispersion_overlay=True, save=True, pcyc_mult=1.25)
-        plot_wk_polished(component='Ey', dispersion_overlay=True, save=True, pcyc_mult=1.25)
-        plot_wk_polished(component='Ez', dispersion_overlay=True, save=True, pcyc_mult=1.25)
-        plot_wk_polished(component='Ex', dispersion_overlay=True, save=True, pcyc_mult=1.25)
-        #disp_folder = 'dispersion_plots/'
 # =============================================================================
-#         for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
-#             plot_wk_AGU(component=comp, saveas=disp_folder + 'wk_plot_AGU', save=True, pcyc_mult=1.1)
+#         disp_folder = 'dispersion_plots/'
+#         
+#         if os.path.exists(cf.anal_dir + disp_folder) == False:
+#             os.makedirs(cf.anal_dir + disp_folder)
+#         
+#         for component in ['By', 'Bz', 'Ey', 'Ex', 'Ez']:
+#             plot_tx(component=component, saveas=disp_folder + 'tx_plot', save=True)
+# =============================================================================
+            
+# =============================================================================
+#             for zero_cold in [True, False]:
+#                 plot_wk_polished(component=component, dispersion_overlay=True, save=True,
+#                                  pcyc_mult=1.25, zero_cold=zero_cold, xmax=20)
 # =============================================================================
         
         #single_point_both_fields_AGU()
