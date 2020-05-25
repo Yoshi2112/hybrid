@@ -9,12 +9,12 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Mario particle homogenous test to check out these ABCs -- Shorter, fewer cold, less time'''
+run_description = '''Narrowing the loss cone since the simulation space only counts for a small section of the flux tube.'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//ABC_mario_test'        # Series save dir   : Folder containing all runs of a series
-run               = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path         = 'runs//new_loss_cone_test'    # Series save dir   : Folder containing all runs of a series
+run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
@@ -22,12 +22,13 @@ cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU 
 
 ## DIAGNOSTIC FLAGS :: DOUBLE CHECK BEFORE EACH RUN! ##
 supress_text      = False                         # Supress initialization text
-homogenous        = True                          # Set B0 to homogenous (as test to compare to parabolic)
+homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
 shoji_approx      = False                         # Changes solution used for calculating particle B0r (1D vs. 3D)
 te0_equil         = True                          # Initialize te0 to be in equilibrium with density
-particle_boundary = 2                             # 0: Absorb, 1: Reflect, 2: Periodic
+particle_boundary = 1                             # 0: Absorb, 1: Flux, 2: Periodic
                                                   # Only reflects cold particles. Hot particles converted to cold
+convert_hot       = False                         # Convert hot particles to cold when reinitialized
 
 ### SIMULATION PARAMETERS ###
 NX        = 128                             # Number of cells - doesn't include ghost cells
@@ -49,7 +50,7 @@ field_res = 0.20                            # Data capture resolution in gyroper
 ### PARTICLE PARAMETERS ###
 species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
 temp_color = ['blue', 'red']
-temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Hot particles get the LCD, cold are maxwellians.
 dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
 nsp_ppc    = np.array([200, 500])                           # Number of particles per cell, per species
 
@@ -169,7 +170,7 @@ loss_cone  = np.arcsin(np.sqrt(B_eq / B_xmax))*180 / np.pi # Loss cone in degree
 
 
 #%%### INPUT TESTS AND CHECKS
-if True:
+if False:
     import matplotlib.pyplot as plt
     
     max_v  = 20 * va

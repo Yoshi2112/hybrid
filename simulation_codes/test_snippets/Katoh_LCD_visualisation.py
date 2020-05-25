@@ -9,13 +9,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def g_func(VPERP):
-    exp1 = np.exp(-VPERP ** 2 / (2*     vth_perp**2))
-    exp2 = np.exp(-VPERP ** 2 / (2*beta*vth_perp**2))
+    exp1 = np.exp(- VPERP ** 2 / (2*     vth_perp**2))
+    exp2 = np.exp(- VPERP ** 2 / (2*beta*vth_perp**2))
     return (1. / (1. - beta)) * (exp1 - exp2)
 
 def f_func(VPAR, VPERP):
     C    = n_eq / np.sqrt(np.pi ** 3 * 8 * vth_par ** 2 * vth_perp ** 4)
-    exp0 = np.exp(-VPAR ** 2 / (2 * vth_par**2))
+    exp0 = np.exp(- VPAR ** 2 / (2 * vth_par**2))
     G    = g_func(VPERP)
     return C * exp0 * G
 
@@ -45,23 +45,30 @@ if __name__ == '__main__':
     v_perp = np.linspace(-vperp_lim, vperp_lim, Nv) * va
     
     plt.ioff()
-    for mm in range(Nb):
-        beta = bet[mm]
-        LCD = np.zeros((Nv, Nv), dtype=np.float64)
-        for ii in range(Nv):
-            for jj in range(Nv):
-                LCD[ii, jj] = f_func(v_par[ii], v_perp[jj])
+    beta = 0.2
+    LCD = np.zeros((Nv, Nv), dtype=np.float64)
+    for ii in range(Nv):
+        for jj in range(Nv):
+            LCD[ii, jj] = f_func(v_par[ii], v_perp[jj])
+    
+    plt.figure(figsize=(15,10))
+    
+    if True:
+        plt.pcolormesh(np.log10(LCD), vmin=-15, vmax=-10)
+    else:
+        plt.pcolormesh(LCD)
+    
+    
+    plt.colorbar()
+    plt.axis('equal')
+    plt.title('$\\beta = %.2f$' % beta)
+    
+# =============================================================================
+#     if False:
+#         plt.savefig('F://runs//teset_LCD//' + 'LCD_{:04}.png'.format(mm))
+#         plt.close('all')
+#     else:
+# =============================================================================
+    plt.show()
         
-        plt.figure(figsize=(15,10))
-        
-        if False:
-            plt.pcolormesh(np.log10(LCD), vmin=-20, vmax=-10)
-        else:
-            plt.pcolormesh(LCD)
-        
-        plt.colorbar()
-        plt.axis('equal')
-        plt.title('$\\beta = %.2f$' % beta)
-        plt.savefig('F://runs//teset_LCD//' + 'LCD_{:04}.png'.format(mm))
-        plt.close('all')
     

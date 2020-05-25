@@ -14,7 +14,7 @@ import save_routines as save
 import particles_1D as particles
 import fields_1D    as fields
 
-from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_xmax, Bc,   \
+from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_xmax,   \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
                                      qm_ratios, freq_res, rc_hwidth, temp_type, Te0_scalar, ne, q
 
@@ -55,6 +55,7 @@ def get_atan(y, x):
     return v
     
 
+@nb.njit()
 def get_gyroangle_from_velocity(vel):
     '''
     Vel is a (3,N) vector of particle velocities in 3-space
@@ -62,6 +63,34 @@ def get_gyroangle_from_velocity(vel):
     vel_gphase = (get_atan(vel[2], vel[1]) * 180. / np.pi + 90.)%360.
     return (vel_gphase * np.pi / 180.)
 
+
+def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
+    '''
+    Takes in a Maxwellian or pseudo-maxwellian distribution. Outputs the number
+    and indexes of any particle inside the loss cone
+    '''
+    B0x = fields.eval_B0x(pos[0, st: en])
+    N_loss = const.N_species[jj]
+                
+    while N_loss > 0:
+        v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
+        
+        N_loss, loss_idx = calc_losses(vel[0, st: en], v_perp, B0x, st=st)
+        
+        # Catch for a particle on the boundary : Set 90 degree pitch angle (gyrophase shouldn't overly matter)
+        if N_loss == 1:
+            if abs(pos[0, loss_idx[0]]) == const.xmax:
+                ww = loss_idx[0]
+                vel[0, loss_idx[0]] = 0.
+                vel[1, loss_idx[0]] = np.sqrt(vel[0, ww] ** 2 + vel[1, ww] ** 2 + vel[2, ww] ** 2)
+                vel[2, loss_idx[0]] = 0.
+                N_loss = 0
+                            
+        if N_loss != 0:                        
+            vel[0, loss_idx] = np.random.normal(0., sf_par, N_loss)
+            vel[1, loss_idx] = np.random.normal(0., sf_per, N_loss)
+            vel[2, loss_idx] = np.random.normal(0., sf_per, N_loss)
+    return
 
 def uniform_gaussian_distribution_quiet():
     '''Creates an N-sampled normal distribution across all particle species within each simulation cell
@@ -97,7 +126,7 @@ def uniform_gaussian_distribution_quiet():
         if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
             NC_load = NX
         else:
-            if rc_hwidth == 0 or rc_hwidth > NX//2:
+            if rc_hwidth == 0 or rc_hwidth > NX//2:   # Need to change this to be something like the FWHM or something
                 NC_load = NX
             else:
                 NC_load = 2*rc_hwidth
@@ -126,32 +155,11 @@ def uniform_gaussian_distribution_quiet():
             vel[1, st: en] = np.random.normal(0, sf_per, half_n)
             vel[2, st: en] = np.random.normal(0, sf_per, half_n)
 
-            # Set Loss Cone Distribution: Reinitialize particles in loss cone
-            B0x = fields.eval_B0x(pos[0, st: en])
-            if const.homogenous == False:
-                N_loss = const.N_species[jj]
+            # Set Loss Cone Distribution: Reinitialize particles in loss cone (move to a function)
+            if const.homogenous == False and temp_type[jj] == 1:
+                LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj)
                 
-                while N_loss > 0:
-                    v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
-                    
-                    N_loss, loss_idx = calc_losses(vel[0, st: en], v_perp, B0x, st=st)
-                    
-                    # Catch for a particle on the boundary : Set 90 degree pitch angle (gyrophase shouldn't overly matter)
-                    if N_loss == 1:
-                        if abs(pos[0, loss_idx[0]]) == const.xmax:
-                            ww = loss_idx[0]
-                            vel[0, loss_idx[0]] = 0.
-                            vel[1, loss_idx[0]] = np.sqrt(vel[0, ww] ** 2 + vel[1, ww] ** 2 + vel[2, ww] ** 2)
-                            vel[2, loss_idx[0]] = 0.
-                            N_loss = 0
-                                        
-                    if N_loss != 0:                        
-                        vel[0, loss_idx] = np.random.normal(0., sf_par, N_loss)
-                        vel[1, loss_idx] = np.random.normal(0., sf_per, N_loss)
-                        vel[2, loss_idx] = np.random.normal(0., sf_per, N_loss)
-            else:
-                v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
-            
+            # Quiet start : Initialize second half
             vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Invert velocities (v2 = -v1)
             vel[1, en: en + half_n] = vel[1, st: en] * -1.0
             vel[2, en: en + half_n] = vel[2, st: en] * -1.0
@@ -462,15 +470,17 @@ if __name__ == '__main__':
 # =============================================================================
     
     plt.ioff()
-    fig1, ax1 = plt.subplots()
+    
     #fig2, ax2 = plt.subplots()
     #fig3, ax3 = plt.subplots()
     
     node_number = 0
     
-    for jj in [1]:#range(cf.Nj):
+    for jj in range(const.Nj):
         if True:
             # Loss cone diagram
+            fig1, ax1 = plt.subplots()
+            
             ax1.scatter(V_PERP[idx_start[jj]: idx_end[jj]], V_PARA[idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
 
             ax1.set_title('Loss Cone Distribution :: {}'.format(const.species_lbl[jj]))

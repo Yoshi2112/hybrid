@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ratios, kB,\
-                                        B_eq, a, particle_boundary, mass, Tper, Tpar
+                                        B_eq, a, particle_boundary, mass, Tper, Tpar, convert_hot
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -216,6 +216,11 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
     changes will be required if multiple hot species (helium, oxygen, etc.)
     become included. Maybe include a "cooldown" array stating at what T_per
     they'll be reinit at.
+    
+    NOTE :: This reinitialization thing is super slow. More efficient way to code it?
+    
+    NOTE :: Also got rid of the convert_hot to cold thing for now, too tricky to code
+            efficiently
     '''
     pos[0, :] += vel[0, :] * DT
     pos[1, :] += vel[1, :] * DT
@@ -238,21 +243,19 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
                 elif pos[0, ii] < xmin:
                     pos[0, ii] = 2*xmin - pos[0, ii]
                     
-                if temp_type[idx[ii]] == 0 or idx[ii] < 0:
-                    # Reflect cold particle
-                    vel[0, ii] *= -1.0              
-                else:
-                    # Convert hot particle to cold
-                    idx[ii]   -= 128                               
-                    sf_per     = np.sqrt(kB *  Tper[0] /  mass[0]) # Re-init velocity with cold sf and heading away from boundary
-                    sf_par     = np.sqrt(kB *  Tpar[0] /  mass[0]) # Re-init velocity with cold sf and heading away from boundary
+                # Re-initialize velocity
+                sf_per     = np.sqrt(kB *  Tper[idx[ii]] /  mass[idx[ii]])
+                sf_par     = np.sqrt(kB *  Tpar[idx[ii]] /  mass[idx[ii]])
+
+                # If posx negative, velx positive.
+                # Vel always opposite of pos sign
+                # This only works for cold. For hot, need some sort of rejection method
+                vel[0, ii] = np.abs(np.random.normal(0, sf_par)) * (- np.sign(pos[0, ii]))
+                vel[1, ii] = np.random.normal(0, sf_per)
+                vel[2, ii] = np.random.normal(0, sf_per)
                     
-                    # If posx negative, velx positive.
-                    # Vel always opposite of pos sign
-                    vel[0, ii] = np.abs(np.random.normal(0, sf_par)) * (- np.sign(pos[0, ii]))
-                    vel[1, ii] = np.random.normal(0, sf_per)
-                    vel[2, ii] = np.random.normal(0, sf_per)
-                    
+                # Don't foget : Also need to reinitialize position gyrophase (pos[1:2])
+                
                     
             # Mario (Periodic)
             elif particle_boundary == 2:            
