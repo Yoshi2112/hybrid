@@ -206,52 +206,63 @@ def plot_spatial_poynting_helical(saveas='poynting_helical_plot', save=False, lo
                 plt.close('all')
     return
 
-def plot_tx(component='By', saveas='tx_plot', save=False, log=False):
+def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None):
     plt.ioff()
 
     t, arr = cf.get_array(component)
     
+    fontsize = 18
+    font     = 'monospace'
+    
+    tick_label_size = 14
+    mpl.rcParams['xtick.labelsize'] = tick_label_size 
+    mpl.rcParams['ytick.labelsize'] = tick_label_size 
+    
     if component[0] == 'B':
         arr *= 1e9
-        x    = cf.B_nodes
+        x    = cf.B_nodes / cf.dx
     else:
         arr *= 1e3
-        x    = cf.E_nodes
+        x    = cf.E_nodes / cf.dx
+        
+    if tmax is None:
+        lbl = 'full'
+    else:
+        lbl = '{:04}'.format(tmax)
     
     ## PLOT IT
-    for tmax, lbl in zip([60, None], ['min', 'full']):
-        fig, ax = plt.subplots(1, figsize=(15, 10))
-        
-        if log == True:
-            im1 = ax.pcolormesh(x, t, abs(arr),
-                           norm=colors.LogNorm(vmin=1e-3, vmax=None), cmap='nipy_spectral')
-            suffix = '_log'
-        else:
-            im1 = ax.pcolormesh(x, t, arr, cmap='nipy_spectral', vmin=0, vmax=100)      # Remove f[0] since FFT[0] >> FFT[1, 2, ... , k]
-            suffix = ''
-        
-        cb  = fig.colorbar(im1)
-        
-        if component[0] == 'B':
-            cb.set_label('nT', rotation=0)
-        else:
-            cb.set_label('mV/m', rotation=0)
+    fig, ax = plt.subplots(1, figsize=(15, 10))
     
-        ax.set_title('Time-Space ($t-x$) Plot :: {} component'.format(component.upper()), fontsize=14)
-        ax.set_ylabel(r't (s)', rotation=0, labelpad=15)
-        ax.set_xlabel('x (m)')
-        ax.set_ylim(0, tmax)
+    if log == True:
+        im1 = ax.pcolormesh(x, t, abs(arr),
+                       norm=colors.LogNorm(vmin=1e-3, vmax=None), cmap='nipy_spectral')
+        suffix = '_log'
+    else:
+        im1 = ax.pcolormesh(x, t, arr, cmap='nipy_spectral', vmin=0, vmax=cf.B_eq*1e9)
+        suffix = ''
+    
+    cb  = fig.colorbar(im1)
+    
+    if component[0] == 'B':
+        cb.set_label('nT', rotation=0, family=font, fontsize=fontsize, labelpad=30)
+    else:
+        cb.set_label('mV/m', rotation=0, family=font, fontsize=fontsize, labelpad=30)
+
+    ax.set_title('Time-Space ($t-x$) Plot :: {} component'.format(component.upper()), fontsize=fontsize, family=font)
+    ax.set_ylabel('t (s)', rotation=0, labelpad=30, fontsize=fontsize, family=font)
+    ax.set_xlabel('x ($\Delta x$)', fontsize=fontsize, family=font)
+    ax.set_ylim(0, tmax)
+    
+    ax.set_xlim(x[0], x[-1])
+    ax.axvline(cf.xmin     / cf.dx, c='w', ls=':', alpha=1.0)
+    ax.axvline(cf.xmax     / cf.dx, c='w', ls=':', alpha=1.0)
+    ax.axvline(cf.grid_mid / cf.dx, c='w', ls=':', alpha=0.75)   
         
-        ax.set_xlim(cf.grid_min, cf.grid_max)
-        ax.axvline(cf.xmin, c='w', ls=':', alpha=1.0)
-        ax.axvline(cf.xmax, c='w', ls=':', alpha=1.0)
-        ax.axvline(cf.grid_mid, c='w', ls=':', alpha=0.75)   
-            
-        if save == True:
-            fullpath = cf.anal_dir + saveas + '_{}_{}'.format(component.lower(), lbl) + suffix + '.png'
-            plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-            print('t-x Plot saved')
-            plt.close('all')
+    if save == True:
+        fullpath = cf.anal_dir + saveas + '_{}_{}'.format(component.lower(), lbl) + suffix + '.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        print('t-x Plot saved')
+        plt.close('all')
     return
 
 
@@ -1399,7 +1410,12 @@ def summary_plots(save=True, histogram=True):
         
         ax_Bx = ax_B.twinx()
         ax_Bx.plot(B_nodes, pbx[ii]*1e9, color='k', label=r'$B_x$', ls=':', alpha=0.6) 
-        ax_Bx.set_ylim(cf.B_eq*1e9, cf.Bc.max()*1e9)
+        
+        if cf.B_eq == cf.Bc.max():
+            pass
+        else:
+            ax_Bx.set_ylim(cf.B_eq*1e9, cf.Bc.max()*1e9)
+            
         ax_Bx.set_ylabel(r'$B_{0x} (nT)$', rotation=0, labelpad=30, fontsize=14)
         
         ax_B.plot( B_nodes, mag_B*1e9, color='g')
@@ -1435,7 +1451,7 @@ def summary_plots(save=True, histogram=True):
         ###################
         anisotropy = (cf.Tper / cf.Tpar - 1).round(1)
         beta_per   = (2*(4e-7*np.pi)*(1.381e-23)*cf.Tper*cf.ne / (cf.B_eq**2)).round(1)
-        beta_e     = round((2*(4e-7*np.pi)*(1.381e-23)*cf.Te0*cf.ne  / (cf.B_eq**2)), 2)
+        #beta_e     = np.round((2*(4e-7*np.pi)*(1.381e-23)*cf.Te0*cf.ne  / (cf.B_eq**2)), 2)
         rdens      = (cf.density / cf.ne).round(2)
 
         try:
@@ -1468,7 +1484,7 @@ def summary_plots(save=True, histogram=True):
         plt.figtext(0.855, top - 10*gap, 'N_lost    : {}'.format(N_lost), fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 11*gap, '', fontsize=fontsize, family='monospace')
         
-        plt.figtext(0.855, top - 12*gap, r'$\beta_e$      : %.2f' % beta_e, fontsize=fontsize, family='monospace')
+        #plt.figtext(0.855, top - 12*gap, r'$\beta_e$      : %.2f' % beta_e, fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 13*gap, 'dx      : {}km'.format(round(cf.dx/1e3, 2)), fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 14*gap, 'L       : {}'.format(cf.L), fontsize=fontsize, family='monospace')
         plt.figtext(0.855, top - 15*gap, 'MLAT_max: $\pm$%.1f$^{\circ}$' % (cf.theta_xmax * 180. / np.pi), fontsize=fontsize, family='monospace')
@@ -1495,7 +1511,7 @@ def summary_plots(save=True, histogram=True):
     return
 
 
-def standard_analysis_package():
+def standard_analysis_package(thesis=True):
     '''
     Need a high-pass option for the wk? Or will it do all of it?
     It should do all of it (show the Pc4 branch and the Pc1 branch)
@@ -1503,31 +1519,37 @@ def standard_analysis_package():
     
     Actually, Pc5 is only in bx... affects By/Bz? Echo in other components?
     '''
-    disp_folder = 'dispersion_plots/'
+    if thesis == False:
+        disp_folder = 'dispersion_plots/'
+    else:
+        disp_folder = 'dispersion_plots_thesis/'
         
     if os.path.exists(cf.anal_dir + disp_folder) == False:
         os.makedirs(cf.anal_dir + disp_folder)
         
     for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
         print('2D summary for {}'.format(comp))
-        plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True)
-        try:
-            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, log=True)
-        except:
-            pass
-        try:
-            plot_wx(component=comp, saveas=disp_folder + 'wx_plot', save=True, linear_overlay=False,     pcyc_mult=1.1)
-        except:
-            pass
-        plot_wk(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=False, pcyc_mult=1.1)
-        plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
+        plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
+        plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=20)
+
+# =============================================================================
+#         try:
+#             plot_wx(component=comp, saveas=disp_folder + 'wx_plot', save=True, linear_overlay=False,     pcyc_mult=1.1)
+#         except:
+#             pass
+#         
+#         plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=True, pcyc_mult=1.25)
+#         plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
+# =============================================================================
         
-    plot_spatial_poynting(save=True, log=True)
-    plot_spatial_poynting_helical(save=True, log=True)
-    #plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
-    
-    plot_particle_loss_with_time()
-    plot_initial_configurations()
+# =============================================================================
+#     plot_spatial_poynting(save=True, log=True)
+#     plot_spatial_poynting_helical(save=True, log=True)
+#     #plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
+#     
+#     plot_particle_loss_with_time()
+#     plot_initial_configurations()
+# =============================================================================
     
     if False:
         check_fields()
@@ -2619,7 +2641,7 @@ def thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True):
     ################
     if os.path.exists(save_data_file) == False or save_data == False:
         # Get Ns sample indexes from each species 
-        Ns    = 2  
+        Ns    = 20  
         sidx  = np.zeros(Ns * cf.Nj, dtype=int)
         for ii in range(cf.Nj):
             sidx[Ns*ii:Ns*(ii + 1)] = np.random.randint(cf.idx_start[ii], cf.idx_end[ii], Ns)
@@ -2638,6 +2660,7 @@ def thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True):
             calc_mu(pos, vel, idx, sidx, Bp, mu_av, mu_s, ii, cf.mass)
             pos_s[ii, :, :] = pos[:, sidx]
     else:
+        print('Loading from file')
         data = np.load(save_data_file)
         Bp      = data['Bp']
         mu_s    = data['mu_s']
@@ -2648,29 +2671,48 @@ def thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True):
 
     if save_data == True and os.path.exists(save_data_file) == False:
         np.savez(save_data_file, Bp=Bp, mu_s=mu_s, pos_s=pos_s, mu_av=mu_av, ptime=ptime, sidx=sidx)
-        
+
     #################
     ## Do PLOTTING ##
     #################
+    yfac       = 1e8
+    ylabel_pad = 40
+    fontsize   = 18
+    tick_size  = 14
+    index      = 2
+    
+    mpl.rcParams['xtick.labelsize'] = tick_size 
+    mpl.rcParams['ytick.labelsize'] = tick_size 
+
     cf.temp_color[0] = 'c'
-        
+
     plt.ioff()
-    fig, axes = plt.subplots(2, figsize=(15, 10), sharex=True)
+    fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
     
-    axes[0].set_title('First Adiabatic Invariant :: N-Average and Samples :: N = {} ::{}[{}]'.format(cf.N_species, series, run_num),
-                      fontsize=16)
-    axes[0].plot(ptime, mu_av*1e10)
-    axes[0].set_ylabel('$\mu_{av}\n(\\times 10^{10})$', rotation=0, labelpad=50, fontsize=14)
+    axes[0].set_title('Average Magnetic Moment, Sample Moment/Particle Motion'.format(cf.N_species, series, run_num),
+                      fontsize=fontsize+2)
     
-    for ii in range(mu_s.shape[1]):
-        axes[1].plot(ptime, mu_s[:, ii]*1e10, label='idx {}'.format(sidx[ii]))
+    axes[0].plot(ptime, mu_av*yfac)
+    axes[1].plot(ptime, mu_s[:,     index]*yfac)
+    axes[2].plot(ptime, pos_s[:, 0, index] / cf.dx)
     
-    axes[1].set_ylabel('$\mu\n(\\times 10^{10})$', rotation=0, labelpad=50, fontsize=14)
-    axes[1].set_xlabel('Time (s)', fontsize=14)
-    axes[1].set_xlim(0, ptime[-1])
-    #axes[1].legend(loc="upper left", bbox_to_anchor=(1,1))
-    axes[1].legend(loc="upper left")
+    axes[0].set_ylabel('$\mu_{av}$\n$(\\times 10^{%d})$' % np.log10(yfac), rotation=0,
+                       labelpad=ylabel_pad, fontsize=fontsize)
     
+    axes[0].set_yticks(np.arange(1.4, 1.61, 0.05))
+    axes[0].set_ylim(1.44, 1.6)
+    
+    axes[1].set_yticks(np.arange(3.45, 3.50, 0.04))
+    axes[1].set_ylim(3.43, 3.52)
+    
+    axes[1].set_ylabel('$\mu$\n$(\\times 10^{%d})$' % np.log10(yfac), rotation=0,
+                       labelpad=ylabel_pad, fontsize=fontsize)
+    
+    axes[2].set_ylabel('$\\frac{x}{\Delta x}$', rotation=0, fontsize=fontsize+6, labelpad=ylabel_pad)
+    
+    axes[2].set_xlabel('Time (s)', fontsize=fontsize)
+    axes[2].set_xlim(0, ptime[-1])
+        
     fig.subplots_adjust(hspace=0)
     
     if save_plot == True:
@@ -2881,22 +2923,116 @@ def compare_B0_to_dipole():
     return
 
 
+def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False, save=False,
+                     pcyc_mult=None, xmax=None, plot_alfven=False, zero_cold=False, overwrite=True):
+    
+    plt.ioff()
+    
+    fontsize = 18
+    font     = 'monospace'
+    
+    tick_label_size = 14
+    mpl.rcParams['xtick.labelsize'] = tick_label_size 
+    mpl.rcParams['ytick.labelsize'] = tick_label_size 
+    
+    k, f, wk = disp.get_wk(component)
+
+    xfac = 1e6
+    xlab = '$\mathtt{k (\\times 10^{-6}m^{-1})}$'
+    ylab = 'f\n(Hz)'
+    
+    if component[0].upper() == 'B':
+        clab = 'Pwr\n$\left(\\frac{nT^2}{Hz}\\right)$'
+    else:
+        clab = 'Pwr\n$\left(\\frac{mV^2}{m^2Hz}\\right)$'
+
+    fig = plt.figure(1, figsize=(15, 10))
+    ax  = fig.add_subplot(111)
+    
+    im1 = ax.pcolormesh(xfac*k[1:], f[1:], wk[1:, 1:].real, cmap='jet',
+                        norm=colors.LogNorm(vmin=wk[1:, 1:].real.min(),
+                                            vmax=wk[1:, 1:].real.max()))      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
+    
+    fig.colorbar(im1, extend='both', fraction=0.05).set_label(clab, rotation=0, fontsize=fontsize, family=font, labelpad=30)
+    ax.set_title(r'$\omega/k$ Plot :: {} Component :: Linear Theory Overlay'.format(component.upper()),
+                 fontsize=fontsize, family=font)
+    ax.set_ylabel(ylab, fontsize=fontsize, family=font, rotation=0, labelpad=30)
+    ax.set_xlabel(xlab, fontsize=fontsize, family=font)
+    
+    #clr  = ['black', 'green', 'red'] 
+    lbl  = [r'$f_{eq, H^+}$', r'$f_{eq, He^+}$', r'$f_{eq, O^+}$']
+    M    = np.array([1., 4., 16.])
+    cyc  = qi * cf.B_eq / (2 * np.pi * mp * M)
+    
+    from matplotlib.transforms import blended_transform_factory
+    trans = blended_transform_factory(ax.transAxes, ax.transData) # the x coords of this transformation are axes, and the
+            # y coord are data
+    
+    for ii in range(3):
+        if cf.species_present[ii] == True:
+            ax.axhline(cyc[ii], linestyle=':', c='k')
+            ax.text(1.025, cyc[ii], lbl[ii], transform=trans, ha='center', 
+                    va='center', color='k', fontsize=fontsize, family=font)
+    
+    ax.set_xlim(0, xmax)
+    if pcyc_mult is not None:
+        ax.set_ylim(0, pcyc_mult*cyc[0])
+    else:
+        ax.set_ylim(0, None)
+    
+    alpha=0.5
+    if dispersion_overlay == True:
+        k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=zero_cold)
+        for ii in range(CPDR_solns.shape[1]):
+            ax.plot(xfac*k_vals, CPDR_solns[:, ii],      c='k', linestyle='--', label='CPDR' if ii == 0 else '', alpha=alpha)
+            ax.plot(xfac*k_vals, warm_solns[:, ii].real, c='k', linestyle='-',  label='WPDR' if ii == 0 else '', alpha=alpha)
+      
+    if plot_alfven == True:
+        # Plot Alfven velocity on here just to see
+        alfven_line = k * cf.va
+        ax.plot(xfac*k, alfven_line, c='blue', linestyle=':', label='$v_A$')
+        
+    ax.legend(loc='upper right', facecolor='white', prop={'size': fontsize-2, 'family':font})
+        
+    if save == True:
+        zero_suff = '' if zero_cold is False else 'zero'
+        fullpath  = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '_{}'.format(zero_suff)
+        save_path = fullpath + '.png'
+        
+        if overwrite == False:
+            count = 1
+            while os.path.exists(save_path) == True:
+                print('Save file exists, incrementing...')
+                save_path = fullpath + '_{}.png'.format(count)
+                count += 1
+            
+        plt.savefig(save_path, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        print('w-k for component {} saved'.format(component.lower()))
+        plt.close('all')
+    else:
+        plt.show()
+    return
+
+
 ##%% MAIN
 if __name__ == '__main__':
     drive       = 'G:'
     
-    series      = 'small_bottle_test_v3'
+    series      = 'archive/ABC_test_lowres_v5'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
     # To do : A comparison plot of the loss per time of the cold plasma runs
-    for run_num in [3]:#range(num_runs):
+    for run_num in [0]:#range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
              
-        thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True)
+        standard_analysis_package(thesis=True)
+        #summary_plots(save=True, histogram=False)
+        
+        #thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True)
         
 # =============================================================================
 #         plot_adiabatic_parameter()
@@ -2907,12 +3043,12 @@ if __name__ == '__main__':
 #         plot_average_mu()
 # 
 #         try:
-#             standard_analysis_package()
+#             
 #         except:
 #             pass
 # 
 #         try:
-#             summary_plots(save=True, histogram=False)
+#             
 #         except:
 #             pass
 # =============================================================================

@@ -199,6 +199,13 @@ def initialize_simulation_variables():
 
 def output_simulation_parameter_file(series, run):
     output_file = run_dir + 'simulation_parameter_file.txt'
+    
+    mu0    = (4e-7) * np.pi  # Magnetic Permeability of Free Space (SI units)
+    kB     = 1.38065e-23     # Boltzmann's Constant (J/K)
+
+    beta_e   = (2 * mu0 * ne * kB * Te0 ) / B_eq ** 2
+    beta_par = (2 * mu0 * ne * kB * Tpar) / B_eq ** 2
+    beta_per = (2 * mu0 * ne * kB * Tper) / B_eq ** 2
 
     if os.path.exists(output_file) == True:
         pass
@@ -235,11 +242,11 @@ def output_simulation_parameter_file(series, run):
             print('MLAT max/min extent       :: {} deg'.format(theta_xmax * 180. / np.pi), file=f)
             print('McIlwain L value equiv.   :: {}'.format(L), file=f)
             print('Parabolic scale factor, a :: {}'.format(a), file=f)
-            
             print('', file=f)
             print('Electron Density     :: {} /cc'.format(ne*1e-6), file=f)
             print('Electron Treatment   :: {}'.format(ie), file=f)
             print('Electron Temperature :: {}K'.format(Te0), file=f)
+            print('Electron Beta        :: {}'.format(beta_e), file=f)
             print('', file=f)
             print('Particle Parameters', file=f)
             print('Number of Species   :: {}'.format(Nj), file=f)
@@ -258,6 +265,8 @@ def output_simulation_parameter_file(series, run):
             print('Drift Velocity  :: {} m/s'.format(drift_v), file=f)
             print('Perp Temp       :: {} K'.format(Tper), file=f)
             print('Para Temp       :: {} K'.format(Tpar), file=f)
+            print('Perp Beta       :: {}'.format(beta_per), file=f)
+            print('Para Beta       :: {}'.format(beta_par), file=f)
             print('MParticle Contr.:: {} real particles/macroparticle'.format(n_contr), file=f)
     return
 

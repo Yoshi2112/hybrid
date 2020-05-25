@@ -10,7 +10,7 @@ import numpy as np
 import sys
 import pyfftw
 from scipy import signal
-data_scripts_dir = 'C://Users//iarey//Documents//GitHub//hybrid//linear_theory//'
+data_scripts_dir = 'C://Users//iarey//Documents//GitHub//hybrid//linear_theory//new_general_DR_solver//'
 sys.path.append(data_scripts_dir)
 
 
@@ -55,62 +55,40 @@ def get_cgr_from_sim(norm_flag=0):
     return freqs, cgr, stop
 
 
-def get_linear_dispersion_from_sim(k=None, plot=False, save=False):
+def get_linear_dispersion_from_sim(k, plot=False, save=False, zero_cold=True):
     '''
     Still not sure how this will work for a H+, O+ mix, but H+-He+ should be fine
+    
+    Extracted values units :: 
+        Density    -- /m3       (Cold, warm densities)
+        Anisotropy -- Number
+        Tper       -- eV
     '''
-    from chen_warm_dispersion   import get_dispersion_relation
+    from dispersion_solver_multispecies import dispersion_relations
+    from analysis_config                import Tper, Tpar, B_eq
+        
+    anisotropy = Tper / Tpar - 1
+    t_perp     = cf.Tper.copy() / 11603.  
     
-    from analysis_config import species_present, NX, dx, Tper, Tpar, temp_type,\
-                                species_lbl, density, Nj, B0, anal_dir
-                   
-    if k is None:
-        k         = np.fft.fftfreq(NX, dx)
-        k         = k[k>=0]
+    if zero_cold == True:
+        for ii in range(t_perp.shape[0]):
+            if cf.temp_type[ii] == 0:
+                t_perp[ii] = 0.0
     
-    N_present    = species_present.count(True)
-    cold_density = np.zeros(N_present)
-    warm_density = np.zeros(N_present)
-    cgr_ani      = np.zeros(N_present)
-    tempperp     = np.zeros(N_present)
-    anisotropies = Tper / Tpar - 1
+    # Convert from linear units to angular units for k range to solve over
+    kmin = 2*np.pi*k[0]
+    kmax = 2*np.pi*k[-1]
     
-    for ii in range(Nj):
-        if temp_type[ii] == 0:
-            if 'H^+'    in species_lbl[ii]:
-                cold_density[0] = density[ii]
-            elif 'He^+' in species_lbl[ii]:
-                cold_density[1] = density[ii]
-            elif 'O^+'  in species_lbl[ii]:
-                cold_density[2] = density[ii]
-            else:
-                print('WARNING: UNKNOWN ION IN DENSITY MIX')
-                
-        if temp_type[ii] == 1:
-            if 'H^+'    in species_lbl[ii]:
-                warm_density[0] = density[ii]
-                cgr_ani[0]      = anisotropies[ii]
-                tempperp[0]     = Tper[ii] / 11603.
-            elif 'He^+' in species_lbl[ii]:
-                warm_density[1] = density[ii]
-                cgr_ani[1]      = anisotropies[ii]
-                tempperp[1]     = Tper[ii] / 11603
-            elif 'O^+'  in species_lbl[ii]:
-                warm_density[2] = density[ii]
-                cgr_ani[2]      = anisotropies[ii]
-                tempperp[2]     = Tper[ii] / 11603
-            else:
-                print('WARNING: UNKNOWN ION IN DENSITY MIX')
+    k_vals, CPDR_solns, WPDR_solns = dispersion_relations(B_eq, cf.species_lbl, cf.mass, cf.charge, \
+                                           cf.density, t_perp, anisotropy, norm_k_in=False, norm_w=False,
+                                           kmin=kmin, kmax=kmax)
+    
+    # Convert back from angular units to linear units
+    k_vals     /= 2*np.pi
+    CPDR_solns /= 2*np.pi
+    WPDR_solns /= 2*np.pi
 
-    if save == True:
-        savepath = anal_dir
-    else:
-        savepath = None
-    
-    k_vals, CPDR_solns, warm_solns = get_dispersion_relation(B0, cold_density, warm_density, cgr_ani, tempperp,
-               norm_k=False, norm_w=False, kmin=k[0], kmax=k[-1], k_input_norm=0, plot=plot, save=save, savepath=savepath)
-
-    return k_vals, CPDR_solns, warm_solns
+    return k_vals, CPDR_solns, WPDR_solns
 
 
 def get_wx(component):
