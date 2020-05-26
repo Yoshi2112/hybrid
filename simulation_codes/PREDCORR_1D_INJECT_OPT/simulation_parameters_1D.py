@@ -31,14 +31,15 @@ particle_boundary = 1                             # 0: Absorb, 1: Flux, 2: Perio
 convert_hot       = False                         # Convert hot particles to cold when reinitialized
 
 ### SIMULATION PARAMETERS ###
-NX        = 128                             # Number of cells - doesn't include ghost cells
+NX        = 500                             # Number of cells - doesn't include ghost cells
 ND        = 64                              # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev   = 50                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
-dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
+dxm       = 10.0                            # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell
+r_A       = 150e3                           # Ionospheric anchor point (loss zone/max mirror point)
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
-B_eq      = 200e-9                          # Initial magnetic field at equator: None for L-determined value (in T)
+B_eq      = None                            # Initial magnetic field at equator: None for L-determined value (in T)
 rc_hwidth = 0                               # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
   
 orbit_res = 0.02                            # Orbit resolution
@@ -52,7 +53,7 @@ species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/label
 temp_color = ['blue', 'red']
 temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Hot particles get the LCD, cold are maxwellians.
 dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.array([200, 500])                           # Number of particles per cell, per species
+nsp_ppc    = np.array([100, 10000])                         # Number of particles per cell, per species
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
@@ -89,12 +90,12 @@ mu0    = (4e-7) * np.pi                     # Magnetic Permeability of Free Spac
 RE     = 6.371e6                            # Earth radius in metres
 B_surf = 3.12e-5                            # Magnetic field strength at Earth surface
 
-NC         = NX + 2*ND
-ne         = density.sum()
-E_par      = E_per / (anisotropy + 1)
+NC         = NX + 2*ND                      # Total number of cells
+ne         = density.sum()                  # Electron number density
+E_par      = E_per / (anisotropy + 1)       # Parallel species energy
 
 if B_eq is None:
-    B_eq      = (B_surf / (L ** 3))                      # Magnetic field at equator, based on L value
+    B_eq      = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
     
 if beta_par is None:
     Te0_scalar = E_e   * 11603.
@@ -145,11 +146,20 @@ idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)]
 B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx      # B grid points position in space
 E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
 
-theta_xmax  = xmax/(L*RE)                                # Latitudinal extent of simulation , based on xmax
-r_xmax      = L * np.sin(np.pi / 2 - theta_xmax) ** 2    # Calculate radial distance of boundary in dipole and get field intensity
-cos_bit     = np.sqrt(3*np.cos(theta_xmax)**2 + 1)       # Intermediate variable (angular scale factor)
-B_xmax      = (B_surf / (r_xmax ** 3)) * cos_bit         # Magnetic field intensity at boundary
-a           = (B_xmax / B_eq - 1) / xmax ** 2            # Parabolic scale factor: Fitted to B_eq, B_xmax
+print('Fitting parabola to dipole...')
+dlam   = 1e-6                                            # Latitude increment in radians
+fx_len = 0.0; ii = 1                                     # Arclength/increment counters
+while fx_len < xmax:
+    lam_i   = dlam * ii                                                             # Current latitude
+    d_len   = L * RE * np.cos(lam_i) * np.sqrt(4 - 3*np.cos(lam_i) ** 2) * dlam     # Length increment
+    fx_len += d_len                                                                 # Accrue arclength
+    ii     += 1                                                                     # Increment counter
+
+theta_xmax  = lam_i                                                                 # Latitude of simulation boundary
+r_xmax      = L * RE * np.cos(theta_xmax) ** 2                                      # Radial distance of simulation boundary
+B_xmax      = B_eq*np.sqrt(4 - 3*np.cos(theta_xmax)**2)/np.cos(theta_xmax)**6       # Magnetic field intensity at boundary
+a           = (B_xmax / B_eq - 1) / xmax ** 2                                       # Parabolic scale factor: Fitted to B_eq, B_xmax
+lambda_L    = np.arccos(np.sqrt(1.0 / L))                                           # Lattitude of Earth's surface at this L
 
 if homogenous == True:
     a      = 0
@@ -166,7 +176,11 @@ gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency 
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
 
-loss_cone  = np.arcsin(np.sqrt(B_eq / B_xmax))*180 / np.pi # Loss cone in degrees
+lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L)))       # Anchor latitude in radians
+B_loss     = B_eq * np.sqrt(4 - 3*np.cos(lat_A) ** 2)\
+           / (np.cos(lat_A) ** 6)                        # Magnetic field at anchor point
+
+loss_cone  = np.arcsin(np.sqrt(B_eq / B_loss))*180 / np.pi # Equatorial loss cone in degrees
 
 
 #%%### INPUT TESTS AND CHECKS
@@ -206,8 +220,9 @@ if supress_text == False:
     print('Density            : {:5.2f}cc'.format(ne / 1e6))
     print('Equatorial B-field : {:5.2f}nT'.format(B_eq*1e9))
     print('Maximum    B-field : {:5.2f}nT'.format(B_xmax*1e9))
-    print('Loss cone          : {:<5.2f} degrees  '.format(loss_cone))
-    print('Maximum MLAT (+/-) : {:<5.2f} degrees\n'.format(theta_xmax * 180. / np.pi))
+    print('Equat. Loss cone   : {:<5.2f} degrees  '.format(loss_cone))
+    print('Maximum MLAT (+/-) : {:<5.2f} degrees  '.format(theta_xmax * 180. / np.pi))
+    print('Iono.   MLAT (+/-) : {:<5.2f} degrees\n'.format(lambda_L * 180. / np.pi))
     
     print('Equat. Gyroperiod: : {}s'.format(round(2. * np.pi / gyfreq, 3)))
     print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 3)))
@@ -238,6 +253,13 @@ if abs(simulated_density_per_cell - real_density_per_cell) / real_density_per_ce
     print('--------------------------------------------------------------------------------')
     print('')
     print('ABORTING...')
+    sys.exit()
+
+if theta_xmax > lambda_L:
+    print('--------------------------------------------------')
+    print('WARNING : SIMULATION DOMAIN LONGER THAN FIELD LINE')
+    print('DO SOMETHING ABOUT IT')
+    print('--------------------------------------------------')
     sys.exit()
 
 if particle_boundary != 0:

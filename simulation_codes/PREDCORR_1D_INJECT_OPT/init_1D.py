@@ -9,28 +9,41 @@ import numba as nb
 import numpy as np
 import simulation_parameters_1D as const
 import save_routines as save
-#import diagnostics as diag
+import diagnostics as diag
 
 import particles_1D as particles
 import fields_1D    as fields
 
-from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_xmax,   \
+from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_loss,   \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
                                      qm_ratios, freq_res, rc_hwidth, temp_type, Te0_scalar, ne, q
 
 
+@nb.njit()
 def calc_losses(v_para, v_perp, B0x, st=0):
     '''
     For arrays of parallel and perpendicular velocities, finds the number and 
     indices of particles outside the loss cone.
-    
-    Calculation of in_loss_cone not compatible with njit(). Recode later if you want.
     '''
     alpha        = np.arctan(v_perp / v_para)                   # Calculate particle PA's
-    loss_cone    = np.arcsin(np.sqrt(B0x / B_xmax))             # Loss cone per particle (based on B0 at particle)
-    in_loss_cone = (abs(alpha) < loss_cone)                     # Determine if particle in loss cone
+    loss_cone    = np.arcsin(np.sqrt(B0x / B_loss))             # Loss cone per particle (based on B0 at particle)
+    #pdb.set_trace()
+    
+    in_loss_cone = np.zeros(v_para.shape[0], dtype=nb.int32)
+    for ii in range(v_para.shape[0]):
+        if np.abs(alpha[ii]) < loss_cone[ii]:                   # Determine if particle in loss cone
+            in_loss_cone[ii] = 1
+    
     N_loss       = in_loss_cone.sum()                           # Count number that are
-    loss_idx     = np.where(in_loss_cone == True)[0]            # Find their indices
+    
+    # Collect the indices of those in the loss cone
+    loss_idx     = np.zeros(N_loss, dtype=nb.int32)
+    lc           = 0
+    for ii in range(v_para.shape[0]):
+        if in_loss_cone[ii] == True:
+            loss_idx[lc] = ii
+            lc          += 1
+        
     loss_idx    += st                                           # Offset indices to account for position in master array
     return N_loss, loss_idx
 
@@ -69,7 +82,7 @@ def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
     Takes in a Maxwellian or pseudo-maxwellian distribution. Outputs the number
     and indexes of any particle inside the loss cone
     '''
-    B0x = fields.eval_B0x(pos[0, st: en])
+    B0x    = fields.eval_B0x(pos[0, st: en])
     N_loss = const.N_species[jj]
                 
     while N_loss > 0:
@@ -91,6 +104,7 @@ def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
             vel[1, loss_idx] = np.random.normal(0., sf_per, N_loss)
             vel[2, loss_idx] = np.random.normal(0., sf_per, N_loss)
     return
+
 
 def uniform_gaussian_distribution_quiet():
     '''Creates an N-sampled normal distribution across all particle species within each simulation cell
@@ -476,17 +490,21 @@ if __name__ == '__main__':
     
     node_number = 0
     
-    for jj in range(const.Nj):
-        if True:
-            # Loss cone diagram
-            fig1, ax1 = plt.subplots()
-            
-            ax1.scatter(V_PERP[idx_start[jj]: idx_end[jj]], V_PARA[idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
-
-            ax1.set_title('Loss Cone Distribution :: {}'.format(const.species_lbl[jj]))
-            ax1.set_ylabel('$v_\parallel (/v_A)$')
-            ax1.set_xlabel('$v_\perp (/v_A)$')
-            ax1.axis('equal')
+    diag.check_cell_velocity_distribution_2D(POS, VEL, node_number=None, jj=1, save=True)
+    
+# =============================================================================
+#     for jj in range(const.Nj):
+#         if True:
+#             # Loss cone diagram
+#             fig1, ax1 = plt.subplots()
+#             
+#             ax1.scatter(V_PERP[idx_start[jj]: idx_end[jj]], V_PARA[idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
+# 
+#             ax1.set_title('Loss Cone Distribution :: {}'.format(const.species_lbl[jj]))
+#             ax1.set_ylabel('$v_\parallel (/v_A)$')
+#             ax1.set_xlabel('$v_\perp (/v_A)$')
+#             ax1.axis('equal')
+# =============================================================================
      
 # =============================================================================
 #             ax2.scatter(POS[1, idx_start[jj]: idx_end[jj]], POS[2, idx_start[jj]: idx_end[jj]], s=1, c=const.temp_color[jj])
@@ -501,8 +519,6 @@ if __name__ == '__main__':
 #             ax3.set_xlabel('$v_z (m/s)$')
 #             ax3.axis('equal')
 # =============================================================================
-            
-            plt.show()
             
 # =============================================================================
 #         if False:

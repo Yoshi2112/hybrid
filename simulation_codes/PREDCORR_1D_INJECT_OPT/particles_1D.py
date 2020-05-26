@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ratios, kB,\
-                                        B_eq, a, particle_boundary, mass, Tper, Tpar, convert_hot
+                                        B_eq, a, particle_boundary, mass, Tper, Tpar
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x

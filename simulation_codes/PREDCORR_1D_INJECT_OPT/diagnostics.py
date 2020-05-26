@@ -95,6 +95,71 @@ def check_cell_velocity_distribution(pos, vel, node_number=const.NX // 2, j=0): 
     plt.show()
     return
 
+
+def check_cell_velocity_distribution_2D(pos, vel, node_number=const.NX // 2, jj=0, show_cone=False, save=False): #
+    '''
+    Checks the velocity distribution of a particle species within a specified cell
+    
+    Starts at "cell 0" - i.e. only counts real cells. 
+    Damping cell offset is handled by function
+    '''
+    if node_number is None:
+        node_number = np.arange(const.NX)
+        
+    # Account for damping nodes. Node_number should be "real" node count.
+    for node in node_number:
+        print('Collecting particle info in cell {}'.format(node))
+        node += const.ND
+        x_node = const.E_nodes[node]
+        f      = np.zeros((1, 3))
+        
+        count = 0
+        for ii in np.arange(const.idx_start[jj], const.idx_end[jj]):
+            if (abs(pos[0, ii] - x_node) <= 0.5*const.dx):
+                f = np.append(f, [vel[0:3, ii]], axis=0)
+                count += 1
+    
+        plt.ioff()
+        print('{} particles counted for diagnostic'.format(count))
+        fig, ax1 = plt.subplots(figsize=(15,10))
+        fig.suptitle('Particle velocity distribution of species {} in cell {}'.format(jj, node))
+        fig.patch.set_facecolor('w')
+    
+        V_PERP = np.sign(f[:, 2]) * np.sqrt(f[:, 1] ** 2 + f[:, 2] ** 2) / const.va
+        V_PARA = f[:, 0] / const.va
+    
+        ax1.scatter(V_PERP, V_PARA, s=1, c=const.temp_color[jj])
+    
+        ax1.set_ylabel('$v_\parallel (/v_A)$')
+        ax1.set_xlabel('$v_\perp (/v_A)$')
+        ax1.axis('equal')
+        
+        # Plot loss cone lines 
+        B_at_nodes     = fields.eval_B0x(np.array([x_node + const.dx, x_node - const.dx]))
+        end_loss_cones = np.arcsin(np.sqrt(B_at_nodes/const.B_loss)).max()                    # Calculate max loss cone
+        
+        yst, yend = ax1.get_ylim()                  # Get V_PARA lims
+        yarr      = np.linspace(yst, yend, 100)     # V_PARA values on axis
+        xarr      = yarr * np.tan(end_loss_cones)   # Calculate V_PERP values
+        ax1.plot(xarr,  yarr, c='k', label='Loss Cone: {:.1f} deg'.format(end_loss_cones * 180. / np.pi))
+        ax1.plot(xarr, -yarr, c='k')
+        ax1.legend()
+        ax1.set_xlim(yst, yend)
+        ax1.set_ylim(yst, yend)
+        
+        if save == True:
+            save_path = const.drive + '//' + const.save_path + '//' + 'run_{}//'.format(const.run)
+            
+            if os.path.exists(save_path) == False:
+                os.makedirs(save_path)
+                
+            fig.savefig(save_path + 'LCD_cell_{:04}.png'.format(node))
+            plt.close('all')
+        else:
+            plt.show()
+    return
+
+
 def check_position_distribution(pos):
     '''Checks the spatial distribution of a particle species j within the spatial domain
     
@@ -1099,18 +1164,24 @@ def test_interp_cross_manual():
 
 
 
-def plot_dipole_field_line(length=True):
+def plot_dipole_field_line(length=True, get_from_sim=True):
     '''
     Plots field lines with basic L = r*sin^2(theta) relation. Can plot
     multiple for all in Ls. Can also calculate arclengths from lat_st/lat_min
     and print as the title (can be changed if you want)
     '''
-    Ls         = [4.3]
+    
     dtheta     = 0.1
     theta      = np.arange(0, 180. + dtheta, dtheta) * np.pi / 180
         
-    lat_st = 80  
-    lat_en = 100
+    if get_from_sim == False:
+        Ls     = [4.3]
+        lat_st = 80  
+        lat_en = 100
+    else:
+        Ls     = [const.L]
+        lat_st = 90 - const.theta_xmax * 180./np.pi
+        lat_en = 90 + const.theta_xmax * 180./np.pi
     
     plt.figure()
     plt.gcf().gca().add_artist(plt.Circle((0,0), 1.0, color='k'))
@@ -1134,7 +1205,7 @@ def plot_dipole_field_line(length=True):
         length = 0
         for ii in range(idx_start, idx_end):
             length += r[ii] * dtheta * np.pi / 180
-        plt.title('Arclength from {} deg to {} deg at L = {} : {:>5.2f} R_E'.format(lat_st, lat_en, L, length))
+        plt.title('Arclength MLAT {} to {} deg at L = {} : {:>5.2f} R_E'.format(90 - lat_st, 90 + lat_en, L, length))
     return
 
 
@@ -2443,7 +2514,7 @@ if __name__ == '__main__':
     #test_curl_B()
     #test_curl_E()
     #test_grad_P()
-    test_grad_P_with_init_loading()
+    #test_grad_P_with_init_loading()
     #test_density_and_velocity_deposition()
     #check_density_deposition()
     #visualize_inhomogenous_B()
@@ -2473,7 +2544,7 @@ if __name__ == '__main__':
     #smart_plot_2D_planes()
     #smart_plot_3D()
     #check_directions()
-
+    plot_dipole_field_line(length=True)
 # =============================================================================
 #     init_pos, init_vel, time, pos_history, vel_history, mag_history,\
 #         DT, max_t, POS_gphase, VEL_gphase = do_particle_run(max_rev=1, v_mag=10.0, pitch=41.0, dt_mult=1.0)
