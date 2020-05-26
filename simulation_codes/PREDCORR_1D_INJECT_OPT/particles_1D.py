@@ -7,10 +7,11 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ratios, kB,\
-                                        B_eq, a, particle_boundary, mass, Tper, Tpar
+                                        B_eq, a, mass, Tper, Tpar, homogenous, loss_cone_xmax
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
+from init_1D   import get_gyroangle_from_velocity
 
 
 
@@ -175,12 +176,6 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
     vel[2, :] += v_prime[0, :] * S[1, :] - v_prime[1, :] * S[0, :]
     
     vel[:, :] += qmi[:] * Ep[:, :]                                           # Second E-field half-push
-    
-    # Zero velocity of killed particles if reflection not enabled
-    if particle_boundary != 1:
-        for ii in range(vel.shape[1]):
-            if idx[ii] < 0:
-                vel[:, ii] *= 0.
     return
 
 
@@ -218,9 +213,8 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
     they'll be reinit at.
     
     NOTE :: This reinitialization thing is super slow. More efficient way to code it?
-    
-    NOTE :: Also got rid of the convert_hot to cold thing for now, too tricky to code
-            efficiently
+            Maybe initialize array of n_ppc / 2 samples for each species, to at least vectorize it
+            Count each one being used, start generating new ones if it runs out (but it shouldn't)
     '''
     pos[0, :] += vel[0, :] * DT
     pos[1, :] += vel[1, :] * DT
@@ -229,36 +223,43 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
     for ii in nb.prange(pos.shape[1]):
         # Particle boundary conditions
         if (pos[0, ii] < xmin or pos[0, ii] > xmax):
-            
-            # Absorb
-            if particle_boundary == 0:              
-                vel[:, ii] *= 0          			       # Zero particle velocity
-                idx[ii]    -= 128                          # Fold index to negative values (preserves species ID)
-                pos[0, ii]  = np.sign(pos[0, ii]) * xmax   # Put particle directly on boundary (this assumes xmin = xmax)
+            # Reinitialize
+            if homogenous == False: 
                 
-            # Reflect
-            elif particle_boundary == 1:            
+                # Fix position
                 if pos[0, ii] > xmax:
                     pos[0, ii] = 2*xmax - pos[0, ii]
                 elif pos[0, ii] < xmin:
                     pos[0, ii] = 2*xmin - pos[0, ii]
-                    
-                # Re-initialize velocity
+                   
+                # Re-initialize velocity: Vel_x sign so it doesn't go back into boundary
                 sf_per     = np.sqrt(kB *  Tper[idx[ii]] /  mass[idx[ii]])
                 sf_par     = np.sqrt(kB *  Tpar[idx[ii]] /  mass[idx[ii]])
-
-                # If posx negative, velx positive.
-                # Vel always opposite of pos sign
-                # This only works for cold. For hot, need some sort of rejection method
-                vel[0, ii] = np.abs(np.random.normal(0, sf_par)) * (- np.sign(pos[0, ii]))
-                vel[1, ii] = np.random.normal(0, sf_per)
-                vel[2, ii] = np.random.normal(0, sf_per)
+                
+                if temp_type[idx[ii]] == 0:
+                    vel[0, ii] = np.abs(np.random.normal(0, sf_par)) * (- np.sign(pos[0, ii]))
+                    vel[1, ii] =        np.random.normal(0, sf_per)
+                    vel[2, ii] =        np.random.normal(0, sf_per)
+                    v_perp     = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
+                else:
+                    particle_PA = 0.0
+                    while np.abs(particle_PA) < loss_cone_xmax:
+                        vel[0, ii]  = np.abs(np.random.normal(0, sf_par)) * (- np.sign(pos[0, ii]))
+                        vel[1, ii]  =        np.random.normal(0, sf_per)
+                        vel[2, ii]  =        np.random.normal(0, sf_per)
+                        
+                        v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
+                        particle_PA = np.arctan(v_perp / vel[0, ii])                   # Calculate particle PA's
                     
                 # Don't foget : Also need to reinitialize position gyrophase (pos[1:2])
-                
+                B0x         = eval_B0x(pos[0, ii])
+                gyangle     = get_gyroangle_from_velocity(vel[:, ii])
+                rL          = v_perp / (qm_ratios[idx] * B0x)
+                pos[1, ii]  = rL * np.cos(gyangle)
+                pos[2, ii]  = rL * np.sin(gyangle)
                     
             # Mario (Periodic)
-            elif particle_boundary == 2:            
+            else:            
                 if pos[0, ii] > xmax:
                     pos[0, ii] += xmin - xmax
                 elif pos[0, ii] < xmin:

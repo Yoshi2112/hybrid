@@ -50,8 +50,8 @@ def calc_losses(v_para, v_perp, B0x, st=0):
 
 @nb.njit()
 def get_atan(y, x):
-    v = np.zeros(N)
-    for ii in range(N):
+    v = np.zeros(y.shape[0])
+    for ii in range(y.shape[0]):
         if x[ii] > 0:
             v[ii] = np.arctan(y[ii] / x[ii])
         elif y[ii] >= 0 and x[ii] < 0:
@@ -71,7 +71,7 @@ def get_atan(y, x):
 @nb.njit()
 def get_gyroangle_from_velocity(vel):
     '''
-    Vel is a (3,N) vector of particle velocities in 3-space
+    Vel is a (3,N) vector of 3-velocities for N-particles
     '''
     vel_gphase = (get_atan(vel[2], vel[1]) * 180. / np.pi + 90.)%360.
     return (vel_gphase * np.pi / 180.)
