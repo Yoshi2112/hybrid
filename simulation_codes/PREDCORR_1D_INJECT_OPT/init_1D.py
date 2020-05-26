@@ -49,28 +49,45 @@ def calc_losses(v_para, v_perp, B0x, st=0):
 
 @nb.njit()
 def get_atan(y, x):
-    v = np.zeros(y.shape[0])
-    for ii in range(y.shape[0]):
-        if x[ii] > 0:
-            v[ii] = np.arctan(y[ii] / x[ii])
-        elif y[ii] >= 0 and x[ii] < 0:
-            v[ii] = np.pi + np.arctan(y[ii] / x[ii])
-        elif y[ii] < 0 and x[ii] < 0:
-            v[ii] = -np.pi + np.arctan(y[ii] / x[ii])
-        elif y[ii] > 0 and x[ii] == 0:
-            v[ii] = np.pi/2
-        elif y[ii] < 0 and x[ii] == 0:
-            v[ii] = -np.pi/2
-            
-        if v[ii] < 0:
-            v[ii] += 2*np.pi
+    '''
+    Returns proper quadrant arctan in radians. Operates on single y, x
+    '''
+    if x > 0:
+        v = np.arctan(y / x)
+    elif y >= 0 and x < 0:
+        v = np.pi + np.arctan(y / x)
+    elif y < 0 and x < 0:
+        v = -np.pi + np.arctan(y / x)
+    elif y > 0 and x == 0:
+        v = np.pi/2
+    elif y < 0 and x == 0:
+        v = -np.pi/2
+        
+    if v < 0:
+        v += 2*np.pi
     return v
     
 
 @nb.njit()
-def get_gyroangle_from_velocity(vel):
+def get_gyroangle_array(vel):
     '''
     Vel is a (3,N) vector of 3-velocities for N-particles
+    
+    Calculates in radians, rounds in degrees, returns in radians.
+    WHY!???
+    '''
+    vel_gphase = np.zeros(vel.shape[1], dtype=nb.float64)
+    for ii in range(vel.shape[1]):
+        vel_gphase[ii] = (get_atan(vel[2, ii], vel[1, ii]) * 180. / np.pi + 90.)%360.
+    return (vel_gphase * np.pi / 180.)
+
+@nb.njit()
+def get_gyroangle_single(vel):
+    '''
+    Vel is a (3,N) vector of 3-velocities for N-particles
+    
+    Calculates in radians, rounds in degrees, returns in radians.
+    WHY!???
     '''
     vel_gphase = (get_atan(vel[2], vel[1]) * 180. / np.pi + 90.)%360.
     return (vel_gphase * np.pi / 180.)
@@ -192,7 +209,7 @@ def uniform_gaussian_distribution_quiet():
     print('Initializing particles off-axis')
     B0x     = fields.eval_B0x(pos[0])
     v_perp  = np.sqrt(vel[1] ** 2 + vel[2] ** 2)
-    gyangle = get_gyroangle_from_velocity(vel)
+    gyangle = get_gyroangle_array(vel)
     rL      = v_perp / (qm_ratios[idx] * B0x)
     pos[1]  = rL * np.cos(gyangle)
     pos[2]  = rL * np.sin(gyangle)
@@ -276,13 +293,13 @@ def initialize_fields():
         Ve     -- Electron fluid velocity moment: Calculated as part of E-field update equation
         Te     -- Electron temperature          : Calculated as part of E-field update equation          
     '''
-    B       = np.zeros((NC + 1, 3), dtype=np.float64)
-    E_int   = np.zeros((NC    , 3), dtype=np.float64)
-    E_half  = np.zeros((NC    , 3), dtype=np.float64)
+    B       = np.zeros((NC + 1, 3), dtype=nb.float64)
+    E_int   = np.zeros((NC    , 3), dtype=nb.float64)
+    E_half  = np.zeros((NC    , 3), dtype=nb.float64)
     
-    Ve      = np.zeros((NC, 3), dtype=np.float64)
-    Te      = np.ones(  NC,     dtype=np.float64) * Te0_scalar
-    Te0     = np.ones(  NC,     dtype=np.float64) * Te0_scalar
+    Ve      = np.zeros((NC, 3), dtype=nb.float64)
+    Te      = np.ones(  NC,     dtype=nb.float64) * Te0_scalar
+    Te0     = np.ones(  NC,     dtype=nb.float64) * Te0_scalar
     return B, E_int, E_half, Ve, Te, Te0
 
 

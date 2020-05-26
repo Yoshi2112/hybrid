@@ -31,7 +31,7 @@ te0_equil         = False                         # Initialize te0 to be in equi
 ### SIMULATION PARAMETERS ###
 NX        = 512                             # Number of cells - doesn't include ghost cells
 ND        = 128                             # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 20                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+max_rev   = 25                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell
 r_A       = 100e3                           # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics

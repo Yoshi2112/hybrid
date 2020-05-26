@@ -59,7 +59,7 @@ if __name__ == '__main__':
             save.save_field_data(sim_time, DT, field_save_iter, qq, Ji, E_int,
                                  B, Ve, Te, q_dens, damping_array)
         
-        if qq%100 == 0:            
+        if qq%1 == 0:            
             running_time = int(timer() - start_time)
             hrs          = running_time // 3600
             rem          = running_time %  3600

@@ -237,8 +237,8 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
                     
                 # Don't foget : Also need to reinitialize position gyrophase (pos[1:2])
                 B0x         = eval_B0x(pos[0, ii])
-                gyangle     = init.get_gyroangle_from_velocity(vel[:, ii])
-                rL          = v_perp / (qm_ratios[idx] * B0x)
+                gyangle     = init.get_gyroangle_single(vel[:, ii])
+                rL          = v_perp / (qm_ratios[idx[ii]] * B0x)
                 pos[1, ii]  = rL * np.cos(gyangle)
                 pos[2, ii]  = rL * np.sin(gyangle)
                     
