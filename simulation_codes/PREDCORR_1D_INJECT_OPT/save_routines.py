@@ -13,7 +13,7 @@ from shutil import rmtree
 import simulation_parameters_1D as const
 from   simulation_parameters_1D import drive, save_path, NX, ND, NC, ne, density, save_particles, save_fields
 from   simulation_parameters_1D import idx_start, idx_end, Nj, species_lbl, temp_type, dist_type, mass, charge,\
-                                       drift_v, Tpar, Tper, temp_color, nsp_ppc, Bc, N_species, orbit_res, particle_boundary
+                                       drift_v, Tpar, Tper, temp_color, nsp_ppc, Bc, N_species, orbit_res
 
 
 def manage_directories():
@@ -51,13 +51,6 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
     for folder in [d_path, f_path, p_path]:
         if os.path.exists(folder) == False:                               # Create data directories
             os.makedirs(folder)
-    
-    if   particle_boundary == 0:
-        rstring = 'absorptive'
-    elif particle_boundary == 1:
-        rstring = 'reflective'
-    elif particle_boundary == 2:
-        rstring = 'periodic'
         
     # Single parameters
     params = dict([('seed', const.seed),
@@ -95,7 +88,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
                    ('method_type', 'PREDCORR_PARABOLIC'),
                    ('particle_shape', 'TSC'),
                    ('boundary_type', 'damped'),
-                   ('particle_boundary', rstring),
+                   ('particle_boundary', 'Open flux'),
                    ('run_time', None),
                    ])
 

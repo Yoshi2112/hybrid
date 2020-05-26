@@ -14,7 +14,7 @@ import diagnostics as diag
 import particles_1D as particles
 import fields_1D    as fields
 
-from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_loss,   \
+from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A,   \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
                                      qm_ratios, freq_res, rc_hwidth, temp_type, Te0_scalar, ne, q
 
@@ -26,8 +26,7 @@ def calc_losses(v_para, v_perp, B0x, st=0):
     indices of particles outside the loss cone.
     '''
     alpha        = np.arctan(v_perp / v_para)                   # Calculate particle PA's
-    loss_cone    = np.arcsin(np.sqrt(B0x / B_loss))             # Loss cone per particle (based on B0 at particle)
-    #pdb.set_trace()
+    loss_cone    = np.arcsin(np.sqrt(B0x / B_A))                # Loss cone per particle (based on B0 at particle)
     
     in_loss_cone = np.zeros(v_para.shape[0], dtype=nb.int32)
     for ii in range(v_para.shape[0]):
@@ -77,19 +76,20 @@ def get_gyroangle_from_velocity(vel):
     return (vel_gphase * np.pi / 180.)
 
 
+@nb.njit()
 def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
     '''
     Takes in a Maxwellian or pseudo-maxwellian distribution. Outputs the number
     and indexes of any particle inside the loss cone
     '''
     B0x    = fields.eval_B0x(pos[0, st: en])
-    N_loss = const.N_species[jj]
-                
+    N_loss = 1
+
     while N_loss > 0:
         v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
         
         N_loss, loss_idx = calc_losses(vel[0, st: en], v_perp, B0x, st=st)
-        
+
         # Catch for a particle on the boundary : Set 90 degree pitch angle (gyrophase shouldn't overly matter)
         if N_loss == 1:
             if abs(pos[0, loss_idx[0]]) == const.xmax:
@@ -98,14 +98,20 @@ def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
                 vel[1, loss_idx[0]] = np.sqrt(vel[0, ww] ** 2 + vel[1, ww] ** 2 + vel[2, ww] ** 2)
                 vel[2, loss_idx[0]] = 0.
                 N_loss = 0
-                            
-        if N_loss != 0:                        
-            vel[0, loss_idx] = np.random.normal(0., sf_par, N_loss)
-            vel[1, loss_idx] = np.random.normal(0., sf_per, N_loss)
-            vel[2, loss_idx] = np.random.normal(0., sf_per, N_loss)
+
+        if N_loss != 0:   
+            new_vx = np.random.normal(0., sf_par, N_loss)             
+            new_vy = np.random.normal(0., sf_per, N_loss)
+            new_vz = np.random.normal(0., sf_per, N_loss)
+            
+            for ii in range(N_loss):
+                vel[0, loss_idx[ii]] = new_vx[ii]
+                vel[1, loss_idx[ii]] = new_vy[ii]
+                vel[2, loss_idx[ii]] = new_vz[ii]
     return
 
 
+@nb.njit()
 def uniform_gaussian_distribution_quiet():
     '''Creates an N-sampled normal distribution across all particle species within each simulation cell
 
@@ -125,9 +131,9 @@ def uniform_gaussian_distribution_quiet():
 
     # Could use temp_type[jj] == 1 for RC LCD only
     '''
-    pos = np.zeros((3, N), dtype=np.float64)
-    vel = np.zeros((3, N), dtype=np.float64)
-    idx = np.zeros(N,      dtype=np.int8)
+    pos = np.zeros((3, N), dtype=nb.float64)
+    vel = np.zeros((3, N), dtype=nb.float64)
+    idx = np.zeros(N,      dtype=nb.int8)
     np.random.seed(seed)
 
     for jj in range(Nj):
@@ -194,7 +200,7 @@ def uniform_gaussian_distribution_quiet():
     return pos, vel, idx
 
 
-#@nb.njit()
+@nb.njit()
 def initialize_particles():
     '''Initializes particle arrays.
     
@@ -212,14 +218,14 @@ def initialize_particles():
     '''
     pos, vel, idx = uniform_gaussian_distribution_quiet()
     
-    Ie         = np.zeros(N,      dtype=np.uint16)
-    Ib         = np.zeros(N,      dtype=np.uint16)
-    W_elec     = np.zeros((3, N), dtype=np.float64)
-    W_mag      = np.zeros((3, N), dtype=np.float64)
+    Ie         = np.zeros(N,      dtype=nb.uint16)
+    Ib         = np.zeros(N,      dtype=nb.uint16)
+    W_elec     = np.zeros((3, N), dtype=nb.float64)
+    W_mag      = np.zeros((3, N), dtype=nb.float64)
     
-    Bp      = np.zeros((3, N), dtype=np.float64)
-    Ep      = np.zeros((3, N), dtype=np.float64)
-    temp_N  = np.zeros((N),    dtype=np.float64)
+    Bp      = np.zeros((3, N), dtype=nb.float64)
+    Ep      = np.zeros((3, N), dtype=nb.float64)
+    temp_N  = np.zeros((N),    dtype=nb.float64)
     
     particles.assign_weighting_TSC(pos, Ie, W_elec)
     return pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, temp_N
@@ -273,13 +279,6 @@ def initialize_fields():
     B       = np.zeros((NC + 1, 3), dtype=np.float64)
     E_int   = np.zeros((NC    , 3), dtype=np.float64)
     E_half  = np.zeros((NC    , 3), dtype=np.float64)
-
-# =============================================================================
-#     # Set initial B0
-#     B[:, 0] = Bc[:, 0]
-#     B[:, 1] = Bc[:, 1]
-#     B[:, 2] = Bc[:, 2]
-# =============================================================================
     
     Ve      = np.zeros((NC, 3), dtype=np.float64)
     Te      = np.ones(  NC,     dtype=np.float64) * Te0_scalar
@@ -464,7 +463,7 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
    
     POS, VEL, IDX = uniform_gaussian_distribution_quiet()
-    
+    print('Successful initialization')
     V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
     V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
     V_PARA = VEL[0] / va
@@ -490,7 +489,7 @@ if __name__ == '__main__':
     
     node_number = 0
     
-    diag.check_cell_velocity_distribution_2D(POS, VEL, node_number=None, jj=1, save=True)
+    #diag.check_cell_velocity_distribution_2D(POS, VEL, node_number=None, jj=1, save=True)
     
 # =============================================================================
 #     for jj in range(const.Nj):

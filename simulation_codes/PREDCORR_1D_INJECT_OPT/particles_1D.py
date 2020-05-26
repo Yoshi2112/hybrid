@@ -11,8 +11,8 @@ from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ra
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
-from init_1D   import get_gyroangle_from_velocity
-
+#from init_1D   import get_gyroangle_from_velocity
+import init_1D as init
 
 
 @nb.njit()
@@ -194,26 +194,10 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
         W_elec -- Particle weighting array (Also output)
         
     Note: This function also controls what happens when a particle leaves the 
-    simulation boundary with the particle_boundary variable:
-        
-    particle_boundary == 0 :: Particle is "absorbed", velocity set to zero and
-    index becomes negative
+    simulation boundary.
     
-    particle_boundary == 1 :: Particle is "reflected". Cold particles are truly
-    reflected (vx changes sign). Hot particles are converted to cold particles
-    by folding their index negative, zeroing their parallel velocity, and
-    randomly reinitializing their perpendicular velocity. 
-    
-    particle_boundary == 2 :: "Mario" particles that come out of the opposite
-    boundary that they disappear into. Only used for homogenous B-field.    
-    
-    NOTE :: Currently this reinit is hardcoded for the cold proton values. More
-    changes will be required if multiple hot species (helium, oxygen, etc.)
-    become included. Maybe include a "cooldown" array stating at what T_per
-    they'll be reinit at.
-    
-    NOTE :: This reinitialization thing is super slow. More efficient way to code it?
-            Maybe initialize array of n_ppc / 2 samples for each species, to at least vectorize it
+    NOTE :: This reinitialization thing is super unoptimized and inefficient.
+            Maybe initialize array of n_ppc samples for each species, to at least vectorize it
             Count each one being used, start generating new ones if it runs out (but it shouldn't)
     '''
     pos[0, :] += vel[0, :] * DT
@@ -253,7 +237,7 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
                     
                 # Don't foget : Also need to reinitialize position gyrophase (pos[1:2])
                 B0x         = eval_B0x(pos[0, ii])
-                gyangle     = get_gyroangle_from_velocity(vel[:, ii])
+                gyangle     = init.get_gyroangle_from_velocity(vel[:, ii])
                 rL          = v_perp / (qm_ratios[idx] * B0x)
                 pos[1, ii]  = rL * np.cos(gyangle)
                 pos[2, ii]  = rL * np.sin(gyangle)

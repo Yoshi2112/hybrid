@@ -9,7 +9,8 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Narrowing the loss cone since the simulation space only counts for a small section of the flux tube.'''
+run_description = '''Testing TRUE open fluxes at boundary. Simulation space is only small part of field line, need
+                     to consider particles with mirror point outside small MLAT window.'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
@@ -20,7 +21,7 @@ save_fields       = 1                             # Save plot flag    : To ensur
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
 
-## DIAGNOSTIC FLAGS :: DOUBLE CHECK BEFORE EACH RUN! ##
+## DIAGNOSTIC FLAGS ##
 supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
