@@ -29,7 +29,7 @@ disable_waves     = False                         # Zeroes electric field soluti
 shoji_approx      = False                         # Changes solution used for calculating particle B0r (1D vs. 3D)
 te0_equil         = False                         # Initialize te0 to be in equilibrium with density
 source_smoothing  = True                          # Smooth source terms with 3-point Gaussian filter
-reflect           = False                         # 'Reflects' particles at edges by randomizing their gyrophase
+reflect           = False                         # THIS IS BROKEN!!! 'Reflects' particles at edges by randomizing their gyrophase
 
 
 ### SIMULATION PARAMETERS ###

@@ -128,7 +128,7 @@ def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
     return
 
 
-#@nb.njit()
+@nb.njit()
 def uniform_gaussian_distribution_quiet():
     '''Creates an N-sampled normal distribution across all particle species within each simulation cell
 

@@ -6,6 +6,7 @@ Created on Fri Sep 22 11:00:58 2017
 """
 import numpy as np
 import sys
+from os import system
 
 ### RUN DESCRIPTION ###
 run_description = '''Marginal instability test for 25/07/2013 event -- Maximum growth paramters (high growth expected)'''
