@@ -1,4 +1,5 @@
 import os
+import sys
 import numpy as np
 import numba as nb
 import pickle
@@ -14,7 +15,7 @@ The global calls allow variables to be accessed in the main script without
 clogging up its namespace - i.e. run-specific parameters are called by
 using e.g. cf.B0
 '''
-def load_run(drive, series, run_num, extract_arrays=True, print_summary=True):
+def load_run(drive, series, run_num, extract_arrays=True, print_summary=True, overwrite_summary=False):
     manage_dirs(drive, series, run_num)
     load_simulation_params()
     load_species_params()
@@ -24,7 +25,7 @@ def load_run(drive, series, run_num, extract_arrays=True, print_summary=True):
         extract_all_arrays()
         
     if print_summary == True:
-        output_simulation_parameter_file(series, run_num)
+        output_simulation_parameter_file(series, run_num, overwrite_summary=overwrite_summary)
     return
 
 
@@ -197,7 +198,7 @@ def initialize_simulation_variables():
     return
 
 
-def output_simulation_parameter_file(series, run):
+def output_simulation_parameter_file(series, run, overwrite_summary=False):
     output_file = run_dir + 'simulation_parameter_file.txt'
     
     mu0    = (4e-7) * np.pi  # Magnetic Permeability of Free Space (SI units)
@@ -207,10 +208,10 @@ def output_simulation_parameter_file(series, run):
     beta_par = (2 * mu0 * ne * kB * Tpar) / B_eq ** 2
     beta_per = (2 * mu0 * ne * kB * Tper) / B_eq ** 2
 
-    if os.path.exists(output_file) == True:
+    if os.path.exists(output_file) == True and overwrite_summary == False:
         pass
     else:
-        with open(output_file, 'a') as f:
+        with open(output_file, 'w') as f:
             print('HYBRID SIMULATION :: PARAMETER FILE', file=f)
             print('', file=f)
             print('Series[run]  :: {}[{}]'.format(series, run), file=f)
@@ -245,8 +246,8 @@ def output_simulation_parameter_file(series, run):
             print('', file=f)
             print('Electron Density     :: {} /cc'.format(ne*1e-6), file=f)
             print('Electron Treatment   :: {}'.format(ie), file=f)
-            print('Electron Temperature :: {}K'.format(Te0), file=f)
-            print('Electron Beta        :: {}'.format(beta_e), file=f)
+            #print('Electron Temperature :: {}K'.format(Te0), file=f)
+            #print('Electron Beta        :: {}'.format(beta_e), file=f)
             print('', file=f)
             print('Particle Parameters', file=f)
             print('Number of Species   :: {}'.format(Nj), file=f)
@@ -332,7 +333,8 @@ def extract_all_arrays():
     else:
         print('Extracting fields...')
         for ii in range(num_field_steps):
-            print('Extracting field timestep {}'.format(ii))
+            sys.stdout.write('\rExtracting field timestep {}'.format(ii))
+            sys.stdout.flush()
             
             B, E, Ve, Te, J, q_dns, sim_time, damp = load_fields(ii)
 
@@ -356,6 +358,7 @@ def extract_all_arrays():
             qdns_arr[ii, :]      = q_dns
             field_sim_time[ii]   = sim_time
             damping_array[ii, :] = damp
+        print('\nExtraction Complete.')
         
         np.save(temp_dir + 'bx' +'_array.npy', bx_arr)
         np.save(temp_dir + 'by' +'_array.npy', by_arr)

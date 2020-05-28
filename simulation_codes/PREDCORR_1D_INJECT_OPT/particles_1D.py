@@ -199,6 +199,11 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
     NOTE :: This reinitialization thing is super unoptimized and inefficient.
             Maybe initialize array of n_ppc samples for each species, to at least vectorize it
             Count each one being used, start generating new ones if it runs out (but it shouldn't)
+            
+    # 28/05/2020 :: Removed np.abs() and -np.sign() factors from v_x calculation
+    # See if that helps better simulate the distro function (will "lose" more
+    # particles at boundaries, but that'll just slow things down a bit - should
+    # still be valid)
     '''
     pos[0, :] += vel[0, :] * DT
     pos[1, :] += vel[1, :] * DT
@@ -220,19 +225,20 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
                 sf_per     = np.sqrt(kB *  Tper[idx[ii]] /  mass[idx[ii]])
                 sf_par     = np.sqrt(kB *  Tpar[idx[ii]] /  mass[idx[ii]])
                 
+
                 if temp_type[idx[ii]] == 0:
-                    vel[0, ii] = np.abs(np.random.normal(0, sf_par)) * (- np.sign(pos[0, ii]))
+                    vel[0, ii] = (np.random.normal(0, sf_par))# * (- np.sign(pos[0, ii]))
                     vel[1, ii] =        np.random.normal(0, sf_per)
                     vel[2, ii] =        np.random.normal(0, sf_per)
                     v_perp     = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
                 else:
                     particle_PA = 0.0
                     while np.abs(particle_PA) < loss_cone_xmax:
-                        vel[0, ii]  = np.abs(np.random.normal(0, sf_par)) * (- np.sign(pos[0, ii]))
+                        vel[0, ii]  = (np.random.normal(0, sf_par))# * (- np.sign(pos[0, ii]))
                         vel[1, ii]  =        np.random.normal(0, sf_per)
                         vel[2, ii]  =        np.random.normal(0, sf_per)
-                        
                         v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
+                        
                         particle_PA = np.arctan(v_perp / vel[0, ii])                   # Calculate particle PA's
                     
                 # Don't foget : Also need to reinitialize position gyrophase (pos[1:2])

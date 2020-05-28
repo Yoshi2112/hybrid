@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 from   matplotlib.gridspec import GridSpec
 import os
+import sys
 import pdb
 
 import analysis_backend as bk
@@ -1313,10 +1314,13 @@ def summary_plots(save=True, histogram=True):
         fullpath = path + filename
         
         if os.path.exists(fullpath):
-            print('Summary plot already present for timestep [{}]{}'.format(run_num, ii))
+            sys.stdout.write('\rSummary plot already present for timestep [{}]{}'.format(run_num, ii))
+            sys.stdout.flush()
             continue
         
-        print('Creating summary plot for particle timestep [{}]{}'.format(run_num, ii))
+        sys.stdout.write('\rCreating summary plot for particle timestep [{}]{}'.format(run_num, ii))
+        sys.stdout.flush()
+
         fig_size = 4, 7                                                             # Set figure grid dimensions
         fig = plt.figure(figsize=(20,10))                                           # Initialize Figure Space
         fig.patch.set_facecolor('w')   
@@ -1508,6 +1512,7 @@ def summary_plots(save=True, histogram=True):
         if save == True:
             plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
         plt.close('all')
+    print('\n')
     return
 
 
@@ -1529,27 +1534,33 @@ def standard_analysis_package(thesis=True):
         
     for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
         print('2D summary for {}'.format(comp))
-        plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
-        plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=20)
+        try:
+            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
+            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=15)
+        except:
+            pass
 
-# =============================================================================
-#         try:
-#             plot_wx(component=comp, saveas=disp_folder + 'wx_plot', save=True, linear_overlay=False,     pcyc_mult=1.1)
-#         except:
-#             pass
-#         
-#         plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=True, pcyc_mult=1.25)
-#         plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
-# =============================================================================
+        try:
+            plot_wx(component=comp, saveas=disp_folder + 'wx_plot', save=True, linear_overlay=False,     pcyc_mult=1.1)
+        except:
+            pass
         
-# =============================================================================
-#     plot_spatial_poynting(save=True, log=True)
-#     plot_spatial_poynting_helical(save=True, log=True)
-#     #plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
-#     
-#     plot_particle_loss_with_time()
-#     plot_initial_configurations()
-# =============================================================================
+        try:
+            plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=False, pcyc_mult=1.25)
+        except:
+            pass
+        
+        try:
+            plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
+        except:
+            pass
+     
+    if False:
+        plot_spatial_poynting(save=True, log=True)
+        plot_spatial_poynting_helical(save=True, log=True)
+        plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
+        
+        plot_initial_configurations()
     
     if False:
         check_fields()
@@ -3014,23 +3025,164 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
     return
 
 
+def plot_vi_vs_t_for_cell(cell=None, comp=0, it_max=None, jj=1, save=True, hexbin=False):
+    '''
+    For each point in time
+     - Collect particle information for particles near cell, plus time component
+     - Store in array
+     - Plot using either hexbin or hist2D
+     
+    Fix this: Make it better. Manually specify bins maybe? Or use 1D hist and compile at each timestep
+                now that I know how to make sure bin limits are the same at each time
+    '''
+    if cell == None:
+        cell = cf.NX//2
+    cell  += cf.ND
+    x_node = cf.E_nodes[cell]
+    
+    print('Calculating distribution vs. time...')
+    if it_max is None:
+        it_max = len(os.listdir(cf.particle_dir))
+       
+    vel_i = np.zeros(0, dtype=float)
+    time  = np.zeros(0, dtype=float)
+        
+    # Collect all particle information for specified cell
+    for ii in range(it_max):
+        sys.stdout.write('\rAccruing particle data from p-file {}'.format(ii))
+        sys.stdout.flush()
+
+        pos, vel, idx, ptime= cf.load_particles(ii)
+        
+        f = np.zeros((0, 3))    ;   count = 0
+        for ii in np.arange(cf.idx_start[jj], cf.idx_end[jj]):
+            if (abs(pos[0, ii] - x_node) <= 0.5*cf.dx):
+                f = np.append(f, [vel[0:3, ii]], axis=0)
+                count += 1
+                
+        vel_i = np.append(vel_i, f[:, comp])
+        time  = np.append(time, np.ones(count) * ptime)
+    print('\n')
+
+    vel_i /= cf.va
+
+    # Do the plotting
+    plt.ioff()
+    
+    xmin = time.min()
+    xmax = time.max()
+    ymin = vel_i.min()
+    ymax = vel_i.max()
+    
+    fig, ax = plt.subplots(figsize=(15, 10))
+    ax.set_title("F(v) vs. t :: {} :: Cell {}".format(cf.species_lbl[jj], cell))
+    
+    if hexbin == True:
+        im1 = ax.hexbin(time, vel_i, gridsize=50, cmap='inferno')
+        ax.axis([xmin, xmax, ymin, ymax])
+    else:
+        im1 = ax.hist2d(time, vel_i, bins=100)
+               
+    #cb = fig.colorbar(im1, ax=ax)
+    #cb.set_label('Counts')
+    if save == True:
+        save_dir = cf.anal_dir + '//Particle Distribution Histograms//Time//'
+        filename = 'v{}_vs_t_cell_{}_species_{}'.format(comp, cell, jj)
+        
+        if os.path.exists(save_dir) == False:
+            os.makedirs(save_dir)
+        
+        plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        print('Distribution histogram for v{}, cell {}, species {} saved'.format(comp, cell, jj))
+        plt.close('all')
+    else:
+        plt.show()
+    return
+
+
+def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
+    '''
+    For each point in time
+     - Collect particle information for particles near cell, plus time component
+     - Store in array
+     - Plot using either hexbin or hist2D
+     
+    Issue : Bins along v changing depending on time (how to set max/min bins? Specify arrays manually)
+    
+    '''
+    lt = ['x', 'y', 'z']
+    print('Calculating distribution vx{} vs. space for species {},...'.format(lt[comp], jj))
+    if it_max is None:
+        it_max = len(os.listdir(cf.particle_dir))
+              
+    cfac = 10 if cf.temp_type[jj] == 1 else 5
+    vlim = 10 if cf.temp_type[jj] == 1 else 5
+    
+    # Manually specify bin edges for histogram
+    vbins = np.linspace(-vlim, vlim, 101, endpoint=True)
+    xbins = np.linspace(cf.xmin/cf.dx, cf.xmax/cf.dx, cf.NX + 1, endpoint=True)
+        
+    # Collect all particle information for specified cell
+    for ii in range(it_max):
+        sys.stdout.write('\rAccruing particle data from p-file {}'.format(ii))
+        sys.stdout.flush()
+    
+        pos, vel, idx, ptime= cf.load_particles(ii)
+        
+        # Do the plotting
+        plt.ioff()
+        
+        fig, ax = plt.subplots(figsize=(15, 10))
+        ax.set_title('v{} vs. x :: {} :: Time {:.2f}s'.format(lt[comp], cf.species_lbl[jj], ptime))
+                    
+        counts, xedges, yedges, im1 = ax.hist2d(pos[0, :]/cf.dx, vel[0, :]/cf.va, 
+                                                bins=[xbins, vbins],
+                                                vmin=0, vmax=cf.nsp_ppc[jj] / cfac)
+
+        cb = fig.colorbar(im1, ax=ax)
+        cb.set_label('Counts')
+        
+        ax.set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
+        ax.set_ylim(-vlim, vlim)
+
+        if save == True:
+            save_dir = cf.anal_dir + '//Particle Distribution Histograms//For Every Time//Species {}//v{}//'.format(jj, lt[comp])
+            filename = 'v{}_vs_x_species_{}_{:05}'.format(lt[comp], jj, ii)
+            
+            if os.path.exists(save_dir) == False:
+                os.makedirs(save_dir)
+            
+            plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+            plt.close('all')
+        else:
+            plt.show()
+    
+    print('\n')
+    return
+
+
 ##%% MAIN
 if __name__ == '__main__':
-    drive       = 'G:'
-    
-    series      = 'archive/ABC_test_lowres_v5'
+    drive       = 'F:'
+    series      = 'edge_distro_test'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
     # To do : A comparison plot of the loss per time of the cold plasma runs
-    for run_num in [0]:#range(num_runs):
+    for run_num in range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
              
-        standard_analysis_package(thesis=True)
-        #summary_plots(save=True, histogram=False)
+        standard_analysis_package(thesis=False)
+        summary_plots(save=True, histogram=False)
+        
+        for cm in range(3):
+            for sp in range(2):
+                plot_vi_vs_x(comp=cm, it_max=None, jj=sp, save=True)
+                
+        #plot_vi_vs_t_for_cell(cell=0, comp=0, it_max=None, jj=1)
         
         #thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True)
         

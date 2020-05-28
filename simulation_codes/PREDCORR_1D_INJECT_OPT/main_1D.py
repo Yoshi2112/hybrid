@@ -8,6 +8,7 @@ import particles_1D  as particles
 import fields_1D     as fields
 import sources_1D    as sources
 import save_routines as save
+import diagnostics   as diag
 
 from simulation_parameters_1D import save_particles, save_fields, te0_equil
 
@@ -59,13 +60,16 @@ if __name__ == '__main__':
             save.save_field_data(sim_time, DT, field_save_iter, qq, Ji, E_int,
                                  B, Ve, Te, q_dens, damping_array)
         
-        if qq%1 == 0:            
+        if qq%50 == 0:            
             running_time = int(timer() - start_time)
             hrs          = running_time // 3600
             rem          = running_time %  3600
             
             mins         = rem // 60
             sec          = rem %  60
+            
+            #diag.check_cell_velocity_distribution_2D(pos, vel, node_number=[0], jj=1, show_cone=True, save=True, qq=qq)
+            #diag.check_cell_velocity_distribution_2D(pos, vel, node_number=[0], jj=0, show_cone=True, save=True, qq=qq)
             print('Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(qq, max_inc, hrs, mins, sec))
             
         qq       += 1
@@ -76,5 +80,32 @@ if __name__ == '__main__':
     if save_fields == 1 or save_particles == 1:
         save.add_runtime_to_header(runtime)
     print("Time to execute program: {0:.2f} seconds".format(runtime))
-
-
+    
+# =============================================================================
+#     #%%
+#     diag.check_position_distribution(pos)
+#     diag.check_cell_velocity_distribution_2D(pos, vel, node_number=None, jj=0, show_cone=True, save=True, qq=qq)
+#     diag.check_cell_velocity_distribution_2D(pos, vel, node_number=None, jj=1, show_cone=True, save=True, qq=qq)
+# 
+# #%%    
+#     import numpy as np
+#     import matplotlib.pyplot as plt
+# 
+#     plt.figure()
+#     plt.title('Normalized Charge Density and Temp')
+#     plt.plot(q_dens/q_dens.max(), marker='o', label='Density')
+#     plt.plot(Te/Te.max(), marker='x', label='Electron Temperature')
+#     plt.legend()
+#     
+#     plt.figure()
+#     plt.title('Electric Field')
+#     plt.plot(E_int, marker='o')
+#     
+#     plt.figure()
+#     plt.title('Magnetic Field')
+#     plt.plot(B, marker='o')
+#     
+#     plt.figure()
+#     plt.title('Current Density')
+#     plt.plot(Ji, marker='o')
+# =============================================================================

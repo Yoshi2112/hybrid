@@ -485,6 +485,37 @@ if __name__ == '__main__':
     V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
     V_PARA = VEL[0] / va
     
+    jj = 1
+    
+    x = V_PERP[idx_start[jj]: idx_end[jj]]
+    y = V_PARA[idx_start[jj]: idx_end[jj]]
+    
+    plt.ioff()    
+    xmin = x.min()
+    xmax = x.max()
+    ymin = y.min()
+    ymax = y.max()
+
+    fig, axs = plt.subplots(ncols=2, sharey=True, figsize=(7, 4))
+    fig.subplots_adjust(hspace=0.5, left=0.07, right=0.93)
+    ax = axs[0]
+    hb = ax.hexbin(x, y, gridsize=50, cmap='inferno')
+    ax.axis([xmin, xmax, ymin, ymax])
+    ax.set_title("F(v) :: {}".format(const.species_lbl[jj]))
+    cb = fig.colorbar(hb, ax=ax)
+    cb.set_label('counts')
+    
+    ax = axs[1]
+    hb = ax.hexbin(x, y, gridsize=50, bins='log', cmap='inferno')
+    ax.axis([xmin, xmax, ymin, ymax])
+    ax.set_title("With a log color scale")
+    cb = fig.colorbar(hb, ax=ax)
+    cb.set_label('log10(N)')
+    
+    plt.show()
+    
+    
+    
 # =============================================================================
 #     # Test gyrophase transformation
 #     pos_gphase  = get_atan(POS[2], POS[1]) * 180. / np.pi
@@ -499,12 +530,12 @@ if __name__ == '__main__':
 #     print(rel_angle.min())
 # =============================================================================
     
-    plt.ioff()
+    
     
     #fig2, ax2 = plt.subplots()
     #fig3, ax3 = plt.subplots()
     
-    node_number = 0
+    #node_number = 0
     
     #diag.check_cell_velocity_distribution_2D(POS, VEL, node_number=None, jj=1, save=True)
     

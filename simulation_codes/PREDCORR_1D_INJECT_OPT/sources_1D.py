@@ -5,7 +5,7 @@ Created on Fri Sep 22 17:55:15 2017
 @author: iarey
 """
 import numba as nb
-from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, q, ne, min_dens
+from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, q, ne, min_dens, source_smoothing
 
 
 @nb.njit()
@@ -72,12 +72,14 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
     07/05/2020 :: Changed damped source terms to give zero gradient at ND-NX
                     boundary. Remaining gradient probably a particle
                     initialization error.
+                    
+    28/05/2020 :: Implemented 3-point smoothing
     '''
     q_dens *= 0.
     Ji     *= 0.
     ni     *= 0.
     nu     *= 0.
-
+    
     deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu)
     
     # Sum contributions across species
@@ -105,6 +107,12 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
     q_dens[:ND]    = q_dens[ND + 1]
     q_dens[ND+NX:] = q_dens[ND+NX - 2]
         
+    # Implement smoothing filter: If enabled
+    if source_smoothing == True:
+        three_point_smoothing(q_dens, ni[:, 0])
+        for ii in range(3):
+            three_point_smoothing(Ji[:, ii], ni[:, 0])
+    
     # Set density minimum
     for ii in range(q_dens.shape[0]):
         if q_dens[ii] < min_dens * ne * q:
@@ -112,13 +120,43 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
     return
 
 
+@nb.njit()
+def three_point_smoothing(arr, temp):
+    '''
+    Three point Gaussian (1/4-1/2-1/4) smoothing function. arr, temp are both
+    1D arrays of size NC = NX + 2*ND (i.e. on the E-grid)
+    '''
+    NC = arr.shape[0]
+    
+    temp *= 0.0
+    for ii in range(1, NC - 1):
+        temp[ii] = 0.25*arr[ii - 1] + 0.5*arr[ii] + 0.25*arr[ii + 1]
+    arr[:]       = temp
+    return
 
 
-
-
-
-
-
+# =============================================================================
+# if __name__ == '__main__':
+#     import numpy as np
+#     import matplotlib.pyplot as plt
+#     
+#     test_NX  = 20
+#     test_arr = np.zeros((test_NX, 3), dtype=float)
+#     test_tmp = np.zeros((test_NX), dtype=float)
+#     
+#     test_arr[5, 0]  = 1.0
+#     test_arr[10, 1] = 4.0
+#     test_arr[15, 2] = 6.0
+#     
+#     plt.ioff()
+#     plt.figure()
+#     plt.plot(test_arr)
+#     for ii in range(3):
+#         three_point_smoothing(test_arr[:, ii], test_tmp)
+#     plt.plot(test_arr)
+#     plt.show()
+# =============================================================================
+    
 
 
 

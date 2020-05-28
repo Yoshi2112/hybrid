@@ -96,7 +96,7 @@ def check_cell_velocity_distribution(pos, vel, node_number=const.NX // 2, j=0): 
     return
 
 
-def check_cell_velocity_distribution_2D(pos, vel, node_number=const.NX // 2, jj=0, show_cone=False, save=False): #
+def check_cell_velocity_distribution_2D(pos, vel, node_number=const.NX // 2, jj=0, show_cone=False, save=False, qq=None): #
     '''
     Checks the velocity distribution of a particle species within a specified cell
     
@@ -105,6 +105,8 @@ def check_cell_velocity_distribution_2D(pos, vel, node_number=const.NX // 2, jj=
     '''
     if node_number is None:
         node_number = np.arange(const.NX)
+        
+    
         
     # Account for damping nodes. Node_number should be "real" node count.
     for node in node_number:
@@ -120,7 +122,7 @@ def check_cell_velocity_distribution_2D(pos, vel, node_number=const.NX // 2, jj=
                 count += 1
     
         plt.ioff()
-        print('{} particles counted for diagnostic'.format(count))
+        #print('{} particles counted for diagnostic'.format(count))
         fig, ax1 = plt.subplots(figsize=(15,10))
         fig.suptitle('Particle velocity distribution of species {} in cell {}'.format(jj, node))
         fig.patch.set_facecolor('w')
@@ -136,7 +138,7 @@ def check_cell_velocity_distribution_2D(pos, vel, node_number=const.NX // 2, jj=
         
         # Plot loss cone lines 
         B_at_nodes     = fields.eval_B0x(np.array([x_node + const.dx, x_node - const.dx]))
-        end_loss_cones = np.arcsin(np.sqrt(B_at_nodes/const.B_loss)).max()                    # Calculate max loss cone
+        end_loss_cones = np.arcsin(np.sqrt(B_at_nodes/const.B_A)).max()                    # Calculate max loss cone
         
         yst, yend = ax1.get_ylim()                  # Get V_PARA lims
         yarr      = np.linspace(yst, yend, 100)     # V_PARA values on axis
@@ -148,19 +150,22 @@ def check_cell_velocity_distribution_2D(pos, vel, node_number=const.NX // 2, jj=
         ax1.set_ylim(yst, yend)
         
         if save == True:
-            save_path = const.drive + '//' + const.save_path + '//' + 'run_{}//'.format(const.run)
+            save_path = const.drive + '//' + const.save_path + '//' + 'run_{}//LCD_plot_sp_{}//'.format(const.run, jj)
             
             if os.path.exists(save_path) == False:
                 os.makedirs(save_path)
                 
-            fig.savefig(save_path + 'LCD_cell_{:04}.png'.format(node))
+            if ii is None:
+                fig.savefig(save_path + 'LCD_cell_{:04}_sp{}.png'.format(node, jj))
+            else:
+                fig.savefig(save_path + 'LCD_cell_{:04}_sp{}_{:08}.png'.format(node, jj, qq))
             plt.close('all')
         else:
             plt.show()
     return
 
 
-def check_position_distribution(pos):
+def check_position_distribution(pos, num_bins=None):
     '''Checks the spatial distribution of a particle species j within the spatial domain
     
     Called by main_1D()
@@ -169,7 +174,9 @@ def check_position_distribution(pos):
         fig = plt.figure(figsize=(12,10))
         fig.suptitle('Configuration space distribution of {}'.format(const.species_lbl[j]))
         fig.patch.set_facecolor('w')
-        num_bins = const.NX
+        
+        if num_bins is None:
+            num_bins = const.NX
     
         ax_x = plt.subplot()
     

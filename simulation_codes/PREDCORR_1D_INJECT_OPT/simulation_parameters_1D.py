@@ -9,12 +9,11 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Testing TRUE open fluxes at boundary. Simulation space is only small part of field line, need
-                     to consider particles with mirror point outside small MLAT window.'''
+run_description = '''Testing why this weird distro thing at the edges. Compare to edge_distro_test[1]'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//new_loss_cone_test'    # Series save dir   : Folder containing all runs of a series
+save_path         = 'runs//smoothing_test'        # Series save dir   : Folder containing all runs of a series
 run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
@@ -27,11 +26,12 @@ homogenous        = False                         # Set B0 to homogenous (as tes
 disable_waves     = False                         # Zeroes electric field solution at each timestep
 shoji_approx      = False                         # Changes solution used for calculating particle B0r (1D vs. 3D)
 te0_equil         = False                         # Initialize te0 to be in equilibrium with density
+source_smoothing  = True                          # Smooth source terms with 3-point Gaussian filter
 
 ### SIMULATION PARAMETERS ###
-NX        = 512                             # Number of cells - doesn't include ghost cells
-ND        = 128                             # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 25                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+NX        = 128                             # Number of cells - doesn't include ghost cells
+ND        = 64                              # Damping region length: Multiple of NX (on each side of simulation domain)
+max_rev   = 5                               # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell
 r_A       = 100e3                           # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
@@ -42,8 +42,8 @@ rc_hwidth = 0                               # Ring current half-width in number 
   
 orbit_res = 0.02                            # Orbit resolution
 freq_res  = 0.02                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
-part_res  = 0.25                            # Data capture resolution in gyroperiod fraction: Particle information
-field_res = 0.20                            # Data capture resolution in gyroperiod fraction: Field information
+part_res  = 0.10                            # Data capture resolution in gyroperiod fraction: Particle information
+field_res = 0.10                            # Data capture resolution in gyroperiod fraction: Field information
 
 
 ### PARTICLE PARAMETERS ###
@@ -51,7 +51,7 @@ species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/label
 temp_color = ['blue', 'red']
 temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Hot particles get the LCD, cold are maxwellians.
 dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.array([200, 1000])                          # Number of particles per cell, per species
+nsp_ppc    = np.array([500, 10000])                         # Number of particles per cell, per species
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
@@ -197,8 +197,8 @@ lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L)))       # Anchor latitude in ra
 B_A        = B_eq * np.sqrt(4 - 3*np.cos(lat_A) ** 2)\
            / (np.cos(lat_A) ** 6)                        # Magnetic field at anchor point
 
-loss_cone_eq   = np.arcsin(np.sqrt(B_eq / B_A))*180 / np.pi # Equatorial loss cone in degrees
-loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))           # Equatorial loss cone in degrees
+loss_cone_eq   = np.arcsin(np.sqrt(B_eq   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
+loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
 
 #%%### INPUT TESTS AND CHECKS
 if rc_hwidth == 0:
