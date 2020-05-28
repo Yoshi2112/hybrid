@@ -3111,7 +3111,7 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
     
     '''
     lt = ['x', 'y', 'z']
-    print('Calculating distribution vx{} vs. space for species {},...'.format(lt[comp], jj))
+    print('Calculating distribution v{} vs. space for species {},...'.format(lt[comp], jj))
     if it_max is None:
         it_max = len(os.listdir(cf.particle_dir))
               
@@ -3144,6 +3144,9 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
         
         ax.set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
         ax.set_ylim(-vlim, vlim)
+        
+        ax.set_xlabel('Position (cell)')
+        ax.set_ylabel('Velocity ($v_A$)')
 
         if save == True:
             save_dir = cf.anal_dir + '//Particle Distribution Histograms//For Every Time//Species {}//v{}//'.format(jj, lt[comp])
@@ -3164,14 +3167,14 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
 ##%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'edge_distro_test'
+    series      = 'reflection_test'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
     # To do : A comparison plot of the loss per time of the cold plasma runs
-    for run_num in range(num_runs):
+    for run_num in [1]:#range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
              

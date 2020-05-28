@@ -6,7 +6,7 @@ Created on Fri Sep 22 17:23:44 2017
 """
 import numba as nb
 import numpy as np
-from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ratios, kB,\
+from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ratios, kB, reflect,\
                                         B_eq, a, mass, Tper, Tpar, homogenous, loss_cone_xmax
 from   sources_1D                import collect_moments
 
@@ -220,33 +220,45 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
                     pos[0, ii] = 2*xmax - pos[0, ii]
                 elif pos[0, ii] < xmin:
                     pos[0, ii] = 2*xmin - pos[0, ii]
-                   
-                # Re-initialize velocity: Vel_x sign so it doesn't go back into boundary
-                sf_per     = np.sqrt(kB *  Tper[idx[ii]] /  mass[idx[ii]])
-                sf_par     = np.sqrt(kB *  Tpar[idx[ii]] /  mass[idx[ii]])
                 
-
-                if temp_type[idx[ii]] == 0:
-                    vel[0, ii] = (np.random.normal(0, sf_par))# * (- np.sign(pos[0, ii]))
-                    vel[1, ii] =        np.random.normal(0, sf_per)
-                    vel[2, ii] =        np.random.normal(0, sf_per)
-                    v_perp     = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
-                else:
-                    particle_PA = 0.0
-                    while np.abs(particle_PA) < loss_cone_xmax:
-                        vel[0, ii]  = (np.random.normal(0, sf_par))# * (- np.sign(pos[0, ii]))
-                        vel[1, ii]  =        np.random.normal(0, sf_per)
-                        vel[2, ii]  =        np.random.normal(0, sf_per)
-                        v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
-                        
-                        particle_PA = np.arctan(v_perp / vel[0, ii])                   # Calculate particle PA's
+                if reflect == False:
+                    # Re-initialize velocity: Vel_x sign so it doesn't go back into boundary
+                    sf_per     = np.sqrt(kB *  Tper[idx[ii]] /  mass[idx[ii]])
+                    sf_par     = np.sqrt(kB *  Tpar[idx[ii]] /  mass[idx[ii]])
                     
-                # Don't foget : Also need to reinitialize position gyrophase (pos[1:2])
-                B0x         = eval_B0x(pos[0, ii])
-                gyangle     = init.get_gyroangle_single(vel[:, ii])
-                rL          = v_perp / (qm_ratios[idx[ii]] * B0x)
-                pos[1, ii]  = rL * np.cos(gyangle)
-                pos[2, ii]  = rL * np.sin(gyangle)
+                    if temp_type[idx[ii]] == 0:
+                        vel[0, ii] = (np.random.normal(0, sf_par))# * (- np.sign(pos[0, ii]))
+                        vel[1, ii] =        np.random.normal(0, sf_per)
+                        vel[2, ii] =        np.random.normal(0, sf_per)
+                        v_perp     = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
+                    else:
+                        particle_PA = 0.0
+                        while np.abs(particle_PA) < loss_cone_xmax:
+                            vel[0, ii]  = (np.random.normal(0, sf_par))# * (- np.sign(pos[0, ii]))
+                            vel[1, ii]  =        np.random.normal(0, sf_per)
+                            vel[2, ii]  =        np.random.normal(0, sf_per)
+                            v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
+                            
+                            particle_PA = np.arctan(v_perp / vel[0, ii])                   # Calculate particle PA's
+                        
+                    # Don't foget : Also need to reinitialize position gyrophase (pos[1:2])
+                    B0x         = eval_B0x(pos[0, ii])
+                    gyangle     = init.get_gyroangle_single(vel[:, ii])
+                    rL          = v_perp / (qm_ratios[idx[ii]] * B0x)
+                    pos[1, ii]  = rL * np.cos(gyangle)
+                    pos[2, ii]  = rL * np.sin(gyangle)
+                else:
+                    vel[0, ii] *= -1.0
+                    rL          = np.sqrt(pos[1, ii] ** 2 + pos[2, ii] ** 2)
+                    v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
+                    
+                    # Randomize new vy
+                    vel[1, ii]  = np.random.uniform(-v_perp, v_perp)
+                    vel[2, ii]  = np.sqrt(v_perp ** 2 - vel[1, ii] ** 2)
+                    
+                    gyangle     = init.get_gyroangle_single(vel[:, ii])
+                    pos[1, ii]  = rL * np.cos(gyangle)
+                    pos[2, ii]  = rL * np.sin(gyangle)
                     
             # Mario (Periodic)
             else:            

@@ -131,6 +131,10 @@ def three_point_smoothing(arr, temp):
     temp *= 0.0
     for ii in range(1, NC - 1):
         temp[ii] = 0.25*arr[ii - 1] + 0.5*arr[ii] + 0.25*arr[ii + 1]
+        
+    temp[0]      = temp[1]
+    temp[NC - 1] = temp[NC - 1]
+    
     arr[:]       = temp
     return
 

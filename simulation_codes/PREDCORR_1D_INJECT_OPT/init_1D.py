@@ -14,9 +14,9 @@ import diagnostics as diag
 import particles_1D as particles
 import fields_1D    as fields
 
-from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A,   \
+from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A, dist_type,  \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
-                                     qm_ratios, freq_res, rc_hwidth, temp_type, Te0_scalar, ne, q
+                                     qm_ratios, freq_res, rc_hwidth, temp_type, Te0_scalar, ne, q, N_species
 
 
 @nb.njit()
@@ -128,7 +128,7 @@ def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
     return
 
 
-@nb.njit()
+#@nb.njit()
 def uniform_gaussian_distribution_quiet():
     '''Creates an N-sampled normal distribution across all particle species within each simulation cell
 
@@ -148,62 +148,99 @@ def uniform_gaussian_distribution_quiet():
 
     # Could use temp_type[jj] == 1 for RC LCD only
     '''
-    pos = np.zeros((3, N), dtype=nb.float64)
-    vel = np.zeros((3, N), dtype=nb.float64)
-    idx = np.zeros(N,      dtype=nb.int8)
+    pos = np.zeros((3, N), dtype=np.float64)
+    vel = np.zeros((3, N), dtype=np.float64)
+    idx = np.zeros(N,      dtype=np.int8)
     np.random.seed(seed)
 
     for jj in range(Nj):
         idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle idx
-                
-        half_n = nsp_ppc[jj] // 2                     # Half particles per cell - doubled later
+        
         sf_par = np.sqrt(kB *  Tpar[jj] /  mass[jj])  # Scale factors for velocity initialization
         sf_per = np.sqrt(kB *  Tper[jj] /  mass[jj])
-       
-        if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
-            NC_load = NX
-        else:
-            if rc_hwidth == 0 or rc_hwidth > NX//2:   # Need to change this to be something like the FWHM or something
+        
+        if dist_type[jj] == 0:                            # Uniform position distribution (incl. limitied RC)
+            half_n = nsp_ppc[jj] // 2                     # Half particles per cell - doubled later
+            if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
                 NC_load = NX
             else:
-                NC_load = 2*rc_hwidth
-        
-        # Load particles in each applicable cell
-        acc = 0; offset  = 0
-        for ii in range(NC_load):
-            # Add particle if last cell (for symmetry)
-            if ii == NC_load - 1:
-                half_n += 1
-                offset  = 1
+                if rc_hwidth == 0 or rc_hwidth > NX//2:   # Need to change this to be something like the FWHM or something
+                    NC_load = NX
+                else:
+                    NC_load = 2*rc_hwidth
+            
+            # Load particles in each applicable cell
+            acc = 0; offset  = 0
+            for ii in range(NC_load):
+                # Add particle if last cell (for symmetry)
+                if ii == NC_load - 1:
+                    half_n += 1
+                    offset  = 1
+                    
+                # Particle index ranges
+                st = idx_start[jj] + acc
+                en = idx_start[jj] + acc + half_n
                 
-            # Particle index ranges
-            st = idx_start[jj] + acc
-            en = idx_start[jj] + acc + half_n
+                # Set position for half: Analytically uniform
+                for kk in range(half_n):
+                    pos[0, st + kk] = dx*(float(kk) / (half_n - offset) + ii)
+                
+                # Turn [0, NC] distro into +/- NC/2 distro
+                pos[0, st: en]-= NC_load*dx/2              
+                
+                # Set velocity for half: Randomly Maxwellian
+                vel[0, st: en] = np.random.normal(0, sf_par, half_n) +  drift_v[jj]
+                vel[1, st: en] = np.random.normal(0, sf_per, half_n)
+                vel[2, st: en] = np.random.normal(0, sf_per, half_n)
+    
+                # Set Loss Cone Distribution: Reinitialize particles in loss cone (move to a function)
+                if const.homogenous == False and temp_type[jj] == 1:
+                    LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj)
+                    
+                # Quiet start : Initialize second half
+                vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Invert velocities (v2 = -v1)
+                vel[1, en: en + half_n] = vel[1, st: en] * -1.0
+                vel[2, en: en + half_n] = vel[2, st: en] * -1.0
+                
+                pos[0, en: en + half_n] = pos[0, st: en]            # Other half, same position
+                
+                acc                    += half_n * 2
+        
+        else:
+            # Gaussian position distribution
+            # Remember :: N_species just gives a total number of species particles
+            # which was scaled by the size of rc_hwidth
+            if rc_hwidth == 0:
+                rc_hwidth_norm = NX // 2
+            else:
+                rc_hwidth_norm = rc_hwidth
             
-            # Set position for half: Analytically uniform
-            for kk in range(half_n):
-                pos[0, st + kk] = dx*(float(kk) / (half_n - offset) + ii)
+            half_n = N_species[jj] // 2
+            sigma  = rc_hwidth_norm*dx / (2 * np.sqrt(2 * np.log(2)))
             
-            # Turn [0, NC] distro into +/- NC/2 distro
-            pos[0, st: en]-= NC_load*dx/2              
+            st = idx_start[jj]
+            en = idx_start[jj] + half_n
             
-            # Set velocity for half: Randomly Maxwellian
+            pos[0, st: en] = np.random.normal(0, sigma, half_n)
             vel[0, st: en] = np.random.normal(0, sf_par, half_n) +  drift_v[jj]
             vel[1, st: en] = np.random.normal(0, sf_per, half_n)
             vel[2, st: en] = np.random.normal(0, sf_per, half_n)
-
-            # Set Loss Cone Distribution: Reinitialize particles in loss cone (move to a function)
+            
+            # Reinitialize particles outside simulation bounds
+            for ii in range(st, en):
+                while abs(pos[0, ii]) > const.xmax:
+                    pos[0, st: en] = np.random.normal(0, sigma)
+                    
             if const.homogenous == False and temp_type[jj] == 1:
-                LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj)
-                
+                    LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj)
+                    
             # Quiet start : Initialize second half
             vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Invert velocities (v2 = -v1)
             vel[1, en: en + half_n] = vel[1, st: en] * -1.0
             vel[2, en: en + half_n] = vel[2, st: en] * -1.0
             
             pos[0, en: en + half_n] = pos[0, st: en]            # Other half, same position
-            
-            acc                    += half_n * 2
+            pass
     
     # Set initial Larmor radius - rL from v_perp, distributed to y,z based on velocity gyroangle
     print('Initializing particles off-axis')
@@ -213,7 +250,7 @@ def uniform_gaussian_distribution_quiet():
     rL      = v_perp / (qm_ratios[idx] * B0x)
     pos[1]  = rL * np.cos(gyangle)
     pos[2]  = rL * np.sin(gyangle)
-
+    
     return pos, vel, idx
 
 
@@ -485,34 +522,38 @@ if __name__ == '__main__':
     V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
     V_PARA = VEL[0] / va
     
-    jj = 1
+    diag.check_position_distribution(POS)
     
-    x = V_PERP[idx_start[jj]: idx_end[jj]]
-    y = V_PARA[idx_start[jj]: idx_end[jj]]
-    
-    plt.ioff()    
-    xmin = x.min()
-    xmax = x.max()
-    ymin = y.min()
-    ymax = y.max()
-
-    fig, axs = plt.subplots(ncols=2, sharey=True, figsize=(7, 4))
-    fig.subplots_adjust(hspace=0.5, left=0.07, right=0.93)
-    ax = axs[0]
-    hb = ax.hexbin(x, y, gridsize=50, cmap='inferno')
-    ax.axis([xmin, xmax, ymin, ymax])
-    ax.set_title("F(v) :: {}".format(const.species_lbl[jj]))
-    cb = fig.colorbar(hb, ax=ax)
-    cb.set_label('counts')
-    
-    ax = axs[1]
-    hb = ax.hexbin(x, y, gridsize=50, bins='log', cmap='inferno')
-    ax.axis([xmin, xmax, ymin, ymax])
-    ax.set_title("With a log color scale")
-    cb = fig.colorbar(hb, ax=ax)
-    cb.set_label('log10(N)')
-    
-    plt.show()
+# =============================================================================
+#     jj = 1
+#     
+#     x = V_PERP[idx_start[jj]: idx_end[jj]]
+#     y = V_PARA[idx_start[jj]: idx_end[jj]]
+#     
+#     plt.ioff()    
+#     xmin = x.min()
+#     xmax = x.max()
+#     ymin = y.min()
+#     ymax = y.max()
+# 
+#     fig, axs = plt.subplots(ncols=2, sharey=True, figsize=(7, 4))
+#     fig.subplots_adjust(hspace=0.5, left=0.07, right=0.93)
+#     ax = axs[0]
+#     hb = ax.hexbin(x, y, gridsize=50, cmap='inferno')
+#     ax.axis([xmin, xmax, ymin, ymax])
+#     ax.set_title("F(v) :: {}".format(const.species_lbl[jj]))
+#     cb = fig.colorbar(hb, ax=ax)
+#     cb.set_label('counts')
+#     
+#     ax = axs[1]
+#     hb = ax.hexbin(x, y, gridsize=50, bins='log', cmap='inferno')
+#     ax.axis([xmin, xmax, ymin, ymax])
+#     ax.set_title("With a log color scale")
+#     cb = fig.colorbar(hb, ax=ax)
+#     cb.set_label('log10(N)')
+#     
+#     plt.show()
+# =============================================================================
     
     
     
