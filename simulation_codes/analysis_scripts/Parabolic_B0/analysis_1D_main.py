@@ -239,7 +239,9 @@ def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None):
                        norm=colors.LogNorm(vmin=1e-3, vmax=None), cmap='nipy_spectral')
         suffix = '_log'
     else:
-        im1 = ax.pcolormesh(x, t, arr, cmap='nipy_spectral', vmin=0, vmax=cf.B_eq*1e9)
+        vmin = arr.min()
+        vmax = arr.max()
+        im1 = ax.pcolormesh(x, t, arr, cmap='nipy_spectral', vmin=vmin, vmax=vmax)
         suffix = ''
     
     cb  = fig.colorbar(im1)
@@ -279,8 +281,7 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
     f  = np.fft.rfftfreq(ftime.shape[0], d=cf.dt_field)
     
     ## PLOT IT
-    fig = plt.figure(1, figsize=(15, 10))
-    ax  = fig.add_subplot(111)
+    fig, ax = plt.subplots(1, figsize=(15, 10))
 
     im1 = ax.pcolormesh(x, f, wx, cmap='nipy_spectral')      # Remove f[0] since FFT[0] >> FFT[1, 2, ... , k]
     fig.colorbar(im1)
@@ -288,6 +289,8 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
     lbl  = [r'$\Omega_{H^+}$', r'$\Omega_{He^+}$', r'$\Omega_{O^+}$']
     clr  = ['white', 'yellow', 'red']    
     M    = np.array([1., 4., 16.])
+    
+    pcyc = qi * cf.Bc[:, 0] / (2 * np.pi * mp)
     
     for ii in range(3):
         if cf.species_present[ii] == True:
@@ -308,15 +311,15 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
     ax.set_xlabel('x (m)')
     
     if pcyc_mult is not None:
-        ax.set_ylim(0, pcyc_mult*cyc[0])
+        ax.set_ylim(0, pcyc_mult*pcyc.max())
     else:
         ax.set_ylim(0, None)
-      
+
     ax.set_xlim(cf.grid_min, cf.grid_max)
     ax.axvline(cf.xmin, c='w', ls=':', alpha=1.0)
     ax.axvline(cf.xmax, c='w', ls=':', alpha=1.0)
     ax.axvline(cf.grid_mid, c='w', ls=':', alpha=0.75)   
-    
+
     if save == True:
         fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
@@ -347,126 +350,6 @@ def plot_kt(component='By', saveas='kt_plot', save=False):
     return
 
 
-def plot_wk(component='By', saveas='wk_plot' , dispersion_overlay=False, save=False, pcyc_mult=None):
-    plt.ioff()
-    
-    k, f, wk = disp.get_wk(component)
-
-    xlab = r'$k (\times 10^{-6}m^{-1})$'
-    ylab = r'f (Hz)'
-
-    fig = plt.figure(1, figsize=(15, 10))
-    ax  = fig.add_subplot(111)
-    
-    im1 = ax.pcolormesh(1e6*k[1:], f[1:], np.log10(wk[1:, 1:].real), cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
-    fig.colorbar(im1)
-    ax.set_title(r'$\omega/k$ Dispersion Plot :: {} component'.format(component.upper()), fontsize=14)
-    ax.set_ylabel(ylab)
-    ax.set_xlabel(xlab)
-    
-# =============================================================================
-#     # Doesn't work because cyclotron frequencies aren't constant in x
-#     clr  = ['white', 'yellow', 'red'] 
-#     lbl  = [r'$\Omega_{H^+}$', r'$\Omega_{He^+}$', r'$\Omega_{O^+}$']
-#     M    = np.array([1., 4., 16.])
-#     
-#     for ii in range(3):
-#         if cf.species_present[ii] == True:
-#             cyc  = q * cf.B_eq / (2 * np.pi * mp * M[ii])
-#             
-#             ax.axhline(cyc, linestyle='--', c=clr[ii], label=lbl[ii])
-#     
-#     if pcyc_mult is not None:
-#         ax.set_ylim(0, pcyc_mult*cyc[0])
-#     else:
-#         ax.set_ylim(0, None)
-#         
-#     if dispersion_overlay == True:
-#         '''
-#         Some weird factor of about 2pi inaccuracy? Is this inherent to the sim? Or a problem
-#         with linear theory? Or problem with the analysis?
-#         '''
-#         try:
-#             k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k)
-#             for ii in range(CPDR_solns.shape[1]):
-#                 ax.plot(k_vals, CPDR_solns[:, ii]*2*np.pi,      c='k', linestyle='--', label='CPDR')
-#                 ax.plot(k_vals, warm_solns[:, ii].real*2*np.pi, c='k', linestyle='-',  label='WPDR')
-#         except:
-#             pass
-#         
-#     ax.legend(loc=2, facecolor='grey')
-# =============================================================================
-    
-    ax.set_ylim(0, None)
-    
-    if save == True:
-        fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
-        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-        print('w-k saved')
-        plt.close('all')
-    return
-
-
-def plot_wk_AGU(component='By', saveas='wk_plot' , dispersion_overlay=False, save=False, pcyc_mult=None):
-    plt.ioff()
-    
-    tick_label_size = 14
-    mpl.rcParams['xtick.labelsize'] = tick_label_size 
-    
-    fontsize = 18
-    
-    k, f, wk = disp.get_wk(component)
-
-    xlab = r'$k (\times 10^{-6}m^{-1})$'
-    ylab = r'f (Hz)'
-
-    fig = plt.figure(1, figsize=(15, 10))
-    ax  = fig.add_subplot(111)
-    
-    im1 = ax.pcolormesh(1e6*k[1:], f[1:], np.log10(wk[1:, 1:].real), cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
-    fig.colorbar(im1).set_label(r'$log_{10}$(Power)', rotation=90, fontsize=fontsize)
-    ax.set_title(r'$\omega/k$ Dispersion Plot for {}'.format(component), fontsize=fontsize+4)
-    ax.set_ylabel(ylab, fontsize=fontsize)
-    ax.set_xlabel(xlab, fontsize=fontsize)
-    
-    clr  = ['black', 'green', 'red'] 
-    lbl  = [r'$f_{H^+}$', r'$f_{He^+}$', r'$f_{O^+}$']
-    M    = np.array([1., 4., 16.])
-    cyc  = qi * cf.B0 / (2 * np.pi * mp * M)
-    for ii in range(3):
-        if cf.species_present[ii] == True:
-            ax.axhline(cyc[ii], linestyle='--', c=clr[ii], label=lbl[ii])
-    
-    ax.set_xlim(0, None)
-    
-    if pcyc_mult is not None:
-        ax.set_ylim(0, pcyc_mult*cyc[0])
-    else:
-        ax.set_ylim(0, None)
-    
-    if dispersion_overlay == True:
-        '''
-        Some weird factor of about 2pi inaccuracy? Is this inherent to the sim? Or a problem
-        with linear theory? Or problem with the analysis?
-        '''
-        try:
-            k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k)
-            for ii in range(CPDR_solns.shape[1]):
-                ax.plot(k_vals, CPDR_solns[:, ii]*2*np.pi,      c='k', linestyle='--', label='CPDR')
-                ax.plot(k_vals, warm_solns[:, ii].real*2*np.pi, c='k', linestyle='-',  label='WPDR')
-        except:
-            pass
-        
-    ax.legend(loc=2, facecolor='white', prop={'size': fontsize})
-        
-    if save == True:
-        fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
-        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-        print('w-k for component {} saved'.format(component.lower()))
-        plt.close('all')
-    return
-
-
 def plot_dynamic_spectra(component='By', saveas='power_spectra', save=False, ymax=None, cell=None,
                          overlap=0.99, win_idx=None, slide_idx=None, df=50):
     
@@ -479,7 +362,7 @@ def plot_dynamic_spectra(component='By', saveas='power_spectra', save=False, yma
         os.makedirs(dynspec_folderpath)
         
     if cell is None:
-        cell = cf.NX // 2
+        cell = cf.NC // 2
         
     plt.ioff()
     
@@ -1534,33 +1417,24 @@ def standard_analysis_package(thesis=True):
         
     for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
         print('2D summary for {}'.format(comp))
-        try:
-            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
-            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=15)
-        except:
-            pass
+        
+        plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
+        plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=15)
 
-        try:
-            plot_wx(component=comp, saveas=disp_folder + 'wx_plot', save=True, linear_overlay=False,     pcyc_mult=1.1)
-        except:
-            pass
-        
-        try:
-            plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=False, pcyc_mult=1.25)
-        except:
-            pass
-        
-        try:
-            plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
-        except:
-            pass
-     
+        plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', save=True, linear_overlay=False, pcyc_mult=1.1)
+        plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , save=True, linear_overlay=False, pcyc_mult=None)
+
+        plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=False, pcyc_mult=1.25)
+
+        plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
+
+
     if False:
         plot_spatial_poynting(save=True, log=True)
         plot_spatial_poynting_helical(save=True, log=True)
-        plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
+        #plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
         
-        plot_initial_configurations()
+        #plot_initial_configurations()
     
     if False:
         check_fields()
@@ -1574,8 +1448,8 @@ def standard_analysis_package(thesis=True):
 
 def do_all_dynamic_spectra(ymax=None):
     
-    for component in ['Bx', 'By', 'Bz', 'Ex', 'Ey', 'Ez']:
-        for cell in np.arange(cf.NX):
+    for component in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
+        for cell in np.arange(cf.ND, cf.NX + cf.ND):
             plot_dynamic_spectra(component=component, ymax=ymax, save=True, cell=cell)
     return
 
@@ -3167,34 +3041,41 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
 ##%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'reflection_test'
+    series      = 'july_25_parabolic'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
     # To do : A comparison plot of the loss per time of the cold plasma runs
-    for run_num in [1]:#range(num_runs):
+    for run_num in [0, 1]:#range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
              
-        standard_analysis_package(thesis=False)
-        summary_plots(save=True, histogram=False)
+        #standard_analysis_package(thesis=False)
         
-        for cm in range(3):
-            for sp in range(2):
-                plot_vi_vs_x(comp=cm, it_max=None, jj=sp, save=True)
-                
+        do_all_dynamic_spectra(ymax=2.0)
+        do_all_dynamic_spectra(ymax=None)
+        
+# =============================================================================
+#         summary_plots(save=True, histogram=False)
+#         
+#         for cm in range(3):
+#             for sp in range(2):
+#                 plot_vi_vs_x(comp=cm, it_max=None, jj=sp, save=True)
+#            
+#         plot_initial_configurations()
+# =============================================================================
+            
         #plot_vi_vs_t_for_cell(cell=0, comp=0, it_max=None, jj=1)
         
-        #thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True)
+        
         
 # =============================================================================
 #         plot_adiabatic_parameter()
 #         plot_particle_loss_with_time()
 #         #plot_average_GC()
-#         
-#         plot_initial_configurations()
+#         thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True)
 #         plot_average_mu()
 # 
 #         try:
@@ -3244,8 +3125,7 @@ if __name__ == '__main__':
 
         #single_point_both_fields_AGU()
         
-        #do_all_dynamic_spectra(ymax=1.0)
-        #do_all_dynamic_spectra(ymax=None)
+        
         
         #ggg.get_linear_growth()
 

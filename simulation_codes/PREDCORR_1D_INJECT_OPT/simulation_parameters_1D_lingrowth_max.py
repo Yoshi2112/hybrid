@@ -9,13 +9,13 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Marginal instability test for 25/07/2013 event -- Maximum growth paramters (growth expected)'''
+run_description = '''Marginal instability test for 25/07/2013 event -- Maximum growth parameters :: LONGER DOMAIN'''
 
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//july_25_lingrowth_PARABOLIC'  # Series save dir   : Folder containing all runs of a series
-run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path         = 'runs//july_25_parabolic'     # Series save dir   : Folder containing all runs of a series
+run               = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
@@ -33,12 +33,12 @@ reflect           = False                         # THIS IS BROKEN!!! 'Reflects'
 
 
 ### SIMULATION PARAMETERS ###
-NX        = 512                              # Number of cells - doesn't include ghost cells
-ND        = 128                              # Damping region length: Multiple of NX (on each side of simulation domain)
+NX        = 1024                             # Number of cells - doesn't include ghost cells
+ND        = 512                              # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev   = 100                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
-L         = 5.00                             # Field line L shell
-r_A       = 100e3                           # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
+L         = 5.2                              # Field line L shell
+r_A       = 100e3                            # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
 B_eq      = None                            # Initial magnetic field at equator: None for L-determined value (in T)

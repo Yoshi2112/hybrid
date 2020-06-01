@@ -9,6 +9,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import os
+import pdb
 
 import analysis_backend as bk
 import analysis_config  as cf
@@ -28,18 +29,19 @@ e0  = 8.854e-12               # Epsilon naught - permittivity of free space
 Aim: To populate this script with plotting routines ONLY. Separate out the 
 processing/loading/calculation steps into other modules that can be called.
 '''
-def plot_tx(component='By', saveas='tx_plot', save=False, tmax=None, yunits='seconds'):
+def plot_tx(component='By', saveas='tx_plot', save=False, tmax=None, yunits='seconds', add_ND=False, ND=None):
     plt.ioff()    
+    
+    tx = cf.get_array(component)
+    
     fontsize = 18
     font     = 'monospace'
     
     tick_label_size = 14
     mpl.rcParams['xtick.labelsize'] = tick_label_size 
     mpl.rcParams['ytick.labelsize'] = tick_label_size 
-
-    tx = cf.get_array(component)
     
-    x  = np.arange(cf.NX) * cf.dx * 1e-6
+    x  = np.arange(cf.NX)
     
     if yunits == 'seconds':
         t    = cf.time_seconds_field
@@ -55,12 +57,27 @@ def plot_tx(component='By', saveas='tx_plot', save=False, tmax=None, yunits='sec
         tx *= 1e9
     else:
         tx *= 1e3
+
+    if add_ND == True:
+        
+        if ND is None:
+            ND = x.shape[0]
+            
+        new_tx = np.zeros((tx.shape[0], cf.NX + 2*ND), dtype=tx.dtype)
+        new_tx[:, cf.NX:cf.NX + ND] = tx
+        
+        new_x = np.arange(cf.NX + 2*ND)
+    else:
+        new_tx = tx
+        new_x  = x
+
     
     ## PLOT IT
-    fig = plt.figure(1, figsize=(15, 10))
-    ax  = fig.add_subplot(111)
+    fig, ax = plt.subplots(1, figsize=(15, 10))
 
-    im1 = ax.pcolormesh(x, t, tx, cmap='nipy_spectral')      # Remove f[0] since FFT[0] >> FFT[1, 2, ... , k]
+    vmin = tx.min()
+    vmax = tx.max()
+    im1 = ax.pcolormesh(new_x, t, new_tx, cmap='nipy_spectral', vmin=vmin, vmax=vmax)
     cb  = fig.colorbar(im1)
     
     if component[0] == 'B':
@@ -70,8 +87,12 @@ def plot_tx(component='By', saveas='tx_plot', save=False, tmax=None, yunits='sec
 
     ax.set_title('Field Plot :: {} Component'.format(component), fontsize=fontsize, family=font)
     ax.set_ylabel(ylab   , fontsize=fontsize, family=font, labelpad=15, rotation=0)
-    ax.set_xlabel('x ($\\times10^3$ km)', fontsize=fontsize, family=font)
+    ax.set_xlabel('x ($\Delta x$)', fontsize=fontsize, family=font)
     ax.set_ylim(0, tmax)
+    
+    if add_ND == True:
+        ax.axvline(ND,         c='w', ls=':', alpha=1.0)
+        ax.axvline(ND + cf.NX, c='w', ls=':', alpha=1.0)
         
     if save == True:
         fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
@@ -1254,7 +1275,7 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
 #%%
 if __name__ == '__main__':
     drive      = 'G:'
-    series      = 'archive/long_large_run'
+    series      = 'july_25_lingrowth'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     dumb_offset = 1
@@ -1263,15 +1284,13 @@ if __name__ == '__main__':
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
         
-# =============================================================================
-#         disp_folder = 'dispersion_plots/'
-#         
-#         if os.path.exists(cf.anal_dir + disp_folder) == False:
-#             os.makedirs(cf.anal_dir + disp_folder)
-#         
-#         for component in ['By', 'Bz', 'Ey', 'Ex', 'Ez']:
-#             plot_tx(component=component, saveas=disp_folder + 'tx_plot', save=True)
-# =============================================================================
+        disp_folder = 'dispersion_plots_new/'
+        
+        if os.path.exists(cf.anal_dir + disp_folder) == False:
+            os.makedirs(cf.anal_dir + disp_folder)
+        
+        for component in ['By', 'Bz', 'Ey', 'Ex', 'Ez']:
+            plot_tx(component=component, saveas=disp_folder + 'tx_plot', save=True, tmax=30., add_ND=True)
             
 # =============================================================================
 #             for zero_cold in [True, False]:

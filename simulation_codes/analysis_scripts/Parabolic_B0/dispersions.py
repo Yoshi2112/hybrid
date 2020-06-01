@@ -173,8 +173,6 @@ def do_stft(dat, win_len, slide, num_slides):
     window     = np.hanning(win_len)                                            # Hanning window
     out_mem    = np.zeros((num_slides, win_len), dtype=np.complex128)           # Allocate empty memory for STFT output
     
-    import pdb; pdb.set_trace
-    
     for ii in range(num_slides):
         try:
             temp_in[:]     = np.multiply(dat[ii*slide: 
@@ -194,9 +192,11 @@ def do_stft(dat, win_len, slide, num_slides):
 
 def autopower_spectra(component='By', overlap=0.5, win_idx=None, slide_idx=None, df=50, cell_idx=None):
     if 'B' in component.upper(): 
-        y_arr = cf.get_array(component)[:, cell_idx]*1e9                                # Field component in nT
+        ftime, y_arr = cf.get_array(component)                                      # Field component in nT
+        y_arr = y_arr[:, cell_idx]*1e9
     elif 'E' in component.upper():
-        y_arr = cf.get_array(component)[:, cell_idx]*1e6                                # Field component in mV/m
+        ftime, y_arr = cf.get_array(component)                                      # Field component in mV/m
+        y_arr = y_arr[:, cell_idx]*1e6
     else:
         sys.exit('Field loading error for kwarg: component={}'.format(component))
    
