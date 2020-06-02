@@ -6,15 +6,14 @@ Created on Fri Sep 22 11:00:58 2017
 """
 import numpy as np
 import sys
-from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''SECOND RUN :: 25/07/2013 event :: Maximum growth parameters :: More particles'''
+run_description = '''Marginal instability test for 25/07/2013 event -- Maximum growth paramters (high growth expected)'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs//july_25_lingrowth_v3_check'  # Series save dir   : Folder containing all runs of a series
-run_num         = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path       = 'runs//july_25_lingrowth_v2'  # Series save dir   : Folder containing all runs of a series
+run_num         = 4                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles  = 1                             # Save data flag    : For later analysis
 save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 15401                         # RNG Seed          : Set to enable consistent results for parameter studies
@@ -33,10 +32,10 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 1024                             # Number of cells - doesn't include ghost cells
-max_rev  = 50                               # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+NX       = 128                              # Number of cells - doesn't include ghost cells
+max_rev  = 100                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 
-nsp_ppc  = 1000                             # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+nsp_ppc  = 3000                             # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
@@ -212,5 +211,10 @@ if abs(simulated_density_per_cell - real_density_per_cell) / real_density_per_ce
     print('')
     print('ABORTING...')
     sys.exit()
-    
-system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run_num))
+
+# =============================================================================
+# if beta == True:
+#     Te0        = B0 ** 2 * beta_e   / (2 * mu0 * ne * kB)    # Temperatures of species in Kelvin (used for particle velocity initialization)
+#     Tpar       = B0 ** 2 * beta_par / (2 * mu0 * ne * kB)
+#     Tper       = B0 ** 2 * beta_per / (2 * mu0 * ne * kB)
+# =============================================================================

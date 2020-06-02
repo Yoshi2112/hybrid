@@ -33,8 +33,8 @@ reflect           = False                         # THIS IS BROKEN!!! 'Reflects'
 
 
 ### SIMULATION PARAMETERS ###
-NX        = 1024                             # Number of cells - doesn't include ghost cells
-ND        = 512                              # Damping region length: Multiple of NX (on each side of simulation domain)
+NX        = 3072                             # Number of cells - doesn't include ghost cells
+ND        = 1024                             # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev   = 100                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.2                              # Field line L shell
