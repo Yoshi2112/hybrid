@@ -9,13 +9,13 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Marginal instability test for 25/07/2013 event -- Minimum growth parameters :: HOMOGENOUS'''
+run_description = '''Marginal instability test for 25/07/2013 event -- Minimum growth parameters :: LARGER, CONSTRAINED RC'''
 
 
 ### RUN PARAMETERS ###
-drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
+drive             = 'D:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path         = 'runs//july_25_parabolic_v2'     # Series save dir   : Folder containing all runs of a series
-run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+run               = 2                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
@@ -24,29 +24,29 @@ cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run. Mu
 
 ## DIAGNOSTIC FLAGS ##
 supress_text      = False                         # Supress initialization text
-homogenous        = True                         # Set B0 to homogenous (as test to compare to parabolic)
+homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
 shoji_approx      = False                         # Changes solution used for calculating particle B0r (1D vs. 3D)
-te0_equil         = False                         # Initialize te0 to be in equilibrium with density
-source_smoothing  = False                          # Smooth source terms with 3-point Gaussian filter
+te0_equil         = True                          # Initialize te0 to be in equilibrium with density
+source_smoothing  = True                          # Smooth source terms with 3-point Gaussian filter
 reflect           = False                         # THIS IS BROKEN!!! 'Reflects' particles at edges by randomizing their gyrophase
 
 
 ### SIMULATION PARAMETERS ###
-NX        = 128                              # Number of cells - doesn't include ghost cells
-ND        = 32                               # Damping region length: Multiple of NX (on each side of simulation domain)
+NX        = 3072                             # Number of cells - doesn't include ghost cells
+ND        = 1024                             # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev   = 100                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.2                              # Field line L shell
 r_A       = 100e3                            # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
-B_eq      = 229.687                         # Initial magnetic field at equator: None for L-determined value (in T)
-rc_hwidth = 0                               # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
+B_eq      = 229.687e-9                      # Initial magnetic field at equator: None for L-determined value (in T)
+rc_hwidth = 512                             # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
 
 orbit_res = 0.10                            # Particle orbit resolution: Fraction of gyroperiod in seconds
 freq_res  = 0.02                            # Frequency resolution     : Fraction of inverse radian cyclotron frequency
-part_res  = 0.25                            # Data capture resolution in gyroperiod fraction: Particle information
+part_res  = 0.50                            # Data capture resolution in gyroperiod fraction: Particle information
 field_res = 0.10                            # Data capture resolution in gyroperiod fraction: Field information
 
 
@@ -67,9 +67,9 @@ dist_type  = np.asarray([0, 0, 0,
                          0, 0, 0,
                          0, 0, 0])                          # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
 
-nsp_ppc    = np.array([200, 200, 200,
-                       1000, 1000,1000,
-                       1000, 1000,1000])                           # Number of particles per cell, per species
+nsp_ppc    = np.array([500,  500,  500,
+                       1000, 1000, 1000,
+                       1000, 1000, 1000])                           # Number of particles per cell, per species
 
 mass       = np.asarray([1., 4., 16.,
                          1., 4., 16.,
