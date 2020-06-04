@@ -6,9 +6,7 @@ Created on Mon Aug 26 15:42:27 2019
 """
 
 import sys
-sys.path.append('D://Google Drive//Uni//PhD 2017//Data//Scripts//')
-import pdb
-import os
+sys.path.append('F://Google Drive//Uni//PhD 2017//Data//Scripts//')
 import numpy as np
 import rbsp_file_readers   as rfr
 import rbsp_fields_loader  as rfl
@@ -66,7 +64,7 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_pa
         
         this_dens = spice_dict['F{}DU_Density'.format(spec)]
         this_anis = spice_dict['F{}DU_PerpPressure'.format(spec)] / spice_dict['F{}DU_ParaPressure'.format(spec)] - 1
-    
+        
         # Perp Temperature - Calculate as T = P/nk
         kB            = 1.381e-23; q = 1.602e-19
         t_perp_kelvin = 1e-9*spice_dict['F{}DU_PerpPressure'.format(spec)] / (kB*1e6*spice_dict['F{}DU_Density'.format(spec)])
@@ -84,23 +82,8 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_pa
     
     # Subtract energetic components from total electron density (assuming each is singly charged)
     cold_dens = edens - ihope_dens.sum(axis=0) - ispice_dens.sum(axis=0)
-    
-    # Calculate cold ion composition. Assumes static percentage composition, but this could be changed.
-    cold_comp = np.array([cold_composition[0]*cold_dens*0.01,
-                          cold_composition[1]*cold_dens*0.01,
-                          cold_composition[2]*cold_dens*0.01])
 
-    param_dict               = {}
-    param_dict['times']      = den_times
-    param_dict['field']      = Bi
-    param_dict['ndensc']     = cold_comp
-    param_dict['ndensw']     = ihope_dens
-    param_dict['temp_perp']  = ihope_temp
-    param_dict['A']          = ihope_anis
-    param_dict['ndensw2']    = ispice_dens
-    param_dict['temp_perp2'] = ispice_temp
-    param_dict['A2']         = ispice_anis
-    return param_dict
+    return den_times, Bi, cold_dens, ihope_dens, ihope_temp, ihope_anis, ispice_dens, ispice_temp, ispice_anis
 
 
 if __name__ == '__main__':
@@ -110,7 +93,7 @@ if __name__ == '__main__':
     _probe      = 'a'
     _pad        = 0
     
-    times, field, ndensc, densw, temp_perp, A, ndensw2, temp_perp2, A2 = load_and_interpolate_plasma_params(_time_start, _time_end, _probe, _pad)
+    _param_dict = load_and_interpolate_plasma_params(_time_start, _time_end, _probe, _pad)
     
     import matplotlib.pyplot as plt
-    plt.plot(times, A2.T)
+    plt.plot(_param_dict['times'], _param_dict['A2'].T)

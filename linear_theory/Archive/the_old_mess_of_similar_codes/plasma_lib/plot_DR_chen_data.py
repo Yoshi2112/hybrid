@@ -293,7 +293,6 @@ def plot_all_DRs(param_dict, all_k, all_CPDR, all_WPDR):
         ax2.yaxis.tick_right()
         plt.setp(ax2.get_xticklabels()[0], visible=False)
         
-        #%%
         if figtext == True:
             set_figure_text(ax2, ii, param_dict)
         
