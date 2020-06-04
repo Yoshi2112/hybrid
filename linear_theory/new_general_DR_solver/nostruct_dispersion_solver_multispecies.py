@@ -113,9 +113,10 @@ def estimate_first_and_complexify(solutions):
     return outarray
 
 
-def dispersion_relation_solver(Species, PlasmaParams, norm_k_in=True, norm_k_out=False, norm_w=False, Nk=1000,
-                             kmin=0.0, kmax=1.0, plot=False, save=False, savepath=None,
-                             return_all=False):
+def dispersion_relation_solver(B0, name, mass, charge, density, tper, ani,
+                               norm_k_in=True, norm_k_out=False, norm_w=False, Nk=1000,
+                               kmin=0.0, kmax=1.0, plot=False, save=False, savepath=None,
+                               return_all=False):
     '''
     Function that solves dispersion relation for a given range of k in a plasma consisting of Species and 
     with given PlasmaParams
@@ -138,11 +139,20 @@ def dispersion_relation_solver(Species, PlasmaParams, norm_k_in=True, norm_k_out
         CPDR_solns -- Cold plasma dispersion relation: w(k) for each k in k_vals
         warm_solns -- Warm plasma dispersion relation: w(k) for each k in k_vals
     '''
+    e0        = 8.854e-12
+    mu0       = 4e-7*np.pi
+    q         = 1.602e-19
+    me        = 9.101e-31
+    mp        = 1.673e-27
+    
     gyfreqs, counts = np.unique(Species['gyrofreq'], return_counts=True)
     
     # Remove electron count, 
     gyfreqs = gyfreqs[1:]
     N_solns = counts.shape[0] - 1
+    
+    p_cyc = qi * B0 / mp
+    va    = B0 / np.sqrt(mu0*(density * mass).sum())  # Alfven speed
     
     # Initialize k space: (un)Normalized by va/pcyc to get into SI units
     if norm_k_in == True:
@@ -330,56 +340,6 @@ def create_species_array(B0, name, mass, charge, density, tper, ani):
     return Species, PlasParams
 
 
-def get_dispersion_relations(B0, name, mass, charge, density, tper, ani, kmin=0.0, kmax=1.0, Nk=1000,
-                         norm_k_in=True, norm_k_out=False, norm_w=False, plot=False):
-    '''
-    Wrapper around dispersion solver, taking in numpy arrays of species and field quantities.
-    
-    INPUT:
-        B0      -- Magnetic field, in T
-        name    -- Species name, as a string
-        mass    -- Species mass, in kg
-        charge  -- Species charge, in C
-        density -- Species number density, in /m3
-        tper    -- Species perpendicular (to B0) temperature, in eV
-        ani     -- Species anisotropy, T_perp / T_par - 1
-    
-    OUTPUT:
-        k_vals      -- Angular wavenumbers for which the dispersion relations were solved (rad/m)
-        CPDR_solns  -- Cold Plasma Dispersion Relation solutions, in angular frequency (rad/s)
-        warm_solns  -- Warm Plasma Dispersion Relation solutions, in angular frequency (rad/s)
-    
-    kwarg:
-        kmin=0.0            -- Minimum wavenumber to solve for
-        kmax=1.0            -- Maximum wavenumber to solve for
-        norm_k_in=True      -- Flag to signify if kmin/kmax kwargs are to be normalized by va/pcyc
-        norm_k_out=False    -- Flag to signify if output wavenumbers are     normalized by va/pcyc
-        norm_w=False        -- Flag to signify if output frequencies are     normalized by pcyc
-        plot=False          -- Plotting flag. Should only be used if function is called a single time.
-    
-    Note: 
-        The 'Warm Plasma Dispersion Relation' is its own thing, if you believe Stix, and is probably
-        not this simple. These equations take after the Chen/Wang papers of 2016, and are remarkably
-        similar to those used by Kozyra in 1984 (i.e. only valid for small growth rates, gam << w)
-        
-    To Do:
-        - Put in a check to make sure all arrays are the same size
-    '''
-    Species, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
-    
-    if False:
-        # Diagnostic to check residuals
-        k_vals, CPDR_solns, cold_ier, cold_msg, warm_solns, warm_ier, warm_msg = \
-            dispersion_relation_solver(Species, PP, norm_k_in=norm_k_in, norm_k_out=norm_k_out, \
-                                     norm_w=norm_w, plot=plot, \
-                                     Nk=Nk, kmin=kmin, kmax=kmax, return_all=True)
-
-        back_substitute(k_vals, CPDR_solns, warm_solns, Species)
-    else:
-        k_vals, CPDR_solns, warm_solns = dispersion_relation_solver(Species, PP, norm_k_in=norm_k_in, norm_k_out=norm_k_out, \
-                                     norm_w=norm_w, plot=plot, kmin=kmin, kmax=kmax, Nk=Nk)
-    return k_vals, CPDR_solns, warm_solns
-
 
 def back_substitute(k_vals, CPDR_solns, warm_solns, Species):
     '''
@@ -476,5 +436,10 @@ if __name__ == '__main__':
         _ani     = np.array([1.0       , 0.0             , 0.0     ])
         _tper    = (_ani + 1) * _tpar
         
-    _k, CPDR, WPDR = get_dispersion_relations(_B0, _name, _mass, _charge, _density, _tper, _ani,
-                         norm_k=True, norm_w=True, plot=True)
+    k_vals, CPDR_solns, warm_solns = dispersion_relation_solver(Species, PP, norm_k_in=norm_k_in, norm_k_out=norm_k_out, \
+                                     norm_w=norm_w, plot=plot, kmin=kmin, kmax=kmax, Nk=Nk)
+        
+# =============================================================================
+#     _k, CPDR, WPDR = get_dispersion_relations(_B0, _name, _mass, _charge, _density, _tper, _ani,
+#                          norm_k=True, norm_w=True, plot=True)
+# =============================================================================
