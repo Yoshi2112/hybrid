@@ -179,7 +179,7 @@ def set_figure_text(ax, ii, param_dict):
 
 
 def get_all_DRs():
-    param_dict   = data.load_and_interpolate_plasma_params(time_start, time_end, probe, pad, cold_composition=cmp, rbsp_path=rbsp_path)
+    param_dict = data.load_and_interpolate_plasma_params(time_start, time_end, probe, pad, cold_composition=cmp, rbsp_path=rbsp_path)
 
     if os.path.exists(data_path) == True:
         print('Save file found: Loading...')

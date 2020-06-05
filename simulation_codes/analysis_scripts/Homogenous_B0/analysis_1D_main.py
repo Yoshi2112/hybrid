@@ -1274,13 +1274,13 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
 
 #%%
 if __name__ == '__main__':
-    drive      = 'G:'
-    series      = 'july_25_lingrowth'
+    drive       = 'F:'
+    series      = 'july_25_lingrowth_v3_check'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
-    dumb_offset = 1
+    dumb_offset = 0
     
-    for run_num in range(num_runs):
+    for run_num in [0, 1]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
         
@@ -1292,11 +1292,9 @@ if __name__ == '__main__':
         for component in ['By', 'Bz', 'Ey', 'Ex', 'Ez']:
             plot_tx(component=component, saveas=disp_folder + 'tx_plot', save=True, tmax=30., add_ND=True)
             
-# =============================================================================
-#             for zero_cold in [True, False]:
-#                 plot_wk_polished(component=component, dispersion_overlay=True, save=True,
-#                                  pcyc_mult=1.25, zero_cold=zero_cold, xmax=20)
-# =============================================================================
+            for zero_cold in [True, False]:
+                plot_wk_polished(component=component, dispersion_overlay=True, save=True,
+                                 pcyc_mult=1.25, zero_cold=zero_cold, xmax=20)
         
         #single_point_both_fields_AGU()
         

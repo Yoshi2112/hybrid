@@ -45,6 +45,10 @@ def interpolate_B(edens_time, b_time, b_array):
 
 
 def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_path='G://DATA//RBSP//', cold_composition=np.array([70, 20, 10])):
+    '''
+    Outputs as SI units: B0 in nT, densities in /m3, temperatures in eV (pseudo SI)
+    '''
+    
     # Cold (total?) electron plasma density
     den_times, edens, dens_err    = rfr.retrieve_RBSP_electron_density_data(rbsp_path, time_start, time_end, probe, pad=pad)
 
@@ -68,7 +72,7 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_pa
         # Perp Temperature - Calculate as T = P/nk
         kB            = 1.381e-23; q = 1.602e-19
         t_perp_kelvin = 1e-9*spice_dict['F{}DU_PerpPressure'.format(spec)] / (kB*1e6*spice_dict['F{}DU_Density'.format(spec)])
-        this_temp     = kB * t_perp_kelvin / q  # Convert to eV
+        this_temp     = kB * t_perp_kelvin / q  # Convert from K to eV
         
         spice_dens.append(this_dens)
         spice_temp.append(this_temp)
@@ -83,7 +87,7 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_pa
     # Subtract energetic components from total electron density (assuming each is singly charged)
     cold_dens = edens - ihope_dens.sum(axis=0) - ispice_dens.sum(axis=0)
 
-    return den_times, Bi, cold_dens, ihope_dens, ihope_temp, ihope_anis, ispice_dens, ispice_temp, ispice_anis
+    return den_times, Bi*1e-9, cold_dens*1e6, ihope_dens*1e6, ihope_temp, ihope_anis, ispice_dens*1e6, ispice_temp, ispice_anis
 
 
 if __name__ == '__main__':
@@ -93,7 +97,8 @@ if __name__ == '__main__':
     _probe      = 'a'
     _pad        = 0
     
-    _param_dict = load_and_interpolate_plasma_params(_time_start, _time_end, _probe, _pad)
+    _times, _B0, _cold_dens, _hope_dens, _hope_temp, _hope_anis, _spice_dens, _spice_temp, _spice_anis =\
+        load_and_interpolate_plasma_params(_time_start, _time_end, _probe, _pad)
     
-    import matplotlib.pyplot as plt
-    plt.plot(_param_dict['times'], _param_dict['A2'].T)
+    #import matplotlib.pyplot as plt
+    #plt.plot(_times, _cold_dens)

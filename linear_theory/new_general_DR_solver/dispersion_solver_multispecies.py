@@ -204,7 +204,9 @@ def dispersion_relation_solver(Species, PlasmaParams, norm_k_in=True, norm_k_out
                        warm_solns, warm_ier, warm_msg
 
 
-def plot_dispersion(k_vals, CPDR_solns, warm_solns, PlasmaParams, norm_k=False, norm_w=False, save=False, savepath=None):
+def plot_dispersion(k_vals, CPDR_solns, warm_solns, PlasmaParams,
+                    norm_k=False, norm_w=False, save=False, savename=None,
+                    title='', growth_only=False, glims=0.05):
     ###############
     ## NORMALIZE ##
     ###############
@@ -229,9 +231,10 @@ def plot_dispersion(k_vals, CPDR_solns, warm_solns, PlasmaParams, norm_k=False, 
     species_colors = ['r', 'b', 'g']
     
     plt.ioff()
-    plt.figure()
+    plt.figure(figsize=(15, 10))
     ax1 = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
     ax2 = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
+    plt.suptitle(title)
     
     for ii in range(CPDR_solns.shape[1]):
         ax1.plot(x_vals[1:], y_cold[1:, ii],      c=species_colors[ii], linestyle='--', label='Cold')
@@ -264,20 +267,16 @@ def plot_dispersion(k_vals, CPDR_solns, warm_solns, PlasmaParams, norm_k=False, 
     ax2.set_xlim(x_vals[0], x_vals[-1])
     
     if norm_w == True:
-        ax2.set_ylim(-0.05, 0.05)
+        ax2.set_ylim(-glims, glims)
     
     ax2.minorticks_on()
     
+    if growth_only == True:
+        ax2.set_ylim(0, glims)
+    
     if save == True:
-        path     = os.getcwd() + '\\'
-        
-        vercount = 0
-        name     = 'dispersion_relation{}.png'.format(vercount)
-        while os.path.exists(path + name) == True:
-            vercount += 1
-            name     = 'dispersion_relation{}'.format(vercount)
-
-        plt.savefig(path + name)
+        plt.savefig(savename)
+        plt.close('all')
     else:
         figManager = plt.get_current_fig_manager()
         figManager.window.showMaximized()    
@@ -288,6 +287,8 @@ def create_species_array(B0, name, mass, charge, density, tper, ani):
     '''
     For each ion species, total density is collated and an entry for 'electrons' added (treated as cold)
     Also output a PlasmaParameters dict containing things like alfven speed, density, hydrogen gyrofrequency, etc.
+    
+    Inputs must be in SI units: nT, kg, C, /m3, eV, etc.
     '''
     e0        = 8.854e-12
     mu0       = 4e-7*np.pi
@@ -435,16 +436,14 @@ def back_substitute(k_vals, CPDR_solns, warm_solns, Species):
 if __name__ == '__main__':
     '''
     Test quantities/direct interface
-    '''
-    Nn       = 3                                # Number of species
+    '''                               # Number of species
     L_shell  = 4                                # L-shell at which magnetic field and density are calculated
     n0       = sheely_plasmasphere(L_shell)     # Plasma density, /m3
     _B0      = geomagnetic_magnitude(L_shell)   # Background magnetic field, T
-    HPA      = 0.1                              # Hot proton abundance
-    mp       = 1.673e-27                        # Proton mass (in kg)
-    qi       = 1.602e-19
+    mp       = 1.673e-27                        # Proton mass (kg)
+    qi       = 1.602e-19                        # Elementary charge (C)
     
-    if False:
+    if True:
         '''
         Standard Wang (2016) test values DON'T CHANGE
         '''
@@ -477,4 +476,5 @@ if __name__ == '__main__':
         _tper    = (_ani + 1) * _tpar
         
     _k, CPDR, WPDR = get_dispersion_relations(_B0, _name, _mass, _charge, _density, _tper, _ani,
-                         norm_k=True, norm_w=True, plot=True)
+                         kmin=0.0, kmax=1.0, Nk=1000, norm_k_in=True, norm_k_out=True, 
+                         norm_w=True, plot=True)

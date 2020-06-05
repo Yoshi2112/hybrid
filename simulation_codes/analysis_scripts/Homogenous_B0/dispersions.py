@@ -65,7 +65,7 @@ def get_linear_dispersion_from_sim(k, plot=False, save=False, zero_cold=True):
         Anisotropy -- Number
         Tper       -- eV
     '''
-    from dispersion_solver_multispecies import dispersion_relations
+    from dispersion_solver_multispecies import get_dispersion_relations
     from analysis_config                import Tper, Tpar, B0
         
     anisotropy = Tper / Tpar - 1
@@ -80,7 +80,7 @@ def get_linear_dispersion_from_sim(k, plot=False, save=False, zero_cold=True):
     kmin = 2*np.pi*k[0]
     kmax = 2*np.pi*k[-1]
     
-    k_vals, CPDR_solns, WPDR_solns = dispersion_relations(B0, cf.species_lbl, cf.mass, cf.charge, \
+    k_vals, CPDR_solns, WPDR_solns = get_dispersion_relations(B0, cf.species_lbl, cf.mass, cf.charge, \
                                            cf.density, t_perp, anisotropy, norm_k_in=False, norm_w=False,
                                            kmin=kmin, kmax=kmax)
     

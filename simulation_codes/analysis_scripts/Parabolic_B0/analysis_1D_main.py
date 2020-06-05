@@ -1424,12 +1424,12 @@ def standard_analysis_package(thesis=True):
         plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', save=True, linear_overlay=False, pcyc_mult=1.1)
         plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , save=True, linear_overlay=False, pcyc_mult=None)
 
-        plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=False, pcyc_mult=1.25)
+        plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=True, pcyc_mult=1.25)
 
         plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
 
 
-    if False:
+    if True:
         plot_spatial_poynting(save=True, log=True)
         plot_spatial_poynting_helical(save=True, log=True)
         #plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
@@ -2844,7 +2844,7 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
     ax.set_ylabel(ylab, fontsize=fontsize, family=font, rotation=0, labelpad=30)
     ax.set_xlabel(xlab, fontsize=fontsize, family=font)
     
-    #clr  = ['black', 'green', 'red'] 
+    clr  = ['black', 'green', 'red'] 
     lbl  = [r'$f_{eq, H^+}$', r'$f_{eq, He^+}$', r'$f_{eq, O^+}$']
     M    = np.array([1., 4., 16.])
     cyc  = qi * cf.B_eq / (2 * np.pi * mp * M)
@@ -3048,14 +3048,14 @@ if __name__ == '__main__':
     print('{} runs in series {}'.format(num_runs, series))
     
     # To do : A comparison plot of the loss per time of the cold plasma runs
-    for run_num in [0, 1]:#range(num_runs):
+    for run_num in [2, 3]:#range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
              
-        #standard_analysis_package(thesis=False)
+        standard_analysis_package(thesis=False)
         
-        do_all_dynamic_spectra(ymax=2.0)
-        do_all_dynamic_spectra(ymax=None)
+        #do_all_dynamic_spectra(ymax=2.0)
+        #do_all_dynamic_spectra(ymax=None)
         
 # =============================================================================
 #         summary_plots(save=True, histogram=False)
