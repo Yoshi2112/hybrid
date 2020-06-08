@@ -9,13 +9,13 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''So the /reflection/ thing was the only broken thing. Lets check the smoothing a bit more, longer.'''
+run_description = '''ABC test with homogenous conditions, with longer timespan of 200 gyroperiods'''
 
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//reflection_test'       # Series save dir   : Folder containing all runs of a series
-run               = 2                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path         = 'runs//ABC_mario_test'        # Series save dir   : Folder containing all runs of a series
+run               = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
@@ -24,25 +24,24 @@ cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU 
 
 ## DIAGNOSTIC FLAGS ##
 supress_text      = False                         # Supress initialization text
-homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
+homogenous        = True                          # Set B0 to homogenous (as test to compare to parabolic)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
 shoji_approx      = False                         # Changes solution used for calculating particle B0r (1D vs. 3D)
-te0_equil         = False                         # Initialize te0 to be in equilibrium with density
-source_smoothing  = True                          # Smooth source terms with 3-point Gaussian filter
-reflect           = False                         # THIS IS BROKEN!!! 'Reflects' particles at edges by randomizing their gyrophase
+te0_equil         = True                          # Initialize te0 to be in equilibrium with density
+source_smoothing  = False                         # Smooth source terms with 3-point Gaussian filter
 
 
 ### SIMULATION PARAMETERS ###
-NX        = 128                             # Number of cells - doesn't include ghost cells
-ND        = 64                              # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 25                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+NX        = 384                             # Number of cells - doesn't include ghost cells
+ND        = 128                             # Damping region length: Multiple of NX (on each side of simulation domain)
+max_rev   = 200                             # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell
 r_A       = 100e3                           # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
 B_eq      = None                            # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
-rc_hwidth = 16                              # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
+rc_hwidth = 64                              # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
   
 orbit_res = 0.02                            # Orbit resolution
 freq_res  = 0.02                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
@@ -55,7 +54,7 @@ species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/label
 temp_color = ['blue', 'red']
 temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Hot particles get the LCD, cold are maxwellians.
 dist_type  = np.array([0, 1])                               # Particle distribution type : Uniform (0) or Gaussian (1)
-nsp_ppc    = np.array([500, 5000])                          # Number of particles per cell, per species
+nsp_ppc    = np.array([200, 500])                           # Number of particles per cell, per species
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
@@ -74,10 +73,6 @@ J_k            = 1e-7                                       # External current :
 
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
 E_e            = 10.0                                       # Electron energy (eV)
-
-# This will be fixed by subcycling later on, hopefully
-account_for_dispersion = False                              # Flag (True/False) whether or not to reduce timestep to prevent dispersion getting too high
-dispersion_allowance   = 1.                                 # Multiple of how much past frac*wD^-1 is allowed: Used to stop dispersion from slowing down sim too much  
 
 
 #%%### DERIVED SIMULATION PARAMETERS

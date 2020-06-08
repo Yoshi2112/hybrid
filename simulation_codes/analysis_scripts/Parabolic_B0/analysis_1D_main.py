@@ -1399,7 +1399,7 @@ def summary_plots(save=True, histogram=True):
     return
 
 
-def standard_analysis_package(thesis=True):
+def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, tx_only=False, tmax=15):
     '''
     Need a high-pass option for the wk? Or will it do all of it?
     It should do all of it (show the Pc4 branch and the Pc1 branch)
@@ -1419,14 +1419,15 @@ def standard_analysis_package(thesis=True):
         print('2D summary for {}'.format(comp))
         
         plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
-        plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=15)
+        plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=tmax)
 
-        plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', save=True, linear_overlay=False, pcyc_mult=1.1)
-        plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , save=True, linear_overlay=False, pcyc_mult=None)
-
-        plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=True, pcyc_mult=1.25)
-
-        plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
+        if tx_only == False:
+            plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
+            plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , save=True, linear_overlay=False, pcyc_mult=None)
+    
+            plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
+    
+            plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
 
 
     if True:
@@ -3041,18 +3042,18 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
 ##%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'july_25_parabolic'
+    series      = 'ABC_mario_test'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
     # To do : A comparison plot of the loss per time of the cold plasma runs
-    for run_num in [2, 3]:#range(num_runs):
+    for run_num in range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
              
-        standard_analysis_package(thesis=False)
+        standard_analysis_package(thesis=False, tx_only=True)
         
         #do_all_dynamic_spectra(ymax=2.0)
         #do_all_dynamic_spectra(ymax=None)

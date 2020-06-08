@@ -11,8 +11,7 @@ import particles_1D as particles
 import fields_1D    as fields
 import init_1D      as init
 
-from simulation_parameters_1D import dx, mu0, NC, NX, ND, qm_ratios, freq_res, orbit_res,\
-                                     account_for_dispersion, dispersion_allowance, E_nodes
+from simulation_parameters_1D import dx, NC, NX, ND, qm_ratios, freq_res, orbit_res, E_nodes
 
 @nb.njit()
 def cross_product(A, B, C):
@@ -116,18 +115,9 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
         Eacc_ts         = freq_res / elecfreq                            
     else:
         Eacc_ts = ion_ts
-    
-    if account_for_dispersion == True:
-        B_tot           = np.sqrt(B_center[:, 0] ** 2 + B_center[:, 1] ** 2 + B_center[:, 2] ** 2)
-    
-        dispfreq        = ((np.pi / dx) ** 2) * (B_tot / (mu0 * q_dens)).max()           # Dispersion frequency
-
-        disp_ts     = dispersion_allowance * freq_res / dispfreq     # Making this a little bigger so it doesn't wreck everything
-    else:
-        disp_ts     = ion_ts
 
     vel_ts          = 0.60 * dx / np.abs(vel[0, :]).max()                        # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
-    DT_part         = min(Eacc_ts, vel_ts, ion_ts, disp_ts)                      # Smallest of the allowable timesteps
+    DT_part         = min(Eacc_ts, vel_ts, ion_ts)                      # Smallest of the allowable timesteps
     
     if DT_part < 0.9*DT:
 
