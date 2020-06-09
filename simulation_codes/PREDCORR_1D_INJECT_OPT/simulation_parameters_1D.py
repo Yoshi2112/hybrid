@@ -9,12 +9,12 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''ABC test with homogenous conditions, with longer timespan of 200 gyroperiods'''
-
+run_description = '''I wouldn't have thought there would be wave generation with no anisotropy''' +\
+                  '''These runs have no anisotropy, but increasing numbers of particles. Is it just noise?'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//ABC_mario_test'        # Series save dir   : Folder containing all runs of a series
+save_path         = 'runs//noise_test'            # Series save dir   : Folder containing all runs of a series
 run               = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
@@ -27,21 +27,21 @@ supress_text      = False                         # Supress initialization text
 homogenous        = True                          # Set B0 to homogenous (as test to compare to parabolic)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
 shoji_approx      = False                         # Changes solution used for calculating particle B0r (1D vs. 3D)
-te0_equil         = True                          # Initialize te0 to be in equilibrium with density
+te0_equil         = False                         # Initialize te0 to be in equilibrium with density
 source_smoothing  = False                         # Smooth source terms with 3-point Gaussian filter
 
 
 ### SIMULATION PARAMETERS ###
-NX        = 384                             # Number of cells - doesn't include ghost cells
-ND        = 128                             # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 200                             # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+NX        = 128                             # Number of cells - doesn't include ghost cells
+ND        = 64                              # Damping region length: Multiple of NX (on each side of simulation domain)
+max_rev   = 20                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell
 r_A       = 100e3                           # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
 B_eq      = None                            # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
-rc_hwidth = 64                              # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
+rc_hwidth = 0                               # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
   
 orbit_res = 0.02                            # Orbit resolution
 freq_res  = 0.02                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
@@ -53,14 +53,14 @@ field_res = 0.10                            # Data capture resolution in gyroper
 species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
 temp_color = ['blue', 'red']
 temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Hot particles get the LCD, cold are maxwellians.
-dist_type  = np.array([0, 1])                               # Particle distribution type : Uniform (0) or Gaussian (1)
-nsp_ppc    = np.array([200, 500])                           # Number of particles per cell, per species
+dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or Gaussian (1)
+nsp_ppc    = np.array([4000, 4000])                           # Number of particles per cell, per species
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
 drift_v    = np.array([0., 0.])                             # Species parallel bulk velocity (alfven velocity units)
 density    = np.array([180., 20.]) * 1e6                    # Species density in /cc (cast to /m3)
-anisotropy = np.array([0.0, 5.0])                           # Particle anisotropy: A = T_per/T_par - 1
+anisotropy = np.array([0.0, 0.0])                           # Particle anisotropy: A = T_per/T_par - 1
 
 # Particle energy: Choose one                                    
 E_per      = np.array([5.0, 50000.])                        # Perpendicular energy in eV

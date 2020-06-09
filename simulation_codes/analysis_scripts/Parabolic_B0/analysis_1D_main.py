@@ -2999,7 +2999,7 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
         
     # Collect all particle information for specified cell
     for ii in range(it_max):
-        sys.stdout.write('\rAccruing particle data from p-file {}'.format(ii))
+        sys.stdout.write('\nPlotting particle data from p-file {}'.format(ii))
         sys.stdout.flush()
     
         pos, vel, idx, ptime= cf.load_particles(ii)
@@ -3009,8 +3009,11 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
         
         fig, ax = plt.subplots(figsize=(15, 10))
         ax.set_title('v{} vs. x :: {} :: Time {:.2f}s'.format(lt[comp], cf.species_lbl[jj], ptime))
-                    
-        counts, xedges, yedges, im1 = ax.hist2d(pos[0, :]/cf.dx, vel[0, :]/cf.va, 
+        
+        st = cf.idx_start[jj]
+        en = cf.idx_end[jj]
+        
+        counts, xedges, yedges, im1 = ax.hist2d(pos[0, st:en]/cf.dx, vel[0, st:en]/cf.va, 
                                                 bins=[xbins, vbins],
                                                 vmin=0, vmax=cf.nsp_ppc[jj] / cfac)
 
@@ -3042,35 +3045,31 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
 ##%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'ABC_mario_test'
+    series      = 'particle_boundary_test'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
-    # To do : A comparison plot of the loss per time of the cold plasma runs
-    for run_num in range(num_runs):
+    for run_num in [1]:#range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
              
-        standard_analysis_package(thesis=False, tx_only=True)
+        #standard_analysis_package(thesis=False, tx_only=False)
+                
+        summary_plots(save=True, histogram=False)
+        #check_fields()
         
-        #do_all_dynamic_spectra(ymax=2.0)
-        #do_all_dynamic_spectra(ymax=None)
-        
-# =============================================================================
-#         summary_plots(save=True, histogram=False)
-#         
-#         for cm in range(3):
-#             for sp in range(2):
-#                 plot_vi_vs_x(comp=cm, it_max=None, jj=sp, save=True)
-#            
-#         plot_initial_configurations()
-# =============================================================================
+        for cm in range(3):
+            for sp in range(2):
+                plot_vi_vs_x(comp=cm, it_max=None, jj=sp, save=True)
+           
+        #plot_initial_configurations()
             
         #plot_vi_vs_t_for_cell(cell=0, comp=0, it_max=None, jj=1)
         
-        
+        #do_all_dynamic_spectra(ymax=2.0)
+        #do_all_dynamic_spectra(ymax=None)
         
 # =============================================================================
 #         plot_adiabatic_parameter()
@@ -3119,7 +3118,7 @@ if __name__ == '__main__':
         
         
         
-        #check_fields()
+        #
         #plot_energies(normalize=False, save=True)
         
         #disp_folder = 'dispersion_plots/'
