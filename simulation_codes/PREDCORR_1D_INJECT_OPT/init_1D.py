@@ -14,9 +14,10 @@ import diagnostics as diag
 import particles_1D as particles
 import fields_1D    as fields
 
-from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A, dist_type,  \
-                                     idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
-                                     qm_ratios, freq_res, rc_hwidth, temp_type, Te0_scalar, ne, q, N_species
+from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A, dist_type,       \
+                                     idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,          \
+                                     qm_ratios, freq_res, rc_hwidth, temp_type, Te0_scalar, ne, q, \
+                                     N_species, n_ppc_spare
 
 
 @nb.njit()
@@ -240,7 +241,8 @@ def uniform_gaussian_distribution_quiet():
             vel[2, en: en + half_n] = vel[2, st: en] * -1.0
             
             pos[0, en: en + half_n] = pos[0, st: en]            # Other half, same position
-            pass
+
+        idx[en + half_n: idx_end[jj]] = jj - 128                # Set deactivated status for spare particles
     
     # Set initial Larmor radius - rL from v_perp, distributed to y,z based on velocity gyroangle
     print('Initializing particles off-axis')
@@ -514,15 +516,20 @@ def set_timestep(vel, E, Te0):
 
 
 if __name__ == '__main__':
-    import matplotlib.pyplot as plt
+    #import matplotlib.pyplot as plt
    
     POS, VEL, IDX = uniform_gaussian_distribution_quiet()
-    print('Successful initialization')
-    V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
-    V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
-    V_PARA = VEL[0] / va
     
-    diag.check_position_distribution(POS)
+    POS = POS.T
+    VEL = VEL.T
+# =============================================================================
+#     print('Successful initialization')
+#     V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
+#     V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
+#     V_PARA = VEL[0] / va
+#     
+#     diag.check_position_distribution(POS)
+# =============================================================================
     
 # =============================================================================
 #     jj = 1

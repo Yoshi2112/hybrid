@@ -2999,7 +2999,7 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
         
     # Collect all particle information for specified cell
     for ii in range(it_max):
-        sys.stdout.write('\nPlotting particle data from p-file {}'.format(ii))
+        sys.stdout.write('\rPlotting particle data from p-file {}'.format(ii))
         sys.stdout.flush()
     
         pos, vel, idx, ptime= cf.load_particles(ii)
@@ -3051,18 +3051,18 @@ if __name__ == '__main__':
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
-    for run_num in [1]:#range(num_runs):
+    for run_num in [2]:#range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
              
         #standard_analysis_package(thesis=False, tx_only=False)
-                
-        summary_plots(save=True, histogram=False)
         #check_fields()
         
         for cm in range(3):
             for sp in range(2):
                 plot_vi_vs_x(comp=cm, it_max=None, jj=sp, save=True)
+                
+        summary_plots(save=True, histogram=False)
            
         #plot_initial_configurations()
             

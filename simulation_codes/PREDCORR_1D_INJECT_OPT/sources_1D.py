@@ -29,19 +29,24 @@ def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
     07/05/2020 :: Modified to allow contributions from negatively indexed particles
                     if reflection is enabled - these *were* hot particles, now
                     counted as cold.
+                    
+    09/06/2020 :: Re-ignored the negative particles. In this case, negative particles
+                    have either not been initialized, or have left the simulation
+                    domain.
     '''
     for ii in nb.prange(vel.shape[1]):
         I   = Ie[ii]
         sp  = idx[ii]
         
-        for kk in range(3):
-            nu[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
-            nu[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
-            nu[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
-        
-        ni[I,     sp] += W_elec[0, ii]
-        ni[I + 1, sp] += W_elec[1, ii]
-        ni[I + 2, sp] += W_elec[2, ii]
+        if sp >= 0:
+            for kk in range(3):
+                nu[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
+                nu[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
+                nu[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
+            
+            ni[I,     sp] += W_elec[0, ii]
+            ni[I + 1, sp] += W_elec[1, ii]
+            ni[I + 2, sp] += W_elec[2, ii]
     return
 
 
