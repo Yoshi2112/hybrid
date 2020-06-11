@@ -14,9 +14,10 @@ import diagnostics as diag
 import particles_1D as particles
 import fields_1D    as fields
 
-from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A, dist_type,  \
-                                     idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
-                                     qm_ratios, freq_res, rc_hwidth, temp_type, Te0_scalar, ne, q, N_species
+from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A, dist_type,       \
+                                     idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,          \
+                                     qm_ratios, freq_res, rc_hwidth, temp_type, Te0_scalar, ne, q, \
+                                     N_species, n_ppc_spare, homogenous
 
 
 @nb.njit()
@@ -129,24 +130,6 @@ def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
 
 
 @nb.njit()
-def check_boundary_particles(pos, vel):
-    '''
-    Make sure boundary particles are exactly on the boundary
-    Also make sure their velocities are pointing inwards
-    '''
-    print('Checking boundary particles')
-    p_thres = 0.01 # If within 1cm of boundary
-    for ii in nb.prange(pos.shape[1]):
-        if (pos[0, ii] - const.xmin) < p_thres:
-            pos[0, ii] = const.xmin
-            vel[0, ii] = np.abs(vel[0, ii])
-        elif (pos[0, ii] - const.xmax) < p_thres:
-            pos[0, ii] = const.xmax
-            vel[0, ii] = -np.abs(vel[0, ii])
-    return
-
-
-@nb.njit()
 def uniform_gaussian_distribution_quiet():
     '''Creates an N-sampled normal distribution across all particle species within each simulation cell
 
@@ -216,10 +199,11 @@ def uniform_gaussian_distribution_quiet():
                     LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj)
                     
                 # Quiet start : Initialize second half
-                pos[0, en: en + half_n] = pos[0, st: en]            # Other half, same position
-                vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set parallel
-                vel[1, en: en + half_n] = vel[1, st: en] * -1.0     # Invert perp velocities (v2 = -v1)
+                vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Invert velocities (v2 = -v1)
+                vel[1, en: en + half_n] = vel[1, st: en] * -1.0
                 vel[2, en: en + half_n] = vel[2, st: en] * -1.0
+                
+                pos[0, en: en + half_n] = pos[0, st: en]            # Other half, same position
                 
                 acc                    += half_n * 2
         
@@ -257,7 +241,9 @@ def uniform_gaussian_distribution_quiet():
             vel[2, en: en + half_n] = vel[2, st: en] * -1.0
             
             pos[0, en: en + half_n] = pos[0, st: en]            # Other half, same position
-            pass
+
+        if homogenous == True:
+            idx[en + half_n: idx_end[jj]] = jj - 128                # Set deactivated status for spare particles
     
     # Set initial Larmor radius - rL from v_perp, distributed to y,z based on velocity gyroangle
     print('Initializing particles off-axis')
@@ -267,8 +253,6 @@ def uniform_gaussian_distribution_quiet():
     rL      = v_perp / (qm_ratios[idx] * B0x)
     pos[1]  = rL * np.cos(gyangle)
     pos[2]  = rL * np.sin(gyangle)
-    
-    check_boundary_particles(pos, vel)
     
     return pos, vel, idx
 
@@ -323,9 +307,9 @@ def set_damping_array(damping_array, DT):
     23/03/2020 Put factor of 0.5 in front of va to set group velocity approx.
     14/05/2020 Put factor of 0.5 in front of DT since B is only ever pushed 0.5DT
     '''
-    dist_from_mp  = np.abs(np.arange(NC + 1) - 0.5*NC)                # Distance of each B-node from midpoint
+    dist_from_mp  = np.abs(np.arange(NC + 1) - 0.5*NC)          # Distance of each B-node from midpoint
     r_damp        = np.sqrt(29.7 * 0.5 * va * (0.5 * DT / dx) / ND)   # Damping coefficient
-
+    
     for ii in range(NC + 1):
         if dist_from_mp[ii] > 0.5*NX:
             damping_array[ii] = 1. - r_damp * ((dist_from_mp[ii] - 0.5*NX) / ND) ** 2 
@@ -533,12 +517,12 @@ def set_timestep(vel, E, Te0):
 
 
 if __name__ == '__main__':
-    import matplotlib.pyplot as plt
+    #import matplotlib.pyplot as plt
    
     POS, VEL, IDX = uniform_gaussian_distribution_quiet()
     
-    #diag.collect_macroparticle_moments(pos, vel, idx)
-    
+    POS = POS.T
+    VEL = VEL.T
 # =============================================================================
 #     print('Successful initialization')
 #     V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 

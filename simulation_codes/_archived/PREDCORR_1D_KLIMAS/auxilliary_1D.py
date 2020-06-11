@@ -132,7 +132,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
 
         particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T,temp_N,-0.5*DT)   # De-sync vel/pos 
         print('Timestep halved. Syncing particle velocity...')
-        #init.set_damping_array(damping_array, DT)
+        init.set_damping_array(damping_array, DT)
             
 # =============================================================================
 #     elif DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0:

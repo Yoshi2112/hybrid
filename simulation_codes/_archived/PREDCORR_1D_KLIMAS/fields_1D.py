@@ -182,10 +182,7 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P):
     aux.interpolate_edges_to_center(B, temp3Db)              # temp3db is now B_center
 
     aux.cross_product(Ve, temp3Db[:temp3Db.shape[0]-1, :], temp3De)                  # temp3De is now Ve x B term
-    
-    # This would be where I put temp3Db *= damping_array assuming they were the same shape
-    # Or maybe I would need to recalculate it for the E nodes
-    
+
     E[:, 0]  = - temp3De[:, 0] - grad_P[:] / q_dens[:]
     E[:, 1]  = - temp3De[:, 1]
     E[:, 2]  = - temp3De[:, 2]

@@ -6,7 +6,7 @@ Created on Fri Sep 22 17:55:15 2017
 """
 import numba as nb
 from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, q, ne, min_dens, source_smoothing
-import pdb
+
 
 @nb.njit()
 def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
@@ -29,19 +29,24 @@ def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
     07/05/2020 :: Modified to allow contributions from negatively indexed particles
                     if reflection is enabled - these *were* hot particles, now
                     counted as cold.
+                    
+    09/06/2020 :: Re-ignored the negative particles. In this case, negative particles
+                    have either not been initialized, or have left the simulation
+                    domain.
     '''
     for ii in nb.prange(vel.shape[1]):
         I   = Ie[ii]
         sp  = idx[ii]
         
-        for kk in range(3):
-            nu[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
-            nu[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
-            nu[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
-        
-        ni[I,     sp] += W_elec[0, ii]
-        ni[I + 1, sp] += W_elec[1, ii]
-        ni[I + 2, sp] += W_elec[2, ii]
+        if sp >= 0:
+            for kk in range(3):
+                nu[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
+                nu[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
+                nu[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
+            
+            ni[I,     sp] += W_elec[0, ii]
+            ni[I + 1, sp] += W_elec[1, ii]
+            ni[I + 2, sp] += W_elec[2, ii]
     return
 
 
@@ -74,8 +79,6 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
                     initialization error.
                     
     28/05/2020 :: Implemented 3-point smoothing
-    
-    QUESTION :: The values in the green cells are still giving me pause.
     '''
     q_dens *= 0.
     Ji     *= 0.
@@ -95,7 +98,7 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
     # some sort of source on the outside of the physical space boundary.
     q_dens[ND]          += q_dens[ND - 1]
     q_dens[ND + NX - 1] += q_dens[ND + NX]
-    pdb.set_trace()
+    
     for ii in range(3):
         # Mirror source term contributions
         Ji[ND, ii]          += Ji[ND - 1, ii]
@@ -114,7 +117,7 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
         three_point_smoothing(q_dens, ni[:, 0])
         for ii in range(3):
             three_point_smoothing(Ji[:, ii], ni[:, 0])
-    pdb.set_trace()
+    
     # Set density minimum
     for ii in range(q_dens.shape[0]):
         if q_dens[ii] < min_dens * ne * q:
