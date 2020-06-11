@@ -28,10 +28,10 @@ if __name__ == '__main__':
     if te0_equil == True:
         init.set_equilibrium_te0(q_dens, Te0)
     
-    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D)
-    
     DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array\
-        = init.set_timestep(vel, E_int, Te0)
+        = init.set_timestep(vel, Te0)
+        
+    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
     
     if save_particles == 1:
         save.save_particle_data(0, DT, part_save_iter, 0, pos, vel, idx)

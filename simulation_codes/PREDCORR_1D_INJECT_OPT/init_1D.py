@@ -219,9 +219,13 @@ def uniform_gaussian_distribution_quiet():
                     LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj)
                     
                 # Quiet start : Initialize second half
-                pos[0, en: en + half_n] = pos[0, st: en]            # Other half, same position
-                vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set parallel
-                vel[1, en: en + half_n] = vel[1, st: en] * -1.0     # Invert perp velocities (v2 = -v1)
+                if const.quiet_start == True:
+                    vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set parallel
+                else:
+                    vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set anti-parallel
+                    
+                pos[0, en: en + half_n] = pos[0, st: en]                # Other half, same position
+                vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
                 vel[2, en: en + half_n] = vel[2, st: en] * -1.0
                 
                 acc                    += half_n * 2
@@ -496,7 +500,7 @@ def set_equilibrium_te0(q_dens, Te0):
     return
 
 
-def set_timestep(vel, E, Te0):
+def set_timestep(vel, Te0):
     '''
     INPUT:
         vel -- Initial particle velocities
@@ -513,14 +517,16 @@ def set_timestep(vel, E, Te0):
     ion_ts   = const.orbit_res / const.gyfreq               # Timestep to resolve gyromotion
     vel_ts   = 0.5 * const.dx / np.max(np.abs(vel[0, :]))   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
 
-    if E[:, 0].max() != 0:
-        elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / np.abs(vel).max()).max())               # Electron acceleration "frequency"
-        Eacc_ts         = freq_res / elecfreq                            
-    else:
-        Eacc_ts = ion_ts
+# =============================================================================
+#     if E[:, 0].max() != 0:
+#         elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / np.abs(vel).max()).max())               # Electron acceleration "frequency"
+#         Eacc_ts         = freq_res / elecfreq                            
+#     else:
+#         Eacc_ts = ion_ts
+# =============================================================================
 
     gyperiod = 2 * np.pi / const.gyfreq
-    DT       = min(ion_ts, vel_ts, Eacc_ts)
+    DT       = min(ion_ts, vel_ts)
     max_time = const.max_rev * 2 * np.pi / const.gyfreq_eq     # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1                          # Total number of time steps
 

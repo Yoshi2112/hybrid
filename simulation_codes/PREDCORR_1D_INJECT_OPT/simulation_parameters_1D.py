@@ -9,15 +9,15 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''No quiet start, just testing the ABCs with varying ratios. Penetrate more = damp more?''' +\
-                  '''Control test'''
+run_description = '''Testing to see if damping the E-field as well works, as per Hu & Denton (2010)''' +\
+                  '''Test -- E-damping on and also with a quiet start'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//ABC_variation_test'    # Series save dir   : Folder containing all runs of a series
-run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles    = 0                             # Save data flag    : For later analysis
-save_fields       = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
+save_path         = 'runs//denton_damping_test'   # Series save dir   : Folder containing all runs of a series
+run               = 2                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_particles    = 1                             # Save data flag    : For later analysis
+save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
 
@@ -28,12 +28,14 @@ homogenous        = True                          # Set B0 to homogenous (as tes
 disable_waves     = False                         # Zeroes electric field solution at each timestep
 te0_equil         = False                         # Initialize te0 to be in equilibrium with density
 source_smoothing  = False                         # Smooth source terms with 3-point Gaussian filter
+E_damping         = True                         # Damp E in a manner similar to B for ABCs
+quiet_start       = True                         # Flag to use quiet start (False :: semi-quiet start)
 damping_multiplier= 1.0
 
 ### SIMULATION PARAMETERS ###
-NX        = 128                             # Number of cells - doesn't include ghost cells
-ND        = 64                              # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 50                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+NX        = 512                             # Number of cells - doesn't include ghost cells
+ND        = 128                             # Damping region length: Multiple of NX (on each side of simulation domain)
+max_rev   = 500                             # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell
 r_A       = 100e3                           # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
