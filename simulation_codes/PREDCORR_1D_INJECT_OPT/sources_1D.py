@@ -95,7 +95,7 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
     # some sort of source on the outside of the physical space boundary.
     q_dens[ND]          += q_dens[ND - 1]
     q_dens[ND + NX - 1] += q_dens[ND + NX]
-    pdb.set_trace()
+
     for ii in range(3):
         # Mirror source term contributions
         Ji[ND, ii]          += Ji[ND - 1, ii]
@@ -114,7 +114,7 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
         three_point_smoothing(q_dens, ni[:, 0])
         for ii in range(3):
             three_point_smoothing(Ji[:, ii], ni[:, 0])
-    pdb.set_trace()
+
     # Set density minimum
     for ii in range(q_dens.shape[0]):
         if q_dens[ii] < min_dens * ne * q:

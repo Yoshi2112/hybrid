@@ -119,7 +119,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
     return
 
 
-def save_field_data(sim_time, dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, damping_array):
+def save_field_data(sim_time, dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, damping_array, E_damping_array):
     d_path   = '%s/%s/run_%d/data/fields/' % (drive, save_path, const.run)
     r        = qq / field_save_iter
 
@@ -127,7 +127,7 @@ def save_field_data(sim_time, dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, da
     
     np.savez(d_fullpath, E = E[:, 0:3], B = B[:, 0:3],   J = Ji[:, 0:3],
                        dns = dns,      Ve = Ve[:, 0:3], Te = Te, sim_time = sim_time,
-                       damping_array = damping_array)
+                       damping_array = damping_array, E_damping_array=E_damping_array)
     print('Field data saved')
     
     

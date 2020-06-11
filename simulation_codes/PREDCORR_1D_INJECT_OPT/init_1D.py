@@ -16,7 +16,8 @@ import fields_1D    as fields
 
 from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A, dist_type,  \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
-                                     qm_ratios, freq_res, rc_hwidth, temp_type, Te0_scalar, ne, q, N_species
+                                     qm_ratios, freq_res, rc_hwidth, temp_type, Te0_scalar,\
+                                         ne, q, N_species, damping_multiplier
 
 
 @nb.njit()
@@ -137,12 +138,14 @@ def check_boundary_particles(pos, vel):
     print('Checking boundary particles')
     p_thres = 0.01 # If within 1cm of boundary
     for ii in nb.prange(pos.shape[1]):
-        if (pos[0, ii] - const.xmin) < p_thres:
+        if np.abs(pos[0, ii] - const.xmin) < p_thres:
             pos[0, ii] = const.xmin
             vel[0, ii] = np.abs(vel[0, ii])
-        elif (pos[0, ii] - const.xmax) < p_thres:
+
+        elif np.abs(pos[0, ii] - const.xmax) < p_thres:
             pos[0, ii] = const.xmax
             vel[0, ii] = -np.abs(vel[0, ii])
+
     return
 
 
@@ -305,7 +308,7 @@ def initialize_particles():
 
 
 @nb.njit()
-def set_damping_array(damping_array, DT):
+def set_damping_array(B_damping_array, E_damping_array, DT):
     '''Create masking array for magnetic field damping used to apply open
     boundaries. Based on applcation by Shoji et al. (2011) and
     Umeda et al. (2001)
@@ -323,14 +326,24 @@ def set_damping_array(damping_array, DT):
     23/03/2020 Put factor of 0.5 in front of va to set group velocity approx.
     14/05/2020 Put factor of 0.5 in front of DT since B is only ever pushed 0.5DT
     '''
-    dist_from_mp  = np.abs(np.arange(NC + 1) - 0.5*NC)                # Distance of each B-node from midpoint
-    r_damp        = np.sqrt(29.7 * 0.5 * va * (0.5 * DT / dx) / ND)   # Damping coefficient
-
+    r_damp   = np.sqrt(29.7 * 0.5 * va * (0.5 * DT / dx) / ND)   # Damping coefficient
+    r_damp  *= damping_multiplier
+    
+    # Do B-damping array
+    B_dist_from_mp  = np.abs(np.arange(NC + 1) - 0.5*NC)                # Distance of each B-node from midpoint
     for ii in range(NC + 1):
-        if dist_from_mp[ii] > 0.5*NX:
-            damping_array[ii] = 1. - r_damp * ((dist_from_mp[ii] - 0.5*NX) / ND) ** 2 
+        if B_dist_from_mp[ii] > 0.5*NX:
+            B_damping_array[ii] = 1. - r_damp * ((B_dist_from_mp[ii] - 0.5*NX) / ND) ** 2 
         else:
-            damping_array[ii] = 1.0
+            B_damping_array[ii] = 1.0
+            
+    # Do E-damping array
+    E_dist_from_mp  = np.abs(np.arange(NC) + 0.5 - 0.5*NC)                # Distance of each B-node from midpoint
+    for ii in range(NC):
+        if E_dist_from_mp[ii] > 0.5*NX:
+            E_damping_array[ii] = 1. - r_damp * ((E_dist_from_mp[ii] - 0.5*NX) / ND) ** 2 
+        else:
+            E_damping_array[ii] = 1.0
     return
 
 
@@ -524,11 +537,12 @@ def set_timestep(vel, E, Te0):
     if const.save_fields == 1 or const.save_particles == 1:
         save.store_run_parameters(DT, part_save_iter, field_save_iter, Te0)
 
-    damping_array = np.ones(NC + 1)
-    set_damping_array(damping_array, DT)
+    B_damping_array = np.ones(NC + 1, dtype=float)
+    E_damping_array = np.ones(NC    , dtype=float)
+    set_damping_array(B_damping_array, E_damping_array, DT)
 
     print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))
-    return DT, max_inc, part_save_iter, field_save_iter, damping_array
+    return DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array
 
 
 
