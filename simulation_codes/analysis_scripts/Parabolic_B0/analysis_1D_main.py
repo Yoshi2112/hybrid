@@ -3114,23 +3114,23 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
 ##%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'quiet_start_test'
+    series      = 'denton_damping_test'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
-    for run_num in [0]:#range(num_runs):
+    for run_num in range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
-        plot_E_components(plot=True)
+        #plot_E_components(plot=True)
         
-        #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None)
-        #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
+        plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None)
+        plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
         
+        standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
         
-        #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
         #summary_plots(save=True, histogram=False)
         #check_fields()
         

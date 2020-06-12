@@ -76,6 +76,7 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
     for ii in range(NC):
         interp[ii, 0] = fields.eval_B0x(E_nodes[ii])
     
+    # This bit could be removed to allow B0x to vary in green cells naturally
     interp[:ND,      0] = interp[ND,    0]
     interp[ND+NX+1:, 0] = interp[ND+NX, 0]
     return

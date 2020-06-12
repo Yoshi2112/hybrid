@@ -16,8 +16,8 @@ import fields_1D    as fields
 
 from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A, dist_type,  \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
-                                     qm_ratios, freq_res, rc_hwidth, temp_type, Te0_scalar,\
-                                         ne, q, N_species, damping_multiplier
+                                     qm_ratios, rc_hwidth, temp_type, Te0_scalar,\
+                                     ne, q, N_species, damping_multiplier, quiet_start
 
 
 @nb.njit()
@@ -258,8 +258,12 @@ def uniform_gaussian_distribution_quiet():
             if const.homogenous == False and temp_type[jj] == 1:
                     LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj)
                     
-            # Quiet start : Initialize second half
-            vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Invert velocities (v2 = -v1)
+            # Initialize second half
+            if quiet_start == True:
+                vel[0, en: en + half_n] = vel[0, st: en]
+            else:
+                vel[0, en: en + half_n] = vel[0, st: en] * -1.0
+                
             vel[1, en: en + half_n] = vel[1, st: en] * -1.0
             vel[2, en: en + half_n] = vel[2, st: en] * -1.0
             
