@@ -3096,7 +3096,7 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
         st = cf.idx_start[jj]
         en = cf.idx_end[jj]
         
-        counts, xedges, yedges, im1 = ax.hist2d(pos[0, st:en]/cf.dx, vel[0, st:en]/cf.va, 
+        counts, xedges, yedges, im1 = ax.hist2d(pos[0, st:en]/cf.dx, vel[comp, st:en]/cf.va, 
                                                 bins=[xbins, vbins],
                                                 vmin=0, vmax=cf.nsp_ppc[jj] / cfac)
 

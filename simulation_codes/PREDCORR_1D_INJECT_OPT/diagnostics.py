@@ -242,6 +242,100 @@ def check_velocity_distribution(vel):
     return
 
 
+def check_velocity_components_vs_space(pos, vel, jj=1):
+    '''
+    For each point in time
+     - Collect particle information for particles near cell, plus time component
+     - Store in array
+     - Plot using either hexbin or hist2D
+    '''
+    print('Calculating velocity distributions vs. space for species {},...'.format(jj))
+    comp = ['x', 'y', 'z']
+    cfac = 10 if const.temp_type[jj] == 1 else 5
+    vlim = 15 if const.temp_type[jj] == 1 else 5
+    
+    V_PERP = np.sign(vel[2]) * np.sqrt(vel[1] ** 2 + vel[2] ** 2) / const.va
+    V_PARA = vel[0] / const.va
+    
+    # Manually specify bin edges for histogram
+    vbins = np.linspace(-vlim, vlim, 101, endpoint=True)
+    xbins = np.linspace(const.xmin/const.dx, const.xmax/const.dx, const.NX + 1, endpoint=True)
+        
+    # Do the plotting
+    plt.ioff()
+    
+    fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
+    axes[0].set_title('f(v) vs. x :: {}'.format(const.species_lbl[jj]))
+    
+    st = const.idx_start[jj]
+    en = const.idx_end[jj]
+    
+    for ii in range(3):
+        counts, xedges, yedges, im1 = axes[ii].hist2d(pos[0, st:en]/const.dx, vel[ii, st:en]/const.va, 
+                                                bins=[xbins, vbins],
+                                                vmin=0, vmax=const.nsp_ppc[jj] / cfac)
+    
+        cb = fig.colorbar(im1, ax=axes[ii])
+        cb.set_label('Counts')
+        
+        axes[ii].set_xlim(const.xmin/const.dx, const.xmax/const.dx)
+        axes[ii].set_ylim(-vlim, vlim)
+        
+        axes[ii].set_ylabel('v{}\n($v_A$)'.format(comp[ii]), rotation=0)
+        
+    axes[2].set_xlabel('Position (cell)')
+    fig.subplots_adjust(hspace=0)
+    plt.show()
+    
+    print('\n')
+    return
+
+
+def plot_temperature_extremes():
+    '''
+    Calculate what the max/min temperatures for the distribution are at eq/boundary
+    For each species, plot these two distributions
+    
+    Two positions: eq/xmax, Two components, par/per, multiple species Nj
+    '''
+    vlim = 10
+    jj   = 1
+    
+    from scipy.stats import norm
+    
+    T_eq_par = const.beta_par[jj] * const.B_eq ** 2 / (2 * const.mu0 * const.ne * const.kB)
+    T_eq_per = const.beta_per[jj] * const.B_eq ** 2 / (2 * const.mu0 * const.ne * const.kB)
+    
+    T_xmax_par = const.beta_par[jj] * const.B_xmax ** 2 / (2 * const.mu0 * const.ne * const.kB)
+    T_xmax_per = const.beta_per[jj] * const.B_xmax ** 2 / (2 * const.mu0 * const.ne * const.kB)
+    
+    sf_eq_par = np.sqrt(const.kB *  T_eq_par /  const.mass[jj])
+    sf_eq_per = np.sqrt(const.kB *  T_eq_per /  const.mass[jj])
+    
+    sf_xmax_par = np.sqrt(const.kB *  T_xmax_par /  const.mass[jj])
+    sf_xmax_per = np.sqrt(const.kB *  T_xmax_per /  const.mass[jj])
+    
+    x = np.linspace(-vlim*const.va, vlim*const.va, 100)
+    
+    prob_eq_par   = norm.pdf(x, 0.0, sf_eq_par)
+    prob_eq_per   = norm.pdf(x, 0.0, sf_eq_per)
+    
+    prob_xmax_par = norm.pdf(x, 0.0, sf_xmax_par)
+    prob_xmax_per = norm.pdf(x, 0.0, sf_xmax_per)
+    
+    plt.ioff()
+    fig, ax = plt.subplots(2, sharex=True)
+    ax[0].plot(x, prob_eq_par  , c='b')
+    ax[0].plot(x, prob_xmax_par, c='r')
+    ax[0].set_xlabel('$v_\parallel$')
+    
+    ax[1].plot(x, prob_eq_per, c='b')
+    ax[1].plot(x, prob_xmax_per, c='r')
+    ax[1].set_xlabel('$v_\perp$')
+    plt.show()
+    return
+
+
 def test_particle_orbit():
     def position_update(pos, vel, DT):
         for ii in range(3):

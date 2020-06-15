@@ -24,7 +24,7 @@ cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run as 
 
 ## DIAGNOSTIC FLAGS ##
 supress_text      = False                         # Supress initialization text
-homogenous        = True                          # Set B0 to homogenous (as test to compare to parabolic)
+homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 particle_periodic = False                         # Set particle boundary conditions to periodic (False : Open boundary flux)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
 te0_equil         = False                         # Initialize te0 to be in equilibrium with density
@@ -97,6 +97,7 @@ if B_eq is None:
     B_eq      = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
     
 if beta_par is None:
+    beta_per   = None
     Te0_scalar = E_e   * 11603.
     Tpar       = E_par * 11603.
     Tper       = E_per * 11603.
