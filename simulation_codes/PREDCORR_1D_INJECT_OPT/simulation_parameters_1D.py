@@ -9,27 +9,27 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Testing damping and quiet start with smaller domain and limited time''' +\
-                  '''E-damping, quiet start'''
+run_description = '''Testing damping and quiet start with smaller domain and limited time. ''' +\
+                  '''No E-damping, no quiet start, parabolic'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path         = 'runs//damping_QS_test_small' # Series save dir   : Folder containing all runs of a series
-run               = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+run               = 5                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
-
+#cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
+cpu_affin         = [4, 5, 6, 7]
 
 ## DIAGNOSTIC FLAGS ##
 supress_text      = False                         # Supress initialization text
-homogenous        = True                          # Set B0 to homogenous (as test to compare to parabolic)
+homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
 te0_equil         = False                         # Initialize te0 to be in equilibrium with density
 source_smoothing  = False                         # Smooth source terms with 3-point Gaussian filter
-E_damping         = True                          # Damp E in a manner similar to B for ABCs
-quiet_start       = True                         # Flag to use quiet start (False :: semi-quiet start)
+E_damping         = False                          # Damp E in a manner similar to B for ABCs
+quiet_start       = False                         # Flag to use quiet start (False :: semi-quiet start)
 damping_multiplier= 1.0
 
 ### SIMULATION PARAMETERS ###
@@ -182,13 +182,12 @@ if homogenous == True:
     a      = 0
     B_xmax = B_eq
 
-# NOTHING USES Bc ANYMORE :: BACKGROUND FIELD IS SUPPLIED ANALYTICALLY TO PARTICLE/NODE POSITIONS
-# THIS EXISTS ONLY AS A RECORD OF WHAT B0x WOULD HAVE BEEN, BUT DOESN"T REFER TO FUNCTION, COULD CAUSE MISTAKES
-Bc           = np.zeros((NC + 1, 3), dtype=np.float64)   # Constant components of magnetic field based on theta and B0
-Bc[:, 0]     = B_eq * (1 + a * B_nodes**2)               # Set constant Bx
-Bc[:ND]      = Bc[ND]                                    # Set B0 in damping cells (same as last spatial cell)
-Bc[ND+NX+1:] = Bc[ND+NX]
-############################################################
+lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L)))       # Anchor latitude in radians
+B_A        = B_eq * np.sqrt(4 - 3*np.cos(lat_A) ** 2)\
+           / (np.cos(lat_A) ** 6)                        # Magnetic field at anchor point
+
+loss_cone_eq   = np.arcsin(np.sqrt(B_eq   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
+loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
 
 
 # Freqs based on highest magnetic field value (at simulation boundaries)
@@ -196,13 +195,6 @@ gyfreq     = q*B_xmax/ mp                                # Proton Gyrofrequency 
 gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
-
-lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L)))       # Anchor latitude in radians
-B_A        = B_eq * np.sqrt(4 - 3*np.cos(lat_A) ** 2)\
-           / (np.cos(lat_A) ** 6)                        # Magnetic field at anchor point
-
-loss_cone_eq   = np.arcsin(np.sqrt(B_eq   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
-loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
 
 #%%### INPUT TESTS AND CHECKS
 if rc_hwidth == 0:
@@ -235,7 +227,7 @@ if supress_text == False:
     print('{} cells total'.format(NC))
     print('{} particles total\n'.format(N))
     
-    if None not in cpu_affin:
+    if cpu_affin is not None:
         import psutil
         run_proc = psutil.Process()
         run_proc.cpu_affinity(cpu_affin)

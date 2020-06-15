@@ -219,10 +219,10 @@ def uniform_gaussian_distribution_quiet():
                     LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj)
                     
                 # Quiet start : Initialize second half
-                if const.quiet_start == True:
+                if quiet_start == True:
                     vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set parallel
                 else:
-                    vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set anti-parallel
+                    vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Set anti-parallel
                     
                 pos[0, en: en + half_n] = pos[0, st: en]                # Other half, same position
                 vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)

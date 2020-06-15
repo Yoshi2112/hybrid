@@ -9,7 +9,6 @@ import numpy as np
 
 import particles_1D as particles
 import fields_1D    as fields
-import init_1D      as init
 
 from simulation_parameters_1D import dx, NC, NX, ND, qm_ratios, freq_res, orbit_res, E_nodes
 
@@ -77,8 +76,8 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
         interp[ii, 0] = fields.eval_B0x(E_nodes[ii])
     
     # This bit could be removed to allow B0x to vary in green cells naturally
-    interp[:ND,      0] = interp[ND,    0]
-    interp[ND+NX+1:, 0] = interp[ND+NX, 0]
+    # interp[:ND,      0] = interp[ND,    0]
+    # interp[ND+NX+1:, 0] = interp[ND+NX, 0]
     return
 
 
