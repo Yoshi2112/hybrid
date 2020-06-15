@@ -9,33 +9,34 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Testing damping and quiet start with smaller domain and limited time. ''' +\
-                  '''No E-damping, no quiet start, parabolic'''
+run_description = '''Series of runs to examine the clumping at the simulation boundary. ''' +\
+                  '''Homogenous, waves, open boundary fluxes.'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//damping_QS_test_small' # Series save dir   : Folder containing all runs of a series
+save_path         = 'runs//boundary_examination'  # Series save dir   : Folder containing all runs of a series
 run               = 5                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
-#cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
-cpu_affin         = [4, 5, 6, 7]
+cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run as list. Set as None to auto-assign. 
+#cpu_affin         = [4, 5, 6, 7]
 
 ## DIAGNOSTIC FLAGS ##
 supress_text      = False                         # Supress initialization text
-homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
+homogenous        = True                          # Set B0 to homogenous (as test to compare to parabolic)
+particle_periodic = False                         # Set particle boundary conditions to periodic (False : Open boundary flux)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
 te0_equil         = False                         # Initialize te0 to be in equilibrium with density
 source_smoothing  = False                         # Smooth source terms with 3-point Gaussian filter
-E_damping         = False                          # Damp E in a manner similar to B for ABCs
+E_damping         = False                         # Damp E in a manner similar to B for ABCs
 quiet_start       = False                         # Flag to use quiet start (False :: semi-quiet start)
 damping_multiplier= 1.0
 
 ### SIMULATION PARAMETERS ###
 NX        = 128                             # Number of cells - doesn't include ghost cells
 ND        = 64                              # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 50                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+max_rev   = 20                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell
 r_A       = 100e3                           # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
@@ -257,4 +258,11 @@ if theta_xmax > lambda_L:
     print('--------------------------------------------------')
     sys.exit()
 
+if homogenous == False and particle_periodic == True:
+    particle_periodic = False
+    print('---------------------------------------------------')
+    print('WARNING : PERIODIC BOUNDARY CONDITIONS INCOMPATIBLE')
+    print('WITH PARABOLIC B0. BOUNDARIES SET TO OPEN FLUX.')
+    print('---------------------------------------------------')
+    
 system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))

@@ -480,7 +480,6 @@ def set_equilibrium_te0(q_dens, Te0):
         temp     = np.zeros(NC + 1, dtype=np.float64)
         fields.get_grad_P(q_dens, Te0, grad_P, temp)
         
-        import matplotlib.pyplot as plt
         import sys
         
         fig, axes = plt.subplots(4, sharex=True, figsize=(15, 10))

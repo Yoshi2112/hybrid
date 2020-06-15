@@ -1466,21 +1466,35 @@ def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, t
     for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
         print('2D summary for {}'.format(comp))
         
-        plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
-        plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=tmax)
+        try:
+            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
+            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=tmax)
+        except:
+            pass
 
         if tx_only == False:
-            plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
-            plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , save=True, linear_overlay=False, pcyc_mult=None)
+            try:
+                plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
+                plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , save=True, linear_overlay=False, pcyc_mult=None)
+            except:
+                pass
     
-            plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
-    
-            plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
-
+            try:
+                plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
+            except:
+                pass
+            
+            try:
+                plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
+            except:
+                pass
 
     if True:
-        plot_spatial_poynting(save=True, log=True)
-        plot_spatial_poynting_helical(save=True, log=True)
+        try:
+            plot_spatial_poynting(save=True, log=True)
+            plot_spatial_poynting_helical(save=True, log=True)
+        except:
+            pass
         #plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
         
         #plot_initial_configurations()
@@ -3114,26 +3128,27 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
 ##%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'damping_QS_test_small'
+    series      = 'boundary_examination'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
-    for run_num in [4, 5]:#range(num_runs):
+    for run_num in [5]:#range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
         #plot_E_components(plot=True)
         
-# =============================================================================
-#         plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None)
-#         plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
-#         
-#         standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
-# =============================================================================
+        try:
+            plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None)
+            plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
+        except:
+            pass
         
-        #summary_plots(save=True, histogram=False)
+        standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
+        
+        summary_plots(save=True, histogram=False)
         #check_fields()
         
         for cm in range(3):

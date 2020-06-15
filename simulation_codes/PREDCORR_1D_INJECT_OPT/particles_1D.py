@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ratios, kB, \
-                                        B_eq, a, mass, Tper, Tpar, homogenous, loss_cone_xmax
+                                        B_eq, a, mass, Tper, Tpar, particle_periodic, loss_cone_xmax
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -219,7 +219,7 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
     # Check Particle boundary conditions: Re-initialize if at edges
     for ii in nb.prange(pos.shape[1]):
         if (pos[0, ii] < xmin or pos[0, ii] > xmax):
-            if homogenous == False: 
+            if particle_periodic == False: 
                 
                 # Fix position
                 if pos[0, ii] > xmax:

@@ -139,33 +139,7 @@ def three_point_smoothing(arr, temp):
     
     arr[:]       = temp
     return
-
-
-# =============================================================================
-# if __name__ == '__main__':
-#     import numpy as np
-#     import matplotlib.pyplot as plt
-#     
-#     test_NX  = 20
-#     test_arr = np.zeros((test_NX, 3), dtype=float)
-#     test_tmp = np.zeros((test_NX), dtype=float)
-#     
-#     test_arr[5, 0]  = 1.0
-#     test_arr[10, 1] = 4.0
-#     test_arr[15, 2] = 6.0
-#     
-#     plt.ioff()
-#     plt.figure()
-#     plt.plot(test_arr)
-#     for ii in range(3):
-#         three_point_smoothing(test_arr[:, ii], test_tmp)
-#     plt.plot(test_arr)
-#     plt.show()
-# =============================================================================
-    
-
-
-
+ 
 
 # OLD CODE
 
