@@ -9,15 +9,16 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Series of runs to examine the clumping at the simulation boundary. ''' +\
-                  '''Homogenous, waves, open boundary fluxes.'''
+run_description = '''Open boundary test using the particle boundary as described in Daughton et al. (2006)''' +\
+                  '''Running without waves '''
+
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//boundary_examination'  # Series save dir   : Folder containing all runs of a series
-run               = 5                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles    = 1                             # Save data flag    : For later analysis
-save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
+save_path         = 'runs//daughton_open_boundary'# Series save dir   : Folder containing all runs of a series
+run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_particles    = 0                             # Save data flag    : For later analysis
+save_fields       = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run as list. Set as None to auto-assign. 
 #cpu_affin         = [4, 5, 6, 7]
@@ -27,16 +28,14 @@ supress_text      = False                         # Supress initialization text
 homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 particle_periodic = False                         # Set particle boundary conditions to periodic (False : Open boundary flux)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
-te0_equil         = False                         # Initialize te0 to be in equilibrium with density
-source_smoothing  = False                         # Smooth source terms with 3-point Gaussian filter
 E_damping         = False                         # Damp E in a manner similar to B for ABCs
 quiet_start       = False                         # Flag to use quiet start (False :: semi-quiet start)
 damping_multiplier= 1.0
 
 ### SIMULATION PARAMETERS ###
-NX        = 128                             # Number of cells - doesn't include ghost cells
-ND        = 64                              # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 20                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+NX        = 64                              # Number of cells - doesn't include ghost cells
+ND        = 8                               # Damping region length: Multiple of NX (on each side of simulation domain)
+max_rev   = 50                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell
 r_A       = 100e3                           # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
@@ -56,7 +55,7 @@ species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/label
 temp_color = ['blue', 'red']
 temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Hot particles get the LCD, cold are maxwellians.
 dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or Gaussian (1)
-nsp_ppc    = np.array([256, 1024])                          # Number of particles per cell, per species
+nsp_ppc    = np.array([200, 200])                           # Number of particles per cell, per species
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
@@ -67,6 +66,8 @@ anisotropy = np.array([0.0, 5.0])                           # Particle anisotrop
 # Particle energy: Choose one                                    
 E_per      = np.array([5.0, 50000.])                        # Perpendicular energy in eV
 beta_par   = np.array([1., 10.])                            # Overrides E_per if not None. Uses B_eq for conversion
+
+spare_ppc  = nsp_ppc.copy()
 
 # External current properties (not yet implemented)
 J_amp          = 1.0                                        # External current : Amplitude  (A)
@@ -108,6 +109,7 @@ else:
     Tper       = beta_per    * B_eq ** 2 / (2 * mu0 * ne * kB)
     Te0_scalar = beta_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
 
+vth_par    = np.sqrt(kB * Tpar / mass)                   # Parallel thermal velocity
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma
 
@@ -135,7 +137,10 @@ for jj in range(Nj):
             N_species[jj] = nsp_ppc[jj] * NX + 2
         else:
             N_species[jj] = nsp_ppc[jj] * 2*rc_hwidth + 2    
-N = N_species.sum()
+            
+# Spare assumes same number in each cell (doesn't account for dist=1) 
+# THIS CAN BE CHANGED LATER TO BE MORE MEMORY EFFICIENT. LEAVE IT HUGE FOR DEBUGGING PURPOSES.
+N = N_species.sum() + (spare_ppc * NX).sum()
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order

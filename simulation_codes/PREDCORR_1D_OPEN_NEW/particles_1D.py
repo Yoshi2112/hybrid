@@ -6,29 +6,35 @@ Created on Fri Sep 22 17:23:44 2017
 """
 import numba as nb
 import numpy as np
-from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ratios, kB, \
-                                        B_eq, a, mass, Tper, Tpar, particle_periodic, loss_cone_xmax
-from   sources_1D                import collect_moments
+from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, Nj, n_contr, \
+                                        B_eq, a, mass, particle_periodic, vth_par, B_xmax
+from   sources_1D                import collect_velocity_moments, collect_position_moment
 
 from fields_1D import eval_B0x
 
 import init_1D as init
 
 
-@nb.njit()
+#@nb.njit()
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T, temp_N,\
-                                  B, E, DT, q_dens_adv, Ji, ni, nu, pc=0):
+                                  B, E, DT, q_dens_adv, Ji, ni, nu, Pi, flux_rem, pc=0):
     '''
-    Helper function to group the particle advance and moment collection functions
+    Container function to group and order the particle advance and moment collection functions
     '''
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, temp_N, DT)
+    collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi)
     position_update(pos, vel, idx, DT, Ie, W_elec)  
-    collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, ni, nu)
+    
+    # New function: Particle injector
+    inject_particles(pos, vel, idx, ni, nu, Pi, flux_rem, DT)
+    ####
+    
+    collect_position_moment(Ie, W_elec, idx, q_dens_adv, ni)
     return
 
 
 @nb.njit()
-def assign_weighting_TSC(pos, I, W, E_nodes=True):
+def assign_weighting_TSC(pos, idx, I, W, E_nodes=True):
     '''Triangular-Shaped Cloud (TSC) weighting scheme used to distribute particle densities to
     nodes and interpolate field values to particle positions. Ref. Lipatov? Or Birdsall & Langdon?
 
@@ -74,24 +80,25 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
     particle_transform = xmax + (ND - grid_offset)*dx  + epsil  # Offset to account for E/B grid and damping nodes
     
     for ii in np.arange(Np):
-        xp          = (pos[0, ii] + particle_transform) / dx    # Shift particle position >= 0
-        I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node (Vectorize?)
-        delta_left  = I[ii] - xp                                # Distance from left node in grid units
-        
-        if abs(pos[0, ii] - xmin) < 1e-10:
-            I[ii]    = ND - 1
-            W[0, ii] = 0.0
-            W[1, ii] = 0.5
-            W[2, ii] = 0.0
-        elif abs(pos[0, ii] - xmax) < 1e-10:
-            I[ii]    = ND + NX - 1
-            W[0, ii] = 0.5
-            W[1, ii] = 0.0
-            W[2, ii] = 0.0
-        else:
-            W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))  # Get weighting factors
-            W[1, ii] = 0.75 - np.square(delta_left + 1.)
-            W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
+        if idx[ii] >= 0: 
+            xp          = (pos[0, ii] + particle_transform) / dx    # Shift particle position >= 0
+            I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node (Vectorize?)
+            delta_left  = I[ii] - xp                                # Distance from left node in grid units
+            
+            if abs(pos[0, ii] - xmin) < 1e-10:
+                I[ii]    = ND - 1
+                W[0, ii] = 0.0
+                W[1, ii] = 0.5
+                W[2, ii] = 0.0
+            elif abs(pos[0, ii] - xmax) < 1e-10:
+                I[ii]    = ND + NX - 1
+                W[0, ii] = 0.5
+                W[1, ii] = 0.0
+                W[2, ii] = 0.0
+            else:
+                W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))  # Get weighting factors
+                W[1, ii] = 0.75 - np.square(delta_left + 1.)
+                W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
     return
 
 
@@ -113,29 +120,6 @@ def eval_B0_particle(pos, Bp):
 
 
 @nb.njit()
-def eval_B0_particle_1D(pos, vel, idx, Bp):
-    '''
-    Calculates the B0 magnetic field at the position of a particle. B0x is
-    non-uniform in space, and B0r (split into y,z components) is the required
-    value to keep div(B) = 0
-    
-    These values are added onto the existing value of B at the particle location,
-    Bp. B0x is simply equated since we never expect a non-zero wave field in x.
-        
-    Could totally vectorise this. Would have to change to give a particle_temp
-    array for memory allocation or something
-    '''
-    Bp[0]    =   eval_B0x(pos[0])  
-    constant = a * B_eq 
-    for ii in range(idx.shape[0]):
-        l_cyc      = qm_ratios[idx[ii]] * Bp[0, ii]
-        
-        Bp[1, ii] += constant * pos[0, ii] * vel[2, ii] / l_cyc
-        Bp[2, ii] -= constant * pos[0, ii] * vel[1, ii] / l_cyc
-    return
-
-
-@nb.njit()
 def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, qmi, DT):
     '''
     updates velocities using a Boris particle pusher.
@@ -151,10 +135,8 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
     OUTPUT:
         None -- vel array is mutable (I/O array)
         
-    Notes: Still not sure how to parallelise this: There are a lot of array operations
-    Probably need to do it more algebraically? Find some way to not create those temp arrays.
-    Removed the "cross product" and "field interpolation" functions because I'm
-    not convinced they helped.
+    Check for -ve indexes :: qmi set to zero and interpolation not done. This should
+                            ensure the resulting velocity is zero.
     '''
     Bp *= 0
     Ep *= 0
@@ -163,11 +145,14 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
     eval_B0_particle(pos, Bp)  
     
     for ii in range(vel.shape[1]):
-        qmi[ii] = 0.5 * DT * qm_ratios[idx[ii]]                         # q/m for ion of species idx[ii]
-        for jj in range(3):                                             # Nodes
-            for kk in range(3):                                         # Components
-                Ep[kk, ii] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]       # Vector E-field  at particle location
-                Bp[kk, ii] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]       # Vector b1-field at particle location
+        if idx[ii] < 0:
+            qmi[ii] = 0.0
+        else:
+            qmi[ii] = 0.5 * DT * qm_ratios[idx[ii]]                         # q/m for ion of species idx[ii]
+            for jj in range(3):                                             # Nodes
+                for kk in range(3):                                         # Components
+                    Ep[kk, ii] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]       # Vector E-field  at particle location
+                    Bp[kk, ii] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]       # Vector b1-field at particle location
 
     vel[:, :] += qmi[:] * Ep[:, :]                                      # First E-field half-push IS NOW V_MINUS
 
@@ -187,7 +172,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
 
 
 @nb.njit()
-def position_update(pos, vel, idx, DT, Ie, W_elec):
+def position_update(pos, vel, idx, DT, Ie, W_elec, ni, nu, Pi):
     '''
     Updates the position of the particles using x = x0 + vt. 
     Also updates particle nearest node and weighting.
@@ -201,16 +186,7 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
         W_elec -- Particle weighting array (Also output)
         
     Note: This function also controls what happens when a particle leaves the 
-    simulation boundary.
-    
-    NOTE :: This reinitialization thing is super unoptimized and inefficient.
-            Maybe initialize array of n_ppc samples for each species, to at least vectorize it
-            Count each one being used, start generating new ones if it runs out (but it shouldn't)
-            
-    # 28/05/2020 :: Removed np.abs() and -np.sign() factors from v_x calculation
-    # See if that helps better simulate the distro function (will "lose" more
-    # particles at boundaries, but that'll just slow things down a bit - should
-    # still be valid)
+    simulation boundary. As per Daughton et al. (2006).
     '''
     pos[0, :] += vel[0, :] * DT
     pos[1, :] += vel[1, :] * DT
@@ -218,47 +194,135 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
          
     # Check Particle boundary conditions: Re-initialize if at edges
     for ii in nb.prange(pos.shape[1]):
-        if (pos[0, ii] < xmin or pos[0, ii] > xmax):
-            if particle_periodic == False: 
+        if idx[ii] >= 0:
+            if (pos[0, ii] < xmin or pos[0, ii] > xmax):
                 
-                # Fix position
-                if pos[0, ii] > xmax:
-                    pos[0, ii] = 2*xmax - pos[0, ii]
-                elif pos[0, ii] < xmin:
-                    pos[0, ii] = 2*xmin - pos[0, ii]
-                
-                # Re-initialize velocity: Vel_x sign so it doesn't go back into boundary
-                sf_per     = np.sqrt(kB *  Tper[idx[ii]] /  mass[idx[ii]])
-                sf_par     = np.sqrt(kB *  Tpar[idx[ii]] /  mass[idx[ii]])
-                
-                if temp_type[idx[ii]] == 0:
-                    vel[0, ii] = np.random.normal(0, sf_par)
-                    vel[1, ii] = np.random.normal(0, sf_per)
-                    vel[2, ii] = np.random.normal(0, sf_per)
-                    v_perp     = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
-                else:
-                    particle_PA = 0.0
-                    while np.abs(particle_PA) < loss_cone_xmax:
-                        vel[0, ii]  = (np.random.normal(0, sf_par))# * (- np.sign(pos[0, ii]))
-                        vel[1, ii]  =        np.random.normal(0, sf_per)
-                        vel[2, ii]  =        np.random.normal(0, sf_per)
-                        v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
-                        
-                        particle_PA = np.arctan(v_perp / vel[0, ii])                   # Calculate particle PA's
-                    
-                # Don't foget : Also need to reinitialize position gyrophase (pos[1:2])
-                B0x         = eval_B0x(pos[0, ii])
-                gyangle     = init.get_gyroangle_single(vel[:, ii])
-                rL          = v_perp / (qm_ratios[idx[ii]] * B0x)
-                pos[1, ii]  = rL * np.cos(gyangle)
-                pos[2, ii]  = rL * np.sin(gyangle)
-                    
-            # Mario (Periodic)
-            else:   
-                if pos[0, ii] > xmax:
-                    pos[0, ii] += xmin - xmax
-                elif pos[0, ii] < xmin:
-                    pos[0, ii] += xmax - xmin  
+                # Deactivate particle (Open)
+                if particle_periodic == False: 
+                    pos[:, ii] *= 0.0
+                    vel[:, ii] *= 0.0
+                    idx[ii]    -= 128
+      
+                # Move particle to opposite boundary (Periodic)
+                else:   
+                    if pos[0, ii] > xmax:
+                        pos[0, ii] += xmin - xmax
+                    elif pos[0, ii] < xmin:
+                        pos[0, ii] += xmax - xmin  
 
     assign_weighting_TSC(pos, Ie, W_elec)
     return
+
+
+#%% PARTICLE INJECTION ROUTINES
+from scipy.optimize import fsolve
+from scipy.special  import erf, erfinv
+
+
+@nb.njit()
+def locate_spare_indices(idx, N_needed, ii_first=0):
+    '''
+    Function to locate N_needed number of indices that contain
+    deactivated (i.e. spare) particles. 
+    '''
+    output_indices = np.zeros(N_needed, dtype=int)
+    N_found = 0; ii = ii_first
+    
+    while N_found < N_needed:
+        if idx[ii] < 0:
+            output_indices[ii] = idx[ii]
+            N_found += 1
+        ii += 1
+    return output_indices, ii+1
+
+
+def gamma_so(n, V, U):
+    '''
+    Inbound flux: Phase space from 0->inf
+    '''
+    t1 = n * V / (2 * np.sqrt(np.pi))
+    t2 = np.exp(- U ** 2 / V ** 2)
+    t3 = np.sqrt(np.pi) * U / V
+    t4 = 1 + erf(U / V)
+    return t1 * (t2 + t3*t4)
+
+
+def gamma_s(vx, n, V, U):
+    '''
+    Inbound flux: Phase space from 0->vx
+    '''
+    t1  = n * V / (2 * np.sqrt(np.pi))
+    t2  = np.exp(-       U  ** 2 / V ** 2)
+    t2b = np.exp(- (vx - U) ** 2 / V ** 2)
+    t3  = np.sqrt(np.pi) * U / V
+    t4a = erf((vx - U) / V)
+    t4  = erf(      U  / V)
+    return t1 * (t2 - t2b + t3*(t4a + t4))
+
+
+# Minimize this thing (e.g. Find root)
+def find_root(vx, n, V, U, Rx):
+    return gamma_s(vx, n, V, U) / gamma_so(n, V, U) - Rx    
+
+
+def inject_particles(pos, vel, idx, ni, Us, Pi, flux_rem, dt):
+    '''
+    A lot of this might be able to be replaced with numpy random functions.
+    
+    Loops through each:
+        -- Boundary (ND, ND + NX - 1)
+        -- Species
+        -- Newly injected particle
+        
+    To check :: 
+        -- Does vx have to be negative for the second boundary? Or is this
+            accounted for in the moments?
+        -- Should I put a rejection method in for a loss-cone distribution 
+            depending on ion type?
+    '''
+    
+    end_cells = [ND, ND + NX - 1]
+    ii_last   = 0
+    # For each boundary, use moments
+    cell = 0
+    for ii in end_cells:
+        for jj in range(Nj):
+            Ws  = 0.5 * mass[jj] * ni[ii, jj] * np.linalg.inv(Pi[ii, jj, :, :])
+            #Cs  = ni[ii, jj] * np.sqrt(np.linalg.det(Ws)) / np.pi ** 1.5
+            Vsx = 2 * Pi[ii, jj, 0, 0] / (mass[jj] * ni[ii, jj])
+            
+            # Find number of (sim) particles to inject
+            integrated_flux      = gamma_so(ni[ii, jj], Vsx, Us[ii, jj, 0]) * dt
+            num_inject           = integrated_flux // n_contr[jj]
+            flux_rem[cell, jj]   = integrated_flux % n_contr[jj]
+            new_indices, ii_last = locate_spare_indices(num_inject, ii_last)
+            
+            # For each new particle
+            for kk in range(num_inject):                
+                Rx, Ry, Rz = np.random.uniform(size=3)
+                
+                # Calculate vx using root finder/minimization (is this the fastest way?)
+                vx = fsolve(find_root, x0=vth_par[jj], args=(ni[ii, jj], Vsx, Us[0], Rx))
+                                      #,xtol=tol, maxfev=fev)
+                
+                # Calculate vy, vz using their analytic functions (Maybe do this in batches later?)
+                vy = Us[ii, jj, 1] * erfinv(2*Ry-1) * np.sqrt(Ws[2, 2] / (Ws[1, 1] * Ws[2, 2] - Ws[1, 2] ** 2))\
+                   + (vx - Us[ii, jj, 0]) * Pi[ii, jj, 0, 1] / Pi[ii, jj, 0, 0]
+                
+                vz = Us[ii, jj, 0] * 1.0 / Ws[2, 2] * (np.sqrt(Ws[2, 2]) * erfinv(2*Rz-1) - (vx - Us[ii, jj, 0])*Ws[0, 2]
+                                                       - (vy - Us[ii, jj, 1])*Ws[1, 2])
+                
+                # Set rL(y, z) off-plane using xmax value
+                pp = new_indices[kk]
+                idx[pp]     = jj
+                gyangle     = init.get_gyroangle_single(vel[:, pp])
+                rL          = np.sqrt(vy**2 + vz**2) / (qm_ratios[idx[pp]] * B_xmax)
+                pos[1, pp]  = rL * np.cos(gyangle)
+                pos[2, pp]  = rL * np.sin(gyangle)
+        cell += 1
+                
+                
+                
+    return
+
+    

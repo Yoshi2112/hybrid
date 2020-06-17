@@ -9,8 +9,12 @@ import fields_1D     as fields
 import sources_1D    as sources
 import save_routines as save
 
-from simulation_parameters_1D import save_particles, save_fields, te0_equil
+from simulation_parameters_1D import save_particles, save_fields, NC
 
+# TODO:
+# -- Check position density :: Does it need to be saved for the P/C loop?
+# -- Vectorise/Optimize particle loss/injection
+# -- Test run :: Does it compile and execute?
 
 if __name__ == '__main__':
     start_time = timer()
@@ -18,16 +22,14 @@ if __name__ == '__main__':
     # Initialize simulation: Allocate memory and set time parameters
     pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp,temp_N = init.initialize_particles()
     B, E_int, E_half, Ve, Te, Te0                       = init.initialize_fields()
-    q_dens, q_dens_adv, Ji, ni, nu                      = init.initialize_source_arrays()
+    q_dens, q_dens_adv, Ji, ni, nu, Pi                  = init.initialize_source_arrays()
     old_particles, old_fields, temp3De, temp3Db, temp1D,\
                                           v_prime, S, T = init.initialize_tertiary_arrays()
     
     # Collect initial moments and save initial state
-    sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu) 
-    
-    if te0_equil == True:
-        init.set_equilibrium_te0(q_dens, Te0)
-    
+    sources.collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi) 
+    sources.collect_position_moment(Ie, W_elec, idx, q_dens, ni)
+        
     DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array\
         = init.set_timestep(vel, Te0)
         
@@ -44,37 +46,106 @@ if __name__ == '__main__':
     print('Retarding velocity...')
     particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E_int, v_prime, S, T, temp_N, -0.5*DT)
 
-    qq       = 1;    sim_time = DT
-    print('Starting main loop...')
-    while qq < max_inc:
-        qq, DT, max_inc, part_save_iter, field_save_iter =                                \
-        aux.main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T, temp_N,\
-              B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,                           \
-              Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields,           \
-              B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter, field_save_iter)
-
-        if qq%part_save_iter == 0 and save_particles == 1:
-            save.save_particle_data(sim_time, DT, part_save_iter, qq, pos,
-                                    vel, idx)
+    if False:
+        qq       = 1;    sim_time = DT
+        print('Starting main loop...')
+        while qq < max_inc:
+            ###########################
+            ####### MAIN LOOP #########
+            ###########################
             
-        if qq%field_save_iter == 0 and save_fields == 1:
-            save.save_field_data(sim_time, DT, field_save_iter, qq, Ji, E_int,
-                                 B, Ve, Te, q_dens, B_damping_array, E_damping_array)
+            # Check timestep
+            qq, DT, max_inc, part_save_iter, field_save_iter, damping_array \
+            = aux.check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, Ep, Bp, v_prime, S, T,temp_N,\
+                             qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array)
+            
+            # Move particles, collect moments, delete or inject new particles
+            particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
+                                                    B, E_int, DT, q_dens_adv, Ji, ni, nu)
+            
+            # Average N, N + 1 densities (q_dens at N + 1/2)
+            q_dens *= 0.5
+            q_dens += 0.5 * q_dens_adv
+            
+            # Push B from N to N + 1/2
+            fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
+            
+            # Calculate E at N + 1/2
+            fields.calculate_E(B, Ji, q_dens, E_half, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
         
-        if qq%50 == 0:            
-            running_time = int(timer() - start_time)
-            hrs          = running_time // 3600
-            rem          = running_time %  3600
+            ###################################
+            ### PREDICTOR CORRECTOR SECTION ###
+            ###################################
+        
+            # Store old values
+            old_particles[0:3 , :] = pos
+            old_particles[3:6 , :] = vel
+            old_particles[6   , :] = Ie
+            old_particles[7:10, :] = W_elec
+            old_particles[10  , :] = idx
             
-            mins         = rem // 60
-            sec          = rem %  60
-            print('Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(qq, max_inc, hrs, mins, sec))
+            old_fields[:,   0:3]  = B
+            old_fields[:NC, 3:6]  = Ji
+            old_fields[:NC, 6:9]  = Ve
+            old_fields[:NC,   9]  = Te
             
-        qq       += 1
-        sim_time += DT
+            # Predict fields
+            E_int *= -1.0
+            E_int +=  2.0 * E_half
+            
+            fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
+        
+            # Advance particles to obtain source terms at N + 3/2
+            particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
+                                                    B, E_int, DT, q_dens, Ji, ni, nu, pc=1)
+            
+            q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
+            
+            # Compute predicted fields at N + 3/2
+            fields.push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
+            fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
+            
+            # Determine corrected fields at N + 1 
+            E_int *= 0.5;    E_int += 0.5 * E_half
+        
+            # Restore old values: [:] allows reference to same memory (instead of creating new, local instance)
+            pos[:]    = old_particles[0:3 , :]
+            vel[:]    = old_particles[3:6 , :]
+            Ie[:]     = old_particles[6   , :]
+            W_elec[:] = old_particles[7:10, :]
+            idx[:]    = old_particles[10  , :]
+            
+            B[:]      = old_fields[:,   0:3]
+            Ji[:]     = old_fields[:NC, 3:6]
+            Ve[:]     = old_fields[:NC, 6:9]
+            Te[:]     = old_fields[:NC,   9]
+            
+            fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
+        
+            q_dens[:] = q_dens_adv
     
-    runtime = round(timer() - start_time,2)
-    
-    if save_fields == 1 or save_particles == 1:
-        save.add_runtime_to_header(runtime)
-    print("Time to execute program: {0:.2f} seconds".format(runtime))
+            if qq%part_save_iter == 0 and save_particles == 1:
+                save.save_particle_data(sim_time, DT, part_save_iter, qq, pos,
+                                        vel, idx)
+                
+            if qq%field_save_iter == 0 and save_fields == 1:
+                save.save_field_data(sim_time, DT, field_save_iter, qq, Ji, E_int,
+                                     B, Ve, Te, q_dens, B_damping_array, E_damping_array)
+            
+            if qq%50 == 0:            
+                running_time = int(timer() - start_time)
+                hrs          = running_time // 3600
+                rem          = running_time %  3600
+                
+                mins         = rem // 60
+                sec          = rem %  60
+                print('Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(qq, max_inc, hrs, mins, sec))
+                
+            qq       += 1
+            sim_time += DT
+        
+        runtime = round(timer() - start_time,2)
+        
+        if save_fields == 1 or save_particles == 1:
+            save.add_runtime_to_header(runtime)
+        print("Time to execute program: {0:.2f} seconds".format(runtime))

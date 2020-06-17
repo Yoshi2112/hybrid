@@ -174,6 +174,9 @@ def uniform_gaussian_distribution_quiet():
     vel = np.zeros((3, N), dtype=np.float64)
     idx = np.zeros(N,      dtype=np.int8)
     np.random.seed(seed)
+    
+    # Start all particles as disabled (idx < 0)
+    idx[:] = -1.0
 
     for jj in range(Nj):
         idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle idx
@@ -273,12 +276,12 @@ def uniform_gaussian_distribution_quiet():
     
     # Set initial Larmor radius - rL from v_perp, distributed to y,z based on velocity gyroangle
     print('Initializing particles off-axis')
-    B0x     = fields.eval_B0x(pos[0])
-    v_perp  = np.sqrt(vel[1] ** 2 + vel[2] ** 2)
-    gyangle = get_gyroangle_array(vel)
-    rL      = v_perp / (qm_ratios[idx] * B0x)
-    pos[1]  = rL * np.cos(gyangle)
-    pos[2]  = rL * np.sin(gyangle)
+    B0x         = fields.eval_B0x(pos[0, :en])
+    v_perp      = np.sqrt(vel[1, :en] ** 2 + vel[2, :en] ** 2)
+    gyangle     = get_gyroangle_array(vel[:, :en])
+    rL          = v_perp / (qm_ratios[idx[:en]] * B0x)
+    pos[1, :en] = rL * np.cos(gyangle)
+    pos[2, :en] = rL * np.sin(gyangle)
     
     check_boundary_particles(pos, vel)
     
@@ -485,15 +488,17 @@ def initialize_source_arrays():
         q_dens  -- Total ion charge  density
         q_dens2 -- Total ion charge  density (used for averaging)
         Ji      -- Total ion current density
-        ni      -- Ion number density per species
-        nu      -- Ion velocity "density" per species
+        ni      -- Zeroth moment : Ion number density per species (Scalar)
+        nu      -- First  moment : Ion velocity "density" per species (Vector)
+        Pi      -- Second moment : Ion pressure tensor per species (Tensor) (only at two cells, times two for "old/new")
     '''
-    q_dens  = np.zeros( NC,         dtype=nb.float64)    
-    q_dens2 = np.zeros( NC,         dtype=nb.float64) 
-    Ji      = np.zeros((NC, 3),     dtype=nb.float64)
-    ni      = np.zeros((NC, Nj),    dtype=nb.float64)
-    nu      = np.zeros((NC, Nj, 3), dtype=nb.float64)
-    return q_dens, q_dens2, Ji, ni, nu
+    q_dens  = np.zeros( NC,            dtype=nb.float64)    
+    q_dens2 = np.zeros( NC,            dtype=nb.float64) 
+    Ji      = np.zeros((NC, 3),        dtype=nb.float64)
+    ni      = np.zeros((NC, Nj),       dtype=nb.float64)
+    nu      = np.zeros((NC, Nj, 3),    dtype=nb.float64)
+    Pi      = np.zeros((NC, Nj, 3, 3), dtype=nb.float64)
+    return q_dens, q_dens2, Ji, ni, nu, Pi
 
 
 @nb.njit()
@@ -523,78 +528,6 @@ def initialize_tertiary_arrays():
     old_particles = np.zeros((11, N),      dtype=nb.float64)
         
     return old_particles, old_fields, temp3De, temp3Db, temp1D, v_prime, S, T
-
-
-def set_equilibrium_te0(q_dens, Te0):
-    '''
-    Modifies the initial Te array to allow grad(P_e) = grad(nkT) = 0
-    
-    Iterative? Analytic?
-    
-    NOTE: Removed factors 2dx from qdens_gradient and m_arr, since they cancel out
-    
-    Note: Could probably calculate Te0 from some sort of density/temperature relationship
-    with the ions, rather than defining it a priori, for now it should be ok (set via beta
-    same as cold ions)
-    '''
-    qdens_gradient = np.zeros(NC    , dtype=np.float64)
-    
-    # Get density gradient: Central differencing, internal points
-    for ii in nb.prange(1, NC - 1):
-        qdens_gradient[ii] = (q_dens[ii + 1] - q_dens[ii - 1])
-    
-    # Forwards/Backwards difference at physical boundaries (In this case, the gradient will be zero)
-    qdens_gradient[0]      = 0
-    qdens_gradient[NC - 1] = 0
-    
-    m_arr = (qdens_gradient/q_dens)
-    
-    # Construct solution array to work out Te
-    soln_array = np.zeros((NC, NC), dtype=np.float64)
-    ans_arr    = np.zeros(NC, dtype=np.float64)
-    
-    # Construct central points (Centered finite difference with constant)
-    for ii in range(1, NC-1):
-        soln_array[ii, ii - 1] = -1.0
-        soln_array[ii, ii    ] =  1.0 * m_arr[ii]
-        soln_array[ii, ii + 1] =  1.0
-    
-    # Enter boundary points : Neumann boundary conditions
-    soln_array[0, 0]           = 1.0
-    soln_array[NC - 1, NC - 1] = 1.0
-    
-    ans_arr[0]      = Te0_scalar
-    ans_arr[NC - 1] = Te0_scalar
-    
-    Te0[:] = np.dot(np.linalg.inv(soln_array), ans_arr)
-    
-    if False:
-        # Test: This should be zero if working
-        grad_P   = np.zeros(NC    , dtype=np.float64)
-        temp     = np.zeros(NC + 1, dtype=np.float64)
-        fields.get_grad_P(q_dens, Te0, grad_P, temp)
-        
-        import sys
-        
-        fig, axes = plt.subplots(4, sharex=True, figsize=(15, 10))
-        
-        axes[0].set_title('Initial Temp/Dens with zero derivative at ND-NX interface')
-        axes[0].plot(q_dens / (q*ne))
-        axes[0].set_ylabel('ne / ne0')
-        
-        axes[1].plot(qdens_gradient)
-        axes[1].set_ylabel('dne/dx')
-        
-        axes[2].plot(Te0)
-        axes[2].set_ylabel('Te')
-        
-        axes[3].plot(grad_P)
-        axes[3].set_ylabel('grad(P)')
-        
-        axes[3].set_xlabel('Cell number')
-        
-        sys.exit()
-    return
 
 
 def set_timestep(vel, Te0):
@@ -652,16 +585,16 @@ def set_timestep(vel, Te0):
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
    
-    #POS, VEL, IDX = uniform_gaussian_distribution_quiet()
+    POS, VEL, IDX = uniform_gaussian_distribution_quiet()
     
-    POS, VEL, IDX = uniform_accounting_for_beta()
+    #POS, VEL, IDX = uniform_accounting_for_beta()
     
     V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
     V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
     V_PARA = VEL[0] / va
     
     #diag.check_velocity_components_vs_space(POS, VEL, jj=1)
-    diag.plot_temperature_extremes()
+    #diag.plot_temperature_extremes()
     #diag.check_cell_velocity_distribution_2D(POS, VEL, node_number=None, jj=1, save=True)
     #diag.check_position_distribution(POS)
     #diag.collect_macroparticle_moments(pos, vel, idx)

@@ -74,10 +74,6 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
     # Add B0x to interpolated array
     for ii in range(NC):
         interp[ii, 0] = fields.eval_B0x(E_nodes[ii])
-    
-    # This bit could be removed to allow B0x to vary in green cells naturally
-    # interp[:ND,      0] = interp[ND,    0]
-    # interp[ND+NX+1:, 0] = interp[ND+NX, 0]
     return
 
 
@@ -97,11 +93,6 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
     should be valid except under extreme instability. The timestep is then halved and all
     time-dependent counters and quantities are doubled. Velocity is then retarded back
     half a timestep to de-sync back into a leapfrog scheme.
-    
-    Also evaluates if a timestep is unnneccessarily too small, which can sometimes happen
-    after wave-particle interactions are complete and energetic particles are slower. This
-    criteria is higher in order to provide a little hysteresis and prevent constantly switching
-    timesteps.
     '''
     interpolate_edges_to_center(B, B_center)
     B_magnitude     = np.sqrt(B_center[ND:ND+NX+1, 0] ** 2 +
@@ -132,110 +123,5 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
 
         particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T,temp_N,-0.5*DT)   # De-sync vel/pos 
         print('Timestep halved. Syncing particle velocity...')
-        #init.set_damping_array(damping_array, DT)
-            
-# =============================================================================
-#     elif DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0:
-#         particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, 0.5*DT)    # Re-sync vel/pos          
-#         DT         *= 2.0
-#         max_inc   //= 2
-#         qq        //= 2
-# 
-#         field_save_iter //= 2
-#         part_save_iter //= 2
-#             
-#         particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*DT)   # De-sync vel/pos 
-#         print('Timestep Doubled. Syncing particle velocity...')
-#         init.set_damping_array(damping_array, DT)
-# =============================================================================
-
     return qq, DT, max_inc, part_save_iter, field_save_iter, damping_array
 
-
-@nb.njit()
-def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N,                      \
-              B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
-              Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields,\
-              B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter, field_save_iter):
-    '''
-    Main loop separated from __main__ function, since this is the actual computation bit.
-    Could probably be optimized further, but I wanted to njit() it.
-    The only reason everything's not njit() is because of the output functions.
-    
-    Future: Come up with some way to loop until next save point
-    
-    Thoughts: declare a variable steps_to_go. Output all time variables at return
-    to resync everything, and calculate steps to next stop.
-    If no saves, steps_to_go = max_inc
-    '''
-    # Check timestep
-    qq, DT, max_inc, part_save_iter, field_save_iter, damping_array \
-    = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, Ep, Bp, v_prime, S, T,temp_N,\
-                     qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array)
-    
-    # Move particles, collect moments
-    particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
-                                            B, E_int, DT, q_dens_adv, Ji, ni, nu)
-    
-    # Average N, N + 1 densities (q_dens at N + 1/2)
-    q_dens *= 0.5
-    q_dens += 0.5 * q_dens_adv
-    
-    # Push B from N to N + 1/2
-    fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
-    
-    # Calculate E at N + 1/2
-    fields.calculate_E(B, Ji, q_dens, E_half, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
-
-    ###################################
-    ### PREDICTOR CORRECTOR SECTION ###
-    ###################################
-
-    # Store old values
-    old_particles[0:3 , :] = pos
-    old_particles[3:6 , :] = vel
-    old_particles[6   , :] = Ie
-    old_particles[7:10, :] = W_elec
-    old_particles[10  , :] = idx
-    
-    old_fields[:,   0:3]  = B
-    old_fields[:NC, 3:6]  = Ji
-    old_fields[:NC, 6:9]  = Ve
-    old_fields[:NC,   9]  = Te
-    
-    # Predict fields
-    E_int *= -1.0
-    E_int +=  2.0 * E_half
-    
-    fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
-
-    # Advance particles to obtain source terms at N + 3/2
-    particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
-                                            B, E_int, DT, q_dens, Ji, ni, nu, pc=1)
-    
-    q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
-    
-    # Compute predicted fields at N + 3/2
-    fields.push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
-    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
-    
-    # Determine corrected fields at N + 1 
-    E_int *= 0.5;    E_int += 0.5 * E_half
-
-    # Restore old values: [:] allows reference to same memory (instead of creating new, local instance)
-    pos[:]    = old_particles[0:3 , :]
-    vel[:]    = old_particles[3:6 , :]
-    Ie[:]     = old_particles[6   , :]
-    W_elec[:] = old_particles[7:10, :]
-    idx[:]    = old_particles[10  , :]
-    
-    B[:]      = old_fields[:,   0:3]
-    Ji[:]     = old_fields[:NC, 3:6]
-    Ve[:]     = old_fields[:NC, 6:9]
-    Te[:]     = old_fields[:NC,   9]
-    
-    fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
-
-    q_dens[:] = q_dens_adv
-
-    return qq, DT, max_inc, part_save_iter, field_save_iter
