@@ -398,21 +398,27 @@ def test_weight_conservation():
     Plots the normalized weight for a single particle at 1e5 points along simulation
     domain. Should remain at 1 the whole time.
     '''
-    nspace        = 100
+    nspace  = const.NX * 2 + 1
 
-    positions     = np.zeros((3, nspace), dtype=float)
-    positions[0]  = np.linspace(const.xmin, const.xmax, nspace, endpoint=True)
-    normal_weight = np.zeros(positions.shape[1])
-    left_nodes    = np.zeros(positions.shape[1], dtype=int)
-    weights       = np.zeros((3, positions.shape[1]))
+    pos     = np.zeros((3, nspace), dtype=float)
+    pos[0]  = np.linspace(const.xmin, const.xmax, nspace, endpoint=True)
+    I       = np.zeros(pos.shape[1], dtype=int)
+    idx     = np.zeros(pos.shape[1], dtype=int)
+    W_1     = np.zeros(pos.shape[1])  # Weights at I + 1
+    W_0     = np.zeros(pos.shape[1])  # Weights at I + 0
     
-    particles.assign_weighting_TSC(positions, left_nodes, weights, E_nodes=False)
-    
-    for ii in range(positions.shape[1]):
-        normal_weight[ii] = weights[:, ii].sum()
-
-    plt.plot(positions[0], normal_weight)
-    plt.xlim(const.xmin, const.xmax)
+    particles.assign_weighting_CIC(pos, idx, I, W_1, E_nodes=False)
+    W_0  = 1.0 - W_1
+    pos /= const.dx
+    pos  = pos.T
+    pdb.set_trace()
+# =============================================================================
+#     for ii in range(positions.shape[1]):
+#         normal_weight[ii] = weights[:, ii].sum()
+# 
+#     plt.plot(positions[0], normal_weight)
+#     plt.xlim(const.xmin, const.xmax)
+# =============================================================================
     return
 
 
@@ -2651,8 +2657,8 @@ if __name__ == '__main__':
     #test_varying_background_function()
     #test_push_B_w_varying_background()
     
-    #test_weight_conservation()
-    check_density_deposition()
+    test_weight_conservation()
+    #check_density_deposition()
     #test_weight_shape_and_alignment()
     
     #compare_parabolic_to_dipole()

@@ -32,8 +32,8 @@ quiet_start       = False                         # Flag to use quiet start (Fal
 damping_multiplier= 1.0
 
 ### SIMULATION PARAMETERS ###
-NX        = 64                              # Number of cells - doesn't include ghost cells
-ND        = 8                               # Damping region length: Multiple of NX (on each side of simulation domain)
+NX        = 6                               # Number of cells - doesn't include ghost cells
+ND        = 2                               # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev   = 50                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell
@@ -54,7 +54,7 @@ species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/label
 temp_color = ['blue', 'red']
 temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Hot particles get the LCD, cold are maxwellians.
 dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or Gaussian (1)
-nsp_ppc    = np.array([200, 200])                           # Number of particles per cell, per species
+nsp_ppc    = np.array([5000, 5000])                         # Number of particles per cell, per species
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
@@ -76,6 +76,7 @@ J_k            = 1e-7                                       # External current :
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
 E_e            = 10.0                                       # Electron energy (eV)
 
+# Subcycling :: Winske & Quest, 1988
 
 #%%### DERIVED SIMULATION PARAMETERS
 ### PHYSICAL CONSTANTS ###

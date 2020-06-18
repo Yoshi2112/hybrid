@@ -29,19 +29,19 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, 
     
     # Double check these velocity moments :: Make sure I didn't accidentally ruin something.
     collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi)
-    collect_position_moment(Ie, W_elec, idx, q_dens_adv, ni)
+    collect_position_moment(pos, Ie, W_elec, idx, q_dens_adv, ni)
     return
 
 
 @nb.njit()
-def assign_weighting_TSC(pos, idx, I, W, E_nodes=True):
-    '''Triangular-Shaped Cloud (TSC) weighting scheme used to distribute particle densities to
-    nodes and interpolate field values to particle positions. Ref. Lipatov? Or Birdsall & Langdon?
+def assign_weighting_CIC(pos, idx, I, W, E_nodes=True):
+    '''Cloud-in-Cell weighting scheme used to distribute particle densities to
+    nodes and interpolate field values to particle positions. Winske 1993
 
     INPUT:
         pos     -- particle positions (x)
-        I       -- Leftmost (to nearest) nodes. Output array
-        W       -- TSC weights, 3xN array starting at respective I
+        I       -- Leftmost node
+        W       -- CIC weight at I + 1
         E_nodes -- True/False flag for calculating values at electric field
                    nodes (grid centres) or not (magnetic field, edges)
     
@@ -52,22 +52,11 @@ def assign_weighting_TSC(pos, idx, I, W, E_nodes=True):
     
     NOTE: The addition of `epsilon' prevents banker's rounding due to precision limits. This
           is the easiest way to get around it.
-          
-    NOTE2: If statements in weighting prevent double counting of particles on simulation
-           boundaries. abs() with threshold used due to machine accuracy not recognising the
-           upper boundary sometimes. Note sure how big I can make this and still have it
-           be valid/not cause issues, but considering the scale of normal particle runs (speeds
-           on the order of va) it should be plenty fine.
            
     Could vectorize this with the temp_N array, then check for particles on the boundaries (for
     manual setting)
     
-    QUESTION :: Why do particles on the boundary only give 0.5 weighting? 
-    ANSWER   :: It seems legit and prevents double counting of a particle on the boundary. Since it
-                is a B-field node, there should be 0.5 weighted to both nearby E-nodes. In this case,
-                reflection doesn't make sense because there cannot be another particle there - there is 
-                only one midpoint position (c.f. mirroring contributions of all other particles due to 
-                pretending there's another identical particle on the other side of the simulation boundary).
+    
     '''
     Np         = pos.shape[1]
     epsil      = 1e-15
@@ -77,28 +66,13 @@ def assign_weighting_TSC(pos, idx, I, W, E_nodes=True):
     else:
         grid_offset   = 0.0
     
-    particle_transform = xmax + (ND - grid_offset)*dx  + epsil  # Offset to account for E/B grid and damping nodes
+    particle_transform = xmax + (ND - grid_offset)*dx  + epsil      # Offset to account for E/B grid and damping nodes
     
     for ii in np.arange(Np):
         if idx[ii] >= 0: 
-            xp          = (pos[0, ii] + particle_transform) / dx    # Shift particle position >= 0
-            I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node (Vectorize?)
-            delta_left  = I[ii] - xp                                # Distance from left node in grid units
-            
-            if abs(pos[0, ii] - xmin) < 1e-10:
-                I[ii]    = ND - 1
-                W[0, ii] = 0.0
-                W[1, ii] = 0.5
-                W[2, ii] = 0.0
-            elif abs(pos[0, ii] - xmax) < 1e-10:
-                I[ii]    = ND + NX - 1
-                W[0, ii] = 0.5
-                W[1, ii] = 0.0
-                W[2, ii] = 0.0
-            else:
-                W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))  # Get weighting factors
-                W[1, ii] = 0.75 - np.square(delta_left + 1.)
-                W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
+            xp    = (pos[0, ii] + particle_transform) / dx    # Shift particle position >= 0
+            I[ii] = int(xp)                                   # Get leftmost to nearest node (Vectorize?)
+            W[ii] = xp - I[ii]                                # Distance from left node in grid units
     return
 
 
@@ -141,20 +115,25 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
     Bp *= 0
     Ep *= 0
     
-    assign_weighting_TSC(pos, idx, Ib, W_mag, E_nodes=False)                # Calculate magnetic node weights
+    assign_weighting_CIC(pos, idx, Ib, W_mag, E_nodes=False)                # Calculate magnetic node weights
     eval_B0_particle(pos, Bp)  
     
     for ii in range(vel.shape[1]):
         if idx[ii] < 0:
             qmi[ii] = 0.0                                                   # Ensures v = 0 for dead particles
         else:
-            qmi[ii] = 0.5 * DT * qm_ratios[idx[ii]]                         # q/m for ion of species idx[ii]
-            for jj in range(3):                                             # Nodes
-                for kk in range(3):                                         # Components
-                    Ep[kk, ii] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]       # Vector E-field  at particle location
-                    Bp[kk, ii] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]       # Vector b1-field at particle location
+            qmi[ii] = 0.5 * DT * qm_ratios[idx[ii]]
+            for kk in range(3):
+                
+                # Contribution of node I
+                Ep[kk, ii] += E[Ie[ii] + 0, kk] * (1.0 - W_elec[ii])
+                Bp[kk, ii] += B[Ib[ii] + 0, kk] * (1.0 - W_mag[ ii])
 
-    vel[:, :] += qmi[:] * Ep[:, :]                                      # First E-field half-push IS NOW V_MINUS
+                # Contribution of node I + 1
+                Ep[kk, ii] += E[Ie[ii] + 1, kk] * W_elec[ii]
+                Bp[kk, ii] += B[Ib[ii] + 1, kk] * W_mag[ ii]
+
+    vel[:, :] += qmi[:] * Ep[:, :]                                            # First E-field half-push IS NOW V_MINUS
 
     T[:, :] = qmi[:] * Bp[:, :]                                               # Vector Boris variable
     S[:, :] = 2.*T[:, :] / (1. + T[0, :] ** 2 + T[1, :] ** 2 + T[2, :] ** 2)  # Vector Boris variable
@@ -210,7 +189,7 @@ def position_update(pos, vel, idx, DT, Ie, W_elec, ni, nu, Pi):
                     elif pos[0, ii] < xmin:
                         pos[0, ii] += xmax - xmin  
 
-    assign_weighting_TSC(pos, idx, Ie, W_elec)
+    assign_weighting_CIC(pos, idx, Ie, W_elec)
     return
 
 
@@ -324,6 +303,17 @@ def inject_particles(pos, vel, idx, ni, Us, Pi, flux_rem, dt, pc):
                 rL          = np.sqrt(vy**2 + vz**2) / (qm_ratios[idx[pp]] * B_xmax)
                 pos[1, pp]  = rL * np.cos(gyangle)
                 pos[2, pp]  = rL * np.sin(gyangle)
+                
+                vel[0, pp]  = vx
+                vel[1, pp]  = vy
+                vel[2, pp]  = vz
+                
+                # Randomly reinitialize position so it pops into simulation domain
+                # on position advance
+                if ii < ni.shape[0] // 2:
+                    pos[0, pp] = np.random.uniform(xmin - vx*dt, xmin)
+                else:
+                    pos[0, pp] = np.random.uniform(xmax, xmax  - vx*dt)
     return
 
     

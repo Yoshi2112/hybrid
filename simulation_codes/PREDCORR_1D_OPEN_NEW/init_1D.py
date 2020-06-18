@@ -399,16 +399,16 @@ def initialize_particles():
     '''
     pos, vel, idx = uniform_gaussian_distribution_quiet()
     
-    Ie         = np.zeros(N,      dtype=nb.uint16)
-    Ib         = np.zeros(N,      dtype=nb.uint16)
-    W_elec     = np.zeros((3, N), dtype=nb.float64)
-    W_mag      = np.zeros((3, N), dtype=nb.float64)
+    Ie         = np.zeros(N, dtype=nb.uint16)
+    Ib         = np.zeros(N, dtype=nb.uint16)
+    W_elec     = np.zeros(N, dtype=nb.float64)
+    W_mag      = np.zeros(N, dtype=nb.float64)
     
     Bp      = np.zeros((3, N), dtype=nb.float64)
     Ep      = np.zeros((3, N), dtype=nb.float64)
     temp_N  = np.zeros((N),    dtype=nb.float64)
     
-    particles.assign_weighting_TSC(pos, idx, Ie, W_elec)
+    particles.assign_weighting_CIC(pos, idx, Ie, W_elec)
     return pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, temp_N
 
 
@@ -654,7 +654,7 @@ if __name__ == '__main__':
     
     
     for jj in range(const.Nj):
-        if False:
+        if True:
             # Loss cone diagram
             fig1, ax1 = plt.subplots()
             
@@ -679,7 +679,7 @@ if __name__ == '__main__':
 #             ax3.axis('equal')
 # =============================================================================
             
-        if False:
+        if True:
             # v_mag vs. x
             fig1, ax2 = plt.subplots()
             
@@ -689,7 +689,7 @@ if __name__ == '__main__':
             ax2.set_xlabel('Position (m)')
             ax2.set_ylabel('Velocity |v| (m/s)')
         
-        if False:
+        if True:
             # v components vs. x (3 plots)
             fig1, ax3 = plt.subplots(3)
             

@@ -9,12 +9,13 @@ import fields_1D     as fields
 import sources_1D    as sources
 import save_routines as save
 
+import diagnostics as diag
+
 from simulation_parameters_1D import save_particles, save_fields, NC, Nj
 import sys
+
 # TODO:
 # -- Check initial moments (i.e. verify uniform and expected charge density, zero transverse current density)
-# -- Check position density :: Does it need to be saved for the P/C loop?
-# -- Increase Pressure Tensor collection range, TSC requires 2*dx for conserved moments
 # -- Vectorise/Optimize particle loss/injection
 # -- Test run :: Does it compile and execute?
 
@@ -29,10 +30,10 @@ if __name__ == '__main__':
              temp3De, temp3Db, temp1D, v_prime, S, T    = init.initialize_tertiary_arrays()
     print('Array memory allocated')
     # Collect initial moments and save initial state
-    #sources.collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi) 
-    #sources.collect_position_moment(Ie, W_elec, idx, q_dens, ni)
+    sources.collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi) 
+    sources.collect_position_moment(pos, Ie, W_elec, idx, q_dens, ni)
     print('Initial moments and sources collected')
-    sys.exit()
+
     DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array\
         = init.set_timestep(vel, Te0)
     
@@ -45,6 +46,8 @@ if __name__ == '__main__':
         save.save_field_data(0, DT, field_save_iter, 0, Ji, E_int,\
                              B, Ve, Te, q_dens, B_damping_array, E_damping_array)
 
+    #diag.check_position_distribution(pos)
+    
     # Retard velocity
     print('Retarding velocity...')
     particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E_int, v_prime, S, T, temp_N, -0.5*DT)
