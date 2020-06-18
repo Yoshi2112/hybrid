@@ -408,7 +408,7 @@ def initialize_particles():
     Ep      = np.zeros((3, N), dtype=nb.float64)
     temp_N  = np.zeros((N),    dtype=nb.float64)
     
-    particles.assign_weighting_TSC(pos, Ie, W_elec)
+    particles.assign_weighting_TSC(pos, idx, Ie, W_elec)
     return pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, temp_N
 
 
@@ -514,12 +514,17 @@ def initialize_tertiary_arrays():
         temp1D        -- Swap-file scalar array with E-grid dimensions
         old_particles -- Location to store old particle values (positions, velocities, weights)
                          as part of predictor-corrector routine
-        old_fields   -- Location to store old B, Ji, Ve, Te field values for predictor-corrector routine
+        old_fields    -- Location to store old B, Ji, Ve, Te field values for predictor-corrector routine
+        old_moments   -- Location to store old moments (13*Nj per cell). Pi Tensor 
+                         seems wasteful, but since 95% or more of memory useage is particles,
+                         go with the easy to code/read alternative.
     '''
-    temp3Db       = np.zeros((NC + 1, 3),  dtype=nb.float64)
-    temp3De       = np.zeros((NC    , 3),  dtype=nb.float64)
-    temp1D        = np.zeros( NC    ,      dtype=nb.float64) 
-    old_fields    = np.zeros((NC + 1, 10), dtype=nb.float64)
+    temp3Db       = np.zeros((NC + 1, 3)     , dtype=nb.float64)
+    temp3De       = np.zeros((NC    , 3)     , dtype=nb.float64)
+    temp1D        = np.zeros( NC             , dtype=nb.float64) 
+    old_fields    = np.zeros((NC + 1, 10)    , dtype=nb.float64)
+    old_moments   = np.zeros((NC    , 13, Nj), dtype=nb.float64)
+    flux_rem      = np.zeros((NC    , Nj)    , dtype=nb.float64)
     
     v_prime = np.zeros((3, N),      dtype=nb.float64)
     S       = np.zeros((3, N),      dtype=nb.float64)
@@ -527,7 +532,7 @@ def initialize_tertiary_arrays():
         
     old_particles = np.zeros((11, N),      dtype=nb.float64)
         
-    return old_particles, old_fields, temp3De, temp3Db, temp1D, v_prime, S, T
+    return old_particles, old_fields, old_moments, flux_rem, temp3De, temp3Db, temp1D, v_prime, S, T
 
 
 def set_timestep(vel, Te0):

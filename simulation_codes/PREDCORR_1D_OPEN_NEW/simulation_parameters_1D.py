@@ -24,10 +24,9 @@ cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run as 
 #cpu_affin         = [4, 5, 6, 7]
 
 ## DIAGNOSTIC FLAGS ##
-supress_text      = False                         # Supress initialization text
-homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
-particle_periodic = False                         # Set particle boundary conditions to periodic (False : Open boundary flux)
-disable_waves     = False                         # Zeroes electric field solution at each timestep
+homogenous        = True                          # Set B0 to homogenous (as test to compare to parabolic)
+particle_periodic = True                          # Set particle boundary conditions to periodic (False : Open boundary flux)
+disable_waves     = True                          # Zeroes electric field solution at each timestep
 E_damping         = False                         # Damp E in a manner similar to B for ABCs
 quiet_start       = False                         # Flag to use quiet start (False :: semi-quiet start)
 damping_multiplier= 1.0
@@ -209,43 +208,40 @@ if rc_hwidth == 0:
 else:
     rc_print = rc_hwidth*2
 
-if supress_text == False:
-    print('Run Started')
-    print('Run Series         : {}'.format(save_path.split('//')[-1]))
-    print('Run Number         : {}'.format(run))
-    print('Field save flag    : {}'.format(save_fields))
-    print('Particle save flag : {}\n'.format(save_particles))
-    
-    print('Sim domain length  : {:5.2f}R_E'.format(2 * xmax / RE))
-    print('Density            : {:5.2f}cc'.format(ne / 1e6))
-    print('Equatorial B-field : {:5.2f}nT'.format(B_eq*1e9))
-    print('Maximum    B-field : {:5.2f}nT'.format(B_xmax*1e9))
-    print('Iono.      B-field : {:5.2f}mT'.format(B_A*1e6))
-    print('Equat. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_eq))
-    print('Bound. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_xmax * 180. / np.pi))
-    print('Maximum MLAT (+/-) : {:<5.2f} degrees  '.format(theta_xmax * 180. / np.pi))
-    print('Iono.   MLAT (+/-) : {:<5.2f} degrees\n'.format(lambda_L * 180. / np.pi))
-    
-    print('Equat. Gyroperiod: : {}s'.format(round(2. * np.pi / gyfreq, 3)))
-    print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 3)))
-    print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_rev * 2. * np.pi / gyfreq_eq, 2), max_rev))
-    
-    print('{} spatial cells, {} with ring current, 2x{} damped cells'.format(NX, rc_print, ND))
-    print('{} cells total'.format(NC))
-    print('{} particles total\n'.format(N))
-    
-    if cpu_affin is not None:
-        import psutil
-        run_proc = psutil.Process()
-        run_proc.cpu_affinity(cpu_affin)
-        if len(cpu_affin) == 1:
-            print('CPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
-        else:
-            print('CPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
-    
-density_normal_sum = (charge / q) * (density / ne)
+print('Run Started')
+print('Run Series         : {}'.format(save_path.split('//')[-1]))
+print('Run Number         : {}'.format(run))
+print('Field save flag    : {}'.format(save_fields))
+print('Particle save flag : {}\n'.format(save_particles))
 
+print('Sim domain length  : {:5.2f}R_E'.format(2 * xmax / RE))
+print('Density            : {:5.2f}cc'.format(ne / 1e6))
+print('Equatorial B-field : {:5.2f}nT'.format(B_eq*1e9))
+print('Maximum    B-field : {:5.2f}nT'.format(B_xmax*1e9))
+print('Iono.      B-field : {:5.2f}mT'.format(B_A*1e6))
+print('Equat. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_eq))
+print('Bound. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_xmax * 180. / np.pi))
+print('Maximum MLAT (+/-) : {:<5.2f} degrees  '.format(theta_xmax * 180. / np.pi))
+print('Iono.   MLAT (+/-) : {:<5.2f} degrees\n'.format(lambda_L * 180. / np.pi))
+
+print('Equat. Gyroperiod: : {}s'.format(round(2. * np.pi / gyfreq, 3)))
+print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 3)))
+print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_rev * 2. * np.pi / gyfreq_eq, 2), max_rev))
+
+print('{} spatial cells, {} with ring current, 2x{} damped cells'.format(NX, rc_print, ND))
+print('{} cells total'.format(NC))
+print('{} particles total\n'.format(N))
+
+if cpu_affin is not None:
+    import psutil
+    run_proc = psutil.Process()
+    run_proc.cpu_affinity(cpu_affin)
+    if len(cpu_affin) == 1:
+        print('CPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
+    else:
+        print('CPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
     
+density_normal_sum         = (charge / q) * (density / ne)
 simulated_density_per_cell = (n_contr * charge * nsp_ppc).sum()
 real_density_per_cell      = ne*q
 

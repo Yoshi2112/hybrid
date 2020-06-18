@@ -9,10 +9,12 @@ import fields_1D     as fields
 import sources_1D    as sources
 import save_routines as save
 
-from simulation_parameters_1D import save_particles, save_fields, NC
-
+from simulation_parameters_1D import save_particles, save_fields, NC, Nj
+import sys
 # TODO:
+# -- Check initial moments (i.e. verify uniform and expected charge density, zero transverse current density)
 # -- Check position density :: Does it need to be saved for the P/C loop?
+# -- Increase Pressure Tensor collection range, TSC requires 2*dx for conserved moments
 # -- Vectorise/Optimize particle loss/injection
 # -- Test run :: Does it compile and execute?
 
@@ -23,16 +25,17 @@ if __name__ == '__main__':
     pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp,temp_N = init.initialize_particles()
     B, E_int, E_half, Ve, Te, Te0                       = init.initialize_fields()
     q_dens, q_dens_adv, Ji, ni, nu, Pi                  = init.initialize_source_arrays()
-    old_particles, old_fields, temp3De, temp3Db, temp1D,\
-                                          v_prime, S, T = init.initialize_tertiary_arrays()
-    
+    old_particles, old_fields, old_moments, flux_rem, \
+             temp3De, temp3Db, temp1D, v_prime, S, T    = init.initialize_tertiary_arrays()
+    print('Array memory allocated')
     # Collect initial moments and save initial state
-    sources.collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi) 
-    sources.collect_position_moment(Ie, W_elec, idx, q_dens, ni)
-        
+    #sources.collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi) 
+    #sources.collect_position_moment(Ie, W_elec, idx, q_dens, ni)
+    print('Initial moments and sources collected')
+    sys.exit()
     DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array\
         = init.set_timestep(vel, Te0)
-        
+    
     fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
     
     if save_particles == 1:
@@ -45,9 +48,9 @@ if __name__ == '__main__':
     # Retard velocity
     print('Retarding velocity...')
     particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E_int, v_prime, S, T, temp_N, -0.5*DT)
-
+    print('<< Initialization Complete >>')
     if False:
-        qq       = 1;    sim_time = DT
+        qq       = 1;    sim_time = DT; max_inc = 1
         print('Starting main loop...')
         while qq < max_inc:
             ###########################
@@ -61,7 +64,7 @@ if __name__ == '__main__':
             
             # Move particles, collect moments, delete or inject new particles
             particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
-                                                    B, E_int, DT, q_dens_adv, Ji, ni, nu)
+                                                    B, E_int, DT, q_dens_adv, Ji, ni, nu, Pi, flux_rem)
             
             # Average N, N + 1 densities (q_dens at N + 1/2)
             q_dens *= 0.5
@@ -89,6 +92,15 @@ if __name__ == '__main__':
             old_fields[:NC, 6:9]  = Ve
             old_fields[:NC,   9]  = Te
             
+            # Note: This could be shortened to potentially increase speed later, if desired.
+            # But probably wouldn't do much compared to particle quantities.
+            for jj in range(Nj):
+                old_moments[:,    0 , jj]  = ni[:, jj]
+                old_moments[:,  1:4 , jj]  = nu[:, jj, :]
+                old_moments[:,  4:7 , jj]  = Pi[:, jj, 0, :]
+                old_moments[:,  7:10, jj]  = Pi[:, jj, 1, :]
+                old_moments[:, 10:13, jj]  = Pi[:, jj, 2, :]
+            
             # Predict fields
             E_int *= -1.0
             E_int +=  2.0 * E_half
@@ -97,7 +109,7 @@ if __name__ == '__main__':
         
             # Advance particles to obtain source terms at N + 3/2
             particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
-                                                    B, E_int, DT, q_dens, Ji, ni, nu, pc=1)
+                                                    B, E_int, DT, q_dens, Ji, ni, nu, Pi, flux_rem, pc=1)
             
             q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
             
@@ -119,6 +131,13 @@ if __name__ == '__main__':
             Ji[:]     = old_fields[:NC, 3:6]
             Ve[:]     = old_fields[:NC, 6:9]
             Te[:]     = old_fields[:NC,   9]
+            
+            for jj in range(Nj):
+                ni[:, jj]       = old_moments[:,    0 , jj]
+                nu[:, jj, :]    = old_moments[:,  1:4 , jj]  
+                Pi[:, jj, 0, :] = old_moments[:,  4:7 , jj]  
+                Pi[:, jj, 1, :] = old_moments[:,  7:10, jj]  
+                Pi[:, jj, 2, :] = old_moments[:, 10:13, jj]  
             
             fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
         

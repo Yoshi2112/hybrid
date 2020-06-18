@@ -21,14 +21,14 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, 
     '''
     Container function to group and order the particle advance and moment collection functions
     '''
+    if particle_periodic == False:
+        inject_particles(pos, vel, idx, ni, nu, Pi, flux_rem, DT, pc)
+        
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, temp_N, DT)
-    collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi)
     position_update(pos, vel, idx, DT, Ie, W_elec)  
     
-    # New function: Particle injector
-    inject_particles(pos, vel, idx, ni, nu, Pi, flux_rem, DT)
-    ####
-    
+    # Double check these velocity moments :: Make sure I didn't accidentally ruin something.
+    collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi)
     collect_position_moment(Ie, W_elec, idx, q_dens_adv, ni)
     return
 
@@ -141,12 +141,12 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
     Bp *= 0
     Ep *= 0
     
-    assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)                 # Calculate magnetic node weights
+    assign_weighting_TSC(pos, idx, Ib, W_mag, E_nodes=False)                # Calculate magnetic node weights
     eval_B0_particle(pos, Bp)  
     
     for ii in range(vel.shape[1]):
         if idx[ii] < 0:
-            qmi[ii] = 0.0
+            qmi[ii] = 0.0                                                   # Ensures v = 0 for dead particles
         else:
             qmi[ii] = 0.5 * DT * qm_ratios[idx[ii]]                         # q/m for ion of species idx[ii]
             for jj in range(3):                                             # Nodes
@@ -210,7 +210,7 @@ def position_update(pos, vel, idx, DT, Ie, W_elec, ni, nu, Pi):
                     elif pos[0, ii] < xmin:
                         pos[0, ii] += xmax - xmin  
 
-    assign_weighting_TSC(pos, Ie, W_elec)
+    assign_weighting_TSC(pos, idx, Ie, W_elec)
     return
 
 
@@ -265,7 +265,7 @@ def find_root(vx, n, V, U, Rx):
     return gamma_s(vx, n, V, U) / gamma_so(n, V, U) - Rx    
 
 
-def inject_particles(pos, vel, idx, ni, Us, Pi, flux_rem, dt):
+def inject_particles(pos, vel, idx, ni, Us, Pi, flux_rem, dt, pc):
     '''
     A lot of this might be able to be replaced with numpy random functions.
     
@@ -279,12 +279,15 @@ def inject_particles(pos, vel, idx, ni, Us, Pi, flux_rem, dt):
             accounted for in the moments?
         -- Should I put a rejection method in for a loss-cone distribution 
             depending on ion type?
+        -- Randomize position in x up to dx/2. Depend on velocity? Or place
+            particle just prior to boundary so it moves into simulation domain
+            on position update
     '''
-    
+    print('Injecting particles...')
     end_cells = [ND, ND + NX - 1]
     ii_last   = 0
+    
     # For each boundary, use moments
-    cell = 0
     for ii in end_cells:
         for jj in range(Nj):
             Ws  = 0.5 * mass[jj] * ni[ii, jj] * np.linalg.inv(Pi[ii, jj, :, :])
@@ -293,36 +296,34 @@ def inject_particles(pos, vel, idx, ni, Us, Pi, flux_rem, dt):
             
             # Find number of (sim) particles to inject
             integrated_flux      = gamma_so(ni[ii, jj], Vsx, Us[ii, jj, 0]) * dt
-            num_inject           = integrated_flux // n_contr[jj]
-            flux_rem[cell, jj]   = integrated_flux % n_contr[jj]
+            total_flux           = integrated_flux + flux_rem[ii, jj]
+            num_inject           = total_flux // n_contr[jj]
+            flux_rem[ii, jj]     = total_flux % n_contr[jj]
             new_indices, ii_last = locate_spare_indices(num_inject, ii_last)
             
             # For each new particle
             for kk in range(num_inject):                
                 Rx, Ry, Rz = np.random.uniform(size=3)
                 
-                # Calculate vx using root finder/minimization (is this the fastest way?)
+                # Calculate vx using root finder/minimization (is this the fastest/best way?)
                 vx = fsolve(find_root, x0=vth_par[jj], args=(ni[ii, jj], Vsx, Us[0], Rx))
                                       #,xtol=tol, maxfev=fev)
                 
-                # Calculate vy, vz using their analytic functions (Maybe do this in batches later?)
+                # Calculate vy
                 vy = Us[ii, jj, 1] * erfinv(2*Ry-1) * np.sqrt(Ws[2, 2] / (Ws[1, 1] * Ws[2, 2] - Ws[1, 2] ** 2))\
                    + (vx - Us[ii, jj, 0]) * Pi[ii, jj, 0, 1] / Pi[ii, jj, 0, 0]
                 
+                # Calculate vz
                 vz = Us[ii, jj, 0] * 1.0 / Ws[2, 2] * (np.sqrt(Ws[2, 2]) * erfinv(2*Rz-1) - (vx - Us[ii, jj, 0])*Ws[0, 2]
                                                        - (vy - Us[ii, jj, 1])*Ws[1, 2])
                 
                 # Set rL(y, z) off-plane using xmax value
-                pp = new_indices[kk]
+                pp          = new_indices[kk]
                 idx[pp]     = jj
                 gyangle     = init.get_gyroangle_single(vel[:, pp])
                 rL          = np.sqrt(vy**2 + vz**2) / (qm_ratios[idx[pp]] * B_xmax)
                 pos[1, pp]  = rL * np.cos(gyangle)
                 pos[2, pp]  = rL * np.sin(gyangle)
-        cell += 1
-                
-                
-                
     return
 
     

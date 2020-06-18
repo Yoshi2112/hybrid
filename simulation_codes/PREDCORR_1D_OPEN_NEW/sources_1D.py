@@ -24,6 +24,14 @@ def collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi):
     OUTPUT:
         ni     -- Species number moment array(size, Nj)
         nui    -- Species velocity moment array (size, Nj)
+        
+    Note: To implement time-relaxation method for boundaries, it would be 
+    required to copy existing values of Ji, nu temporarily (old values), collect
+    new values to compute charge, then re-calculate moments as a linear weighting
+    (depending on R) of the old stored moments and the new moments. This would
+    cause arrays to be created, killing efficiency. Is there a way to use the 
+    old_moments array? Or would that break because of the predictor-corrector
+    scheme?
     '''
     Ji     *= 0.
     nu     *= 0.
@@ -50,8 +58,8 @@ def collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi):
     for ii in nb.prange(vel.shape[1]):
         
         # Only count specific particles
-        if abs(pos[0, ii] - xmin) < dx or \
-           abs(pos[0, ii] - xmax) < dx:
+        if abs(pos[0, ii] - xmin) < 2*dx or \
+           abs(pos[0, ii] - xmax) < 2*dx:
             I   = Ie[ii]
             sp  = idx[ii]
             
@@ -103,6 +111,7 @@ def collect_position_moment(Ie, W_elec, idx, q_dens, ni):
     q_dens *= 0.
     ni     *= 0.
     
+    # Deposit macroparticle moment on grid
     for ii in nb.prange(Ie.shape[0]):
         I   = Ie[ii]
         sp  = idx[ii]
@@ -114,7 +123,8 @@ def collect_position_moment(Ie, W_elec, idx, q_dens, ni):
 
     # Sum charge density contributions across species
     for jj in range(Nj):
-        q_dens  += ni[:, jj] * charge[jj] * n_contr[jj]
+        ni[:, jj] *= n_contr[jj]
+        q_dens    += ni[:, jj] * charge[jj]
         
     # Mirror source term contributions at edge back into domain: Simulates having
     # some sort of source on the outside of the physical space boundary.
