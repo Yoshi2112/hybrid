@@ -151,7 +151,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
 
 
 @nb.njit()
-def position_update(pos, vel, idx, DT, Ie, W_elec, ni, nu, Pi):
+def position_update(pos, vel, idx, DT, Ie, W_elec):
     '''
     Updates the position of the particles using x = x0 + vt. 
     Also updates particle nearest node and weighting.
@@ -198,13 +198,13 @@ from scipy.optimize import fsolve
 from scipy.special  import erf, erfinv
 
 
-@nb.njit()
+#@nb.njit()
 def locate_spare_indices(idx, N_needed, ii_first=0):
     '''
     Function to locate N_needed number of indices that contain
     deactivated (i.e. spare) particles. 
     '''
-    output_indices = np.zeros(N_needed, dtype=int)
+    output_indices = np.zeros(N_needed, dtype=nb.int64)
     N_found = 0; ii = ii_first
     
     while N_found < N_needed:
@@ -262,6 +262,7 @@ def inject_particles(pos, vel, idx, ni, Us, Pi, flux_rem, dt, pc):
             particle just prior to boundary so it moves into simulation domain
             on position update
     '''
+    import pdb
     print('Injecting particles...')
     end_cells = [ND, ND + NX - 1]
     ii_last   = 0
@@ -276,9 +277,11 @@ def inject_particles(pos, vel, idx, ni, Us, Pi, flux_rem, dt, pc):
             # Find number of (sim) particles to inject
             integrated_flux      = gamma_so(ni[ii, jj], Vsx, Us[ii, jj, 0]) * dt
             total_flux           = integrated_flux + flux_rem[ii, jj]
-            num_inject           = total_flux // n_contr[jj]
+            num_inject           = int(total_flux // n_contr[jj])
             flux_rem[ii, jj]     = total_flux % n_contr[jj]
-            new_indices, ii_last = locate_spare_indices(num_inject, ii_last)
+            
+            pdb.set_trace()
+            new_indices, ii_last = locate_spare_indices(idx, num_inject, ii_last)
             
             # For each new particle
             for kk in range(num_inject):                

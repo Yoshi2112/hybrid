@@ -254,9 +254,6 @@ def check_velocity_components_vs_space(pos, vel, jj=1):
     cfac = 10 if const.temp_type[jj] == 1 else 5
     vlim = 15 if const.temp_type[jj] == 1 else 5
     
-    V_PERP = np.sign(vel[2]) * np.sqrt(vel[1] ** 2 + vel[2] ** 2) / const.va
-    V_PARA = vel[0] / const.va
-    
     # Manually specify bin edges for histogram
     vbins = np.linspace(-vlim, vlim, 101, endpoint=True)
     xbins = np.linspace(const.xmin/const.dx, const.xmax/const.dx, const.NX + 1, endpoint=True)

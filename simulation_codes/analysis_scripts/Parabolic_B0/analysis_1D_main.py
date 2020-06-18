@@ -3090,28 +3090,30 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
         # Do the plotting
         plt.ioff()
         
-        fig, ax = plt.subplots(figsize=(15, 10))
-        ax.set_title('v{} vs. x :: {} :: Time {:.2f}s'.format(lt[comp], cf.species_lbl[jj], ptime))
+        fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
+        axes[0].set_title('f(v) vs. x :: {}'.format(cf.species_lbl[jj]))
         
         st = cf.idx_start[jj]
         en = cf.idx_end[jj]
         
-        counts, xedges, yedges, im1 = ax.hist2d(pos[0, st:en]/cf.dx, vel[comp, st:en]/cf.va, 
-                                                bins=[xbins, vbins],
-                                                vmin=0, vmax=cf.nsp_ppc[jj] / cfac)
+        for kk in range(3):
+            counts, xedges, yedges, im1 = axes[kk].hist2d(pos[0, st:en]/cf.dx, vel[kk, st:en]/cf.va, 
+                                                    bins=[xbins, vbins],
+                                                    vmin=0, vmax=cf.nsp_ppc[jj] / cfac)
 
-        cb = fig.colorbar(im1, ax=ax)
-        cb.set_label('Counts')
-        
-        ax.set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
-        ax.set_ylim(-vlim, vlim)
-        
-        ax.set_xlabel('Position (cell)')
-        ax.set_ylabel('Velocity ($v_A$)')
+            cb = fig.colorbar(im1, ax=axes[kk])
+            cb.set_label('Counts')
+            
+            axes[kk].set_ylim(-vlim, vlim)
+            axes[kk].set_ylabel('v{} ($v_A$)'.format(lt[comp]), rotation=0)
+            
+        axes[kk].set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
+        axes[kk].set_xlabel('Position (cell)')
 
+        fig.subplots_adjust(hspace=0)
         if save == True:
-            save_dir = cf.anal_dir + '//Particle Distribution Histograms//For Every Time//Species {}//v{}//'.format(jj, lt[comp])
-            filename = 'v{}_vs_x_species_{}_{:05}'.format(lt[comp], jj, ii)
+            save_dir = cf.anal_dir + '//Particle Distribution Histograms//For Every Time//Species {}//f_v//'.format(jj, lt[comp])
+            filename = 'fv_vs_x_species_{}_{:05}'.format(jj, ii)
             
             if os.path.exists(save_dir) == False:
                 os.makedirs(save_dir)
@@ -3128,28 +3130,30 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
 ##%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'boundary_examination'
+    series      = 'open_boundary_stability_test'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
-    for run_num in [5]:#range(num_runs):
+    for run_num in [0]:#range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
         #plot_E_components(plot=True)
         
-        try:
-            plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None)
-            plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
-        except:
-            pass
-        
-        standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
-        
-        summary_plots(save=True, histogram=False)
-        #check_fields()
+# =============================================================================
+#         try:
+#             plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None)
+#             plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
+#         except:
+#             pass
+#         
+#         standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
+#         
+#         summary_plots(save=True, histogram=False)
+#         #check_fields()
+# =============================================================================
         
         for cm in range(3):
             for sp in range(2):

@@ -9,14 +9,13 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Open boundary test using the particle boundary as described in Daughton et al. (2006)''' +\
-                  '''Running without waves '''
-
+run_description = '''Open boundary test using the particle boundary as described in Daughton et al. (2006). ''' +\
+                  '''First test of the particle injector - no waves.'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//daughton_open_boundary'# Series save dir   : Folder containing all runs of a series
-run               = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path         = 'runs//open_boundary_stability_test'# Series save dir   : Folder containing all runs of a series
+run               = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 0                             # Save data flag    : For later analysis
 save_fields       = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
@@ -25,15 +24,15 @@ cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run as 
 
 ## DIAGNOSTIC FLAGS ##
 homogenous        = True                          # Set B0 to homogenous (as test to compare to parabolic)
-particle_periodic = True                          # Set particle boundary conditions to periodic (False : Open boundary flux)
+particle_periodic = False                         # Set particle boundary conditions to periodic (False : Open boundary flux)
 disable_waves     = True                          # Zeroes electric field solution at each timestep
 E_damping         = False                         # Damp E in a manner similar to B for ABCs
 quiet_start       = False                         # Flag to use quiet start (False :: semi-quiet start)
 damping_multiplier= 1.0
 
 ### SIMULATION PARAMETERS ###
-NX        = 6                               # Number of cells - doesn't include ghost cells
-ND        = 2                               # Damping region length: Multiple of NX (on each side of simulation domain)
+NX        = 16                              # Number of cells - doesn't include ghost cells
+ND        = 4                               # Damping region length: Multiple of NX (on each side of simulation domain)
 max_rev   = 50                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell
@@ -54,7 +53,7 @@ species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/label
 temp_color = ['blue', 'red']
 temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Hot particles get the LCD, cold are maxwellians.
 dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or Gaussian (1)
-nsp_ppc    = np.array([5000, 5000])                         # Number of particles per cell, per species
+nsp_ppc    = np.array([500000, 500000])                       # Number of particles per cell, per species
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)

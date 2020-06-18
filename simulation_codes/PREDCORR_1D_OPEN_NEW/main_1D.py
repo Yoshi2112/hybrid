@@ -28,11 +28,10 @@ if __name__ == '__main__':
     q_dens, q_dens_adv, Ji, ni, nu, Pi                  = init.initialize_source_arrays()
     old_particles, old_fields, old_moments, flux_rem, \
              temp3De, temp3Db, temp1D, v_prime, S, T    = init.initialize_tertiary_arrays()
-    print('Array memory allocated')
+     
     # Collect initial moments and save initial state
     sources.collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi) 
     sources.collect_position_moment(pos, Ie, W_elec, idx, q_dens, ni)
-    print('Initial moments and sources collected')
 
     DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array\
         = init.set_timestep(vel, Te0)
@@ -46,14 +45,12 @@ if __name__ == '__main__':
         save.save_field_data(0, DT, field_save_iter, 0, Ji, E_int,\
                              B, Ve, Te, q_dens, B_damping_array, E_damping_array)
 
-    #diag.check_position_distribution(pos)
-    
     # Retard velocity
     print('Retarding velocity...')
     particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E_int, v_prime, S, T, temp_N, -0.5*DT)
-    print('<< Initialization Complete >>')
+    print('<< Initialization Complete >>\n')
     if False:
-        qq       = 1;    sim_time = DT; max_inc = 1
+        qq       = 1;    sim_time = DT
         print('Starting main loop...')
         while qq < max_inc:
             ###########################
@@ -87,8 +84,8 @@ if __name__ == '__main__':
             old_particles[0:3 , :] = pos
             old_particles[3:6 , :] = vel
             old_particles[6   , :] = Ie
-            old_particles[7:10, :] = W_elec
-            old_particles[10  , :] = idx
+            old_particles[7   , :] = W_elec
+            old_particles[8   , :] = idx
             
             old_fields[:,   0:3]  = B
             old_fields[:NC, 3:6]  = Ji
@@ -127,8 +124,8 @@ if __name__ == '__main__':
             pos[:]    = old_particles[0:3 , :]
             vel[:]    = old_particles[3:6 , :]
             Ie[:]     = old_particles[6   , :]
-            W_elec[:] = old_particles[7:10, :]
-            idx[:]    = old_particles[10  , :]
+            W_elec[:] = old_particles[7   , :]
+            idx[:]    = old_particles[8   , :]
             
             B[:]      = old_fields[:,   0:3]
             Ji[:]     = old_fields[:NC, 3:6]

@@ -52,21 +52,22 @@ def collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi):
                 for kk in range(3):
                     nu[I - 1, sp, kk] += vel[kk, ii] * (1.0 - W_elec[ii])
                     nu[I,     sp, kk] += vel[kk, ii] *        W_elec[ii]
+                    
             elif abs(pos[0, ii] - xmax) < dx:
                 for kk in range(3):
                     nu[I + 1, sp, kk] += vel[kk, ii] * (1.0 - W_elec[ii])
                     nu[I + 2, sp, kk] += vel[kk, ii] *        W_elec[ii]
-
-    # Set damping cell source values (zero gradient)
-    for ii in range(3):
-        Ji[:ND, ii]    = Ji[ND + 1, ii]
-        Ji[ND+NX:, ii] = Ji[ND+NX - 2, ii]
 
     # Convert to real moment, and accumulate charge density
     for jj in range(Nj):
         for kk in range(3):
             nu[:, jj, kk] *= n_contr[jj]
             Ji[:,     kk] += nu[:, jj, kk] * charge[jj]
+            
+    # Set damping cell source values (last value)
+    for ii in range(3):
+        Ji[:ND, ii]    = Ji[ND, ii]
+        Ji[ND+NX:, ii] = Ji[ND+NX - 1, ii]
 
     # Collect pressure tensor AT BOUNDARY CELLS ONLY :: Second moment
     for ii in nb.prange(vel.shape[1]):
@@ -158,8 +159,8 @@ def collect_position_moment(pos, Ie, W_elec, idx, q_dens, ni):
         q_dens    += ni[:, jj] * charge[jj]
         
     # Set damping cell source values
-    q_dens[:ND]    = q_dens[ND + 1]
-    q_dens[ND+NX:] = q_dens[ND+NX - 2]
+    q_dens[:ND]    = q_dens[ND]
+    q_dens[ND+NX:] = q_dens[ND+NX - 1]
         
     # Set density minimum
     for ii in range(q_dens.shape[0]):
