@@ -10,12 +10,12 @@ from os import system
 
 ### RUN DESCRIPTION ###
 run_description = '''CIC/TSC comparison test just to make sure anything else has changed. Plus, CIC + 3-point smoothing should be comparable to TSC weighting anyway. ''' +\
-                  '''This is the TSC code with NO smoothing.'''
+                  '''This is the CIC code with NO smoothing.'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path         = 'runs//TSC_CIC_comparison'    # Series save dir   : Folder containing all runs of a series
-run               = 2                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+run               = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
@@ -23,14 +23,13 @@ cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run as 
 #cpu_affin         = [4, 5, 6, 7]
 
 ## DIAGNOSTIC FLAGS ##
-supress_text      = False                         # Supress initialization text
-homogenous        = True                         # Set B0 to homogenous (as test to compare to parabolic)
+homogenous        = True                          # Set B0 to homogenous (as test to compare to parabolic)
 particle_periodic = False                         # Set particle boundary conditions to periodic (False : Open boundary flux)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
-te0_equil         = False                         # Initialize te0 to be in equilibrium with density
-source_smoothing  = False                         # Smooth source terms with 3-point Gaussian filter
-E_damping         = True                         # Damp E in a manner similar to B for ABCs
-quiet_start       = True                         # Flag to use quiet start (False :: semi-quiet start)
+E_damping         = True                          # Damp E in a manner similar to B for ABCs
+quiet_start       = True                          # Flag to use quiet start (False :: semi-quiet start)
+Pi_use_init       = True
+source_smoothing  = False
 damping_multiplier= 1.0
 
 ### SIMULATION PARAMETERS ###
@@ -56,7 +55,7 @@ species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/label
 temp_color = ['blue', 'red']
 temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Hot particles get the LCD, cold are maxwellians.
 dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or Gaussian (1)
-nsp_ppc    = np.array([256, 1024])                          # Number of particles per cell, per species
+nsp_ppc    = np.array([256, 1024])                           # Number of particles per cell, per species
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
@@ -68,6 +67,8 @@ anisotropy = np.array([0.0, 5.0])                           # Particle anisotrop
 E_per      = np.array([5.0, 50000.])                        # Perpendicular energy in eV
 beta_par   = np.array([1., 10.])                            # Overrides E_per if not None. Uses B_eq for conversion
 
+spare_ppc  = nsp_ppc.copy()
+
 # External current properties (not yet implemented)
 J_amp          = 1.0                                        # External current : Amplitude  (A)
 J_freq         = 0.02                                       # External current : Frequency  (Hz)
@@ -76,6 +77,7 @@ J_k            = 1e-7                                       # External current :
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
 E_e            = 10.0                                       # Electron energy (eV)
 
+# Subcycling :: Winske & Quest, 1988
 
 #%%### DERIVED SIMULATION PARAMETERS
 ### PHYSICAL CONSTANTS ###
@@ -119,6 +121,9 @@ charge    *= q                                           # Cast species charge t
 mass      *= mp                                          # Cast species mass to kg
 drift_v   *= va                                          # Cast species velocity to m/s
 
+vth_par    = np.sqrt(kB * Tpar / mass)                   # Parallel thermal velocity
+vth_per    = np.sqrt(kB * Tper / mass)                   # Parallel thermal velocity
+
 Nj         = len(mass)                                   # Number of species
 n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
 
@@ -135,7 +140,10 @@ for jj in range(Nj):
             N_species[jj] = nsp_ppc[jj] * NX + 2
         else:
             N_species[jj] = nsp_ppc[jj] * 2*rc_hwidth + 2    
-N = N_species.sum()
+            
+# Spare assumes same number in each cell (doesn't account for dist=1) 
+# THIS CAN BE CHANGED LATER TO BE MORE MEMORY EFFICIENT. LEAVE IT HUGE FOR DEBUGGING PURPOSES.
+N = N_species.sum() + (spare_ppc * NX).sum()
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
@@ -204,43 +212,40 @@ if rc_hwidth == 0:
 else:
     rc_print = rc_hwidth*2
 
-if supress_text == False:
-    print('Run Started')
-    print('Run Series         : {}'.format(save_path.split('//')[-1]))
-    print('Run Number         : {}'.format(run))
-    print('Field save flag    : {}'.format(save_fields))
-    print('Particle save flag : {}\n'.format(save_particles))
-    
-    print('Sim domain length  : {:5.2f}R_E'.format(2 * xmax / RE))
-    print('Density            : {:5.2f}cc'.format(ne / 1e6))
-    print('Equatorial B-field : {:5.2f}nT'.format(B_eq*1e9))
-    print('Maximum    B-field : {:5.2f}nT'.format(B_xmax*1e9))
-    print('Iono.      B-field : {:5.2f}mT'.format(B_A*1e6))
-    print('Equat. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_eq))
-    print('Bound. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_xmax * 180. / np.pi))
-    print('Maximum MLAT (+/-) : {:<5.2f} degrees  '.format(theta_xmax * 180. / np.pi))
-    print('Iono.   MLAT (+/-) : {:<5.2f} degrees\n'.format(lambda_L * 180. / np.pi))
-    
-    print('Equat. Gyroperiod: : {}s'.format(round(2. * np.pi / gyfreq, 3)))
-    print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 3)))
-    print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_rev * 2. * np.pi / gyfreq_eq, 2), max_rev))
-    
-    print('{} spatial cells, {} with ring current, 2x{} damped cells'.format(NX, rc_print, ND))
-    print('{} cells total'.format(NC))
-    print('{} particles total\n'.format(N))
-    
-    if cpu_affin is not None:
-        import psutil
-        run_proc = psutil.Process()
-        run_proc.cpu_affinity(cpu_affin)
-        if len(cpu_affin) == 1:
-            print('CPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
-        else:
-            print('CPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
-    
-density_normal_sum = (charge / q) * (density / ne)
+print('Run Started')
+print('Run Series         : {}'.format(save_path.split('//')[-1]))
+print('Run Number         : {}'.format(run))
+print('Field save flag    : {}'.format(save_fields))
+print('Particle save flag : {}\n'.format(save_particles))
 
+print('Sim domain length  : {:5.2f}R_E'.format(2 * xmax / RE))
+print('Density            : {:5.2f}cc'.format(ne / 1e6))
+print('Equatorial B-field : {:5.2f}nT'.format(B_eq*1e9))
+print('Maximum    B-field : {:5.2f}nT'.format(B_xmax*1e9))
+print('Iono.      B-field : {:5.2f}mT'.format(B_A*1e6))
+print('Equat. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_eq))
+print('Bound. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_xmax * 180. / np.pi))
+print('Maximum MLAT (+/-) : {:<5.2f} degrees  '.format(theta_xmax * 180. / np.pi))
+print('Iono.   MLAT (+/-) : {:<5.2f} degrees\n'.format(lambda_L * 180. / np.pi))
+
+print('Equat. Gyroperiod: : {}s'.format(round(2. * np.pi / gyfreq, 3)))
+print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 3)))
+print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_rev * 2. * np.pi / gyfreq_eq, 2), max_rev))
+
+print('{} spatial cells, {} with ring current, 2x{} damped cells'.format(NX, rc_print, ND))
+print('{} cells total'.format(NC))
+print('{} particles total\n'.format(N))
+
+if cpu_affin is not None:
+    import psutil
+    run_proc = psutil.Process()
+    run_proc.cpu_affinity(cpu_affin)
+    if len(cpu_affin) == 1:
+        print('CPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
+    else:
+        print('CPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
     
+density_normal_sum         = (charge / q) * (density / ne)
 simulated_density_per_cell = (n_contr * charge * nsp_ppc).sum()
 real_density_per_cell      = ne*q
 

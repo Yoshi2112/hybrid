@@ -10,7 +10,7 @@ import sources_1D    as sources
 import save_routines as save
 
 from simulation_parameters_1D import save_particles, save_fields, te0_equil
-
+import pdb
 
 if __name__ == '__main__':
     start_time = timer()
@@ -28,18 +28,16 @@ if __name__ == '__main__':
     if te0_equil == True:
         init.set_equilibrium_te0(q_dens, Te0)
     
-    DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array\
-        = init.set_timestep(vel, Te0)
-        
-    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
+    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D)
+    
+    DT, max_inc, part_save_iter, field_save_iter, damping_array = init.set_timestep(vel, E_int, Te0)
     
     if save_particles == 1:
         save.save_particle_data(0, DT, part_save_iter, 0, pos, vel, idx)
         
     if save_fields == 1:
-        save.save_field_data(0, DT, field_save_iter, 0, Ji, E_int,\
-                             B, Ve, Te, q_dens, B_damping_array, E_damping_array)
-
+        save.save_field_data(0, DT, field_save_iter, 0, Ji, E_int, B, Ve, Te, q_dens, damping_array)
+    
     # Retard velocity
     print('Retarding velocity...')
     particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E_int, v_prime, S, T, temp_N, -0.5*DT)
@@ -51,7 +49,7 @@ if __name__ == '__main__':
         aux.main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T, temp_N,\
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,                           \
               Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields,           \
-              B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter, field_save_iter)
+              damping_array, qq, DT, max_inc, part_save_iter, field_save_iter)
 
         if qq%part_save_iter == 0 and save_particles == 1:
             save.save_particle_data(sim_time, DT, part_save_iter, qq, pos,
@@ -59,7 +57,7 @@ if __name__ == '__main__':
             
         if qq%field_save_iter == 0 and save_fields == 1:
             save.save_field_data(sim_time, DT, field_save_iter, qq, Ji, E_int,
-                                 B, Ve, Te, q_dens, B_damping_array, E_damping_array)
+                                 B, Ve, Te, q_dens, damping_array)
         
         if qq%50 == 0:            
             running_time = int(timer() - start_time)
@@ -72,7 +70,7 @@ if __name__ == '__main__':
             
         qq       += 1
         sim_time += DT
-    
+
     runtime = round(timer() - start_time,2)
     
     if save_fields == 1 or save_particles == 1:

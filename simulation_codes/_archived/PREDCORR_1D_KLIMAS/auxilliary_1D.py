@@ -9,6 +9,7 @@ import numpy as np
 
 import particles_1D as particles
 import fields_1D    as fields
+import init_1D      as init
 
 from simulation_parameters_1D import dx, NC, NX, ND, qm_ratios, freq_res, orbit_res, E_nodes
 
@@ -75,9 +76,8 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
     for ii in range(NC):
         interp[ii, 0] = fields.eval_B0x(E_nodes[ii])
     
-    # This bit could be removed to allow B0x to vary in green cells naturally
-    # interp[:ND,      0] = interp[ND,    0]
-    # interp[ND+NX+1:, 0] = interp[ND+NX, 0]
+    interp[:ND,      0] = interp[ND,    0]
+    interp[ND+NX+1:, 0] = interp[ND+NX, 0]
     return
 
 
@@ -132,7 +132,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
 
         particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T,temp_N,-0.5*DT)   # De-sync vel/pos 
         print('Timestep halved. Syncing particle velocity...')
-        #init.set_damping_array(damping_array, DT)
+        init.set_damping_array(damping_array, DT)
             
 # =============================================================================
 #     elif DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0:
@@ -156,7 +156,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N,                      \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
               Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields,\
-              B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter, field_save_iter):
+              damping_array, qq, DT, max_inc, part_save_iter, field_save_iter):
     '''
     Main loop separated from __main__ function, since this is the actual computation bit.
     Could probably be optimized further, but I wanted to njit() it.
@@ -171,7 +171,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     # Check timestep
     qq, DT, max_inc, part_save_iter, field_save_iter, damping_array \
     = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, Ep, Bp, v_prime, S, T,temp_N,\
-                     qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array)
+                     qq, DT, max_inc, part_save_iter, field_save_iter, idx, damping_array)
     
     # Move particles, collect moments
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
@@ -182,10 +182,10 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     q_dens += 0.5 * q_dens_adv
     
     # Push B from N to N + 1/2
-    fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
+    fields.push_B(B, E_int, temp3Db, DT, qq, damping_array, half_flag=1)
     
     # Calculate E at N + 1/2
-    fields.calculate_E(B, Ji, q_dens, E_half, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
+    fields.calculate_E(B, Ji, q_dens, E_half, Ve, Te, Te0, temp3De, temp3Db, temp1D)
 
     ###################################
     ### PREDICTOR CORRECTOR SECTION ###
@@ -207,7 +207,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     E_int *= -1.0
     E_int +=  2.0 * E_half
     
-    fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
+    fields.push_B(B, E_int, temp3Db, DT, qq, damping_array, half_flag=0)
 
     # Advance particles to obtain source terms at N + 3/2
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
@@ -216,8 +216,8 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
     
     # Compute predicted fields at N + 3/2
-    fields.push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
-    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
+    fields.push_B(B, E_int, temp3Db, DT, qq + 1, damping_array, half_flag=1)
+    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D)
     
     # Determine corrected fields at N + 1 
     E_int *= 0.5;    E_int += 0.5 * E_half
@@ -234,7 +234,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     Ve[:]     = old_fields[:NC, 6:9]
     Te[:]     = old_fields[:NC,   9]
     
-    fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
+    fields.push_B(B, E_int, temp3Db, DT, qq, damping_array, half_flag=0)   # Advance the original B
 
     q_dens[:] = q_dens_adv
 

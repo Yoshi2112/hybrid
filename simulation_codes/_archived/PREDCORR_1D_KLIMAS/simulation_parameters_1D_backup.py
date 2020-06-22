@@ -9,45 +9,44 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''CIC/TSC comparison test just to make sure anything else has changed. Plus, CIC + 3-point smoothing should be comparable to TSC weighting anyway. ''' +\
-                  '''This is the TSC code with NO smoothing.'''
+run_description = '''So the /reflection/ thing was the only broken thing. Lets check the smoothing a bit more, longer.'''
+
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//TSC_CIC_comparison'    # Series save dir   : Folder containing all runs of a series
+save_path         = 'runs//reflection_test'       # Series save dir   : Folder containing all runs of a series
 run               = 2                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run as list. Set as None to auto-assign. 
-#cpu_affin         = [4, 5, 6, 7]
+cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
+
 
 ## DIAGNOSTIC FLAGS ##
 supress_text      = False                         # Supress initialization text
-homogenous        = True                         # Set B0 to homogenous (as test to compare to parabolic)
-particle_periodic = False                         # Set particle boundary conditions to periodic (False : Open boundary flux)
+homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
+shoji_approx      = False                         # Changes solution used for calculating particle B0r (1D vs. 3D)
 te0_equil         = False                         # Initialize te0 to be in equilibrium with density
-source_smoothing  = False                         # Smooth source terms with 3-point Gaussian filter
-E_damping         = True                         # Damp E in a manner similar to B for ABCs
-quiet_start       = True                         # Flag to use quiet start (False :: semi-quiet start)
-damping_multiplier= 1.0
+source_smoothing  = True                          # Smooth source terms with 3-point Gaussian filter
+reflect           = False                         # THIS IS BROKEN!!! 'Reflects' particles at edges by randomizing their gyrophase
+
 
 ### SIMULATION PARAMETERS ###
-NX        = 256                             # Number of cells - doesn't include ghost cells
+NX        = 128                             # Number of cells - doesn't include ghost cells
 ND        = 64                              # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 50                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+max_rev   = 25                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell
 r_A       = 100e3                           # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
 
 ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
-B_eq      = None                            # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
-rc_hwidth = 0                               # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
+B_eq      = None                            # Initial magnetic field at equator: None for L-determined value (in T)
+rc_hwidth = 16                              # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
   
 orbit_res = 0.02                            # Orbit resolution
 freq_res  = 0.02                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
-part_res  = 0.25                            # Data capture resolution in gyroperiod fraction: Particle information
+part_res  = 0.10                            # Data capture resolution in gyroperiod fraction: Particle information
 field_res = 0.10                            # Data capture resolution in gyroperiod fraction: Field information
 
 
@@ -55,8 +54,8 @@ field_res = 0.10                            # Data capture resolution in gyroper
 species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
 temp_color = ['blue', 'red']
 temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Hot particles get the LCD, cold are maxwellians.
-dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or Gaussian (1)
-nsp_ppc    = np.array([256, 1024])                          # Number of particles per cell, per species
+dist_type  = np.array([0, 1])                               # Particle distribution type : Uniform (0) or Gaussian (1)
+nsp_ppc    = np.array([500, 5000])                          # Number of particles per cell, per species
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
@@ -75,6 +74,10 @@ J_k            = 1e-7                                       # External current :
 
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
 E_e            = 10.0                                       # Electron energy (eV)
+
+# This will be fixed by subcycling later on, hopefully
+account_for_dispersion = False                              # Flag (True/False) whether or not to reduce timestep to prevent dispersion getting too high
+dispersion_allowance   = 1.                                 # Multiple of how much past frac*wD^-1 is allowed: Used to stop dispersion from slowing down sim too much  
 
 
 #%%### DERIVED SIMULATION PARAMETERS
@@ -97,7 +100,6 @@ if B_eq is None:
     B_eq      = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
     
 if beta_par is None:
-    beta_per   = None
     Te0_scalar = E_e   * 11603.
     Tpar       = E_par * 11603.
     Tper       = E_per * 11603.
@@ -184,19 +186,23 @@ if homogenous == True:
     a      = 0
     B_xmax = B_eq
 
-lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L)))       # Anchor latitude in radians
-B_A        = B_eq * np.sqrt(4 - 3*np.cos(lat_A) ** 2)\
-           / (np.cos(lat_A) ** 6)                        # Magnetic field at anchor point
-
-loss_cone_eq   = np.arcsin(np.sqrt(B_eq   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
-loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
-
+Bc           = np.zeros((NC + 1, 3), dtype=np.float64)   # Constant components of magnetic field based on theta and B0
+Bc[:, 0]     = B_eq * (1 + a * B_nodes**2)               # Set constant Bx
+Bc[:ND]      = Bc[ND]                                    # Set B0 in damping cells (same as last spatial cell)
+Bc[ND+NX+1:] = Bc[ND+NX]
 
 # Freqs based on highest magnetic field value (at simulation boundaries)
 gyfreq     = q*B_xmax/ mp                                # Proton Gyrofrequency (rad/s) at boundary (highest)
 gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
+
+lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L)))       # Anchor latitude in radians
+B_A        = B_eq * np.sqrt(4 - 3*np.cos(lat_A) ** 2)\
+           / (np.cos(lat_A) ** 6)                        # Magnetic field at anchor point
+
+loss_cone_eq   = np.arcsin(np.sqrt(B_eq   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
+loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
 
 #%%### INPUT TESTS AND CHECKS
 if rc_hwidth == 0:
@@ -229,7 +235,7 @@ if supress_text == False:
     print('{} cells total'.format(NC))
     print('{} particles total\n'.format(N))
     
-    if cpu_affin is not None:
+    if None not in cpu_affin:
         import psutil
         run_proc = psutil.Process()
         run_proc.cpu_affinity(cpu_affin)
@@ -259,11 +265,4 @@ if theta_xmax > lambda_L:
     print('--------------------------------------------------')
     sys.exit()
 
-if homogenous == False and particle_periodic == True:
-    particle_periodic = False
-    print('---------------------------------------------------')
-    print('WARNING : PERIODIC BOUNDARY CONDITIONS INCOMPATIBLE')
-    print('WITH PARABOLIC B0. BOUNDARIES SET TO OPEN FLUX.')
-    print('---------------------------------------------------')
-    
 system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))

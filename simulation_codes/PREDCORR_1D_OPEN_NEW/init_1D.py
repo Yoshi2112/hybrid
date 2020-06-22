@@ -18,7 +18,7 @@ from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
                                      qm_ratios, rc_hwidth, temp_type, Te0_scalar,\
                                      ne, q, N_species, damping_multiplier, quiet_start, \
-                                     beta_par, beta_per
+                                     beta_par, beta_per, xmin, xmax
 
 
 @nb.njit()
@@ -135,6 +135,8 @@ def check_boundary_particles(pos, vel):
     '''
     Make sure boundary particles are exactly on the boundary
     Also make sure their velocities are pointing inwards
+    
+    This does weird things to my moments???
     '''
     print('Checking boundary particles')
     p_thres = 0.01 # If within 1cm of boundary
@@ -174,6 +176,9 @@ def uniform_gaussian_distribution_quiet():
     vel = np.zeros((3, N), dtype=np.float64)
     idx = np.zeros(N,      dtype=np.int8)
     np.random.seed(seed)
+    
+    # Start all particles as disabled (idx < 0)
+    idx[:] = -1.0
 
     for jj in range(Nj):
         idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle idx
@@ -273,108 +278,47 @@ def uniform_gaussian_distribution_quiet():
     
     # Set initial Larmor radius - rL from v_perp, distributed to y,z based on velocity gyroangle
     print('Initializing particles off-axis')
-    B0x     = fields.eval_B0x(pos[0])
-    v_perp  = np.sqrt(vel[1] ** 2 + vel[2] ** 2)
-    gyangle = get_gyroangle_array(vel)
-    rL      = v_perp / (qm_ratios[idx] * B0x)
-    pos[1]  = rL * np.cos(gyangle)
-    pos[2]  = rL * np.sin(gyangle)
+    B0x         = fields.eval_B0x(pos[0, :en])
+    v_perp      = np.sqrt(vel[1, :en] ** 2 + vel[2, :en] ** 2)
+    gyangle     = get_gyroangle_array(vel[:, :en])
+    rL          = v_perp / (qm_ratios[idx[:en]] * B0x)
+    pos[1, :en] = rL * np.cos(gyangle)
+    pos[2, :en] = rL * np.sin(gyangle)
     
     #check_boundary_particles(pos, vel)
     
     return pos, vel, idx
 
 
-def uniform_accounting_for_beta():
-    # Need to add an adaptation for when beta is None
-    # In this case, calculate the equatorial beta
-    # Then recalculate the temperature off-equatorially
-    # assuming that this equatorial beta is constant along the field
+@nb.njit()
+def init_totally_random():
     pos = np.zeros((3, N), dtype=np.float64)
     vel = np.zeros((3, N), dtype=np.float64)
-    idx = np.zeros(N,      dtype=np.int8)
+    idx = np.ones(N,       dtype=np.int8) * -1
     np.random.seed(seed)
-
+    
     for jj in range(Nj):
         idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle idx
         
-        if dist_type[jj] == 0:                            # Uniform position distribution (incl. limitied RC)
-            half_n = nsp_ppc[jj] // 2                     # Half particles per cell - doubled later
-            if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
-                NC_load = NX
-            else:
-                if rc_hwidth == 0 or rc_hwidth > NX//2:   # Need to change this to be something like the FWHM or something
-                    NC_load = NX
-                else:
-                    NC_load = 2*rc_hwidth
+        sf_par = np.sqrt(kB *  Tpar[jj] /  mass[jj])  # Scale factors for velocity initialization
+        sf_per = np.sqrt(kB *  Tper[jj] /  mass[jj])
+
+        # Particle index ranges
+        st = idx_start[jj]
+        en = idx_end[jj]
+
+        pos[0, st: en] = np.random.uniform(xmin, xmax, en-st)
+        vel[0, st: en] = np.random.normal(0, sf_par, en-st) +  drift_v[jj]
+        vel[1, st: en] = np.random.normal(0, sf_per, en-st)
+        vel[2, st: en] = np.random.normal(0, sf_per, en-st)
             
-            # Load particles in each applicable cell
-            acc = 0; offset  = 0
-            for ii in range(NC_load):
-                # Add particle if last cell (for symmetry)
-                if ii == NC_load - 1:
-                    half_n += 1
-                    offset  = 1
-                    
-                # Particle index ranges
-                st = idx_start[jj] + acc
-                en = idx_start[jj] + acc + half_n
-                
-                # Set position for half: Analytically uniform
-                for kk in range(half_n):
-                    pos[0, st + kk] = dx*(float(kk) / (half_n - offset) + ii) - NC_load*dx/2
-                   
-                    B0xp      = fields.eval_B0x(pos[0, st + kk])
-                    loss_cone = np.arcsin(np.sqrt(B0xp / B_A))
-                    
-                    Tpar_p = beta_par[jj] * B0xp ** 2 / (2 * const.mu0 * ne * const.kB)
-                    Tper_p = beta_per[jj] * B0xp ** 2 / (2 * const.mu0 * ne * const.kB)
-
-                    sf_par = np.sqrt(kB *  Tpar_p /  mass[jj])  # Scale factors for velocity initialization
-                    sf_per = np.sqrt(kB *  Tper_p /  mass[jj])
-
-                    # Set velocity for half: Randomly Maxwellian
-                    vel[0, st + kk] = np.random.normal(0, sf_par) +  drift_v[jj]
-                    vel[1, st + kk] = np.random.normal(0, sf_per)
-                    vel[2, st + kk] = np.random.normal(0, sf_per)
-    
-                    # Set Loss Cone Distribution: Reinitialize particles in loss cone
-                    if const.homogenous == False and temp_type[jj] == 1:
-                        
-                        v_perp    = np.sqrt(vel[1, st + kk] ** 2 + vel[2, st + kk] ** 2)
-                        pitch     = np.arctan(v_perp / vel[0, st + kk])
-                        while pitch < loss_cone:
-                            vel[0, st + kk] = np.random.normal(0, sf_par) +  drift_v[jj]
-                            vel[1, st + kk] = np.random.normal(0, sf_per)
-                            vel[2, st + kk] = np.random.normal(0, sf_per)
-                        
-                            v_perp = np.sqrt(vel[1, st + kk] ** 2 + vel[2, st + kk] ** 2)
-                            pitch  = np.arctan(v_perp / vel[0, st + kk])
-
-                    
-                # Quiet start : Initialize second half
-                if quiet_start == True:
-                    vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set parallel
-                else:
-                    vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Set anti-parallel
-                    
-                pos[0, en: en + half_n] = pos[0, st: en]                # Other half, same position
-                vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
-                vel[2, en: en + half_n] = vel[2, st: en] * -1.0
-                
-                acc                    += half_n * 2
-
-    
-    # Set initial Larmor radius - rL from v_perp, distributed to y,z based on velocity gyroangle
     print('Initializing particles off-axis')
-    B0x     = fields.eval_B0x(pos[0])
-    v_perp  = np.sqrt(vel[1] ** 2 + vel[2] ** 2)
-    gyangle = get_gyroangle_array(vel)
-    rL      = v_perp / (qm_ratios[idx] * B0x)
-    pos[1]  = rL * np.cos(gyangle)
-    pos[2]  = rL * np.sin(gyangle)
-    
-    check_boundary_particles(pos, vel)
+    B0x         = fields.eval_B0x(pos[0, :en])
+    v_perp      = np.sqrt(vel[1, :en] ** 2 + vel[2, :en] ** 2)
+    gyangle     = get_gyroangle_array(vel[:, :en])
+    rL          = v_perp / (qm_ratios[idx[:en]] * B0x)
+    pos[1, :en] = rL * np.cos(gyangle)
+    pos[2, :en] = rL * np.sin(gyangle)
     return pos, vel, idx
 
 
@@ -395,17 +339,17 @@ def initialize_particles():
         idx    -- Particle type index
     '''
     pos, vel, idx = uniform_gaussian_distribution_quiet()
+    #pos, vel, idx = init_totally_random()
+    Ie         = np.zeros(N, dtype=np.uint16)
+    Ib         = np.zeros(N, dtype=np.uint16)
+    W_elec     = np.zeros(N, dtype=np.float64)
+    W_mag      = np.zeros(N, dtype=np.float64)
     
-    Ie         = np.zeros(N,      dtype=nb.uint16)
-    Ib         = np.zeros(N,      dtype=nb.uint16)
-    W_elec     = np.zeros((3, N), dtype=nb.float64)
-    W_mag      = np.zeros((3, N), dtype=nb.float64)
+    Bp      = np.zeros((3, N), dtype=np.float64)
+    Ep      = np.zeros((3, N), dtype=np.float64)
+    temp_N  = np.zeros((N),    dtype=np.float64)
     
-    Bp      = np.zeros((3, N), dtype=nb.float64)
-    Ep      = np.zeros((3, N), dtype=nb.float64)
-    temp_N  = np.zeros((N),    dtype=nb.float64)
-    
-    particles.assign_weighting_TSC(pos, Ie, W_elec)
+    particles.assign_weighting_CIC(pos, idx, Ie, W_elec)
     return pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, temp_N
 
 
@@ -485,15 +429,17 @@ def initialize_source_arrays():
         q_dens  -- Total ion charge  density
         q_dens2 -- Total ion charge  density (used for averaging)
         Ji      -- Total ion current density
-        ni      -- Ion number density per species
-        nu      -- Ion velocity "density" per species
+        ni      -- Zeroth moment : Ion number density per species (Scalar)
+        nu      -- First  moment : Ion velocity "density" per species (Vector)
+        Pi      -- Second moment : Ion pressure tensor per species (Tensor) (only at two cells, times two for "old/new")
     '''
-    q_dens  = np.zeros( NC,         dtype=nb.float64)    
-    q_dens2 = np.zeros( NC,         dtype=nb.float64) 
-    Ji      = np.zeros((NC, 3),     dtype=nb.float64)
-    ni      = np.zeros((NC, Nj),    dtype=nb.float64)
-    nu      = np.zeros((NC, Nj, 3), dtype=nb.float64)
-    return q_dens, q_dens2, Ji, ni, nu
+    q_dens  = np.zeros( NC,            dtype=nb.float64)    
+    q_dens2 = np.zeros( NC,            dtype=nb.float64) 
+    Ji      = np.zeros((NC, 3),        dtype=nb.float64)
+    ni      = np.zeros((NC, Nj),       dtype=nb.float64)
+    nu      = np.zeros((NC, Nj, 3),    dtype=nb.float64)
+    Pi      = np.zeros((NC, Nj, 3, 3), dtype=nb.float64)
+    return q_dens, q_dens2, Ji, ni, nu, Pi
 
 
 @nb.njit()
@@ -509,92 +455,25 @@ def initialize_tertiary_arrays():
         temp1D        -- Swap-file scalar array with E-grid dimensions
         old_particles -- Location to store old particle values (positions, velocities, weights)
                          as part of predictor-corrector routine
-        old_fields   -- Location to store old B, Ji, Ve, Te field values for predictor-corrector routine
+        old_fields    -- Location to store old B, Ji, Ve, Te field values for predictor-corrector routine
+        old_moments   -- Location to store old moments (13*Nj per cell). Pi Tensor 
+                         seems wasteful, but since 95% or more of memory useage is particles,
+                         go with the easy to code/read alternative.
     '''
-    temp3Db       = np.zeros((NC + 1, 3),  dtype=nb.float64)
-    temp3De       = np.zeros((NC    , 3),  dtype=nb.float64)
-    temp1D        = np.zeros( NC    ,      dtype=nb.float64) 
-    old_fields    = np.zeros((NC + 1, 10), dtype=nb.float64)
+    temp3Db       = np.zeros((NC + 1, 3)     , dtype=nb.float64)
+    temp3De       = np.zeros((NC    , 3)     , dtype=nb.float64)
+    temp1D        = np.zeros( NC             , dtype=nb.float64) 
+    old_fields    = np.zeros((NC + 1, 10)    , dtype=nb.float64)
+    old_moments   = np.zeros((NC    , 13, Nj), dtype=nb.float64)
+    flux_rem      = np.zeros((NC    , Nj)    , dtype=nb.float64)
     
     v_prime = np.zeros((3, N),      dtype=nb.float64)
     S       = np.zeros((3, N),      dtype=nb.float64)
     T       = np.zeros((3, N),      dtype=nb.float64)
         
-    old_particles = np.zeros((11, N),      dtype=nb.float64)
+    old_particles = np.zeros((9, N),      dtype=nb.float64)
         
-    return old_particles, old_fields, temp3De, temp3Db, temp1D, v_prime, S, T
-
-
-def set_equilibrium_te0(q_dens, Te0):
-    '''
-    Modifies the initial Te array to allow grad(P_e) = grad(nkT) = 0
-    
-    Iterative? Analytic?
-    
-    NOTE: Removed factors 2dx from qdens_gradient and m_arr, since they cancel out
-    
-    Note: Could probably calculate Te0 from some sort of density/temperature relationship
-    with the ions, rather than defining it a priori, for now it should be ok (set via beta
-    same as cold ions)
-    '''
-    qdens_gradient = np.zeros(NC    , dtype=np.float64)
-    
-    # Get density gradient: Central differencing, internal points
-    for ii in nb.prange(1, NC - 1):
-        qdens_gradient[ii] = (q_dens[ii + 1] - q_dens[ii - 1])
-    
-    # Forwards/Backwards difference at physical boundaries (In this case, the gradient will be zero)
-    qdens_gradient[0]      = 0
-    qdens_gradient[NC - 1] = 0
-    
-    m_arr = (qdens_gradient/q_dens)
-    
-    # Construct solution array to work out Te
-    soln_array = np.zeros((NC, NC), dtype=np.float64)
-    ans_arr    = np.zeros(NC, dtype=np.float64)
-    
-    # Construct central points (Centered finite difference with constant)
-    for ii in range(1, NC-1):
-        soln_array[ii, ii - 1] = -1.0
-        soln_array[ii, ii    ] =  1.0 * m_arr[ii]
-        soln_array[ii, ii + 1] =  1.0
-    
-    # Enter boundary points : Neumann boundary conditions
-    soln_array[0, 0]           = 1.0
-    soln_array[NC - 1, NC - 1] = 1.0
-    
-    ans_arr[0]      = Te0_scalar
-    ans_arr[NC - 1] = Te0_scalar
-    
-    Te0[:] = np.dot(np.linalg.inv(soln_array), ans_arr)
-    
-    if False:
-        # Test: This should be zero if working
-        grad_P   = np.zeros(NC    , dtype=np.float64)
-        temp     = np.zeros(NC + 1, dtype=np.float64)
-        fields.get_grad_P(q_dens, Te0, grad_P, temp)
-        
-        import sys
-        
-        fig, axes = plt.subplots(4, sharex=True, figsize=(15, 10))
-        
-        axes[0].set_title('Initial Temp/Dens with zero derivative at ND-NX interface')
-        axes[0].plot(q_dens / (q*ne))
-        axes[0].set_ylabel('ne / ne0')
-        
-        axes[1].plot(qdens_gradient)
-        axes[1].set_ylabel('dne/dx')
-        
-        axes[2].plot(Te0)
-        axes[2].set_ylabel('Te')
-        
-        axes[3].plot(grad_P)
-        axes[3].set_ylabel('grad(P)')
-        
-        axes[3].set_xlabel('Cell number')
-        
-        sys.exit()
-    return
+    return old_particles, old_fields, old_moments, flux_rem, temp3De, temp3Db, temp1D, v_prime, S, T
 
 
 def set_timestep(vel, Te0):
@@ -652,16 +531,16 @@ def set_timestep(vel, Te0):
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
    
-    #POS, VEL, IDX = uniform_gaussian_distribution_quiet()
+    POS, VEL, IDX = uniform_gaussian_distribution_quiet()
     
-    POS, VEL, IDX = uniform_accounting_for_beta()
+    #POS, VEL, IDX = uniform_accounting_for_beta()
     
     V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
     V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
     V_PARA = VEL[0] / va
     
-    #diag.check_velocity_components_vs_space(POS, VEL, jj=1)
-    diag.plot_temperature_extremes()
+    diag.check_velocity_components_vs_space(POS, VEL, jj=1)
+    #diag.plot_temperature_extremes()
     #diag.check_cell_velocity_distribution_2D(POS, VEL, node_number=None, jj=1, save=True)
     #diag.check_position_distribution(POS)
     #diag.collect_macroparticle_moments(pos, vel, idx)

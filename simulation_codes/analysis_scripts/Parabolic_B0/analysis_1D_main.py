@@ -350,6 +350,54 @@ def plot_kt(component='By', saveas='kt_plot', save=False):
     return
 
 
+def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None):
+    plt.ioff()
+
+    t, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens, field_sim_time, damping_array\
+        = cf.get_array(get_all=True)
+    
+    fontsize = 18
+    font     = 'monospace'
+    
+    tick_label_size = 14
+    mpl.rcParams['xtick.labelsize'] = tick_label_size 
+    mpl.rcParams['ytick.labelsize'] = tick_label_size 
+    
+    bt   = np.sqrt(by ** 2 + bz ** 2) * 1e9
+    x    = cf.B_nodes / cf.dx
+        
+    if tmax is None:
+        lbl = 'full'
+    else:
+        lbl = '{:04}'.format(tmax)
+    
+    ## PLOT IT
+    fig, ax = plt.subplots(1, figsize=(15, 10))
+
+    vmin = 0.0
+    vmax = bt.max()
+    im1  = ax.pcolormesh(x, t, bt, cmap='jet', vmin=vmin, vmax=vmax)
+    cb   = fig.colorbar(im1)
+    
+    cb.set_label('$|B_\perp|$\nnT', rotation=0, family=font, fontsize=fontsize, labelpad=30)
+
+    ax.set_ylabel('t (s)', rotation=0, labelpad=30, fontsize=fontsize, family=font)
+    ax.set_xlabel('x ($\Delta x$)', fontsize=fontsize, family=font)
+    ax.set_ylim(0, tmax)
+    
+    ax.set_xlim(x[0], x[-1])
+    ax.axvline(cf.xmin     / cf.dx, c='w', ls=':', alpha=1.0)
+    ax.axvline(cf.xmax     / cf.dx, c='w', ls=':', alpha=1.0)
+    ax.axvline(cf.grid_mid / cf.dx, c='w', ls=':', alpha=0.75)   
+        
+    if save == True:
+        fullpath = cf.anal_dir + saveas + '_BPERP_{}'.format(lbl) + '.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        print('t-x Plot saved')
+        plt.close('all')
+    return
+
+
 def plot_dynamic_spectra(component='By', saveas='power_spectra', save=False, ymax=None, cell=None,
                          overlap=0.99, win_idx=None, slide_idx=None, df=50):
     
@@ -530,8 +578,8 @@ def plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None):
     sig_fig = 3
     
     # R: 2, 20 -- NR: 1, 15 -- 
-    skip   = 10
-    amp    = 50.                 # Amplitude multiplier of waves:
+    skip   = 2
+    amp    = 10.                 # Amplitude multiplier of waves:
     
     sep    = 1.
     dark   = 1.0
@@ -1207,7 +1255,7 @@ def summary_plots(save=True, histogram=True):
         fig_size = 4, 7                                                             # Set figure grid dimensions
         fig = plt.figure(figsize=(20,10))                                           # Initialize Figure Space
         fig.patch.set_facecolor('w')   
-        xp, vp, idx, psim_time = cf.load_particles(ii)
+        xp, vp, idx, psim_time, idx_start, idx_end = cf.load_particles(ii)
         
         pos       = xp  
         vel       = vp / cf.va 
@@ -1231,11 +1279,11 @@ def summary_plots(save=True, histogram=True):
             for jj in range(cf.Nj):
                 num_bins = cf.nsp_ppc[jj] // 5
                 
-                xs, BinEdgesx = np.histogram(vel[0, cf.idx_start[jj]: cf.idx_end[jj]], bins=num_bins)
+                xs, BinEdgesx = np.histogram(vel[0, idx_start[jj]: idx_end[jj]], bins=num_bins)
                 bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
                 ax_vx.plot(bx, xs, '-', c=cf.temp_color[jj], drawstyle='steps', label=cf.species_lbl[jj])
                 
-                ys, BinEdgesy = np.histogram(vel_tr[cf.idx_start[jj]: cf.idx_end[jj]], bins=num_bins)
+                ys, BinEdgesy = np.histogram(vel_tr[idx_start[jj]: idx_end[jj]], bins=num_bins)
                 by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
                 ax_vy.plot(by, ys, '-', c=cf.temp_color[jj], drawstyle='steps', label=cf.species_lbl[jj])
                 
@@ -1255,8 +1303,8 @@ def summary_plots(save=True, histogram=True):
         else:
         
             for jj in reversed(range(cf.Nj)):
-                ax_vx.scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[0, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj], lw=0, label=cf.species_lbl[jj])
-                ax_vy.scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[1, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj], lw=0)
+                ax_vx.scatter(pos[0, idx_start[jj]: idx_end[jj]], vel[0, idx_start[jj]: idx_end[jj]], s=1, c=cf.temp_color[jj], lw=0, label=cf.species_lbl[jj])
+                ax_vy.scatter(pos[0, idx_start[jj]: idx_end[jj]], vel[1, idx_start[jj]: idx_end[jj]], s=1, c=cf.temp_color[jj], lw=0)
         
             ax_vx.legend(loc='upper right')
             ax_vx.set_title(r'Particle velocities (in $v_A$) vs. Position (x)')
@@ -1418,21 +1466,35 @@ def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, t
     for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
         print('2D summary for {}'.format(comp))
         
-        plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
-        plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=tmax)
+        try:
+            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
+            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=tmax)
+        except:
+            pass
 
         if tx_only == False:
-            plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
-            plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , save=True, linear_overlay=False, pcyc_mult=None)
+            try:
+                plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
+                plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , save=True, linear_overlay=False, pcyc_mult=None)
+            except:
+                pass
     
-            plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
-    
-            plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
-
+            try:
+                plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
+            except:
+                pass
+            
+            try:
+                plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
+            except:
+                pass
 
     if True:
-        plot_spatial_poynting(save=True, log=True)
-        plot_spatial_poynting_helical(save=True, log=True)
+        try:
+            plot_spatial_poynting(save=True, log=True)
+            plot_spatial_poynting_helical(save=True, log=True)
+        except:
+            pass
         #plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
         
         #plot_initial_configurations()
@@ -1530,7 +1592,8 @@ def check_fields(save=True):
         fig.patch.set_facecolor('w')   
 
         axes[0, 0].set_title('Field outputs: {}[{}]'.format(series, run_num), fontsize=fontsize+4, family='monospace')
-
+        axes[0, 1].set_title('Time :: {:<7.4f}s'.format(ftime[ii]), fontsize=fontsize+4, family='monospace')
+        
         # Wave Fields (Plots, Labels, Lims)
         axes[0, 0].plot(cf.B_nodes / cf.dx, rD[ii], color='k', label=r'$r_D(x)$') 
         axes[1, 0].plot(cf.B_nodes / cf.dx, by[ii], color='b', label=r'$B_y$') 
@@ -2627,17 +2690,22 @@ def check_posvel_ortho():
     return
 
 
-def plot_E_components():
-    
+def plot_E_components(plot=False):
+    # Ji x B / qn               Convective Term
+    # del(p) / qn               Ambipolar term
+    # Bx(curl B) / qn*mu0       Hall Term
+    print('Plotting E components...')
     ftime, bx, by, bz, ex, ey, ez, vex, vey, vez,\
     te, jx, jy, jz, qdens, fsim_time, rD = cf.get_array(get_all=True)
         
     hall, amb, conv = bk.calculate_E_components(bx, by, bz, jx, jy, jz, qdens)    
-    pdb.set_trace()
+
     # Sanity check :: Reconstruct what E should be, compare to real
     E_reconstruction = np.zeros((hall.shape[0], hall.shape[1], 3), dtype=float)
-    for ii in range(3):
-        E_reconstruction[:, :, ii] = - (hall[:, :, ii] + conv[:, :, ii] + amb[:, :])
+
+    E_reconstruction[:, :, 0] = - (hall[:, :, 0] + conv[:, :, 0] + amb[:, :])
+    E_reconstruction[:, :, 1] = - (hall[:, :, 1] + conv[:, :, 1])
+    E_reconstruction[:, :, 2] = - (hall[:, :, 2] + conv[:, :, 2])
     
     # Plots to do -- Two options,
     #   1) Component plot vs. time at a particular point (save NX plots to folder)
@@ -2656,50 +2724,58 @@ def plot_E_components():
         if os.path.exists(fpath) == False:
             os.makedirs(fpath)
     
-    plt.ioff()
-    # Plot components for each point in space (vs. time)
-    if True:
-        for ii in range(cf.NC):
-            fig, axes = plt.subplots(4, sharex=True, figsize=(15, 10))
-            
-            # Ambipolar (del P) term
-            axes[0].plot(ftime, amb[:, ii], c='r')
-            axes[0].set_ylabel('Ambipolar')
-            axes[0].set_title('E components at cell {}'.format(ii))
-            
-            # Convective (JxB) term :: x,y,z components
-            axes[1].plot(ftime, conv[:, ii, 0], c='r', label='x')
-            axes[1].plot(ftime, conv[:, ii, 1], c='b', label='y')
-            axes[1].plot(ftime, conv[:, ii, 2], c='k', label='z')
-            axes[1].set_ylabel('Convective')
-            
-            # Hall (B x curl(B)) term :: x, y, z components
-            axes[2].plot(ftime, hall[:, ii, 0], c='r', label='x')
-            axes[2].plot(ftime, hall[:, ii, 1], c='b', label='y')
-            axes[2].plot(ftime, hall[:, ii, 2], c='k', label='z')
-            axes[2].set_ylabel('Hall')
-            
-            # E recorded vs. E reconstructed (as check)
-            axes[3].plot(ftime, E_reconstruction[:, ii, 0], c='r', ls='--', label='x')
-            axes[3].plot(ftime, E_reconstruction[:, ii, 1], c='b', ls='--', label='y')
-            axes[3].plot(ftime, E_reconstruction[:, ii, 2], c='k', ls='--', label='z')
-            
-            axes[3].plot(ftime, ex[:, ii], c='r', ls='-', label='x')
-            axes[3].plot(ftime, ey[:, ii], c='b', ls='-', label='y')
-            axes[3].plot(ftime, ez[:, ii], c='k', ls='-', label='z')
-            axes[3].set_ylabel('E')
-            axes[3].set_xlabel('Time (s)')
-            
-            filename = 'E_comp_vs_time_{:05}.png'.format(ii)
-            savepath = xtime_path + filename
-            plt.savefig(savepath)
-            print('E components vs. time for cell {} plotted'.format(ii))
-            plt.close('all')
+    if plot == True:
+        plt.ioff()
+        
+        if False:
+            # Plot components for each point in space (vs. time)
+            for ii in range(cf.NC):
+                fig, axes = plt.subplots(5, sharex=True, figsize=(15, 10))
+                
+                # Ambipolar (del P) term
+                axes[0].plot(ftime, amb[:, ii], c='r')
+                axes[0].set_ylabel('Ambipolar')
+                axes[0].set_title('E components at cell {}'.format(ii))
+                
+                # Convective (JxB) term :: x,y,z components
+                axes[1].plot(ftime, conv[:, ii, 0], c='r', label='x')
+                axes[1].plot(ftime, conv[:, ii, 1], c='b', label='y')
+                axes[1].plot(ftime, conv[:, ii, 2], c='k', label='z')
+                axes[1].set_ylabel('Convective')
+                axes[1].legend(loc='upper right')
+                
+                # Hall (B x curl(B)) term :: x, y, z components
+                axes[2].plot(ftime, hall[:, ii, 0], c='r', label='x')
+                axes[2].plot(ftime, hall[:, ii, 1], c='b', label='y')
+                axes[2].plot(ftime, hall[:, ii, 2], c='k', label='z')
+                axes[2].set_ylabel('Hall')
+                axes[2].legend(loc='upper right')
+                
+                # E recorded vs. E reconstructed (as check)
+                axes[3].plot(ftime, E_reconstruction[:, ii, 0], c='r', ls='--', label='x')
+                axes[3].plot(ftime, E_reconstruction[:, ii, 1], c='b', ls='--', label='y')
+                axes[3].plot(ftime, E_reconstruction[:, ii, 2], c='k', ls='--', label='z')
+                axes[3].set_ylabel('E recon')
+                axes[3].legend(loc='upper right')
+                
+                axes[4].plot(ftime, ex[:, ii], c='r', ls='-', label='x')
+                axes[4].plot(ftime, ey[:, ii], c='b', ls='-', label='y')
+                axes[4].plot(ftime, ez[:, ii], c='k', ls='-', label='z')
+                axes[4].set_ylabel('E')
+                axes[4].legend(loc='upper right')
+                axes[4].set_xlabel('Time (s)')
+                
+                fig.subplots_adjust(hspace=0)
+                
+                filename = 'E_comp_vs_time_{:05}.png'.format(ii)
+                savepath = xtime_path + filename
+                plt.savefig(savepath)
+                print('E components vs. time for cell {} plotted'.format(ii))
+                plt.close('all')
     
-    # Plot components for each point in time (vs. space)
-    if True:
+        # Plot components for each point in time (vs. space)
         for ii in range(ftime.shape[0]):
-            fig, axes = plt.subplots(4, sharex=True, figsize=(15, 10))
+            fig, axes = plt.subplots(5, sharex=True, figsize=(15, 10))
             
             # Ambipolar (del P) term
             axes[0].plot(cf.E_nodes, amb[ii, :], c='r')
@@ -2711,23 +2787,30 @@ def plot_E_components():
             axes[1].plot(cf.E_nodes, conv[ii, :, 1], c='b', label='y')
             axes[1].plot(cf.E_nodes, conv[ii, :, 2], c='k', label='z')
             axes[1].set_ylabel('Convective')
+            axes[1].legend(loc='upper right')
             
             # Hall (B x curl(B)) term :: x, y, z components
             axes[2].plot(cf.E_nodes, hall[ii, :, 0], c='r', label='x')
             axes[2].plot(cf.E_nodes, hall[ii, :, 1], c='b', label='y')
             axes[2].plot(cf.E_nodes, hall[ii, :, 2], c='k', label='z')
             axes[2].set_ylabel('Hall')
+            axes[2].legend(loc='upper right')
             
             # E recorded vs. E reconstructed (as check)
-            axes[2].plot(cf.E_nodes, E_reconstruction[ii, :, 0], c='r', ls='--', label='x')
-            axes[2].plot(cf.E_nodes, E_reconstruction[ii, :, 1], c='b', ls='--', label='y')
-            axes[2].plot(cf.E_nodes, E_reconstruction[ii, :, 2], c='k', ls='--', label='z')
+            axes[3].plot(cf.E_nodes, E_reconstruction[ii, :, 0], c='r', ls='--', label='x')
+            axes[3].plot(cf.E_nodes, E_reconstruction[ii, :, 1], c='b', ls='--', label='y')
+            axes[3].plot(cf.E_nodes, E_reconstruction[ii, :, 2], c='k', ls='--', label='z')
+            axes[3].set_ylabel('E recon')
+            axes[3].legend(loc='upper right')
             
-            axes[2].plot(cf.E_nodes, ex[ii :,], c='r', ls='-', label='x')
-            axes[2].plot(cf.E_nodes, ey[ii :,], c='b', ls='-', label='y')
-            axes[2].plot(cf.E_nodes, ez[ii :,], c='k', ls='-', label='z')
-            axes[2].set_ylabel('E')
-            axes[3].set_xlabel('Position (m)')
+            axes[4].plot(cf.E_nodes, ex[ii, :], c='r', ls='-', label='x')
+            axes[4].plot(cf.E_nodes, ey[ii, :], c='b', ls='-', label='y')
+            axes[4].plot(cf.E_nodes, ez[ii, :], c='k', ls='-', label='z')
+            axes[4].set_ylabel('E')
+            axes[4].legend(loc='upper right')
+            axes[4].set_xlabel('Position (m)')
+            
+            fig.subplots_adjust(hspace=0)
             
             filename = 'E_comp_vs_space_{:05}.png'.format(ii)
             savepath = xspace_path + filename
@@ -2975,7 +3058,7 @@ def plot_vi_vs_t_for_cell(cell=None, comp=0, it_max=None, jj=1, save=True, hexbi
     return
 
 
-def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
+def plot_vi_vs_x(it_max=None, jj=1, save=True):
     '''
     For each point in time
      - Collect particle information for particles near cell, plus time component
@@ -2986,7 +3069,7 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
     
     '''
     lt = ['x', 'y', 'z']
-    print('Calculating distribution v{} vs. space for species {},...'.format(lt[comp], jj))
+    print('Calculating distribution f(v) vs. x for species {},...'.format(jj))
     if it_max is None:
         it_max = len(os.listdir(cf.particle_dir))
               
@@ -2999,33 +3082,38 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
         
     # Collect all particle information for specified cell
     for ii in range(it_max):
-        sys.stdout.write('\rAccruing particle data from p-file {}'.format(ii))
+        sys.stdout.write('\rPlotting particle data from p-file {}'.format(ii))
         sys.stdout.flush()
     
-        pos, vel, idx, ptime= cf.load_particles(ii)
+        pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii)
         
         # Do the plotting
         plt.ioff()
         
-        fig, ax = plt.subplots(figsize=(15, 10))
-        ax.set_title('v{} vs. x :: {} :: Time {:.2f}s'.format(lt[comp], cf.species_lbl[jj], ptime))
-                    
-        counts, xedges, yedges, im1 = ax.hist2d(pos[0, :]/cf.dx, vel[0, :]/cf.va, 
-                                                bins=[xbins, vbins],
-                                                vmin=0, vmax=cf.nsp_ppc[jj] / cfac)
-
-        cb = fig.colorbar(im1, ax=ax)
-        cb.set_label('Counts')
+        fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
+        axes[0].set_title('f(v) vs. x :: {}'.format(cf.species_lbl[jj]))
         
-        ax.set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
-        ax.set_ylim(-vlim, vlim)
+        st = idx_start[jj]
+        en = idx_end[jj]
         
-        ax.set_xlabel('Position (cell)')
-        ax.set_ylabel('Velocity ($v_A$)')
+        for kk in range(3):
+            counts, xedges, yedges, im1 = axes[kk].hist2d(pos[0, st:en]/cf.dx, vel[kk, st:en]/cf.va, 
+                                                    bins=[xbins, vbins],
+                                                    vmin=0, vmax=cf.nsp_ppc[jj] / cfac)
 
+            cb = fig.colorbar(im1, ax=axes[kk])
+            cb.set_label('Counts')
+            
+            axes[kk].set_ylim(-vlim, vlim)
+            axes[kk].set_ylabel('v{} ($v_A$)'.format(lt[kk]), rotation=0)
+            
+        axes[kk].set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
+        axes[kk].set_xlabel('Position (cell)')
+
+        fig.subplots_adjust(hspace=0)
         if save == True:
-            save_dir = cf.anal_dir + '//Particle Distribution Histograms//For Every Time//Species {}//v{}//'.format(jj, lt[comp])
-            filename = 'v{}_vs_x_species_{}_{:05}'.format(lt[comp], jj, ii)
+            save_dir = cf.anal_dir + '//Particle Distribution Histograms//For Every Time//Species {}//'.format(jj)
+            filename = 'fv_vs_x_species_{}_{:05}'.format(jj, ii)
             
             if os.path.exists(save_dir) == False:
                 os.makedirs(save_dir)
@@ -3042,35 +3130,40 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
 ##%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'ABC_mario_test'
+    series      = 'TSC_CIC_comparison'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
-    # To do : A comparison plot of the loss per time of the cold plasma runs
     for run_num in range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
-             
-        standard_analysis_package(thesis=False, tx_only=True)
+        
+        #plot_E_components(plot=True)
+        
+        try:
+            plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None)
+            plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
+        except:
+            pass
+        
+        standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
+        
+        summary_plots(save=True, histogram=False)
+        check_fields()
+        
+        for sp in range(2):
+            plot_vi_vs_x(it_max=None, jj=sp, save=True)
+        
+
+
+
+        #plot_initial_configurations()
+        #plot_vi_vs_t_for_cell(cell=0, comp=0, it_max=None, jj=1)
         
         #do_all_dynamic_spectra(ymax=2.0)
         #do_all_dynamic_spectra(ymax=None)
-        
-# =============================================================================
-#         summary_plots(save=True, histogram=False)
-#         
-#         for cm in range(3):
-#             for sp in range(2):
-#                 plot_vi_vs_x(comp=cm, it_max=None, jj=sp, save=True)
-#            
-#         plot_initial_configurations()
-# =============================================================================
-            
-        #plot_vi_vs_t_for_cell(cell=0, comp=0, it_max=None, jj=1)
-        
-        
         
 # =============================================================================
 #         plot_adiabatic_parameter()
@@ -3119,7 +3212,7 @@ if __name__ == '__main__':
         
         
         
-        #check_fields()
+        #
         #plot_energies(normalize=False, save=True)
         
         #disp_folder = 'dispersion_plots/'

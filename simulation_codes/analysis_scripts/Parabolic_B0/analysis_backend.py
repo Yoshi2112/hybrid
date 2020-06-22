@@ -106,6 +106,8 @@ def interpolate_B_to_center(bx, by, bz, zero_boundaries=False):
     
     bx, by, bz are each (time, space) ndarrays
     
+    Also adds on background field in x component (for JxB calculation)
+    
     VERIFIED
     '''
     n_times = bx.shape[0]
@@ -150,6 +152,7 @@ def interpolate_B_to_center(bx, by, bz, zero_boundaries=False):
             bxi[tt, ii] = 0.5 * (bx[tt, ii] + bx[tt, ii + 1] + (1/6) * (y2x[ii] + y2x[ii + 1]))
             byi[tt, ii] = 0.5 * (by[tt, ii] + by[tt, ii + 1] + (1/6) * (y2y[ii] + y2y[ii + 1]))
             bzi[tt, ii] = 0.5 * (bz[tt, ii] + bz[tt, ii + 1] + (1/6) * (y2z[ii] + y2z[ii + 1]))
+                
     return bxi, byi, bzi
 
 
@@ -203,7 +206,7 @@ def get_grad_P(qn, te):
 
 def get_curl_B(bx, by, bz):
     '''
-    Each b component is a (time, space) ndarray
+    Each b component is a (time, space) ndarray. This looks fine.
     '''
     curl_B = np.zeros((bx.shape[0], bx.shape[1] - 1, 3), dtype=np.float64)
     
@@ -212,6 +215,7 @@ def get_curl_B(bx, by, bz):
         curl_B[:, ii, 2] =   by[:, ii + 1] - by[:, ii]
     
     curl_B /= (cf.dx * mu0)
+
     return curl_B
 
 
@@ -222,14 +226,15 @@ def cross_product(ax, ay, az, bx, by, bz):
     all ai, bi are expected to be (time, space) ndarrays
     '''
     C = np.zeros((az.shape[0], az.shape[1], 3), dtype=np.float64)
+
     for ii in nb.prange(az.shape[0]):
-        C[:, ii, 0] += ay[:, ii] * bz[:, ii]
-        C[:, ii, 1] += az[:, ii] * bx[:, ii]
-        C[:, ii, 2] += ax[:, ii] * by[:, ii]
+        C[ii, :, 0] += ay[ii] * bz[ii]
+        C[ii, :, 1] += az[ii] * bx[ii]
+        C[ii, :, 2] += ax[ii] * by[ii]
         
-        C[:, ii, 0] -= az[:, ii] * by[:, ii]
-        C[:, ii, 1] -= ax[:, ii] * bz[:, ii]
-        C[:, ii, 2] -= ay[:, ii] * bx[:, ii]
+        C[ii, :, 0] -= az[ii] * by[ii]
+        C[ii, :, 1] -= ax[ii] * bz[ii]
+        C[ii, :, 2] -= ay[ii] * bx[ii]
     return C
 
 
@@ -238,27 +243,35 @@ def calculate_E_components(bx, by, bz, jx, jy, jz, q_dens):
     '''
     '''
     # Need to calculate (Fatemi, 2017):
-    # Ji x B / qn               Convective Term?
-    # del(p) / qn               Ambipolar term?
-    # Bx(curl B) / qn*mu0       Hall Term?
+    # Ji x B / qn               Convective Term     LOOKS GOOD
+    # del(p) / qn               Ambipolar term      LOOKS GOOD
+    # Bx(curl B) / qn*mu0       Hall Term           LOOKS GOOD
     # This version of the code doesn't include an Ohmic term, since eta = 0
-    import sys
-    import matplotlib.pyplot as plt
-    
+
     bxi, byi, bzi = interpolate_B_to_center(bx, by, bz)
+    B0  = eval_B0x(cf.E_nodes)
+    for tt in range(bxi.shape[0]):
+        bxi[tt] += B0
+        
+# =============================================================================
+#     import sys
+#     import matplotlib.pyplot as plt
+# =============================================================================
+# =============================================================================
+#     fig, ax = plt.subplots(2, figsize=(15, 10))
+#     
+#     time  = 120
+#     space = bx.shape[1] // 2
+#     
+#     ax[0].plot(cf.B_nodes, by[ time], marker='o', c='b')
+#     ax[0].plot(cf.E_nodes, byi[time], marker='x', c='r')
+#     
+#     ax[1].plot(by[ :, space], marker='o', c='b')
+#     ax[1].plot(byi[:, space], marker='x', c='r')
+#     
+#     sys.exit()
+# =============================================================================
     
-    fig, ax = plt.subplots(2, figsize=(15, 10))
-    
-    time  = 120
-    space = bx.shape[1] // 2
-    
-    ax[0].plot(cf.B_nodes, by[ time], marker='o', c='b')
-    ax[0].plot(cf.E_nodes, byi[time], marker='x', c='r')
-    
-    ax[1].plot(by[ :, space], marker='o', c='b')
-    ax[1].plot(byi[:, space], marker='x', c='r')
-    
-    sys.exit()
     # Hall Term
     curl_B = get_curl_B(bx, by, bz)
     BdB    = cross_product(bxi, byi, bzi, curl_B[:, :, 0], curl_B[:, :, 1], curl_B[:, :, 2])
@@ -267,7 +280,7 @@ def calculate_E_components(bx, by, bz, jx, jy, jz, q_dens):
     Te     = get_electron_temp(q_dens)
     grad_P = get_grad_P(q_dens, Te)                           # temp1D is now del_p term, temp3D2 slice used for computation
     grad_P/= q_dens[:]
-
+    
     # Convective Term
     JxB  = cross_product(jx, jy, jz, bxi, byi, bzi)           # temp3De is now Ve x B term
     
@@ -276,7 +289,7 @@ def calculate_E_components(bx, by, bz, jx, jy, jz, q_dens):
         JxB[:, :, ii] /= q_dens[:]
         
     return BdB, grad_P, JxB
-
+    #     hall, amb   , conv
 
 
 

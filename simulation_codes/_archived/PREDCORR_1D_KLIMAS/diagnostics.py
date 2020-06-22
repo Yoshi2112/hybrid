@@ -47,29 +47,6 @@ def r_squared(data, model):
     return r_sq
 
 
-def collect_macroparticle_moments(pos, vel, idx): #
-    import sources_1D   as sources
-    import particles_1D as particles
-    
-    I = np.zeros(pos.shape[1], dtype=int)
-    W = np.zeros(pos.shape   , dtype=float)
-    
-    ni = np.zeros((const.NC, const.Nj),    dtype=nb.float64)
-    nu = np.zeros((const.NC, const.Nj, 3), dtype=nb.float64)
-    
-    # Zeroth and First moment calculations
-    particles.assign_weighting_TSC(pos, I, W, E_nodes=True)
-    sources.deposit_moments_to_grid(vel, I, W, idx, ni, nu)
-    
-    fig, [ax1, ax2] = plt.subplots(2, figsize=(15, 10))
-    
-    x_arr = np.arange(const.NC)
-    
-    ax1.plot(x_arr, ni)
-    ax2.plot(x_arr, nu)
-    return
-
-
 def check_cell_velocity_distribution(pos, vel, node_number=const.NX // 2, j=0): #
     '''Checks the velocity distribution of a particle species within a specified cell
     '''
@@ -128,6 +105,8 @@ def check_cell_velocity_distribution_2D(pos, vel, node_number=const.NX // 2, jj=
     '''
     if node_number is None:
         node_number = np.arange(const.NX)
+        
+    
         
     # Account for damping nodes. Node_number should be "real" node count.
     for node in node_number:
@@ -242,100 +221,6 @@ def check_velocity_distribution(vel):
     return
 
 
-def check_velocity_components_vs_space(pos, vel, jj=1):
-    '''
-    For each point in time
-     - Collect particle information for particles near cell, plus time component
-     - Store in array
-     - Plot using either hexbin or hist2D
-    '''
-    print('Calculating velocity distributions vs. space for species {},...'.format(jj))
-    comp = ['x', 'y', 'z']
-    cfac = 10 if const.temp_type[jj] == 1 else 5
-    vlim = 15 if const.temp_type[jj] == 1 else 5
-    
-    V_PERP = np.sign(vel[2]) * np.sqrt(vel[1] ** 2 + vel[2] ** 2) / const.va
-    V_PARA = vel[0] / const.va
-    
-    # Manually specify bin edges for histogram
-    vbins = np.linspace(-vlim, vlim, 101, endpoint=True)
-    xbins = np.linspace(const.xmin/const.dx, const.xmax/const.dx, const.NX + 1, endpoint=True)
-        
-    # Do the plotting
-    plt.ioff()
-    
-    fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
-    axes[0].set_title('f(v) vs. x :: {}'.format(const.species_lbl[jj]))
-    
-    st = const.idx_start[jj]
-    en = const.idx_end[jj]
-    
-    for ii in range(3):
-        counts, xedges, yedges, im1 = axes[ii].hist2d(pos[0, st:en]/const.dx, vel[ii, st:en]/const.va, 
-                                                bins=[xbins, vbins],
-                                                vmin=0, vmax=const.nsp_ppc[jj] / cfac)
-    
-        cb = fig.colorbar(im1, ax=axes[ii])
-        cb.set_label('Counts')
-        
-        axes[ii].set_xlim(const.xmin/const.dx, const.xmax/const.dx)
-        axes[ii].set_ylim(-vlim, vlim)
-        
-        axes[ii].set_ylabel('v{}\n($v_A$)'.format(comp[ii]), rotation=0)
-        
-    axes[2].set_xlabel('Position (cell)')
-    fig.subplots_adjust(hspace=0)
-    plt.show()
-    
-    print('\n')
-    return
-
-
-def plot_temperature_extremes():
-    '''
-    Calculate what the max/min temperatures for the distribution are at eq/boundary
-    For each species, plot these two distributions
-    
-    Two positions: eq/xmax, Two components, par/per, multiple species Nj
-    '''
-    vlim = 10
-    jj   = 1
-    
-    from scipy.stats import norm
-    
-    T_eq_par = const.beta_par[jj] * const.B_eq ** 2 / (2 * const.mu0 * const.ne * const.kB)
-    T_eq_per = const.beta_per[jj] * const.B_eq ** 2 / (2 * const.mu0 * const.ne * const.kB)
-    
-    T_xmax_par = const.beta_par[jj] * const.B_xmax ** 2 / (2 * const.mu0 * const.ne * const.kB)
-    T_xmax_per = const.beta_per[jj] * const.B_xmax ** 2 / (2 * const.mu0 * const.ne * const.kB)
-    
-    sf_eq_par = np.sqrt(const.kB *  T_eq_par /  const.mass[jj])
-    sf_eq_per = np.sqrt(const.kB *  T_eq_per /  const.mass[jj])
-    
-    sf_xmax_par = np.sqrt(const.kB *  T_xmax_par /  const.mass[jj])
-    sf_xmax_per = np.sqrt(const.kB *  T_xmax_per /  const.mass[jj])
-    
-    x = np.linspace(-vlim*const.va, vlim*const.va, 100)
-    
-    prob_eq_par   = norm.pdf(x, 0.0, sf_eq_par)
-    prob_eq_per   = norm.pdf(x, 0.0, sf_eq_per)
-    
-    prob_xmax_par = norm.pdf(x, 0.0, sf_xmax_par)
-    prob_xmax_per = norm.pdf(x, 0.0, sf_xmax_per)
-    
-    plt.ioff()
-    fig, ax = plt.subplots(2, sharex=True)
-    ax[0].plot(x, prob_eq_par  , c='b')
-    ax[0].plot(x, prob_xmax_par, c='r')
-    ax[0].set_xlabel('$v_\parallel$')
-    
-    ax[1].plot(x, prob_eq_per, c='b')
-    ax[1].plot(x, prob_xmax_per, c='r')
-    ax[1].set_xlabel('$v_\perp$')
-    plt.show()
-    return
-
-
 def test_particle_orbit():
     def position_update(pos, vel, DT):
         for ii in range(3):
@@ -398,21 +283,21 @@ def test_weight_conservation():
     Plots the normalized weight for a single particle at 1e5 points along simulation
     domain. Should remain at 1 the whole time.
     '''
-    nspace        = 100
-
-    positions     = np.zeros((3, nspace), dtype=float)
-    positions[0]  = np.linspace(const.xmin, const.xmax, nspace, endpoint=True)
-    normal_weight = np.zeros(positions.shape[1])
-    left_nodes    = np.zeros(positions.shape[1], dtype=int)
-    weights       = np.zeros((3, positions.shape[1]))
+    nspace        = 10000
+    xmax          = const.NX*const.dx
+    
+    positions     = np.linspace(0, xmax, nspace, endpoint=True)
+    normal_weight = np.zeros(positions.shape[0])
+    left_nodes    = np.zeros(positions.shape[0], dtype=int)
+    weights       = np.zeros((3, positions.shape[0]))
     
     particles.assign_weighting_TSC(positions, left_nodes, weights, E_nodes=False)
     
-    for ii in range(positions.shape[1]):
+    for ii in range(positions.shape[0]):
         normal_weight[ii] = weights[:, ii].sum()
 
-    plt.plot(positions[0], normal_weight)
-    plt.xlim(const.xmin, const.xmax)
+    #plt.plot(positions, normal_weight)
+    #plt.xlim(0., xmax)
     return
 
 
@@ -545,6 +430,7 @@ def check_density_deposition():
     # Change dx to 1 and NX/ND to reasonable values to make this nice
     # Don't forget to comment out the density floor AND re-enable it when done.
     #positions   = np.array([2.00])
+    dy = 0.5
     positions = np.arange(-const.NX/2, const.NX/2 + dy, dy)
 
     Np  = positions.shape[0]
@@ -2628,6 +2514,154 @@ def check_directions():
     return
 
 
+def test_particle_open_boundary_fluxes():
+    '''
+    Full particle pusher
+    Random initializes one species of Np particles
+    Just for testing boundary fluxes
+    '''   
+    print('Testing boundary fluxes')
+    jj = 1
+    # Initialize arrays
+    Np     = 20
+    N_init = 2*Np
+    
+    idx      = np.zeros(N_init, dtype=int)
+    W_elec   = np.zeros((3, N_init))
+    W_mag    = np.zeros((3, N_init))
+    Ep       = np.zeros((3, N_init))
+    Bp       = np.zeros((3, N_init))
+    v_prime  = np.zeros((3, N_init))
+    S        = np.zeros((3, N_init))
+    T        = np.zeros((3, N_init))
+    Ie       = np.zeros(N_init, dtype=int)
+    Ib       = np.zeros(N_init, dtype=int)
+    qmi      = np.zeros(N_init)
+    idx[Np:] = jj - 128
+    
+    B_test = np.zeros((const.NC + 1, 3), dtype=np.float64) 
+    E_test = np.zeros((const.NC, 3),     dtype=np.float64) 
+    
+    vel    = np.zeros((3, N_init), dtype=np.float64)
+    pos    = np.zeros((3, N_init), dtype=np.float64)
+    
+    sf_par = np.sqrt(const.kB * const.Tpar[jj] / const.mass[jj])
+    sf_per = np.sqrt(const.kB * const.Tper[jj] / const.mass[jj])
+    
+    vel[0, :Np] = np.random.normal(0.0, sf_par, Np)
+    vel[1, :Np] = np.random.normal(0.0, sf_per, Np)
+    vel[2, :Np] = np.random.normal(0.0, sf_per, Np)
+    
+    pos[0, :Np] = np.random.uniform(const.xmin, const.xmax, Np)
+
+    # Set initial Larmor radius - rL from v_perp, distributed to y,z based on velocity gyroangle
+    print('Initializing particles off-axis')
+    B0x     = fields.eval_B0x(pos[0, :Np])
+    v_perp  = np.sqrt(vel[1, :Np] ** 2 + vel[2, :Np] ** 2)
+    gyangle = init.get_gyroangle_array(vel[:, :Np])
+    rL      = v_perp / (const.qm_ratios[idx[:Np]] * B0x)
+    pos[1, :Np]  = rL * np.cos(gyangle)
+    pos[2, :Np]  = rL * np.sin(gyangle)
+
+    # Initial quantities
+    ion_ts   = const.orbit_res / const.gyfreq
+    vel_ts   = 0.5 * const.dx / np.max(np.abs(vel[0, :]))
+    DT       = min(ion_ts, vel_ts)
+    
+    # Target: 25000 cyclotron periods (~1hrs)
+    max_t    = const.max_rev / const.gyfreq
+    max_inc  = int(max_t / DT) + 1
+
+    # Retard velocity for stability
+    particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B_test, E_test, v_prime, S, T, qmi, -0.5*DT)
+    
+    # Record initial values
+    tt = 0; t_total = 0
+    while tt < max_inc - 1:
+        plot_scatter_and_save(pos, vel, idx, tt)
+        
+        tt      += 1
+        t_total += DT
+        
+        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B_test, E_test, v_prime, S, T, qmi, DT)
+        particles.position_update(pos, vel, idx, Ep, DT, Ie, W_elec)
+        #pdb.set_trace()
+    return
+
+
+
+def plot_scatter_and_save(pos, vel, idx, ii):   
+    print('Saving phase space plot {}'.format(ii))
+    save_dir = const.drive + '//' + const.save_path + '//DIAGNOSTICS//'
+    
+    if os.path.exists(save_dir) == False:
+        os.makedirs(save_dir)
+        
+    plt.ioff()
+    fig, ax = plt.subplots(figsize=(15, 10))
+    
+    plot_pos = np.ma.masked_where(idx < 0, pos[0])
+    plot_vel = np.ma.masked_where(idx < 0, vel[0])
+
+    ax.scatter(plot_pos/const.dx, plot_vel/const.va, c='k')
+    ax.set_xlim(const.xmin/const.dx, const.xmax/const.dx)
+    ax.set_ylim(-20, 20)
+    
+    for node in const.B_nodes:
+        ax.axvline(node / const.dx, c='k', alpha=0.5, ls=':')
+    
+    fig.savefig(save_dir + 'pos_vel_{:05}'.format(ii))
+    plt.close('all')
+    return
+
+
+def plot_distributions_and_save(pos, vel, idx, ii, jj):   
+    print('Saving phase space plot {}'.format(ii))
+    save_dir = const.drive + '//' + const.save_path + '//DIAGNOSTICS//'
+
+    lt = ['x', 'y', 'z']
+              
+    cfac = 10 if const.temp_type[jj] == 1 else 5
+    vlim = 10 if const.temp_type[jj] == 1 else 5
+    
+    # Manually specify bin edges for histogram
+    vbins = np.linspace(-vlim, vlim, 101, endpoint=True)
+    xbins = np.linspace(const.xmin/const.dx, const.xmax/const.dx, const.NX + 1, endpoint=True)
+
+    plot_pos = np.ma.masked_where(idx < 0, pos[0])
+    plot_vel = np.ma.masked_where(idx < 0, vel[0])
+
+    # Do the plotting
+    plt.ioff()
+    
+    fig, ax = plt.subplots(figsize=(15, 10))
+    ax.set_title('v{} vs. x :: {} :: Time {:.2f}s'.format(lt[comp], cf.species_lbl[jj], ptime))
+        
+    counts, xedges, yedges, im1 = ax.hist2d(pos[0, st:en]/cf.dx, vel[0, st:en]/cf.va, 
+                                            bins=[xbins, vbins],
+                                            vmin=0, vmax=cf.nsp_ppc[jj] / cfac)
+
+    cb = fig.colorbar(im1, ax=ax)
+    cb.set_label('Counts')
+    
+    ax.set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
+    ax.set_ylim(-vlim, vlim)
+    
+    ax.set_xlabel('Position (cell)')
+    ax.set_ylabel('Velocity ($v_A$)')
+
+    save_dir = cf.anal_dir + '//Particle Distribution Histograms//For Every Time//Species {}//v{}//'.format(jj, lt[comp])
+    filename = 'v{}_vs_x_species_{}_{:05}'.format(lt[comp], jj, ii)
+    
+    if os.path.exists(save_dir) == False:
+        os.makedirs(save_dir)
+    
+    plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+    plt.close('all')
+
+    return
+
+
 if __name__ == '__main__':
     #check_position_distribution()
     #animate_moving_weight()
@@ -2637,6 +2671,7 @@ if __name__ == '__main__':
     #test_grad_P()
     #test_grad_P_with_init_loading()
     #test_density_and_velocity_deposition()
+    #check_density_deposition()
     #visualize_inhomogenous_B()
     #plot_dipole_field_line()
     #check_particle_position_individual()
@@ -2650,11 +2685,8 @@ if __name__ == '__main__':
     #test_E_convective_exelectron()
     #test_varying_background_function()
     #test_push_B_w_varying_background()
-    
     #test_weight_conservation()
-    check_density_deposition()
     #test_weight_shape_and_alignment()
-    
     #compare_parabolic_to_dipole()
     #test_boris()
     #test_mirror_motion()
@@ -2668,7 +2700,7 @@ if __name__ == '__main__':
     #smart_plot_3D()
     #check_directions()
     #plot_dipole_field_line(length=True)
-    
+    test_particle_open_boundary_fluxes()
 # =============================================================================
 #     init_pos, init_vel, time, pos_history, vel_history, mag_history,\
 #         DT, max_t, POS_gphase, VEL_gphase = do_particle_run(max_rev=1, v_mag=10.0, pitch=41.0, dt_mult=1.0)

@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ratios, kB, \
-                                        B_eq, a, mass, Tper, Tpar, particle_periodic, loss_cone_xmax
+                                        B_eq, a, mass, Tper, Tpar, homogenous, loss_cone_xmax
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -22,7 +22,7 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, 
     Helper function to group the particle advance and moment collection functions
     '''
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, temp_N, DT)
-    position_update(pos, vel, idx, DT, Ie, W_elec)  
+    position_update(pos, vel, idx, Ep, DT, Ie, W_elec)  
     collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, ni, nu)
     return
 
@@ -55,13 +55,6 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
            
     Could vectorize this with the temp_N array, then check for particles on the boundaries (for
     manual setting)
-    
-    QUESTION :: Why do particles on the boundary only give 0.5 weighting? 
-    ANSWER   :: It seems legit and prevents double counting of a particle on the boundary. Since it
-                is a B-field node, there should be 0.5 weighted to both nearby E-nodes. In this case,
-                reflection doesn't make sense because there cannot be another particle there - there is 
-                only one midpoint position (c.f. mirroring contributions of all other particles due to 
-                pretending there's another identical particle on the other side of the simulation boundary).
     '''
     Np         = pos.shape[1]
     epsil      = 1e-15
@@ -187,7 +180,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
 
 
 @nb.njit()
-def position_update(pos, vel, idx, DT, Ie, W_elec):
+def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
     '''
     Updates the position of the particles using x = x0 + vt. 
     Also updates particle nearest node and weighting.
@@ -203,62 +196,84 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
     Note: This function also controls what happens when a particle leaves the 
     simulation boundary.
     
-    NOTE :: This reinitialization thing is super unoptimized and inefficient.
-            Maybe initialize array of n_ppc samples for each species, to at least vectorize it
-            Count each one being used, start generating new ones if it runs out (but it shouldn't)
+    NOTE :: Check the > < and >= <= equal positions when more awake, just make sure
+            they're right (not under or over triggering the condition)
             
-    # 28/05/2020 :: Removed np.abs() and -np.sign() factors from v_x calculation
-    # See if that helps better simulate the distro function (will "lose" more
-    # particles at boundaries, but that'll just slow things down a bit - should
-    # still be valid)
+    acc is an array accumulator that should prevent starting the search from the 
+    beginning of the array each time a particle needs to be reinitialized
+    
+    Is it super inefficient to do two loops for the disable/enable bit? Or worse
+    to have arrays all jumbled and array access all horrible? Is there a more
+    efficient way to code it?
+    
+    To Do: Code with one loop, same acc, etc. Assume that there is enough 
+    disabled particles to fulfill the needs for a single timestep (especially
+    since all the 'spare' particles are at the end. Spare particles should only
+    then be accessed when there was not sufficient numbers of 'normal' particles
+    in domain, or they were accessed out of order. Might save a bit of time. But
+    also need to check it against the 2-loop version.
     '''
+    pos_old[:, :] = pos
+    
     pos[0, :] += vel[0, :] * DT
     pos[1, :] += vel[1, :] * DT
     pos[2, :] += vel[2, :] * DT
-         
-    # Check Particle boundary conditions: Re-initialize if at edges
-    for ii in nb.prange(pos.shape[1]):
-        if (pos[0, ii] < xmin or pos[0, ii] > xmax):
-            if particle_periodic == False: 
-                
-                # Fix position
-                if pos[0, ii] > xmax:
-                    pos[0, ii] = 2*xmax - pos[0, ii]
-                elif pos[0, ii] < xmin:
-                    pos[0, ii] = 2*xmin - pos[0, ii]
-                
-                # Re-initialize velocity: Vel_x sign so it doesn't go back into boundary
-                sf_per     = np.sqrt(kB *  Tper[idx[ii]] /  mass[idx[ii]])
-                sf_par     = np.sqrt(kB *  Tpar[idx[ii]] /  mass[idx[ii]])
-                
-                if temp_type[idx[ii]] == 0:
-                    vel[0, ii] = np.random.normal(0, sf_par)
-                    vel[1, ii] = np.random.normal(0, sf_per)
-                    vel[2, ii] = np.random.normal(0, sf_per)
-                    v_perp     = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
-                else:
-                    particle_PA = 0.0
-                    while np.abs(particle_PA) < loss_cone_xmax:
-                        vel[0, ii]  = (np.random.normal(0, sf_par))# * (- np.sign(pos[0, ii]))
-                        vel[1, ii]  =        np.random.normal(0, sf_per)
-                        vel[2, ii]  =        np.random.normal(0, sf_per)
-                        v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
-                        
-                        particle_PA = np.arctan(v_perp / vel[0, ii])                   # Calculate particle PA's
-                    
-                # Don't foget : Also need to reinitialize position gyrophase (pos[1:2])
-                B0x         = eval_B0x(pos[0, ii])
-                gyangle     = init.get_gyroangle_single(vel[:, ii])
-                rL          = v_perp / (qm_ratios[idx[ii]] * B0x)
-                pos[1, ii]  = rL * np.cos(gyangle)
-                pos[2, ii]  = rL * np.sin(gyangle)
-                    
-            # Mario (Periodic)
-            else:   
-                if pos[0, ii] > xmax:
-                    pos[0, ii] += xmin - xmax
-                elif pos[0, ii] < xmin:
-                    pos[0, ii] += xmax - xmin  
+    
 
+    if homogenous == False: 
+        # Disable loop: Remove particles that leave the simulation space
+        for ii in nb.prange(pos.shape[1]):
+            if (pos[0, ii] < xmin or pos[0, ii] > xmax):
+                pos[:, ii] *= 0.0
+                vel[:, ii] *= 0.0
+                idx[ii]    -= 128
+        
+        acc = 0
+        for ii in nb.prange(pos.shape[1]):
+            if idx.min() >= 0:
+                print('No negative values left')
+                        
+            # If particle goes from cell 1 to cell 2
+            if (pos_old[0, ii] < xmin + dx):
+                if (pos[0, ii] >= xmin + dx):
+                    
+                    # Find first negative idx to initialize as new particle
+                    for kk in nb.prange(acc, pos.shape[1]):
+                        if idx[kk] < 0:
+                            acc = kk + 1
+                            break
+                    
+                    # Create new particle with pos_old, vel of this particle
+                    pos[0, kk] = pos[0, ii] - dx
+                    pos[1, kk] = pos[1, ii]
+                    pos[2, kk] = pos[2, ii]
+                    vel[:, kk] = vel[:, ii]
+                    idx[kk]   += 128
+            
+            # If particle goes from cell NX to cell NX - 1
+            elif (pos_old[0, ii] > xmax - dx):
+                if pos[0, ii] <= xmax - dx:
+                    
+                    # Find first negative idx to initialize as new particle
+                    for kk in nb.prange(acc, pos.shape[1]):
+                        if idx[kk] < 0:
+                            acc = kk + 1
+                            break
+                    
+                    # Create new particle with pos_old, vel of this particle
+                    pos[0, kk] = pos[0, ii] + dx
+                    pos[1, kk] = pos[1, ii]
+                    pos[2, kk] = pos[2, ii]
+                    vel[:, kk] = vel[:, ii]
+                    idx[kk]   += 128
+
+    # Mario (Periodic)
+    else: 
+        for ii in nb.prange(pos.shape[1]):           
+            if pos[0, ii] > xmax:
+                pos[0, ii] += xmin - xmax
+            elif pos[0, ii] < xmin:
+                pos[0, ii] += xmax - xmin    
+    
     assign_weighting_TSC(pos, Ie, W_elec)
     return

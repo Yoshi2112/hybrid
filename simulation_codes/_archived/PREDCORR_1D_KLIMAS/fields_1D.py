@@ -8,7 +8,7 @@ import numpy as np
 import numba as nb
 
 import auxilliary_1D as aux
-from simulation_parameters_1D import dx, ne, q, mu0, kB, ie, B_eq, a, disable_waves, E_damping
+from simulation_parameters_1D import dx, ne, q, mu0, kB, ie, B_eq, a, disable_waves
 
 
 @nb.njit()
@@ -150,7 +150,7 @@ def get_grad_P(qn, te, grad_P, temp):
 
 
 @nb.njit()
-def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_damping_array):
+def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
     and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
@@ -169,8 +169,6 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_dampi
     
     NOTE: Sending all but the last element in the cross_product() function seems clumsy... but it works!
     Check :: Does it dereference anything?
-    
-    12/06/2020 -- Added E-field damping option as per Hu & Denton (2010), Ve x B term only
     '''
     curl_B_term(B, temp3De)                                   # temp3De is now curl B term
 
@@ -184,9 +182,7 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_dampi
     aux.interpolate_edges_to_center(B, temp3Db)              # temp3db is now B_center
 
     aux.cross_product(Ve, temp3Db[:temp3Db.shape[0]-1, :], temp3De)                  # temp3De is now Ve x B term
-    if E_damping == True:
-        temp3De *= E_damping_array
-    
+
     E[:, 0]  = - temp3De[:, 0] - grad_P[:] / q_dens[:]
     E[:, 1]  = - temp3De[:, 1]
     E[:, 2]  = - temp3De[:, 2]
