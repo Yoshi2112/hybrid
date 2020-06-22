@@ -7,7 +7,7 @@ Created on Mon Apr  8 12:29:15 2019
 import sys
 sys.path.append('D://Google Drive//Uni//PhD 2017//Data//Scripts//')
 
-import pdb
+#import pdb
 import os
 import numpy             as np
 import matplotlib        as mpl
@@ -40,7 +40,7 @@ def extract_species_arrays(time_start, time_end, probe, pad, cmp, return_raw_ne=
     
     
     times, B0, cold_dens, hope_dens, hope_temp, hope_anis, spice_dens, spice_temp, spice_anis\
-        = data.load_and_interpolate_plasma_params(time_start, time_end, probe, pad)
+        = data.load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_path=rbsp_path)
 
     Nt       = times.shape[0]
     _density = np.zeros((9, Nt), dtype=float)
@@ -80,8 +80,8 @@ def get_all_DRs(time_start, time_end, probe, pad, cmp, Nk=1000):
     # Do O concentrations from 1-30 percent
     # Do He concentrations from 1-30 percent
     # Need a special save for 0 percent (2 species) runs
-    for O_rat in [0.1]:#np.arange(0.05, 0.35, 0.05):
-        for He_rat in [0.2]:#np.arange(0.05, 0.35, 0.05):
+    for O_rat in np.arange(0.01, 0.11, 0.01):
+        for He_rat in np.arange(0.01, 0.31, 0.01):
             H_rat = (1.0 - O_rat - He_rat)
             
             print('Cold composition {:.0f}/{:.0f}/{:.0f}'.format(H_rat*100, He_rat*100, O_rat*100))
@@ -119,10 +119,11 @@ def get_all_DRs(time_start, time_end, probe, pad, cmp, Nk=1000):
                 np.savez(data_path, all_CPDR=all_CPDR, all_WPDR=all_WPDR, all_k=all_k, comp=comp)
             else:
                 print('Dispersion results already exist, skipping...')
-    return all_CPDR, all_WPDR, all_k
+    return
 
 
-def plot_growth_rate_with_time(times, k_vals, all_WPDR, save=False, short=False, norm_w=False, B0=None):
+def plot_growth_rate_with_time(times, k_vals, all_WPDR, save=False, short=False,
+                               norm_w=False, B0=None, ccomp=[70, 20, 10]):
     tick_label_size = 14
     mpl.rcParams['xtick.labelsize'] = tick_label_size 
     
@@ -152,12 +153,6 @@ def plot_growth_rate_with_time(times, k_vals, all_WPDR, save=False, short=False,
                 
                 if norm_w == True:
                     max_g[ii, jj] /= qi * B0[ii] / mp
-# =============================================================================
-#                     
-#             except:
-#                 max_k[ii, jj] = np.nan
-#                 max_g[ii, jj] = np.nan
-# =============================================================================
 
     plt.ioff()
     fig, ax1 = plt.subplots(figsize=(13, 6))
@@ -167,7 +162,7 @@ def plot_growth_rate_with_time(times, k_vals, all_WPDR, save=False, short=False,
     
     ax1.set_xlabel('Time (UT)', fontsize=fontsize)
     ax1.set_ylabel(r'Temporal Growth Rate ($\times 10^{-3} s^{-1}$)', fontsize=fontsize)
-    ax1.set_title('EMIC Temporal Growth Rate :: RBSP-A Instruments'.format(*cmp), fontsize=fontsize+4)
+    ax1.set_title('EMIC Temporal Growth Rate :: RBSP-A Instruments :: {}/{}/{}'.format(*ccomp), fontsize=fontsize+4)
     ax1.legend(loc='upper left', prop={'size': fontsize}) 
     
     ax1.xaxis.set_major_locator(mdates.MinuteLocator(interval=5))
@@ -181,10 +176,10 @@ def plot_growth_rate_with_time(times, k_vals, all_WPDR, save=False, short=False,
     # Set xlim to show either just pearls, or whole event
     if short == True:
         ax1.set_xlim(np.datetime64('2013-07-25T21:25:00'), np.datetime64('2013-07-25T21:45:00'))
-        figsave_path = save_dir + '_LT_timeseries_CC_{:03}_{:03}_{:03}_{}_short.png'.format(cmp[0], cmp[1], cmp[2], save_string)
+        figsave_path = save_dir + '_LT_timeseries_CC_{:03}_{:03}_{:03}_{}_short.png'.format(ccomp[0], ccomp[1], ccomp[2], save_string)
     else:
         ax1.set_xlim(time_start, time_end)
-        figsave_path = save_dir + '_LT_timeseries_CC_{:03}_{:03}_{:03}_{}.png'.format(cmp[0], cmp[1], cmp[2], save_string)
+        figsave_path = save_dir + '_LT_timeseries_CC_{:03}_{:03}_{:03}_{}.png'.format(ccomp[0], ccomp[1], ccomp[2], save_string)
 
         
     if output.lower() == 'save':
@@ -202,22 +197,33 @@ def plot_growth_rate_with_time(times, k_vals, all_WPDR, save=False, short=False,
     return max_k, max_g
 
 
-def load_and_plot_timeseries():
-    #files = os.listdir(save_dir)
+def load_and_plot_timeseries(ccomp=[70,20,10]):
+    files = os.listdir(save_dir)
     
     times, B0, name, mass, charge, density, tper, ani, cold_dens = \
-        extract_species_arrays(time_start, time_end, probe, pad, cmp, return_raw_ne=True)
+        extract_species_arrays(time_start, time_end, probe, pad, ccomp, return_raw_ne=True)
     
-    this_file = 'DR_results_coldcomp_070_020_010_20130725_2100_2200.npz'
+    #this_file = 'DR_results_coldcomp_070_020_010_20130725_2100_2200.npz'
     
-    for file in [this_file]:#files:
-        # DRs stored as (Nt, Nk, solns)
-        data_pointer = np.load(save_dir + file)
-        all_WPDR     = data_pointer['all_WPDR']
-        all_k        = data_pointer['all_k']
-        
-        plot_growth_rate_with_time(times, all_k, all_WPDR, save=True,
-                                   short=True, norm_w=True, B0=B0)
+    for file in files:
+        if file[-4:] == '.npz':
+            try:
+                cstring = file[20:31].split('_')
+                cH      = int(cstring[0])
+                cHe     = int(cstring[1])
+                cO      = int(cstring[2])
+                ccomp   = [cH, cHe, cO]
+                
+                # DRs stored as (Nt, Nk, solns)
+                data_pointer = np.load(save_dir + file)
+                all_WPDR     = data_pointer['all_WPDR']
+                all_k        = data_pointer['all_k']
+                
+                plot_growth_rate_with_time(times, all_k, all_WPDR, save=True,
+                                           short=True, norm_w=True, B0=B0, ccomp=ccomp)
+            except:
+                print('Error with file', file)
+                continue
     return
 
 
@@ -226,7 +232,7 @@ def plot_all_DRs(ccomp=[70, 20, 10]):
     Values loaded in order of Nt, Nk, solns
     '''
     times, B0, name, mass, charge, density, tper, ani, cold_dens = \
-        extract_species_arrays(time_start, time_end, probe, pad, cmp, return_raw_ne=True)
+        extract_species_arrays(time_start, time_end, probe, pad, ccomp, return_raw_ne=True)
             
     file = 'DR_results_coldcomp_{:03}_{:03}_{:03}_{}.npz'.format(ccomp[0], ccomp[1], ccomp[2], save_string)
     
@@ -257,8 +263,9 @@ def plot_all_DRs(ccomp=[70, 20, 10]):
 
 
 if __name__ == '__main__':
-    gdrive    = 'F://Google Drive//'
-    rbsp_path = 'G://DATA//RBSP//'
+    gdrive    = 'D://Google Drive//'
+    rbsp_path = 'E://DATA//RBSP//'
+    dump_drive= 'D://'
     
     _Nk       = 500
     output    = 'save'
@@ -270,19 +277,16 @@ if __name__ == '__main__':
     probe       = 'a'
     pad         = 0
     
-    cmp         = np.array([0.70, 0.20, 0.10])
-    
     date_string = time_start.astype(object).strftime('%Y%m%d')
     save_string = time_start.astype(object).strftime('%Y%m%d_%H%M_') + time_end.astype(object).strftime('%H%M')
-    save_dir    = 'G://NEW_LT//EVENT_{}//LINEAR_DISPERSION_RESULTS//'.format(date_string, cmp[0], cmp[1], cmp[2])
+    save_dir    = '{}NEW_LT//EVENT_{}//LINEAR_DISPERSION_RESULTS//'.format(dump_drive, date_string)
     
     if os.path.exists(save_dir) == False:
         os.makedirs(save_dir)
     
+    #get_all_DRs(time_start, time_end, probe, pad, cmp, Nk=_Nk)
     
-    #_all_CPDR, _all_WPDR, _all_k = get_all_DRs(time_start, time_end, probe, pad, cmp, Nk=_Nk)
     #plot_all_DRs()
-
     load_and_plot_timeseries()
-    
+
         
