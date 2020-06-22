@@ -54,13 +54,11 @@ def manage_dirs(drive, series, run_num):
 def load_species_params():
     global species_present, density, dist_type, charge, mass, Tper,      \
            temp_type, temp_color, Tpar, species_lbl, n_contr,  \
-           drift_v, idx_start, idx_end, N_species, Bc, nsp_ppc, Te0_arr
+           drift_v, N_species, Bc, nsp_ppc, Te0_arr
 
     p_path = os.path.join(data_dir, 'particle_parameters.npz')                  # File location
     p_data = np.load(p_path)                                                    # Load file
 
-    idx_start  = p_data['idx_start']
-    idx_end    = p_data['idx_end']
     species_lbl= p_data['species_lbl']
     temp_color = p_data['temp_color']
     temp_type  = p_data['temp_type']
@@ -289,20 +287,36 @@ def load_fields(ii):
 
 
 def load_particles(ii):  
+    '''
+    Sort kw for arranging particles by species index since they get jumbled.
+    '''    
     part_file  = 'data%05d.npz' % ii             # Define target file
     input_path = particle_dir + part_file        # File location
     data       = np.load(input_path)             # Load file
     
-    tx               = data['pos']
-    tv               = data['vel']
-    tsim_time        = data['sim_time']
+    tx         = data['pos']
+    tv         = data['vel']
+    tsim_time  = data['sim_time']
+    tidx       = data['idx']
+
+    order = np.argsort(tidx)                # Retrieve order of elements by index
+    tidx  = tidx[order]
+    tx    = tx[:, order]
+    tv    = tv[:, order]
+
+    idx_start = np.zeros(Nj, dtype=int)
+    idx_end   = np.zeros(Nj, dtype=int)
+    xx = 0
+    for ii in range(1, tidx.shape[0]):
+        if tidx[ii] >= 0 and tidx[ii] != tidx[ii - 1]:
+            idx_start[xx] = ii
+            xx += 1
     
-    try:
-        tidx = data['idx']
-    except:
-        tidx = None
-        
-    return tx, tv, tidx, tsim_time
+    for ii in range(1, Nj):
+        idx_end[ii - 1] = idx_start[ii]
+    idx_end[-1] = tidx.shape[0]
+    return tx, tv, tidx, tsim_time, idx_start, idx_end
+
 
 
 def extract_all_arrays():

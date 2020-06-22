@@ -294,7 +294,7 @@ def uniform_gaussian_distribution_quiet():
 def init_totally_random():
     pos = np.zeros((3, N), dtype=np.float64)
     vel = np.zeros((3, N), dtype=np.float64)
-    idx = np.zeros(N,      dtype=np.int8)
+    idx = np.ones(N,       dtype=np.int8) * -1
     np.random.seed(seed)
     
     for jj in range(Nj):
@@ -302,27 +302,23 @@ def init_totally_random():
         
         sf_par = np.sqrt(kB *  Tpar[jj] /  mass[jj])  # Scale factors for velocity initialization
         sf_per = np.sqrt(kB *  Tper[jj] /  mass[jj])
-                
+
         # Particle index ranges
         st = idx_start[jj]
         en = idx_end[jj]
 
-        pos[0, st:en]  = np.random.uniform(xmin, xmax, en-st)
+        pos[0, st: en] = np.random.uniform(xmin, xmax, en-st)
         vel[0, st: en] = np.random.normal(0, sf_par, en-st) +  drift_v[jj]
         vel[1, st: en] = np.random.normal(0, sf_per, en-st)
         vel[2, st: en] = np.random.normal(0, sf_per, en-st)
             
-# =============================================================================
-#         # Quiet start : Initialize second half
-#         if quiet_start == True:
-#             vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set parallel
-#         else:
-#             vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Set anti-parallel
-#             
-#         pos[0, en: en + half_n] = pos[0, st: en]                # Other half, same position
-#         vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
-#         vel[2, en: en + half_n] = vel[2, st: en] * -1.0
-# =============================================================================
+    print('Initializing particles off-axis')
+    B0x         = fields.eval_B0x(pos[0, :en])
+    v_perp      = np.sqrt(vel[1, :en] ** 2 + vel[2, :en] ** 2)
+    gyangle     = get_gyroangle_array(vel[:, :en])
+    rL          = v_perp / (qm_ratios[idx[:en]] * B0x)
+    pos[1, :en] = rL * np.cos(gyangle)
+    pos[2, :en] = rL * np.sin(gyangle)
     return pos, vel, idx
 
 
@@ -342,16 +338,16 @@ def initialize_particles():
         W_mag  -- Initial particle weights on B-grid
         idx    -- Particle type index
     '''
-    #pos, vel, idx = uniform_gaussian_distribution_quiet()
-    pos, vel, idx = init_totally_random()
-    Ie         = np.zeros(N, dtype=nb.uint16)
-    Ib         = np.zeros(N, dtype=nb.uint16)
-    W_elec     = np.zeros(N, dtype=nb.float64)
-    W_mag      = np.zeros(N, dtype=nb.float64)
+    pos, vel, idx = uniform_gaussian_distribution_quiet()
+    #pos, vel, idx = init_totally_random()
+    Ie         = np.zeros(N, dtype=np.uint16)
+    Ib         = np.zeros(N, dtype=np.uint16)
+    W_elec     = np.zeros(N, dtype=np.float64)
+    W_mag      = np.zeros(N, dtype=np.float64)
     
-    Bp      = np.zeros((3, N), dtype=nb.float64)
-    Ep      = np.zeros((3, N), dtype=nb.float64)
-    temp_N  = np.zeros((N),    dtype=nb.float64)
+    Bp      = np.zeros((3, N), dtype=np.float64)
+    Ep      = np.zeros((3, N), dtype=np.float64)
+    temp_N  = np.zeros((N),    dtype=np.float64)
     
     particles.assign_weighting_CIC(pos, idx, Ie, W_elec)
     return pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, temp_N
@@ -543,7 +539,7 @@ if __name__ == '__main__':
     V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
     V_PARA = VEL[0] / va
     
-    #diag.check_velocity_components_vs_space(POS, VEL, jj=1)
+    diag.check_velocity_components_vs_space(POS, VEL, jj=1)
     #diag.plot_temperature_extremes()
     #diag.check_cell_velocity_distribution_2D(POS, VEL, node_number=None, jj=1, save=True)
     #diag.check_position_distribution(POS)
@@ -599,7 +595,7 @@ if __name__ == '__main__':
     
     
     for jj in range(const.Nj):
-        if True:
+        if False:
             # Loss cone diagram
             fig1, ax1 = plt.subplots()
             
@@ -624,7 +620,7 @@ if __name__ == '__main__':
 #             ax3.axis('equal')
 # =============================================================================
             
-        if True:
+        if False:
             # v_mag vs. x
             fig1, ax2 = plt.subplots()
             
@@ -634,7 +630,7 @@ if __name__ == '__main__':
             ax2.set_xlabel('Position (m)')
             ax2.set_ylabel('Velocity |v| (m/s)')
         
-        if True:
+        if False:
             # v components vs. x (3 plots)
             fig1, ax3 = plt.subplots(3)
             

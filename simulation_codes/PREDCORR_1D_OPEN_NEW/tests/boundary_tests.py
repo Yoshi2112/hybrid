@@ -93,19 +93,54 @@ def find_root(vx, n, V, U, Rx):
     return gamma_s(vx, n, V, U) / gamma_so(n, V, U) - Rx
 
 
+def test_sorting():
+    N_idx = 4
+    idx  = np.random.randint(N_idx, size=20)
+    idx -= 1
+    #print(idx)
+    order = np.argsort(idx)
+    idx = idx[order]
+    
+    idx_start = np.zeros(N_idx-1, dtype=int)
+    idx_end   = np.zeros(N_idx-1, dtype=int)
+    xx = 0
+    for ii in range(1, idx.shape[0]):
+        if idx[ii] >= 0 and idx[ii] != idx[ii - 1]:
+            idx_start[xx] = ii
+            xx += 1
+    
+    for ii in range(1, N_idx-1):
+        idx_end[ii - 1] = idx_start[ii]
+    idx_end[-1] = idx.shape[0]
+    
+    print(idx)
+    print(idx_start)    
+    print(idx_end)
+    
+    for ii in range(N_idx-1):
+        st = idx_start[ii]
+        en = idx_end[ii]
+        print(idx[st:en])
+    
+    return
+
+
+
 if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-    
-    # Test erfinv()
-    if False:
-        N_val = 100000
-        vals  = np.linspace(-1.0, 1.0, N_val)
-        diffs = np.zeros(N_val)
-        
-        for ii in range(N_val):
-            diffs[ii] = abs(calc_erfinv(vals[ii]) - calc_erfinv_custom(vals[ii]))
-    
-        plt.plot(vals, diffs)
+    #import matplotlib.pyplot as plt
+    test_sorting()
+# =============================================================================
+#     # Test erfinv()
+#     if False:
+#         N_val = 100000
+#         vals  = np.linspace(-1.0, 1.0, N_val)
+#         diffs = np.zeros(N_val)
+#         
+#         for ii in range(N_val):
+#             diffs[ii] = abs(calc_erfinv(vals[ii]) - calc_erfinv_custom(vals[ii]))
+#     
+#         plt.plot(vals, diffs)
+# =============================================================================
 
     # Test gamma values and/or root finding. What are standard moments that I could
     # plug into this thing?

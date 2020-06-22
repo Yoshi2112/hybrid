@@ -1255,7 +1255,7 @@ def summary_plots(save=True, histogram=True):
         fig_size = 4, 7                                                             # Set figure grid dimensions
         fig = plt.figure(figsize=(20,10))                                           # Initialize Figure Space
         fig.patch.set_facecolor('w')   
-        xp, vp, idx, psim_time = cf.load_particles(ii)
+        xp, vp, idx, psim_time, idx_start, idx_end = cf.load_particles(ii)
         
         pos       = xp  
         vel       = vp / cf.va 
@@ -1279,11 +1279,11 @@ def summary_plots(save=True, histogram=True):
             for jj in range(cf.Nj):
                 num_bins = cf.nsp_ppc[jj] // 5
                 
-                xs, BinEdgesx = np.histogram(vel[0, cf.idx_start[jj]: cf.idx_end[jj]], bins=num_bins)
+                xs, BinEdgesx = np.histogram(vel[0, idx_start[jj]: idx_end[jj]], bins=num_bins)
                 bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
                 ax_vx.plot(bx, xs, '-', c=cf.temp_color[jj], drawstyle='steps', label=cf.species_lbl[jj])
                 
-                ys, BinEdgesy = np.histogram(vel_tr[cf.idx_start[jj]: cf.idx_end[jj]], bins=num_bins)
+                ys, BinEdgesy = np.histogram(vel_tr[idx_start[jj]: idx_end[jj]], bins=num_bins)
                 by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
                 ax_vy.plot(by, ys, '-', c=cf.temp_color[jj], drawstyle='steps', label=cf.species_lbl[jj])
                 
@@ -1303,8 +1303,8 @@ def summary_plots(save=True, histogram=True):
         else:
         
             for jj in reversed(range(cf.Nj)):
-                ax_vx.scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[0, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj], lw=0, label=cf.species_lbl[jj])
-                ax_vy.scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[1, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj], lw=0)
+                ax_vx.scatter(pos[0, idx_start[jj]: idx_end[jj]], vel[0, idx_start[jj]: idx_end[jj]], s=1, c=cf.temp_color[jj], lw=0, label=cf.species_lbl[jj])
+                ax_vy.scatter(pos[0, idx_start[jj]: idx_end[jj]], vel[1, idx_start[jj]: idx_end[jj]], s=1, c=cf.temp_color[jj], lw=0)
         
             ax_vx.legend(loc='upper right')
             ax_vx.set_title(r'Particle velocities (in $v_A$) vs. Position (x)')
@@ -3058,7 +3058,7 @@ def plot_vi_vs_t_for_cell(cell=None, comp=0, it_max=None, jj=1, save=True, hexbi
     return
 
 
-def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
+def plot_vi_vs_x(it_max=None, jj=1, save=True):
     '''
     For each point in time
      - Collect particle information for particles near cell, plus time component
@@ -3069,7 +3069,7 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
     
     '''
     lt = ['x', 'y', 'z']
-    print('Calculating distribution v{} vs. space for species {},...'.format(lt[comp], jj))
+    print('Calculating distribution f(v) vs. x for species {},...'.format(jj))
     if it_max is None:
         it_max = len(os.listdir(cf.particle_dir))
               
@@ -3085,7 +3085,7 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
         sys.stdout.write('\rPlotting particle data from p-file {}'.format(ii))
         sys.stdout.flush()
     
-        pos, vel, idx, ptime= cf.load_particles(ii)
+        pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii)
         
         # Do the plotting
         plt.ioff()
@@ -3093,8 +3093,8 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
         fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
         axes[0].set_title('f(v) vs. x :: {}'.format(cf.species_lbl[jj]))
         
-        st = cf.idx_start[jj]
-        en = cf.idx_end[jj]
+        st = idx_start[jj]
+        en = idx_end[jj]
         
         for kk in range(3):
             counts, xedges, yedges, im1 = axes[kk].hist2d(pos[0, st:en]/cf.dx, vel[kk, st:en]/cf.va, 
@@ -3105,14 +3105,14 @@ def plot_vi_vs_x(comp=0, it_max=None, jj=1, save=True):
             cb.set_label('Counts')
             
             axes[kk].set_ylim(-vlim, vlim)
-            axes[kk].set_ylabel('v{} ($v_A$)'.format(lt[comp]), rotation=0)
+            axes[kk].set_ylabel('v{} ($v_A$)'.format(lt[kk]), rotation=0)
             
         axes[kk].set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
         axes[kk].set_xlabel('Position (cell)')
 
         fig.subplots_adjust(hspace=0)
         if save == True:
-            save_dir = cf.anal_dir + '//Particle Distribution Histograms//For Every Time//Species {}//f_v//'.format(jj, lt[comp])
+            save_dir = cf.anal_dir + '//Particle Distribution Histograms//For Every Time//Species {}//'.format(jj)
             filename = 'fv_vs_x_species_{}_{:05}'.format(jj, ii)
             
             if os.path.exists(save_dir) == False:
@@ -3136,7 +3136,7 @@ if __name__ == '__main__':
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
-    for run_num in [0]:#range(num_runs):
+    for run_num in [4, 6]:#range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
@@ -3150,14 +3150,13 @@ if __name__ == '__main__':
 #             pass
 #         
 #         standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
-#         
-#         summary_plots(save=True, histogram=False)
-#         #check_fields()
 # =============================================================================
         
-        for cm in range(3):
-            for sp in range(2):
-                plot_vi_vs_x(comp=cm, it_max=None, jj=sp, save=True)
+        summary_plots(save=True, histogram=False)
+        #check_fields()
+        
+        for sp in range(2):
+            plot_vi_vs_x(it_max=None, jj=sp, save=True)
         
 
 

@@ -10,12 +10,12 @@ from os import system
 
 ### RUN DESCRIPTION ###
 run_description = '''Open boundary test using the particle boundary as described in Daughton et al. (2006). ''' +\
-                  '''First test of the particle injector - no waves.'''
+                  '''Just a random test without the P/C method, just to check'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path         = 'runs//open_boundary_stability_test'# Series save dir   : Folder containing all runs of a series
-run               = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+run               = 7                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 0                             # Save data flag    : For later analysis
 save_fields       = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
@@ -25,15 +25,17 @@ cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run as 
 ## DIAGNOSTIC FLAGS ##
 homogenous        = True                          # Set B0 to homogenous (as test to compare to parabolic)
 particle_periodic = False                         # Set particle boundary conditions to periodic (False : Open boundary flux)
-disable_waves     = True                          # Zeroes electric field solution at each timestep
+disable_waves     = False                         # Zeroes electric field solution at each timestep
 E_damping         = False                         # Damp E in a manner similar to B for ABCs
-quiet_start       = False                         # Flag to use quiet start (False :: semi-quiet start)
+quiet_start       = True                          # Flag to use quiet start (False :: semi-quiet start)
+Pi_use_init       = True
+source_smoothing  = True
 damping_multiplier= 1.0
 
 ### SIMULATION PARAMETERS ###
-NX        = 16                              # Number of cells - doesn't include ghost cells
+NX        = 32                              # Number of cells - doesn't include ghost cells
 ND        = 4                               # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 50                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+max_rev   = 20                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell
 r_A       = 100e3                           # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
@@ -53,7 +55,7 @@ species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/label
 temp_color = ['blue', 'red']
 temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Hot particles get the LCD, cold are maxwellians.
 dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or Gaussian (1)
-nsp_ppc    = np.array([500000, 500000])                       # Number of particles per cell, per species
+nsp_ppc    = np.array([200, 200])                           # Number of particles per cell, per species
 
 mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
 charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
@@ -108,7 +110,6 @@ else:
     Tper       = beta_per    * B_eq ** 2 / (2 * mu0 * ne * kB)
     Te0_scalar = beta_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
 
-vth_par    = np.sqrt(kB * Tpar / mass)                   # Parallel thermal velocity
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma
 
@@ -119,6 +120,9 @@ xmin       =-NX // 2 * dx
 charge    *= q                                           # Cast species charge to Coulomb
 mass      *= mp                                          # Cast species mass to kg
 drift_v   *= va                                          # Cast species velocity to m/s
+
+vth_par    = np.sqrt(kB * Tpar / mass)                   # Parallel thermal velocity
+vth_per    = np.sqrt(kB * Tper / mass)                   # Parallel thermal velocity
 
 Nj         = len(mass)                                   # Number of species
 n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
