@@ -227,6 +227,108 @@ def load_and_plot_timeseries(ccomp=[70,20,10]):
     return
 
 
+def load_and_overlay_multiple_timeseries(save=True):
+    '''
+    Maybe just do He/O? Use linestyles this time rather than colour. Save colour for 
+    composition
+    
+    We have: 
+        He from 1-30% in 1% increments
+        O  from 1-10% in 1% increments
+        
+    Up to 30 values per O ratio
+    Up to 10 values per He ratio
+    
+    Maybe do a plot overlaying GR for each He ratio
+    
+    WPDR     stored as complex128 with dimensions (Nt, Nk, band_solns=3)
+    k values stored as float64    with dimensions (Nt, Nk)
+    '''
+    files = os.listdir(save_dir)
+
+    # Get Nt, Nk from dummy
+    for file in files:
+        if file[-4:] == '.npz': 
+            data_pointer = np.load(save_dir + file)
+            this_WPDR    = data_pointer['all_WPDR']
+            this_k       = data_pointer['all_k']
+            Nt           = this_k.shape[0]
+            #Nk           = this_k.shape[1]
+            break
+    
+    nO = 10
+    for He_rat in range(1, 31, 1):
+        all_max_g = np.zeros((Nt, 3, nO), dtype=np.float)
+        all_max_k = np.zeros((Nt, 3, nO), dtype=np.float)
+        
+        # Load all files with this He concentration
+        for O_rat, ii in zip(range(1, 11), range(nO)):
+            H_rat = 100 - He_rat - O_rat
+            fname = 'DR_results_coldcomp_{:03}_{:03}_{:03}_20130725_2100_2200.npz'.format(H_rat, He_rat, O_rat)
+            
+            if os.path.exists(save_dir + fname):
+                data_pointer = np.load(save_dir + fname)
+                this_WPDR    = data_pointer['all_WPDR']
+                this_k       = data_pointer['all_k']
+                
+                # Extract maximum growth rate/wavenumber for each band
+                for mm in range(Nt):
+                    for nn in range(3):
+                        dispersion  = this_WPDR.real
+                        growth_rate = this_WPDR.imag
+                        
+                        if any(np.isnan(dispersion[mm, :, nn]) == True):
+                            all_max_k[mm, nn, ii] = np.nan
+                            all_max_g[mm, nn, ii] = np.nan
+                        else:
+                            max_idx               = np.where(growth_rate[mm, :, nn] ==
+                                                             growth_rate[mm, :, nn].max())[0][0]
+                            all_max_k[mm, nn, ii] = this_k[mm, max_idx]
+                            all_max_g[mm, nn, ii] = growth_rate[mm, max_idx, nn]
+            else:
+                print('No file: {}'.format(fname))
+
+        # Plot these files (No normalizations) -- For possible O value
+        plt.ioff()
+        fig, ax1 = plt.subplots(figsize=(13, 6))
+        
+        tick_label_size = 14
+        mpl.rcParams['xtick.labelsize'] = tick_label_size 
+        
+        time_colors = plt.cm.plasma(np.linspace(0, 1, nO))
+        #band_labels = [r'$H^+$', r'$He^+$', r'$O^+$']
+        spls        = [    '--',       '-',      ':']
+        fontsize    = 18
+        times = np.arange(Nt)           # Placeholder time until I can save and extract the times from the data.
+            
+        for jj in range(nO):
+            for kk in range(3):
+                ax1.plot(times, 1e3*all_max_g[:, kk, jj], color=time_colors[jj], ls=spls[kk])
+        
+        ax1.set_xlabel('Time (UT)', fontsize=fontsize)
+        ax1.set_ylabel(r'Temporal Growth Rate ($\times 10^{-3} s^{-1}$)', fontsize=fontsize)
+        ax1.set_title('EMIC Temporal Growth Rate :: RBSP-A Instruments :: {}% He'.format(He_rat), fontsize=fontsize+4)
+        #ax1.legend(loc='upper left', prop={'size': fontsize}) 
+        
+        #ax1.xaxis.set_major_locator(mdates.MinuteLocator(interval=5))
+        #ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        
+        if False:
+            pearl_idx, pearl_times, pex = get_pearl_times(time_start, gdrive=gdrive)
+            for ii in range(pearl_times.shape[0]):
+                ax1.axvline(pearl_times[ii], c='k', linestyle='--', alpha=0.4)
+        
+        # Set xlim to show either just pearls, or whole event
+        #ax1.set_xlim(time_start, time_end)
+        figsave_path = save_dir + 'LT_compilation_overlay_He_{:02}_{}.png'.format(He_rat, save_string)
+            
+        if save==True:
+            print('Saving {}'.format(figsave_path))
+            fig.savefig(figsave_path, bbox_inches='tight')
+            plt.close('all')
+    return
+
+
 def plot_all_DRs(ccomp=[70, 20, 10]):
     '''
     Values loaded in order of Nt, Nk, solns
@@ -262,10 +364,22 @@ def plot_all_DRs(ccomp=[70, 20, 10]):
     return
 
 
+def check_if_exists():
+    all_files = os.listdir(save_dir)
+    
+    for O_rat in range(1, 11, 1):
+        for He_rat in range(1, 31, 1):
+            H_rat = 100 - O_rat - He_rat
+            fname = 'DR_results_coldcomp_{:03}_{:03}_{:03}_20130725_2100_2200.npz'.format(H_rat, He_rat, O_rat)
+            if fname not in all_files:
+                print('No file :: {:02}/{:02}/{:02}'.format(H_rat, He_rat, O_rat))
+    return
+
+
 if __name__ == '__main__':
     gdrive    = 'D://Google Drive//'
     rbsp_path = 'E://DATA//RBSP//'
-    dump_drive= 'D://'
+    dump_drive= 'G://'
     
     _Nk       = 500
     output    = 'save'
@@ -287,6 +401,10 @@ if __name__ == '__main__':
     #get_all_DRs(time_start, time_end, probe, pad, cmp, Nk=_Nk)
     
     #plot_all_DRs()
-    load_and_plot_timeseries()
+    #load_and_plot_timeseries()
+    
+    #check_if_exists()
+        
+    load_and_overlay_multiple_timeseries()
 
         
