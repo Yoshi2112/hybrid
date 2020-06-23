@@ -3130,30 +3130,28 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True):
 ##%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'open_boundary_stability_test'
+    series      = 'TSC_CIC_comparison'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
-    for run_num in [4, 6]:#range(num_runs):
+    for run_num in range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
         #plot_E_components(plot=True)
         
-# =============================================================================
-#         try:
-#             plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None)
-#             plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
-#         except:
-#             pass
-#         
-#         standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
-# =============================================================================
+        try:
+            plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None)
+            plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
+        except:
+            pass
+        
+        standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
         
         summary_plots(save=True, histogram=False)
-        #check_fields()
+        check_fields()
         
         for sp in range(2):
             plot_vi_vs_x(it_max=None, jj=sp, save=True)

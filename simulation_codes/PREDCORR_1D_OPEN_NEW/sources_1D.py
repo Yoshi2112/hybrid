@@ -34,9 +34,7 @@ def collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi):
     old_moments array? Or would that break because of the predictor-corrector
     scheme?
     '''
-    Ji     *= 0.
     nu     *= 0.
-    
     # Deposit average velocity across all cells :: First moment
     for ii in nb.prange(vel.shape[1]):
         I   = Ie[ii]
@@ -63,6 +61,7 @@ def collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi):
             for ii in range(3):
                 three_point_smoothing(nu[:, jj, ii], Ji[:,  0])
 
+    Ji     *= 0.
     # Convert to real moment, and accumulate charge density
     for jj in range(Nj):
         for kk in range(3):
@@ -151,9 +150,7 @@ def collect_position_moment(pos, Ie, W_elec, idx, q_dens, ni):
         q_dens -- Total charge density in each cell
         ni     -- Species number moment array(size, Nj)
     '''
-    q_dens *= 0.
     ni     *= 0.
-    
     # Deposit macroparticle moment on grid
     for ii in nb.prange(Ie.shape[0]):
         I   = Ie[ii]
@@ -173,8 +170,9 @@ def collect_position_moment(pos, Ie, W_elec, idx, q_dens, ni):
     
     if source_smoothing == True:
         for ii in range(Nj):
-            three_point_smoothing(ni, q_dens)
-
+            three_point_smoothing(ni[:, ii], q_dens)
+            
+    q_dens *= 0.
     # Sum charge density contributions across species
     for jj in range(Nj):
         ni[:, jj] *= n_contr[jj]

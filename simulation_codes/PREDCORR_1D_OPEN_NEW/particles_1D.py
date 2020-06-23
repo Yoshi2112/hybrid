@@ -13,7 +13,6 @@ from   sources_1D                import collect_velocity_moments, collect_positi
 from fields_1D import eval_B0x
 
 import init_1D as init
-import pdb
 
 @nb.njit()
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T, temp_N,\
@@ -23,13 +22,12 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, 
     ''' 
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, temp_N, DT)
     position_update(pos, vel, idx, DT, Ie, W_elec)  
-    
+
 # =============================================================================
 #     if particle_periodic == False and reflect_cold == False:
 #         inject_particles(pos, vel, idx, ni, nu, Pi, flux_rem, DT, pc, N_lost)
 # =============================================================================
     
-    # Double check these velocity moments :: Make sure I didn't accidentally ruin something.
     collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi)
     collect_position_moment(pos, Ie, W_elec, idx, q_dens_adv, ni)
     return
@@ -87,6 +85,8 @@ def eval_B0_particle(pos, Bp):
     
     These values are added onto the existing value of B at the particle location,
     Bp. B0x is simply equated since we never expect a non-zero wave field in x.
+    
+    Maybe go back to 1D version?
     '''
     constant = - a * B_eq 
     Bp[0]    =   eval_B0x(pos[0])   
@@ -202,16 +202,16 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
                         pos[0, ii] = 2*xmin - pos[0, ii]
 
                     if temp_type[idx[ii]] == 0:
-                        vel[0, ii] = np.random.normal(0, vth_par[ii])
-                        vel[1, ii] = np.random.normal(0, vth_per[ii])
-                        vel[2, ii] = np.random.normal(0, vth_per[ii])
+                        vel[0, ii] = np.random.normal(0, vth_par[idx[ii]])
+                        vel[1, ii] = np.random.normal(0, vth_per[idx[ii]])
+                        vel[2, ii] = np.random.normal(0, vth_per[idx[ii]])
                         v_perp     = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
                     else:
                         particle_PA = 0.0
                         while np.abs(particle_PA) < loss_cone_xmax:
-                            vel[0, ii]  = (np.random.normal(0, vth_par[ii]))# * (- np.sign(pos[0, ii]))
-                            vel[1, ii]  =        np.random.normal(0, vth_per[ii])
-                            vel[2, ii]  =        np.random.normal(0, vth_per[ii])
+                            vel[0, ii]  = np.random.normal(0, vth_par[idx[ii]])# * (-1.0) * np.sign(pos[0, ii])
+                            vel[1, ii]  = np.random.normal(0, vth_per[idx[ii]])
+                            vel[2, ii]  = np.random.normal(0, vth_per[idx[ii]])
                             v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
                             
                             particle_PA = np.arctan(v_perp / vel[0, ii])                   # Calculate particle PA's

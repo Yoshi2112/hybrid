@@ -280,7 +280,7 @@ def uniform_gaussian_distribution_quiet():
     pos[1]  = rL * np.cos(gyangle)
     pos[2]  = rL * np.sin(gyangle)
     
-    check_boundary_particles(pos, vel)
+    #check_boundary_particles(pos, vel)
     
     return pos, vel, idx
 

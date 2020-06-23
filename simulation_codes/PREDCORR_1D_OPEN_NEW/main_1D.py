@@ -8,7 +8,7 @@ import particles_1D  as particles
 import fields_1D     as fields
 import sources_1D    as sources
 import save_routines as save
-
+import pdb
 import diagnostics as diag
 
 from simulation_parameters_1D import save_particles, save_fields, NC, Nj, disable_waves
@@ -44,7 +44,7 @@ if __name__ == '__main__':
     if save_fields == 1:
         save.save_field_data(0, DT, field_save_iter, 0, Ji, E_int,\
                              B, Ve, Te, q_dens, B_damping_array, E_damping_array, Pi)
-    
+
     # Retard velocity
     print('Retarding velocity...')
     particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E_int, v_prime, S, T, temp_N, -0.5*DT)
@@ -70,7 +70,7 @@ if __name__ == '__main__':
             q_dens *= 0.5
             q_dens += 0.5 * q_dens_adv
             
-            if disable_waves == True:
+            if disable_waves == False:
                 # Push B from N to N + 1/2
                 fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
                 
@@ -163,7 +163,7 @@ if __name__ == '__main__':
                 
             qq       += 1
             sim_time += DT
-        
+            
         runtime = round(timer() - start_time,2)
         
         if save_fields == 1 or save_particles == 1:
