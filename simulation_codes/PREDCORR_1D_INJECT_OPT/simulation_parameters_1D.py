@@ -9,13 +9,13 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''CIC/TSC comparison test just to make sure anything else has changed. Plus, CIC + 3-point smoothing should be comparable to TSC weighting anyway. ''' +\
-                  '''This is the TSC code with NO smoothing.'''
+run_description = '''Just testing reflection based on what Dave said, maybe I was wrong before? ''' +\
+                  '''This has REFLECTIVE boundary conditions (Test)'''
 
 ### RUN PARAMETERS ###
 drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//TSC_CIC_comparison'    # Series save dir   : Folder containing all runs of a series
-run               = 2                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path         = 'runs//new_reflection_test'    # Series save dir   : Folder containing all runs of a series
+run               = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
@@ -25,7 +25,7 @@ cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run as 
 ## DIAGNOSTIC FLAGS ##
 supress_text      = False                         # Supress initialization text
 homogenous        = True                         # Set B0 to homogenous (as test to compare to parabolic)
-particle_periodic = False                         # Set particle boundary conditions to periodic (False : Open boundary flux)
+particle_periodic = True # ACTUALLY CURRENTLY RELFECTION                         # Set particle boundary conditions to periodic (False : Open boundary flux)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
 te0_equil         = False                         # Initialize te0 to be in equilibrium with density
 source_smoothing  = False                         # Smooth source terms with 3-point Gaussian filter

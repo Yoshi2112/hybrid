@@ -5,9 +5,9 @@ Created on Mon Apr  8 12:29:15 2019
 @author: Yoshi
 """
 import sys
-sys.path.append('D://Google Drive//Uni//PhD 2017//Data//Scripts//')
+sys.path.append('F://Google Drive//Uni//PhD 2017//Data//Scripts//')
 
-#import pdb
+import pdb
 import os
 import numpy             as np
 import matplotlib        as mpl
@@ -28,6 +28,34 @@ mu0 = 4.000e-07*np.pi
  - From result, calculate group velocity and CGR
  - Plot as timeseries using max values (or maybe some sort of 2D thing for each band
 '''
+def get_raw_data():
+    save_file = save_dir + 'extracted_data_{}.npz'.format(save_string)
+    
+    if os.path.exists(save_file) == False:
+        times, B0, cold_dens, hope_dens, hope_temp, hope_anis, spice_dens, spice_temp, spice_anis\
+            = data.load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_path=rbsp_path)
+            
+        print('Saving raw data...')
+        np.savez(save_file, times=times, B0=B0, cold_dens=cold_dens,
+                 hope_dens=hope_dens,   hope_temp=hope_temp,   hope_anis=hope_anis,
+                 spice_dens=spice_dens, spice_temp=spice_temp, spice_anis=spice_anis)
+    else:
+        print('Save data found, loading...')
+        dp = np.load(save_file)
+        
+        times     = dp['times']
+        B0        = dp['B0']
+        cold_dens = dp['cold_dens']
+        
+        hope_dens = dp['hope_dens']
+        hope_temp = dp['hope_temp']
+        hope_anis = dp['hope_anis']
+        
+        spice_dens = dp['spice_dens']
+        spice_temp = dp['spice_temp']
+        spice_anis = dp['spice_anis']
+    return times, B0, cold_dens, hope_dens, hope_temp, hope_anis, spice_dens, spice_temp, spice_anis
+
 
 def extract_species_arrays(time_start, time_end, probe, pad, cmp, return_raw_ne=False):
     '''
@@ -227,7 +255,7 @@ def load_and_plot_timeseries(ccomp=[70,20,10]):
     return
 
 
-def load_and_overlay_multiple_timeseries(save=True):
+def load_and_overlay_multiple_timeseries(save=True, short=False, pearls=True):
     '''
     Maybe just do He/O? Use linestyles this time rather than colour. Save colour for 
     composition
@@ -244,6 +272,9 @@ def load_and_overlay_multiple_timeseries(save=True):
     WPDR     stored as complex128 with dimensions (Nt, Nk, band_solns=3)
     k values stored as float64    with dimensions (Nt, Nk)
     '''
+    times, B0, cold_dens, hope_dens, hope_temp, hope_anis,\
+        spice_dens, spice_temp, spice_anis = get_raw_data()
+    
     files = os.listdir(save_dir)
 
     # Get Nt, Nk from dummy
@@ -253,18 +284,18 @@ def load_and_overlay_multiple_timeseries(save=True):
             this_WPDR    = data_pointer['all_WPDR']
             this_k       = data_pointer['all_k']
             Nt           = this_k.shape[0]
-            #Nk           = this_k.shape[1]
             break
     
-    nO = 10
+    tg_max = 60.0;  wn_max = 15.0; t_int = 5
+    nO = 10; O_min = 1.0; O_max = 10.0; O_rats = np.arange(O_min, O_max)
     for He_rat in range(1, 31, 1):
         all_max_g = np.zeros((Nt, 3, nO), dtype=np.float)
         all_max_k = np.zeros((Nt, 3, nO), dtype=np.float)
         
         # Load all files with this He concentration
-        for O_rat, ii in zip(range(1, 11), range(nO)):
+        for O_rat, ii in zip(O_rats, range(nO)):
             H_rat = 100 - He_rat - O_rat
-            fname = 'DR_results_coldcomp_{:03}_{:03}_{:03}_20130725_2100_2200.npz'.format(H_rat, He_rat, O_rat)
+            fname = 'DR_results_coldcomp_{:03}_{:03}_{:03}_20130725_2100_2200.npz'.format(int(H_rat), He_rat, int(O_rat))
             
             if os.path.exists(save_dir + fname):
                 data_pointer = np.load(save_dir + fname)
@@ -288,40 +319,98 @@ def load_and_overlay_multiple_timeseries(save=True):
             else:
                 print('No file: {}'.format(fname))
 
-        # Plot these files (No normalizations) -- For possible O value
-        plt.ioff()
-        fig, ax1 = plt.subplots(figsize=(13, 6))
         
-        tick_label_size = 14
+        #### PLOTTING ### (No normalizations) -- For possible O value
+               
+        ## GROWTH RATE ##
+        plt.ioff()
+        fig, axes = plt.subplots(2, figsize=(15, 10), sharex=True)
+        
+        tick_label_size = 12
         mpl.rcParams['xtick.labelsize'] = tick_label_size 
         
-        time_colors = plt.cm.plasma(np.linspace(0, 1, nO))
-        #band_labels = [r'$H^+$', r'$He^+$', r'$O^+$']
-        spls        = [    '--',       '-',      ':']
-        fontsize    = 18
-        times = np.arange(Nt)           # Placeholder time until I can save and extract the times from the data.
-            
-        for jj in range(nO):
-            for kk in range(3):
-                ax1.plot(times, 1e3*all_max_g[:, kk, jj], color=time_colors[jj], ls=spls[kk])
+        band_labels = [r'$H^+$', r'$He^+$', r'$O^+$']
+        fontsize    = 16
         
-        ax1.set_xlabel('Time (UT)', fontsize=fontsize)
-        ax1.set_ylabel(r'Temporal Growth Rate ($\times 10^{-3} s^{-1}$)', fontsize=fontsize)
-        ax1.set_title('EMIC Temporal Growth Rate :: RBSP-A Instruments :: {}% He'.format(He_rat), fontsize=fontsize+4)
-        #ax1.legend(loc='upper left', prop={'size': fontsize}) 
+        # Note: The call to cm works as a fraction of the max because the argument has to be normalized to 
+        # between 0-1. To have a non-zero minimum, you'd probably have to pass a norm instance.
+        for O_rat, ii in zip(O_rats, range(nO)):
+            for kk in range(1,3):
+                axes[kk-1].plot(times, 1e3*all_max_g[:, kk, ii], color=plt.cm.plasma(O_rat/O_max))
+                axes[kk-1].set_ylabel('$\gamma (\\times 10^{-3} s^{-1})$\n%s band' % band_labels[kk], fontsize=fontsize)
+                axes[kk-1].set_ylim(0.0, tg_max)
         
-        #ax1.xaxis.set_major_locator(mdates.MinuteLocator(interval=5))
-        #ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        sm = plt.cm.ScalarMappable(cmap='plasma', norm=plt.Normalize(vmin=0, vmax=O_max))
+        plt.colorbar(sm, ax=axes[0]).set_label('$O^{+}$ percent', fontsize=fontsize)
+        plt.colorbar(sm, ax=axes[1]).set_label('$O^{+}$ percent', fontsize=fontsize)
         
-        if False:
+        axes[0].set_title('EMIC Temporal Growth Rate :: RBSP-A Instruments :: {}% He'.format(He_rat), fontsize=fontsize)
+        axes[1].set_xlabel('Time (UT)', fontsize=fontsize)
+        axes[1].xaxis.set_major_locator(mdates.MinuteLocator(interval=t_int))
+        axes[1].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        
+        if pearls == True:
             pearl_idx, pearl_times, pex = get_pearl_times(time_start, gdrive=gdrive)
             for ii in range(pearl_times.shape[0]):
-                ax1.axvline(pearl_times[ii], c='k', linestyle='--', alpha=0.4)
+                for ax in axes:
+                    ax.axvline(pearl_times[ii], c='k', linestyle='--', alpha=0.4)
         
         # Set xlim to show either just pearls, or whole event
-        #ax1.set_xlim(time_start, time_end)
-        figsave_path = save_dir + 'LT_compilation_overlay_He_{:02}_{}.png'.format(He_rat, save_string)
+        if short == True:
+            axes[1].set_xlim(np.datetime64('2013-07-25T21:27:00'), np.datetime64('2013-07-25T21:45:00'))
+            figsave_path = save_dir + 'LT_compilation_overlay_He_{:02}_{}_GR_short.png'.format(He_rat, save_string)
+        else:
+            axes[1].set_xlim(time_start, time_end)
+            figsave_path = save_dir + 'LT_compilation_overlay_He_{:02}_{}_GR.png'.format(He_rat, save_string)
+        
+        fig.subplots_adjust(hspace=0.03, wspace=0)
+        if save==True:
+            print('Saving {}'.format(figsave_path))
+            fig.savefig(figsave_path, bbox_inches='tight')
+            plt.close('all')
             
+        ## WAVENUMBER ## 
+        plt.ioff()
+        fig, axes = plt.subplots(2, figsize=(15, 10), sharex=True)
+        
+        tick_label_size = 12
+        mpl.rcParams['xtick.labelsize'] = tick_label_size 
+        
+        band_labels = [r'$H^+$', r'$He^+$', r'$O^+$']
+        fontsize    = 16
+        
+        # Note: The call to cm works as a fraction of the max because the argument has to be normalized to 
+        # between 0-1. To have a non-zero minimum, you'd probably have to pass a norm instance.
+        for O_rat, ii in zip(O_rats, range(nO)):
+            for kk in range(1,3):
+                axes[kk-1].plot(times, 1e6*all_max_k[:, kk, ii], color=plt.cm.plasma(O_rat/O_max))
+                axes[kk-1].set_ylabel('$\gamma (\\times 10^{-6} s^{-1})$\n%s band' % band_labels[kk], fontsize=fontsize)
+                axes[kk-1].set_ylim(0.0, wn_max)
+        
+        sm = plt.cm.ScalarMappable(cmap='plasma', norm=plt.Normalize(vmin=0, vmax=O_max))
+        plt.colorbar(sm, ax=axes[0]).set_label('$O^{+}$ percent', fontsize=fontsize)
+        plt.colorbar(sm, ax=axes[1]).set_label('$O^{+}$ percent', fontsize=fontsize)
+        
+        axes[0].set_title('EMIC Wavenumber :: RBSP-A Instruments :: {}% He'.format(He_rat), fontsize=fontsize)
+        axes[1].set_xlabel('Time (UT)', fontsize=fontsize)
+        axes[1].xaxis.set_major_locator(mdates.MinuteLocator(interval=t_int))
+        axes[1].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        
+        if pearls == True:
+            pearl_idx, pearl_times, pex = get_pearl_times(time_start, gdrive=gdrive)
+            for ii in range(pearl_times.shape[0]):
+                for ax in axes:
+                    ax.axvline(pearl_times[ii], c='k', linestyle='--', alpha=0.4)
+        
+        # Set xlim to show either just pearls, or whole event
+        if short == True:
+            axes[1].set_xlim(np.datetime64('2013-07-25T21:27:00'), np.datetime64('2013-07-25T21:45:00'))
+            figsave_path = save_dir + 'LT_compilation_overlay_He_{:02}_{}_WN_short.png'.format(He_rat, save_string)
+        else:
+            axes[1].set_xlim(time_start, time_end)
+            figsave_path = save_dir + 'LT_compilation_overlay_He_{:02}_{}_WN.png'.format(He_rat, save_string)
+        
+        fig.subplots_adjust(hspace=0.03, wspace=0)
         if save==True:
             print('Saving {}'.format(figsave_path))
             fig.savefig(figsave_path, bbox_inches='tight')
@@ -377,9 +466,9 @@ def check_if_exists():
 
 
 if __name__ == '__main__':
-    gdrive    = 'D://Google Drive//'
-    rbsp_path = 'E://DATA//RBSP//'
-    dump_drive= 'G://'
+    gdrive    = 'F://Google Drive//'
+    rbsp_path = 'G://DATA//RBSP//'
+    dump_drive= 'H://'
     
     _Nk       = 500
     output    = 'save'
@@ -406,5 +495,7 @@ if __name__ == '__main__':
     #check_if_exists()
         
     load_and_overlay_multiple_timeseries()
+    
+    #get_raw_data()
 
         
