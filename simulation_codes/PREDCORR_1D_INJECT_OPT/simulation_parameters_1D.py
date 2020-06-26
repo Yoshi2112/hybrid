@@ -17,14 +17,15 @@ from os import system
 import pdb
 
 ## INPUT FILES ##
-run_input = 'C://Users//iarey//Documents//GitHub//hybrid//simulation_codes//run_inputs//run_params.txt'
+run_input    = 'C://Users//iarey//Documents//GitHub//hybrid//simulation_codes//run_inputs//run_params.txt'
+plasma_input = 'C://Users//iarey//Documents//GitHub//hybrid//simulation_codes//run_inputs//plasma_params.txt'
 
 # Load run parameters
 with open(run_input, 'r') as f:
     ### RUN PARAMETERS ###
     drive             = f.readline().split()[1]        # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
     save_path         = f.readline().split()[1]        # Series save dir   : Folder containing all runs of a series
-    run               = f.readline().split()[1]        # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+    run               = int(f.readline().split()[1])   # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 
     save_particles    = int(f.readline().split()[1])   # Save data flag    : For later analysis
     save_fields       = int(f.readline().split()[1])   # Save plot flag    : To ensure hybrid is solving correctly during run
@@ -62,24 +63,25 @@ with open(run_input, 'r') as f:
     ### RUN DESCRIPTION ###
     run_description = f.readline()         # Commentary to attach to runs, helpful to have a quick description
 
-
-### PARTICLE PARAMETERS ###
-species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
-temp_color = ['blue', 'red']
-temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Hot particles get the LCD, cold are maxwellians.
-dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or Gaussian (1)
-nsp_ppc    = np.array([256, 1024])                          # Number of particles per cell, per species
-
-mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
-charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
-drift_v    = np.array([0., 0.])                             # Species parallel bulk velocity (alfven velocity units)
-density    = np.array([180., 20.]) * 1e6                    # Species density in /cc (cast to /m3)
-anisotropy = np.array([0.0, 5.0])                           # Particle anisotropy: A = T_per/T_par - 1
-
-# Particle energy: Choose one                                    
-E_per      = np.array([5.0, 50000.])                        # Perpendicular energy in eV
-beta_par   = np.array([1., 10.])                            # Overrides E_per if not None. Uses B_eq for conversion
-E_e        = 10.0                                       # Electron energy (eV)
+with open(plasma_input, 'r') as f:
+    ### PARTICLE PARAMETERS ###
+    species_lbl = np.array(f.readline().split()[1:])
+    
+    temp_color = np.array(f.readline().split()[1:])
+    temp_type  = np.array(f.readline().split()[1:], dtype=int)
+    dist_type  = np.array(f.readline().split()[1:], dtype=int)
+    nsp_ppc    = np.array(f.readline().split()[1:], dtype=int)
+    
+    mass       = np.array(f.readline().split()[1:], dtype=float)
+    charge     = np.array(f.readline().split()[1:], dtype=float)
+    drift_v    = np.array(f.readline().split()[1:], dtype=float)
+    density    = np.array(f.readline().split()[1:], dtype=float)*1e6
+    anisotropy = np.array(f.readline().split()[1:], dtype=float)
+    
+    # Particle energy: Choose one                                    
+    E_per      = np.array(f.readline().split()[1:], dtype=float)
+    E_e        = float(f.readline().split()[1])
+    beta_flag  = int(f.readline().split()[1])
 
 
 #%%### DERIVED SIMULATION PARAMETERS
@@ -98,20 +100,23 @@ NC         = NX + 2*ND                      # Total number of cells
 ne         = density.sum()                  # Electron number density
 E_par      = E_per / (anisotropy + 1)       # Parallel species energy
 
-if B_eq is None:
+if B_eq == '-':
     B_eq      = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
     
-if beta_par is None:
+if rc_hwidth == '-':
+    rc_hwidth = 0
+    
+if beta_flag == 0:
+    # Input energies as (perpendicular) eV
     beta_per   = None
     Te0_scalar = E_e   * 11603.
     Tpar       = E_par * 11603.
     Tper       = E_per * 11603.
-else:
-    beta_per   = beta_par * (anisotropy + 1)
-    
-    Tpar       = beta_par    * B_eq ** 2 / (2 * mu0 * ne * kB)
-    Tper       = beta_per    * B_eq ** 2 / (2 * mu0 * ne * kB)
-    Te0_scalar = beta_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
+else:    
+    # Input energies in terms of a (perpendicular) beta
+    Tpar       = E_par    * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Tper       = E_per    * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Te0_scalar = E_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma
@@ -233,7 +238,7 @@ print('{} spatial cells, {} with ring current, 2x{} damped cells'.format(NX, rc_
 print('{} cells total'.format(NC))
 print('{} particles total\n'.format(N))
 
-if cpu_affin is not None:
+if cpu_affin != '-':
     import psutil
     run_proc = psutil.Process()
     run_proc.cpu_affinity(cpu_affin)

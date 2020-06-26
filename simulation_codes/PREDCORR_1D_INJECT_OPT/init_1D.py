@@ -17,8 +17,7 @@ import fields_1D    as fields
 from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A, dist_type,  \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
                                      qm_ratios, rc_hwidth, temp_type, Te0_scalar,\
-                                     ne, q, N_species, damping_multiplier, quiet_start, \
-                                     beta_par, beta_per
+                                     ne, q, N_species, damping_multiplier, quiet_start
 
 
 @nb.njit()
@@ -652,16 +651,18 @@ def set_timestep(vel, Te0):
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
    
-    #POS, VEL, IDX = uniform_gaussian_distribution_quiet()
+    POS, VEL, IDX = uniform_gaussian_distribution_quiet()
     
-    POS, VEL, IDX = uniform_accounting_for_beta()
+    #POS, VEL, IDX = uniform_accounting_for_beta()
     
-    V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
-    V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
-    V_PARA = VEL[0] / va
+# =============================================================================
+#     V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
+#     V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
+#     V_PARA = VEL[0] / va
+# =============================================================================
     
     #diag.check_velocity_components_vs_space(POS, VEL, jj=1)
-    diag.plot_temperature_extremes()
+    #diag.plot_temperature_extremes()
     #diag.check_cell_velocity_distribution_2D(POS, VEL, node_number=None, jj=1, save=True)
     #diag.check_position_distribution(POS)
     #diag.collect_macroparticle_moments(pos, vel, idx)
