@@ -219,7 +219,7 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
     # Check Particle boundary conditions: Re-initialize if at edges
     for ii in nb.prange(pos.shape[1]):
         if (pos[0, ii] < xmin or pos[0, ii] > xmax):
-            if particle_periodic == False: 
+            if particle_periodic == 0: 
                 
                 # Fix position
                 if pos[0, ii] > xmax:
@@ -253,20 +253,21 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
                 pos[1, ii]  = rL * np.cos(gyangle)
                 pos[2, ii]  = rL * np.sin(gyangle)
                     
-            # REFLECTIVE
-            else:   
+            
+            else:  
+                # Mario (Periodic)
                 if pos[0, ii] > xmax:
-                    pos[0, ii] = 2*xmax - pos[0, ii]
+                    pos[0, ii] += xmin - xmax
                 elif pos[0, ii] < xmin:
-                    pos[0, ii] = 2*xmin - pos[0, ii]
+                    pos[0, ii] += xmax - xmin  
                     
 # =============================================================================
-#                 # Mario (Periodic)
+#                 # REFLECTIVE
 #                 if pos[0, ii] > xmax:
-#                     pos[0, ii] += xmin - xmax
+#                     pos[0, ii] = 2*xmax - pos[0, ii]
 #                 elif pos[0, ii] < xmin:
-#                     pos[0, ii] += xmax - xmin  
+#                     pos[0, ii] = 2*xmin - pos[0, ii]
 # =============================================================================
-
+                    
     assign_weighting_TSC(pos, Ie, W_elec)
     return

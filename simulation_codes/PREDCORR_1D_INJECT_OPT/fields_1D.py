@@ -184,7 +184,7 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_dampi
     aux.interpolate_edges_to_center(B, temp3Db)              # temp3db is now B_center
 
     aux.cross_product(Ve, temp3Db[:temp3Db.shape[0]-1, :], temp3De)                  # temp3De is now Ve x B term
-    if E_damping == True:
+    if E_damping == 1:
         temp3De *= E_damping_array
     
     E[:, 0]  = - temp3De[:, 0] - grad_P[:] / q_dens[:]
@@ -192,6 +192,6 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_dampi
     E[:, 2]  = - temp3De[:, 2]
     
     # Diagnostic flag for testing
-    if disable_waves == True:   
+    if disable_waves == 1:   
         E *= 0.
     return 

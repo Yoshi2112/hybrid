@@ -110,7 +110,7 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
     q_dens[ND+NX:] = q_dens[ND+NX - 2]
         
     # Implement smoothing filter: If enabled
-    if source_smoothing == True:
+    if source_smoothing == 1:
         three_point_smoothing(q_dens, ni[:, 0])
         for ii in range(3):
             three_point_smoothing(Ji[:, ii], ni[:, 0])

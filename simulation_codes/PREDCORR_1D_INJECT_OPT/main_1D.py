@@ -25,7 +25,7 @@ if __name__ == '__main__':
     # Collect initial moments and save initial state
     sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu) 
     
-    if te0_equil == True:
+    if te0_equil == 1:
         init.set_equilibrium_te0(q_dens, Te0)
     
     DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array\

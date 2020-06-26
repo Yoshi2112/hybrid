@@ -216,11 +216,11 @@ def uniform_gaussian_distribution_quiet():
                 vel[2, st: en] = np.random.normal(0, sf_per, half_n)
     
                 # Set Loss Cone Distribution: Reinitialize particles in loss cone (move to a function)
-                if const.homogenous == False and temp_type[jj] == 1:
+                if const.homogenous == 0 and temp_type[jj] == 1:
                     LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj)
                     
                 # Quiet start : Initialize second half
-                if quiet_start == True:
+                if quiet_start == 1:
                     vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set parallel
                 else:
                     vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Set anti-parallel
@@ -256,11 +256,11 @@ def uniform_gaussian_distribution_quiet():
                 while abs(pos[0, ii]) > const.xmax:
                     pos[0, st: en] = np.random.normal(0, sigma)
                     
-            if const.homogenous == False and temp_type[jj] == 1:
+            if const.homogenous == 0 and temp_type[jj] == 1:
                     LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj)
                     
             # Initialize second half
-            if quiet_start == True:
+            if quiet_start == 1:
                 vel[0, en: en + half_n] = vel[0, st: en]
             else:
                 vel[0, en: en + half_n] = vel[0, st: en] * -1.0
@@ -339,7 +339,7 @@ def uniform_accounting_for_beta():
                     vel[2, st + kk] = np.random.normal(0, sf_per)
     
                     # Set Loss Cone Distribution: Reinitialize particles in loss cone
-                    if const.homogenous == False and temp_type[jj] == 1:
+                    if const.homogenous == 0 and temp_type[jj] == 1:
                         
                         v_perp    = np.sqrt(vel[1, st + kk] ** 2 + vel[2, st + kk] ** 2)
                         pitch     = np.arctan(v_perp / vel[0, st + kk])
@@ -353,7 +353,7 @@ def uniform_accounting_for_beta():
 
                     
                 # Quiet start : Initialize second half
-                if quiet_start == True:
+                if quiet_start == 1:
                     vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set parallel
                 else:
                     vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Set anti-parallel
