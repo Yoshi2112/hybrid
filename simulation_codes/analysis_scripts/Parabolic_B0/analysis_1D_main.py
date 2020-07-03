@@ -3091,7 +3091,7 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True):
         plt.ioff()
         
         fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
-        axes[0].set_title('f(v) vs. x :: {}'.format(cf.species_lbl[jj]))
+        axes[0].set_title('f(v) vs. x :: {} :: t = {:.3f}s'.format(cf.species_lbl[jj], ptime))
         
         st = idx_start[jj]
         en = idx_end[jj]
@@ -3101,16 +3101,16 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True):
                                                     bins=[xbins, vbins],
                                                     vmin=0, vmax=cf.nsp_ppc[jj] / cfac)
 
-            cb = fig.colorbar(im1, ax=axes[kk])
+            cb = fig.colorbar(im1, ax=axes[kk], pad=0.015)
             cb.set_label('Counts')
             
             axes[kk].set_ylim(-vlim, vlim)
-            axes[kk].set_ylabel('v{} ($v_A$)'.format(lt[kk]), rotation=0)
+            axes[kk].set_ylabel('v{}\n($v_A$)'.format(lt[kk]), rotation=0)
             
         axes[kk].set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
         axes[kk].set_xlabel('Position (cell)')
 
-        fig.subplots_adjust(hspace=0)
+        fig.subplots_adjust(hspace=0.065)
         if save == True:
             save_dir = cf.anal_dir + '//Particle Distribution Histograms//For Every Time//Species {}//'.format(jj)
             filename = 'fv_vs_x_species_{}_{:05}'.format(jj, ii)
@@ -3136,25 +3136,29 @@ if __name__ == '__main__':
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
-    for run_num in range(num_runs):
+    for run_num in [1]:#range(2, num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
-        #plot_E_components(plot=True)
-        
-        try:
-            plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None)
-            plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
-        except:
-            pass
-        
-        standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
-        
-        summary_plots(save=True, histogram=False)
-        check_fields()
+        plot_E_components(plot=True)
         
         for sp in range(2):
             plot_vi_vs_x(it_max=None, jj=sp, save=True)
+        
+# =============================================================================
+#         try:
+#             plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None)
+#             plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
+#         except:
+#             pass
+#         
+#         standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
+#         
+#         summary_plots(save=True, histogram=False)
+#         check_fields()
+# =============================================================================
+        
+        
         
 
 

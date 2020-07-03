@@ -289,6 +289,8 @@ def load_fields(ii):
 def load_particles(ii):  
     '''
     Sort kw for arranging particles by species index since they get jumbled.
+    
+    Still need to test the jumble fixer more in depth (i.e. multispecies etc.)
     '''    
     part_file  = 'data%05d.npz' % ii             # Define target file
     input_path = particle_dir + part_file        # File location
@@ -306,7 +308,7 @@ def load_particles(ii):
 
     idx_start = np.zeros(Nj, dtype=int)
     idx_end   = np.zeros(Nj, dtype=int)
-    xx = 0
+    xx = 1
     for ii in range(1, tidx.shape[0]):
         if tidx[ii] >= 0 and tidx[ii] != tidx[ii - 1]:
             idx_start[xx] = ii
@@ -315,6 +317,7 @@ def load_particles(ii):
     for ii in range(1, Nj):
         idx_end[ii - 1] = idx_start[ii]
     idx_end[-1] = tidx.shape[0]
+
     return tx, tv, tidx, tsim_time, idx_start, idx_end
 
 
