@@ -91,8 +91,10 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
                    ('method_type', 'PREDCORR_PARABOLIC'),
                    ('particle_shape', 'TSC'),
                    ('boundary_type', 'damped'),
-                   ('particle_boundary', 'Open flux'),
                    ('run_time', None),
+                   ('particle_periodic', const.particle_periodic),
+                   ('particle_reflect', const.particle_reflect),
+                   ('particle_reinit', const.particle_reinit)
                    ])
 
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:

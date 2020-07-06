@@ -14,7 +14,7 @@ derived values/casting to SI units (e.g. alfven velocity)
 import numpy as np
 import sys
 from os import system
-import pdb
+
 
 ## INPUT FILES ##
 run_input    = 'C://Users//iarey//Documents//GitHub//hybrid//simulation_codes//run_inputs//run_params.txt'
@@ -34,7 +34,10 @@ with open(run_input, 'r') as f:
 
     ## FLAGS ##
     homogenous        = int(f.readline().split()[1])   # Set B0 to homogenous (as test to compare to parabolic)
-    particle_periodic = int(f.readline().split()[1])   # Set particle boundary conditions to periodic (False : Open boundary flux)
+    particle_periodic = int(f.readline().split()[1])   # Set particle boundary conditions to periodic
+    particle_reflect  = int(f.readline().split()[1])   # Set particle boundary conditions to reflective
+    particle_reinit   = int(f.readline().split()[1])   # Set particle boundary conditions to reinitialize
+    field_periodic    = int(f.readline().split()[1])   # Set field boundary to periodic (False: Absorbtive Boundary Conditions)
     disable_waves     = int(f.readline().split()[1])   # Zeroes electric field solution at each timestep
     te0_equil         = int(f.readline().split()[1])   # Initialize te0 to be in equilibrium with density
     source_smoothing  = int(f.readline().split()[1])   # Smooth source terms with 3-point Gaussian filter
@@ -78,7 +81,7 @@ with open(plasma_input, 'r') as f:
     density    = np.array(f.readline().split()[1:], dtype=float)*1e6
     anisotropy = np.array(f.readline().split()[1:], dtype=float)
     
-    # Particle energy: Choose one                                    
+    # Particle energy: If beta == 1, energies are in beta. If not, they are in eV                                    
     E_per      = np.array(f.readline().split()[1:], dtype=float)
     E_e        = float(f.readline().split()[1])
     beta_flag  = int(f.readline().split()[1])
@@ -268,11 +271,10 @@ if theta_xmax > lambda_L:
     print('--------------------------------------------------')
     sys.exit()
 
-if homogenous == 0 and particle_periodic == 1:
-    particle_periodic = 1
-    print('---------------------------------------------------')
-    print('WARNING : PERIODIC BOUNDARY CONDITIONS INCOMPATIBLE')
-    print('WITH PARABOLIC B0. BOUNDARIES SET TO OPEN FLUX.')
-    print('---------------------------------------------------')
+if particle_periodic + particle_reflect + particle_reinit > 1:
+    print('--------------------------------------------------')
+    print('WARNING : ONLY ONE PARTICLE BOUNDARY CONDITION ALLOWED')
+    print('DO SOMETHING ABOUT IT')
+    print('--------------------------------------------------')
     
 system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))

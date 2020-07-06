@@ -7,7 +7,8 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ratios, kB, \
-                                        B_eq, a, mass, Tper, Tpar, particle_periodic, loss_cone_xmax
+                                        B_eq, a, mass, Tper, Tpar, particle_periodic, particle_reflect,\
+                                        particle_reinit, loss_cone_xmax
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -219,7 +220,7 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
     # Check Particle boundary conditions: Re-initialize if at edges
     for ii in nb.prange(pos.shape[1]):
         if (pos[0, ii] < xmin or pos[0, ii] > xmax):
-            if particle_periodic == 0: 
+            if particle_reinit == 1: 
                 
                 # Fix position
                 if pos[0, ii] > xmax:
@@ -239,7 +240,7 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
                 else:
                     particle_PA = 0.0
                     while np.abs(particle_PA) < loss_cone_xmax:
-                        vel[0, ii]  = (np.random.normal(0, sf_par))# * (- np.sign(pos[0, ii]))
+                        vel[0, ii]  = (np.random.normal(0, sf_par)) * (- np.sign(pos[0, ii]))
                         vel[1, ii]  =        np.random.normal(0, sf_per)
                         vel[2, ii]  =        np.random.normal(0, sf_per)
                         v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
@@ -253,21 +254,27 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
                 pos[1, ii]  = rL * np.cos(gyangle)
                 pos[2, ii]  = rL * np.sin(gyangle)
                     
-            
-            else:  
-                # Mario (Periodic)
-                if pos[0, ii] > xmax:
-                    pos[0, ii] += xmin - xmax
-                elif pos[0, ii] < xmin:
-                    pos[0, ii] += xmax - xmin  
+        elif particle_periodic == 1:  
+            # Mario (Periodic)
+            if pos[0, ii] > xmax:
+                pos[0, ii] += xmin - xmax
+            elif pos[0, ii] < xmin:
+                pos[0, ii] += xmax - xmin 
                     
-# =============================================================================
-#                 # REFLECTIVE
-#                 if pos[0, ii] > xmax:
-#                     pos[0, ii] = 2*xmax - pos[0, ii]
-#                 elif pos[0, ii] < xmin:
-#                     pos[0, ii] = 2*xmin - pos[0, ii]
-# =============================================================================
+        elif particle_reinit == 1:
+            # Reflect
+            if pos[0, ii] > xmax:
+                pos[0, ii] = 2*xmax - pos[0, ii]
+            elif pos[0, ii] < xmin:
+                pos[0, ii] = 2*xmin - pos[0, ii]
+                
+            vel[0, ii] *= -1.0
+                
+        else:
+            # DEACTIVATE PARTICLE (Negative index means they're not pushed or counted in sources)
+            idx[ii]    -= 128
+            pos[:, ii] *= 0.0
+            vel[:, ii] *= 0.0
                     
     assign_weighting_TSC(pos, Ie, W_elec)
     return

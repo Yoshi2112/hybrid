@@ -6,7 +6,7 @@ Created on Fri Sep 22 17:55:15 2017
 """
 import numba as nb
 from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, q, ne, min_dens, source_smoothing
-import pdb
+
 
 @nb.njit()
 def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
@@ -34,14 +34,15 @@ def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
         I   = Ie[ii]
         sp  = idx[ii]
         
-        for kk in range(3):
-            nu[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
-            nu[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
-            nu[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
-        
-        ni[I,     sp] += W_elec[0, ii]
-        ni[I + 1, sp] += W_elec[1, ii]
-        ni[I + 2, sp] += W_elec[2, ii]
+        if sp >= 0:
+            for kk in range(3):
+                nu[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
+                nu[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
+                nu[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
+            
+            ni[I,     sp] += W_elec[0, ii]
+            ni[I + 1, sp] += W_elec[1, ii]
+            ni[I + 2, sp] += W_elec[2, ii]
     return
 
 
