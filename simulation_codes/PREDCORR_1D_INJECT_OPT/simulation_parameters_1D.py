@@ -17,8 +17,8 @@ from os import system
 
 
 ## INPUT FILES ##
-run_input    = 'C://Users//iarey//Documents//GitHub//hybrid//simulation_codes//run_inputs//run_params.txt'
-plasma_input = 'C://Users//iarey//Documents//GitHub//hybrid//simulation_codes//run_inputs//plasma_params.txt'
+run_input    = '../run_inputs/run_params.txt'
+plasma_input = '../run_inputs/plasma_params.txt'
 
 # Load run parameters
 with open(run_input, 'r') as f:
