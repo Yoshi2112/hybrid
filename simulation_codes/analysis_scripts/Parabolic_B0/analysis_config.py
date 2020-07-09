@@ -54,7 +54,7 @@ def manage_dirs(drive, series, run_num):
 def load_species_params():
     global species_present, density, dist_type, charge, mass, Tper,      \
            temp_type, temp_color, Tpar, species_lbl, n_contr,  \
-           drift_v, N_species, Bc, nsp_ppc, Te0_arr
+           drift_v, N_species, Bc, nsp_ppc, Te0_arr, idx_start0, idx_end0
 
     p_path = os.path.join(data_dir, 'particle_parameters.npz')                  # File location
     p_data = np.load(p_path)                                                    # Load file
@@ -75,6 +75,9 @@ def load_species_params():
     Tper       = p_data['Tper']
     Bc         = p_data['Bc']
     
+    idx_start0 = p_data['idx_start']
+    idx_end0   = p_data['idx_end']
+
     try:
         Te0_arr = p_data['Te0']
     except:
@@ -98,14 +101,15 @@ def load_simulation_params():
            ie, run_desc, orbit_res, freq_res, method_type,    \
            particle_shape, part_save_iter, field_save_iter, dt_field, dt_particle,  \
            ND, NC, N, loss_cone, xmax, B_xmax, B_eq, theta_xmax, a, boundary_type,     \
-           particle_boundary, rc_hwidth, L, B_nodes, E_nodes, xmin, grid_min, grid_max, \
-           grid_mid, run_time, run_time_str
+           rc_hwidth, L, B_nodes, E_nodes, xmin, grid_min, grid_max, \
+           grid_mid, run_time, run_time_str, particle_periodic, particle_reflect, \
+           particle_reinit, particle_open, disable_waves, source_smoothing, \
+           E_damping, quiet_start, homogenous, field_periodic
 
     h_name = os.path.join(data_dir, 'simulation_parameters.pckl')       # Load header file
     f      = open(h_name, 'rb')                                         # Open header file
     obj    = pickle.load(f)                                             # Load variables from header file into dict
     f.close()                                                           # Close header file
-
     seed              = obj['seed']
     Nj                = obj['Nj']
     dt_sim            = obj['dt']
@@ -132,7 +136,6 @@ def load_simulation_params():
     method_type       = obj['method_type'] 
     particle_shape    = obj['particle_shape']
     boundary_type     = obj['boundary_type']
-    particle_boundary = obj['particle_boundary']
     
     part_save_iter    = obj['part_save_iter']
     field_save_iter   = obj['field_save_iter']
@@ -152,6 +155,37 @@ def load_simulation_params():
         loss_cone = obj['loss_cone']
     except:
         loss_cone = 0.0
+        
+    try:
+        particle_periodic = obj['particle_periodic']
+        particle_reflect  = obj['particle_reflect']
+        particle_reinit   = obj['particle_reinit']
+    except:
+        particle_periodic = None
+        particle_reflect  = None
+        particle_reinit   = None
+        
+    if particle_reinit is None and particle_reflect is None and particle_periodic is None:
+        particle_open = None
+    elif particle_reinit + particle_reflect + particle_periodic == 0:
+        particle_open = 1
+    else:
+        particle_open = 0
+        
+    try:
+        disable_waves    = obj['disable_waves']
+        source_smoothing = obj['source_smoothing']
+        E_damping        = obj['E_damping']
+        quiet_start      = obj['quiet_start']
+        homogenous       = obj['homogeneous']
+        field_periodic   = obj['field_periodic']
+    except:
+        disable_waves    = None
+        source_smoothing = None
+        E_damping        = None
+        quiet_start      = None
+        homogenous       = None
+        field_periodic   = None
         
     try:
         run_time = obj['run_time']
@@ -179,6 +213,8 @@ def load_simulation_params():
     except:
         # If it is, make it a vector
         Te0 = np.ones(NC, dtype=float) * Te0
+        
+    
     return 
 
 
@@ -206,6 +242,15 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
     beta_par = (2 * mu0 * ne * kB * Tpar) / B_eq ** 2
     beta_per = (2 * mu0 * ne * kB * Tper) / B_eq ** 2
 
+    if particle_open == 1:
+        particle_boundary = 'Open Lossy'
+    elif particle_reinit == 1:
+        particle_boundary = 'Reinitialize'
+    elif particle_reflect == 1:
+        particle_boundary = 'Reflection'
+    elif particle_periodic == 1:
+        particle_boundary = 'Periodic'
+
     if os.path.exists(output_file) == True and overwrite_summary == False:
         pass
     else:
@@ -217,13 +262,21 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
             print('Hybrid Type  :: {}'.format(method_type), file=f)
             print('Random Seed  :: {}'.format(seed), file=f)
             print('', file=f)
+            print('Flags', file=f)
+            print('Disable Wave Growth:: {}'.format(disable_waves), file=f)
+            print('Source Smoothing   :: {}'.format(source_smoothing), file=f)
+            print('E-field Damping    :: {}'.format(E_damping), file=f)
+            print('Quiet Start        :: {}'.format(quiet_start), file=f)
+            print('Homogenous B0      :: {}'.format(homogenous), file=f)
+            print('Field Periodic BCs :: {}'.format(field_periodic), file=f)
+            print('', file=f)
             print('Temporal Parameters', file=f)
             print('Maximum Sim. Time  :: {} GPeriods'.format(max_rev), file=f)
-            print('Simulation cadence :: {} seconds'.format(dt_sim), file=f)
-            print('Particle Dump Time :: {} seconds'.format(dt_particle), file=f)
-            print('Field Dump Time    :: {} seconds'.format(dt_field), file=f)
-            print('Frequency Resol.   :: {} GPeriods'.format(freq_res), file=f)
-            print('Gyperiod Resol.    :: {}'.format(orbit_res), file=f)
+            print('Simulation cadence :: {:.5f} seconds'.format(dt_sim), file=f)
+            print('Particle Dump Time :: {:.5f} seconds'.format(dt_particle), file=f)
+            print('Field Dump Time    :: {:.5f} seconds'.format(dt_field), file=f)
+            print('Frequency Resol.   :: {:.5f} GPeriods'.format(freq_res), file=f)
+            print('Gyperiod Resol.    :: {:.5f}'.format(orbit_res), file=f)
             print('Final runtime      :: {}'.format(run_time_str), file=f)
             print('', file=f)
             print('Simulation Parameters', file=f)
@@ -232,14 +285,14 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
             print('# Cells Total   :: {}'.format(NC), file=f)
             print('# RC Cells      :: {}'.format(rc_hwidth*2), file=f)
             print('InerLen per dx  :: {}'.format(dxm), file=f)
-            print('Cell width      :: {} m'.format(dx), file=f)
-            print('Simulation Min  :: {} m'.format(xmin), file=f)
-            print('Simulation Max  :: {} m'.format(xmax), file=f)
+            print('Cell width      :: {:.1f} m'.format(dx), file=f)
+            print('Simulation Min  :: {:.1f} m'.format(xmin), file=f)
+            print('Simulation Max  :: {:.1f} m'.format(xmax), file=f)
             print('', file=f)
-            print('Equatorial Field Strength :: {} nT'.format(B_eq*1e9), file=f)
-            print('Boundary   Field Strength :: {} nT'.format(B_xmax*1e9), file=f)
-            print('MLAT max/min extent       :: {} deg'.format(theta_xmax * 180. / np.pi), file=f)
-            print('McIlwain L value equiv.   :: {}'.format(L), file=f)
+            print('Equatorial Field Strength :: {:.2f} nT'.format(B_eq*1e9), file=f)
+            print('Boundary   Field Strength :: {:.2f} nT'.format(B_xmax*1e9), file=f)
+            print('MLAT max/min extent       :: {:.2f} deg'.format(theta_xmax * 180. / np.pi), file=f)
+            print('McIlwain L value equiv.   :: {:.2f}'.format(L), file=f)
             print('Parabolic scale factor, a :: {}'.format(a), file=f)
             print('', file=f)
             print('Electron Density     :: {} /cc'.format(ne*1e-6), file=f)
@@ -286,11 +339,25 @@ def load_fields(ii):
     return tB, tE, tVe, tTe, tJ, tdns, tsim_time, tdamping_array
 
 
-def load_particles(ii):  
+def load_particles(ii, shuffled_idx=False):  
     '''
     Sort kw for arranging particles by species index since they get jumbled.
     
     Still need to test the jumble fixer more in depth (i.e. multispecies etc.)
+    
+    Also need to group disabled particles with their active counterparts... but then
+    there's a problem with having all 'spare' particles having index -128 for some
+    runs - they're not 'deactivated cold particles', they were never active in the
+    first place
+    
+    SOLUTION: For subsequent runs, use idx = -1 for 'spare' particles, since their
+    index will be reset when they're turned on.
+    
+    ACTUALLY, the current iteration of the code doesn't use spare particles. idx_start/end
+    should still be valid, maybe put a flag in for it under certain circumstances (For speed)
+    
+    Flag will be anything that involves spare particles. Load it later (nothing like
+    that exists yet).
     '''    
     part_file  = 'data%05d.npz' % ii             # Define target file
     input_path = particle_dir + part_file        # File location
@@ -301,23 +368,38 @@ def load_particles(ii):
     tsim_time  = data['sim_time']
     tidx       = data['idx']
 
-    order = np.argsort(tidx)                # Retrieve order of elements by index
-    tidx  = tidx[order]
-    tx    = tx[:, order]
-    tv    = tv[:, order]
-
-    idx_start = np.zeros(Nj, dtype=int)
-    idx_end   = np.zeros(Nj, dtype=int)
-    xx = 1
-    for ii in range(1, tidx.shape[0]):
-        if tidx[ii] >= 0 and tidx[ii] != tidx[ii - 1]:
-            idx_start[xx] = ii
-            xx += 1
+    if shuffled_idx == True:
+        order = np.argsort(tidx)                # Retrieve order of elements by index
+        tidx  = tidx[order]
+        tx    = tx[:, order]
+        tv    = tv[:, order]
     
-    for ii in range(1, Nj):
-        idx_end[ii - 1] = idx_start[ii]
-    idx_end[-1] = tidx.shape[0]
-
+        idx_start = np.zeros(Nj, dtype=int)
+        idx_end   = np.zeros(Nj, dtype=int)
+            
+        # Get first index of each species. If None found,  
+        acc = 0
+        for jj in range(Nj):
+            found_st = 0; found_en = 0
+            for ii in range(acc, tidx.shape[0]):
+                if tidx[ii] >= 0:
+                    
+                    # Find start point (Store, and keep looping through particles)
+                    if tidx[ii] == jj and found_st == 0:
+                        idx_start[jj] = ii
+                        found_st = 1
+                        
+                    # Find end point (Find first value that doesn't match, if start is found
+                    elif tidx[ii] != jj and found_st == 1:
+                        idx_end[jj] = ii; found_en = 1; acc = ii
+                        break
+                    
+            # This should only happen with last species in array
+            if found_st == 1 and found_en == 0:
+                idx_end[jj] = tidx.shape[0]
+    else:
+        idx_start = idx_start0
+        idx_end   = idx_end0
     return tx, tv, tidx, tsim_time, idx_start, idx_end
 
 

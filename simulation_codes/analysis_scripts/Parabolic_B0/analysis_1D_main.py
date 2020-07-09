@@ -1277,15 +1277,18 @@ def summary_plots(save=True, histogram=True):
             vel_tr = np.sqrt(vel[1] ** 2 + vel[2] ** 2)
             
             for jj in range(cf.Nj):
-                num_bins = cf.nsp_ppc[jj] // 5
-                
-                xs, BinEdgesx = np.histogram(vel[0, idx_start[jj]: idx_end[jj]], bins=num_bins)
-                bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
-                ax_vx.plot(bx, xs, '-', c=cf.temp_color[jj], drawstyle='steps', label=cf.species_lbl[jj])
-                
-                ys, BinEdgesy = np.histogram(vel_tr[idx_start[jj]: idx_end[jj]], bins=num_bins)
-                by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
-                ax_vy.plot(by, ys, '-', c=cf.temp_color[jj], drawstyle='steps', label=cf.species_lbl[jj])
+                try:
+                    num_bins = cf.nsp_ppc[jj] // 5
+                    
+                    xs, BinEdgesx = np.histogram(vel[0, idx_start[jj]: idx_end[jj]], bins=num_bins)
+                    bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
+                    ax_vx.plot(bx, xs, '-', c=cf.temp_color[jj], drawstyle='steps', label=cf.species_lbl[jj])
+                    
+                    ys, BinEdgesy = np.histogram(vel_tr[idx_start[jj]: idx_end[jj]], bins=num_bins)
+                    by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
+                    ax_vy.plot(by, ys, '-', c=cf.temp_color[jj], drawstyle='steps', label=cf.species_lbl[jj])
+                except: 
+                    pass
                 
                 ax_vx.set_ylabel(r'$n_{v_\parallel}$')
                 ax_vx.set_ylabel(r'$n_{v_\perp}$')
@@ -1297,7 +1300,7 @@ def summary_plots(save=True, histogram=True):
                 ax_vy.set_xlim(0, np.sqrt(2)*vel_lim)
                 
                 for ax, comp in zip([ax_vx, ax_vy], ['v_\parallel', 'v_\perp']):
-                    ax.set_ylim(0, int(cf.N / cf.NX) * 4.0)
+                    ax.set_ylim(0, int(cf.N / cf.NX) * 10.0)
                     ax.legend(loc='upper right')
                     ax.set_ylabel('$n_{%s}$'%comp)
         else:
@@ -1363,10 +1366,21 @@ def summary_plots(save=True, histogram=True):
         ax_B.set_xlabel('Cell Number')
         
         # SET FIELD RANGES #
-        ax_den.set_ylim(den_min, den_max)
-        ax_Ex.set_ylim(-E_lim, E_lim)
-        ax_By.set_ylim(-B_lim, B_lim)
-        ax_B.set_ylim(0, B_lim)
+        try:
+            ax_den.set_ylim(den_min, den_max)
+        except:
+            pass
+        
+        try:
+            ax_Ex.set_ylim(-E_lim, E_lim)
+        except:
+            pass
+        
+        try:
+            ax_By.set_ylim(-B_lim, B_lim)
+            ax_B.set_ylim(0, B_lim)
+        except:
+            pass
         
         for ax in [ax_den, ax_Ex, ax_By]:
             plt.setp(ax.get_xticklabels(), visible=False)
@@ -3080,10 +3094,19 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True):
     vbins = np.linspace(-vlim, vlim, 101, endpoint=True)
     xbins = np.linspace(cf.xmin/cf.dx, cf.xmax/cf.dx, cf.NX + 1, endpoint=True)
         
-    # Collect all particle information for specified cell
+
     for ii in range(it_max):
-        sys.stdout.write('\rPlotting particle data from p-file {}'.format(ii))
-        sys.stdout.flush()
+        save_dir = cf.anal_dir + '//Particle Spatial Distribution Histograms//Species {}//'.format(jj)
+        filename = 'fv_vs_x_species_{}_{:05}'.format(jj, ii)
+        
+        if os.path.exists(save_dir) == False:
+            os.makedirs(save_dir)
+            
+        if os.path.exists(save_dir + filename + '.png') == True:
+            print('Particle data plot from p-file {} already exists.'.format(ii))
+            continue
+        else:
+            print('Plotting particle data from p-file {}'.format(ii))
     
         pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii)
         
@@ -3111,39 +3134,35 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True):
         axes[kk].set_xlabel('Position (cell)')
 
         fig.subplots_adjust(hspace=0.065)
-        if save == True:
-            save_dir = cf.anal_dir + '//Particle Distribution Histograms//For Every Time//Species {}//'.format(jj)
-            filename = 'fv_vs_x_species_{}_{:05}'.format(jj, ii)
-            
-            if os.path.exists(save_dir) == False:
-                os.makedirs(save_dir)
-            
-            plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-            plt.close('all')
-        else:
-            plt.show()
-    
-    print('\n')
+        
+        plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        plt.close('all')
     return
 
 
 ##%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'RCG_test'
+    series      = 'boundary_conditions_systematic_test'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
-    for run_num in [1]:#range(2, num_runs):
+    # Extract all summary files
+    for run_num in range(num_runs):
+        print('\nRun {}'.format(run_num))
+        cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
+        summary_plots(save=True, histogram=True)
+    
+    for run_num in range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
-        plot_E_components(plot=True)
-        
         for sp in range(2):
             plot_vi_vs_x(it_max=None, jj=sp, save=True)
+        
+    #plot_E_components(plot=True)
         
 # =============================================================================
 #         try:
@@ -3154,7 +3173,7 @@ if __name__ == '__main__':
 #         
 #         standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
 #         
-#         summary_plots(save=True, histogram=False)
+#         
 #         check_fields()
 # =============================================================================
         

@@ -284,97 +284,6 @@ def uniform_gaussian_distribution_quiet():
     return pos, vel, idx
 
 
-def uniform_accounting_for_beta():
-    # Need to add an adaptation for when beta is None
-    # In this case, calculate the equatorial beta
-    # Then recalculate the temperature off-equatorially
-    # assuming that this equatorial beta is constant along the field
-    pos = np.zeros((3, N), dtype=np.float64)
-    vel = np.zeros((3, N), dtype=np.float64)
-    idx = np.zeros(N,      dtype=np.int8)
-    np.random.seed(seed)
-
-    for jj in range(Nj):
-        idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle idx
-        
-        if dist_type[jj] == 0:                            # Uniform position distribution (incl. limitied RC)
-            half_n = nsp_ppc[jj] // 2                     # Half particles per cell - doubled later
-            if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
-                NC_load = NX
-            else:
-                if rc_hwidth == 0 or rc_hwidth > NX//2:   # Need to change this to be something like the FWHM or something
-                    NC_load = NX
-                else:
-                    NC_load = 2*rc_hwidth
-            
-            # Load particles in each applicable cell
-            acc = 0; offset  = 0
-            for ii in range(NC_load):
-                # Add particle if last cell (for symmetry)
-                if ii == NC_load - 1:
-                    half_n += 1
-                    offset  = 1
-                    
-                # Particle index ranges
-                st = idx_start[jj] + acc
-                en = idx_start[jj] + acc + half_n
-                
-                # Set position for half: Analytically uniform
-                for kk in range(half_n):
-                    pos[0, st + kk] = dx*(float(kk) / (half_n - offset) + ii) - NC_load*dx/2
-                   
-                    B0xp      = fields.eval_B0x(pos[0, st + kk])
-                    loss_cone = np.arcsin(np.sqrt(B0xp / B_A))
-                    
-                    Tpar_p = beta_par[jj] * B0xp ** 2 / (2 * const.mu0 * ne * const.kB)
-                    Tper_p = beta_per[jj] * B0xp ** 2 / (2 * const.mu0 * ne * const.kB)
-
-                    sf_par = np.sqrt(kB *  Tpar_p /  mass[jj])  # Scale factors for velocity initialization
-                    sf_per = np.sqrt(kB *  Tper_p /  mass[jj])
-
-                    # Set velocity for half: Randomly Maxwellian
-                    vel[0, st + kk] = np.random.normal(0, sf_par) +  drift_v[jj]
-                    vel[1, st + kk] = np.random.normal(0, sf_per)
-                    vel[2, st + kk] = np.random.normal(0, sf_per)
-    
-                    # Set Loss Cone Distribution: Reinitialize particles in loss cone
-                    if const.homogenous == 0 and temp_type[jj] == 1:
-                        
-                        v_perp    = np.sqrt(vel[1, st + kk] ** 2 + vel[2, st + kk] ** 2)
-                        pitch     = np.arctan(v_perp / vel[0, st + kk])
-                        while pitch < loss_cone:
-                            vel[0, st + kk] = np.random.normal(0, sf_par) +  drift_v[jj]
-                            vel[1, st + kk] = np.random.normal(0, sf_per)
-                            vel[2, st + kk] = np.random.normal(0, sf_per)
-                        
-                            v_perp = np.sqrt(vel[1, st + kk] ** 2 + vel[2, st + kk] ** 2)
-                            pitch  = np.arctan(v_perp / vel[0, st + kk])
-
-                    
-                # Quiet start : Initialize second half
-                if quiet_start == 1:
-                    vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set parallel
-                else:
-                    vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Set anti-parallel
-                    
-                pos[0, en: en + half_n] = pos[0, st: en]                # Other half, same position
-                vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
-                vel[2, en: en + half_n] = vel[2, st: en] * -1.0
-                
-                acc                    += half_n * 2
-
-    
-    # Set initial Larmor radius - rL from v_perp, distributed to y,z based on velocity gyroangle
-    print('Initializing particles off-axis')
-    B0x     = fields.eval_B0x(pos[0])
-    v_perp  = np.sqrt(vel[1] ** 2 + vel[2] ** 2)
-    gyangle = get_gyroangle_array(vel)
-    rL      = v_perp / (qm_ratios[idx] * B0x)
-    pos[1]  = rL * np.cos(gyangle)
-    pos[2]  = rL * np.sin(gyangle)
-    
-    check_boundary_particles(pos, vel)
-    return pos, vel, idx
 
 
 @nb.njit()
@@ -655,11 +564,9 @@ if __name__ == '__main__':
     
     #POS, VEL, IDX = uniform_accounting_for_beta()
     
-# =============================================================================
-#     V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
-#     V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
-#     V_PARA = VEL[0] / va
-# =============================================================================
+    V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
+    V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
+    V_PARA = VEL[0] / va
     
     #diag.check_velocity_components_vs_space(POS, VEL, jj=1)
     #diag.plot_temperature_extremes()

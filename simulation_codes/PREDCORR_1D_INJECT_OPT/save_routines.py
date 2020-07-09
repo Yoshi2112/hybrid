@@ -90,11 +90,16 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
                    ('run_desc', const.run_description),
                    ('method_type', 'PREDCORR_PARABOLIC'),
                    ('particle_shape', 'TSC'),
-                   ('boundary_type', 'damped'),
+                   ('field_periodic', const.field_periodic),
                    ('run_time', None),
+                   ('homogeneous', const.homogenous),
                    ('particle_periodic', const.particle_periodic),
                    ('particle_reflect', const.particle_reflect),
-                   ('particle_reinit', const.particle_reinit)
+                   ('particle_reinit', const.particle_reinit),
+                   ('disable_waves', const.disable_waves),
+                   ('source_smoothing', const.source_smoothing),
+                   ('E_damping', const.E_damping),
+                   ('quiet_start', const.quiet_start)
                    ])
 
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:
