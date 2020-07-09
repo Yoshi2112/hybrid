@@ -254,27 +254,27 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
                 pos[1, ii]  = rL * np.cos(gyangle)
                 pos[2, ii]  = rL * np.sin(gyangle)
                     
-        elif particle_periodic == 1:  
-            # Mario (Periodic)
-            if pos[0, ii] > xmax:
-                pos[0, ii] += xmin - xmax
-            elif pos[0, ii] < xmin:
-                pos[0, ii] += xmax - xmin 
+            elif particle_periodic == 1:  
+                # Mario (Periodic)
+                if pos[0, ii] > xmax:
+                    pos[0, ii] += xmin - xmax
+                elif pos[0, ii] < xmin:
+                    pos[0, ii] += xmax - xmin 
+                        
+            elif particle_reinit == 1:
+                # Reflect
+                if pos[0, ii] > xmax:
+                    pos[0, ii] = 2*xmax - pos[0, ii]
+                elif pos[0, ii] < xmin:
+                    pos[0, ii] = 2*xmin - pos[0, ii]
                     
-        elif particle_reinit == 1:
-            # Reflect
-            if pos[0, ii] > xmax:
-                pos[0, ii] = 2*xmax - pos[0, ii]
-            elif pos[0, ii] < xmin:
-                pos[0, ii] = 2*xmin - pos[0, ii]
-                
-            vel[0, ii] *= -1.0
-                
-        else:
-            # DEACTIVATE PARTICLE (Negative index means they're not pushed or counted in sources)
-            idx[ii]    -= 128
-            pos[:, ii] *= 0.0
-            vel[:, ii] *= 0.0
+                vel[0, ii] *= -1.0
+                    
+            else:
+                # DEACTIVATE PARTICLE (Negative index means they're not pushed or counted in sources)
+                idx[ii]    -= 128
+                pos[:, ii] *= 0.0
+                vel[:, ii] *= 0.0
                     
     assign_weighting_TSC(pos, Ie, W_elec)
     return
