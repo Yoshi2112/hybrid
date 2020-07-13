@@ -3153,12 +3153,11 @@ if __name__ == '__main__':
     for run_num in range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
-        summary_plots(save=True, histogram=True)
-    
+        
     for run_num in range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
-        
+        summary_plots(save=True, histogram=True)
         for sp in range(2):
             plot_vi_vs_x(it_max=None, jj=sp, save=True)
         

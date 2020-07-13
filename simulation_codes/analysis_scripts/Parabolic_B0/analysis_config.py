@@ -122,11 +122,13 @@ def load_simulation_params():
     ne                = obj['ne']
     Te0               = obj['Te0']
     ie                = obj['ie']
+    xmin              = obj['xmin']
     xmax              = obj['xmax']
     B_xmax            = obj['B_xmax']
     B_eq              = obj['B_eq']
     a                 = obj['a']
     L                 = obj['L']
+    loss_cone         = obj['loss_cone']
     rc_hwidth         = obj['rc_hwidth']
     theta_xmax        = obj['theta_xmax']
     max_rev           = obj['max_rev']
@@ -135,7 +137,6 @@ def load_simulation_params():
     run_desc          = obj['run_desc']
     method_type       = obj['method_type'] 
     particle_shape    = obj['particle_shape']
-    boundary_type     = obj['boundary_type']
     
     part_save_iter    = obj['part_save_iter']
     field_save_iter   = obj['field_save_iter']
@@ -145,17 +146,7 @@ def load_simulation_params():
     
     B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx                 # B grid points position in space
     E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx                 # E grid points position in space
-    
-    try:
-        xmin = obj['xmin']
-    except:
-        xmin = -xmax
-        
-    try:
-        loss_cone = obj['loss_cone']
-    except:
-        loss_cone = 0.0
-        
+
     try:
         particle_periodic = obj['particle_periodic']
         particle_reflect  = obj['particle_reflect']
@@ -186,19 +177,15 @@ def load_simulation_params():
         quiet_start      = None
         homogenous       = None
         field_periodic   = None
-        
-    try:
-        run_time = obj['run_time']
-        
-        hrs      = int(run_time // 3600)
-        rem      = run_time %  3600
-        
-        mins     = int(rem // 60)
-        sec      = round(rem %  60, 2)
-        run_time_str = '{:02}:{:02}:{:02}'.format(hrs, mins, sec)
-    except:
-        run_time     = -1.0
-        run_time_str = ''
+       
+    run_time = obj['run_time']
+    
+    hrs      = int(run_time // 3600)
+    rem      = run_time %  3600
+    
+    mins     = int(rem // 60)
+    sec      = round(rem %  60, 2)
+    run_time_str = '{:02}:{:02}:{:02}'.format(hrs, mins, sec)
 
     grid_min = B_nodes[0]
     grid_max = B_nodes[-1]
