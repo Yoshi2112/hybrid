@@ -3143,40 +3143,39 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True):
 ##%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'open_flux_testing'
+    series      = 'boundary_conditions_systematic_test'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
     # Extract all summary files
-    for run_num in range(num_runs):
-        print('\nRun {}'.format(run_num))
-        cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
+# =============================================================================
+#     for run_num in range(num_runs):
+#         print('\nRun {}'.format(run_num))
+#         cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
+# =============================================================================
         
-    for run_num in range(num_runs):
+    for run_num in range(8, num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
-        summary_plots(save=True, histogram=True)
-        for sp in range(2):
-            plot_vi_vs_x(it_max=None, jj=sp, save=True)
-        
-    #plot_E_components(plot=True)
         
 # =============================================================================
-#         try:
-#             plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None)
-#             plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
-#         except:
-#             pass
-#         
-#         standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
-#         
-#         
-#         check_fields()
+#         summary_plots(save=True, histogram=True)
+#         for sp in range(2):
+#             plot_vi_vs_x(it_max=None, jj=sp, save=True)
 # =============================================================================
         
+        try:
+            plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None)
+            plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
+        except:
+            pass
         
+        standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
+        
+        #check_fields()
+        #plot_E_components(plot=True)
         
 
 

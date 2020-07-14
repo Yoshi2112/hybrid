@@ -72,7 +72,6 @@ def load_species_params():
     N_species  = p_data['N_species']
     nsp_ppc    = p_data['nsp_ppc']
     Tpar       = p_data['Tpar']
-    Tperp       = p_data['Tperp']
     Bc         = p_data['Bc']
     
     idx_start0 = p_data['idx_start']
