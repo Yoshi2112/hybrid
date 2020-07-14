@@ -52,7 +52,7 @@ def manage_dirs(drive, series, run_num):
 
 
 def load_species_params():
-    global species_present, density, dist_type, charge, mass, Tper,      \
+    global species_present, density, dist_type, charge, mass, Tperp,      \
            temp_type, temp_color, Tpar, species_lbl, n_contr,  \
            drift_v, N_species, Bc, nsp_ppc, Te0_arr, idx_start0, idx_end0
 
@@ -72,11 +72,16 @@ def load_species_params():
     N_species  = p_data['N_species']
     nsp_ppc    = p_data['nsp_ppc']
     Tpar       = p_data['Tpar']
-    Tper       = p_data['Tper']
+    Tperp       = p_data['Tperp']
     Bc         = p_data['Bc']
     
     idx_start0 = p_data['idx_start']
     idx_end0   = p_data['idx_end']
+
+    try:
+        Tperp  = p_data['Tperp']
+    except:
+        Tperp  = p_data['Tper']
 
     try:
         Te0_arr = p_data['Te0']
@@ -180,12 +185,15 @@ def load_simulation_params():
        
     run_time = obj['run_time']
     
-    hrs      = int(run_time // 3600)
-    rem      = run_time %  3600
-    
-    mins     = int(rem // 60)
-    sec      = round(rem %  60, 2)
-    run_time_str = '{:02}:{:02}:{:02}'.format(hrs, mins, sec)
+    if run_time is not None:
+        hrs      = int(run_time // 3600)
+        rem      = run_time %  3600
+        
+        mins     = int(rem // 60)
+        sec      = round(rem %  60, 2)
+        run_time_str = '{:02}:{:02}:{:02}'.format(hrs, mins, sec)
+    else:
+        run_time_str = '-'
 
     grid_min = B_nodes[0]
     grid_max = B_nodes[-1]
@@ -227,7 +235,7 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
 
     beta_e   = (2 * mu0 * ne * kB * Te0 ) / B_eq ** 2
     beta_par = (2 * mu0 * ne * kB * Tpar) / B_eq ** 2
-    beta_per = (2 * mu0 * ne * kB * Tper) / B_eq ** 2
+    beta_per = (2 * mu0 * ne * kB * Tperp) / B_eq ** 2
 
     if particle_open == 1:
         particle_boundary = 'Open Lossy'
@@ -237,6 +245,8 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
         particle_boundary = 'Reflection'
     elif particle_periodic == 1:
         particle_boundary = 'Periodic'
+    else:
+        particle_boundary = '-'
 
     if os.path.exists(output_file) == True and overwrite_summary == False:
         pass
@@ -302,7 +312,7 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
             print('Species Charge  :: {}'.format(charge), file=f)
             print('Species Mass    :: {} kg'.format(mass), file=f)
             print('Drift Velocity  :: {} m/s'.format(drift_v), file=f)
-            print('Perp Temp       :: {} K'.format(Tper), file=f)
+            print('Perp Temp       :: {} K'.format(Tperp), file=f)
             print('Para Temp       :: {} K'.format(Tpar), file=f)
             print('Perp Beta       :: {}'.format(beta_per), file=f)
             print('Para Beta       :: {}'.format(beta_par), file=f)

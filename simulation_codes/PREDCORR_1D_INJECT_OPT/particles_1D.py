@@ -261,7 +261,7 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
                 elif pos[0, ii] < xmin:
                     pos[0, ii] += xmax - xmin 
                         
-            elif particle_reinit == 1:
+            elif particle_reflect == 1:
                 # Reflect
                 if pos[0, ii] > xmax:
                     pos[0, ii] = 2*xmax - pos[0, ii]

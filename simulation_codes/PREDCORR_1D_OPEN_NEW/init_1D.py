@@ -15,10 +15,10 @@ import particles_1D as particles
 import fields_1D    as fields
 
 from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A, dist_type,  \
-                                     idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
+                                     idx_start, idx_end, seed, vth_par, vth_perp, mass, drift_v,  \
                                      qm_ratios, rc_hwidth, temp_type, Te0_scalar,\
                                      ne, q, N_species, damping_multiplier, quiet_start, \
-                                     beta_par, beta_per, xmin, xmax
+                                     xmin, xmax
 
 
 @nb.njit()
@@ -96,7 +96,7 @@ def get_gyroangle_single(vel):
 
 
 @nb.njit()
-def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
+def LCD_by_rejection(pos, vel, st, en, jj):
     '''
     Takes in a Maxwellian or pseudo-maxwellian distribution. Outputs the number
     and indexes of any particle inside the loss cone
@@ -119,9 +119,9 @@ def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
                 N_loss = 0
 
         if N_loss != 0:   
-            new_vx = np.random.normal(0., sf_par, N_loss)             
-            new_vy = np.random.normal(0., sf_per, N_loss)
-            new_vz = np.random.normal(0., sf_per, N_loss)
+            new_vx = np.random.normal(0., vth_par[ jj], N_loss)             
+            new_vy = np.random.normal(0., vth_perp[jj], N_loss)
+            new_vz = np.random.normal(0., vth_perp[jj], N_loss)
             
             for ii in range(N_loss):
                 vel[0, loss_idx[ii]] = new_vx[ii]
@@ -174,17 +174,11 @@ def uniform_gaussian_distribution_quiet():
     '''
     pos = np.zeros((3, N), dtype=np.float64)
     vel = np.zeros((3, N), dtype=np.float64)
-    idx = np.zeros(N,      dtype=np.int8)
+    idx = np.ones(N,       dtype=np.int8) * -1 # Start all particles as disabled (idx < 0)
     np.random.seed(seed)
     
-    # Start all particles as disabled (idx < 0)
-    idx[:] = -1.0
-
     for jj in range(Nj):
         idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle idx
-        
-        sf_par = np.sqrt(kB *  Tpar[jj] /  mass[jj])  # Scale factors for velocity initialization
-        sf_per = np.sqrt(kB *  Tper[jj] /  mass[jj])
         
         if dist_type[jj] == 0:                            # Uniform position distribution (incl. limitied RC)
             half_n = nsp_ppc[jj] // 2                     # Half particles per cell - doubled later
@@ -216,13 +210,13 @@ def uniform_gaussian_distribution_quiet():
                 pos[0, st: en]-= NC_load*dx/2              
                 
                 # Set velocity for half: Randomly Maxwellian
-                vel[0, st: en] = np.random.normal(0, sf_par, half_n) +  drift_v[jj]
-                vel[1, st: en] = np.random.normal(0, sf_per, half_n)
-                vel[2, st: en] = np.random.normal(0, sf_per, half_n)
+                vel[0, st: en] = np.random.normal(0, vth_par[jj],  half_n) +  drift_v[jj]
+                vel[1, st: en] = np.random.normal(0, vth_perp[jj], half_n)
+                vel[2, st: en] = np.random.normal(0, vth_perp[jj], half_n)
     
                 # Set Loss Cone Distribution: Reinitialize particles in loss cone (move to a function)
                 if const.homogenous == False and temp_type[jj] == 1:
-                    LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj)
+                    LCD_by_rejection(pos, vel, st, en, jj)
                     
                 # Quiet start : Initialize second half
                 if quiet_start == True:
@@ -252,9 +246,9 @@ def uniform_gaussian_distribution_quiet():
             en = idx_start[jj] + half_n
             
             pos[0, st: en] = np.random.normal(0, sigma, half_n)
-            vel[0, st: en] = np.random.normal(0, sf_par, half_n) +  drift_v[jj]
-            vel[1, st: en] = np.random.normal(0, sf_per, half_n)
-            vel[2, st: en] = np.random.normal(0, sf_per, half_n)
+            vel[0, st: en] = np.random.normal(0, vth_par[jj], half_n) +  drift_v[jj]
+            vel[1, st: en] = np.random.normal(0, vth_perp[jj], half_n)
+            vel[2, st: en] = np.random.normal(0, vth_perp[jj], half_n)
             
             # Reinitialize particles outside simulation bounds
             for ii in range(st, en):
@@ -262,7 +256,7 @@ def uniform_gaussian_distribution_quiet():
                     pos[0, st: en] = np.random.normal(0, sigma)
                     
             if const.homogenous == False and temp_type[jj] == 1:
-                    LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj)
+                    LCD_by_rejection(pos, vel, st, en, jj)
                     
             # Initialize second half
             if quiet_start == True:
@@ -299,18 +293,15 @@ def init_totally_random():
     
     for jj in range(Nj):
         idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle idx
-        
-        sf_par = np.sqrt(kB *  Tpar[jj] /  mass[jj])  # Scale factors for velocity initialization
-        sf_per = np.sqrt(kB *  Tper[jj] /  mass[jj])
 
         # Particle index ranges
         st = idx_start[jj]
         en = idx_end[jj]
 
         pos[0, st: en] = np.random.uniform(xmin, xmax, en-st)
-        vel[0, st: en] = np.random.normal(0, sf_par, en-st) +  drift_v[jj]
-        vel[1, st: en] = np.random.normal(0, sf_per, en-st)
-        vel[2, st: en] = np.random.normal(0, sf_per, en-st)
+        vel[0, st: en] = np.random.normal(0, vth_par[ jj], en-st) +  drift_v[jj]
+        vel[1, st: en] = np.random.normal(0, vth_perp[jj], en-st)
+        vel[2, st: en] = np.random.normal(0, vth_perp[jj], en-st)
             
     print('Initializing particles off-axis')
     B0x         = fields.eval_B0x(pos[0, :en])
@@ -539,7 +530,7 @@ if __name__ == '__main__':
     V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
     V_PARA = VEL[0] / va
     
-    diag.check_velocity_components_vs_space(POS, VEL, jj=1)
+    #diag.check_velocity_components_vs_space(POS, VEL, jj=1)
     #diag.plot_temperature_extremes()
     #diag.check_cell_velocity_distribution_2D(POS, VEL, node_number=None, jj=1, save=True)
     #diag.check_position_distribution(POS)
@@ -595,7 +586,7 @@ if __name__ == '__main__':
     
     
     for jj in range(const.Nj):
-        if False:
+        if True:
             # Loss cone diagram
             fig1, ax1 = plt.subplots()
             

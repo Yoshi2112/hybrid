@@ -6,8 +6,8 @@ Created on Fri Sep 22 17:23:44 2017
 """
 import numba as nb
 import numpy as np
-from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, Nj, n_contr, kB, Tpar, Tper, temp_type,\
-                                        B_eq, a, mass, particle_periodic, vth_par, B_xmax, vth_per, loss_cone_xmax
+from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, Nj, n_contr, kB, Tpar, Tperp, temp_type,\
+                                        B_eq, a, mass, particle_periodic, vth_par, B_xmax, vth_perp, loss_cone_xmax
 from   sources_1D                import collect_velocity_moments, collect_position_moment
 
 from fields_1D import eval_B0x
@@ -169,7 +169,7 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
     Note: This function also controls what happens when a particle leaves the 
     simulation boundary. As per Daughton et al. (2006).
     '''
-    #N_lost = np.zeros((2, Nj), dtype=nb.int64)
+    #N_lost = np.zeros((2, Nj), dtype=np.int64)
     
     pos[0, :] += vel[0, :] * DT
     pos[1, :] += vel[1, :] * DT
@@ -203,15 +203,15 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
 
                     if temp_type[idx[ii]] == 0:
                         vel[0, ii] = np.random.normal(0, vth_par[idx[ii]])
-                        vel[1, ii] = np.random.normal(0, vth_per[idx[ii]])
-                        vel[2, ii] = np.random.normal(0, vth_per[idx[ii]])
+                        vel[1, ii] = np.random.normal(0, vth_perp[idx[ii]])
+                        vel[2, ii] = np.random.normal(0, vth_perp[idx[ii]])
                         v_perp     = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
                     else:
                         particle_PA = 0.0
                         while np.abs(particle_PA) < loss_cone_xmax:
                             vel[0, ii]  = np.random.normal(0, vth_par[idx[ii]])# * (-1.0) * np.sign(pos[0, ii])
-                            vel[1, ii]  = np.random.normal(0, vth_per[idx[ii]])
-                            vel[2, ii]  = np.random.normal(0, vth_per[idx[ii]])
+                            vel[1, ii]  = np.random.normal(0, vth_perp[idx[ii]])
+                            vel[2, ii]  = np.random.normal(0, vth_perp[idx[ii]])
                             v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
                             
                             particle_PA = np.arctan(v_perp / vel[0, ii])                   # Calculate particle PA's
@@ -230,7 +230,7 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
 #                     vel[:, ii] *= 0.0
 #                     idx[ii]    -= 128
 # =============================================================================
-
+    #print(N_lost)
     assign_weighting_CIC(pos, idx, Ie, W_elec)
     return
 

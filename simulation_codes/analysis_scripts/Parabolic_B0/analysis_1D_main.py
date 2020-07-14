@@ -1398,8 +1398,8 @@ def summary_plots(save=True, histogram=True):
         ###################
         ### FIGURE TEXT ###
         ###################
-        anisotropy = (cf.Tper / cf.Tpar - 1).round(1)
-        beta_per   = (2*(4e-7*np.pi)*(1.381e-23)*cf.Tper*cf.ne / (cf.B_eq**2)).round(1)
+        anisotropy = (cf.Tperp / cf.Tpar - 1).round(1)
+        beta_per   = (2*(4e-7*np.pi)*(1.381e-23)*cf.Tperp*cf.ne / (cf.B_eq**2)).round(1)
         #beta_e     = np.round((2*(4e-7*np.pi)*(1.381e-23)*cf.Te0*cf.ne  / (cf.B_eq**2)), 2)
         rdens      = (cf.density / cf.ne).round(2)
 
@@ -3143,7 +3143,7 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True):
 ##%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'boundary_conditions_systematic_test'
+    series      = 'open_flux_testing'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])

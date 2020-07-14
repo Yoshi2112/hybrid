@@ -6,7 +6,7 @@ Created on Fri Sep 22 17:55:15 2017
 """
 import numba as nb
 from simulation_parameters_1D import ND, NX, Nj, n_contr, mass, charge, q, ne, min_dens,\
-                                     xmin, xmax, dx, density, Tpar, Tper, kB, Pi_use_init,\
+                                     xmin, xmax, dx, density, Tpar, Tperp, kB, Pi_use_init,\
                                          source_smoothing
 
 
@@ -79,12 +79,12 @@ def collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi):
         
         for jj in range(Tpar.shape[0]):
             Pi[ND, jj, 0, 0] = density[jj] * kB * Tpar[jj]
-            Pi[ND, jj, 1, 1] = density[jj] * kB * Tper[jj]
-            Pi[ND, jj, 2, 2] = density[jj] * kB * Tper[jj]
+            Pi[ND, jj, 1, 1] = density[jj] * kB * Tperp[jj]
+            Pi[ND, jj, 2, 2] = density[jj] * kB * Tperp[jj]
             
             Pi[ND + NX - 1, jj, 0, 0] = density[jj] * kB * Tpar[jj]
-            Pi[ND + NX - 1, jj, 1, 1] = density[jj] * kB * Tper[jj]
-            Pi[ND + NX - 1, jj, 2, 2] = density[jj] * kB * Tper[jj]
+            Pi[ND + NX - 1, jj, 1, 1] = density[jj] * kB * Tperp[jj]
+            Pi[ND + NX - 1, jj, 2, 2] = density[jj] * kB * Tperp[jj]
             
     # Else: Collect pressure tensor from macroparticles at boundaries
     else:
@@ -168,7 +168,7 @@ def collect_position_moment(pos, Ie, W_elec, idx, q_dens, ni):
                 ni[I + 1, sp] +=(1.0 - W_elec[ii])
                 ni[I + 2, sp] +=       W_elec[ii]
     
-    if source_smoothing == True:
+    if source_smoothing == 1:
         for ii in range(Nj):
             three_point_smoothing(ni[:, ii], q_dens)
             

@@ -3,81 +3,89 @@
 Created on Fri Sep 22 11:00:58 2017
 
 @author: iarey
+
+Changing so that values are calculated here, but main inputs come from files
+That way I'd only have to change the input file, rather than manually changing
+every single value on each run. Makes doing pearl-studies much easier.
+
+This script will just be about loading them in, doing checks, and initializing
+derived values/casting to SI units (e.g. alfven velocity)
 """
 import numpy as np
 import sys
 from os import system
 
-### RUN DESCRIPTION ###
-run_description = '''CIC/TSC comparison test just to make sure anything else has changed. Plus, CIC + 3-point smoothing should be comparable to TSC weighting anyway. ''' +\
-                  '''This is the CIC code with NO smoothing.'''
 
-### RUN PARAMETERS ###
-drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//TSC_CIC_comparison'    # Series save dir   : Folder containing all runs of a series
-run               = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles    = 1                             # Save data flag    : For later analysis
-save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
-seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin         = [(2*run)%8, (2*run + 1)%8]    # Set CPU affinity for run as list. Set as None to auto-assign. 
-#cpu_affin         = [4, 5, 6, 7]
+## INPUT FILES ##
+run_input    = '../run_inputs/run_params.txt'
+plasma_input = '../run_inputs/plasma_params.txt'
 
-## DIAGNOSTIC FLAGS ##
-homogenous        = True                          # Set B0 to homogenous (as test to compare to parabolic)
-particle_periodic = False                         # Set particle boundary conditions to periodic (False : Open boundary flux)
-disable_waves     = False                         # Zeroes electric field solution at each timestep
-E_damping         = True                          # Damp E in a manner similar to B for ABCs
-quiet_start       = True                          # Flag to use quiet start (False :: semi-quiet start)
-Pi_use_init       = True
-source_smoothing  = False
-damping_multiplier= 1.0
+# Load run parameters
+with open(run_input, 'r') as f:
+    ### RUN PARAMETERS ###
+    drive             = f.readline().split()[1]        # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
+    save_path         = f.readline().split()[1]        # Series save dir   : Folder containing all runs of a series
+    run               = int(f.readline().split()[1])   # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 
-### SIMULATION PARAMETERS ###
-NX        = 256                             # Number of cells - doesn't include ghost cells
-ND        = 64                              # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 50                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
-dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
-L         = 5.35                            # Field line L shell
-r_A       = 100e3                           # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
+    save_particles    = int(f.readline().split()[1])   # Save data flag    : For later analysis
+    save_fields       = int(f.readline().split()[1])   # Save plot flag    : To ensure hybrid is solving correctly during run
+    seed              = int(f.readline().split()[1])   # RNG Seed          : Set to enable consistent results for parameter studies
+    cpu_affin         = f.readline().split()[1]        # Set CPU affinity for run as list. Set as None to auto-assign. 
 
-ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
-B_eq      = None                            # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
-rc_hwidth = 0                               # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
-  
-orbit_res = 0.02                            # Orbit resolution
-freq_res  = 0.02                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
-part_res  = 0.25                            # Data capture resolution in gyroperiod fraction: Particle information
-field_res = 0.10                            # Data capture resolution in gyroperiod fraction: Field information
+    ## FLAGS ##
+    homogenous        = int(f.readline().split()[1])   # Set B0 to homogenous (as test to compare to parabolic)
+    particle_periodic = int(f.readline().split()[1])   # Set particle boundary conditions to periodic
+    particle_reflect  = int(f.readline().split()[1])   # Set particle boundary conditions to reflective
+    particle_reinit   = int(f.readline().split()[1])   # Set particle boundary conditions to reinitialize
+    field_periodic    = int(f.readline().split()[1])   # Set field boundary to periodic (False: Absorbtive Boundary Conditions)
+    disable_waves     = int(f.readline().split()[1])   # Zeroes electric field solution at each timestep
+    te0_equil         = int(f.readline().split()[1])   # Initialize te0 to be in equilibrium with density
+    source_smoothing  = int(f.readline().split()[1])   # Smooth source terms with 3-point Gaussian filter
+    E_damping         = int(f.readline().split()[1])   # Damp E in a manner similar to B for ABCs
+    quiet_start       = int(f.readline().split()[1])   # Flag to use quiet start (False :: semi-quiet start)
+    damping_multiplier= float(f.readline().split()[1]) # Multiplies the r-factor to increase/decrease damping rate.
 
+    ### SIMULATION PARAMETERS ###
+    NX        = int(f.readline().split()[1])           # Number of cells - doesn't include ghost cells
+    ND        = int(f.readline().split()[1])           # Damping region length: Multiple of NX (on each side of simulation domain)
+    max_rev   = float(f.readline().split()[1])         # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+    dxm       = float(f.readline().split()[1])         # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
+    L         = float(f.readline().split()[1])         # Field line L shell
+    r_A       = float(f.readline().split()[1])         # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
+    
+    ie        = int(f.readline().split()[1])           # Adiabatic electrons. 0: off (constant), 1: on.
+    min_dens  = float(f.readline().split()[1])         # Allowable minimum charge density in a cell, as a fraction of ne*q
+    B_eq      = f.readline().split()[1]                # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
+    rc_hwidth = f.readline().split()[1]                # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
+      
+    orbit_res = float(f.readline().split()[1])         # Orbit resolution
+    freq_res  = float(f.readline().split()[1])         # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
+    part_res  = float(f.readline().split()[1])         # Data capture resolution in gyroperiod fraction: Particle information
+    field_res = float(f.readline().split()[1])         # Data capture resolution in gyroperiod fraction: Field information
 
-### PARTICLE PARAMETERS ###
-species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
-temp_color = ['blue', 'red']
-temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Hot particles get the LCD, cold are maxwellians.
-dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or Gaussian (1)
-nsp_ppc    = np.array([256, 1024])                           # Number of particles per cell, per species
+    ### RUN DESCRIPTION ###
+    run_description = f.readline()         # Commentary to attach to runs, helpful to have a quick description
 
-mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
-charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
-drift_v    = np.array([0., 0.])                             # Species parallel bulk velocity (alfven velocity units)
-density    = np.array([180., 20.]) * 1e6                    # Species density in /cc (cast to /m3)
-anisotropy = np.array([0.0, 5.0])                           # Particle anisotropy: A = T_per/T_par - 1
+with open(plasma_input, 'r') as f:
+    ### PARTICLE PARAMETERS ###
+    species_lbl = np.array(f.readline().split()[1:])
+    
+    temp_color = np.array(f.readline().split()[1:])
+    temp_type  = np.array(f.readline().split()[1:], dtype=int)
+    dist_type  = np.array(f.readline().split()[1:], dtype=int)
+    nsp_ppc    = np.array(f.readline().split()[1:], dtype=int)
+    
+    mass       = np.array(f.readline().split()[1:], dtype=float)
+    charge     = np.array(f.readline().split()[1:], dtype=float)
+    drift_v    = np.array(f.readline().split()[1:], dtype=float)
+    density    = np.array(f.readline().split()[1:], dtype=float)*1e6
+    anisotropy = np.array(f.readline().split()[1:], dtype=float)
+    
+    # Particle energy: If beta == 1, energies are in beta. If not, they are in eV                                    
+    E_perp     = np.array(f.readline().split()[1:], dtype=float)
+    E_e        = float(f.readline().split()[1])
+    beta_flag  = int(f.readline().split()[1])
 
-# Particle energy: Choose one                                    
-E_per      = np.array([5.0, 50000.])                        # Perpendicular energy in eV
-beta_par   = np.array([1., 10.])                            # Overrides E_per if not None. Uses B_eq for conversion
-
-spare_ppc  = nsp_ppc.copy()
-
-# External current properties (not yet implemented)
-J_amp          = 1.0                                        # External current : Amplitude  (A)
-J_freq         = 0.02                                       # External current : Frequency  (Hz)
-J_k            = 1e-7                                       # External current : Wavenumber (/m)
-
-min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
-E_e            = 10.0                                       # Electron energy (eV)
-
-# Subcycling :: Winske & Quest, 1988
 
 #%%### DERIVED SIMULATION PARAMETERS
 ### PHYSICAL CONSTANTS ###
@@ -93,22 +101,30 @@ B_surf = 3.12e-5                            # Magnetic field strength at Earth s
 
 NC         = NX + 2*ND                      # Total number of cells
 ne         = density.sum()                  # Electron number density
-E_par      = E_per / (anisotropy + 1)       # Parallel species energy
+E_par      = E_perp / (anisotropy + 1)      # Parallel species energy
 
-if B_eq is None:
+Pi_use_init = True
+
+if B_eq == '-':
     B_eq      = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
     
-if beta_par is None:
+if rc_hwidth == '-':
+    rc_hwidth = 0
+    
+if beta_flag == 0:
+    # Input energies as (perpendicular) eV
     beta_per   = None
     Te0_scalar = E_e   * 11603.
     Tpar       = E_par * 11603.
-    Tper       = E_per * 11603.
-else:
-    beta_per   = beta_par * (anisotropy + 1)
-    
-    Tpar       = beta_par    * B_eq ** 2 / (2 * mu0 * ne * kB)
-    Tper       = beta_per    * B_eq ** 2 / (2 * mu0 * ne * kB)
-    Te0_scalar = beta_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Tperp      = E_perp* 11603.
+else:    
+    # Input energies in terms of a (perpendicular) beta
+    Tpar       = E_par    * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Tperp      = E_perp   * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Te0_scalar = E_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
+
+vth_par  = np.sqrt(kB *  Tpar  /  mass)
+vth_perp = np.sqrt(kB *  Tperp /  mass)
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma
@@ -120,9 +136,6 @@ xmin       =-NX // 2 * dx
 charge    *= q                                           # Cast species charge to Coulomb
 mass      *= mp                                          # Cast species mass to kg
 drift_v   *= va                                          # Cast species velocity to m/s
-
-vth_par    = np.sqrt(kB * Tpar / mass)                   # Parallel thermal velocity
-vth_per    = np.sqrt(kB * Tper / mass)                   # Parallel thermal velocity
 
 Nj         = len(mass)                                   # Number of species
 n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
@@ -140,9 +153,10 @@ for jj in range(Nj):
             N_species[jj] = nsp_ppc[jj] * NX + 2
         else:
             N_species[jj] = nsp_ppc[jj] * 2*rc_hwidth + 2    
-            
+
 # Spare assumes same number in each cell (doesn't account for dist=1) 
 # THIS CAN BE CHANGED LATER TO BE MORE MEMORY EFFICIENT. LEAVE IT HUGE FOR DEBUGGING PURPOSES.
+spare_ppc  = nsp_ppc.copy()
 N = N_species.sum() + (spare_ppc * NX).sum()
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
@@ -188,7 +202,7 @@ B_xmax      = B_eq*np.sqrt(4 - 3*np.cos(theta_xmax)**2)/np.cos(theta_xmax)**6   
 a           = (B_xmax / B_eq - 1) / xmax ** 2                                       # Parabolic scale factor: Fitted to B_eq, B_xmax
 lambda_L    = np.arccos(np.sqrt(1.0 / L))                                           # Lattitude of Earth's surface at this L
 
-if homogenous == True:
+if homogenous == 1:
     a      = 0
     B_xmax = B_eq
 
@@ -234,9 +248,11 @@ print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_rev * 2. * 
 
 print('{} spatial cells, {} with ring current, 2x{} damped cells'.format(NX, rc_print, ND))
 print('{} cells total'.format(NC))
+print('{} particles initialized'.format(N_species.sum()))
+print('{} particles spare'.format((spare_ppc * NX).sum()))
 print('{} particles total\n'.format(N))
 
-if cpu_affin is not None:
+if cpu_affin != '-':
     import psutil
     run_proc = psutil.Process()
     run_proc.cpu_affinity(cpu_affin)
@@ -245,7 +261,9 @@ if cpu_affin is not None:
     else:
         print('CPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
     
-density_normal_sum         = (charge / q) * (density / ne)
+density_normal_sum = (charge / q) * (density / ne)
+
+    
 simulated_density_per_cell = (n_contr * charge * nsp_ppc).sum()
 real_density_per_cell      = ne*q
 
@@ -264,11 +282,10 @@ if theta_xmax > lambda_L:
     print('--------------------------------------------------')
     sys.exit()
 
-if homogenous == False and particle_periodic == True:
-    particle_periodic = False
-    print('---------------------------------------------------')
-    print('WARNING : PERIODIC BOUNDARY CONDITIONS INCOMPATIBLE')
-    print('WITH PARABOLIC B0. BOUNDARIES SET TO OPEN FLUX.')
-    print('---------------------------------------------------')
+if particle_periodic + particle_reflect + particle_reinit > 1:
+    print('--------------------------------------------------')
+    print('WARNING : ONLY ONE PARTICLE BOUNDARY CONDITION ALLOWED')
+    print('DO SOMETHING ABOUT IT')
+    print('--------------------------------------------------')
     
 system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
