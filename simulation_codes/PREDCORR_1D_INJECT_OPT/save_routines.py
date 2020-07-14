@@ -20,12 +20,14 @@ def manage_directories():
     print('Checking directories...')
     if (save_particles == 1 or save_fields == 1) == True:
         if os.path.exists('%s/%s' % (drive, save_path)) == False:
+            print('Creating master directory %s/%s' % (drive, save_path))
             os.makedirs('%s/%s' % (drive, save_path))                        # Create master test series directory
             print('Master directory created')
 
         path = ('%s/%s/run_%d' % (drive, save_path, const.run))          # Set root run path (for images)
         
         if os.path.exists(path) == False:
+            print('Creating run directory %s' % (path))
             os.makedirs(path)
             print('Run directory created')
         else:
