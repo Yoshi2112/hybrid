@@ -13,6 +13,7 @@ import diagnostics as diag
 
 import particles_1D as particles
 import fields_1D    as fields
+import sources_1D   as sources
 
 from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A, dist_type,  \
                                      idx_start, idx_end, seed, vth_par, vth_perp, mass, drift_v,  \
@@ -522,13 +523,27 @@ def set_timestep(vel, Te0):
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
    
-    POS, VEL, IDX = uniform_gaussian_distribution_quiet()
+    POS, VEL, IE, WE, IB, WM, IDX, EP, BP, TEMP_N = initialize_particles()
+    QD, QD2, JI, NI, NU, PI = initialize_source_arrays()
     
-    #POS, VEL, IDX = uniform_accounting_for_beta()
+    #pos, vel, Ie, W_elec, idx, nu, Ji, Pi
+    sources.collect_velocity_moments(POS, VEL, IE, WE, IDX, NU, JI, PI)
     
-    V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
-    V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
-    V_PARA = VEL[0] / va
+    plt.plot(const.E_nodes, NU[:, 1, 0])
+    plt.show()
+    
+    
+    
+    
+    
+    #POS, VEL, IDX = uniform_gaussian_distribution_quiet()
+
+    
+# =============================================================================
+#     V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
+#     V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
+#     V_PARA = VEL[0] / va
+# =============================================================================
     
     #diag.check_velocity_components_vs_space(POS, VEL, jj=1)
     #diag.plot_temperature_extremes()
@@ -586,7 +601,7 @@ if __name__ == '__main__':
     
     
     for jj in range(const.Nj):
-        if True:
+        if False:
             # Loss cone diagram
             fig1, ax1 = plt.subplots()
             

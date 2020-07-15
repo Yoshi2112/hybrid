@@ -15,6 +15,7 @@ import numpy as np
 import sys
 from os import system
 
+Pi_use_init = True
 
 ## INPUT FILES ##
 run_input    = '../run_inputs/run_params.txt'
@@ -103,7 +104,7 @@ NC         = NX + 2*ND                      # Total number of cells
 ne         = density.sum()                  # Electron number density
 E_par      = E_perp / (anisotropy + 1)      # Parallel species energy
 
-Pi_use_init = True
+
 
 if B_eq == '-':
     B_eq      = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
@@ -123,9 +124,6 @@ else:
     Tperp      = E_perp   * B_eq ** 2 / (2 * mu0 * ne * kB)
     Te0_scalar = E_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
 
-vth_par  = np.sqrt(kB *  Tpar  /  mass)
-vth_perp = np.sqrt(kB *  Tperp /  mass)
-
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma
 
@@ -139,6 +137,9 @@ drift_v   *= va                                          # Cast species velocity
 
 Nj         = len(mass)                                   # Number of species
 n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
+
+vth_par  = np.sqrt(kB *  Tpar  /  mass)                  # Species thermal velocities
+vth_perp = np.sqrt(kB *  Tperp /  mass)
 
 # Number of sim particles for each species, total
 N_species  = np.zeros(Nj, dtype=np.int64)

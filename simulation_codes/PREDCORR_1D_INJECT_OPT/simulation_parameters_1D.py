@@ -18,8 +18,13 @@ from os import system, getcwd
 script_dir = sys.path[0]
 
 ## INPUT FILES ##
-run_input    = script_dir + '/../run_inputs/run_params.txt'
-plasma_input = script_dir + '/../run_inputs/plasma_params.txt'
+run_input    = '../run_inputs/run_params.txt'
+plasma_input = '../run_inputs/plasma_params.txt'
+# =============================================================================
+# ## INPUT FILES ##
+# run_input    = script_dir + '/../run_inputs/run_params.txt'
+# plasma_input = script_dir + '/../run_inputs/plasma_params.txt'
+# =============================================================================
 
 # Load run parameters
 with open(run_input, 'r') as f:
