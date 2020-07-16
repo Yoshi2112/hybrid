@@ -125,7 +125,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
     return qq, DT, max_inc, part_save_iter, field_save_iter
 
 
-#@nb.njit()
+@nb.njit()
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                      \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
               Ve, Te, temp3Da, temp3Db, temp3Dc, old_particles, old_fields,\

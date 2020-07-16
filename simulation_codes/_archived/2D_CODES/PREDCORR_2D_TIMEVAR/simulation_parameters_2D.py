@@ -17,7 +17,7 @@ run_num         = 0                             # Series run number : For multip
 save_particles  = 0                             # Save data flag    : For later analysis
 save_fields     = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 15401                         # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [None]                        # Set CPU affinity for run. Must be list. Auto-assign: None.
+cpu_affin       = None                          # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 ### PHYSICAL CONSTANTS ###
@@ -32,12 +32,12 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 10                               # Number of cells - doesn't include ghost cells
-NY       = 8
+NX       = 128                               # Number of cells - doesn't include ghost cells
+NY       = 128
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 dym      = 1.0
-max_rev  = 10                               # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
-nsp_ppc  = 50                               # Number of particles per cell, per species - i.e. each species has equal representation
+max_rev  = 50                               # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+nsp_ppc  = 200                              # Number of particles per cell, per species - i.e. each species has equal representation
 
 ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
@@ -58,19 +58,19 @@ dist_type  = np.asarray([0, 0])                     # Particle distribution type
 
 mass       = np.asarray([1.000, 1.000])    			# Species ion mass (proton mass units)
 charge     = np.asarray([1.000, 1.000])    			# Species ion charge (elementary charge units)
-density    = np.asarray([0.010, 0.990])             # Species charge density as normalized fraction (add to 1.0)
+density    = np.asarray([0.100, 0.900])             # Species charge density as normalized fraction (add to 1.0)
 drift_v    = np.asarray([0.000, 0.000])             # Species parallel bulk velocity (alfven velocity units)
 
-beta       = True                                           # Flag: Specify temperatures by beta (True) or energy in eV (False)
-beta_e     = 1.                                             # Electron beta
-beta_par   = np.array([1., 1.])                            # Ion species parallel beta (10)
-beta_per   = np.array([1., 1.])                            # Ion species perpendicular beta (50)
+beta       = True                                   # Flag: Specify temperatures by beta (True) or energy in eV (False)
+beta_e     = 1.                                     # Electron beta
+beta_par   = np.array([10., 1.])                     # Ion species parallel beta (10)
+beta_per   = np.array([50., 1.])                     # Ion species perpendicular beta (50)
 
 E_e        = 0.01
 E_par      = np.array([1.3e3, 30])
 E_per      = np.array([5.2e3, 10])
 
-min_dens       = 0.00                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
+min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
 
 HM_amplitude   = 0e-9                                       # Driven wave amplitude in T
 HM_frequency   = 0.02                                       # Driven wave in Hz
@@ -181,7 +181,7 @@ print('\n{}x{} ({}) cells'.format(NX, NY, NX * NY))
 print('{} macroparticles per cell'.format(nsp_ppc * Nj))
 print('{} macroparticles total\n'.format(nsp_ppc * Nj * NX * NY))
 
-if None not in cpu_affin:
+if cpu_affin is not None:
     import psutil
     run_proc = psutil.Process()
     run_proc.cpu_affinity(cpu_affin)

@@ -741,7 +741,7 @@ def test_B_grid_interpolation_and_boundaries():
 if __name__ == '__main__':
     #test_weight_conservation()
     #test_weight_correctness()
-    #test_curl_B()
+    test_curl_B()
     #test_ghost_cell_filling()
     #test_density_and_velocity_deposition()
-    test_B_grid_interpolation_and_boundaries()
+    #test_B_grid_interpolation_and_boundaries()

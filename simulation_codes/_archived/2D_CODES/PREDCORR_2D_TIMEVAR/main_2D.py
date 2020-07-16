@@ -35,7 +35,6 @@ if __name__ == '__main__':
     
     particles.velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT)
     
-    max_inc = 0
     qq      = 1
     print('Starting main loop...')
     while qq < max_inc:
