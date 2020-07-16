@@ -10,7 +10,7 @@ import simulation_parameters_2D as const
 import save_routines as save
 
 from particles_2D             import assign_weighting_TSC
-from simulation_parameters_2D import dx, dy, NX, NY, N_species, kB, B0, Nj, dist_type, idx_bounds,    \
+from simulation_parameters_2D import dx, dy, NX, NY, N_species, kB, B0, Nj, dist_type, idx_start, idx_end,    \
                                      seed, Tpar, Tper, mass, drift_v, theta, nsp_ppc
 from fields_2D                import uniform_HM_field_value
 
@@ -52,11 +52,11 @@ def initialize_configuration_space(ppc):
     
     for jj in range(Nj):                    # For each species
         acc = 0
-        idx[idx_bounds[jj, 0]: idx_bounds[jj, 1]] = jj
+        idx[idx_start[jj]: idx_end[jj]] = jj
         
         for mm in range(NX):                # For each cell
             for nn in range(NY):  
-                st = idx_bounds[jj, 0] + acc
+                st = idx_start[jj] + acc
                 en = st + ppc[jj, mm, nn]
                 
                 pos[0, st: en] = np.random.uniform(mm, mm+1, nsp_ppc)*dx
@@ -83,7 +83,7 @@ def initialize_velocity_space(ppc):
     for jj in range(Nj):
         acc = 0                  # Species accumulator
         for ii in range(NX):
-            st = idx_bounds[jj, 0] + acc
+            st = idx_start[jj] + acc
             en = st + nsp_ppc
             dist[0, st: en] = np.random.normal(0, np.sqrt((kB * Tpar[jj]) / mass[jj]), nsp_ppc) +  drift_v[jj]
             dist[1, st: en] = np.random.normal(0, np.sqrt((kB * Tper[jj]) / mass[jj]), nsp_ppc)

@@ -46,11 +46,11 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
     # Single parameters
     params = dict([('seed', const.seed),
                    ('Nj', const.Nj),
-                   ('dt', const.dt),
+                   ('dt', dt),
                    ('NX', const.NX),
                    ('dxm', const.dxm),
                    ('dx', const.dx),
-                   ('cellpart', const.cellpart),
+                   ('nsp_ppc', const.nsp_ppc),
                    ('B0', const.B0),
                    ('HM_amplitude', const.HM_amplitude),
                    ('HM_frequency', const.HM_frequency),
@@ -75,7 +75,8 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
         
     # Particle values: Array parameters
     p_file = d_path + 'particle_parameters'
-    np.savez(p_file, idx_bounds  = const.idx_bounds,
+    np.savez(p_file, idx_start   = const.idx_start,
+                     idx_end     = const.idx_end,
                      species_lbl = const.species_lbl,
                      temp_color  = const.temp_color,
                      temp_type   = const.temp_type,
@@ -84,7 +85,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                      charge      = const.charge,
                      drift_v     = const.drift_v,
                      density     = const.density,
-                     sim_repr    = const.sim_repr,
+                     n_contr     = const.n_contr,
                      Tpar        = const.Tpar,
                      Tper        = const.Tper)
     print('Particle data saved')

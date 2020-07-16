@@ -11,7 +11,8 @@ import sys
 run_description = '''Pushed PREDCORR_1D_TIMEVAR to 2D. Test to see if it works. Run on grid 2020-07-16'''
 
 ### RUN PARAMETERS ###
-drive           = '/home/c3134027/'             # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
+drive           = 'F:/'             # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
+#drive           = '/home/c3134027/'             # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path       = 'runs//2D_test'               # Series save dir   : Folder containing all runs of a series
 run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles  = 1                             # Save data flag    : For later analysis
@@ -131,7 +132,6 @@ n_contr    = density / nsp_ppc                           # Species density contr
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
-idx_bounds = np.stack((idx_start, idx_end)).transpose()                              # idx_bounds[species, start/end]
 
 gyfreq     = q*B0/mp                                     # Proton   Gyrofrequency (rad/s) (since this will be the highest of all ion species)
 e_gyfreq   = q*B0/me                                     # Electron Gyrofrequency (rad/s)
