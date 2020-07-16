@@ -8,14 +8,14 @@ import numpy as np
 import sys
 
 ### RUN DESCRIPTION ###
-run_description = '''Pushed PREDCORR_1D_TIMEVAR to 2D. Test to see if it works.'''
+run_description = '''Pushed PREDCORR_1D_TIMEVAR to 2D. Test to see if it works. Run on grid 2020-07-16'''
 
 ### RUN PARAMETERS ###
-drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
+drive           = '/home/c3134027/'             # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
 save_path       = 'runs//2D_test'               # Series save dir   : Folder containing all runs of a series
 run_num         = 0                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles  = 0                             # Save data flag    : For later analysis
-save_fields     = 0                             # Save plot flag    : To ensure hybrid is solving correctly during run
+save_particles  = 1                             # Save data flag    : For later analysis
+save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 15401                         # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin       = None                          # Set CPU affinity for run. Must be list. Auto-assign: None.
 
