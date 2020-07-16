@@ -350,7 +350,18 @@ def plot_kt(component='By', saveas='kt_plot', save=False):
     return
 
 
-def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None):
+def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=False, B0_lim=None):
+    '''
+    Plot pcolormesh of tranverse magnetic field in space (x) and time (y).
+    
+    kwargs:
+        saveas    -- Filename (without suffixes) to save as
+        save      -- Save (True) or show (False)
+        log       -- Plot colorbar on log scale
+        tmax      -- Maximum time (y axis limit) to plot to
+        normalize -- Normalize B_tranverse by equatorial B0 (True) or plot in nT (False)
+        B0_lim    -- Colorbar limit (in multiples of B0). If None, plot up to maximum value.
+    '''
     plt.ioff()
 
     t, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens, field_sim_time, damping_array\
@@ -363,7 +374,15 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None):
     mpl.rcParams['xtick.labelsize'] = tick_label_size 
     mpl.rcParams['ytick.labelsize'] = tick_label_size 
     
-    bt   = np.sqrt(by ** 2 + bz ** 2) * 1e9
+    if normalize == False:
+        bt     = np.sqrt(by ** 2 + bz ** 2) * 1e9
+        clabel = '$|B_\perp|$\nnT'
+        suff   = '' 
+    else:
+        bt     = np.sqrt(by ** 2 + bz ** 2) / cf.B_eq
+        clabel = '$\\frac{|B_\perp|}{B_{eq}}$'
+        suff   = '_norm' 
+        
     x    = cf.B_nodes / cf.dx
         
     if tmax is None:
@@ -375,11 +394,19 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None):
     fig, ax = plt.subplots(1, figsize=(15, 10))
 
     vmin = 0.0
-    vmax = bt.max()
+    
+    if B0_lim is None:
+        vmax = bt.max()
+    else:
+        if normalize == False:
+            vmax = cf.B_eq * B0_lim * 1e9
+        else:
+            vmax = B0_lim
+        
     im1  = ax.pcolormesh(x, t, bt, cmap='jet', vmin=vmin, vmax=vmax)
     cb   = fig.colorbar(im1)
     
-    cb.set_label('$|B_\perp|$\nnT', rotation=0, family=font, fontsize=fontsize, labelpad=30)
+    cb.set_label(clabel, rotation=0, family=font, fontsize=fontsize, labelpad=30)
 
     ax.set_ylabel('t (s)', rotation=0, labelpad=30, fontsize=fontsize, family=font)
     ax.set_xlabel('x ($\Delta x$)', fontsize=fontsize, family=font)
@@ -391,7 +418,7 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None):
     ax.axvline(cf.grid_mid / cf.dx, c='w', ls=':', alpha=0.75)   
         
     if save == True:
-        fullpath = cf.anal_dir + saveas + '_BPERP_{}'.format(lbl) + '.png'
+        fullpath = cf.anal_dir + saveas + '_BPERP_{}{}'.format(lbl, suff) + '.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
         print('t-x Plot saved')
         plt.close('all')
@@ -3143,32 +3170,34 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True):
 ##%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'boundary_systematic_reflection_only'
+    series      = 'new_reflection_test'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
-    # Extract all summary files
-    for run_num in range(num_runs):
-        print('\nRun {}'.format(run_num))
-        cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
+# =============================================================================
+#     # Extract all summary files
+#     for run_num in range(num_runs):
+#         print('\nRun {}'.format(run_num))
+#         cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=False)
+# =============================================================================
         
     for run_num in range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
-        summary_plots(save=True, histogram=True)
-        for sp in range(2):
-            plot_vi_vs_x(it_max=None, jj=sp, save=True)
+# =============================================================================
+#         summary_plots(save=True, histogram=True)
+#         for sp in range(2):
+#             plot_vi_vs_x(it_max=None, jj=sp, save=True)
+# =============================================================================
         
-        try:
-            plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None)
-            plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
-        except:
-            pass
+        plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=None, B0_lim=2.0)
+        #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
+
         
-        standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
+        #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
         
         #check_fields()
         #plot_E_components(plot=True)
