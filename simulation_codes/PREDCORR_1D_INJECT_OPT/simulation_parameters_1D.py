@@ -13,18 +13,19 @@ derived values/casting to SI units (e.g. alfven velocity)
 """
 import numpy as np
 import sys
-from os import system, getcwd
+from os import system
+
+on_grid = False
 
 script_dir = sys.path[0]
 
 ## INPUT FILES ##
-run_input    = '../run_inputs/run_params.txt'
-plasma_input = '../run_inputs/plasma_params.txt'
-# =============================================================================
-# ## INPUT FILES ##
-# run_input    = script_dir + '/../run_inputs/run_params.txt'
-# plasma_input = script_dir + '/../run_inputs/plasma_params.txt'
-# =============================================================================
+if on_grid == False:
+    run_input    = '../run_inputs/run_params.txt'
+    plasma_input = '../run_inputs/plasma_params.txt'
+else:
+    run_input    = script_dir + '/../run_inputs/run_params_grid.txt'
+    plasma_input = script_dir + '/../run_inputs/plasma_params_grid.txt'
 
 # Load run parameters
 with open(run_input, 'r') as f:
