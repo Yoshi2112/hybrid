@@ -3170,35 +3170,30 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True):
 ##%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'new_reflection_test'
+    series      = 'reflective_boundary_tests_small'
     
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
-# =============================================================================
-#     # Extract all summary files
-#     for run_num in range(num_runs):
-#         print('\nRun {}'.format(run_num))
-#         cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=False)
-# =============================================================================
+    # Extract all summary files
+    for run_num in range(num_runs):
+        print('\nRun {}'.format(run_num))
+        cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=False)
+        plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=None, B0_lim=None)
+        standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
         
     for run_num in range(num_runs):
         print('\nRun {}'.format(run_num))
         cf.load_run(drive, series, run_num, extract_arrays=True)
         
-# =============================================================================
-#         summary_plots(save=True, histogram=True)
-#         for sp in range(2):
-#             plot_vi_vs_x(it_max=None, jj=sp, save=True)
-# =============================================================================
+        summary_plots(save=True, histogram=True)
+        for sp in range(2):
+            plot_vi_vs_x(it_max=None, jj=sp, save=True)
         
-        plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=None, B0_lim=2.0)
+        
+        
         #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
-
-        
-        #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
-        
         #check_fields()
         #plot_E_components(plot=True)
         
