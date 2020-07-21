@@ -8,7 +8,7 @@ import numba as nb
 import numpy as np
 from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ratios, kB, \
                                         B_eq, a, mass, Tper, Tpar, particle_periodic, particle_reflect,\
-                                        particle_reinit, loss_cone_xmax
+                                        particle_reinit, loss_cone_xmax, randomise_gyrophase
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -254,13 +254,23 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
                 pos[1, ii]  = rL * np.cos(gyangle)
                 pos[2, ii]  = rL * np.sin(gyangle)
                     
+                
             elif particle_periodic == 1:  
                 # Mario (Periodic)
                 if pos[0, ii] > xmax:
                     pos[0, ii] += xmin - xmax
                 elif pos[0, ii] < xmin:
                     pos[0, ii] += xmax - xmin 
+                    
+                # Randomise gyrophase: Prevent bunching at initialization
+                if randomise_gyrophase == True:
+                    v_perp = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
+                    theta  = np.random.uniform(0, 2*np.pi)
+                
+                    vel[1, ii] = v_perp * np.sin(theta)
+                    vel[2, ii] = v_perp * np.cos(theta)
                         
+                    
             elif particle_reflect == 1:
                 # Reflect
                 if pos[0, ii] > xmax:
@@ -273,7 +283,6 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
             else:
                 # DEACTIVATE PARTICLE (Negative index means they're not pushed or counted in sources)
                 idx[ii]    -= 128
-                pos[:, ii] *= 0.0
                 vel[:, ii] *= 0.0
                     
     assign_weighting_TSC(pos, Ie, W_elec)
