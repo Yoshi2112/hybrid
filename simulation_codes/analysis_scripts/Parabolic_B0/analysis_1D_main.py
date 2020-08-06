@@ -3169,27 +3169,33 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True):
 
 ##%% MAIN
 if __name__ == '__main__':
-    drive       = 'F:'
-    series      = 'reflective_boundary_tests_small'
-    
-    series_dir  = '{}/runs//{}//'.format(drive, series)
-    num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
-    print('{} runs in series {}'.format(num_runs, series))
-    
-    # Extract all summary files
-    for run_num in range(num_runs):
-        print('\nRun {}'.format(run_num))
-        cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=False)
-        plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=None, B0_lim=None)
-        standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
+    drive       = 'G:'
+    #series      = 'reflective_boundary_tests_small'
+    #'ABC_test_all_boundaries_01', 
+    for series in ['periodic_gyrophase_test']:
+        series_dir  = '{}/runs//{}//'.format(drive, series)
+        num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+        print('{} runs in series {}'.format(num_runs, series))
         
-    for run_num in range(num_runs):
-        print('\nRun {}'.format(run_num))
-        cf.load_run(drive, series, run_num, extract_arrays=True)
+        # Extract all summary files
+        for run_num in range(num_runs):
+            print('\nRun {}'.format(run_num))
+            cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=False)
+            plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=None, B0_lim=None)
+            standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
+            
+        for run_num in range(num_runs):
+            print('\nRun {}'.format(run_num))
+            cf.load_run(drive, series, run_num, extract_arrays=True)
+            
+            summary_plots(save=True, histogram=True)
+            for sp in range(2):
+                plot_vi_vs_x(it_max=None, jj=sp, save=True)
         
-        summary_plots(save=True, histogram=True)
-        for sp in range(2):
-            plot_vi_vs_x(it_max=None, jj=sp, save=True)
+        
+        
+        
+        
         
         
         
