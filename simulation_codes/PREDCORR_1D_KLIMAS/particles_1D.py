@@ -6,13 +6,11 @@ Created on Fri Sep 22 17:23:44 2017
 """
 import numba as nb
 import numpy as np
-from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ratios, kB, \
-                                        B_eq, a, mass, Tper, Tpar, homogenous, loss_cone_xmax
-from   sources_1D                import collect_moments
+from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios,\
+                                        B_eq, a, particle_periodic
+from   sources_1D                import collect_velocity_moments, collect_position_moment
 
 from fields_1D import eval_B0x
-
-import init_1D as init
 
 
 @nb.njit()
@@ -23,12 +21,14 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, 
     '''
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, temp_N, DT)
     position_update(pos, vel, idx, Ep, DT, Ie, W_elec)  
-    collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, ni, nu)
+    
+    collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji)
+    collect_position_moment(pos, Ie, W_elec, idx, q_dens_adv, ni)
     return
 
 
 @nb.njit()
-def assign_weighting_TSC(pos, I, W, E_nodes=True):
+def assign_weighting_TSC(pos, idx, I, W, E_nodes=True):
     '''Triangular-Shaped Cloud (TSC) weighting scheme used to distribute particle densities to
     nodes and interpolate field values to particle positions. Ref. Lipatov? Or Birdsall & Langdon?
 
@@ -67,24 +67,25 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
     particle_transform = xmax + (ND - grid_offset)*dx  + epsil  # Offset to account for E/B grid and damping nodes
     
     for ii in np.arange(Np):
-        xp          = (pos[0, ii] + particle_transform) / dx    # Shift particle position >= 0
-        I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node (Vectorize?)
-        delta_left  = I[ii] - xp                                # Distance from left node in grid units
-        
-        if abs(pos[0, ii] - xmin) < 1e-10:
-            I[ii]    = ND - 1
-            W[0, ii] = 0.0
-            W[1, ii] = 0.5
-            W[2, ii] = 0.0
-        elif abs(pos[0, ii] - xmax) < 1e-10:
-            I[ii]    = ND + NX - 1
-            W[0, ii] = 0.5
-            W[1, ii] = 0.0
-            W[2, ii] = 0.0
-        else:
-            W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))  # Get weighting factors
-            W[1, ii] = 0.75 - np.square(delta_left + 1.)
-            W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
+        if idx[ii] >= 0:
+            xp          = (pos[0, ii] + particle_transform) / dx    # Shift particle position >= 0
+            I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node (Vectorize?)
+            delta_left  = I[ii] - xp                                # Distance from left node in grid units
+            
+            if abs(pos[0, ii] - xmin) < 1e-10:
+                I[ii]    = ND - 1
+                W[0, ii] = 0.0
+                W[1, ii] = 0.5
+                W[2, ii] = 0.0
+            elif abs(pos[0, ii] - xmax) < 1e-10:
+                I[ii]    = ND + NX - 1
+                W[0, ii] = 0.5
+                W[1, ii] = 0.0
+                W[2, ii] = 0.0
+            else:
+                W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))  # Get weighting factors
+                W[1, ii] = 0.75 - np.square(delta_left + 1.)
+                W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
     return
 
 
@@ -152,7 +153,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
     Bp *= 0
     Ep *= 0
     
-    assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)                 # Calculate magnetic node weights
+    assign_weighting_TSC(pos, idx, Ib, W_mag, E_nodes=False)            # Calculate magnetic node weights
     eval_B0_particle(pos, Bp)  
     
     for ii in range(vel.shape[1]):
@@ -220,7 +221,13 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
     pos[2, :] += vel[2, :] * DT
     
 
-    if homogenous == False: 
+    if particle_periodic == True:
+        for ii in nb.prange(pos.shape[1]):           
+            if pos[0, ii] > xmax:
+                pos[0, ii] += xmin - xmax
+            elif pos[0, ii] < xmin:
+                pos[0, ii] += xmax - xmin  
+    else:
         # Disable loop: Remove particles that leave the simulation space
         for ii in nb.prange(pos.shape[1]):
             if (pos[0, ii] < xmin or pos[0, ii] > xmax):
@@ -266,14 +273,6 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
                     pos[2, kk] = pos[2, ii]
                     vel[:, kk] = vel[:, ii]
                     idx[kk]   += 128
-
-    # Mario (Periodic)
-    else: 
-        for ii in nb.prange(pos.shape[1]):           
-            if pos[0, ii] > xmax:
-                pos[0, ii] += xmin - xmax
-            elif pos[0, ii] < xmin:
-                pos[0, ii] += xmax - xmin    
-    
-    assign_weighting_TSC(pos, Ie, W_elec)
+   
+    assign_weighting_TSC(pos, idx, Ie, W_elec)
     return

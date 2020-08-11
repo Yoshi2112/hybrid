@@ -13,7 +13,7 @@ from shutil import rmtree
 import simulation_parameters_1D as const
 from   simulation_parameters_1D import drive, save_path, NX, ND, NC, ne, density, save_particles, save_fields
 from   simulation_parameters_1D import idx_start, idx_end, Nj, species_lbl, temp_type, dist_type, mass, charge,\
-                                       drift_v, Tpar, Tper, temp_color, nsp_ppc, Bc, N_species, orbit_res
+                                       drift_v, Tpar, Tperp, temp_color, nsp_ppc, N_species, orbit_res
 
 
 def manage_directories():
@@ -51,7 +51,10 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
     for folder in [d_path, f_path, p_path]:
         if os.path.exists(folder) == False:                               # Create data directories
             os.makedirs(folder)
-        
+    
+    Bc       = np.zeros((NC + 1, 3), dtype=np.float64)
+    Bc[:, 0] = const.B_eq * (1 + const.a * const.B_nodes**2)
+
     # Single parameters
     params = dict([('seed', const.seed),
                    ('Nj', Nj),
@@ -112,22 +115,22 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
                      density     = density,
                      N_species   = N_species,
                      Tpar        = Tpar,
-                     Tper        = Tper,
+                     Tperp       = Tperp,
                      Bc          = Bc,
                      Te0         = Te0)
     print('Particle data saved')
     return
 
 
-def save_field_data(sim_time, dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, damping_array):
+def save_field_data(sim_time, dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, damping_array, E_damping_array):
     d_path   = '%s/%s/run_%d/data/fields/' % (drive, save_path, const.run)
     r        = qq / field_save_iter
 
     d_fullpath = d_path + 'data%05d' % r
     
-    np.savez(d_fullpath, E = E[:, 0:3], B = B[:, 0:3],   J = Ji[:, 0:3],
+    np.savez(d_fullpath, E = E[:, 0:3], B = B[:, 0:3],   J = Ji[:, 0:3], 
                        dns = dns,      Ve = Ve[:, 0:3], Te = Te, sim_time = sim_time,
-                       damping_array = damping_array)
+                       damping_array = damping_array, E_damping_array=E_damping_array)
     print('Field data saved')
     
     

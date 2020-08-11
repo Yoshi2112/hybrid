@@ -47,6 +47,48 @@ def r_squared(data, model):
     return r_sq
 
 
+def plot_initial_sources(q_dens, Ji, E, B):
+    fig, ax = plt.subplots(4, 2, sharex=True)
+    ax[0, 0].plot(const.E_nodes/const.dx, q_dens)
+    ax[0, 0].set_ylabel('$\\rho_c$', rotation=0, fontsize=14, labelpad=20)
+    
+    ax[1, 0].plot(const.E_nodes/const.dx, Ji[:, 0])
+    ax[1, 0].set_ylabel('$J_{ix}$', rotation=0, fontsize=14, labelpad=20)
+    
+    ax[2, 0].plot(const.E_nodes/const.dx, Ji[:, 1])
+    ax[2, 0].set_ylabel('$J_{iy}$', rotation=0, fontsize=14, labelpad=20)
+    
+    ax[3, 0].plot(const.E_nodes/const.dx, Ji[:, 2])
+    ax[3, 0].set_ylabel('$J_{iz}$', rotation=0, fontsize=14, labelpad=20)
+    
+    ax[0, 1].plot(const.E_nodes/const.dx, E[:, 0])
+    ax[0, 1].set_ylabel('$E_x$', rotation=0, fontsize=14, labelpad=20)
+    ax[1, 1].plot(const.E_nodes/const.dx, E[:, 1])
+    ax[1, 1].set_ylabel('$E_y$', rotation=0, fontsize=14, labelpad=20)
+    ax[2, 1].plot(const.E_nodes/const.dx, E[:, 1])
+    ax[2, 1].set_ylabel('$E_z$', rotation=0, fontsize=14, labelpad=20)
+    return
+
+
+def plot_initial_positions_scatter(pos):
+    fig, ax = plt.subplots()
+
+    for jj in range(const.Nj):
+        st = const.idx_start[jj]
+        en = const.idx_end[jj]
+        ax.scatter(pos[0, st: en], np.ones(const.N_species[jj])*jj)
+        
+    for ii in range(const.E_nodes.shape[0]):
+        ax.axvline(const.E_nodes[ii], linestyle='--', c='r', alpha=0.2)
+        ax.axvline(const.B_nodes[ii], linestyle='--', c='b', alpha=0.2)
+     
+    ax.axvline(const.xmin, color='k')
+    ax.axvline(const.xmax, color='k')
+    ax.axvline(const.B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
+    ax.axvline(const.B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
+    return
+
+
 def check_cell_velocity_distribution(pos, vel, node_number=const.NX // 2, j=0): #
     '''Checks the velocity distribution of a particle species within a specified cell
     '''
@@ -105,8 +147,6 @@ def check_cell_velocity_distribution_2D(pos, vel, node_number=const.NX // 2, jj=
     '''
     if node_number is None:
         node_number = np.arange(const.NX)
-        
-    
         
     # Account for damping nodes. Node_number should be "real" node count.
     for node in node_number:

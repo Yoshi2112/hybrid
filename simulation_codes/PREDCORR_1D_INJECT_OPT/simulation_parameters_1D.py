@@ -27,7 +27,7 @@ else:
     run_input    = script_dir + '/../run_inputs/run_params_grid.txt'
     plasma_input = script_dir + '/../run_inputs/plasma_params_grid.txt'
 
-randomise_gyrophase = True
+randomise_gyrophase = False
 
 # Load run parameters
 with open(run_input, 'r') as f:

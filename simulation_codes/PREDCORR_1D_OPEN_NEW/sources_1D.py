@@ -5,13 +5,12 @@ Created on Fri Sep 22 17:55:15 2017
 @author: iarey
 """
 import numba as nb
-from simulation_parameters_1D import ND, NX, Nj, n_contr, mass, charge, q, ne, min_dens,\
-                                     xmin, xmax, dx, density, Tpar, Tperp, kB, Pi_use_init,\
-                                         source_smoothing
+from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, q, ne, min_dens,\
+                                     xmin, xmax, dx, source_smoothing
 
 
 @nb.njit()
-def collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi):
+def collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji):
     '''
     Collect first and second moments of macroparticle velocity distributions.
     Calculate average current density at each grid point. 
@@ -73,66 +72,6 @@ def collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi):
         Ji[:ND, ii]    = Ji[ND, ii]
         Ji[ND+NX:, ii] = Ji[ND+NX - 1, ii]
 
-    # If True: Use initial temperature/pressure for second moment
-    if Pi_use_init == True:
-        Pi[ND, sp, :, :] *= 0.0
-        
-        for jj in range(Tpar.shape[0]):
-            Pi[ND, jj, 0, 0] = density[jj] * kB * Tpar[jj]
-            Pi[ND, jj, 1, 1] = density[jj] * kB * Tperp[jj]
-            Pi[ND, jj, 2, 2] = density[jj] * kB * Tperp[jj]
-            
-            Pi[ND + NX - 1, jj, 0, 0] = density[jj] * kB * Tpar[jj]
-            Pi[ND + NX - 1, jj, 1, 1] = density[jj] * kB * Tperp[jj]
-            Pi[ND + NX - 1, jj, 2, 2] = density[jj] * kB * Tperp[jj]
-            
-    # Else: Collect pressure tensor from macroparticles at boundaries
-    else:
-        # Collect pressure tensor AT BOUNDARY CELLS ONLY :: Second moment
-        for ii in nb.prange(vel.shape[1]):
-            I   = Ie[ii]
-            sp  = idx[ii]
-            
-            # Only count specific particles: Imaginary "ghost" particles
-            if abs(pos[0, ii] - xmin) < dx:
-                for mm in range(3):
-                    for nn in range(3):
-                        
-                        # Real macroparticle
-                        Pi[I,     sp, mm, nn] += (vel[mm, ii] - nu[I,     sp, mm]) *\
-                                                 (vel[nn, ii] - nu[I,     sp, nn]) * (1.0 - W_elec[ii])
-                                             
-                        Pi[I + 1, sp, mm, nn] += (vel[mm, ii] - nu[I + 1, sp, mm]) *\
-                                                 (vel[nn, ii] - nu[I + 1, sp, nn]) * W_elec[ii]
-                                            
-                        # Virtual macroparticle
-                        Pi[I - 1, sp, mm, nn] += (vel[mm, ii] - nu[I,     sp, mm]) *\
-                                                 (vel[nn, ii] - nu[I,     sp, nn]) * (1.0 - W_elec[ii])
-                                             
-                        Pi[I    , sp, mm, nn] += (vel[mm, ii] - nu[I + 1, sp, mm]) *\
-                                                 (vel[nn, ii] - nu[I + 1, sp, nn]) * W_elec[ii]
-                                
-            elif abs(pos[0, ii] - xmax) < dx:
-                for mm in range(3):
-                    for nn in range(3):
-                        # Real particle
-                        Pi[I,     sp, mm, nn] += (vel[mm, ii] - nu[I,     sp, mm]) *\
-                                                 (vel[nn, ii] - nu[I,     sp, nn]) * (1.0 - W_elec[ii])
-                                             
-                        Pi[I + 1, sp, mm, nn] += (vel[mm, ii] - nu[I + 1, sp, mm]) *\
-                                                 (vel[nn, ii] - nu[I + 1, sp, nn]) * W_elec[ii]
-                                       
-                        # Virtual macroparticle
-                        Pi[I,     sp, mm, nn] += (vel[mm, ii] - nu[I,     sp, mm]) *\
-                                                 (vel[nn, ii] - nu[I,     sp, nn]) * (1.0 - W_elec[ii])
-                                             
-                        Pi[I + 1, sp, mm, nn] += (vel[mm, ii] - nu[I + 1, sp, mm]) *\
-                                                 (vel[nn, ii] - nu[I + 1, sp, nn]) * W_elec[ii]
-        
-        # Convert to real units               
-        for jj in range(Nj):
-            Pi[:, jj, :, :] *= mass[jj] * n_contr[jj]
-    
     return
 
 
@@ -206,3 +145,67 @@ def three_point_smoothing(arr, temp):
     
     arr[:]       = temp
     return
+
+
+# Pressure Tensor collection for if I actually want to collect it from the macroparticles
+# =============================================================================
+#     # If True: Use initial temperature/pressure for second moment
+#     if Pi_use_init == True:
+#         Pi[ND, sp, :, :] *= 0.0
+#         
+#         for jj in range(Tpar.shape[0]):
+#             Pi[ND, jj, 0, 0] = density[jj] * kB * Tpar[jj]
+#             Pi[ND, jj, 1, 1] = density[jj] * kB * Tperp[jj]
+#             Pi[ND, jj, 2, 2] = density[jj] * kB * Tperp[jj]
+#             
+#             Pi[ND + NX - 1, jj, 0, 0] = density[jj] * kB * Tpar[jj]
+#             Pi[ND + NX - 1, jj, 1, 1] = density[jj] * kB * Tperp[jj]
+#             Pi[ND + NX - 1, jj, 2, 2] = density[jj] * kB * Tperp[jj]
+#             
+#     # Else: Collect pressure tensor from macroparticles at boundaries
+#     else:
+#         # Collect pressure tensor AT BOUNDARY CELLS ONLY :: Second moment
+#         for ii in nb.prange(vel.shape[1]):
+#             I   = Ie[ii]
+#             sp  = idx[ii]
+#             
+#             # Only count specific particles: Imaginary "ghost" particles
+#             if abs(pos[0, ii] - xmin) < dx:
+#                 for mm in range(3):
+#                     for nn in range(3):
+#                         
+#                         # Real macroparticle
+#                         Pi[I,     sp, mm, nn] += (vel[mm, ii] - nu[I,     sp, mm]) *\
+#                                                  (vel[nn, ii] - nu[I,     sp, nn]) * (1.0 - W_elec[ii])
+#                                              
+#                         Pi[I + 1, sp, mm, nn] += (vel[mm, ii] - nu[I + 1, sp, mm]) *\
+#                                                  (vel[nn, ii] - nu[I + 1, sp, nn]) * W_elec[ii]
+#                                             
+#                         # Virtual macroparticle
+#                         Pi[I - 1, sp, mm, nn] += (vel[mm, ii] - nu[I,     sp, mm]) *\
+#                                                  (vel[nn, ii] - nu[I,     sp, nn]) * (1.0 - W_elec[ii])
+#                                              
+#                         Pi[I    , sp, mm, nn] += (vel[mm, ii] - nu[I + 1, sp, mm]) *\
+#                                                  (vel[nn, ii] - nu[I + 1, sp, nn]) * W_elec[ii]
+#                                 
+#             elif abs(pos[0, ii] - xmax) < dx:
+#                 for mm in range(3):
+#                     for nn in range(3):
+#                         # Real particle
+#                         Pi[I,     sp, mm, nn] += (vel[mm, ii] - nu[I,     sp, mm]) *\
+#                                                  (vel[nn, ii] - nu[I,     sp, nn]) * (1.0 - W_elec[ii])
+#                                              
+#                         Pi[I + 1, sp, mm, nn] += (vel[mm, ii] - nu[I + 1, sp, mm]) *\
+#                                                  (vel[nn, ii] - nu[I + 1, sp, nn]) * W_elec[ii]
+#                                        
+#                         # Virtual macroparticle
+#                         Pi[I,     sp, mm, nn] += (vel[mm, ii] - nu[I,     sp, mm]) *\
+#                                                  (vel[nn, ii] - nu[I,     sp, nn]) * (1.0 - W_elec[ii])
+#                                              
+#                         Pi[I + 1, sp, mm, nn] += (vel[mm, ii] - nu[I + 1, sp, mm]) *\
+#                                                  (vel[nn, ii] - nu[I + 1, sp, nn]) * W_elec[ii]
+#         
+#         # Convert to real units               
+#         for jj in range(Nj):
+#             Pi[:, jj, :, :] *= mass[jj] * n_contr[jj]
+# =============================================================================

@@ -7,27 +7,28 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 
-from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, Nj, n_contr, kB, Tpar, Tperp, temp_type,\
-                                        B_eq, a, mass, particle_periodic, vth_par, B_xmax, vth_perp, loss_cone_xmax
+from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, Nj, n_contr, temp_type,\
+                                        B_eq, a, mass, particle_periodic, vth_par, vth_perp, loss_cone_xmax,\
+                                            drift_v, density, Pi0, particle_open, particle_reinit
 from   sources_1D                import collect_velocity_moments, collect_position_moment
 
 from fields_1D import eval_B0x
 
 import init_1D as init
 
-#@nb.njit()
+
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T, temp_N,\
-                                  B, E, DT, q_dens_adv, Ji, ni, nu, Pi, flux_rem, pc=0):
+                                  B, E, DT, q_dens_adv, Ji, ni, nu, flux_rem, pc=0):
     '''
     Container function to group and order the particle advance and moment collection functions
     ''' 
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, temp_N, DT)
     position_update(pos, vel, idx, DT, Ie, W_elec)  
 
-    if particle_periodic == False:
-        inject_particles(pos, vel, idx, ni, nu, Pi, flux_rem, DT, pc)
+    if particle_open == 1:
+        inject_particles(pos, vel, idx, flux_rem, DT, pc)
     
-    collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji, Pi)
+    collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji)
     collect_position_moment(pos, Ie, W_elec, idx, q_dens_adv, ni)
     return
 
@@ -54,8 +55,6 @@ def assign_weighting_CIC(pos, idx, I, W, E_nodes=True):
            
     Could vectorize this with the temp_N array, then check for particles on the boundaries (for
     manual setting)
-    
-    
     '''
     Np         = pos.shape[1]
     epsil      = 1e-15
@@ -168,7 +167,7 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
     Note: This function also controls what happens when a particle leaves the 
     simulation boundary. As per Daughton et al. (2006).
     '''
-    #N_lost = np.zeros((2, Nj), dtype=np.int64)
+    N_lost = np.zeros((2, Nj), dtype=np.int64)
     
     pos[0, :] += vel[0, :] * DT
     pos[1, :] += vel[1, :] * DT
@@ -179,22 +178,20 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
         if idx[ii] >= 0:
             if (pos[0, ii] < xmin or pos[0, ii] > xmax):
                 
-# =============================================================================
-#                 if pos[0, ii] < xmin:
-#                     N_lost[0, idx[ii]] += 1
-#                 else:
-#                     N_lost[1, idx[ii]] += 1
-# =============================================================================
+                if pos[0, ii] < xmin:
+                    N_lost[0, idx[ii]] += 1
+                else:
+                    N_lost[1, idx[ii]] += 1
                 
                 # Move particle to opposite boundary (Periodic)
-                if particle_periodic == True:   
+                if particle_periodic == 1:   
                     if pos[0, ii] > xmax:
                         pos[0, ii] += xmin - xmax
                     elif pos[0, ii] < xmin:
                         pos[0, ii] += xmax - xmin 
                 
                 # Random flux initialization at boundary (Open)
-                else:
+                elif particle_reinit == 1:
                     if pos[0, ii] > xmax:
                         pos[0, ii] = 2*xmax - pos[0, ii]
                     elif pos[0, ii] < xmin:
@@ -222,14 +219,13 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
                     pos[1, ii]  = rL * np.cos(gyangle)
                     pos[2, ii]  = rL * np.sin(gyangle)
                 
-# =============================================================================
-#                 # Deactivate particle (Open, default)
-#                 else: 
-#                     pos[:, ii] *= 0.0
-#                     vel[:, ii] *= 0.0
-#                     idx[ii]    -= 128
-# =============================================================================
-    #print(N_lost[0, :], N_lost[1, :])
+                # Deactivate particle (Open, default)
+                else: 
+                    pos[:, ii] *= 0.0
+                    vel[:, ii] *= 0.0
+                    idx[ii]    -= 128
+                    
+    print(N_lost[0, :], N_lost[1, :])
     assign_weighting_CIC(pos, idx, Ie, W_elec)
     return
 
@@ -258,7 +254,7 @@ def locate_spare_indices(idx, N_needed, ii_first=0):
 
 def gamma_so(n, V, U):
     '''
-    Inbound flux: Phase space from 0->inf
+    Inbound flux: Phase space from 0->inf (verified)
     '''
     t1 = n * V / (2 * np.sqrt(np.pi))
     t2 = np.exp(- U ** 2 / V ** 2)
@@ -285,7 +281,7 @@ def find_root(vx, n, V, U, Rx):
     return gamma_s(vx, n, V, U) / gamma_so(n, V, U) - Rx    
 
 
-def inject_particles(pos, vel, idx, ni, Us, Pi, flux_rem, dt, pc):
+def inject_particles(pos, vel, idx, flux_rem, dt, pc):
     '''
     A lot of this might be able to be replaced with numpy random functions.
     
@@ -302,29 +298,38 @@ def inject_particles(pos, vel, idx, ni, Us, Pi, flux_rem, dt, pc):
         -- Randomize position in x up to dx/2. Depend on velocity? Or place
             particle just prior to boundary so it moves into simulation domain
             on position update
+            
+    Note: Removed moments as inputs, as we just want to test with t=0 moments
+    for now - i.e. initial density, bulk velocity, and Pressure Tensor. If this 
+    works, then we can do the moment measuring stuff later.
     '''
     import pdb
     print('Injecting particles...')
     end_cells = [ND, ND + NX - 1]
     
-    
     # For each boundary, use moments
     bb = 0; ii_last   = 0
     for ii in end_cells:
         for jj in range(Nj):
-            Ws  = 0.5 * mass[jj] * ni[ii, jj] * np.linalg.inv(Pi[ii, jj, :, :])
-            Cs  = ni[ii, jj] * np.sqrt(np.linalg.det(Ws)) / np.pi ** 1.5
-            Vsx = np.sqrt(2 * Pi[ii, jj, 0, 0] / (mass[jj] * ni[ii, jj]))
+            
+            # Moments specified at t = 0
+            ni  = density[jj]
+            Us  = np.array([drift_v[jj], 0.0, 0.0])
+            Pi  = Pi0
+            
+            Ws  = 0.5 * mass[jj] * ni * np.linalg.inv(Pi[jj, :, :])
+            Cs  = ni * np.sqrt(np.linalg.det(Ws)) / np.pi ** 1.5
+            Vsx = np.sqrt(2 * Pi[jj, 0, 0] / (mass[jj] * ni))
             
             # Find number of (sim) particles to inject
             
-            #maxwellian_flux      = dt * ni[ii, jj] * np.sqrt(2 * kB * (Tpar[jj] + 2*Tper[jj]) / (3*np.pi * mass[jj]))
+            #maxwellian_flux      = dt * ni * np.sqrt(2 * kB * (Tpar[jj] + 2*Tper[jj]) / (3*np.pi * mass[jj]))
             
-            integrated_flux      = gamma_so(ni[ii, jj], Vsx, Us[ii, jj, 0]) * dt
+            integrated_flux      = gamma_so(ni, Vsx, Us[0]) * dt
             total_flux           = integrated_flux + flux_rem[ii, jj]
             num_inject           = int(total_flux // n_contr[jj])
             flux_rem[ii, jj]     = total_flux % n_contr[jj]
-
+    
             pdb.set_trace()
 # =============================================================================
 #             new_indices, ii_last = locate_spare_indices(idx, N_lost[bb, jj], ii_last)

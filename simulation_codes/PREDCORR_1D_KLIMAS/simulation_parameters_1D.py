@@ -229,6 +229,11 @@ for jj in range(Tpar.shape[0]):
 particle_open = 0
 if particle_periodic + particle_reflect + particle_reinit == 0:
     particle_open = 1
+elif particle_reflect == 1 or particle_reinit == 1:
+    print('Only periodic or open boundaries supported, defaulting to open')
+    particle_reflect = particle_reinit = particle_periodic = 0
+    particle_open = 1
+
 
 
 #%%### INPUT TESTS AND CHECKS

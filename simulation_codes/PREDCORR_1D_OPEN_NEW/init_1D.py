@@ -15,10 +15,10 @@ import particles_1D as particles
 import fields_1D    as fields
 import sources_1D   as sources
 
-from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A, dist_type,  \
-                                     idx_start, idx_end, seed, vth_par, vth_perp, mass, drift_v,  \
+from simulation_parameters_1D import dx, NX, ND, NC, N, Nj, nsp_ppc, va, B_A, dist_type,  \
+                                     idx_start, idx_end, seed, vth_par, vth_perp, drift_v,  \
                                      qm_ratios, rc_hwidth, temp_type, Te0_scalar,\
-                                     ne, q, N_species, damping_multiplier, quiet_start, \
+                                     N_species, damping_multiplier, quiet_start, \
                                      xmin, xmax
 
 
@@ -430,8 +430,7 @@ def initialize_source_arrays():
     Ji      = np.zeros((NC, 3),        dtype=nb.float64)
     ni      = np.zeros((NC, Nj),       dtype=nb.float64)
     nu      = np.zeros((NC, Nj, 3),    dtype=nb.float64)
-    Pi      = np.zeros((NC, Nj, 3, 3), dtype=nb.float64)
-    return q_dens, q_dens2, Ji, ni, nu, Pi
+    return q_dens, q_dens2, Ji, ni, nu
 
 
 @nb.njit()
@@ -456,7 +455,6 @@ def initialize_tertiary_arrays():
     temp3De       = np.zeros((NC    , 3)     , dtype=nb.float64)
     temp1D        = np.zeros( NC             , dtype=nb.float64) 
     old_fields    = np.zeros((NC + 1, 10)    , dtype=nb.float64)
-    old_moments   = np.zeros((NC    , 13, Nj), dtype=nb.float64)
     flux_rem      = np.zeros((NC    , Nj)    , dtype=nb.float64)
     
     v_prime = np.zeros((3, N),      dtype=nb.float64)
@@ -465,7 +463,7 @@ def initialize_tertiary_arrays():
         
     old_particles = np.zeros((9, N),      dtype=nb.float64)
         
-    return old_particles, old_fields, old_moments, flux_rem, temp3De, temp3Db, temp1D, v_prime, S, T
+    return old_particles, old_fields, flux_rem, temp3De, temp3Db, temp1D, v_prime, S, T
 
 
 def set_timestep(vel, Te0):
