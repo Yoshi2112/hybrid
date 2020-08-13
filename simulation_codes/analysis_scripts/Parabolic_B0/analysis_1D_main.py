@@ -3107,7 +3107,6 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True):
      - Plot using either hexbin or hist2D
      
     Issue : Bins along v changing depending on time (how to set max/min bins? Specify arrays manually)
-    
     '''
     lt = ['x', 'y', 'z']
     print('Calculating distribution f(v) vs. x for species {},...'.format(jj))
@@ -3167,11 +3166,173 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True):
     return
 
 
+def find_the_particles(it_max=None):
+    '''
+    Check location and status of particles
+     - How many with -ve indices?
+     - How many outside sim domain?
+     - How many with zero velocity?
+     
+    '''
+    print('Finding particles')
+    if it_max is None:
+        it_max = len(os.listdir(cf.particle_dir))
+     
+    N_negative = np.zeros(it_max)
+    N_outside  = np.zeros(it_max)
+    N_still    = np.zeros(it_max)
+    
+    for xx in range(it_max):    
+        pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(xx)
+        
+        N_negative[xx] = (idx < 0).sum()
+        N_still[xx]    = (vel[0, :] == 0.0).sum()
+        for ii in range(idx.shape[0]):
+            if pos[0, ii] < cf.xmin:
+                N_outside[xx] += 1
+            elif pos[0, ii] > cf.xmax:
+                N_outside[xx] += 1
+                
+    # Do the plotting
+    filename = 'lost_particles.png'
+    plt.ioff()
+    
+    fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
+    
+    axes[0].plot(N_negative)
+    axes[0].set_ylabel('Negative')
+    
+    axes[1].plot(N_outside)
+    axes[1].set_ylabel('Outside')
+    
+    axes[2].plot(N_still)
+    axes[2].set_ylabel('Still')
+    
+    axes[0].set_title('Check particles')
+    axes[2].set_xlabel('Timestep')
+    axes[2].set_xlim(0, it_max)
+
+    fig.subplots_adjust(hspace=0.0)
+    
+    plt.savefig(cf.anal_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+    plt.close('all')
+    return
+
+
+def plot_sample(it_max=None, N_sample=1000):
+    print('Plotting sample of particles...')
+    if it_max is None:
+        it_max = len(os.listdir(cf.particle_dir))
+
+    save_dir = cf.anal_dir + '//Particle Sample//'
+    
+    vlim = [5, 20]
+    
+    if os.path.exists(save_dir) == False:
+            os.makedirs(save_dir)
+            
+    # Get sample of existing particles
+    sample_idx = np.zeros((cf.Nj, N_sample), dtype=int)
+    
+    pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(0)
+    
+    for jj in range(cf.Nj):
+        sample_idx[jj] = np.random.randint(idx_start[jj], idx_end[jj], N_sample)
+            
+    for ii in range(it_max):
+        
+        filename = 'particle_sample_{:05}'.format(ii)
+        
+        if os.path.exists(save_dir + filename + '.png') == True:
+            print('Particle data plot from p-file {} already exists.'.format(ii))
+            continue
+        else:
+            print('Plotting particle data from p-file {}'.format(ii))
+    
+        pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii)
+        
+        #v_mag = np.sqrt(vel[0] ** 2 + vel[1] ** 2 + vel[2] ** 2) / cf.va
+        
+        # Do the plotting
+        plt.ioff()
+        
+        fig, axes = plt.subplots(cf.Nj, figsize=(15, 10), sharex=True)
+        axes[0].set_title('Particle sample :: t = {:.3f}s :: x vs. vx'.format(ptime))
+        
+        for jj in range(cf.Nj):
+            #axes[jj].scatter(pos[0, sample_idx[jj]]/cf.dx, v_mag[sample_idx[jj]], c=cf.temp_color[jj], s=5, marker='x')
+            axes[jj].scatter(pos[0, sample_idx[jj]]/cf.dx, vel[0, sample_idx[jj]], c=cf.temp_color[jj], s=5, marker='x')
+
+            axes[jj].set_ylabel(cf.species_lbl[jj])
+            axes[jj].set_ylim(0, vlim[jj])
+            
+        axes[-1].set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
+        axes[-1].set_xlabel('x (dx)')
+
+        fig.subplots_adjust(hspace=0)
+        
+        plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        plt.close('all')
+    return
+
+
+def scatterplot_velocities(it_max=None):
+    print('Plotting sample of particles...')
+    if it_max is None:
+        it_max = len(os.listdir(cf.particle_dir))
+
+    save_dir = cf.anal_dir + '//velocity_scatterplots//'
+    
+    if os.path.exists(save_dir) == False:
+            os.makedirs(save_dir)
+            
+    ptime_sec, pbx, pby, pbz, pex, pey, pez, pvex, pvey,\
+    pvez, pte, pjx, pjy, pjz, pqdens = cf.interpolate_fields_to_particle_time(it_max)
+    
+    for ii in range(it_max):
+        print('Plotting particle data from p-file {}'.format(ii))
+        filename = 'velocity_scatterplot_{:05}'.format(ii)
+
+        pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii)
+        v_perp = np.sqrt(vel[1, :] ** 2 + vel[2, :] ** 2) * np.sign(vel[2, :])
+        # Do the plotting
+        plt.ioff()
+        
+        fig, axes = plt.subplots(4, figsize=(15, 10), sharex=True)
+        axes[0].set_title('All particles :: t = {:.3f}s :: x vs. vx'.format(ptime))
+        
+        axes[0].scatter(pos[0, :]/cf.dx, vel[0, :]/cf.va, c='k', s=1)
+        axes[0].set_ylabel('$v_\parallel$')
+        
+        axes[1].scatter(pos[0, :]/cf.dx, v_perp/cf.va, c='k', s=1)
+        axes[1].set_ylabel('$v_\perp$')
+        
+        axes[0].set_ylim(-15, 15)
+        axes[1].set_ylim(-15, 15) 
+        
+        axes[-1].set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
+        axes[-1].set_xlabel('x (dx)')
+        
+        axes[2].plot(cf.E_nodes/cf.dx, pjx[ii])
+        axes[2].set_ylabel('$J_x$', rotation=0)
+        axes[2].set_ylim(pjx.min(), pjx.max())
+        
+        axes[3].plot(cf.E_nodes/cf.dx, pqdens[ii])
+        axes[3].set_ylabel('dens')
+        axes[3].set_ylim(pqdens.min(), pqdens.max())
+
+        fig.subplots_adjust(hspace=0)
+        
+        plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        plt.close('all')
+    return
+
+
 ##%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
 
-    for series in ['open_flux_test']:
+    for series in ['klimas_test_new']:
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -3185,13 +3346,15 @@ if __name__ == '__main__':
 #             standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
 # =============================================================================
             
-        for run_num in range(num_runs):
+        for run_num in [2]:#range(num_runs):
             print('\nRun {}'.format(run_num))
             cf.load_run(drive, series, run_num, extract_arrays=True)
-            
+            scatterplot_velocities()
+            #plot_sample(N_sample=1000)
+            #find_the_particles(it_max=None)
             #summary_plots(save=True, histogram=True)
-            for sp in range(2):
-                plot_vi_vs_x(it_max=None, jj=sp, save=True)
+            #for sp in range(2):
+            #    plot_vi_vs_x(it_max=None, jj=sp, save=True)
         
         #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
         #check_fields()

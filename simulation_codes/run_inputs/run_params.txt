@@ -1,6 +1,6 @@
 DRIVE					F:
 SAVE_PATH				/runs/klimas_test_new/
-RUN						0
+RUN						2
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
 SEED					3216587
@@ -16,9 +16,9 @@ SOURCE_SMOOTHING_FLAG	0
 E_DAMPING_FLAG			0
 QUIET_START_FLAG		1
 DAMPING_MULTIPLIER		1.0
-NX 						128
-ND 						32
-MAX_REV					100
+NX 						16
+ND 						4
+MAX_REV					50
 DXM						1.0
 L						5.35
 R_A						120e3
@@ -28,6 +28,6 @@ B_EQ					-
 RC_HWIDTH				-
 GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02
-PARTICLE_DUMP_FREQ		0.25
+PARTICLE_DUMP_FREQ		0.05
 FIELD_DUMP_FREQ			0.10
-Testing the Klimas open boundary condition again, since it's probably the easiest to do. This is just the particles, no waves (looking at moments only).
+Testing the Klimas open boundary condition. No waves, testing the Birdsall and Langdon Reverse-Radix approach.

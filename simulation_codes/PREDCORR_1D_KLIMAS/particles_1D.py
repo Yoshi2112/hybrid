@@ -9,6 +9,7 @@ import numpy as np
 from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios,\
                                         B_eq, a, particle_periodic, nsp_ppc
 from   sources_1D                import collect_velocity_moments, collect_position_moment
+import sys
 
 from fields_1D import eval_B0x
 
@@ -26,17 +27,9 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, 
     
     Maybe maths this later on? How did Verbonceur (2005) get around this?
     '''
-    
-    #print('APAM   Calling velocity function')
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, temp_N, DT)
-    
-    #print('APAM   Calling position function')
     position_update(pos, vel, idx, Ep, DT, Ie, W_elec)  
-    
-    #print('APAM   Calling moment (vel) function')
     collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji)
-    
-    #print('APAM   Calling moment (pos) function')
     collect_position_moment(pos, Ie, W_elec, idx, q_dens_adv, ni)
     return
 
@@ -235,38 +228,36 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
     OR: Generate array of disabled indices at each timestep and call that instead of
     searching each time.
     '''
-    #print('POSN   Saving old, pushing new')
     pos_old[:, :] = pos
     
     pos[0, :] += vel[0, :] * DT
     pos[1, :] += vel[1, :] * DT
     pos[2, :] += vel[2, :] * DT
     
-    #print('POSN   Starting boundary check')
-    if particle_periodic == True:
+    if particle_periodic == 1:
         for ii in nb.prange(pos.shape[1]):           
             if pos[0, ii] > xmax:
                 pos[0, ii] += xmin - xmax
             elif pos[0, ii] < xmin:
                 pos[0, ii] += xmax - xmin  
     else:
-        #print('POSN   Removing exited particles')
         # Disable loop: Remove particles that leave the simulation space
-        # Count how many left, and store their indices
+        n_deleted = 0
         for ii in nb.prange(pos.shape[1]):
             if (pos[0, ii] < xmin or pos[0, ii] > xmax):
                 pos[:, ii] *= 0.0
                 vel[:, ii] *= 0.0
-                idx[ii]    -= 128
+                idx[ii]     = -1
+                n_deleted  += 1
         
-        #print('POSN   Checking number of spare particles')
         num_spare = (idx < 0).sum()
         if num_spare < 2 * nsp_ppc.sum():
-            print('WARNING :: Less than two cells worth of spare particles remaining.')
-            # Could also put something here to end simulation if num_spare reaches zero.
+            #print('WARNING :: Less than two cells worth of spare particles remaining.')
+            if num_spare == 0:
+                print('WARNING :: No space particles remaining. Exiting simulation.')
+                raise IndexError
         
-        #print('POSN   Checking boundary cells for flux')
-        acc = 0
+        acc = 0; n_created = 0
         for ii in nb.prange(pos.shape[1]):
             # If particle goes from cell 1 to cell 2
             if (pos_old[0, ii] < xmin + dx):
@@ -283,7 +274,8 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
                     pos[1, kk] = pos[1, ii]
                     pos[2, kk] = pos[2, ii]
                     vel[:, kk] = vel[:, ii]
-                    idx[kk]   += 128
+                    idx[kk]    = idx[ii]
+                    n_created += 1
             
             # If particle goes from cell NX to cell NX - 1
             elif (pos_old[0, ii] > xmax - dx):
@@ -300,8 +292,9 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
                     pos[1, kk] = pos[1, ii]
                     pos[2, kk] = pos[2, ii]
                     vel[:, kk] = vel[:, ii]
-                    idx[kk]   += 128
+                    idx[kk]    = idx[ii]
+                    n_created += 1
    
-    #print('POSN   Assigning TSC Weights')
+    #print(n_created, 'created  ;  ', n_deleted, 'deleted')
     assign_weighting_TSC(pos, idx, Ie, W_elec)
     return

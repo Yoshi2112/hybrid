@@ -34,10 +34,10 @@ def collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji):
     nu     *= 0.
     # Deposit average velocity across all cells :: First moment
     for ii in nb.prange(vel.shape[1]):
-        I   = Ie[ii]
-        sp  = idx[ii]
+        if idx[ii] >= 0:
+            I   = Ie[ii]
+            sp  = idx[ii]
         
-        if sp >= 0:
             for kk in range(3):
                 nu[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
                 nu[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
@@ -108,10 +108,10 @@ def collect_position_moment(pos, Ie, W_elec, idx, q_dens, ni):
     
     # Deposit macroparticle moment on grid
     for ii in nb.prange(Ie.shape[0]):
-        I   = Ie[ii]
-        sp  = idx[ii]
+        if idx[ii] >= 0:
+            I   = Ie[ii]
+            sp  = idx[ii]
         
-        if sp >= 0:
             ni[I,     sp] += W_elec[0, ii]
             ni[I + 1, sp] += W_elec[1, ii]
             ni[I + 2, sp] += W_elec[2, ii]

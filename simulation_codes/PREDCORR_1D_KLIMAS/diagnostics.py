@@ -2578,12 +2578,12 @@ def test_particle_open_boundary_fluxes():
     Just for testing boundary fluxes
     '''   
     print('Testing boundary fluxes')
-    jj = 1
-    # Initialize arrays
-    Np     = 20
-    N_init = 2*Np
     
-    idx      = np.zeros(N_init, dtype=int)
+    # Initialize arrays
+    Np     = 10
+    N_init = 10*Np
+    
+    idx      = np.ones(N_init, dtype=int) * -1
     W_elec   = np.zeros((3, N_init))
     W_mag    = np.zeros((3, N_init))
     Ep       = np.zeros((3, N_init))
@@ -2594,31 +2594,37 @@ def test_particle_open_boundary_fluxes():
     Ie       = np.zeros(N_init, dtype=int)
     Ib       = np.zeros(N_init, dtype=int)
     qmi      = np.zeros(N_init)
-    idx[Np:] = jj - 128
     
-    B_test = np.zeros((const.NC + 1, 3), dtype=np.float64) 
-    E_test = np.zeros((const.NC, 3),     dtype=np.float64) 
+    B_test   = np.zeros((const.NC + 1, 3), dtype=np.float64) 
+    E_test   = np.zeros((const.NC, 3),     dtype=np.float64) 
     
-    vel    = np.zeros((3, N_init), dtype=np.float64)
-    pos    = np.zeros((3, N_init), dtype=np.float64)
-    
-    sf_par = np.sqrt(const.kB * const.Tpar[jj] / const.mass[jj])
-    sf_per = np.sqrt(const.kB * const.Tper[jj] / const.mass[jj])
-    
-    vel[0, :Np] = np.random.normal(0.0, sf_par, Np)
-    vel[1, :Np] = np.random.normal(0.0, sf_per, Np)
-    vel[2, :Np] = np.random.normal(0.0, sf_per, Np)
-    
-    pos[0, :Np] = np.random.uniform(const.xmin, const.xmax, Np)
+    vel      = np.zeros((3, N_init), dtype=np.float64)
+    pos      = np.zeros((3, N_init), dtype=np.float64)
+        
+# =============================================================================
+#     vel[0, :Np] = np.random.normal(0.0, const.vth_par[ jj], Np)
+#     vel[1, :Np] = np.random.normal(0.0, const.vth_perp[jj], Np)
+#     vel[2, :Np] = np.random.normal(0.0, const.vth_perp[jj], Np)
+#     
+#     pos[0, :Np] = np.random.uniform(const.xmin, const.xmax, Np)
+# =============================================================================
 
-    # Set initial Larmor radius - rL from v_perp, distributed to y,z based on velocity gyroangle
-    print('Initializing particles off-axis')
-    B0x     = fields.eval_B0x(pos[0, :Np])
-    v_perp  = np.sqrt(vel[1, :Np] ** 2 + vel[2, :Np] ** 2)
-    gyangle = init.get_gyroangle_array(vel[:, :Np])
-    rL      = v_perp / (const.qm_ratios[idx[:Np]] * B0x)
-    pos[1, :Np]  = rL * np.cos(gyangle)
-    pos[2, :Np]  = rL * np.sin(gyangle)
+    pos[0, 0] = const.xmin + const.dx / 2.0
+    vel[0, 0] = const.va * 10.0
+    
+    pos[0, 1] = const.xmin + const.dx * 2.0
+    vel[0, 1] = const.va * -10.0
+    
+    pos[0, 2] = const.xmax - const.dx * 2.0
+    vel[0, 2] = const.va * 10.0
+    
+    pos[0, 3] = const.xmax - const.dx / 2.0
+    vel[0, 3] = const.va * -10.0
+    
+    idx[0] = 1
+    idx[1] = 1
+    idx[2] = 1
+    idx[3] = 1
 
     # Initial quantities
     ion_ts   = const.orbit_res / const.gyfreq
@@ -2633,19 +2639,63 @@ def test_particle_open_boundary_fluxes():
     particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B_test, E_test, v_prime, S, T, qmi, -0.5*DT)
     
     # Record initial values
-    tt = 0; t_total = 0
+    tt = 0; t_total = 0; max_inc=200
     while tt < max_inc - 1:
-        plot_scatter_and_save(pos, vel, idx, tt)
-        
+
+        #plot_scatter_and_save(pos, vel, idx, tt)
+
         tt      += 1
         t_total += DT
         
+        #save_boundary_diagnostics(pos[0]/const.dx, vel[0]/const.va, idx, tt)
+        if tt > 87:
+            db_pos = pos.T.copy()/const.dx
+            db_vel = vel.T.copy()/const.va
+            db_idx = idx.copy()
+            print(db_idx[6: 8], db_pos[6:8, 0], db_vel[6:8, 0])
+            pdb.set_trace()
         particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B_test, E_test, v_prime, S, T, qmi, DT)
         particles.position_update(pos, vel, idx, Ep, DT, Ie, W_elec)
-        #pdb.set_trace()
+        
+        
+        
+# =============================================================================
+#         if tt > 50:
+#             pdb.set_trace()
+# =============================================================================
+# =============================================================================
+#             db_pos = pos.T.copy()/const.dx
+#             db_vel = vel.T.copy()/const.va
+#             db_idx = idx.copy()
+#             pdb.set_trace()
+# =============================================================================
     return
 
-
+def save_boundary_diagnostics(pos, vel, idx, ii):
+    print('Saving to file')
+    save_dir = const.drive + '//' + const.save_path + '//DIAGNOSTICS_TEXT//'
+    
+    if os.path.exists(save_dir) == False:
+        os.makedirs(save_dir)
+        
+    with open(save_dir + 'pos.txt', 'a') as pos_file:  
+        pos_file.write('{:<5}'.format(ii))
+        for val in pos:
+            pos_file.write('{:6.2f}'.format(val))
+        pos_file.write('\n')
+        
+    with open(save_dir + 'vel.txt', 'a') as vel_file:  
+        vel_file.write('{:<5}'.format(ii))
+        for val in vel:
+            vel_file.write('{:6.2f}'.format(val))
+        vel_file.write('\n')
+        
+    with open(save_dir + 'idx.txt', 'a') as idx_file:  
+        idx_file.write('{:<5}'.format(ii))
+        for val in idx:
+            idx_file.write('{:3}'.format(val))
+        idx_file.write('\n')
+    return
 
 def plot_scatter_and_save(pos, vel, idx, ii):   
     print('Saving phase space plot {}'.format(ii))
@@ -2653,6 +2703,9 @@ def plot_scatter_and_save(pos, vel, idx, ii):
     
     if os.path.exists(save_dir) == False:
         os.makedirs(save_dir)
+        
+    n_active   = (idx >= 0).sum()
+    n_disabled = (idx < 0).sum()
         
     plt.ioff()
     fig, ax = plt.subplots(figsize=(15, 10))
@@ -2663,6 +2716,7 @@ def plot_scatter_and_save(pos, vel, idx, ii):
     ax.scatter(plot_pos/const.dx, plot_vel/const.va, c='k')
     ax.set_xlim(const.xmin/const.dx, const.xmax/const.dx)
     ax.set_ylim(-20, 20)
+    ax.set_title('Open Boundary Test :: Active {} :: Disabled {}'.format(n_active, n_disabled))
     
     for node in const.B_nodes:
         ax.axvline(node / const.dx, c='k', alpha=0.5, ls=':')
@@ -2758,6 +2812,9 @@ if __name__ == '__main__':
     #check_directions()
     #plot_dipole_field_line(length=True)
     test_particle_open_boundary_fluxes()
+    
+    
+    
 # =============================================================================
 #     init_pos, init_vel, time, pos_history, vel_history, mag_history,\
 #         DT, max_t, POS_gphase, VEL_gphase = do_particle_run(max_rev=1, v_mag=10.0, pitch=41.0, dt_mult=1.0)

@@ -15,7 +15,35 @@ import fields_1D    as fields
 from simulation_parameters_1D import dx, NX, ND, NC, N, Nj, nsp_ppc, va, B_A,  \
                                      idx_start, seed, vth_par, vth_perp, drift_v,  \
                                      qm_ratios, rc_hwidth, temp_type, Te0_scalar,\
-                                     damping_multiplier, quiet_start
+                                     damping_multiplier, quiet_start, N_species, xmax,idx_end
+                           
+                            
+def rkbr_uniform_set(arr, base=2):
+    '''
+    Works on array arr to produce fractions in (0, 1) by 
+    traversing base k.
+    
+    Will support arrays of lengths up to at least a billion
+     -- But this is super inefficient, takes up to a minute with 2 million
+    '''
+    def reverse_slicing(s):
+        return s[::-1]
+    
+    # Convert ints to base k strings
+    str_arr = np.zeros(arr.shape[0], dtype='U30')
+    dec_arr = np.zeros(arr.shape[0], dtype=float)
+    for ii in range(arr.shape[0]):
+        str_arr[ii] = np.base_repr(arr[ii], base)   # Returns strings
+
+    # Reverse string order and convert to decimal, treating as base k fraction (i.e. with 0. at front)
+    for ii in range(arr.shape[0]):
+        rev = reverse_slicing(str_arr[ii])
+
+        dec_val = 0
+        for jj in range(len(rev)):
+            dec_val += float(rev[jj]) * (base ** -(jj + 1))
+        dec_arr[ii] = dec_val
+    return dec_arr 
 
 
 @nb.njit()
@@ -217,6 +245,157 @@ def uniform_gaussian_distribution_quiet():
 
 
 @nb.njit()
+def uniform_gaussian_distribution_ultra_quiet():
+    '''Creates an N-sampled normal distribution across all particle species within each simulation cell
+
+    OUTPUT:
+        pos -- 3xN array of particle positions. Pos[0] is uniformly distributed with boundaries depending on its temperature type
+        vel -- 3xN array of particle velocities. Each component initialized as a Gaussian with a scale factor determined by the species perp/para temperature
+        idx -- N   array of particle indexes, indicating which species it belongs to. Coded as an 8-bit signed integer, allowing values between +/-128
+    
+    Same as UGD_Q() but with 4 particles at each spatial point instead of two. This balances it in 
+    vx as well as vy (at least initially) and should allow for flux to be more equal?
+    '''
+    pos = np.zeros((3, N), dtype=np.float64)
+    vel = np.zeros((3, N), dtype=np.float64)
+    idx = np.ones(N,       dtype=np.int8) * -1 # Start all particles as disabled (idx < 0)
+    np.random.seed(seed)
+    
+    for jj in range(Nj):
+        quart_n = nsp_ppc[jj] // 4                    # Quarter of particles per cell - quaded later
+        if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
+            NC_load = NX
+        else:
+            if rc_hwidth == 0 or rc_hwidth > NX//2:   # Need to change this to be something like the FWHM or something
+                NC_load = NX
+            else:
+                NC_load = 2*rc_hwidth
+        
+        # Load particles in each applicable cell
+        acc = 0; offset  = 0
+        for ii in range(NC_load):
+            # Add particle if last cell (for symmetry)
+            if ii == NC_load - 1:
+                quart_n += 1
+                offset   = 1
+                
+            # Particle index ranges
+            st = idx_start[jj] + acc
+            en = idx_start[jj] + acc + quart_n
+            
+            # Set position for half: Analytically uniform
+            for kk in range(quart_n):
+                pos[0, st + kk] = dx*(float(kk) / (quart_n - offset) + ii)
+            
+            # Turn [0, NC] distro into +/- NC/2 distro
+            pos[0, st: en]-= NC_load*dx/2              
+            
+            # Set velocity for half: Randomly Maxwellian
+            vel[0, st: en] = np.random.normal(0, vth_par[jj],  quart_n) +  drift_v[jj]
+            vel[1, st: en] = np.random.normal(0, vth_perp[jj], quart_n)
+            vel[2, st: en] = np.random.normal(0, vth_perp[jj], quart_n)
+            idx[   st: en] = jj          # Turn particle on
+            
+            # Set Loss Cone Distribution: Reinitialize particles in loss cone (move to a function)
+            if const.homogenous == False and temp_type[jj] == 1:
+                LCD_by_rejection(pos, vel, st, en, jj)
+                
+            # Quiet start : Initialize second half of v_perp
+            vel[0, en: en + quart_n] = vel[0, st: en] *  1.0         # Set parallel
+            pos[0, en: en + quart_n] = pos[0, st: en]                # Other half, same position
+            vel[1, en: en + quart_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
+            vel[2, en: en + quart_n] = vel[2, st: en] * -1.0
+            idx[   en: en + quart_n] = jj                            # Turn particle on
+            
+            # Quieter start : Initialize second half of v_para
+            en2 = en + quart_n
+            vel[0, en2: en2 + 2*quart_n] = vel[0, st: en2] *  -1.0   # Set anti-parallel
+                
+            pos[0, en2: en2 + 2*quart_n] = pos[0, st: en2]           # Same positions
+            vel[1, en2: en2 + 2*quart_n] = vel[1, st: en2]           # Same perpendicular velocities
+            vel[2, en2: en2 + 2*quart_n] = vel[2, st: en2]
+            idx[   en2: en2 + 2*quart_n] = jj                        # Turn particle on
+            
+            acc                     += quart_n * 4
+
+    # Set initial Larmor radius - rL from v_perp, distributed to y,z based on velocity gyroangle
+    print('Initializing particles off-axis')
+    B0x          = fields.eval_B0x(pos[0, :acc])
+    v_perp       = np.sqrt(vel[1, :acc] ** 2 + vel[2, :acc] ** 2)
+    gyangle      = get_gyroangle_array(vel[:, :acc])
+    rL           = v_perp / (qm_ratios[idx[:acc]] * B0x)
+    pos[1, :acc] = rL * np.cos(gyangle)
+    pos[2, :acc] = rL * np.sin(gyangle)
+    
+    return pos, vel, idx
+
+
+def bit_reversed_quiet():
+    '''
+    Creates an N-sampled normal distribution across all particle species within each simulation cell
+
+    OUTPUT:
+        pos -- 3xN array of particle positions. Pos[0] is uniformly distributed with boundaries depending on its temperature type
+        vel -- 3xN array of particle velocities. Each component initialized as a Gaussian with a scale factor determined by the species perp/para temperature
+        idx -- N   array of particle indexes, indicating which species it belongs to. Coded as an 8-bit signed integer, allowing values between +/-128
+    
+    New function using analytic loadings and reverse-radix shuffling.
+    TO DO:
+        -- Check with particle plots, is this random enough?
+        -- Do a run to see if it fixes boundaries
+        -- At some point, have to load loss cone distribution
+    '''
+    pos = np.zeros((3, N), dtype=np.float64)
+    vel = np.zeros((3, N), dtype=np.float64)
+    idx = np.ones(N,       dtype=np.int8) * -1
+    
+    for jj in range(Nj):
+        half_n = N_species[jj] // 2                     # Half particles of species - doubled later
+                
+        st = idx_start[jj]
+        en = idx_start[jj] + half_n
+        
+        # Set position
+        for kk in range(half_n):
+            pos[0, st + kk] = 2*xmax*(float(kk) / (half_n - 1))
+        pos[0, st: en]-= xmax              
+        
+        # Set velocity for half: Randomly Maxwellian
+        arr     = np.arange(half_n)
+        
+        R_vr    = rkbr_uniform_set(arr+1, base=2)
+        R_theta = rkbr_uniform_set(arr  , base=3) 
+        R_vrx   = rkbr_uniform_set(arr+1, base=5)
+            
+        vr      = vth_perp[jj] * np.sqrt(-2 * np.log(R_vr ))
+        vrx     = vth_par[ jj] * np.sqrt(-2 * np.log(R_vrx))
+        theta   = R_theta * np.pi * 2
+
+        vel[0, st: en] = vrx * np.sin(theta) +  drift_v[jj]
+        vel[1, st: en] = vr  * np.sin(theta)
+        vel[2, st: en] = vr  * np.cos(theta)
+        idx[   st: en] = jj
+            
+        pos[0, en: en + half_n] = pos[0, st: en]                # Other half, same position
+        vel[0, en: en + half_n] = vel[0, st: en] *  1.0         # Set parallel
+        vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
+        vel[2, en: en + half_n] = vel[2, st: en] * -1.0
+        
+        idx[st: idx_end[jj]] = jj
+        
+
+    # Set initial Larmor radius - rL from v_perp, distributed to y,z based on velocity gyroangle
+    print('Initializing particles off-axis')
+    B0x         = fields.eval_B0x(pos[0, :en])
+    v_perp      = np.sqrt(vel[1, :en] ** 2 + vel[2, :en] ** 2)
+    gyangle     = get_gyroangle_array(vel[:, :en])
+    rL          = v_perp / (qm_ratios[idx[:en]] * B0x)
+    pos[1, :en] = rL * np.cos(gyangle)
+    pos[2, :en] = rL * np.sin(gyangle)
+    return pos, vel, idx
+
+
+#@nb.njit()
 def initialize_particles():
     '''Initializes particle arrays.
     
@@ -232,7 +411,8 @@ def initialize_particles():
         W_mag  -- Initial particle weights on B-grid
         idx    -- Particle type index
     '''
-    pos, vel, idx = uniform_gaussian_distribution_quiet()
+    #pos, vel, idx = uniform_gaussian_distribution_quiet()
+    pos, vel, idx = bit_reversed_quiet()
 
     Ie         = np.zeros(N, dtype=np.uint16)
     Ib         = np.zeros(N, dtype=np.uint16)
@@ -404,3 +584,23 @@ def set_timestep(vel, Te0):
 
     print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))
     return DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array
+
+
+if __name__ == '__main__':
+    import matplotlib.pyplot as plt
+    from simulation_parameters_1D import idx_end, temp_color
+    
+    POS, VEL, IDX = bit_reversed_quiet()
+    
+    V_PARA = VEL[0]
+    V_PERP = np.sqrt(VEL[2]**2 + VEL[1]**2) * np.sign(VEL[2])
+    
+    for jj in range(Nj):
+        fig, ax = plt.subplots()
+        ax.scatter(V_PARA[idx_start[jj]: idx_end[jj]], V_PERP[idx_start[jj]: idx_end[jj]],
+                   c=temp_color[jj], s=1)
+        
+        ax.axhline(0, c='k', alpha=0.2)
+        ax.axvline(0, c='k', alpha=0.2)
+        
+    plt.show()
