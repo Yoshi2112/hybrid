@@ -2639,21 +2639,27 @@ def test_particle_open_boundary_fluxes():
     particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B_test, E_test, v_prime, S, T, qmi, -0.5*DT)
     
     # Record initial values
-    tt = 0; t_total = 0; max_inc=200
+    tt = 0; t_total = 0; max_inc=400
     while tt < max_inc - 1:
 
-        #plot_scatter_and_save(pos, vel, idx, tt)
+        plot_scatter_and_save(pos, vel, idx, tt)
 
         tt      += 1
         t_total += DT
         
-        #save_boundary_diagnostics(pos[0]/const.dx, vel[0]/const.va, idx, tt)
-        if tt > 87:
-            db_pos = pos.T.copy()/const.dx
-            db_vel = vel.T.copy()/const.va
-            db_idx = idx.copy()
-            print(db_idx[6: 8], db_pos[6:8, 0], db_vel[6:8, 0])
-            pdb.set_trace()
+# =============================================================================
+#         db_pos = pos.T.copy()/const.dx
+#         db_vel = vel.T.copy()/const.va
+#         db_idx = idx.copy()
+# =============================================================================
+            
+        save_boundary_diagnostics(pos[0]/const.dx, vel[0]/const.va, idx, tt)
+# =============================================================================
+#         if tt > 87:
+#             print(db_idx[6: 8], db_pos[6:8, 0], db_vel[6:8, 0])
+#             pdb.set_trace()
+# =============================================================================
+            
         particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B_test, E_test, v_prime, S, T, qmi, DT)
         particles.position_update(pos, vel, idx, Ep, DT, Ie, W_elec)
         

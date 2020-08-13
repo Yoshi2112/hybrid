@@ -227,6 +227,12 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
     
     OR: Generate array of disabled indices at each timestep and call that instead of
     searching each time.
+    
+    IDEA: INSTEAD OF STORING POS_OLD, USE Ie INSTEAD, SINCE IT STORES THE CLOSEST
+    CELL CENTER - IF IT WAS IN LHS BOUNDARY CELL Ie[ii] == ND (+1?)
+    
+    I THINK I FIXED THE ERROR :: POOR SPECIFICATION OF WHETHER OR NOT THE PARTICLE WAS
+    IN CELL 2 OR NOT.
     '''
     pos_old[:, :] = pos
     
@@ -261,7 +267,7 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
         for ii in nb.prange(pos.shape[1]):
             # If particle goes from cell 1 to cell 2
             if (pos_old[0, ii] < xmin + dx):
-                if (pos[0, ii] >= xmin + dx):
+                if (pos[0, ii] >= xmin + dx) and (pos[0, ii] <= xmin + 2*dx):
                     
                     # Find first negative idx to initialize as new particle
                     for kk in nb.prange(acc, pos.shape[1]):
@@ -279,7 +285,7 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
             
             # If particle goes from cell NX to cell NX - 1
             elif (pos_old[0, ii] > xmax - dx):
-                if pos[0, ii] <= xmax - dx:
+                if (pos[0, ii] <= xmax - dx) and (pos[0, ii] > xmax - 2*dx):
                     
                     # Find first negative idx to initialize as new particle
                     for kk in nb.prange(acc, pos.shape[1]):
