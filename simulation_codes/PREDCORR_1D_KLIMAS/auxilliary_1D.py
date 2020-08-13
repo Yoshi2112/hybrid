@@ -144,19 +144,19 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     If no saves, steps_to_go = max_inc
     '''
     # Check timestep
-    print('MAIN   Checking timestep')
+    #print('MAIN   Checking timestep')
     qq, DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array   \
     = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, Ep, Bp, \
                      v_prime, S, T,temp_N, qq, DT, max_inc, part_save_iter, \
                      field_save_iter, idx, B_damping_array, E_damping_array)
     
     # Move particles, collect moments
-    print('MAIN   Advancing particles/moments')
+    #print('MAIN   Advancing particles/moments')
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
                                             B, E_int, DT, q_dens_adv, Ji, ni, nu)
     
     # Average N, N + 1 densities (q_dens at N + 1/2)
-    print('MAIN   Averaging density')
+    #print('MAIN   Averaging density')
     q_dens *= 0.5
     q_dens += 0.5 * q_dens_adv
     
