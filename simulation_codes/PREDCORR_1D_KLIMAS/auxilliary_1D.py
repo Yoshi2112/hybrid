@@ -11,7 +11,7 @@ import particles_1D as particles
 import fields_1D    as fields
 import init_1D      as init
 
-from simulation_parameters_1D import dx, NC, NX, ND, qm_ratios, freq_res, orbit_res, E_nodes
+from simulation_parameters_1D import dx, NC, NX, ND, qm_ratios, freq_res, orbit_res, E_nodes, disable_waves
 
 @nb.njit()
 def cross_product(A, B, C):
@@ -144,73 +144,79 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     If no saves, steps_to_go = max_inc
     '''
     # Check timestep
-    qq, DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array \
-    = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, Ep, Bp, v_prime, S, T,temp_N,\
-                     qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array, E_damping_array)
+    print('MAIN   Checking timestep')
+    qq, DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array   \
+    = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, Ep, Bp, \
+                     v_prime, S, T,temp_N, qq, DT, max_inc, part_save_iter, \
+                     field_save_iter, idx, B_damping_array, E_damping_array)
     
     # Move particles, collect moments
+    print('MAIN   Advancing particles/moments')
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
                                             B, E_int, DT, q_dens_adv, Ji, ni, nu)
     
     # Average N, N + 1 densities (q_dens at N + 1/2)
+    print('MAIN   Averaging density')
     q_dens *= 0.5
     q_dens += 0.5 * q_dens_adv
     
-    # Push B from N to N + 1/2
-    fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
+    if disable_waves == 1:
+        # Push B from N to N + 1/2
+        fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
+        
+        # Calculate E at N + 1/2
+        fields.calculate_E(B, Ji, q_dens, E_half, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
     
-    # Calculate E at N + 1/2
-    fields.calculate_E(B, Ji, q_dens, E_half, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
+        ###################################
+        ### PREDICTOR CORRECTOR SECTION ###
+        ###################################
 
-    ###################################
-    ### PREDICTOR CORRECTOR SECTION ###
-    ###################################
-
-    # Store old values
-    old_particles[0:3 , :] = pos
-    old_particles[3:6 , :] = vel
-    old_particles[6   , :] = Ie
-    old_particles[7:10, :] = W_elec
-    old_particles[10  , :] = idx
+        # Store old values
+        old_particles[0:3 , :] = pos
+        old_particles[3:6 , :] = vel
+        old_particles[6   , :] = Ie
+        old_particles[7:10, :] = W_elec
+        old_particles[10  , :] = idx
+        
+        old_fields[:,   0:3]  = B
+        old_fields[:NC, 3:6]  = Ji
+        old_fields[:NC, 6:9]  = Ve
+        old_fields[:NC,   9]  = Te
+        
+        # Predict fields
+        E_int *= -1.0
+        E_int +=  2.0 * E_half
+        
+        fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
     
-    old_fields[:,   0:3]  = B
-    old_fields[:NC, 3:6]  = Ji
-    old_fields[:NC, 6:9]  = Ve
-    old_fields[:NC,   9]  = Te
+        # Advance particles to obtain source terms at N + 3/2
+        particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
+                                                B, E_int, DT, q_dens, Ji, ni, nu, pc=1)
+        
+        # Average N + 1, N + 2 densities (q_dens at N + 3/2)
+        q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
+        
+        # Compute predicted fields at N + 3/2
+        fields.push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
+        fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
+        
+        # Determine corrected fields at N + 1 
+        E_int *= 0.5;    E_int += 0.5 * E_half
     
-    # Predict fields
-    E_int *= -1.0
-    E_int +=  2.0 * E_half
+        # Restore old values: [:] allows reference to same memory (instead of creating new, local instance)
+        pos[:]    = old_particles[0:3 , :]
+        vel[:]    = old_particles[3:6 , :]
+        Ie[:]     = old_particles[6   , :]
+        W_elec[:] = old_particles[7:10, :]
+        idx[:]    = old_particles[10  , :]
+        
+        B[:]      = old_fields[:,   0:3]
+        Ji[:]     = old_fields[:NC, 3:6]
+        Ve[:]     = old_fields[:NC, 6:9]
+        Te[:]     = old_fields[:NC,   9]
+        
+        fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
     
-    fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
-
-    # Advance particles to obtain source terms at N + 3/2
-    particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
-                                            B, E_int, DT, q_dens, Ji, ni, nu, pc=1)
-    
-    q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
-    
-    # Compute predicted fields at N + 3/2
-    fields.push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
-    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
-    
-    # Determine corrected fields at N + 1 
-    E_int *= 0.5;    E_int += 0.5 * E_half
-
-    # Restore old values: [:] allows reference to same memory (instead of creating new, local instance)
-    pos[:]    = old_particles[0:3 , :]
-    vel[:]    = old_particles[3:6 , :]
-    Ie[:]     = old_particles[6   , :]
-    W_elec[:] = old_particles[7:10, :]
-    idx[:]    = old_particles[10  , :]
-    
-    B[:]      = old_fields[:,   0:3]
-    Ji[:]     = old_fields[:NC, 3:6]
-    Ve[:]     = old_fields[:NC, 6:9]
-    Te[:]     = old_fields[:NC,   9]
-    
-    fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
-
-    q_dens[:] = q_dens_adv
+        q_dens[:] = q_dens_adv
 
     return qq, DT, max_inc, part_save_iter, field_save_iter

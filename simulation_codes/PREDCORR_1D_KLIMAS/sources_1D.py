@@ -30,6 +30,7 @@ def collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji):
     get overwritten anyway. For now just leave it because I +/- 1 is simpler
     to visualise, check, and code
     '''
+    epsilon = 1e-3
     nu     *= 0.
     # Deposit average velocity across all cells :: First moment
     for ii in nb.prange(vel.shape[1]):
@@ -43,15 +44,25 @@ def collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji):
                 nu[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
                 
             # Simulate virtual particles in boundary ghost cells
-            # Same position but dx further forward or behind
-            if abs(pos[0, ii] - xmin) < dx and pos[0, ii] != xmin:
-                for kk in range(3):
+            # Check if in first cell
+            if pos[0, ii] - xmin < dx:
+                
+                if dx - pos[0, ii] + xmin < epsilon:        # If on inner cell boundary, don't count
+                    pass
+                elif pos[0, ii] - xmin < epsilon:           # If on simulation boundary, don't count
+                    pass
+                else:                                       # Otherwise, count
                     nu[I - 1, sp, kk] += W_elec[0, ii] * vel[kk, ii]
                     nu[I    , sp, kk] += W_elec[1, ii] * vel[kk, ii]
                     nu[I + 1, sp, kk] += W_elec[2, ii] * vel[kk, ii]
-                    
-            elif abs(pos[0, ii] - xmax) < dx and pos[0, ii] != xmax:
-                for kk in range(3):
+               
+            # Check if in last cell
+            elif xmax - pos[0, ii] < dx:
+                if xmax - pos[0, ii] < epsilon:             # If on simulation boundary, don't count
+                    pass
+                elif dx - xmax + pos[0, ii] < epsilon:      # If on inner cell boundary, don't count
+                    pass
+                else:
                     nu[I + 1, sp, kk] += W_elec[0, ii] * vel[kk, ii]
                     nu[I + 2, sp, kk] += W_elec[1, ii] * vel[kk, ii]
                     nu[I + 3, sp, kk] += W_elec[2, ii] * vel[kk, ii]
@@ -68,12 +79,10 @@ def collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji):
             nu[:, jj, kk] *= n_contr[jj]
             Ji[:,     kk] += nu[:, jj, kk] * charge[jj]
             
-# =============================================================================
-#     # Set damping cell source values (last value)
-#     for ii in range(3):
-#         Ji[:ND, ii]    = Ji[ND, ii]
-#         Ji[ND+NX:, ii] = Ji[ND+NX - 1, ii]
-# =============================================================================
+    # Set damping cell source values (last value)
+    for ii in range(3):
+        Ji[:ND, ii]    = Ji[ND, ii]
+        Ji[ND+NX:, ii] = Ji[ND+NX - 1, ii]
     return
 
 
@@ -94,8 +103,9 @@ def collect_position_moment(pos, Ie, W_elec, idx, q_dens, ni):
     Again, check the ghost cell access or remove it altogether. Also, surely
     there's a more efficient way to do this.
     '''
-    epsilon = 1e-6
+    epsilon = 1e-3
     ni     *= 0.
+    
     # Deposit macroparticle moment on grid
     for ii in nb.prange(Ie.shape[0]):
         I   = Ie[ii]
@@ -107,16 +117,30 @@ def collect_position_moment(pos, Ie, W_elec, idx, q_dens, ni):
             ni[I + 2, sp] += W_elec[2, ii]
             
             # Simulate virtual particles in boundary ghost cells
-            if pos[0, ii] - xmin < dx and pos[0, ii] != xmin:
-                print('LHS Ghost for particle ', ii)
-                ni[I - 1, sp] += W_elec[0, ii]
-                ni[I    , sp] += W_elec[1, ii]
-                ni[I + 1, sp] += W_elec[2, ii]
-            elif xmax - pos[0, ii] < dx  and pos[0, ii] != xmax:
-                print('RHS Ghost for particle ', ii)
-                ni[I + 1, sp] += W_elec[0, ii]
-                ni[I + 2, sp] += W_elec[1, ii]
-                ni[I + 3, sp] += W_elec[2, ii]
+            # Nested ifs to improve performance (only one operation/evaluation per particle)
+            
+            # Check if in first cell
+            if pos[0, ii] - xmin < dx:
+                
+                if dx - pos[0, ii] + xmin < epsilon:        # If on inner cell boundary, don't count
+                    pass
+                elif pos[0, ii] - xmin < epsilon:           # If on simulation boundary, don't count
+                    pass
+                else:                                       # Otherwise, count
+                    ni[I - 1, sp] += W_elec[0, ii]
+                    ni[I    , sp] += W_elec[1, ii]
+                    ni[I + 1, sp] += W_elec[2, ii]
+               
+            # Check if in last cell
+            elif xmax - pos[0, ii] < dx:
+                if xmax - pos[0, ii] < epsilon:             # If on simulation boundary, don't count
+                    pass
+                elif dx - xmax + pos[0, ii] < epsilon:      # If on inner cell boundary, don't count
+                    pass
+                else:
+                    ni[I + 1, sp] += W_elec[0, ii]
+                    ni[I + 2, sp] += W_elec[1, ii]
+                    ni[I + 3, sp] += W_elec[2, ii]
     
     if source_smoothing == 1:
         for ii in range(Nj):
@@ -128,16 +152,22 @@ def collect_position_moment(pos, Ie, W_elec, idx, q_dens, ni):
         ni[:, jj] *= n_contr[jj]
         q_dens    += ni[:, jj] * charge[jj]
         
-# =============================================================================
-#     # Set damping cell source values
-#     q_dens[:ND]    = q_dens[ND]
-#     q_dens[ND+NX:] = q_dens[ND+NX - 1]
-#         
-#     # Set density minimum
-#     for ii in range(q_dens.shape[0]):
-#         if q_dens[ii] < min_dens * ne * q:
-#             q_dens[ii] = min_dens * ne * q
-# =============================================================================
+    # Set damping cell source values
+    q_dens[:ND]    = q_dens[ND]
+    q_dens[ND+NX:] = q_dens[ND+NX - 1]
+        
+    # Set density minimum
+    for ii in range(q_dens.shape[0]):
+        if q_dens[ii] < min_dens * ne * q:
+            q_dens[ii] = min_dens * ne * q
+    return
+
+
+@nb.njit()
+def collect_moments():
+    '''
+    Same as above two functions but combined for efficiency.
+    '''
     return
 
 

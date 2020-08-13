@@ -12,10 +12,10 @@ import save_routines as save
 import particles_1D as particles
 import fields_1D    as fields
 
-from simulation_parameters_1D import dx, NX, ND, NC, N, Nj, nsp_ppc, va, B_A, dist_type,  \
-                                     idx_start, idx_end, seed, vth_par, vth_perp, drift_v,  \
+from simulation_parameters_1D import dx, NX, ND, NC, N, Nj, nsp_ppc, va, B_A,  \
+                                     idx_start, seed, vth_par, vth_perp, drift_v,  \
                                      qm_ratios, rc_hwidth, temp_type, Te0_scalar,\
-                                     N_species, damping_multiplier, quiet_start
+                                     damping_multiplier, quiet_start
 
 
 @nb.njit()
@@ -191,18 +191,16 @@ def uniform_gaussian_distribution_quiet():
             if const.homogenous == False and temp_type[jj] == 1:
                 LCD_by_rejection(pos, vel, st, en, jj)
                 
-# =============================================================================
-#             # Quiet start : Initialize second half
-#             if quiet_start == True:
-#                 vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set parallel
-#             else:
-#                 vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Set anti-parallel
-#                 
-#             pos[0, en: en + half_n] = pos[0, st: en]                # Other half, same position
-#             vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
-#             vel[2, en: en + half_n] = vel[2, st: en] * -1.0
-#             idx[   en: en + half_n] = jj          # Turn particle on
-# =============================================================================
+            # Quiet start : Initialize second half
+            if quiet_start == True:
+                vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set parallel
+            else:
+                vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Set anti-parallel
+                
+            pos[0, en: en + half_n] = pos[0, st: en]                # Other half, same position
+            vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
+            vel[2, en: en + half_n] = vel[2, st: en] * -1.0
+            idx[   en: en + half_n] = jj          # Turn particle on
             
             acc                    += half_n * 2
 

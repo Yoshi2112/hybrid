@@ -67,16 +67,33 @@ def plot_initial_sources(q_dens, Ji, E, B):
     ax[1, 1].set_ylabel('$E_y$', rotation=0, fontsize=14, labelpad=20)
     ax[2, 1].plot(const.E_nodes/const.dx, E[:, 1])
     ax[2, 1].set_ylabel('$E_z$', rotation=0, fontsize=14, labelpad=20)
+    
+    for mm in range(4):
+        for nn in range(2):
+            for ii in range(const.E_nodes.shape[0]):
+                ax[mm, nn].axvline(const.E_nodes[ii]/const.dx, linestyle='--', c='r', alpha=0.2)
+                ax[mm, nn].axvline(const.B_nodes[ii]/const.dx, linestyle='--', c='b', alpha=0.2)
+             
+            ax[mm, nn].axvline(const.xmin/const.dx, color='k')
+            ax[mm, nn].axvline(const.xmax/const.dx, color='k')
+            ax[mm, nn].axvline(const.B_nodes[ 0]/const.dx, linestyle='-', c='darkblue', alpha=1.0)
+            ax[mm, nn].axvline(const.B_nodes[-1]/const.dx, linestyle='-', c='darkblue', alpha=1.0)
+        
+    fig.subplots_adjust(hspace=0)
     return
 
 
-def plot_initial_positions_scatter(pos):
+def plot_initial_positions_scatter(pos, highlight=None):
     fig, ax = plt.subplots()
 
     for jj in range(const.Nj):
         st = const.idx_start[jj]
         en = const.idx_end[jj]
         ax.scatter(pos[0, st: en], np.ones(const.N_species[jj])*jj)
+        
+    if highlight is not None:
+        for this in highlight:
+            ax.scatter(pos[0,this], 1.0, c='k', marker='x')
         
     for ii in range(const.E_nodes.shape[0]):
         ax.axvline(const.E_nodes[ii], linestyle='--', c='r', alpha=0.2)

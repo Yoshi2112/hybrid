@@ -18,11 +18,25 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, 
                                   B, E, DT, q_dens_adv, Ji, ni, nu, pc=0):
     '''
     Helper function to group the particle advance and moment collection functions
+    
+    Note: use pc = 1 for predictor corrector to not collect new density. 
+    Actually, E_pred at N + 3/2 (used to get E(N+1) by averaging at 1/2, 3/2) requires
+    density at N + 3/2 to be known, so density at N + 2 is still required (and so
+    second position push also still required).
+    
+    Maybe maths this later on? How did Verbonceur (2005) get around this?
     '''
+    
+    print('APAM   Calling velocity function')
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, temp_N, DT)
+    
+    print('APAM   Calling position function')
     position_update(pos, vel, idx, Ep, DT, Ie, W_elec)  
     
+    print('APAM   Calling moment (vel) function')
     collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji)
+    
+    print('APAM   Calling moment (pos) function')
     collect_position_moment(pos, Ie, W_elec, idx, q_dens_adv, ni)
     return
 
