@@ -47,6 +47,59 @@ def r_squared(data, model):
     return r_sq
 
 
+def plot_velocity_distribution_2D_histogram(pos, vel, suff=''):
+    '''
+    For each point in time
+     - Collect particle information for particles near cell, plus time component
+     - Store in array
+     - Plot using either hexbin or hist2D
+     
+    Issue : Bins along v changing depending on time (how to set max/min bins? Specify arrays manually)
+    '''
+    lt = ['x', 'y', 'z']
+    
+    for jj in range(const.Nj):
+        # Manually specify bin edges for histogram: Set vbins for 3*vth?
+        vlim = 10 if const.temp_type[jj] == 1 else 5
+        
+        vbins = np.linspace(-vlim, vlim, 101, endpoint=True)
+        xbins = np.linspace(const.xmin/const.dx, const.xmax/const.dx, const.NX + 1, endpoint=True)
+            
+        save_dir = const.drive + const.save_path + '//INIT//'
+        filename = 'fv_vs_x_species_{}'.format(jj) + suff
+        
+        if os.path.exists(save_dir) == False:
+            os.makedirs(save_dir)
+    
+        # Do the plotting
+        plt.ioff()
+        
+        fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
+        axes[0].set_title('f(v) vs. x :: INIT :: {}'.format(const.species_lbl[jj]))
+        
+        st = const.idx_start[jj]
+        en = const.idx_end[jj]
+        
+        for kk in range(3):
+            counts, xedges, yedges, im1 = axes[kk].hist2d(pos[0, st:en]/const.dx, vel[kk, st:en]/const.va, 
+                                                    bins=[xbins, vbins], vmin=0)
+    
+            cb = fig.colorbar(im1, ax=axes[kk], pad=0.015)
+            cb.set_label('Counts')
+            
+            axes[kk].set_ylim(-vlim, vlim)
+            axes[kk].set_ylabel('v{}\n($v_A$)'.format(lt[kk]), rotation=0)
+            
+        axes[kk].set_xlim(const.xmin/const.dx, const.xmax/const.dx)
+        axes[kk].set_xlabel('Position (cell)')
+    
+        fig.subplots_adjust(hspace=0.065)
+        
+        plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        plt.close('all')
+    return
+
+
 def plot_initial_sources(q_dens, Ji, E, B):
     fig, ax = plt.subplots(4, 2, sharex=True)
     ax[0, 0].plot(const.E_nodes/const.dx, q_dens)
@@ -84,6 +137,10 @@ def plot_initial_sources(q_dens, Ji, E, B):
 
 
 def plot_initial_positions_scatter(pos, highlight=None):
+    '''
+    Shows physical position of each particle on a scatterplot of (x, 1), as well
+    as the E, B grids and boundaries.
+    '''
     fig, ax = plt.subplots()
 
     for jj in range(const.Nj):
@@ -107,7 +164,8 @@ def plot_initial_positions_scatter(pos, highlight=None):
 
 
 def check_cell_velocity_distribution(pos, vel, node_number=const.NX // 2, j=0): #
-    '''Checks the velocity distribution of a particle species within a specified cell
+    '''
+    Checks the velocity distribution of a particle species within a specified cell
     '''
     # Account for damping nodes. Node_number should be "real" node count.
     node_number += const.ND

@@ -6,7 +6,7 @@ Created on Fri Sep 22 17:55:15 2017
 """
 import numba as nb
 from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, q, ne, min_dens,\
-                                     xmin, xmax, dx, source_smoothing
+                                     xmin, xmax, dx, source_smoothing, field_periodic
 
 
 @nb.njit()
@@ -42,30 +42,35 @@ def collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji):
                 nu[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
                 nu[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
                 nu[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
+            
+            if field_periodic == 0:
+                # Simulate virtual particles in boundary ghost cells
+                # Check if in first cell
+                if pos[0, ii] - xmin < dx:
+                    
+                    if dx - pos[0, ii] + xmin < epsilon:        # If on inner cell boundary, don't count
+                        pass
+                    elif pos[0, ii] - xmin < epsilon:           # If on simulation boundary, don't count
+                        pass
+                    else:                                       # Otherwise, count
+                        nu[I - 1, sp, kk] += W_elec[0, ii] * vel[kk, ii]
+                        nu[I    , sp, kk] += W_elec[1, ii] * vel[kk, ii]
+                        nu[I + 1, sp, kk] += W_elec[2, ii] * vel[kk, ii]
                 
-            # Simulate virtual particles in boundary ghost cells
-            # Check if in first cell
-            if pos[0, ii] - xmin < dx:
-                
-                if dx - pos[0, ii] + xmin < epsilon:        # If on inner cell boundary, don't count
-                    pass
-                elif pos[0, ii] - xmin < epsilon:           # If on simulation boundary, don't count
-                    pass
-                else:                                       # Otherwise, count
-                    nu[I - 1, sp, kk] += W_elec[0, ii] * vel[kk, ii]
-                    nu[I    , sp, kk] += W_elec[1, ii] * vel[kk, ii]
-                    nu[I + 1, sp, kk] += W_elec[2, ii] * vel[kk, ii]
-               
-            # Check if in last cell
-            elif xmax - pos[0, ii] < dx:
-                if xmax - pos[0, ii] < epsilon:             # If on simulation boundary, don't count
-                    pass
-                elif dx - xmax + pos[0, ii] < epsilon:      # If on inner cell boundary, don't count
-                    pass
-                else:
-                    nu[I + 1, sp, kk] += W_elec[0, ii] * vel[kk, ii]
-                    nu[I + 2, sp, kk] += W_elec[1, ii] * vel[kk, ii]
-                    nu[I + 3, sp, kk] += W_elec[2, ii] * vel[kk, ii]
+                # Check if in last cell
+                elif xmax - pos[0, ii] < dx:
+                    if xmax - pos[0, ii] < epsilon:             # If on simulation boundary, don't count
+                        pass
+                    elif dx - xmax + pos[0, ii] < epsilon:      # If on inner cell boundary, don't count
+                        pass
+                    else:
+                        nu[I + 1, sp, kk] += W_elec[0, ii] * vel[kk, ii]
+                        nu[I + 2, sp, kk] += W_elec[1, ii] * vel[kk, ii]
+                        nu[I + 3, sp, kk] += W_elec[2, ii] * vel[kk, ii]
+
+    if field_periodic == 1:
+        # Copy over source terms into last cells
+        pass
 
     if source_smoothing == True:
         for jj in range(Nj):
@@ -78,11 +83,12 @@ def collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji):
         for kk in range(3):
             nu[:, jj, kk] *= n_contr[jj]
             Ji[:,     kk] += nu[:, jj, kk] * charge[jj]
-            
-    # Set damping cell source values (last value)
-    for ii in range(3):
-        Ji[:ND, ii]    = Ji[ND, ii]
-        Ji[ND+NX:, ii] = Ji[ND+NX - 1, ii]
+    
+    if field_periodic == 0:
+        # Set damping cell source values (last value)
+        for ii in range(3):
+            Ji[:ND, ii]    = Ji[ND, ii]
+            Ji[ND+NX:, ii] = Ji[ND+NX - 1, ii]
     return
 
 
@@ -116,31 +122,34 @@ def collect_position_moment(pos, Ie, W_elec, idx, q_dens, ni):
             ni[I + 1, sp] += W_elec[1, ii]
             ni[I + 2, sp] += W_elec[2, ii]
             
-            # Simulate virtual particles in boundary ghost cells
-            # Nested ifs to improve performance (only one operation/evaluation per particle)
-            
-            # Check if in first cell
-            if pos[0, ii] - xmin < dx:
-                
-                if dx - pos[0, ii] + xmin < epsilon:        # If on inner cell boundary, don't count
-                    pass
-                elif pos[0, ii] - xmin < epsilon:           # If on simulation boundary, don't count
-                    pass
-                else:                                       # Otherwise, count
-                    ni[I - 1, sp] += W_elec[0, ii]
-                    ni[I    , sp] += W_elec[1, ii]
-                    ni[I + 1, sp] += W_elec[2, ii]
-               
-            # Check if in last cell
-            elif xmax - pos[0, ii] < dx:
-                if xmax - pos[0, ii] < epsilon:             # If on simulation boundary, don't count
-                    pass
-                elif dx - xmax + pos[0, ii] < epsilon:      # If on inner cell boundary, don't count
-                    pass
-                else:
-                    ni[I + 1, sp] += W_elec[0, ii]
-                    ni[I + 2, sp] += W_elec[1, ii]
-                    ni[I + 3, sp] += W_elec[2, ii]
+            if field_periodic == 0:
+                # Simulate virtual particles in boundary ghost cells
+                # Check if in first cell
+                if pos[0, ii] - xmin < dx:
+                    
+                    if dx - pos[0, ii] + xmin < epsilon:        # If on inner cell boundary, don't count
+                        pass
+                    elif pos[0, ii] - xmin < epsilon:           # If on simulation boundary, don't count
+                        pass
+                    else:                                       # Otherwise, count
+                        ni[I - 1, sp] += W_elec[0, ii]
+                        ni[I    , sp] += W_elec[1, ii]
+                        ni[I + 1, sp] += W_elec[2, ii]
+                   
+                # Check if in last cell
+                elif xmax - pos[0, ii] < dx:
+                    if xmax - pos[0, ii] < epsilon:             # If on simulation boundary, don't count
+                        pass
+                    elif dx - xmax + pos[0, ii] < epsilon:      # If on inner cell boundary, don't count
+                        pass
+                    else:
+                        ni[I + 1, sp] += W_elec[0, ii]
+                        ni[I + 2, sp] += W_elec[1, ii]
+                        ni[I + 3, sp] += W_elec[2, ii]
+    
+    if field_periodic == 1:
+        # Copy source terms into opposite cells
+        pass
     
     if source_smoothing == 1:
         for ii in range(Nj):
@@ -151,10 +160,12 @@ def collect_position_moment(pos, Ie, W_elec, idx, q_dens, ni):
     for jj in range(Nj):
         ni[:, jj] *= n_contr[jj]
         q_dens    += ni[:, jj] * charge[jj]
-        
-    # Set damping cell source values
-    q_dens[:ND]    = q_dens[ND]
-    q_dens[ND+NX:] = q_dens[ND+NX - 1]
+    
+    
+    if field_periodic == 0:
+        # Set damping cell source values
+        q_dens[:ND]    = q_dens[ND]
+        q_dens[ND+NX:] = q_dens[ND+NX - 1]
         
     # Set density minimum
     for ii in range(q_dens.shape[0]):

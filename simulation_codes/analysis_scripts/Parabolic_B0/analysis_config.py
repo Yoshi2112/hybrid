@@ -237,7 +237,7 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
     beta_per = (2 * mu0 * ne * kB * Tperp) / B_eq ** 2
 
     if particle_open == 1:
-        particle_boundary = 'Open Lossy'
+        particle_boundary = 'Open: Zero moment derivative'
     elif particle_reinit == 1:
         particle_boundary = 'Reinitialize'
     elif particle_reflect == 1:

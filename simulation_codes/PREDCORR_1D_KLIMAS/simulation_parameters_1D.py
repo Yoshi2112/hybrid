@@ -15,7 +15,7 @@ import numpy as np
 import sys
 from os import system
 
-init_radix = False
+init_radix = True
 
 ## INPUT FILES ##
 run_input    = '../run_inputs/run_params.txt'
@@ -103,7 +103,6 @@ B_surf = 3.12e-5                            # Magnetic field strength at Earth s
 NC         = NX + 2*ND                      # Total number of cells
 ne         = density.sum()                  # Electron number density
 E_par      = E_perp / (anisotropy + 1)      # Parallel species energy/beta
-
 
 
 if B_eq == '-':

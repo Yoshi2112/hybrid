@@ -4,6 +4,7 @@ Created on Fri Sep 22 17:27:33 2017
 
 @author: iarey
 """
+import pdb
 import numba as nb
 import numpy as np
 import simulation_parameters_1D as const
@@ -157,7 +158,76 @@ def LCD_by_rejection(pos, vel, st, en, jj):
 
 
 @nb.njit()
-def uniform_gaussian_distribution_quiet():
+def LCD_by_rejection_varying_vth(pos, vel, st, en, jj, vth_par_gauss, vth_perp_gauss):
+    '''
+    Takes in a Maxwellian or pseudo-maxwellian distribution. Outputs the number
+    and indexes of any particle inside the loss cone
+    
+    I think the new_vi's are ok? Need to check this! (Indexes are hard)
+    '''
+    B0x    = fields.eval_B0x(pos[0, st: en])
+    N_loss = 1
+
+    while N_loss > 0:
+        v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
+        
+        N_loss, loss_idx = calc_losses(vel[0, st: en], v_perp, B0x, st=st)
+
+        # Catch for a particle on the boundary : Set 90 degree pitch angle (gyrophase shouldn't overly matter)
+        if N_loss == 1:
+            if abs(pos[0, loss_idx[0]]) == const.xmax:
+                ww = loss_idx[0]
+                vel[0, loss_idx[0]] = 0.
+                vel[1, loss_idx[0]] = np.sqrt(vel[0, ww] ** 2 + vel[1, ww] ** 2 + vel[2, ww] ** 2)
+                vel[2, loss_idx[0]] = 0.
+                N_loss = 0
+
+        if N_loss != 0:   
+            new_vx = np.random.normal(0., vth_par_gauss[loss_idx - st], N_loss)             
+            new_vy = np.random.normal(0., vth_perp_gauss[loss_idx - st], N_loss)
+            new_vz = np.random.normal(0., vth_perp_gauss[loss_idx - st], N_loss)
+            
+            for ii in range(N_loss):
+                vel[0, loss_idx[ii]] = new_vx[ii]
+                vel[1, loss_idx[ii]] = new_vy[ii]
+                vel[2, loss_idx[ii]] = new_vz[ii]
+    return
+
+
+def get_vth_at_x(pos, jj):
+    '''
+    Given position array, return array of T_perp, T_parallel scaled by a normalised Gaussian
+    such that T = T_eq at x = 0.0, i.e.
+    
+    vth_perp_gauss = vth_perp * f(x)
+    vth_para_gauss = vth_par * f(x)
+    
+    where f(x) is the normalized Gaussian. (Maybe change this to temp to be more cross-species
+    friendly? Or not, since temperature is species specific too)
+    
+    Set fwhm to be related to rc_hwdith later
+    
+    Could potentially set this to be any other distirbution we want
+    
+    PROBLEM: WHAT HAPPENS AFTER t=0? DID I JUST SPEND AGES WRITING THIS EVEN THOUGH IT'LL
+    HOMOGENISE REALLY FAST? :(
+    
+    Maybe only gaussianize v_perp? Let v_parallel be homogenous since it's just constant flux.
+    '''
+    fwhm      = const.NX//4
+    mu, sigma = 0.0, const.dx*fwhm
+    gauss     = 1.0 / np.sqrt(2 * np.pi * sigma**2) * np.exp(-0.5*((pos - mu)/sigma) ** 2)
+
+    # Value of the gaussian at each particle position
+    normalized_gauss = gauss / gauss.max()
+    
+    vth_perp_gauss = vth_perp[jj] * normalized_gauss
+    vth_para_gauss = vth_par[jj]  * normalized_gauss
+    return vth_para_gauss, vth_perp_gauss
+
+
+@nb.njit()
+def uniform_config_random_velocity():
     '''Creates an N-sampled normal distribution across all particle species within each simulation cell
 
     OUTPUT:
@@ -232,6 +302,75 @@ def uniform_gaussian_distribution_quiet():
             idx[   en: en + half_n] = jj          # Turn particle on
             
             acc                    += half_n * 2
+
+    # Set initial Larmor radius - rL from v_perp, distributed to y,z based on velocity gyroangle
+    print('Initializing particles off-axis')
+    B0x         = fields.eval_B0x(pos[0, :en])
+    v_perp      = np.sqrt(vel[1, :en] ** 2 + vel[2, :en] ** 2)
+    gyangle     = get_gyroangle_array(vel[:, :en])
+    rL          = v_perp / (qm_ratios[idx[:en]] * B0x)
+    pos[1, :en] = rL * np.cos(gyangle)
+    pos[2, :en] = rL * np.sin(gyangle)
+    
+    return pos, vel, idx
+
+
+#@nb.njit()
+def uniform_config_random_velocity_gaussian_T():
+    '''Creates an N-sampled normal distribution across all particle species within each simulation cell
+
+    OUTPUT:
+        pos -- 3xN array of particle positions. Pos[0] is uniformly distributed with boundaries depending on its temperature type
+        vel -- 3xN array of particle velocities. Each component initialized as a Gaussian with a scale factor determined by the species perp/para temperature
+        idx -- N   array of particle indexes, indicating which species it belongs to. Coded as an 8-bit signed integer, allowing values between +/-128
+    
+    This one varies temperature by position as a gaussian - i.e. every particle is loaded from a 
+    slightly different normal distribution. Because of this, don't bother loading cellwise.
+    
+    Also, Gaussian only applied to hot component. Cold components remain homogenous and isotropic
+    '''
+    pos = np.zeros((3, N), dtype=np.float64)
+    vel = np.zeros((3, N), dtype=np.float64)
+    idx = np.ones(N,       dtype=np.int8) * -1 # Start all particles as disabled (idx < 0)
+    np.random.seed(seed)
+
+    for jj in range(Nj):
+        half_n = N_species[jj] // 2                     # Half particles of species - doubled later
+                
+        st = idx_start[jj]
+        en = idx_start[jj] + half_n
+        
+        # Set position
+        for kk in range(half_n):
+            pos[0, st + kk] = 2*xmax*(float(kk) / (half_n - 1))
+        pos[0, st: en]-= xmax              
+        idx[   st: en] = jj
+        
+        if temp_type[jj] == 1:
+            # Set velocity: Position varying temperature (Gaussian)
+            vth_par_gauss, vth_perp_gauss = get_vth_at_x(pos[0, st: en], jj)
+            mu = np.zeros(N_species[jj] // 2)
+            
+            # Set velocity for half: Randomly Maxwellian but with varying vth in space
+            vel[0, st: en] = np.random.normal(mu, vth_par_gauss,  N_species[jj] // 2) +  drift_v[jj]
+            vel[1, st: en] = np.random.normal(mu, vth_perp_gauss, N_species[jj] // 2)
+            vel[2, st: en] = np.random.normal(mu, vth_perp_gauss, N_species[jj] // 2)
+
+            # Set Loss Cone Distribution: Reinitialize particles in loss cone (move to a function)
+            if const.homogenous == False:
+                LCD_by_rejection_varying_vth(pos, vel, st, en, jj, vth_par_gauss, vth_perp_gauss)
+        else:
+            # Set velocity for half: Randomly Maxwellian, isotropic and homogenous
+            vel[0, st: en] = np.random.normal(0.0, vth_par[jj],  N_species[jj] // 2) +  drift_v[jj]
+            vel[1, st: en] = np.random.normal(0.0, vth_perp[jj], N_species[jj] // 2)
+            vel[2, st: en] = np.random.normal(0.0, vth_perp[jj], N_species[jj] // 2)
+        
+        pos[0, en: en + half_n] = pos[0, st: en]                # Other half, same position
+        vel[0, en: en + half_n] = vel[0, st: en] *  1.0         # Set parallel
+        vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
+        vel[2, en: en + half_n] = vel[2, st: en] * -1.0
+        
+        idx[st: idx_end[jj]] = jj
 
     # Set initial Larmor radius - rL from v_perp, distributed to y,z based on velocity gyroangle
     print('Initializing particles off-axis')
@@ -331,7 +470,7 @@ def uniform_gaussian_distribution_ultra_quiet():
     return pos, vel, idx
 
 
-def bit_reversed_quiet():
+def uniform_config_reverseradix_velocity():
     '''
     Creates an N-sampled normal distribution across all particle species within each simulation cell
 
@@ -413,14 +552,14 @@ def initialize_particles():
         idx    -- Particle type index
     '''
     if init_radix == True:
-        pos, vel, idx = bit_reversed_quiet()
+        pos, vel, idx = uniform_config_reverseradix_velocity()
     else:
-        pos, vel, idx = uniform_gaussian_distribution_quiet()
+        pos, vel, idx = uniform_config_random_velocity()
     
-    Ie         = np.zeros(N, dtype=np.uint16)
-    Ib         = np.zeros(N, dtype=np.uint16)
-    W_elec     = np.zeros((3, N), dtype=np.float64)
-    W_mag      = np.zeros((3, N), dtype=np.float64)
+    Ie      = np.zeros(N, dtype=np.uint16)
+    Ib      = np.zeros(N, dtype=np.uint16)
+    W_elec  = np.zeros((3, N), dtype=np.float64)
+    W_mag   = np.zeros((3, N), dtype=np.float64)
     
     Bp      = np.zeros((3, N), dtype=np.float64)
     Ep      = np.zeros((3, N), dtype=np.float64)
@@ -591,19 +730,39 @@ def set_timestep(vel, Te0):
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    from simulation_parameters_1D import idx_end, temp_color
+    import diagnostics as diag
     
-    POS, VEL, IDX = bit_reversed_quiet()
+    #POS, VEL, IDX = uniform_config_random_velocity_gaussian_T()
     
-    V_PARA = VEL[0]
-    V_PERP = np.sqrt(VEL[2]**2 + VEL[1]**2) * np.sign(VEL[2])
+    #diag.plot_velocity_distribution_2D_histogram(POS, VEL)
     
-    for jj in range(Nj):
-        fig, ax = plt.subplots()
-        ax.scatter(V_PARA[idx_start[jj]: idx_end[jj]], V_PERP[idx_start[jj]: idx_end[jj]],
-                   c=temp_color[jj], s=1)
-        
-        ax.axhline(0, c='k', alpha=0.2)
-        ax.axvline(0, c='k', alpha=0.2)
-        
+    POS = np.linspace(const.xmin, xmax, 10000)
+    
+    vth_par_gauss, vth_perp_gauss = get_vth_at_x(POS, 0)
+    plt.plot(POS, vth_par_gauss/const.va)
+    plt.plot(POS, vth_perp_gauss/const.va)
+    vth_par_gauss, vth_perp_gauss = get_vth_at_x(POS, 1)
+    plt.plot(POS, vth_par_gauss/const.va)
+    plt.plot(POS, vth_perp_gauss/const.va)
+    
     plt.show()
+    
+# =============================================================================
+#     
+#     from simulation_parameters_1D import idx_end, temp_color
+#     
+#     POS, VEL, IDX = bit_reversed_quiet()
+#     
+#     V_PARA = VEL[0]
+#     V_PERP = np.sqrt(VEL[2]**2 + VEL[1]**2) * np.sign(VEL[2])
+#     
+#     for jj in range(Nj):
+#         fig, ax = plt.subplots()
+#         ax.scatter(V_PARA[idx_start[jj]: idx_end[jj]], V_PERP[idx_start[jj]: idx_end[jj]],
+#                    c=temp_color[jj], s=1)
+#         
+#         ax.axhline(0, c='k', alpha=0.2)
+#         ax.axvline(0, c='k', alpha=0.2)
+#         
+#     plt.show()
+# =============================================================================

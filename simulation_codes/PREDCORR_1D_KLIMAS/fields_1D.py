@@ -8,7 +8,8 @@ import numpy as np
 import numba as nb
 
 import auxilliary_1D as aux
-from simulation_parameters_1D import dx, ne, q, mu0, kB, ie, B_eq, a, disable_waves, E_damping
+from simulation_parameters_1D import dx, ne, q, mu0, kB, ie, B_eq, a, \
+                                     disable_waves, E_damping, field_periodic
 
 
 @nb.njit()
@@ -76,8 +77,12 @@ def push_B(B, E, curlE, DT, qq, damping_array, half_flag=1):
 
     B       -= 0.5 * DT * curlE                          # Advance using curl (apply retarding factor here?)
     
-    for ii in nb.prange(1, B.shape[1]):                  # Apply damping, skipping x-axis
-        B[:, ii] *= damping_array                        # Not sure if this needs to modified for half steps?
+    if field_periodic == 1:
+        # Copy field value into opposite cell
+        pass
+    else:
+        for ii in nb.prange(1, B.shape[1]):                  # Apply damping, skipping x-axis
+            B[:, ii] *= damping_array                        # Not sure if this needs to modified for half steps?
     return
 
 
@@ -180,12 +185,18 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_dampi
     aux.interpolate_edges_to_center(B, temp3Db)              # temp3db is now B_center
 
     aux.cross_product(Ve, temp3Db[:temp3Db.shape[0]-1, :], temp3De)                  # temp3De is now Ve x B term
-    if E_damping == True:
-        temp3De *= E_damping_array
+    
+    if field_periodic == 0:
+        if E_damping == True:
+            temp3De *= E_damping_array
     
     E[:, 0]  = - temp3De[:, 0] - grad_P[:] / q_dens[:]
     E[:, 1]  = - temp3De[:, 1]
     E[:, 2]  = - temp3De[:, 2]
+    
+    if field_periodic == 1:
+        # Copy field values into ghost cells
+        pass
     
     # Diagnostic flag for testing
     if disable_waves == 1:   

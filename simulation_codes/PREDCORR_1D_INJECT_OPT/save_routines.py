@@ -90,7 +90,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
                    ('freq_res', const.freq_res),
                    ('orbit_res', orbit_res),
                    ('run_desc', const.run_description),
-                   ('method_type', 'PREDCORR_PARABOLIC'),
+                   ('method_type', 'PREDCORR_PARABOLIC_OPTIMIZED'),
                    ('particle_shape', 'TSC'),
                    ('field_periodic', const.field_periodic),
                    ('run_time', None),

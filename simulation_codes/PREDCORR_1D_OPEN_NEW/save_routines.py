@@ -88,7 +88,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
                    ('freq_res', const.freq_res),
                    ('orbit_res', orbit_res),
                    ('run_desc', const.run_description),
-                   ('method_type', 'PREDCORR_PARABOLIC'),
+                   ('method_type', 'PREDCORR_PARABOLIC_OPEN_NEW'),
                    ('particle_shape', 'TSC'),
                    ('boundary_type', 'damped'),
                    ('particle_boundary', 'Open flux'),
