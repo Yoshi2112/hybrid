@@ -160,7 +160,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     q_dens *= 0.5
     q_dens += 0.5 * q_dens_adv
     
-    if disable_waves == 1:
+    if disable_waves == 0:
         # Push B from N to N + 1/2
         fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
         

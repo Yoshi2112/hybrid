@@ -15,6 +15,8 @@ import numpy as np
 import sys
 from os import system
 
+init_radix = False
+
 ## INPUT FILES ##
 run_input    = '../run_inputs/run_params.txt'
 plasma_input = '../run_inputs/plasma_params.txt'
@@ -156,7 +158,7 @@ for jj in range(Nj):
 # Spare assumes same number in each cell (doesn't account for dist=1) 
 # THIS CAN BE CHANGED LATER TO BE MORE MEMORY EFFICIENT. LEAVE IT HUGE FOR DEBUGGING PURPOSES.
 spare_ppc  = nsp_ppc.copy()
-N = N_species.sum() + (spare_ppc * NX).sum()
+N          = N_species.sum() + (spare_ppc * NX).sum()
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
@@ -219,20 +221,15 @@ gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency 
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
 
-# Initial pressure tensor
-Pi0 = np.zeros((Nj, 3, 3), dtype=np.float64)
-for jj in range(Tpar.shape[0]):
-    Pi0[jj, 0, 0] = density[jj] * kB * Tpar[jj]
-    Pi0[jj, 1, 1] = density[jj] * kB * Tperp[jj]
-    Pi0[jj, 2, 2] = density[jj] * kB * Tperp[jj]
 
 particle_open = 0
-if particle_periodic + particle_reflect + particle_reinit == 0:
-    particle_open = 1
-elif particle_reflect == 1 or particle_reinit == 1:
+if particle_reflect == 1 or particle_reinit == 1:
     print('Only periodic or open boundaries supported, defaulting to open')
     particle_reflect = particle_reinit = particle_periodic = 0
     particle_open = 1
+elif particle_periodic == 0:
+    particle_open = 1
+
 
 
 

@@ -15,7 +15,8 @@ import fields_1D    as fields
 from simulation_parameters_1D import dx, NX, ND, NC, N, Nj, nsp_ppc, va, B_A,  \
                                      idx_start, seed, vth_par, vth_perp, drift_v,  \
                                      qm_ratios, rc_hwidth, temp_type, Te0_scalar,\
-                                     damping_multiplier, quiet_start, N_species, xmax,idx_end
+                                     damping_multiplier, quiet_start, N_species, \
+                                     xmax,idx_end, init_radix
                            
                             
 def rkbr_uniform_set(arr, base=2):
@@ -411,9 +412,11 @@ def initialize_particles():
         W_mag  -- Initial particle weights on B-grid
         idx    -- Particle type index
     '''
-    #pos, vel, idx = uniform_gaussian_distribution_quiet()
-    pos, vel, idx = bit_reversed_quiet()
-
+    if init_radix == True:
+        pos, vel, idx = bit_reversed_quiet()
+    else:
+        pos, vel, idx = uniform_gaussian_distribution_quiet()
+    
     Ie         = np.zeros(N, dtype=np.uint16)
     Ib         = np.zeros(N, dtype=np.uint16)
     W_elec     = np.zeros((3, N), dtype=np.float64)

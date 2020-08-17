@@ -3099,7 +3099,7 @@ def plot_vi_vs_t_for_cell(cell=None, comp=0, it_max=None, jj=1, save=True, hexbi
     return
 
 
-def plot_vi_vs_x(it_max=None, jj=1, save=True):
+def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False):
     '''
     For each point in time
      - Collect particle information for particles near cell, plus time component
@@ -3134,7 +3134,7 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True):
         else:
             print('Plotting particle data from p-file {}'.format(ii))
     
-        pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii)
+        pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii, shuffled_idx=shuffled_idx)
         
         # Do the plotting
         plt.ioff()
@@ -3332,29 +3332,28 @@ def scatterplot_velocities(it_max=None):
 if __name__ == '__main__':
     drive       = 'F:'
 
-    for series in ['klimas_test_new']:
+    for series in ['klimas_test_full']:
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-# =============================================================================
-#         # Extract all summary files
-#         for run_num in range(num_runs):
-#             print('\nRun {}'.format(run_num))
-#             cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=False)
-#             plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=None, B0_lim=None)
-#             standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
-# =============================================================================
+        # Extract all summary files
+        for run_num in [0, 1]:#range(num_runs):
+            print('\nRun {}'.format(run_num))
+            cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=False)
+            plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=None, B0_lim=None)
+            standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
             
-        for run_num in [2]:#range(num_runs):
+        for run_num in [0, 1]:#range(num_runs):
             print('\nRun {}'.format(run_num))
             cf.load_run(drive, series, run_num, extract_arrays=True)
-            scatterplot_velocities()
+            
             #plot_sample(N_sample=1000)
             #find_the_particles(it_max=None)
             #summary_plots(save=True, histogram=True)
-            #for sp in range(2):
-            #    plot_vi_vs_x(it_max=None, jj=sp, save=True)
+            scatterplot_velocities()
+            for sp in range(2):
+                plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
         
         #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
         #check_fields()

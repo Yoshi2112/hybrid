@@ -20,12 +20,14 @@ def manage_directories():
     print('Checking directories...')
     if (save_particles == 1 or save_fields == 1) == True:
         if os.path.exists('%s/%s' % (drive, save_path)) == False:
+            print('Creating master directory %s/%s' % (drive, save_path))
             os.makedirs('%s/%s' % (drive, save_path))                        # Create master test series directory
             print('Master directory created')
 
         path = ('%s/%s/run_%d' % (drive, save_path, const.run))          # Set root run path (for images)
         
         if os.path.exists(path) == False:
+            print('Creating run directory %s' % (path))
             os.makedirs(path)
             print('Run directory created')
         else:
@@ -90,9 +92,16 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
                    ('run_desc', const.run_description),
                    ('method_type', 'PREDCORR_PARABOLIC'),
                    ('particle_shape', 'TSC'),
-                   ('boundary_type', 'damped'),
-                   ('particle_boundary', 'Open flux'),
+                   ('field_periodic', const.field_periodic),
                    ('run_time', None),
+                   ('homogeneous', const.homogenous),
+                   ('particle_periodic', const.particle_periodic),
+                   ('particle_reflect', const.particle_reflect),
+                   ('particle_reinit', const.particle_reinit),
+                   ('disable_waves', const.disable_waves),
+                   ('source_smoothing', const.source_smoothing),
+                   ('E_damping', const.E_damping),
+                   ('quiet_start', const.quiet_start)
                    ])
 
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:

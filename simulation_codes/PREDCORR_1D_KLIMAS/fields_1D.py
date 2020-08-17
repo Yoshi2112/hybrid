@@ -188,6 +188,6 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_dampi
     E[:, 2]  = - temp3De[:, 2]
     
     # Diagnostic flag for testing
-    if disable_waves == True:   
+    if disable_waves == 1:   
         E *= 0.
     return 

@@ -256,9 +256,10 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
                 idx[ii]     = -1
                 n_deleted  += 1
         
+        # Check number of spare particles
         num_spare = (idx < 0).sum()
         if num_spare < 2 * nsp_ppc.sum():
-            #print('WARNING :: Less than two cells worth of spare particles remaining.')
+            print('WARNING :: Less than two cells worth of spare particles remaining.')
             if num_spare == 0:
                 print('WARNING :: No space particles remaining. Exiting simulation.')
                 raise IndexError
