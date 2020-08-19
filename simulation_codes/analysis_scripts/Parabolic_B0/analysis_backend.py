@@ -5,7 +5,7 @@ Created on Tue Apr 30 11:24:46 2019
 @author: Yoshi
 """
 import sys
-data_scripts_dir = 'F://Google Drive//Uni//PhD 2017//Data//Scripts//'
+data_scripts_dir = 'D://Google Drive//Uni//PhD 2017//Data//Scripts//'
 sys.path.append(data_scripts_dir)
 from analysis_scripts import analytic_signal
 

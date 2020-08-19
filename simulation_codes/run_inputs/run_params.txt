@@ -1,12 +1,12 @@
-DRIVE					G:
-SAVE_PATH				/runs/KLIMAS_RADIX_BIGGER/
-RUN						3
+DRIVE					E:
+SAVE_PATH				/runs/old_OPT_vs_new_KLIMAS_test/
+RUN						4
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
 SEED					3216587
 CPU_AFFINITY			-
 HOMOGENOUS_B0_FLAG		1
-PERIODIC_FLAG			0
+PERIODIC_FLAG			1
 REFLECT_FLAG			0
 REINIT_FLAG				0
 FIELD_PERIODIC			0
@@ -16,8 +16,8 @@ SOURCE_SMOOTHING_FLAG	0
 E_DAMPING_FLAG			0
 QUIET_START_FLAG		1
 DAMPING_MULTIPLIER		1.0
-NX 						256
-ND 						64
+NX 						128
+ND 						32
 MAX_REV					100
 DXM						1.0
 L						5.35
@@ -30,4 +30,4 @@ GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02
 PARTICLE_DUMP_FREQ		0.25
 FIELD_DUMP_FREQ			0.10
-Testing of the open boundary conditions with reverse-radix initialization. Looking to see the effect of more particles and cells.
+Testing old vs. new code. This is the KLIMAS code with the NEW moment collection routine. Random velocity distro.

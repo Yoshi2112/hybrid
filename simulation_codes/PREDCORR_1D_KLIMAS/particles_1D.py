@@ -7,8 +7,8 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios,\
-                                        B_eq, a, particle_periodic, nsp_ppc
-from   sources_1D                import collect_velocity_moments, collect_position_moment
+                                        B_eq, a, particle_periodic, nsp_ppc, OPT_moments
+from   sources_1D                import collect_velocity_moments, collect_position_moment, OPT_collect_moments
 import sys
 
 from fields_1D import eval_B0x
@@ -16,7 +16,7 @@ from fields_1D import eval_B0x
 
 @nb.njit()
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T, temp_N,\
-                                  B, E, DT, q_dens_adv, Ji, ni, nu, pc=0):
+                                  B, E, DT, q_dens, Ji, ni, nu, pc=0):
     '''
     Helper function to group the particle advance and moment collection functions
     
@@ -29,8 +29,12 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, 
     '''
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, temp_N, DT)
     position_update(pos, vel, idx, Ep, DT, Ie, W_elec)  
-    collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji)
-    collect_position_moment(pos, Ie, W_elec, idx, q_dens_adv, ni)
+    
+    if OPT_moments == True:
+        OPT_collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu)
+    else:
+        collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji)
+        collect_position_moment(pos, Ie, W_elec, idx, q_dens, ni)
     return
 
 

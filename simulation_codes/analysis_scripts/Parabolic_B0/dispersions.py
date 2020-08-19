@@ -8,7 +8,7 @@ import pdb
 import analysis_config as cf
 import numpy as np
 import sys
-import pyfftw
+
 from scipy import signal
 data_scripts_dir = 'C://Users//iarey//Documents//GitHub//hybrid//linear_theory//new_general_DR_solver//'
 sys.path.append(data_scripts_dir)
@@ -163,6 +163,7 @@ def do_stft(dat, win_len, slide, num_slides):
     Model version of the STFT that was used for RBSP analysis. Changed so 
     it FFTs the entire run starting from index zero.
     '''
+    import pyfftw
     if len(dat.shape) > 1:
         dat = dat.reshape(dat.shape[0])
 

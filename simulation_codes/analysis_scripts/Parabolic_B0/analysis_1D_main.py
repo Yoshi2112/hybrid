@@ -59,12 +59,13 @@ def calc_poynting(bx, by, bz, ex, ey, ez):
     S = np.zeros((bx.shape[0], bx.shape[1], 3))
     
     for ii in range(bx.shape[0]):       # For each time
-        print('Calculating Poynting flux for time ',ii)
+        sys.stdout.write('Calculating Poynting flux for time {}'.format(ii))
+        sys.stdout.flush()
         for jj in range(bx.shape[1]):   # For each point in space
             S[ii, jj, 0] = ey[ii, jj] * bz[ii, jj] - ez[ii, jj] * by[ii, jj]
             S[ii, jj, 1] = ez[ii, jj] * bx[ii, jj] - ex[ii, jj] * bz[ii, jj]
             S[ii, jj, 2] = ex[ii, jj] * by[ii, jj] - ey[ii, jj] * bx[ii, jj]
-            
+    print('\n')
     S *= 1 / mu0
     return  S
 
@@ -3358,28 +3359,29 @@ def scatterplot_velocities(it_max=None):
 
 ##%% MAIN
 if __name__ == '__main__':
-    drive       = 'F:'
+    drive       = 'E:'
 
-    for series in ['klimas_validation_tests']:
+    for series in ['old_OPT_vs_new_KLIMAS_test']:
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-# =============================================================================
-#         # Extract all summary files and plot field stuff (quick)
-#         for run_num in range(num_runs):
-#             print('\nRun {}'.format(run_num))
-#             cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=False)
-#             plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
-#             
-#             standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
-# =============================================================================
-            
-        # Do particle analyses for each run (slow)
-        for run_num in [15]:#range(num_runs):
+        runs_to_do = [3, 4] #range(num_runs)
+        
+        # Extract all summary files and plot field stuff (quick)
+        for run_num in runs_to_do:
             print('\nRun {}'.format(run_num))
-            cf.load_run(drive, series, run_num, extract_arrays=True)
+            cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=False)
+            plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
+            
+            #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
+            
 # =============================================================================
+#         # Do particle analyses for each run (slow)
+#         for run_num in runs_to_do:
+#             print('\nRun {}'.format(run_num))
+#             cf.load_run(drive, series, run_num, extract_arrays=True)
+#             scatterplot_velocities()
 #             plot_E_components(save=True)
 #             
 #             #find_the_particles(it_max=None)
@@ -3387,73 +3389,17 @@ if __name__ == '__main__':
 #             for sp in range(2):
 #                 plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
 # =============================================================================
-            scatterplot_velocities()
+            
             
         #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
         #check_fields()
-        #
-        
-        #plot_initial_configurations()
-        #plot_vi_vs_t_for_cell(cell=0, comp=0, it_max=None, jj=1)
-        
+                
         #do_all_dynamic_spectra(ymax=2.0)
         #do_all_dynamic_spectra(ymax=None)
-        
-# =============================================================================
-#         plot_adiabatic_parameter()
-#         plot_particle_loss_with_time()
-#         #plot_average_GC()
-#         thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True)
-#         plot_average_mu()
-# 
-#         try:
-#             
-#         except:
-#             pass
-# 
-#         try:
-#             
-#         except:
-#             pass
-# =============================================================================
-        
-# =============================================================================
-#         
-#     # For things that take ages so they don't have to go sequentially
-#     for run_num in [0, 2]:
-#         print('Run {} :: Second go'.format(run_num))
-#         cf.load_run(drive, series, run_num, extract_arrays=True)
-#         
-# =============================================================================
-        
-        
-        #plot_initial_configurations_loss_with_time(save=True)
-        #plot_phase_space_with_time()
-        #plot_pitch_and_radius_with_time()
-        
-        #plot_loss_paths(it_max=200)
-        
-        
-        
-        
-        
-        
-        # Particle Loss Analysis :: For Every Time (really time consuming)
-        #analyse_particle_motion()
-        #analyse_particle_motion_manual()
-        
-        #plot_B0()
-        
-        
-        
-        #
+
         #plot_energies(normalize=False, save=True)
         
-        #disp_folder = 'dispersion_plots/'
-
         #single_point_both_fields_AGU()
-        
-        
         
         #ggg.get_linear_growth()
 

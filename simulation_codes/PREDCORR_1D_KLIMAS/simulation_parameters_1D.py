@@ -15,7 +15,8 @@ import numpy as np
 import sys
 from os import system
 
-init_radix = True
+init_radix  = False
+OPT_moments = False
 
 ## INPUT FILES ##
 run_input    = '../run_inputs/run_params.txt'
