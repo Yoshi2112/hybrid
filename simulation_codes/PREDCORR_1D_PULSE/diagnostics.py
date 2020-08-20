@@ -47,7 +47,7 @@ def r_squared(data, model):
     return r_sq
 
 
-def plot_velocity_distribution_2D_histogram(pos, vel, suff='', save=False):
+def plot_velocity_distribution_2D_histogram(pos, vel, suff=''):
     '''
     For each point in time
      - Collect particle information for particles near cell, plus time component
@@ -95,15 +95,12 @@ def plot_velocity_distribution_2D_histogram(pos, vel, suff='', save=False):
     
         fig.subplots_adjust(hspace=0.065)
         
-        if save == True:
-            plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-            plt.close('all')
-        else:
-            plt.show()
+        plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        plt.close('all')
     return
 
 
-def plot_initial_sources(q_dens, Ji, E, B, show_grid=True):
+def plot_initial_sources(q_dens, Ji, E, B):
     fig, ax = plt.subplots(4, 2, sharex=True)
     ax[0, 0].plot(const.E_nodes/const.dx, q_dens)
     ax[0, 0].set_ylabel('$\\rho_c$', rotation=0, fontsize=14, labelpad=20)
@@ -124,20 +121,18 @@ def plot_initial_sources(q_dens, Ji, E, B, show_grid=True):
     ax[2, 1].plot(const.E_nodes/const.dx, E[:, 1])
     ax[2, 1].set_ylabel('$E_z$', rotation=0, fontsize=14, labelpad=20)
     
-    if show_grid == True:
-        for mm in range(4):
-            for nn in range(2):
-                for ii in range(const.E_nodes.shape[0]):
-                    ax[mm, nn].axvline(const.E_nodes[ii]/const.dx, linestyle='--', c='r', alpha=0.2)
-                    ax[mm, nn].axvline(const.B_nodes[ii]/const.dx, linestyle='--', c='b', alpha=0.2)
+    for mm in range(4):
+        for nn in range(2):
+            for ii in range(const.E_nodes.shape[0]):
+                ax[mm, nn].axvline(const.E_nodes[ii]/const.dx, linestyle='--', c='r', alpha=0.2)
+                ax[mm, nn].axvline(const.B_nodes[ii]/const.dx, linestyle='--', c='b', alpha=0.2)
              
-    ax[mm, nn].axvline(const.xmin/const.dx, color='k')
-    ax[mm, nn].axvline(const.xmax/const.dx, color='k')
-    ax[mm, nn].axvline(const.B_nodes[ 0]/const.dx, linestyle='-', c='darkblue', alpha=1.0)
-    ax[mm, nn].axvline(const.B_nodes[-1]/const.dx, linestyle='-', c='darkblue', alpha=1.0)
+            ax[mm, nn].axvline(const.xmin/const.dx, color='k')
+            ax[mm, nn].axvline(const.xmax/const.dx, color='k')
+            ax[mm, nn].axvline(const.B_nodes[ 0]/const.dx, linestyle='-', c='darkblue', alpha=1.0)
+            ax[mm, nn].axvline(const.B_nodes[-1]/const.dx, linestyle='-', c='darkblue', alpha=1.0)
         
     fig.subplots_adjust(hspace=0)
-    plt.show()
     return
 
 

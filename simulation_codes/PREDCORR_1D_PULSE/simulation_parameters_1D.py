@@ -106,21 +106,11 @@ NC         = NX + 2*ND                      # Total number of cells
 ne         = density.sum()                  # Electron number density
 E_par      = E_perp / (anisotropy + 1)      # Parallel species energy/beta
 
-particle_open = 0
-if particle_reflect == 1 or particle_reinit == 1:
-    print('Only periodic or open boundaries supported, defaulting to open')
-    particle_reflect = particle_reinit = particle_periodic = 0
-    particle_open = 1
-elif particle_periodic == 0:
-    particle_open = 1
-    
+
 if B_eq == '-':
     B_eq      = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
     
 if rc_hwidth == '-':
-    rc_hwidth = 0
-elif int(rc_hwidth) > NX // 2:
-    print('WARNING: RC_WIDTH OUTSIDE RANGE. SETTING TO ZERO.')
     rc_hwidth = 0
 else:
     rc_hwidth = int(rc_hwidth)
@@ -157,8 +147,8 @@ vth_perp = np.sqrt(kB *  Tperp /  mass)
 # Number of sim particles for each species, total
 N_species  = np.zeros(Nj, dtype=np.int64)
 for jj in range(Nj):
-    # Cold species in every cell NX (override because non-uniform loading sucks)
-    if temp_type[jj] == 0 or True:                               
+    # Cold species in every cell NX 
+    if temp_type[jj] == 0:                               
         N_species[jj] = nsp_ppc[jj] * NX + 2   
         
     # Warm species only in simulation center, unless rc_hwidth = 0 (disabled)           
@@ -170,10 +160,7 @@ for jj in range(Nj):
 
 # Spare assumes same number in each cell (doesn't account for dist=1) 
 # THIS CAN BE CHANGED LATER TO BE MORE MEMORY EFFICIENT. LEAVE IT HUGE FOR DEBUGGING PURPOSES.
-if particle_open == 1:
-    spare_ppc  = nsp_ppc.copy()
-else:
-    spare_ppc  = 0
+spare_ppc  = nsp_ppc.copy()
 N          = N_species.sum() + (spare_ppc * NX).sum()
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
@@ -238,7 +225,13 @@ k_max      = np.pi / dx                                  # Maximum permissible w
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
 
 
-
+particle_open = 0
+if particle_reflect == 1 or particle_reinit == 1:
+    print('Only periodic or open boundaries supported, defaulting to open')
+    particle_reflect = particle_reinit = particle_periodic = 0
+    particle_open = 1
+elif particle_periodic == 0:
+    particle_open = 1
 
 
 

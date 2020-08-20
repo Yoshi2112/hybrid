@@ -30,8 +30,6 @@ if __name__ == '__main__':
 
     fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
     
-    #diag.plot_initial_sources(q_dens, Ji, E_int, B)
-    
     if save_particles == 1:
         save.save_particle_data(0, DT, part_save_iter, 0, pos, vel, idx)
         

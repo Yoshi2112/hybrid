@@ -9,6 +9,7 @@ import numpy as np
 from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios,\
                                         B_eq, a, particle_periodic, nsp_ppc, OPT_moments
 from   sources_1D                import collect_velocity_moments, collect_position_moment, OPT_collect_moments
+import sys
 
 from fields_1D import eval_B0x
 

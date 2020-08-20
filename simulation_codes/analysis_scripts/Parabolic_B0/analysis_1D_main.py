@@ -3319,7 +3319,7 @@ def scatterplot_velocities(it_max=None):
     pvez, pte, pjx, pjy, pjz, pqdens = cf.interpolate_fields_to_particle_time(it_max)
     
     for ii in range(it_max):
-        sys.stdout.write('Plotting particle data from p-file {}'.format(ii))
+        sys.stdout.write('\rPlotting particle data from p-file {}'.format(ii))
         sys.stdout.flush()
 
         filename = 'velocity_scatterplot_{:05}'.format(ii)
@@ -3360,16 +3360,16 @@ def scatterplot_velocities(it_max=None):
     return
 
 
-##%% MAIN
+#%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
 
-    for series in ['actual_ABC_test']:
+    for series in ['old_OPT_vs_new_KLIMAS_test']:
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        runs_to_do = range(num_runs)
+        runs_to_do = [2]#range(num_runs)
         
         # Extract all summary files and plot field stuff (quick)
         for run_num in runs_to_do:

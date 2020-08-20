@@ -16,7 +16,7 @@ import fields_1D    as fields
 from simulation_parameters_1D import dx, NX, ND, NC, N, Nj, nsp_ppc, va, B_A,  \
                                      idx_start, seed, vth_par, vth_perp, drift_v,  \
                                      qm_ratios, rc_hwidth, temp_type, Te0_scalar,\
-                                     damping_multiplier, N_species, \
+                                     damping_multiplier, quiet_start, N_species, \
                                      xmax,idx_end, init_radix, gaussian_T
                            
                             
@@ -257,8 +257,14 @@ def uniform_config_random_velocity():
     
     for jj in range(Nj):
         half_n = nsp_ppc[jj] // 2                     # Half particles per cell - doubled later
+        if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
+            NC_load = NX
+        else:
+            if rc_hwidth == 0 or rc_hwidth > NX//2:   # Need to change this to be something like the FWHM or something
+                NC_load = NX
+            else:
+                NC_load = 2*rc_hwidth
         
-        NC_load = NX
         # Load particles in each applicable cell
         acc = 0; offset  = 0
         for ii in range(NC_load):
@@ -285,15 +291,19 @@ def uniform_config_random_velocity():
             idx[   st: en] = jj          # Turn particle on
             
             # Set Loss Cone Distribution: Reinitialize particles in loss cone (move to a function)
-            if const.homogenous == 0 and temp_type[jj] == 1:
+            if const.homogenous == False and temp_type[jj] == 1:
                 LCD_by_rejection(pos, vel, st, en, jj)
                 
             # Quiet start : Initialize second half
-            vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set parallel
-            pos[0, en: en + half_n] = pos[0, st: en]            # Other half, same position
-            vel[1, en: en + half_n] = vel[1, st: en] * -1.0     # Invert perp velocities (v2 = -v1)
+            if quiet_start == True:
+                vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set parallel
+            else:
+                vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Set anti-parallel
+                
+            pos[0, en: en + half_n] = pos[0, st: en]                # Other half, same position
+            vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
             vel[2, en: en + half_n] = vel[2, st: en] * -1.0
-            idx[   en: en + half_n] = jj                        # Turn particle on
+            idx[   en: en + half_n] = jj          # Turn particle on
             
             acc                    += half_n * 2
 
@@ -397,16 +407,14 @@ def uniform_gaussian_distribution_ultra_quiet():
     
     for jj in range(Nj):
         quart_n = nsp_ppc[jj] // 4                    # Quarter of particles per cell - quaded later
-# =============================================================================
-#         if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
-#             NC_load = NX
-#         else:
-#             if rc_hwidth == 0 or rc_hwidth > NX//2:   # Need to change this to be something like the FWHM or something
-#                 NC_load = NX
-#             else:
-#                 NC_load = 2*rc_hwidth
-# =============================================================================
-        NC_load = NX
+        if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
+            NC_load = NX
+        else:
+            if rc_hwidth == 0 or rc_hwidth > NX//2:   # Need to change this to be something like the FWHM or something
+                NC_load = NX
+            else:
+                NC_load = 2*rc_hwidth
+        
         # Load particles in each applicable cell
         acc = 0; offset  = 0
         for ii in range(NC_load):
@@ -729,11 +737,8 @@ def set_timestep(vel, Te0):
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import diagnostics as diag
-
-    if True:    
-        POS, VEL, IDX = uniform_config_random_velocity()
-    else:
-        POS, VEL, IDX = uniform_config_random_velocity_gaussian_T()
+    
+    POS, VEL, IDX = uniform_config_random_velocity_gaussian_T()
     
     diag.plot_velocity_distribution_2D_histogram(POS, VEL)
     
@@ -750,33 +755,22 @@ if __name__ == '__main__':
 #     plt.show()
 # =============================================================================
     
-    from simulation_parameters_1D import temp_color
-    
-    #POS, VEL, IDX = bit_reversed_quiet()
-    
-    V_PARA = VEL[0]
-    V_PERP = np.sqrt(VEL[2]**2 + VEL[1]**2) * np.sign(VEL[2])
-    #%%
-    for jj in range(Nj):
-        fig, ax = plt.subplots()
-        ax.scatter(V_PARA[idx_start[jj]: idx_end[jj]], V_PERP[idx_start[jj]: idx_end[jj]],
-                   c=temp_color[jj], s=1)
-    
-        ax.axhline(0, c='k', alpha=0.2)
-        ax.axvline(0, c='k', alpha=0.2)
-        ax.axis('equal')
-        #ax.set_xlim(const.xmin/const.dx, const.xmax/const.dx)
-        
-    plt.show()
-    
-## OLD CODE
 # =============================================================================
-#         # This forces limited homogenous loading into equatorial cells. Not good. Just disable it.
-#         if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
-#             NC_load = NX
-#         else:
-#             if rc_hwidth == 0 or rc_hwidth > NX//2:   # Need to change this to be something like the FWHM or something
-#                 NC_load = NX
-#             else:
-#                 NC_load = 2*rc_hwidth
+#     
+#     from simulation_parameters_1D import idx_end, temp_color
+#     
+#     POS, VEL, IDX = bit_reversed_quiet()
+#     
+#     V_PARA = VEL[0]
+#     V_PERP = np.sqrt(VEL[2]**2 + VEL[1]**2) * np.sign(VEL[2])
+#     
+#     for jj in range(Nj):
+#         fig, ax = plt.subplots()
+#         ax.scatter(V_PARA[idx_start[jj]: idx_end[jj]], V_PERP[idx_start[jj]: idx_end[jj]],
+#                    c=temp_color[jj], s=1)
+#         
+#         ax.axhline(0, c='k', alpha=0.2)
+#         ax.axvline(0, c='k', alpha=0.2)
+#         
+#     plt.show()
 # =============================================================================
