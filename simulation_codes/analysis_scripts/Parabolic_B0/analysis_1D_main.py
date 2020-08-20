@@ -3306,7 +3306,7 @@ def plot_sample(it_max=None, N_sample=1000):
 
 
 def scatterplot_velocities(it_max=None):
-    print('Plotting sample of particles...')
+    print('Plotting scatterplot of all particle velocities...')
     if it_max is None:
         it_max = len(os.listdir(cf.particle_dir))
 
@@ -3319,7 +3319,9 @@ def scatterplot_velocities(it_max=None):
     pvez, pte, pjx, pjy, pjz, pqdens = cf.interpolate_fields_to_particle_time(it_max)
     
     for ii in range(it_max):
-        print('Plotting particle data from p-file {}'.format(ii))
+        sys.stdout.write('Plotting particle data from p-file {}'.format(ii))
+        sys.stdout.flush()
+
         filename = 'velocity_scatterplot_{:05}'.format(ii)
 
         pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii)
@@ -3354,41 +3356,39 @@ def scatterplot_velocities(it_max=None):
         
         plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
         plt.close('all')
+    print('\n')
     return
 
 
 ##%% MAIN
 if __name__ == '__main__':
-    drive       = 'E:'
+    drive       = 'F:'
 
-    for series in ['old_OPT_vs_new_KLIMAS_test']:
+    for series in ['actual_ABC_test']:
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        runs_to_do = [3, 4] #range(num_runs)
+        runs_to_do = range(num_runs)
         
         # Extract all summary files and plot field stuff (quick)
         for run_num in runs_to_do:
             print('\nRun {}'.format(run_num))
             cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=False)
             plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
+            standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
             
-            #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
+        # Do particle analyses for each run (slow)
+        for run_num in runs_to_do:
+            print('\nRun {}'.format(run_num))
+            cf.load_run(drive, series, run_num, extract_arrays=True)
+            scatterplot_velocities()
+            plot_E_components(save=True)
             
-# =============================================================================
-#         # Do particle analyses for each run (slow)
-#         for run_num in runs_to_do:
-#             print('\nRun {}'.format(run_num))
-#             cf.load_run(drive, series, run_num, extract_arrays=True)
-#             scatterplot_velocities()
-#             plot_E_components(save=True)
-#             
-#             #find_the_particles(it_max=None)
-#             summary_plots(save=True, histogram=True)
-#             for sp in range(2):
-#                 plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
-# =============================================================================
+            #find_the_particles(it_max=None)
+            summary_plots(save=True, histogram=True)
+            #for sp in range(2):
+                #plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
             
             
         #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)

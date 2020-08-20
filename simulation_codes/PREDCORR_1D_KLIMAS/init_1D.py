@@ -17,7 +17,7 @@ from simulation_parameters_1D import dx, NX, ND, NC, N, Nj, nsp_ppc, va, B_A,  \
                                      idx_start, seed, vth_par, vth_perp, drift_v,  \
                                      qm_ratios, rc_hwidth, temp_type, Te0_scalar,\
                                      damping_multiplier, quiet_start, N_species, \
-                                     xmax,idx_end, init_radix
+                                     xmax,idx_end, init_radix, gaussian_T
                            
                             
 def rkbr_uniform_set(arr, base=2):
@@ -214,8 +214,12 @@ def get_vth_at_x(pos, jj):
     
     Maybe only gaussianize v_perp? Let v_parallel be homogenous since it's just constant flux.
     '''
-    fwhm      = const.NX//4
-    mu, sigma = 0.0, const.dx*fwhm
+    if rc_hwidth == 0:
+        fwhm      = const.dx*const.NX//4
+    else:
+        fwhm      = const.dx*rc_hwidth
+        
+    mu, sigma = 0.0, fwhm
     gauss     = 1.0 / np.sqrt(2 * np.pi * sigma**2) * np.exp(-0.5*((pos - mu)/sigma) ** 2)
 
     # Value of the gaussian at each particle position
@@ -553,6 +557,8 @@ def initialize_particles():
     '''
     if init_radix == True:
         pos, vel, idx = uniform_config_reverseradix_velocity()
+    elif gaussian_T == True:
+        pos, vel, idx = uniform_config_random_velocity_gaussian_T()
     else:
         pos, vel, idx = uniform_config_random_velocity()
     
@@ -732,20 +738,22 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import diagnostics as diag
     
-    #POS, VEL, IDX = uniform_config_random_velocity_gaussian_T()
+    POS, VEL, IDX = uniform_config_random_velocity_gaussian_T()
     
-    #diag.plot_velocity_distribution_2D_histogram(POS, VEL)
+    diag.plot_velocity_distribution_2D_histogram(POS, VEL)
     
-    POS = np.linspace(const.xmin, xmax, 10000)
-    
-    vth_par_gauss, vth_perp_gauss = get_vth_at_x(POS, 0)
-    plt.plot(POS, vth_par_gauss/const.va)
-    plt.plot(POS, vth_perp_gauss/const.va)
-    vth_par_gauss, vth_perp_gauss = get_vth_at_x(POS, 1)
-    plt.plot(POS, vth_par_gauss/const.va)
-    plt.plot(POS, vth_perp_gauss/const.va)
-    
-    plt.show()
+# =============================================================================
+#     POS = np.linspace(const.xmin, xmax, 10000)
+#     
+#     plt.plot(POS, np.ones(POS.shape[0]) * vth_par[ 0]/const.va)
+#     plt.plot(POS, np.ones(POS.shape[0]) * vth_perp[0]/const.va)
+#     
+#     vth_par_gauss, vth_perp_gauss = get_vth_at_x(POS, 1)
+#     plt.plot(POS, vth_par_gauss/const.va)
+#     plt.plot(POS, vth_perp_gauss/const.va)
+#     
+#     plt.show()
+# =============================================================================
     
 # =============================================================================
 #     

@@ -16,7 +16,8 @@ import sys
 from os import system
 
 init_radix  = False
-OPT_moments = False
+OPT_moments = True
+gaussian_T  = True
 
 ## INPUT FILES ##
 run_input    = '../run_inputs/run_params.txt'
@@ -111,6 +112,8 @@ if B_eq == '-':
     
 if rc_hwidth == '-':
     rc_hwidth = 0
+else:
+    rc_hwidth = int(rc_hwidth)
     
 if beta_flag == 0:
     # Input energies as (perpendicular) eV

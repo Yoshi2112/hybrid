@@ -36,8 +36,6 @@ if __name__ == '__main__':
     if save_fields == 1:
         save.save_field_data(0, DT, field_save_iter, 0, Ji, E_int, B, Ve, Te, q_dens, B_damping_array, E_damping_array)
     
-    #diag.plot_initial_sources(q_dens, Ji, E_int, B)
-    
     # Retard velocity
     print('Retarding velocity...')
     particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E_int, v_prime, S, T, temp_N, -0.5*DT)
