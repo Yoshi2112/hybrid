@@ -61,7 +61,7 @@ if __name__ == '__main__':
     
     print('Retarding velocity...')
     particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT)
-    pdb.set_trace()
+
     qq       = 1;    sim_time = DT
     print('Starting main loop...')
     while qq < max_inc:

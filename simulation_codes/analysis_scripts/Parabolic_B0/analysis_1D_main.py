@@ -1619,99 +1619,110 @@ def check_fields(save=True):
     # Convert to plot units
     bx *= 1e9; by *= 1e9; bz *= 1e9
     ex *= 1e3; ey *= 1e3; ez *= 1e3
-    qdens *= 1e-6/qi
-    te /= 11603.
+    qdens *= 1e-6/qi;    te /= 11603.
     
+    ## Initialize plots and prepare plotspace
+    fontsize = 14; fsize = 12; lpad = 20
+    fig, axes = plt.subplots(5, ncols=3, figsize=(20,10), sharex=True)
+    fig.patch.set_facecolor('w')   
+    axes[0, 0].set_title('Field outputs: {}[{}]'.format(series, run_num), fontsize=fontsize+4, family='monospace')
+
+    axes[0, 0].set_ylabel('$r_D(x)$'     , rotation=0, labelpad=lpad, fontsize=fsize)
+    axes[1, 0].set_ylabel('$B_y$\n(nT)'  , rotation=0, labelpad=lpad, fontsize=fsize)
+    axes[2, 0].set_ylabel('$B_z$\n(nT)'  , rotation=0, labelpad=lpad, fontsize=fsize)
+    axes[3, 0].set_ylabel('$E_y$\n(mV/m)', rotation=0, labelpad=lpad, fontsize=fsize)
+    axes[4, 0].set_ylabel('$E_z$\n(mV/m)', rotation=0, labelpad=lpad, fontsize=fsize)
+        
+    axes[0, 0].set_ylim(rD.min(), rD.max())
+    axes[1, 0].set_ylim(by.min(), by.max())
+    axes[2, 0].set_ylim(bz.min(), bz.max())
+    axes[3, 0].set_ylim(ey.min(), ey.max())
+    axes[4, 0].set_ylim(ez.min(), ez.max())
+    
+    axes[0, 1].set_ylabel('$n_e$\n$(cm^{-1})$', fontsize=fsize, rotation=0, labelpad=lpad)
+    axes[1, 1].set_ylabel('$V_{ey}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
+    axes[2, 1].set_ylabel('$V_{ez}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
+    axes[3, 1].set_ylabel('$J_{iy}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
+    axes[4, 1].set_ylabel('$J_{iz}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
+    
+    axes[0, 1].set_ylim(qdens.min(), qdens.max())
+    axes[1, 1].set_ylim(vey.min(), vey.max())
+    axes[2, 1].set_ylim(vez.min(), vez.max())
+    axes[3, 1].set_ylim(jy.min() , jy.max())
+    axes[4, 1].set_ylim(jz.min() , jz.max())
+    
+    axes[0, 2].set_ylabel('$T_e$\n(eV)'     , fontsize=fsize, rotation=0, labelpad=lpad)
+    axes[1, 2].set_ylabel('$V_{ex}$\n(m/s)' , fontsize=fsize, rotation=0, labelpad=lpad)
+    axes[2, 2].set_ylabel('$J_{ix}$'        , fontsize=fsize, rotation=0, labelpad=lpad)
+    axes[3, 2].set_ylabel('$E_x$\n(mV/m)'   , fontsize=fsize, rotation=0, labelpad=lpad)
+    axes[4, 2].set_ylabel('$B_x$\n(nT)'     , fontsize=fsize, rotation=0, labelpad=lpad)
+
+    axes[0, 2].set_ylim(te.min(), te.max())
+    axes[1, 2].set_ylim(vex.min(), vex.max())
+    axes[2, 2].set_ylim(jx.min(), jx.max())
+    axes[3, 2].set_ylim(ex.min(), ex.max())
+    
+    fig.align_labels()
+            
+    for ii in range(3):
+        axes[4, ii].set_xlabel('Position (m/dx)')
+        for jj in range(5):
+            axes[jj, ii].set_xlim(cf.B_nodes[0] / cf.dx, cf.B_nodes[-1] / cf.dx)
+            axes[jj, ii].axvline(-cf.NX//2, c='k', ls=':', alpha=0.5)
+            axes[jj, ii].axvline( cf.NX//2, c='k', ls=':', alpha=0.5)
+            axes[jj, ii].grid()
+    
+    plt.tight_layout(pad=1.0, w_pad=1.8)
+    fig.subplots_adjust(hspace=0.125)
+    
+    # Initialize line2D with dummy data
+    B_BLANK = np.zeros(cf.B_nodes.shape[0]); E_BLANK = np.zeros(cf.E_nodes.shape[0])
+    
+    # Wave Fields (Plots, Labels, Lims)
+    line_rd, = axes[0, 0].plot(cf.B_nodes / cf.dx, B_BLANK, color='k', label=r'$r_D(x)$') 
+    line_by, = axes[1, 0].plot(cf.B_nodes / cf.dx, B_BLANK, color='b', label=r'$B_y$') 
+    line_bz, = axes[2, 0].plot(cf.B_nodes / cf.dx, B_BLANK, color='g', label=r'$B_z$')
+    line_ey, = axes[3, 0].plot(cf.E_nodes / cf.dx, E_BLANK, color='b', label=r'$E_y$')
+    line_ez, = axes[4, 0].plot(cf.E_nodes / cf.dx, E_BLANK, color='g', label=r'$E_z$')
+    
+    # Transverse Electric Field Variables (Plots, Labels, Lims)
+    line_pc, = axes[0, 1].plot(cf.E_nodes / cf.dx, E_BLANK, color='k', label=r'$n_e$')
+    line_vy, = axes[1, 1].plot(cf.E_nodes / cf.dx, E_BLANK, color='b', label=r'$V_{ey}$')
+    line_vz, = axes[2, 1].plot(cf.E_nodes / cf.dx, E_BLANK, color='g', label=r'$V_{ez}$')
+    line_jy, = axes[3, 1].plot(cf.E_nodes / cf.dx, E_BLANK, color='b', label=r'$J_{iy}$' )
+    line_jz, = axes[4, 1].plot(cf.E_nodes / cf.dx, E_BLANK, color='g', label=r'$J_{iz}$' )
+    
+    # Parallel Variables (Plots, Labels, Lims)
+    line_te, = axes[0, 2].plot(cf.E_nodes / cf.dx, E_BLANK, color='k', label=r'$T_e$')
+    line_vx, = axes[1, 2].plot(cf.E_nodes / cf.dx, E_BLANK, color='r', label=r'$V_{ex}$')
+    line_jx, = axes[2, 2].plot(cf.E_nodes / cf.dx, E_BLANK, color='r', label=r'$J_{ix}$' )
+    line_ex, = axes[3, 2].plot(cf.E_nodes / cf.dx, E_BLANK, color='r', label=r'$E_x$')
+    line_bx, = axes[4, 2].plot(cf.B_nodes / cf.dx, B_BLANK, color='r', label=r'$B_{0x}$')
+    
+    ## Do actual plotting and saving of data
     for ii in range(bx.shape[0]):
+        axes[0, 1].set_title('Time :: {:<7.4f}s'.format(ftime[ii]), fontsize=fontsize+4, family='monospace')
+
         filename = 'summ%05d.png' % ii
         fullpath = path + filename
-        fontsize = 14
         
         if os.path.exists(fullpath):
-            print('Summary plot already present for timestep [{}]{}'.format(run_num, ii))
             continue
-                
-        fsize = 12; lpad = 20
+        sys.stdout.write('\rCreating summary field plots [{}]{}'.format(run_num, ii))
+        sys.stdout.flush()
         
-        print('Creating summary field plots [{}]{}'.format(run_num, ii))
-        fig, axes = plt.subplots(5, ncols=3, figsize=(20,10), sharex=True)
-        fig.patch.set_facecolor('w')   
-
-        axes[0, 0].set_title('Field outputs: {}[{}]'.format(series, run_num), fontsize=fontsize+4, family='monospace')
-        axes[0, 1].set_title('Time :: {:<7.4f}s'.format(ftime[ii]), fontsize=fontsize+4, family='monospace')
+        # Set y datas for this timestep
+        line_rd.set_ydata(rD[ii]); line_pc.set_ydata(qdens[ii]); line_te.set_ydata(te[ii])
+        line_by.set_ydata(by[ii]); line_vy.set_ydata(vey[ii]);   line_vx.set_ydata(vex[ii])
+        line_bz.set_ydata(bz[ii]); line_vz.set_ydata(vez[ii]);   line_jx.set_ydata(jx[ii])
+        line_ey.set_ydata(ey[ii]); line_jy.set_ydata(jy[ii]);    line_ex.set_ydata(ex[ii])
+        line_ez.set_ydata(ez[ii]); line_jz.set_ydata(jz[ii]);    line_bx.set_ydata(bx[ii])
         
-        # Wave Fields (Plots, Labels, Lims)
-        axes[0, 0].plot(cf.B_nodes / cf.dx, rD[ii], color='k', label=r'$r_D(x)$') 
-        axes[1, 0].plot(cf.B_nodes / cf.dx, by[ii], color='b', label=r'$B_y$') 
-        axes[2, 0].plot(cf.B_nodes / cf.dx, bz[ii], color='g', label=r'$B_z$')
-        axes[3, 0].plot(cf.E_nodes / cf.dx, ey[ii], color='b', label=r'$E_y$')
-        axes[4, 0].plot(cf.E_nodes / cf.dx, ez[ii], color='g', label=r'$E_z$')
+        fig.canvas.draw()
         
-        axes[0, 0].set_ylabel('$r_D(x)$'     , rotation=0, labelpad=lpad, fontsize=fsize)
-        axes[1, 0].set_ylabel('$B_y$\n(nT)'  , rotation=0, labelpad=lpad, fontsize=fsize)
-        axes[2, 0].set_ylabel('$B_z$\n(nT)'  , rotation=0, labelpad=lpad, fontsize=fsize)
-        axes[3, 0].set_ylabel('$E_y$\n(mV/m)', rotation=0, labelpad=lpad, fontsize=fsize)
-        axes[4, 0].set_ylabel('$E_z$\n(mV/m)', rotation=0, labelpad=lpad, fontsize=fsize)
-        
-        axes[0, 0].set_ylim(rD.min(), rD.max())
-        axes[1, 0].set_ylim(by.min(), by.max())
-        axes[2, 0].set_ylim(bz.min(), bz.max())
-        axes[3, 0].set_ylim(ey.min(), ey.max())
-        axes[4, 0].set_ylim(ez.min(), ez.max())
-        
-        # Transverse Electric Field Variables (Plots, Labels, Lims)
-        axes[0, 1].plot(cf.E_nodes / cf.dx, qdens[ii], color='k', label=r'$n_e$')
-        axes[1, 1].plot(cf.E_nodes / cf.dx,   vey[ii], color='b', label=r'$V_{ey}$')
-        axes[2, 1].plot(cf.E_nodes / cf.dx,   vez[ii], color='g', label=r'$V_{ez}$')
-        axes[3, 1].plot(cf.E_nodes / cf.dx,    jy[ii], color='b', label=r'$J_{iy}$' )
-        axes[4, 1].plot(cf.E_nodes / cf.dx,    jz[ii], color='g', label=r'$J_{iz}$' )
-        
-        axes[0, 1].set_ylabel('$n_e$\n$(cm^{-1})$', fontsize=fsize, rotation=0, labelpad=lpad)
-        axes[1, 1].set_ylabel('$V_{ey}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
-        axes[2, 1].set_ylabel('$V_{ez}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
-        axes[3, 1].set_ylabel('$J_{iy}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
-        axes[4, 1].set_ylabel('$J_{iz}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
-        
-        axes[0, 1].set_ylim(qdens.min(), qdens.max())
-        axes[1, 1].set_ylim(vey.min(), vey.max())
-        axes[2, 1].set_ylim(vez.min(), vez.max())
-        axes[3, 1].set_ylim(jy.min() , jy.max())
-        axes[4, 1].set_ylim(jz.min() , jz.max())
-        
-        # Parallel Variables (Plots, Labels, Lims)
-        axes[0, 2].plot(cf.E_nodes / cf.dx,   te[ii], color='k', label=r'$T_e$')
-        axes[1, 2].plot(cf.E_nodes / cf.dx,  vex[ii], color='r', label=r'$V_{ex}$')
-        axes[2, 2].plot(cf.E_nodes / cf.dx,   jx[ii], color='r', label=r'$J_{ix}$' )
-        axes[3, 2].plot(cf.E_nodes / cf.dx,   ex[ii], color='r', label=r'$E_x$')
-        axes[4, 2].plot(cf.B_nodes / cf.dx,   bx[ii], color='r', label=r'$B_{0x}$')
-        
-        axes[0, 2].set_ylabel('$T_e$\n(eV)'     , fontsize=fsize, rotation=0, labelpad=lpad)
-        axes[1, 2].set_ylabel('$V_{ex}$\n(m/s)' , fontsize=fsize, rotation=0, labelpad=lpad)
-        axes[2, 2].set_ylabel('$J_{ix}$'        , fontsize=fsize, rotation=0, labelpad=lpad)
-        axes[3, 2].set_ylabel('$E_x$\n(mV/m)'   , fontsize=fsize, rotation=0, labelpad=lpad)
-        axes[4, 2].set_ylabel('$B_x$\n(nT)'     , fontsize=fsize, rotation=0, labelpad=lpad)
-
-        axes[0, 2].set_ylim(te.min(), te.max())
-        axes[1, 2].set_ylim(vex.min(), vex.max())
-        axes[2, 2].set_ylim(jx.min(), jx.max())
-        axes[3, 2].set_ylim(ex.min(), ex.max())
-        
-        fig.align_labels()
-            
-        for ii in range(3):
-            axes[4, ii].set_xlabel('Position (m/dx)')
-            for jj in range(5):
-                axes[jj, ii].set_xlim(cf.B_nodes[0] / cf.dx, cf.B_nodes[-1] / cf.dx)
-                axes[jj, ii].axvline(-cf.NX//2, c='k', ls=':', alpha=0.5)
-                axes[jj, ii].axvline( cf.NX//2, c='k', ls=':', alpha=0.5)
-                axes[jj, ii].grid()
-                
-        plt.tight_layout(pad=1.0, w_pad=1.8)
-        fig.subplots_adjust(hspace=0.125)
-
         if save == True:
             plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-        plt.close('all')
+    print('\n')
     return
 
 
@@ -3364,12 +3375,12 @@ def scatterplot_velocities(it_max=None):
 if __name__ == '__main__':
     drive       = 'F:'
 
-    for series in ['old_OPT_vs_new_KLIMAS_test']:
+    for series in ['actual_ABC_test']:
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        runs_to_do = [2]#range(num_runs)
+        runs_to_do = [2, 3]#range(num_runs)
         
         # Extract all summary files and plot field stuff (quick)
         for run_num in runs_to_do:
@@ -3385,14 +3396,14 @@ if __name__ == '__main__':
             scatterplot_velocities()
             plot_E_components(save=True)
             
-            #find_the_particles(it_max=None)
+            find_the_particles(it_max=None)
             summary_plots(save=True, histogram=True)
             #for sp in range(2):
                 #plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
-            
+            #check_fields()
             
         #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
-        #check_fields()
+            
                 
         #do_all_dynamic_spectra(ymax=2.0)
         #do_all_dynamic_spectra(ymax=None)

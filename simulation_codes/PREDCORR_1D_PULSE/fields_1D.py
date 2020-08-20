@@ -6,10 +6,12 @@ Created on Fri Sep 22 17:54:19 2017
 """
 import numpy as np
 import numba as nb
-
+import pdb
 import auxilliary_1D as aux
-from simulation_parameters_1D import dx, ne, q, mu0, kB, ie, B_eq, a, \
-                                     disable_waves, E_damping, field_periodic
+from simulation_parameters_1D import dx, ne, q, mu0, kB, ie, B_eq, a,         \
+                                     disable_waves, E_damping, field_periodic,\
+                                     driven_freq, driven_ampl, ND, NX,\
+                                     pulse_offset, pulse_width
 
 
 @nb.njit()
@@ -72,6 +74,8 @@ def push_B(B, E, curlE, DT, qq, damping_array, half_flag=1):
     
     The half_flag can be thought of as 'not having done the full timestep yet' for N + 1/2, so 0.5*DT is
     subtracted from the "full" timestep time
+    
+    Equatorial B-cell at ND + NX//2 (alternatively integer divide: B.shape[0]//2 ?
     '''
     get_curl_E(E, curlE)
 
@@ -151,7 +155,31 @@ def get_grad_P(qn, te, grad_P, temp):
 
 
 @nb.njit()
-def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_damping_array):
+def add_J_ext(qq, Ji, DT, half_flag):
+    '''
+    Driven J designed as energy input into simulation. All parameters specified
+    in the simulation_parameters script/file
+    
+    Designed as a Gaussian pulse so that things don't freak out by rising too 
+    quickly. Just test with one source point at first
+    '''
+    # Soft source wave (What t corresponds to this?)
+    # Should put some sort of ramp on it?
+    # Also needs to be polarised. By or Bz lagging/leading?
+    phase = -90
+    N_eq  = ND + NX//2
+    time  = qq*DT - 0.5*half_flag*DT
+    
+    gaussian = np.exp(- ((time - pulse_offset)/ pulse_width) ** 2 )
+
+    # Set new field values in array as soft source
+    Ji[N_eq, 1] += driven_ampl * gaussian*np.sin(2 * np.pi * driven_freq * time)
+    Ji[N_eq, 2] += driven_ampl * gaussian*np.sin(2 * np.pi * driven_freq * time + phase * np.pi / 180.)    
+    return
+
+
+@nb.njit()
+def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_damping_array, qq, DT, half_flag=1):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
     and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
@@ -174,6 +202,8 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_dampi
     12/06/2020 -- Added E-field damping option as per Hu & Denton (2010), Ve x B term only
     '''
     curl_B_term(B, temp3De)                                   # temp3De is now curl B term
+
+    add_J_ext(qq, Ji, DT, half_flag=half_flag)
 
     Ve[:, 0] = (Ji[:, 0] - temp3De[:, 0]) / q_dens
     Ve[:, 1] = (Ji[:, 1] - temp3De[:, 1]) / q_dens

@@ -17,7 +17,17 @@ from os import system
 
 init_radix  = False
 OPT_moments = True
-gaussian_T  = True
+gaussian_T  = False
+
+# DRIVEN B PARAMS: Sine part
+driven_freq = 0.02      # Driven wave frequency in Hz
+driven_ampl = 50e-6     # Driven wave amplitude in A/m (I think?)
+driven_k    = 0.0       # Not used yet. Needs to be a CPDR lookup
+
+# Gaussian part
+pulse_offset = 5.0      # Pulse center time (s)
+pulse_width  = 1.0      # Pulse width (proportional to 2*std. 3*width decayed to 0.0123%) 
+
 
 ## INPUT FILES ##
 run_input    = '../run_inputs/run_params.txt'
@@ -106,6 +116,13 @@ NC         = NX + 2*ND                      # Total number of cells
 ne         = density.sum()                  # Electron number density
 E_par      = E_perp / (anisotropy + 1)      # Parallel species energy/beta
 
+particle_open = 0
+if particle_reflect == 1 or particle_reinit == 1:
+    print('Only periodic or open boundaries supported, defaulting to open')
+    particle_reflect = particle_reinit = particle_periodic = 0
+    particle_open = 1
+elif particle_periodic == 0:
+    particle_open = 1
 
 if B_eq == '-':
     B_eq      = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
@@ -160,8 +177,11 @@ for jj in range(Nj):
 
 # Spare assumes same number in each cell (doesn't account for dist=1) 
 # THIS CAN BE CHANGED LATER TO BE MORE MEMORY EFFICIENT. LEAVE IT HUGE FOR DEBUGGING PURPOSES.
-spare_ppc  = nsp_ppc.copy()
-N          = N_species.sum() + (spare_ppc * NX).sum()
+if particle_open == 1:
+    spare_ppc  = nsp_ppc.copy()
+else:
+    spare_ppc  = np.zeros(Nj, dtype=int)
+N = N_species.sum() + (spare_ppc * NX).sum()
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
@@ -225,13 +245,7 @@ k_max      = np.pi / dx                                  # Maximum permissible w
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
 
 
-particle_open = 0
-if particle_reflect == 1 or particle_reinit == 1:
-    print('Only periodic or open boundaries supported, defaulting to open')
-    particle_reflect = particle_reinit = particle_periodic = 0
-    particle_open = 1
-elif particle_periodic == 0:
-    particle_open = 1
+
 
 
 

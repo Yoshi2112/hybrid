@@ -173,8 +173,8 @@ for jj in range(Nj):
 if particle_open == 1:
     spare_ppc  = nsp_ppc.copy()
 else:
-    spare_ppc  = 0
-N          = N_species.sum() + (spare_ppc * NX).sum()
+    spare_ppc  = np.zeros(Nj, dtype=int)
+N = N_species.sum() + (spare_ppc * NX).sum()
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order

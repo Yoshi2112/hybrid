@@ -218,7 +218,7 @@ def set_damping_array(damping_array, DT):
     23/03/2020 Put factor of 0.5 in front of va to set group velocity approx.
     '''
     dist_from_mp  = np.abs(np.arange(NC + 1) - 0.5*NC)          # Distance of each B-node from midpoint
-    r_damp        = np.sqrt(29.7 * 0.5 * va / ND * (DT / dx))   # Damping coefficient
+    r_damp        = 0.0#np.sqrt(29.7 * 0.5 * va / ND * (DT / dx))   # Damping coefficient
     
     for ii in range(NC + 1):
         if dist_from_mp[ii] > 0.5*NX:

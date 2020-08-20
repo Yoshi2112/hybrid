@@ -11,6 +11,7 @@ import save_routines as save
 
 from simulation_parameters_1D import save_particles, save_fields, xmin, xmax, E_nodes, B_nodes, dx
 import diagnostics as diag
+import pdb
 
 if __name__ == '__main__':
     start_time = timer()
@@ -21,14 +22,14 @@ if __name__ == '__main__':
     q_dens, q_dens_adv, Ji, ni, nu                      = init.initialize_source_arrays()
     old_particles, old_fields, temp3De, temp3Db, temp1D,\
                                           v_prime, S, T = init.initialize_tertiary_arrays()
-    
+
     # Collect initial moments and save initial state
     sources.collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji)
     sources.collect_position_moment(pos, Ie, W_elec, idx, q_dens, ni) 
 
     DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array = init.set_timestep(vel, Te0)
 
-    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
+    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array, 0, DT)
     
     if save_particles == 1:
         save.save_particle_data(0, DT, part_save_iter, 0, pos, vel, idx)
