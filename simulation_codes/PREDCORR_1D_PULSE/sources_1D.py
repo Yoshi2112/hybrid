@@ -6,7 +6,8 @@ Created on Fri Sep 22 17:55:15 2017
 """
 import numba as nb
 from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, q, ne, min_dens,\
-                                     xmin, xmax, dx, source_smoothing, field_periodic
+                                     xmin, xmax, dx, source_smoothing, field_periodic,\
+                                     pulse_test
 
 
 @nb.njit()
@@ -269,6 +270,12 @@ def OPT_collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
     Ji     *= 0.
     ni     *= 0.
     nu     *= 0.
+    
+    # Override moment collection from particles to test fields. Keep 100% ideal
+    # i.e. Zero current and initial homogenous density
+    if pulse_test == True:
+        q_dens[:] = ne * q
+        return
     
     OPT_deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu)
     

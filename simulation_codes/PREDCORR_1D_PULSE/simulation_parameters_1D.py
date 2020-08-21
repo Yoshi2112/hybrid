@@ -18,16 +18,15 @@ from os import system
 init_radix  = False
 OPT_moments = True
 gaussian_T  = False
+pulse_test  = True
 
 # DRIVEN B PARAMS: Sine part
 driven_freq = 0.02      # Driven wave frequency in Hz
-driven_ampl = 50e-6     # Driven wave amplitude in A/m (I think?)
-driven_k    = 0.0       # Not used yet. Needs to be a CPDR lookup
+driven_ampl = 50e-7     # Driven wave amplitude in A/m (I think?)
 
 # Gaussian part
 pulse_offset = 5.0      # Pulse center time (s)
 pulse_width  = 1.0      # Pulse width (proportional to 2*std. 3*width decayed to 0.0123%) 
-
 
 ## INPUT FILES ##
 run_input    = '../run_inputs/run_params.txt'
@@ -244,8 +243,14 @@ gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency 
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
 
+species_plasfreq_sq   = (density * charge ** 2) / (mass * e0)
+species_gyrofrequency = qm_ratios * B_eq
 
-
+# Looks right!
+driven_rad = driven_freq * 2 * np.pi
+driven_k  = (driven_rad / c) ** 2
+driven_k *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyrofrequency))).sum()
+driven_k = np.sqrt(driven_k)
 
 
 

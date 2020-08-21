@@ -1241,6 +1241,11 @@ def summary_plots(save=True, histogram=True):
     '''  
     np.set_printoptions(suppress=True)
     
+    num_particle_steps = len(os.listdir(cf.particle_dir))
+    if num_particle_steps == 0:
+        print('ABORT: No particle data present to create summary plots.')
+        return
+    
     if histogram == True:
         path = cf.anal_dir + '/summary_plots_histogram/'
     else:
@@ -1248,8 +1253,6 @@ def summary_plots(save=True, histogram=True):
         
     if os.path.exists(path) == False:                                   # Create data directory
         os.makedirs(path)
-    
-    num_particle_steps = len(os.listdir(cf.particle_dir))
     
     plt.ioff()
     ptime_sec, pbx, pby, pbz, pex, pey, pez, pvex, pvey,\
@@ -1261,7 +1264,7 @@ def summary_plots(save=True, histogram=True):
     
     # Normalized change density
     qdens_norm = pqdens / (cf.density*cf.charge).sum()     
-    
+
     B_lim   = np.array([-1.0*pby.min(), pby.max(), -1.0*pbz.min(), pbz.max()]).max() * 1e9
     vel_lim = 20
     E_lim   = np.array([-1.0*pex.min(), pex.max(), -1.0*pey.min(), pey.max(), -1.0*pez.min(), pez.max()]).max() * 1e3
@@ -3375,12 +3378,12 @@ def scatterplot_velocities(it_max=None):
 if __name__ == '__main__':
     drive       = 'F:'
 
-    for series in ['actual_ABC_test']:
+    for series in ['pulse_test']:
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        runs_to_do = [2, 3]#range(num_runs)
+        runs_to_do = [2, 3, 4, 5]#range(num_runs)
         
         # Extract all summary files and plot field stuff (quick)
         for run_num in runs_to_do:
@@ -3393,14 +3396,14 @@ if __name__ == '__main__':
         for run_num in runs_to_do:
             print('\nRun {}'.format(run_num))
             cf.load_run(drive, series, run_num, extract_arrays=True)
-            scatterplot_velocities()
-            plot_E_components(save=True)
+            #scatterplot_velocities()
+            #plot_E_components(save=True)
             
-            find_the_particles(it_max=None)
-            summary_plots(save=True, histogram=True)
+            #find_the_particles(it_max=None)
+            #summary_plots(save=True, histogram=True)
             #for sp in range(2):
                 #plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
-            #check_fields()
+            check_fields()
             
         #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
             

@@ -11,7 +11,7 @@ import auxilliary_1D as aux
 from simulation_parameters_1D import dx, ne, q, mu0, kB, ie, B_eq, a,         \
                                      disable_waves, E_damping, field_periodic,\
                                      driven_freq, driven_ampl, ND, NX,\
-                                     pulse_offset, pulse_width
+                                     pulse_offset, pulse_width, driven_k
 
 
 @nb.njit()
@@ -175,6 +175,42 @@ def add_J_ext(qq, Ji, DT, half_flag):
     # Set new field values in array as soft source
     Ji[N_eq, 1] += driven_ampl * gaussian*np.sin(2 * np.pi * driven_freq * time)
     Ji[N_eq, 2] += driven_ampl * gaussian*np.sin(2 * np.pi * driven_freq * time + phase * np.pi / 180.)    
+    return
+
+
+@nb.njit()
+def add_J_ext_pol(qq, Ji, DT, half_flag):
+    '''
+    Driven J designed as energy input into simulation. All parameters specified
+    in the simulation_parameters script/file
+    
+    Designed as a Gaussian pulse so that things don't freak out by rising too 
+    quickly. Just test with one source point at first
+    
+    Polarised with a LH mode only, uses five points with both w, k specified
+    -- Not quite sure how to code this... do you just add a time delay (td, i.e. phase)
+        to both the envelope and sin values at each point? 
+        
+    -- Source node as td=0, other nodes have td depending on distance from source, 
+        (ii*dx) and the wave phase velocity v_ph = w/k (which are both known)
+    
+    P.S. A bunch of these values could be put in the simulation_parameters script.
+    Optimize later (after testing shows that it actually works!)
+    '''
+    # Soft source wave (What t corresponds to this?)
+    # Should put some sort of ramp on it?
+    # Also needs to be polarised. By or Bz lagging/leading?
+    phase = -np.pi / 2
+    N_eq  = ND + NX//2
+    time  = qq*DT - 0.5*half_flag*DT
+    v_ph  = driven_freq / driven_k
+    
+    for off in np.arange(-2, 3):
+        delay = off*dx / v_ph
+        gauss = driven_ampl * np.exp(- ((time - pulse_offset - delay)/ pulse_width) ** 2 )
+        
+        Ji[N_eq + off, 1] += gauss * np.sin(2 * np.pi * driven_freq * (time - delay))
+        Ji[N_eq + off, 2] += gauss * np.sin(2 * np.pi * driven_freq * (time - delay) + phase)    
     return
 
 
