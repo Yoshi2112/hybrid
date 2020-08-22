@@ -30,11 +30,13 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, 
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, temp_N, DT)
     position_update(pos, vel, idx, Ep, DT, Ie, W_elec)  
     
-    if OPT_moments == True:
-        OPT_collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu)
-    else:
-        collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji)
-        collect_position_moment(pos, Ie, W_elec, idx, q_dens, ni)
+    #if OPT_moments == True:
+    OPT_collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu)
+# =============================================================================
+#     else:
+#         collect_velocity_moments(pos, vel, Ie, W_elec, idx, nu, Ji)
+#         collect_position_moment(pos, Ie, W_elec, idx, q_dens, ni)
+# =============================================================================
     return
 
 

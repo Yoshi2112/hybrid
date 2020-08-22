@@ -2,7 +2,7 @@ LABEL        $H^+$_cold
 COLOUR       blue
 TEMP_FLAG    0
 DIST_FLAG    0
-NSP_PPC      128
+NSP_PPC      256
 MASS_PROTON  1.
 CHARGE_ELEM  1.
 DRIFT_VA     0.

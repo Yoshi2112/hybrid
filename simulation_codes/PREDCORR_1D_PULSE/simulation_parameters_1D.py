@@ -18,7 +18,7 @@ from os import system
 init_radix  = False
 OPT_moments = True
 gaussian_T  = False
-pulse_test  = True
+source_BC   = 2
 
 # DRIVEN B PARAMS: Sine part
 driven_freq = 0.02      # Driven wave frequency in Hz

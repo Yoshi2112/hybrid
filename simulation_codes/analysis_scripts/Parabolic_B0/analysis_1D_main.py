@@ -3378,19 +3378,19 @@ def scatterplot_velocities(it_max=None):
 if __name__ == '__main__':
     drive       = 'F:'
 
-    for series in ['pulse_test']:
+    for series in ['ABC_pulse_test_source_BCs']:
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        runs_to_do = [2, 3, 4, 5]#range(num_runs)
+        runs_to_do = range(num_runs)
         
         # Extract all summary files and plot field stuff (quick)
         for run_num in runs_to_do:
             print('\nRun {}'.format(run_num))
             cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=False)
             plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
-            standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
+            standard_analysis_package(thesis=False, tx_only=True, disp_overlay=False)
             
         # Do particle analyses for each run (slow)
         for run_num in runs_to_do:

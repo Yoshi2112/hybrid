@@ -7,7 +7,7 @@ Created on Fri Sep 22 17:55:15 2017
 import numba as nb
 from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, q, ne, min_dens,\
                                      xmin, xmax, dx, source_smoothing, field_periodic,\
-                                     pulse_test
+                                     source_BC
 
 
 @nb.njit()
@@ -270,13 +270,7 @@ def OPT_collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
     Ji     *= 0.
     ni     *= 0.
     nu     *= 0.
-    
-    # Override moment collection from particles to test fields. Keep 100% ideal
-    # i.e. Zero current and initial homogenous density
-    if pulse_test == True:
-        q_dens[:] = ne * q
-        return
-    
+
     OPT_deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu)
     
     # Sum contributions across species
@@ -296,22 +290,53 @@ def OPT_collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
         Ji[ND, ii]          += Ji[ND - 1, ii]
         Ji[ND + NX - 1, ii] += Ji[ND + NX, ii]
 
+        if source_BC == 0:
+            # Set damping cell source values (zero gradient)
+            Ji[:ND, ii]    = Ji[ND + 1, ii]
+            Ji[ND+NX:, ii] = Ji[ND+NX - 2, ii]
+        elif source_BC == 1:
+            # Set damping cell source values (copy last)
+            Ji[:ND, ii] = Ji[ND, ii]
+            Ji[ND+NX:]  = Ji[ND+NX-1]
+        elif source_BC == 2:
+            # Set damping cell source values (zero second derivative)
+            Ji[:ND, ii]    = 2*Ji[ND,      ii] - Ji[ND + 1     , ii]
+            Ji[ND+NX:, ii] = 2*Ji[ND+NX-1, ii] - Ji[ND + NX - 2, ii]
+        
+    if source_BC == 0:
         # Set damping cell source values (zero gradient)
-        Ji[:ND, ii]    = Ji[ND + 1, ii]
-        Ji[ND+NX:, ii] = Ji[ND+NX - 2, ii]
+        q_dens[:ND]    = q_dens[ND + 1]
+        q_dens[ND+NX:] = q_dens[ND+NX - 2]
+    elif source_BC == 1:
+        # Set damping cell source values (copy last)
+        q_dens[:ND]    = q_dens[ND]
+        q_dens[ND+NX:] = q_dens[ND+NX-1]
+    elif source_BC == 2:
+        # Set damping cell source values (zero second derivative)
+        q_dens[:ND]    = 2*q_dens[ND]      - q_dens[ND + 1]
+        q_dens[ND+NX:] = 2*q_dens[ND+NX-1] - q_dens[ND+NX-2]
         
-    # Set damping cell source values
-    q_dens[:ND]    = q_dens[ND + 1]
-    q_dens[ND+NX:] = q_dens[ND+NX - 2]
         
-    # Implement smoothing filter: If enabled
-    if source_smoothing == 1:
-        three_point_smoothing(q_dens, ni[:, 0])
-        for ii in range(3):
-            three_point_smoothing(Ji[:, ii], ni[:, 0])
-
-    # Set density minimum
-    for ii in range(q_dens.shape[0]):
-        if q_dens[ii] < min_dens * ne * q:
-            q_dens[ii] = min_dens * ne * q
+# =============================================================================
+#     # Implement smoothing filter: If enabled
+#     if source_smoothing == 1:
+#         three_point_smoothing(q_dens, ni[:, 0])
+#         for ii in range(3):
+#             three_point_smoothing(Ji[:, ii], ni[:, 0])
+# 
+#     # Set density minimum
+#     for ii in range(q_dens.shape[0]):
+#         if q_dens[ii] < min_dens * ne * q:
+#             q_dens[ii] = min_dens * ne * q
+# =============================================================================
     return
+
+
+        
+        
+    
+    
+    
+        
+        
+    
