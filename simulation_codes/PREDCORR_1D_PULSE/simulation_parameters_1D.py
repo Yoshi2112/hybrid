@@ -14,10 +14,10 @@ derived values/casting to SI units (e.g. alfven velocity)
 import numpy as np
 import sys
 from os import system
-
+import pdb
 # Random options for testing purposes. Nothing here that'll probably be used
 # Except under pretty specific circumstances.
-init_radix  = False
+init_radix  = True
 gaussian_T  = False
 pol_wave    = 0         # 0: No wave, 1: Single point source, 2: Multi point source
 
@@ -30,8 +30,9 @@ pulse_offset = 5.0      # Pulse center time (s)
 pulse_width  = 1.0      # Pulse width (proportional to 2*std. 3*width decayed to 0.0123%) 
 
 ## INPUT FILES ##
-run_input    = '../run_inputs/run_params.txt'
-plasma_input = '../run_inputs/plasma_params.txt'
+root_dir     = os.path.dirname(sys.path[0])
+run_input    = root_dir +  '/run_inputs/run_params.txt'
+plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
 
 # Load run parameters
 with open(run_input, 'r') as f:
