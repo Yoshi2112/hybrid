@@ -13,7 +13,7 @@ derived values/casting to SI units (e.g. alfven velocity)
 """
 import numpy as np
 import sys
-from os import system, path, name
+import os
 # Random options for testing purposes. Nothing here that'll probably be used
 # Except under pretty specific circumstances.
 init_radix  = True
@@ -29,8 +29,8 @@ pulse_offset = 5.0      # Pulse center time (s)
 pulse_width  = 1.0      # Pulse width (proportional to 2*std. 3*width decayed to 0.0123%) 
 
 ## INPUT FILES ##
-if name == 'posix':
-    root_dir     = path.dirname(sys.path[0])
+if os.name == 'posix':
+    root_dir     = os.path.dirname(sys.path[0])
     run_input    = root_dir +  '/run_inputs/run_params.txt'
     plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
 else:
@@ -192,10 +192,8 @@ idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)]
 
 if run == '-':
     # Work out how many runs exist, then add to it. Save a bit of work numerically increasing.
-    try:
-        run = len(path.list(drive + save_path))
-    except:
-        run = 0
+    run = len(os.listdir(drive + save_path))
+    print('Run number AUTOSET to ', run)
 else:
     run = int(run)
 
@@ -359,4 +357,4 @@ if particle_periodic + particle_reflect + particle_reinit > 1:
     print('DO SOMETHING ABOUT IT')
     print('--------------------------------------------------')
     
-system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
+os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
