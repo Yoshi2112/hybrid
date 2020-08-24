@@ -13,7 +13,7 @@ derived values/casting to SI units (e.g. alfven velocity)
 """
 import numpy as np
 import sys
-from os import system
+from os import system, path
 import pdb
 # Random options for testing purposes. Nothing here that'll probably be used
 # Except under pretty specific circumstances.
@@ -30,7 +30,7 @@ pulse_offset = 5.0      # Pulse center time (s)
 pulse_width  = 1.0      # Pulse width (proportional to 2*std. 3*width decayed to 0.0123%) 
 
 ## INPUT FILES ##
-root_dir     = os.path.dirname(sys.path[0])
+root_dir     = path.dirname(sys.path[0])
 run_input    = root_dir +  '/run_inputs/run_params.txt'
 plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
 
