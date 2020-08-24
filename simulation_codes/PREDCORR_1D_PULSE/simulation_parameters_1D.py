@@ -192,7 +192,10 @@ idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)]
 
 if run == '-':
     # Work out how many runs exist, then add to it. Save a bit of work numerically increasing.
-    run = len(os.listdir(drive + save_path))
+    if os.path.exists(drive + save_path) == False:
+        run = 0
+    else:
+        run = len(os.listdir(drive + save_path))
     print('Run number AUTOSET to ', run)
 else:
     run = int(run)
