@@ -14,7 +14,6 @@ derived values/casting to SI units (e.g. alfven velocity)
 import numpy as np
 import sys
 from os import system, path
-import pdb
 # Random options for testing purposes. Nothing here that'll probably be used
 # Except under pretty specific circumstances.
 init_radix  = True
