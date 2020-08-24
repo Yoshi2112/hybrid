@@ -13,7 +13,7 @@ derived values/casting to SI units (e.g. alfven velocity)
 """
 import numpy as np
 import sys
-from os import system, path
+from os import system, path, name
 # Random options for testing purposes. Nothing here that'll probably be used
 # Except under pretty specific circumstances.
 init_radix  = True
@@ -29,16 +29,20 @@ pulse_offset = 5.0      # Pulse center time (s)
 pulse_width  = 1.0      # Pulse width (proportional to 2*std. 3*width decayed to 0.0123%) 
 
 ## INPUT FILES ##
-root_dir     = path.dirname(sys.path[0])
-run_input    = root_dir +  '/run_inputs/run_params.txt'
-plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
+if name == 'posix':
+    root_dir     = path.dirname(sys.path[0])
+    run_input    = root_dir +  '/run_inputs/run_params.txt'
+    plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
+else:
+    run_input    = '../run_inputs/run_params.txt'
+    plasma_input = '../run_inputs/plasma_params.txt'
 
 # Load run parameters
 with open(run_input, 'r') as f:
     ### RUN PARAMETERS ###
     drive             = f.readline().split()[1]        # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
     save_path         = f.readline().split()[1]        # Series save dir   : Folder containing all runs of a series
-    run               = int(f.readline().split()[1])   # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+    run               = f.readline().split()[1]        # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 
     save_particles    = int(f.readline().split()[1])   # Save data flag    : For later analysis
     save_fields       = int(f.readline().split()[1])   # Save plot flag    : To ensure hybrid is solving correctly during run
@@ -186,6 +190,14 @@ N = N_species.sum() + (spare_ppc * NX).sum()
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
 
+if run == '-':
+    # Work out how many runs exist, then add to it. Save a bit of work numerically increasing.
+    try:
+        run = len(path.list(drive + save_path))
+    except:
+        run = 0
+else:
+    run = int(run)
 
 ############################
 ### MAGNETIC FIELD STUFF ###
