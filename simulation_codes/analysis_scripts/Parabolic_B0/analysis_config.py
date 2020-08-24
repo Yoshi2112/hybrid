@@ -108,7 +108,7 @@ def load_simulation_params():
            rc_hwidth, L, B_nodes, E_nodes, xmin, grid_min, grid_max, \
            grid_mid, run_time, run_time_str, particle_periodic, particle_reflect, \
            particle_reinit, particle_open, disable_waves, source_smoothing, \
-           E_damping, quiet_start, homogenous, field_periodic
+           E_damping, quiet_start, homogenous, field_periodic, damping_multiplier
 
     h_name = os.path.join(data_dir, 'simulation_parameters.pckl')       # Load header file
     f      = open(h_name, 'rb')                                         # Open header file
@@ -141,6 +141,11 @@ def load_simulation_params():
     run_desc          = obj['run_desc']
     method_type       = obj['method_type'] 
     particle_shape    = obj['particle_shape']
+    
+    try:
+        damping_multiplier = obj['damping_multiplier']
+    except:
+        damping_multiplier = None
     
     part_save_iter    = obj['part_save_iter']
     field_save_iter   = obj['field_save_iter']
@@ -284,6 +289,7 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
             print('Cell width      :: {:.1f} m'.format(dx), file=f)
             print('Simulation Min  :: {:.1f} m'.format(xmin), file=f)
             print('Simulation Max  :: {:.1f} m'.format(xmax), file=f)
+            print('Damping Multipl.:: {:.2f}'.format(damping_multiplier), file=f)
             print('', file=f)
             print('Equatorial Field Strength :: {:.2f} nT'.format(B_eq*1e9), file=f)
             print('Boundary   Field Strength :: {:.2f} nT'.format(B_xmax*1e9), file=f)

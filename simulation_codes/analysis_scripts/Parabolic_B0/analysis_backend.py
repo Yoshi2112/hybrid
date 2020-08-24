@@ -256,8 +256,7 @@ def calculate_E_components(bx, by, bz, jx, jy, jz, q_dens):
 # =============================================================================
 #     import sys
 #     import matplotlib.pyplot as plt
-# =============================================================================
-# =============================================================================
+#
 #     fig, ax = plt.subplots(2, figsize=(15, 10))
 #     
 #     time  = 120
@@ -380,7 +379,6 @@ def get_helical_components(overwrite=False, field='B'):
         Ft_neg = np.zeros(Fy.shape, dtype=np.complex128)
         
         for ii in range(Fy.shape[0]):
-            print('Analysing time step {}'.format(ii))
             Ft_pos[ii, :], Ft_neg[ii, :] = calculate_helicity(Fy[ii], Fz[ii], cf.dx)
         
         print('Saving {}-helicities to file'.format(field))

@@ -6,16 +6,18 @@ Created on Fri Sep 22 17:54:19 2017
 """
 import numpy as np
 import numba as nb
-
+import pdb
 import auxilliary_1D as aux
 from simulation_parameters_1D import dx, ne, q, mu0, kB, ie, B_eq, a,         \
                                      disable_waves, E_damping, field_periodic,\
                                      driven_freq, driven_ampl, ND, NX,\
                                      pulse_offset, pulse_width, driven_k, pol_wave
 
+
 @nb.njit()
 def eval_B0x(x):
     return B_eq * (1. + a * x**2)
+
 
 @nb.njit()
 def get_curl_E(E, dE):
@@ -57,6 +59,7 @@ def get_curl_E(E, dE):
     dE /= dx
     return 
 
+
 @nb.njit()
 def push_B(B, E, curlE, DT, qq, damping_array, half_flag=1):
     '''
@@ -86,6 +89,7 @@ def push_B(B, E, curlE, DT, qq, damping_array, half_flag=1):
             B[:, ii] *= damping_array                        # Not sure if this needs to modified for half steps?
     return
 
+
 @nb.njit()
 def curl_B_term(B, curlB):
     ''' Returns a vector quantity for the curl of a field valid at the positions 
@@ -103,6 +107,7 @@ def curl_B_term(B, curlB):
     curlB /= (dx * mu0)
     return 
 
+
 @nb.njit()
 def get_electron_temp(qn, Te, Te0):
     '''
@@ -115,6 +120,7 @@ def get_electron_temp(qn, Te, Te0):
         gamma_e = 5./3. - 1.
         Te[:] = Te0 * np.power(qn / (q*ne), gamma_e)
     return
+
 
 @nb.njit()
 def get_grad_P(qn, te, grad_P, temp):
@@ -147,6 +153,7 @@ def get_grad_P(qn, te, grad_P, temp):
     grad_P[:]    = temp[:nc]
     return
 
+
 @nb.njit()
 def add_J_ext(qq, Ji, DT, half_flag):
     '''
@@ -169,6 +176,7 @@ def add_J_ext(qq, Ji, DT, half_flag):
     Ji[N_eq, 1] += driven_ampl * gaussian*np.sin(2 * np.pi * driven_freq * time)
     Ji[N_eq, 2] += driven_ampl * gaussian*np.sin(2 * np.pi * driven_freq * time + phase * np.pi / 180.)    
     return
+
 
 @nb.njit()
 def add_J_ext_pol(qq, Ji, DT, half_flag):
@@ -205,6 +213,7 @@ def add_J_ext_pol(qq, Ji, DT, half_flag):
         Ji[N_eq + off, 2] += gauss * np.sin(2 * np.pi * driven_freq * (time - delay) + phase)    
     return
 
+
 @nb.njit()
 def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_damping_array, qq, DT, half_flag=1):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
@@ -230,15 +239,10 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_dampi
     '''
     curl_B_term(B, temp3De)                                   # temp3De is now curl B term
 
-    if pol_wave == 0:
-        # No driving
+    if pol_wave == True:
         pass
-    elif pol_wave == 1:
-        # Single point source
+    else:
         add_J_ext(qq, Ji, DT, half_flag=half_flag)
-    elif pol_wave == 2:
-        # Multi-point source
-        add_J_ext_pol(qq, Ji, DT, half_flag=half_flag)
 
     Ve[:, 0] = (Ji[:, 0] - temp3De[:, 0]) / q_dens
     Ve[:, 1] = (Ji[:, 1] - temp3De[:, 1]) / q_dens

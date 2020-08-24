@@ -405,14 +405,8 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
             vmax = cf.B_eq * B0_lim * 1e9
         else:
             vmax = B0_lim
-    
-    if log == False:
-        im1     = ax.pcolormesh(x, t, bt, cmap='jet', vmin=vmin, vmax=vmax)
-        logsuff = ''
-    else:
-        im1     = ax.pcolormesh(x, t, np.log10(bt), cmap='jet', vmin=0.0, vmax=-3)
-        logsuff = '_log'
         
+    im1  = ax.pcolormesh(x, t, bt, cmap='jet', vmin=vmin, vmax=vmax)
     cb   = fig.colorbar(im1)
     
     cb.set_label(clabel, rotation=0, family=font, fontsize=fontsize, labelpad=30)
@@ -427,7 +421,7 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
     ax.axvline(cf.grid_mid / cf.dx, c='w', ls=':', alpha=0.75)   
         
     if save == True:
-        fullpath = cf.anal_dir + saveas + '_BPERP_{}{}{}'.format(lbl, suff, logsuff) + '.png'
+        fullpath = cf.anal_dir + saveas + '_BPERP_{}{}'.format(lbl, suff) + '.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
         print('t-x Plot saved')
         plt.close('all')
@@ -3382,105 +3376,59 @@ def get_closest_idx(arr, value):
     return (np.abs(arr - value)).argmin()
 
 
-def get_reflection_coefficient(save=True, incl_damping_cells=True):
+def get_reflection_coefficient(save=True):
     '''
     Just do it in the time series
     But getting a reflection coefficient as a function of frequency could be cool.
     Would need to have a run with a chirp instead of a set pulse though. Would
     definitely need it polarised, too.
-    
-    Would definitely be easier with a Poynting method
     '''
     t_arr, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens, field_sim_time, damping_array\
         = cf.get_array(get_all=True)
         
-    # Specify box points :: Good check!
-    boundary_distance   = 50.0          # Boxes will be this far from boundary
-    ti_start            = 7.0           # And start at these times
-    tr_start            = 14.5
+    # box_params (in units of dx and seconds)
+    del_t = 2.5
+    del_x = 50.0
     
-    # box dimensions (in units of dx and seconds)
-    del_t = 7.5
-    del_x = 100.0
+    # Specify box points
+    x_end   = cf.xmax/cf.dx - 50.0
+    ti1     = 7.5
+    tr1     = 17.5
     
-    # Rectangle boundaries in data coords
-    x_startL = cf.xmin/cf.dx + boundary_distance
-    x_endL   = x_startL + del_x
+    x_arr   = cf.B_nodes // cf.dx
+    x_start = x_end - del_x
+    ti2     = ti1 + del_t
+    tr2     = tr1 + del_t
     
-    x_endR   = cf.xmax/cf.dx - boundary_distance
-    x_startR = x_endR - del_x
-    
-    ti_end   = ti_start + del_t
-    tr_end   = tr_start + del_t
-    
-    # Rectangle boundaries as indices
-    x_arr = cf.B_nodes // cf.dx
-    x1L   = get_closest_idx(x_arr, x_startL)
-    x2L   = get_closest_idx(x_arr, x_endL)
-    x1R   = get_closest_idx(x_arr, x_startR)
-    x2R   = get_closest_idx(x_arr, x_endR)+1
-    ti1   = get_closest_idx(t_arr, ti_start)
-    ti2   = get_closest_idx(t_arr, ti_end)+1
-    tr1   = get_closest_idx(t_arr, tr_start)
-    tr2   = get_closest_idx(t_arr, tr_end)+1
-    
-    bt2 = (by*1e9) ** 2 + (bz*1e9) ** 2
-    bt  = np.sqrt(bt2)
-    
-    # Magnetic field energy is simply the total summation of values at each 
-    # point in space and time, within some boundaries.
-    # Why am I getting wildly different values for each side?
-    I_inL  = bt2[x1L:x2L, ti1:ti2].sum()
-    I_outL = bt2[x1L:x2L, tr1:tr2].sum()
-    reflL  = 10 * np.log10(I_outL/I_inL)
-    
-    I_inR  = bt2[x1R:x2R, ti1:ti2].sum()
-    I_outR = bt2[x1R:x2R, tr1:tr2].sum()
-    reflR  = 10 * np.log10(I_outR/I_inR)
-    
+    x1 = get_closest_idx(x_arr, x_start)
+    x2 = get_closest_idx(x_arr, x_end)
     pdb.set_trace()
+    
+    bt  = np.sqrt(by ** 2 + bz ** 2) * 1e9
+    
+    fontsize = 18
+    font     = 'monospace'
+    
+    
     plt.ioff()
     tick_label_size = 14
     mpl.rcParams['xtick.labelsize'] = tick_label_size 
     mpl.rcParams['ytick.labelsize'] = tick_label_size 
-    fontsize = 18
-    font     = 'monospace'
-    
-    rect1L = mpl.patches.Rectangle((x_arr[x1L], t_arr[ti1]), del_x, del_t, linewidth=1,
-                                   edgecolor='w', facecolor='none')
-    
-    rect2L = mpl.patches.Rectangle((x_arr[x1L], t_arr[tr1]), del_x, del_t, linewidth=1,
-                                   edgecolor='r', facecolor='none')
-    
-    rect1R = mpl.patches.Rectangle((x_arr[x1R], t_arr[ti1]), del_x, del_t, linewidth=1,
-                                   edgecolor='w', facecolor='none')
-    
-    rect2R = mpl.patches.Rectangle((x_arr[x1R], t_arr[tr1]), del_x, del_t, linewidth=1,
-                                   edgecolor='r', facecolor='none')
+   
     
     # Plot, showing box and reflection coeff
     fig, ax = plt.subplots(1, figsize=(15, 10))
 
-    im1  = ax.pcolormesh(x_arr, t_arr, bt, cmap='jet', vmin=0.0, vmax=bt.max())
+    im1  = ax.pcolormesh(x_arr, t, bt, cmap='jet', vmin=0.0, vmax=bt.max())
     cb   = fig.colorbar(im1)
-    
-    ax.add_patch(rect1L)
-    ax.add_patch(rect2L)
-    ax.add_patch(rect1R)
-    ax.add_patch(rect2R)
     
     cb.set_label('$|B_\perp|$\nnT', rotation=0, family=font, fontsize=fontsize, labelpad=30)
 
-    ax.set_title('Transverse B :: Reflection Coefficients :: L {:.2f} dB :: R {:.2f} dB'.format(reflL, reflR), fontsize=fontsize, family=font)
     ax.set_ylabel('t (s)', rotation=0, labelpad=30, fontsize=fontsize, family=font)
     ax.set_xlabel('x ($\Delta x$)', fontsize=fontsize, family=font)
     ax.set_ylim(0, None)
     
-    if incl_damping_cells == True:
-        ax.set_xlim(x_arr[0], x_arr[-1])
-    else:
-        ax.set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
-        
+    ax.set_xlim(x[0], x[-1])
     ax.axvline(cf.xmin     / cf.dx, c='w', ls=':', alpha=1.0)
     ax.axvline(cf.xmax     / cf.dx, c='w', ls=':', alpha=1.0)
     ax.axvline(cf.grid_mid / cf.dx, c='w', ls=':', alpha=0.75)   
@@ -3499,22 +3447,22 @@ def get_reflection_coefficient(save=True, incl_damping_cells=True):
 if __name__ == '__main__':
     drive       = 'F:'
 
-    for series in ['ABC_newEMIC_damping_test']:
+    for series in ['ABC_newEMIC_no_BC_offset']:
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        runs_to_do = [8]#range(num_runs)
+        runs_to_do = [4]#range(num_runs)
         
         # Extract all summary files and plot field stuff (quick)
         for run_num in runs_to_do:
             print('\nRun {}'.format(run_num))
             cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=False)
             
-            plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
-            standard_analysis_package(thesis=False, tx_only=True, disp_overlay=False)
+            #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
+            #standard_analysis_package(thesis=False, tx_only=True, disp_overlay=False)
           
-            #get_reflection_coefficient()
+            get_reflection_coefficient()
 # =============================================================================
 #         # Do particle analyses for each run (slow)
 #         for run_num in runs_to_do:

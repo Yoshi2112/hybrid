@@ -18,12 +18,14 @@ from os import system
 # Random options for testing purposes. Nothing here that'll probably be used
 # Except under pretty specific circumstances.
 init_radix  = False
+OPT_moments = True
 gaussian_T  = False
-pol_wave    = 0         # 0: No wave, 1: Single point source, 2: Multi point source
+source_BC   = 1
+pol_wave    = True
 
 # DRIVEN B PARAMS: Sine part
-driven_freq = 2.2       # Driven wave frequency in Hz standard 2.2
-driven_ampl = 50e-7     # Driven wave amplitude in A/m (I think?) Standard 50e-7
+driven_freq = 2.2       # Driven wave frequency in Hz
+driven_ampl = 50e-7     # Driven wave amplitude in A/m (I think?)
 
 # Gaussian part
 pulse_offset = 5.0      # Pulse center time (s)
