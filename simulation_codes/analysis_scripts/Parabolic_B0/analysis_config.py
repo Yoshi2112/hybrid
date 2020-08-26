@@ -324,6 +324,17 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
             print('MParticle Contr.:: {} real particles/macroparticle'.format(n_contr), file=f)
     return
 
+
+def delete_analysis_folders():
+    '''
+    Used as a blunt tool for when incomplete runs are analysed
+    and you want to do a full one later on.
+    '''
+    
+    
+    return
+
+
 def load_fields(ii):
     field_file = 'data%05d.npz' % ii             # Define target file
     input_path = field_dir + field_file          # File location
