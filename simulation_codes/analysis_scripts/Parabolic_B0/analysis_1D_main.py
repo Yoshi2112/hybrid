@@ -3497,25 +3497,69 @@ def get_reflection_coefficient(save=True, incl_damping_cells=True):
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'F:'
+    drive       = 'Z:'
 
-    for series in ['ABC_newEMIC_damping_test']:
+    for series in ['ABC_newEMIC_nsp_test_parabolic']:
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        runs_to_do = [8]#range(num_runs)
+        # Sample colour list just to draw from
+        clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
+                'darkorange', 'peru', 'yellow']
         
+        runs_to_do = range(num_runs)
+        
+# =============================================================================
+#         fig1, axes1 = plt.subplots(2, sharex=True)
+#         fig2, axes2 = plt.subplots(2, sharex=True)
+# =============================================================================
         # Extract all summary files and plot field stuff (quick)
         for run_num in runs_to_do:
             print('\nRun {}'.format(run_num))
             cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=False)
             
             plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
-            standard_analysis_package(thesis=False, tx_only=True, disp_overlay=False)
-          
-            #get_reflection_coefficient()
+            #standard_analysis_package(thesis=False, tx_only=True, disp_overlay=False)
+            
 # =============================================================================
+#             # Quick & Easy way to do all runs: Plot function here
+#             ftime, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, \
+#             qdens, field_sim_time, damping_array = cf.get_array(get_all=True)
+#             qn0 = cf.ne * qi
+#             LHS = cf.ND
+#             # Density plot at boundary cell
+#             axes1[0].set_title('Flux and density at LHS boundary')
+#             axes1[0].plot(ftime, qdens[:, LHS], c=clrs[run_num], label=str(cf.nsp_ppc[1])+' hppc')
+#             axes1[0].set_ylabel('$\\rho_c$', rotation=0, fontsize=14)
+#             axes1[0].legend()
+#             axes1[0].axhline(qn0, c='k', ls=':', alpha=0.5)
+#             
+#             # Parallel current plot (proxy for total flux)
+#             axes1[1].plot(ftime, jx[:, LHS], c=clrs[run_num], label=str(cf.nsp_ppc[1])+' hppc')
+#             axes1[1].set_ylabel('$J_x$', rotation=0, fontsize=14)
+#             axes1[1].set_xlabel('Time (s)', fontsize=12)
+#             axes1[1].set_xlim(0, None)
+#             axes1[1].axhline(0.0, c='k', ls=':', alpha=0.5)
+#             
+#             RHS = cf.ND + cf.NX - 1
+#             # Density plot at boundary cell
+#             axes2[0].set_title('Flux and density at RHS boundary')
+#             axes2[0].plot(ftime, qdens[:, RHS], c=clrs[run_num], label=str(cf.nsp_ppc[1])+' hppc')
+#             axes2[0].set_ylabel('$\\rho_c$', rotation=0, fontsize=14)
+#             axes2[0].legend()
+#             axes2[0].axhline(qn0, c='k', ls=':', alpha=0.5)
+#             
+#             # Parallel current plot (proxy for total flux)
+#             axes2[1].plot(ftime, jx[:, RHS], c=clrs[run_num], label=str(cf.nsp_ppc[1])+' hppc')
+#             axes2[1].set_ylabel('$J_x$', rotation=0, fontsize=14)
+#             axes2[1].set_xlabel('Time (s)', fontsize=12)
+#             axes2[1].set_xlim(0, None)
+#             axes2[1].axhline(0.0, c='k', ls=':', alpha=0.5)
+# =============================================================================
+            
+# =============================================================================
+#             #get_reflection_coefficient()
 #         # Do particle analyses for each run (slow)
 #         for run_num in runs_to_do:
 #             print('\nRun {}'.format(run_num))
@@ -3531,7 +3575,7 @@ if __name__ == '__main__':
 #             #summary_plots(save=True, histogram=True)
 #             #for sp in range(2):
 #                 #plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
-#             #check_fields()
+#             check_fields()
 # =============================================================================
             
         #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
