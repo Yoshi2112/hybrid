@@ -102,6 +102,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
                    ('source_smoothing', const.source_smoothing),
                    ('E_damping', const.E_damping),
                    ('quiet_start', const.quiet_start),
+                   ('radix_loading', const.radix_loading),
                    ('damping_multiplier', const.damping_multiplier)
                    ])
 

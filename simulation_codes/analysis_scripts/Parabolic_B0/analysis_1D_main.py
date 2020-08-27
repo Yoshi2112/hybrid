@@ -1500,7 +1500,7 @@ def summary_plots(save=True, histogram=True):
     return
 
 
-def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, tx_only=False, tmax=15):
+def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, tx_only=False, tmax=30):
     '''
     Need a high-pass option for the wk? Or will it do all of it?
     It should do all of it (show the Pc4 branch and the Pc1 branch)
@@ -1548,8 +1548,8 @@ def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, t
                     plot_spatial_poynting_helical(save=True, log=True)
                 except:
                     pass
-                #plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
                 
+                #plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
                 #plot_initial_configurations()
             
             if False:
@@ -3497,9 +3497,9 @@ def get_reflection_coefficient(save=True, incl_damping_cells=True):
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'Z:'
+    drive       = 'G:'
 
-    for series in ['ABC_newEMIC_nsp_test_parabolic']:
+    for series in ['ABC_newEMIC_nsp_test', 'ABC_newEMIC_nsp_test_parabolic', 'ABC_newEMIC_nsp_test_radix']:
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -3517,10 +3517,11 @@ if __name__ == '__main__':
         # Extract all summary files and plot field stuff (quick)
         for run_num in runs_to_do:
             print('\nRun {}'.format(run_num))
-            cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=False)
+            #cf.delete_analysis_folders(drive, series, run_num)
+            cf.load_run(drive, series, run_num, extract_arrays=True)
             
             plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
-            #standard_analysis_package(thesis=False, tx_only=True, disp_overlay=False)
+            standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
             
 # =============================================================================
 #             # Quick & Easy way to do all runs: Plot function here
@@ -3558,29 +3559,28 @@ if __name__ == '__main__':
 #             axes2[1].axhline(0.0, c='k', ls=':', alpha=0.5)
 # =============================================================================
             
-# =============================================================================
-#             #get_reflection_coefficient()
-#         # Do particle analyses for each run (slow)
-#         for run_num in runs_to_do:
-#             print('\nRun {}'.format(run_num))
-#             cf.load_run(drive, series, run_num, extract_arrays=True)
-#             
-#             plot_spatial_poynting(save=True, log=True)
-#             plot_spatial_poynting_helical(save=True, log=True)
-#             
-#             #scatterplot_velocities()
-#             #plot_E_components(save=True)
-#             
-#             #find_the_particles(it_max=None)
-#             #summary_plots(save=True, histogram=True)
-#             #for sp in range(2):
-#                 #plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
-#             check_fields()
-# =============================================================================
+            #get_reflection_coefficient()
+        # Do particle analyses for each run (slow)
+    for series in ['ABC_newEMIC_nsp_test', 'ABC_newEMIC_nsp_test_parabolic', 'ABC_newEMIC_nsp_test_radix']:
+        for run_num in runs_to_do:
+            print('\nRun {}'.format(run_num))
+            cf.load_run(drive, series, run_num, extract_arrays=True)
+            
+            plot_E_components(save=True)
+            check_fields()
+            
+            #plot_spatial_poynting(save=True, log=True)
+            #plot_spatial_poynting_helical(save=True, log=True)
+            
+            #scatterplot_velocities()
+            
+            #find_the_particles(it_max=None)
+            #summary_plots(save=True, histogram=True)
+            #for sp in range(2):
+                #plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
             
         #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
             
-                
         #do_all_dynamic_spectra(ymax=2.0)
         #do_all_dynamic_spectra(ymax=None)
 

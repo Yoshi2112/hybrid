@@ -17,7 +17,7 @@ from simulation_parameters_1D import dx, NX, ND, NC, N, Nj, nsp_ppc, va, B_A,  \
                                      idx_start, seed, vth_par, vth_perp, drift_v,  \
                                      qm_ratios, rc_hwidth, temp_type, Te0_scalar,\
                                      damping_multiplier, quiet_start, N_species, \
-                                     xmax,idx_end, init_radix, gaussian_T, driven_freq
+                                     xmax,idx_end, radix_loading, gaussian_T, driven_freq
                            
                             
 def rkbr_uniform_set(arr, base=2):
@@ -555,7 +555,7 @@ def initialize_particles():
         W_mag  -- Initial particle weights on B-grid
         idx    -- Particle type index
     '''
-    if init_radix == True:
+    if radix_loading == True:
         pos, vel, idx = uniform_config_reverseradix_velocity()
     elif gaussian_T == True:
         pos, vel, idx = uniform_config_random_velocity_gaussian_T()

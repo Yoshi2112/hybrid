@@ -14,9 +14,9 @@ derived values/casting to SI units (e.g. alfven velocity)
 import numpy as np
 import sys
 import os
+
 # Random options for testing purposes. Nothing here that'll probably be used
 # Except under pretty specific circumstances.
-init_radix  = True
 gaussian_T  = False
 pol_wave    = 0         # 0: No wave, 1: Single point source, 2: Multi point source
 
@@ -60,6 +60,7 @@ with open(run_input, 'r') as f:
     source_smoothing  = int(f.readline().split()[1])   # Smooth source terms with 3-point Gaussian filter
     E_damping         = int(f.readline().split()[1])   # Damp E in a manner similar to B for ABCs
     quiet_start       = int(f.readline().split()[1])   # Flag to use quiet start (False :: semi-quiet start)
+    radix_loading     = int(f.readline().split()[1])   # Flag to use bit-reversed radix scrambling sets to initialise velocities
     damping_multiplier= float(f.readline().split()[1]) # Multiplies the r-factor to increase/decrease damping rate.
 
     ### SIMULATION PARAMETERS ###

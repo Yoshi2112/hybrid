@@ -3,6 +3,7 @@ import sys
 import numpy as np
 import numba as nb
 import pickle
+import shutil
 import pdb
 '''
 Used to initialise values for a run
@@ -325,13 +326,25 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
     return
 
 
-def delete_analysis_folders():
+def delete_analysis_folders(drive, series, run_num):
     '''
     Used as a blunt tool for when incomplete runs are analysed
     and you want to do a full one later on.
     '''
+    print('Deleting analysis and temp folders.')
+    run_dir  = '{}/runs/{}/run_{}/'.format(drive, series, run_num)      # Main run directory
+    anal_dir = run_dir + 'analysis/'                                    # Output directory for all this analysis (each will probably have a subfolder)
+    temp_dir = run_dir + 'extracted/'                                   # Saving things like matrices so we only have to do them once
+
+    # Delete directory and contents
+    for directory in [anal_dir, temp_dir]:
+        if os.path.exists(directory) == True:
+            shutil.rmtree(directory)
     
-    
+    # Delete summary file
+    param_file = run_dir + 'simulation_parameter_file.txt'
+    if os.path.exists(param_file) == True:
+        os.remove(param_file)
     return
 
 
