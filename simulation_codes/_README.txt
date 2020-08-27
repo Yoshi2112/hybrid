@@ -12,3 +12,6 @@ PREDCORR_1D_KLIMAS
 PREDCORR_1D_PULSE
 Basically the KLIMAS code but modified to include some sort of analytic wave generation at the equator, for testing purposes. Just a junk code to see if it even works. Need the generation in order to properly test and define the ABCs (with a uniform cold plasma). All recent reflection and flux tests were carried out in this code, and it is the latest version that will be used.
 NOTE: THERE WAS AN ISSUE IN THE DAMPING SOURCE TERM FOUND AND FIXED : J COMPONENTS WEREN'T COPIED FOR THE "LAST VALUE" CONDITION (OPTIONS SINCE DELETED). IF OLDER CODES USED, CHECK THAT THIS HAS BEEN FIXED IN THEM.
+
+PREDCORR_1D_NEWFLUX
+So the Klimas BC's seem to die once a wave hits them. I don't think they were designed for such a dynamic interior (more of a steady-state sort of thing). Seems the only way to get around it is to actually inject particles by retrieving some sort of flux, and then injecting particles based on this flux. Will need to try either measuring outgoing and equalling that (easy method) or having some set flux per timestep as per the original distribution (harder method, as it requires calculating that incoming flux). PROTIP: The outgoing flux should be equal to the incoming flux with either method for steady state. Good check.
