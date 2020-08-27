@@ -4,18 +4,20 @@ Created on Fri Sep 22 17:23:44 2017
 
 @author: iarey
 """
-import numba as nb
-import numpy as np
-from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios,\
-                                        B_eq, a, particle_periodic, nsp_ppc
+import numba   as nb
+import numpy   as np
+import init_1D as init      
+ 
+from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios, Nj, vth_par, vth_perp,\
+                                        B_eq, B_xmax, a, particle_periodic, nsp_ppc, n_contr
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
 
 
-@nb.njit()
+#@nb.njit()
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T, temp_N,\
-                                  B, E, DT, q_dens, Ji, ni, nu, pc=0):
+                                  B, E, DT, q_dens, Ji, ni, nu, flux, pc=0):
     '''
     Helper function to group the particle advance and moment collection functions
     
@@ -27,7 +29,11 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, 
     Maybe maths this later on? How did Verbonceur (2005) get around this?
     '''
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, temp_N, DT)
-    position_update(pos, vel, idx, Ep, DT, Ie, W_elec)  
+    position_update(pos, vel, idx, Ep, DT, Ie, W_elec, flux)  
+    
+    if particle_periodic == 0:
+        inject_particles(pos, vel, idx, flux, DT, pc)
+    
     collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu)
     return
 
@@ -186,7 +192,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
 
 
 @nb.njit()
-def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
+def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec, flux):
     '''
     Updates the position of the particles using x = x0 + vt. 
     Also updates particle nearest node and weighting.
@@ -246,60 +252,115 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
                 pos[0, ii] += xmax - xmin  
     else:
         # Disable loop: Remove particles that leave the simulation space
-        n_deleted = 0
+        # Also store their flux (vx component only, n_contr can be done per species later)
+        n_deleted = np.zeros((2, Nj), dtype=nb.float64)
         for ii in nb.prange(pos.shape[1]):
-            if (pos[0, ii] < xmin or pos[0, ii] > xmax):
+            if pos[0, ii] < xmin:
+                flux[0, idx[ii]] += abs(vel[0, ii])
                 pos[:, ii] *= 0.0
                 vel[:, ii] *= 0.0
                 idx[ii]     = -1
-                n_deleted  += 1
-        
-        # Check number of spare particles
-        num_spare = (idx < 0).sum()
-        if num_spare < 2 * nsp_ppc.sum():
-            print('WARNING :: Less than two cells worth of spare particles remaining.')
-            if num_spare == 0:
-                print('WARNING :: No space particles remaining. Exiting simulation.')
-                raise IndexError
-        
-        acc = 0; n_created = 0
-        for ii in nb.prange(pos.shape[1]):
-            # If particle goes from cell 1 to cell 2
-            if (pos_old[0, ii] < xmin + dx):
-                if (pos[0, ii] >= xmin + dx) and (pos[0, ii] <= xmin + 2*dx):
-                    
-                    # Find first negative idx to initialize as new particle
-                    for kk in nb.prange(acc, pos.shape[1]):
-                        if idx[kk] < 0:
-                            acc = kk + 1
-                            break
-                    
-                    # Create new particle with pos_old, vel of this particle
-                    pos[0, kk] = pos[0, ii] - dx
-                    pos[1, kk] = pos[1, ii]
-                    pos[2, kk] = pos[2, ii]
-                    vel[:, kk] = vel[:, ii]
-                    idx[kk]    = idx[ii]
-                    n_created += 1
-            
-            # If particle goes from cell NX to cell NX - 1
-            elif (pos_old[0, ii] > xmax - dx):
-                if (pos[0, ii] <= xmax - dx) and (pos[0, ii] > xmax - 2*dx):
-                    
-                    # Find first negative idx to initialize as new particle
-                    for kk in nb.prange(acc, pos.shape[1]):
-                        if idx[kk] < 0:
-                            acc = kk + 1
-                            break
-                    
-                    # Create new particle with pos_old, vel of this particle
-                    pos[0, kk] = pos[0, ii] + dx
-                    pos[1, kk] = pos[1, ii]
-                    pos[2, kk] = pos[2, ii]
-                    vel[:, kk] = vel[:, ii]
-                    idx[kk]    = idx[ii]
-                    n_created += 1
-   
-    #print(n_created, 'created  ;  ', n_deleted, 'deleted')
+                n_deleted[0, idx[ii]]  += 1
+            elif pos[0, ii] > xmax:
+                flux[1, idx[ii]] += abs(vel[0, ii])
+                pos[:, ii] *= 0.0
+                vel[:, ii] *= 0.0
+                idx[ii]     = -1
+                n_deleted[1, idx[ii]]  += 1
+    
+    #print('Particles deleted:\n', n_deleted)
     assign_weighting_TSC(pos, idx, Ie, W_elec)
+    return
+
+#import pdb
+@nb.njit()
+def inject_particles(pos, vel, idx, flux, dt, pc):
+    '''
+    Basic injection routine. Flux is set by either:
+        -- Measuring outgoing
+        -- Set as initial condition by Maxwellian
+        
+    This code injects particles to equal that outgoing flux. Not sure
+    how this is going to go with conserving moments, but we'll see.
+    If this works, might be able to use Daughton conditions later. But should
+    at least keep constant under static conditions.
+    
+    NOTE: Finding a random particle like that, do I have to change the timestep?
+    What if the particle is just a little too fast? Check later. Or put in cap
+    (3*vth?)
+    '''
+    N_retries = 10      # Set number of times to try and reinitialize a particle 
+                        # This is so when the flux is low (but non-zero) the code
+                        # doesn't start getting exponentially longer at the tail
+                        # looking for a particle with almost zero velocity.
+
+    # Check number of spare particles
+    num_spare = (idx < 0).sum()
+    if num_spare < 2 * nsp_ppc.sum():
+        print('WARNING :: Less than two cells worth of spare particles remaining.')
+        if num_spare == 0:
+            print('WARNING :: No space particles remaining. Exiting simulation.')
+            raise IndexError
+    
+    # Create particles one at a time until flux drops below a certain limit
+    # or number of retries is reached
+    acc = 0; n_created = np.zeros((2, Nj), dtype=np.float64)
+    for ii in range(2):
+        for jj in range(Nj):
+            while flux[ii, jj] > 0:
+                # Loop until not-too-energetic particle found
+                vx = 3e8; new_particle = 0
+                
+                # Find a vx that'll fit in remaining flux
+                for n_tried in range(N_retries):
+                    vx       = np.random.normal(0.0, vth_par[jj])
+                    if vx <= flux[ii, jj]:
+                        new_particle = 1
+                        break
+
+                # If successful, load particle
+                if new_particle == 1:
+                    # Successful particle found, set parameters and subtract flux
+                    # Find first negative idx to initialize as new particle
+                    for kk in nb.prange(acc, pos.shape[1]):
+                        if idx[kk] < 0:
+                            acc = kk + 1
+                            break
+                    
+                    # Decide direction of vx, and placement of particle
+                    # This could probably be way optimized later.
+                    if ii == 0:
+                        vel[0, kk] = np.abs(vx)
+                        max_pos    = vel[0, kk]*dt
+                        
+                        if abs(max_pos) < 0.5*dx:
+                            pos[0, kk] = xmin + np.random.uniform(0, 1) * max_pos
+                        else:
+                            pos[0, kk] = xmin + max_pos
+                            
+                    else:
+                        vel[0, kk] = -np.abs(vx)
+                        max_pos    = vel[0, kk]*dt
+                        
+                        if abs(max_pos) < 0.5*dx:
+                            pos[0, kk] = xmax + np.random.uniform(0, 1) * max_pos
+                        else:
+                            pos[0, kk] = xmax + max_pos
+                        
+                    vel[1, kk] = np.random.normal(0.0, vth_perp[jj])
+                    vel[2, kk] = np.random.normal(0.0, vth_perp[jj])
+                    
+                    gyangle    = init.get_gyroangle_single(vel[:, kk])
+                    rL         = np.sqrt(vel[1, kk]**2 + vel[2, kk]**2) / (qm_ratios[idx[kk]] * B_xmax)
+                    pos[1, kk] = rL * np.cos(gyangle)
+                    pos[2, kk] = rL * np.sin(gyangle)
+                    
+                    idx[kk]            = jj
+                    flux[ii, jj]      -= abs(vx)
+                    n_created[ii, jj] += 1
+                else:
+                    #print('Number of retries reached, stopping injection...')
+                    break
+    
+    #print('Particles created:\n', n_created)
     return

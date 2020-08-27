@@ -127,10 +127,10 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
     return qq, DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array
 
 
-@nb.njit()
+#@nb.njit()
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N,                      \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
-              Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields,\
+              Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields, flux, \
               B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter, field_save_iter):
     '''
     Main loop separated from __main__ function, since this is the actual computation bit.
@@ -153,7 +153,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     # Move particles, collect moments
     #print('MAIN   Advancing particles/moments')
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
-                                            B, E_int, DT, q_dens_adv, Ji, ni, nu)
+                                            B, E_int, DT, q_dens_adv, Ji, ni, nu, flux)
     
     # Average N, N + 1 densities (q_dens at N + 1/2)
     #print('MAIN   Averaging density')
@@ -191,7 +191,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     
         # Advance particles to obtain source terms at N + 3/2
         particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
-                                                B, E_int, DT, q_dens, Ji, ni, nu, pc=1)
+                                                B, E_int, DT, q_dens, Ji, ni, nu, flux, pc=1)
         
         # Average N + 1, N + 2 densities (q_dens at N + 3/2)
         q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv

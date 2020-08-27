@@ -15,6 +15,8 @@ import numpy as np
 import sys
 import os
 
+# NOTE: particle_reflect and particle_reinit flags are deprecated. Remove at some point.
+
 # Random options for testing purposes. Nothing here that'll probably be used
 # Except under pretty specific circumstances.
 gaussian_T  = False

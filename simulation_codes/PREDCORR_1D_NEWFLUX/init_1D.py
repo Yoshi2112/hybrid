@@ -556,10 +556,13 @@ def initialize_particles():
         idx    -- Particle type index
     '''
     if radix_loading == True:
+        print('Loading particle velocities using radix-N scrambling sets.')
         pos, vel, idx = uniform_config_reverseradix_velocity()
     elif gaussian_T == True:
+        print('Loading particles with spatially gaussian temperature.')
         pos, vel, idx = uniform_config_random_velocity_gaussian_T()
     else:
+        print('Loading particle velocties using random distributions.')
         pos, vel, idx = uniform_config_random_velocity()
     
     Ie      = np.zeros(N, dtype=np.uint16)
@@ -648,19 +651,20 @@ def initialize_source_arrays():
         <NONE>
 
     OUTPUT:
-        q_dens  -- Total ion charge  density
-        q_dens2 -- Total ion charge  density (used for averaging)
-        Ji      -- Total ion current density
-        ni      -- Zeroth moment : Ion number density per species (Scalar)
-        nu      -- First  moment : Ion velocity "density" per species (Vector)
-        Pi      -- Second moment : Ion pressure tensor per species (Tensor) (only at two cells, times two for "old/new")
-    '''
+        q_dens   -- Total ion charge  density
+        q_dens2  -- Total ion charge  density (advanced by 1 step, used for averaging)
+        Ji       -- Total ion current density
+        ni       -- Proportional to Zeroth moment : Ion number density per species (Scalar)
+        nu       -- Proportional to First  moment : Ion velocity "density" per species (Vector)
+        flux_rem -- Stores the outgoing flux at boundaries, used to calculate injection rate
+        '''
     q_dens  = np.zeros( NC,            dtype=nb.float64)    
     q_dens2 = np.zeros( NC,            dtype=nb.float64) 
     Ji      = np.zeros((NC, 3),        dtype=nb.float64)
     ni      = np.zeros((NC, Nj),       dtype=nb.float64)
     nu      = np.zeros((NC, Nj, 3),    dtype=nb.float64)
-    return q_dens, q_dens2, Ji, ni, nu
+    flux_rem= np.zeros((2, Nj),        dtype=nb.float64)
+    return q_dens, q_dens2, Ji, ni, nu, flux_rem
 
 
 @nb.njit()
@@ -677,6 +681,8 @@ def initialize_tertiary_arrays():
         old_particles -- Location to store old particle values (positions, velocities, weights)
                          as part of predictor-corrector routine
         old_fields    -- Location to store old B, Ji, Ve, Te field values for predictor-corrector routine
+    
+        v_prime, S, T -- Reserved memory space for boris pusher. Allows vector operations
     '''
     temp3Db       = np.zeros((NC + 1, 3)     , dtype=nb.float64)
     temp3De       = np.zeros((NC    , 3)     , dtype=nb.float64)
@@ -686,7 +692,7 @@ def initialize_tertiary_arrays():
     v_prime = np.zeros((3, N),      dtype=nb.float64)
     S       = np.zeros((3, N),      dtype=nb.float64)
     T       = np.zeros((3, N),      dtype=nb.float64)
-        
+    
     old_particles = np.zeros((11, N),      dtype=nb.float64)
     return old_particles, old_fields, temp3De, temp3Db, temp1D, v_prime, S, T
 

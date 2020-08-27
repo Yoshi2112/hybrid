@@ -18,7 +18,7 @@ if __name__ == '__main__':
     # Initialize simulation: Allocate memory and set time parameters
     pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp,temp_N = init.initialize_particles()
     B, E_int, E_half, Ve, Te, Te0                       = init.initialize_fields()
-    q_dens, q_dens_adv, Ji, ni, nu                      = init.initialize_source_arrays()
+    q_dens, q_dens_adv, Ji, ni, nu, flux                = init.initialize_source_arrays()
     old_particles, old_fields, temp3De, temp3Db, temp1D,\
                                           v_prime, S, T = init.initialize_tertiary_arrays()
     
@@ -45,7 +45,7 @@ if __name__ == '__main__':
         qq, DT, max_inc, part_save_iter, field_save_iter =                                \
         aux.main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T, temp_N,\
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,                           \
-              Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields,           \
+              Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields, flux,     \
               B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter, field_save_iter)
 
         if qq%part_save_iter == 0 and save_particles == 1:

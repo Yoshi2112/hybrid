@@ -3497,9 +3497,9 @@ def get_reflection_coefficient(save=True, incl_damping_cells=True):
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'G:'
+    drive       = 'F:'
 
-    for series in ['ABC_newEMIC_nsp_test', 'ABC_newEMIC_nsp_test_parabolic', 'ABC_newEMIC_nsp_test_radix']:
+    for series in ['new_flux_test']:
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -3514,14 +3514,16 @@ if __name__ == '__main__':
 #         fig1, axes1 = plt.subplots(2, sharex=True)
 #         fig2, axes2 = plt.subplots(2, sharex=True)
 # =============================================================================
-        # Extract all summary files and plot field stuff (quick)
-        for run_num in runs_to_do:
-            print('\nRun {}'.format(run_num))
-            #cf.delete_analysis_folders(drive, series, run_num)
-            cf.load_run(drive, series, run_num, extract_arrays=True)
-            
-            plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
-            standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
+# =============================================================================
+#         # Extract all summary files and plot field stuff (quick)
+#         for run_num in runs_to_do:
+#             print('\nRun {}'.format(run_num))
+#             #cf.delete_analysis_folders(drive, series, run_num)
+#             cf.load_run(drive, series, run_num, extract_arrays=True)
+#             
+#             plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
+#             standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
+# =============================================================================
             
 # =============================================================================
 #             # Quick & Easy way to do all runs: Plot function here
@@ -3561,23 +3563,21 @@ if __name__ == '__main__':
             
             #get_reflection_coefficient()
         # Do particle analyses for each run (slow)
-    for series in ['ABC_newEMIC_nsp_test', 'ABC_newEMIC_nsp_test_parabolic', 'ABC_newEMIC_nsp_test_radix']:
         for run_num in runs_to_do:
             print('\nRun {}'.format(run_num))
             cf.load_run(drive, series, run_num, extract_arrays=True)
             
-            plot_E_components(save=True)
-            check_fields()
+            #plot_E_components(save=True)
+            #check_fields()
             
             #plot_spatial_poynting(save=True, log=True)
             #plot_spatial_poynting_helical(save=True, log=True)
             
-            #scatterplot_velocities()
-            
+            scatterplot_velocities()
             #find_the_particles(it_max=None)
             #summary_plots(save=True, histogram=True)
-            #for sp in range(2):
-                #plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
+            for sp in range(2):
+                plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
             
         #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
             
