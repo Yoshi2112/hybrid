@@ -70,12 +70,10 @@ with open(run_input, 'r') as f:
     ND        = int(f.readline().split()[1])           # Damping region length: Multiple of NX (on each side of simulation domain)
     max_rev   = float(f.readline().split()[1])         # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
     dxm       = float(f.readline().split()[1])         # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
-    L         = float(f.readline().split()[1])         # Field line L shell
     r_A       = float(f.readline().split()[1])         # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
     
     ie        = int(f.readline().split()[1])           # Adiabatic electrons. 0: off (constant), 1: on.
     min_dens  = float(f.readline().split()[1])         # Allowable minimum charge density in a cell, as a fraction of ne*q
-    B_eq      = f.readline().split()[1]                # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
     rc_hwidth = f.readline().split()[1]                # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
       
     orbit_res = float(f.readline().split()[1])         # Orbit resolution
@@ -105,6 +103,8 @@ with open(plasma_input, 'r') as f:
     E_perp     = np.array(f.readline().split()[1:], dtype=float)
     E_e        = float(f.readline().split()[1])
     beta_flag  = int(f.readline().split()[1])
+    L         = float(f.readline().split()[1])         # Field line L shell
+    B_eq      = f.readline().split()[1]                # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
 
 
 #%%### DERIVED SIMULATION PARAMETERS

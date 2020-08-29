@@ -15,63 +15,44 @@ import numpy as np
 import sys
 import os
 
+# NOTE: particle_reflect and particle_reinit flags are deprecated. Remove at some point.
+
 # Random options for testing purposes. Nothing here that'll probably be used
 # Except under pretty specific circumstances.
 gaussian_T  = False
-pol_wave    = 0         # 0: No wave, 1: Single point source, 2: Multi point source
 
-# DRIVEN B PARAMS: Sine part
-driven_freq = 2.2       # Driven wave frequency in Hz standard 2.2
-driven_ampl = 50e-7     # Driven wave amplitude in A/m (I think?) Standard 50e-7
-
-# Gaussian part
-pulse_offset = 5.0      # Pulse center time (s)
-pulse_width  = 1.0      # Pulse width (proportional to 2*std. 3*width decayed to 0.0123%) 
-
-## INPUT FILES ##
-if os.name == 'posix':
-    root_dir     = os.path.dirname(sys.path[0])
-    run_input    = root_dir +  '/run_inputs/run_params.txt'
-    plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
-else:
-    run_input    = '../run_inputs/run_params.txt'
-    plasma_input = '../run_inputs/plasma_params.txt'
+run_input    = '../run_inputs/run_params.txt'
+plasma_input = '../run_inputs/plasma_params.txt'
 
 # Load run parameters
 with open(run_input, 'r') as f:
     ### RUN PARAMETERS ###
-    drive             = f.readline().split()[1]        # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-    save_path         = f.readline().split()[1]        # Series save dir   : Folder containing all runs of a series
-    run               = f.readline().split()[1]        # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+    drive             = 'F:'                           # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
+    save_path         = '/runs/new_flux_test2/'        # Series save dir   : Folder containing all runs of a series
+    run               = 0                              # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 
-    save_particles    = int(f.readline().split()[1])   # Save data flag    : For later analysis
-    save_fields       = int(f.readline().split()[1])   # Save plot flag    : To ensure hybrid is solving correctly during run
-    seed              = int(f.readline().split()[1])   # RNG Seed          : Set to enable consistent results for parameter studies
-    cpu_affin_str     = f.readline().split()[1]        # Set CPU affinity for run as list. Set as '-' to auto-assign. 
+    save_particles    = 0                              # Save data flag    : For later analysis
+    seed              = 6546351                        # RNG Seed          : Set to enable consistent results for parameter studies
 
     ## FLAGS ##
-    homogenous        = int(f.readline().split()[1])   # Set B0 to homogenous (as test to compare to parabolic)
-    particle_periodic = int(f.readline().split()[1])   # Set particle boundary conditions to periodic
-    particle_reflect  = int(f.readline().split()[1])   # Set particle boundary conditions to reflective
-    particle_reinit   = int(f.readline().split()[1])   # Set particle boundary conditions to reinitialize
-    field_periodic    = int(f.readline().split()[1])   # Set field boundary to periodic (False: Absorbtive Boundary Conditions)
-    disable_waves     = int(f.readline().split()[1])   # Zeroes electric field solution at each timestep
-    te0_equil         = int(f.readline().split()[1])   # Initialize te0 to be in equilibrium with density
-    source_smoothing  = int(f.readline().split()[1])   # Smooth source terms with 3-point Gaussian filter
-    E_damping         = int(f.readline().split()[1])   # Damp E in a manner similar to B for ABCs
-    quiet_start       = int(f.readline().split()[1])   # Flag to use quiet start (False :: semi-quiet start)
-    radix_loading     = int(f.readline().split()[1])   # Flag to use bit-reversed radix scrambling sets to initialise velocities
-    damping_multiplier= float(f.readline().split()[1]) # Multiplies the r-factor to increase/decrease damping rate.
+    homogenous        = 1                              # Set B0 to homogenous (as test to compare to parabolic)
+    particle_periodic = 1                              # Set particle boundary conditions to periodic
+    particle_reflect  = 0                              # Set particle boundary conditions to reflective
+    particle_reinit   = 0                              # Set particle boundary conditions to reinitialize
+    field_periodic    = 0                              # Set field boundary to periodic (False: Absorbtive Boundary Conditions)
+    radix_loading     = 0                              # Flag to use bit-reversed radix scrambling sets to initialise velocities
 
     ### SIMULATION PARAMETERS ###
-    NX        = int(f.readline().split()[1])           # Number of cells - doesn't include ghost cells
-    ND        = int(f.readline().split()[1])           # Damping region length: Multiple of NX (on each side of simulation domain)
-    max_rev   = float(f.readline().split()[1])         # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
-    dxm       = float(f.readline().split()[1])         # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
+    NX        = 64                                     # Number of cells - doesn't include ghost cells
+    ND        = 2                                      # Damping region length: Multiple of NX (on each side of simulation domain)
+    max_rev   = 50                                     # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+    dxm       = 1.0                                    # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
+    L         = float(f.readline().split()[1])         # Field line L shell
     r_A       = float(f.readline().split()[1])         # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
     
     ie        = int(f.readline().split()[1])           # Adiabatic electrons. 0: off (constant), 1: on.
     min_dens  = float(f.readline().split()[1])         # Allowable minimum charge density in a cell, as a fraction of ne*q
+    B_eq      = f.readline().split()[1]                # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
     rc_hwidth = f.readline().split()[1]                # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
       
     orbit_res = float(f.readline().split()[1])         # Orbit resolution
@@ -101,8 +82,6 @@ with open(plasma_input, 'r') as f:
     E_perp     = np.array(f.readline().split()[1:], dtype=float)
     E_e        = float(f.readline().split()[1])
     beta_flag  = int(f.readline().split()[1])
-    L          = float(f.readline().split()[1])         # Field line L shell
-    B_eq       = f.readline().split()[1]                # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
 
 
 #%%### DERIVED SIMULATION PARAMETERS
@@ -274,12 +253,6 @@ qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each sp
 species_plasfreq_sq   = (density * charge ** 2) / (mass * e0)
 species_gyrofrequency = qm_ratios * B_eq
 
-# Looks right!
-driven_rad = driven_freq * 2 * np.pi
-driven_k  = (driven_rad / c) ** 2
-driven_k *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyrofrequency))).sum()
-driven_k = np.sqrt(driven_k)
-
 
 
 
@@ -292,7 +265,6 @@ else:
 print('Run Started')
 print('Run Series         : {}'.format(save_path.split('//')[-1]))
 print('Run Number         : {}'.format(run))
-print('Field save flag    : {}'.format(save_fields))
 print('Particle save flag : {}\n'.format(save_particles))
 
 print('Sim domain length  : {:5.2f}R_E'.format(2 * xmax / RE))
@@ -315,25 +287,7 @@ print('{} particles initialized'.format(N_species.sum()))
 print('{} particles spare'.format((spare_ppc * NX).sum()))
 print('{} particles total\n'.format(N))
 
-try:
-    if cpu_affin_str != '-':
-        
-        # If only one value in string
-        if len(cpu_affin_str) == 1:
-            cpu_affin = int(cpu_affin_str)
-        else:
-            cpu_affin = cpu_affin_str.split(',')
-            cpu_affin = [int(cpu_affin[xx]) for xx in range(len(cpu_affin))]
-        
-        import psutil
-        run_proc = psutil.Process()
-        run_proc.cpu_affinity(cpu_affin)
-        if len(cpu_affin_str) == 1:
-            print('CPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
-        else:
-            print('CPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
-except:
-    print('CPU affinity not set or set incorrectly.')
+
 density_normal_sum = (charge / q) * (density / ne)
 
     

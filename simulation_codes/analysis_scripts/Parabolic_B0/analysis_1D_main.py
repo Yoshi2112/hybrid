@@ -3158,7 +3158,7 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False):
         it_max = len(os.listdir(cf.particle_dir))
               
     cfac = 10 if cf.temp_type[jj] == 1 else 5
-    vlim = 10 if cf.temp_type[jj] == 1 else 5
+    vlim = 7.5 if cf.temp_type[jj] == 1 else 2
     
     # Manually specify bin edges for histogram
     vbins = np.linspace(-vlim, vlim, 101, endpoint=True)
@@ -3508,7 +3508,7 @@ if __name__ == '__main__':
         clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
                 'darkorange', 'peru', 'yellow']
         
-        runs_to_do = range(num_runs)
+        runs_to_do = [4,5]#range(num_runs)
         
 # =============================================================================
 #         fig1, axes1 = plt.subplots(2, sharex=True)
@@ -3573,7 +3573,7 @@ if __name__ == '__main__':
             #plot_spatial_poynting(save=True, log=True)
             #plot_spatial_poynting_helical(save=True, log=True)
             
-            scatterplot_velocities()
+            #scatterplot_velocities()
             #find_the_particles(it_max=None)
             #summary_plots(save=True, histogram=True)
             for sp in range(2):

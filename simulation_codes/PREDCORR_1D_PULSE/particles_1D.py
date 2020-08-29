@@ -201,9 +201,6 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
         
     Note: This function also controls what happens when a particle leaves the 
     simulation boundary.
-    
-    NOTE :: Check the > < and >= <= equal positions when more awake, just make sure
-            they're right (not under or over triggering the condition)
             
     acc is an array accumulator that should prevent starting the search from the 
     beginning of the array each time a particle needs to be reinitialized
@@ -219,18 +216,8 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
     in domain, or they were accessed out of order. Might save a bit of time. But
     also need to check it against the 2-loop version.
     
-    IDEA: Instead of searching for negative indices, assume all negatives are at 
-    end of array. Sort arrays every X timesteps so 'disabled' particles are always
-    at end.
-    
-    OR: Generate array of disabled indices at each timestep and call that instead of
-    searching each time.
-    
     IDEA: INSTEAD OF STORING POS_OLD, USE Ie INSTEAD, SINCE IT STORES THE CLOSEST
     CELL CENTER - IF IT WAS IN LHS BOUNDARY CELL Ie[ii] == ND (+1?)
-    
-    I THINK I FIXED THE ERROR :: POOR SPECIFICATION OF WHETHER OR NOT THE PARTICLE WAS
-    IN CELL 2 OR NOT.
     '''
     pos_old[:, :] = pos
     

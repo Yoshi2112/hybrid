@@ -112,7 +112,7 @@ def eval_B0_particle(pos, Bp):
     Bp. B0x is simply equated since we never expect a non-zero wave field in x.
     '''
     constant = - a * B_eq 
-    Bp[0]    =   eval_B0x(pos[0])   
+    Bp[0]    = B_eq * (1. + a * pos[0]**2)  
     Bp[1]   += constant * pos[0] * pos[1]
     Bp[2]   += constant * pos[0] * pos[2]
     return
@@ -142,7 +142,7 @@ def eval_B0_particle_1D(pos, vel, idx, Bp):
 
 
 @nb.njit()
-def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, qmi, DT):
+def velocity_update(pos, vel, Ie, W_elec, idx, Bp, B, E, v_prime, S, T, qmi, DT):
     '''
     updates velocities using a Boris particle pusher.
     Based on Birdsall & Langdon (1985), pp. 59-63.
@@ -163,19 +163,11 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
     not convinced they helped.
     '''
     Bp *= 0
-    Ep *= 0
     
-    assign_weighting_TSC(pos, idx, Ib, W_mag, E_nodes=False)            # Calculate magnetic node weights
     eval_B0_particle(pos, Bp)  
     
     for ii in range(vel.shape[1]):
         qmi[ii] = 0.5 * DT * qm_ratios[idx[ii]]                         # q/m for ion of species idx[ii]
-        for jj in range(3):                                             # Nodes
-            for kk in range(3):                                         # Components
-                Ep[kk, ii] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]       # Vector E-field  at particle location
-                Bp[kk, ii] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]       # Vector b1-field at particle location
-
-    vel[:, :] += qmi[:] * Ep[:, :]                                      # First E-field half-push IS NOW V_MINUS
 
     T[:, :] = qmi[:] * Bp[:, :]                                               # Vector Boris variable
     S[:, :] = 2.*T[:, :] / (1. + T[0, :] ** 2 + T[1, :] ** 2 + T[2, :] ** 2)  # Vector Boris variable
@@ -187,8 +179,6 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
     vel[0, :] += v_prime[1, :] * S[2, :] - v_prime[2, :] * S[1, :]
     vel[1, :] += v_prime[2, :] * S[0, :] - v_prime[0, :] * S[2, :]
     vel[2, :] += v_prime[0, :] * S[1, :] - v_prime[1, :] * S[0, :]
-    
-    vel[:, :] += qmi[:] * Ep[:, :]                                           # Second E-field half-push
     return
 
 
@@ -250,14 +240,14 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec, flux):
         for ii in nb.prange(pos.shape[1]):           
             if pos[0, ii] > xmax:
                 pos[    0, ii]      += xmin - xmax
-                flux[   1, idx[ii]] += n_contr[idx[ii]]
+                flux[   1, idx[ii]] += vel[0, ii] * n_contr[idx[ii]]
                 n_moved[1, idx[ii]] += 1
             elif pos[0, ii] < xmin:
                 pos[0    , ii]      += xmax - xmin  
-                flux[0   , idx[ii]] += n_contr[idx[ii]]
+                flux[0   , idx[ii]] += vel[0, ii] * n_contr[idx[ii]]
                 n_moved[0, idx[ii]] += 1
                 
-        print('n_real moved:\n', flux.T)
+        print('Flux moved:\n', flux)
     else:
         # Disable loop: Remove particles that leave the simulation space
         # Also store their flux (vx component only, n_contr can be done per species later)
@@ -276,7 +266,7 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec, flux):
                 idx[ii]     = -1
                 n_deleted[1, idx[ii]]  += 1
                 
-    #print('Flux removed:\n', flux)
+    print('Flux removed:\n', flux)
     assign_weighting_TSC(pos, idx, Ie, W_elec)
     return
 

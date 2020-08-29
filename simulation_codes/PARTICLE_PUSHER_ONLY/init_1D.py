@@ -566,56 +566,13 @@ def initialize_particles():
         pos, vel, idx = uniform_config_random_velocity()
     
     Ie      = np.zeros(N, dtype=np.uint16)
-    Ib      = np.zeros(N, dtype=np.uint16)
     W_elec  = np.zeros((3, N), dtype=np.float64)
-    W_mag   = np.zeros((3, N), dtype=np.float64)
     
     Bp      = np.zeros((3, N), dtype=np.float64)
-    Ep      = np.zeros((3, N), dtype=np.float64)
     temp_N  = np.zeros((N),    dtype=np.float64)
     
     particles.assign_weighting_TSC(pos, idx, Ie, W_elec)
-    return pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, temp_N
-
-
-@nb.njit()
-def set_damping_array(B_damping_array, E_damping_array, DT):
-    '''Create masking array for magnetic field damping used to apply open
-    boundaries. Based on applcation by Shoji et al. (2011) and
-    Umeda et al. (2001)
-    
-    Shoji's application multiplies by the resulting field before it 
-    is returned at each timestep (or each time called?), but Umeda's variant 
-    includes a damping on the increment as well as the solution, with a
-    different r for each (one damps, one changes the phase velocity and
-    increases the "effective damping length").
-    
-    Also, using Shoji's parameters, mask at most damps 98.7% at end grid 
-    points. Relying on lots of time spend there? Or some sort of error?
-    Can just play with r value/damping region length once it doesn't explode.
-    
-    23/03/2020 Put factor of 0.5 in front of va to set group velocity approx.
-    14/05/2020 Put factor of 0.5 in front of DT since B is only ever pushed 0.5DT
-    '''
-    r_damp   = np.sqrt(29.7 * 0.5 * va * (0.5 * DT / dx) / ND)   # Damping coefficient
-    r_damp  *= damping_multiplier
-    
-    # Do B-damping array
-    B_dist_from_mp  = np.abs(np.arange(NC + 1) - 0.5*NC)                # Distance of each B-node from midpoint
-    for ii in range(NC + 1):
-        if B_dist_from_mp[ii] > 0.5*NX:
-            B_damping_array[ii] = 1. - r_damp * ((B_dist_from_mp[ii] - 0.5*NX) / ND) ** 2 
-        else:
-            B_damping_array[ii] = 1.0
-            
-    # Do E-damping array
-    E_dist_from_mp  = np.abs(np.arange(NC) + 0.5 - 0.5*NC)                # Distance of each B-node from midpoint
-    for ii in range(NC):
-        if E_dist_from_mp[ii] > 0.5*NX:
-            E_damping_array[ii] = 1. - r_damp * ((E_dist_from_mp[ii] - 0.5*NX) / ND) ** 2 
-        else:
-            E_damping_array[ii] = 1.0
-    return
+    return pos, vel, Ie, W_elec, idx, Bp, temp_N
 
 
 @nb.njit()
@@ -698,25 +655,11 @@ def initialize_tertiary_arrays():
 
 
 def set_timestep(vel, Te0):
-    '''
-    INPUT:
-        vel -- Initial particle velocities
-    OUTPUT:
-        DT              -- Maximum allowable timestep (seconds)
-        max_inc         -- Number of integer timesteps to get to end time
-        part_save_iter  -- Number of timesteps between particle data saves
-        field_save_iter -- Number of timesteps between field    data saves
-    
-    Note : Assumes no dispersion effects or electric field acceleration to
-           be initial limiting factor. This may change for inhomogenous loading
-           of particles or initial fields.
-    '''
-    ion_ts   = const.orbit_res / const.gyfreq               # Timestep to resolve gyromotion
-    vel_ts   = 0.5 * const.dx / np.max(np.abs(vel[0, :]))   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
-    drv_ts   = const.freq_res * driven_freq
+    ion_ts   = const.orbit_res / const.gyfreq                  # Timestep to resolve gyromotion
+    vel_ts   = 0.5 * const.dx / np.max(np.abs(vel[0, :]))      # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
 
     gyperiod = 2 * np.pi / const.gyfreq
-    DT       = min(ion_ts, vel_ts, drv_ts)
+    DT       = min(ion_ts, vel_ts)
     max_time = const.max_rev * 2 * np.pi / const.gyfreq_eq     # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1                          # Total number of time steps
 
@@ -725,76 +668,8 @@ def set_timestep(vel, Te0):
     else:
         part_save_iter = int(const.part_res*gyperiod / DT)
 
-    if const.field_res == 0:
-        field_save_iter = 1
-    else:
-        field_save_iter = int(const.field_res*gyperiod / DT)
-
     if const.save_fields == 1 or const.save_particles == 1:
-        save.store_run_parameters(DT, part_save_iter, field_save_iter, Te0)
-
-    B_damping_array = np.ones(NC + 1, dtype=float)
-    E_damping_array = np.ones(NC    , dtype=float)
-    set_damping_array(B_damping_array, E_damping_array, DT)
+        save.store_run_parameters(DT, part_save_iter)
 
     print('Timestep: %.6fs, %d iterations total\n' % (DT, max_inc))
-    return DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array
-
-
-if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-    #import diagnostics as diag
-    
-    POS, VEL, IDX        = uniform_config_random_velocity()
-    count, bins, ignored = plt.hist(VEL[0], 30, density=True)
-
-    # Thermal velocity and drift in cells/s
-
-    mu, vth  = 0.0, np.sqrt(const.kB * const.Tpar[0] / const.mass[0])
-    VEL2     = np.random.normal(mu, vth, VEL.shape[1])
-    
-    # Analytic distro
-    v  = np.linspace(-3*vth, 3*vth, 1000)
-    fv = 1.0 / (np.sqrt(2*np.pi) * vth) * np.exp(-0.5 * ((v - mu)/vth)**2) # (const.nsp_ppc[0]*const.NX)
-    fs = 1.0 / (np.sqrt(2*np.pi) * vth) * np.exp(- (bins - mu)**2 / (2 * vth**2))
-   
-    plt.plot(v, fv)
-    plt.show()
-    
-#diag.plot_velocity_distribution_2D_histogram(POS, VEL)
-    integral = 0.0; dv = v[1] - v[0]
-    for ii in range(1000):
-        integral += dv * fv[ii]
-    print(integral)
-# =============================================================================
-#     POS = np.linspace(const.xmin, xmax, 10000)
-#     
-#     plt.plot(POS, np.ones(POS.shape[0]) * vth_par[ 0]/const.va)
-#     plt.plot(POS, np.ones(POS.shape[0]) * vth_perp[0]/const.va)
-#     
-#     vth_par_gauss, vth_perp_gauss = get_vth_at_x(POS, 1)
-#     plt.plot(POS, vth_par_gauss/const.va)
-#     plt.plot(POS, vth_perp_gauss/const.va)
-#     
-#     plt.show()
-# =============================================================================
-    
-# =============================================================================
-#     
-#     from simulation_parameters_1D import idx_end, temp_color
-#     
-#     POS, VEL, IDX = bit_reversed_quiet()
-#     
-#     V_PARA = VEL[0]
-#     V_PERP = np.sqrt(VEL[2]**2 + VEL[1]**2) * np.sign(VEL[2])
-#     
-#     for jj in range(Nj):
-#         fig, ax = plt.subplots()
-#         ax.scatter(V_PARA[idx_start[jj]: idx_end[jj]], V_PERP[idx_start[jj]: idx_end[jj]],
-#                    c=temp_color[jj], s=1)
-#         
-#         ax.axhline(0, c='k', alpha=0.2)
-#         ax.axvline(0, c='k', alpha=0.2)
-#         
-#     plt.show()
-# =============================================================================
+    return DT, max_inc, part_save_iter
