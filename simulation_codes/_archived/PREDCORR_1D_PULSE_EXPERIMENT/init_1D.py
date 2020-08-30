@@ -4,7 +4,6 @@ Created on Fri Sep 22 17:27:33 2017
 
 @author: iarey
 """
-import pdb
 import numba as nb
 import numpy as np
 import simulation_parameters_1D as const
@@ -13,11 +12,13 @@ import save_routines as save
 import particles_1D as particles
 import fields_1D    as fields
 
-from simulation_parameters_1D import dx, NX, ND, NC, N, Nj, nsp_ppc, va, B_A,  \
-                                     idx_start, seed, vth_par, vth_perp, drift_v,  \
-                                     qm_ratios, rc_hwidth, temp_type, Te0_scalar,\
-                                     damping_multiplier, quiet_start, N_species, \
-                                     xmax,idx_end, radix_loading, gaussian_T, driven_freq
+# =============================================================================
+# from simulation_parameters_1D import dx, NX, ND, NC, N, Nj, nsp_ppc, va, B_A,  \
+#                                      idx_start, seed, vth_par, vth_perp, drift_v,  \
+#                                      qm_ratios, rc_hwidth, temp_type, Te0_scalar,\
+#                                      damping_multiplier, quiet_start, N_species, \
+#                                      xmax,idx_end, radix_loading, gaussian_T, driven_freq
+# =============================================================================
                            
                             
 def rkbr_uniform_set(arr, base=2):
@@ -55,7 +56,7 @@ def calc_losses(v_para, v_perp, B0x, st=0):
     indices of particles outside the loss cone.
     '''
     alpha        = np.arctan(v_perp / v_para)                   # Calculate particle PA's
-    loss_cone    = np.arcsin(np.sqrt(B0x / B_A))                # Loss cone per particle (based on B0 at particle)
+    loss_cone    = np.arcsin(np.sqrt(B0x / const.B_A))                # Loss cone per particle (based on B0 at particle)
     
     in_loss_cone = np.zeros(v_para.shape[0], dtype=nb.int32)
     for ii in range(v_para.shape[0]):
@@ -146,9 +147,9 @@ def LCD_by_rejection(pos, vel, st, en, jj):
                 N_loss = 0
 
         if N_loss != 0:   
-            new_vx = np.random.normal(0., vth_par[ jj], N_loss)             
-            new_vy = np.random.normal(0., vth_perp[jj], N_loss)
-            new_vz = np.random.normal(0., vth_perp[jj], N_loss)
+            new_vx = np.random.normal(0., const.vth_par[ jj], N_loss)             
+            new_vy = np.random.normal(0., const.vth_perp[jj], N_loss)
+            new_vz = np.random.normal(0., const.vth_perp[jj], N_loss)
             
             for ii in range(N_loss):
                 vel[0, loss_idx[ii]] = new_vx[ii]
@@ -214,10 +215,10 @@ def get_vth_at_x(pos, jj):
     
     Maybe only gaussianize v_perp? Let v_parallel be homogenous since it's just constant flux.
     '''
-    if rc_hwidth == 0:
+    if const.rc_hwidth == 0:
         fwhm      = const.dx*const.NX//4
     else:
-        fwhm      = const.dx*rc_hwidth
+        fwhm      = const.dx*const.rc_hwidth
         
     mu, sigma = 0.0, fwhm
     gauss     = 1.0 / np.sqrt(2 * np.pi * sigma**2) * np.exp(-0.5*((pos - mu)/sigma) ** 2)
@@ -225,8 +226,8 @@ def get_vth_at_x(pos, jj):
     # Value of the gaussian at each particle position
     normalized_gauss = gauss / gauss.max()
     
-    vth_perp_gauss = vth_perp[jj] * normalized_gauss
-    vth_para_gauss = vth_par[jj]  * normalized_gauss
+    vth_perp_gauss = const.vth_perp[jj] * normalized_gauss
+    vth_para_gauss = const.vth_par[jj]  * normalized_gauss
     return vth_para_gauss, vth_perp_gauss
 
 
@@ -250,20 +251,20 @@ def uniform_config_random_velocity():
 
     # Could use temp_type[jj] == 1 for RC LCD only
     '''
-    pos = np.zeros((3, N), dtype=np.float64)
-    vel = np.zeros((3, N), dtype=np.float64)
-    idx = np.ones(N,       dtype=np.int8) * -1 # Start all particles as disabled (idx < 0)
-    np.random.seed(seed)
+    pos = np.zeros((3, const.N), dtype=np.float64)
+    vel = np.zeros((3, const.N), dtype=np.float64)
+    idx = np.ones(const.N,       dtype=np.int8) * -1 # Start all particles as disabled (idx < 0)
+    np.random.seed(const.seed)
     
-    for jj in range(Nj):
-        half_n = nsp_ppc[jj] // 2                     # Half particles per cell - doubled later
-        if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
-            NC_load = NX
+    for jj in range(const.Nj):
+        half_n = const.nsp_ppc[jj] // 2                     # Half particles per cell - doubled later
+        if const.temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
+            NC_load = const.NX
         else:
-            if rc_hwidth == 0 or rc_hwidth > NX//2:   # Need to change this to be something like the FWHM or something
-                NC_load = NX
+            if const.rc_hwidth == 0 or const.rc_hwidth > const.NX//2:   # Need to change this to be something like the FWHM or something
+                NC_load = const.NX
             else:
-                NC_load = 2*rc_hwidth
+                NC_load = 2*const.rc_hwidth
         
         # Load particles in each applicable cell
         acc = 0; offset  = 0
@@ -274,28 +275,28 @@ def uniform_config_random_velocity():
                 offset  = 1
                 
             # Particle index ranges
-            st = idx_start[jj] + acc
-            en = idx_start[jj] + acc + half_n
+            st = const.idx_start[jj] + acc
+            en = const.idx_start[jj] + acc + half_n
             
             # Set position for half: Analytically uniform
             for kk in range(half_n):
-                pos[0, st + kk] = dx*(float(kk) / (half_n - offset) + ii)
+                pos[0, st + kk] = const.dx*(float(kk) / (half_n - offset) + ii)
             
             # Turn [0, NC] distro into +/- NC/2 distro
-            pos[0, st: en]-= NC_load*dx/2              
+            pos[0, st: en]-= NC_load*const.dx/2              
             
             # Set velocity for half: Randomly Maxwellian
-            vel[0, st: en] = np.random.normal(0, vth_par[jj],  half_n) +  drift_v[jj]
-            vel[1, st: en] = np.random.normal(0, vth_perp[jj], half_n)
-            vel[2, st: en] = np.random.normal(0, vth_perp[jj], half_n)
+            vel[0, st: en] = np.random.normal(0, const.vth_par[jj],  half_n) +  const.drift_v[jj]
+            vel[1, st: en] = np.random.normal(0, const.vth_perp[jj], half_n)
+            vel[2, st: en] = np.random.normal(0, const.vth_perp[jj], half_n)
             idx[   st: en] = jj          # Turn particle on
             
             # Set Loss Cone Distribution: Reinitialize particles in loss cone (move to a function)
-            if const.homogenous == False and temp_type[jj] == 1:
+            if const.homogenous == False and const.temp_type[jj] == 1:
                 LCD_by_rejection(pos, vel, st, en, jj)
                 
             # Quiet start : Initialize second half
-            if quiet_start == True:
+            if const.quiet_start == True:
                 vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set parallel
             else:
                 vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Set anti-parallel
@@ -312,7 +313,7 @@ def uniform_config_random_velocity():
     B0x         = fields.eval_B0x(pos[0, :en])
     v_perp      = np.sqrt(vel[1, :en] ** 2 + vel[2, :en] ** 2)
     gyangle     = get_gyroangle_array(vel[:, :en])
-    rL          = v_perp / (qm_ratios[idx[:en]] * B0x)
+    rL          = v_perp / (const.qm_ratios[idx[:en]] * B0x)
     pos[1, :en] = rL * np.cos(gyangle)
     pos[2, :en] = rL * np.sin(gyangle)
     
@@ -333,55 +334,55 @@ def uniform_config_random_velocity_gaussian_T():
     
     Also, Gaussian only applied to hot component. Cold components remain homogenous and isotropic
     '''
-    pos = np.zeros((3, N), dtype=np.float64)
-    vel = np.zeros((3, N), dtype=np.float64)
-    idx = np.ones(N,       dtype=np.int8) * -1 # Start all particles as disabled (idx < 0)
-    np.random.seed(seed)
+    pos = np.zeros((3, const.N), dtype=np.float64)
+    vel = np.zeros((3, const.N), dtype=np.float64)
+    idx = np.ones(const.N,       dtype=np.int8) * -1 # Start all particles as disabled (idx < 0)
+    np.random.seed(const.seed)
 
-    for jj in range(Nj):
-        half_n = N_species[jj] // 2                     # Half particles of species - doubled later
+    for jj in range(const.Nj):
+        half_n = const.N_species[jj] // 2                     # Half particles of species - doubled later
                 
-        st = idx_start[jj]
-        en = idx_start[jj] + half_n
+        st = const.idx_start[jj]
+        en = const.idx_start[jj] + half_n
         
         # Set position
         for kk in range(half_n):
-            pos[0, st + kk] = 2*xmax*(float(kk) / (half_n - 1))
-        pos[0, st: en]-= xmax              
+            pos[0, st + kk] = 2*const.xmax*(float(kk) / (half_n - 1))
+        pos[0, st: en]-= const.xmax              
         idx[   st: en] = jj
         
-        if temp_type[jj] == 1:
+        if const.temp_type[jj] == 1:
             # Set velocity: Position varying temperature (Gaussian)
             vth_par_gauss, vth_perp_gauss = get_vth_at_x(pos[0, st: en], jj)
-            mu = np.zeros(N_species[jj] // 2)
+            mu = np.zeros(const.N_species[jj] // 2)
             
             # Set velocity for half: Randomly Maxwellian but with varying vth in space
-            vel[0, st: en] = np.random.normal(mu, vth_par_gauss,  N_species[jj] // 2) +  drift_v[jj]
-            vel[1, st: en] = np.random.normal(mu, vth_perp_gauss, N_species[jj] // 2)
-            vel[2, st: en] = np.random.normal(mu, vth_perp_gauss, N_species[jj] // 2)
+            vel[0, st: en] = np.random.normal(mu, vth_par_gauss,  const.N_species[jj] // 2) +  const.drift_v[jj]
+            vel[1, st: en] = np.random.normal(mu, vth_perp_gauss, const.N_species[jj] // 2)
+            vel[2, st: en] = np.random.normal(mu, vth_perp_gauss, const.N_species[jj] // 2)
 
             # Set Loss Cone Distribution: Reinitialize particles in loss cone (move to a function)
             if const.homogenous == False:
                 LCD_by_rejection_varying_vth(pos, vel, st, en, jj, vth_par_gauss, vth_perp_gauss)
         else:
             # Set velocity for half: Randomly Maxwellian, isotropic and homogenous
-            vel[0, st: en] = np.random.normal(0.0, vth_par[jj],  N_species[jj] // 2) +  drift_v[jj]
-            vel[1, st: en] = np.random.normal(0.0, vth_perp[jj], N_species[jj] // 2)
-            vel[2, st: en] = np.random.normal(0.0, vth_perp[jj], N_species[jj] // 2)
+            vel[0, st: en] = np.random.normal(0.0, const.vth_par[jj],  const.N_species[jj] // 2) +  const.drift_v[jj]
+            vel[1, st: en] = np.random.normal(0.0, const.vth_perp[jj], const.N_species[jj] // 2)
+            vel[2, st: en] = np.random.normal(0.0, const.vth_perp[jj], const.N_species[jj] // 2)
         
         pos[0, en: en + half_n] = pos[0, st: en]                # Other half, same position
         vel[0, en: en + half_n] = vel[0, st: en] *  1.0         # Set parallel
         vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
         vel[2, en: en + half_n] = vel[2, st: en] * -1.0
         
-        idx[st: idx_end[jj]] = jj
+        idx[st: const.idx_end[jj]] = jj
 
     # Set initial Larmor radius - rL from v_perp, distributed to y,z based on velocity gyroangle
     print('Initializing particles off-axis')
     B0x         = fields.eval_B0x(pos[0, :en])
     v_perp      = np.sqrt(vel[1, :en] ** 2 + vel[2, :en] ** 2)
     gyangle     = get_gyroangle_array(vel[:, :en])
-    rL          = v_perp / (qm_ratios[idx[:en]] * B0x)
+    rL          = v_perp / (const.qm_ratios[idx[:en]] * B0x)
     pos[1, :en] = rL * np.cos(gyangle)
     pos[2, :en] = rL * np.sin(gyangle)
     
@@ -400,20 +401,20 @@ def uniform_gaussian_distribution_ultra_quiet():
     Same as UGD_Q() but with 4 particles at each spatial point instead of two. This balances it in 
     vx as well as vy (at least initially) and should allow for flux to be more equal?
     '''
-    pos = np.zeros((3, N), dtype=np.float64)
-    vel = np.zeros((3, N), dtype=np.float64)
-    idx = np.ones(N,       dtype=np.int8) * -1 # Start all particles as disabled (idx < 0)
-    np.random.seed(seed)
+    pos = np.zeros((3, const.N), dtype=np.float64)
+    vel = np.zeros((3, const.N), dtype=np.float64)
+    idx = np.ones(const.N,       dtype=np.int8) * -1 # Start all particles as disabled (idx < 0)
+    np.random.seed(const.seed)
     
-    for jj in range(Nj):
-        quart_n = nsp_ppc[jj] // 4                    # Quarter of particles per cell - quaded later
-        if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
-            NC_load = NX
+    for jj in range(const.Nj):
+        quart_n = const.nsp_ppc[jj] // 4                    # Quarter of particles per cell - quaded later
+        if const.temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
+            NC_load = const.NX
         else:
-            if rc_hwidth == 0 or rc_hwidth > NX//2:   # Need to change this to be something like the FWHM or something
-                NC_load = NX
+            if const.rc_hwidth == 0 or const.rc_hwidth > const.NX//2:   # Need to change this to be something like the FWHM or something
+                NC_load = const.NX
             else:
-                NC_load = 2*rc_hwidth
+                NC_load = 2*const.rc_hwidth
         
         # Load particles in each applicable cell
         acc = 0; offset  = 0
@@ -424,24 +425,24 @@ def uniform_gaussian_distribution_ultra_quiet():
                 offset   = 1
                 
             # Particle index ranges
-            st = idx_start[jj] + acc
-            en = idx_start[jj] + acc + quart_n
+            st = const.idx_start[jj] + acc
+            en = const.idx_start[jj] + acc + quart_n
             
             # Set position for half: Analytically uniform
             for kk in range(quart_n):
-                pos[0, st + kk] = dx*(float(kk) / (quart_n - offset) + ii)
+                pos[0, st + kk] = const.dx*(float(kk) / (quart_n - offset) + ii)
             
             # Turn [0, NC] distro into +/- NC/2 distro
-            pos[0, st: en]-= NC_load*dx/2              
+            pos[0, st: en]-= NC_load*const.dx/2              
             
             # Set velocity for half: Randomly Maxwellian
-            vel[0, st: en] = np.random.normal(0, vth_par[jj],  quart_n) +  drift_v[jj]
-            vel[1, st: en] = np.random.normal(0, vth_perp[jj], quart_n)
-            vel[2, st: en] = np.random.normal(0, vth_perp[jj], quart_n)
+            vel[0, st: en] = np.random.normal(0, const.vth_par[jj],  quart_n) +  const.drift_v[jj]
+            vel[1, st: en] = np.random.normal(0, const.vth_perp[jj], quart_n)
+            vel[2, st: en] = np.random.normal(0, const.vth_perp[jj], quart_n)
             idx[   st: en] = jj          # Turn particle on
             
             # Set Loss Cone Distribution: Reinitialize particles in loss cone (move to a function)
-            if const.homogenous == False and temp_type[jj] == 1:
+            if const.homogenous == False and const.temp_type[jj] == 1:
                 LCD_by_rejection(pos, vel, st, en, jj)
                 
             # Quiet start : Initialize second half of v_perp
@@ -467,7 +468,7 @@ def uniform_gaussian_distribution_ultra_quiet():
     B0x          = fields.eval_B0x(pos[0, :acc])
     v_perp       = np.sqrt(vel[1, :acc] ** 2 + vel[2, :acc] ** 2)
     gyangle      = get_gyroangle_array(vel[:, :acc])
-    rL           = v_perp / (qm_ratios[idx[:acc]] * B0x)
+    rL           = v_perp / (const.qm_ratios[idx[:acc]] * B0x)
     pos[1, :acc] = rL * np.cos(gyangle)
     pos[2, :acc] = rL * np.sin(gyangle)
     
@@ -489,20 +490,20 @@ def uniform_config_reverseradix_velocity():
         -- Do a run to see if it fixes boundaries
         -- At some point, have to load loss cone distribution
     '''
-    pos = np.zeros((3, N), dtype=np.float64)
-    vel = np.zeros((3, N), dtype=np.float64)
-    idx = np.ones(N,       dtype=np.int8) * -1
+    pos = np.zeros((3, const.N), dtype=np.float64)
+    vel = np.zeros((3, const.N), dtype=np.float64)
+    idx = np.ones(const.N,       dtype=np.int8) * -1
     
-    for jj in range(Nj):
-        half_n = N_species[jj] // 2                     # Half particles of species - doubled later
+    for jj in range(const.Nj):
+        half_n = const.N_species[jj] // 2                     # Half particles of species - doubled later
                 
-        st = idx_start[jj]
-        en = idx_start[jj] + half_n
+        st = const.idx_start[jj]
+        en = const.idx_start[jj] + half_n
         
         # Set position
         for kk in range(half_n):
-            pos[0, st + kk] = 2*xmax*(float(kk) / (half_n - 1))
-        pos[0, st: en]-= xmax              
+            pos[0, st + kk] = 2*const.xmax*(float(kk) / (half_n - 1))
+        pos[0, st: en]-= const.xmax              
         
         # Set velocity for half: Randomly Maxwellian
         arr     = np.arange(half_n)
@@ -511,11 +512,11 @@ def uniform_config_reverseradix_velocity():
         R_theta = rkbr_uniform_set(arr  , base=3) 
         R_vrx   = rkbr_uniform_set(arr+1, base=5)
             
-        vr      = vth_perp[jj] * np.sqrt(-2 * np.log(R_vr ))
-        vrx     = vth_par[ jj] * np.sqrt(-2 * np.log(R_vrx))
+        vr      = const.vth_perp[jj] * np.sqrt(-2 * np.log(R_vr ))
+        vrx     = const.vth_par[ jj] * np.sqrt(-2 * np.log(R_vrx))
         theta   = R_theta * np.pi * 2
 
-        vel[0, st: en] = vrx * np.sin(theta) +  drift_v[jj]
+        vel[0, st: en] = vrx * np.sin(theta) +  const.drift_v[jj]
         vel[1, st: en] = vr  * np.sin(theta)
         vel[2, st: en] = vr  * np.cos(theta)
         idx[   st: en] = jj
@@ -525,7 +526,7 @@ def uniform_config_reverseradix_velocity():
         vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
         vel[2, en: en + half_n] = vel[2, st: en] * -1.0
         
-        idx[st: idx_end[jj]] = jj
+        idx[st: const.idx_end[jj]] = jj
         
 
     # Set initial Larmor radius - rL from v_perp, distributed to y,z based on velocity gyroangle
@@ -533,7 +534,7 @@ def uniform_config_reverseradix_velocity():
     B0x         = fields.eval_B0x(pos[0, :en])
     v_perp      = np.sqrt(vel[1, :en] ** 2 + vel[2, :en] ** 2)
     gyangle     = get_gyroangle_array(vel[:, :en])
-    rL          = v_perp / (qm_ratios[idx[:en]] * B0x)
+    rL          = v_perp / (const.qm_ratios[idx[:en]] * B0x)
     pos[1, :en] = rL * np.cos(gyangle)
     pos[2, :en] = rL * np.sin(gyangle)
     return pos, vel, idx
@@ -555,21 +556,21 @@ def initialize_particles():
         W_mag  -- Initial particle weights on B-grid
         idx    -- Particle type index
     '''
-    if radix_loading == True:
+    if const.radix_loading == True:
         pos, vel, idx = uniform_config_reverseradix_velocity()
-    elif gaussian_T == True:
+    elif const.gaussian_T == True:
         pos, vel, idx = uniform_config_random_velocity_gaussian_T()
     else:
         pos, vel, idx = uniform_config_random_velocity()
     
-    Ie      = np.zeros(N, dtype=np.uint16)
-    Ib      = np.zeros(N, dtype=np.uint16)
-    W_elec  = np.zeros((3, N), dtype=np.float64)
-    W_mag   = np.zeros((3, N), dtype=np.float64)
+    Ie      = np.zeros(const.N, dtype=np.uint16)
+    Ib      = np.zeros(const.N, dtype=np.uint16)
+    W_elec  = np.zeros((3, const.N), dtype=np.float64)
+    W_mag   = np.zeros((3, const.N), dtype=np.float64)
     
-    Bp      = np.zeros((3, N), dtype=np.float64)
-    Ep      = np.zeros((3, N), dtype=np.float64)
-    temp_N  = np.zeros((N),    dtype=np.float64)
+    Bp      = np.zeros((3, const.N), dtype=np.float64)
+    Ep      = np.zeros((3, const.N), dtype=np.float64)
+    temp_N  = np.zeros((const.N),    dtype=np.float64)
     
     particles.assign_weighting_TSC(pos, idx, Ie, W_elec)
     return pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, temp_N
@@ -594,22 +595,22 @@ def set_damping_array(B_damping_array, E_damping_array, DT):
     23/03/2020 Put factor of 0.5 in front of va to set group velocity approx.
     14/05/2020 Put factor of 0.5 in front of DT since B is only ever pushed 0.5DT
     '''
-    r_damp   = np.sqrt(29.7 * 0.5 * va * (0.5 * DT / dx) / ND)   # Damping coefficient
-    r_damp  *= damping_multiplier
+    r_damp   = np.sqrt(29.7 * 0.5 * const.va * (0.5 * DT / const.dx) / const.ND)   # Damping coefficient
+    r_damp  *= const.damping_multiplier
     
     # Do B-damping array
-    B_dist_from_mp  = np.abs(np.arange(NC + 1) - 0.5*NC)                # Distance of each B-node from midpoint
-    for ii in range(NC + 1):
-        if B_dist_from_mp[ii] > 0.5*NX:
-            B_damping_array[ii] = 1. - r_damp * ((B_dist_from_mp[ii] - 0.5*NX) / ND) ** 2 
+    B_dist_from_mp  = np.abs(np.arange(const.NC + 1) - 0.5*const.NC)                # Distance of each B-node from midpoint
+    for ii in range(const.NC + 1):
+        if B_dist_from_mp[ii] > 0.5*const.NX:
+            B_damping_array[ii] = 1. - r_damp * ((B_dist_from_mp[ii] - 0.5*const.NX) / const.ND) ** 2 
         else:
             B_damping_array[ii] = 1.0
             
     # Do E-damping array
-    E_dist_from_mp  = np.abs(np.arange(NC) + 0.5 - 0.5*NC)                # Distance of each B-node from midpoint
-    for ii in range(NC):
-        if E_dist_from_mp[ii] > 0.5*NX:
-            E_damping_array[ii] = 1. - r_damp * ((E_dist_from_mp[ii] - 0.5*NX) / ND) ** 2 
+    E_dist_from_mp  = np.abs(np.arange(const.NC) + 0.5 - 0.5*const.NC)                # Distance of each B-node from midpoint
+    for ii in range(const.NC):
+        if E_dist_from_mp[ii] > 0.5*const.NX:
+            E_damping_array[ii] = 1. - r_damp * ((E_dist_from_mp[ii] - 0.5*const.NX) / const.ND) ** 2 
         else:
             E_damping_array[ii] = 1.0
     return
@@ -630,13 +631,13 @@ def initialize_fields():
         Ve     -- Electron fluid velocity moment: Calculated as part of E-field update equation
         Te     -- Electron temperature          : Calculated as part of E-field update equation          
     '''
-    B       = np.zeros((NC + 1, 3), dtype=nb.float64)
-    E_int   = np.zeros((NC    , 3), dtype=nb.float64)
-    E_half  = np.zeros((NC    , 3), dtype=nb.float64)
+    B       = np.zeros((const.NC + 1, 3), dtype=nb.float64)
+    E_int   = np.zeros((const.NC    , 3), dtype=nb.float64)
+    E_half  = np.zeros((const.NC    , 3), dtype=nb.float64)
     
-    Ve      = np.zeros((NC, 3), dtype=nb.float64)
-    Te      = np.ones(  NC,     dtype=nb.float64) * Te0_scalar
-    Te0     = np.ones(  NC,     dtype=nb.float64) * Te0_scalar
+    Ve      = np.zeros((const.NC, 3), dtype=nb.float64)
+    Te      = np.ones(  const.NC,     dtype=nb.float64) * const.Te0_scalar
+    Te0     = np.ones(  const.NC,     dtype=nb.float64) * const.Te0_scalar
     return B, E_int, E_half, Ve, Te, Te0
 
 
@@ -655,11 +656,11 @@ def initialize_source_arrays():
         nu      -- First  moment : Ion velocity "density" per species (Vector)
         Pi      -- Second moment : Ion pressure tensor per species (Tensor) (only at two cells, times two for "old/new")
     '''
-    q_dens  = np.zeros( NC,            dtype=nb.float64)    
-    q_dens2 = np.zeros( NC,            dtype=nb.float64) 
-    Ji      = np.zeros((NC, 3),        dtype=nb.float64)
-    ni      = np.zeros((NC, Nj),       dtype=nb.float64)
-    nu      = np.zeros((NC, Nj, 3),    dtype=nb.float64)
+    q_dens  = np.zeros( const.NC,            dtype=nb.float64)    
+    q_dens2 = np.zeros( const.NC,            dtype=nb.float64) 
+    Ji      = np.zeros((const.NC, 3),        dtype=nb.float64)
+    ni      = np.zeros((const.NC, const.Nj),       dtype=nb.float64)
+    nu      = np.zeros((const.NC, const.Nj, 3),    dtype=nb.float64)
     return q_dens, q_dens2, Ji, ni, nu
 
 
@@ -678,16 +679,16 @@ def initialize_tertiary_arrays():
                          as part of predictor-corrector routine
         old_fields    -- Location to store old B, Ji, Ve, Te field values for predictor-corrector routine
     '''
-    temp3Db       = np.zeros((NC + 1, 3)     , dtype=nb.float64)
-    temp3De       = np.zeros((NC    , 3)     , dtype=nb.float64)
-    temp1D        = np.zeros( NC             , dtype=nb.float64) 
-    old_fields    = np.zeros((NC + 1, 10)    , dtype=nb.float64)
+    temp3Db       = np.zeros((const.NC + 1, 3)     , dtype=nb.float64)
+    temp3De       = np.zeros((const.NC    , 3)     , dtype=nb.float64)
+    temp1D        = np.zeros( const.NC             , dtype=nb.float64) 
+    old_fields    = np.zeros((const.NC + 1, 10)    , dtype=nb.float64)
     
-    v_prime = np.zeros((3, N),      dtype=nb.float64)
-    S       = np.zeros((3, N),      dtype=nb.float64)
-    T       = np.zeros((3, N),      dtype=nb.float64)
+    v_prime = np.zeros((3, const.N),      dtype=nb.float64)
+    S       = np.zeros((3, const.N),      dtype=nb.float64)
+    T       = np.zeros((3, const.N),      dtype=nb.float64)
         
-    old_particles = np.zeros((11, N),      dtype=nb.float64)
+    old_particles = np.zeros((11, const.N),      dtype=nb.float64)
     return old_particles, old_fields, temp3De, temp3Db, temp1D, v_prime, S, T
 
 
@@ -707,7 +708,7 @@ def set_timestep(vel, Te0):
     '''
     ion_ts   = const.orbit_res / const.gyfreq               # Timestep to resolve gyromotion
     vel_ts   = 0.5 * const.dx / np.max(np.abs(vel[0, :]))   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
-    drv_ts   = const.freq_res * driven_freq
+    drv_ts   = const.freq_res * const.driven_freq
 
     gyperiod = 2 * np.pi / const.gyfreq
     DT       = min(ion_ts, vel_ts, drv_ts)
@@ -727,8 +728,8 @@ def set_timestep(vel, Te0):
     if const.save_fields == 1 or const.save_particles == 1:
         save.store_run_parameters(DT, part_save_iter, field_save_iter, Te0)
 
-    B_damping_array = np.ones(NC + 1, dtype=float)
-    E_damping_array = np.ones(NC    , dtype=float)
+    B_damping_array = np.ones(const.NC + 1, dtype=float)
+    E_damping_array = np.ones(const.NC    , dtype=float)
     set_damping_array(B_damping_array, E_damping_array, DT)
 
     print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))

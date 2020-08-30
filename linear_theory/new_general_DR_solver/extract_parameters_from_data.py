@@ -108,13 +108,13 @@ def convert_data_to_hybrid_plasmafile(time_start, time_end, probe, pad, comp=Non
     The biggest uncertainty is the cold composition.
     '''
     run_dir  = 'C:/Users/iarey/Documents/GitHub/hybrid/simulation_codes//run_inputs/from_data/'
-    run_ext  = '10He'           
+    run_ext  = 'H_ONLY'           
     run_dir +=  run_ext + '/'        
                    
     if os.path.exists(run_dir) == False: os.makedirs(run_dir)
     
     if comp is None:
-        comp = [90, 10, 0]
+        comp = [100, 0, 0]
     
     times, B0, cold_dens, hope_dens, hope_temp, hope_anis, spice_dens, spice_temp, spice_anis =\
         load_and_interpolate_plasma_params(time_start, time_end, probe, pad)
@@ -176,7 +176,7 @@ def convert_data_to_hybrid_plasmafile(time_start, time_end, probe, pad, comp=Non
     for ii in range(Nt):
         suffix = times[ii].astype(object).strftime('_%Y%m%d_%H%M%S%f_') + run_ext
         
-        run_file = run_dir + 'run_params' + suffix + '.txt'
+        run_file = run_dir + 'plasma_params' + suffix + '.txt'
         
         with open(run_file, 'w') as f:
             

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 ## PYTHON MODULES ##
 from timeit import default_timer as timer
 
@@ -73,3 +74,4 @@ if __name__ == '__main__':
     if save_fields == 1 or save_particles == 1:
         save.add_runtime_to_header(runtime)
     print("Time to execute program: {0:.2f} seconds".format(runtime))
+    return

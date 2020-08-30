@@ -210,29 +210,29 @@ def plot_growth_rate_with_time(times, k_vals, all_WPDR, save=False, short=False,
         figsave_path = save_dir + '_LT_timeseries_CC_{:03}_{:03}_{:03}_{}.png'.format(ccomp[0], ccomp[1], ccomp[2], save_string)
 
         
-    if output.lower() == 'save':
+    if save == True:
         print('Saving {}'.format(figsave_path))
         fig.savefig(figsave_path, bbox_inches='tight')
         plt.close('all')
-    elif output.lower() == 'show':
+    else:
         ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S.%f'))
         fig.autofmt_xdate()
         figManager = plt.get_current_fig_manager()
         figManager.window.showMaximized()
         plt.show()
-    else:
-        plt.close('all')
+
     return max_k, max_g
 
 
 def load_and_plot_timeseries(ccomp=[70,20,10]):
-    files = os.listdir(save_dir)
+    
     
     times, B0, name, mass, charge, density, tper, ani, cold_dens = \
         extract_species_arrays(time_start, time_end, probe, pad, ccomp, return_raw_ne=True)
     
-    #this_file = 'DR_results_coldcomp_070_020_010_20130725_2100_2200.npz'
+    this_file = 'DR_results_coldcomp_098_001_001_20130725_2100_2200.npz'
     
+    files = [this_file]#os.listdir(save_dir)
     for file in files:
         if file[-4:] == '.npz':
             try:
@@ -247,7 +247,7 @@ def load_and_plot_timeseries(ccomp=[70,20,10]):
                 all_WPDR     = data_pointer['all_WPDR']
                 all_k        = data_pointer['all_k']
                 
-                plot_growth_rate_with_time(times, all_k, all_WPDR, save=True,
+                plot_growth_rate_with_time(times, all_k, all_WPDR, save=False,
                                            short=True, norm_w=True, B0=B0, ccomp=ccomp)
             except:
                 print('Error with file', file)
@@ -468,7 +468,7 @@ def check_if_exists():
 if __name__ == '__main__':
     gdrive    = 'F://Google Drive//'
     rbsp_path = 'G://DATA//RBSP//'
-    dump_drive= 'H://'
+    dump_drive= 'G://'
     
     _Nk       = 500
     output    = 'save'
@@ -490,11 +490,11 @@ if __name__ == '__main__':
     #get_all_DRs(time_start, time_end, probe, pad, cmp, Nk=_Nk)
     
     #plot_all_DRs()
-    #load_and_plot_timeseries()
+    load_and_plot_timeseries()
     
     #check_if_exists()
         
-    load_and_overlay_multiple_timeseries()
+    #load_and_overlay_multiple_timeseries()
     
     #get_raw_data()
 

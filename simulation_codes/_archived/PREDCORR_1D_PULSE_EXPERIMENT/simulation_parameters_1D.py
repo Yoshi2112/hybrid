@@ -11,6 +11,7 @@ every single value on each run. Makes doing pearl-studies much easier.
 This script will just be about loading them in, doing checks, and initializing
 derived values/casting to SI units (e.g. alfven velocity)
 """
+import main_1D
 import numpy as np
 import sys
 import os
@@ -33,17 +34,6 @@ if os.name == 'posix':
     root_dir     = os.path.dirname(sys.path[0])
     run_input    = root_dir +  '/run_inputs/run_params.txt'
     plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
-    
-    plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt'
-    plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213050105000_H_ONLY.txt'
-    plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213221605000_H_ONLY.txt'
-    plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213248105000_H_ONLY.txt'
-    plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213307605000_H_ONLY.txt'
-    plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213406605000_H_ONLY.txt'
-    plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213703105000_H_ONLY.txt'
-    plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213907605000_H_ONLY.txt'
-    plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214026105000_H_ONLY.txt'
-    plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214105605000_H_ONLY.txt'
 else:
     run_input    = '../run_inputs/run_params.txt'
     plasma_input = '../run_inputs/plasma_params.txt'
@@ -373,3 +363,5 @@ if particle_periodic + particle_reflect + particle_reinit > 1:
     print('--------------------------------------------------')
     
 os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
+
+main_1D.main(save_particles, save_fields)

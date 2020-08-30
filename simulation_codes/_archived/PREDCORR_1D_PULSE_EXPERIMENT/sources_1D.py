@@ -5,8 +5,9 @@ Created on Fri Sep 22 17:55:15 2017
 @author: iarey
 """
 import numba as nb
-from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, q, ne, min_dens,\
-                                     source_smoothing, field_periodic
+import simulation_parameters_1D as const
+#from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, q, ne, min_dens,\
+#                                     source_smoothing, field_periodic
 
 @nb.njit()
 def three_point_smoothing(arr, temp):
@@ -96,44 +97,44 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
     deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu)
     
     # Sum contributions across species
-    for jj in range(Nj):
-        q_dens  += ni[:, jj] * n_contr[jj] * charge[jj]
+    for jj in range(const.Nj):
+        q_dens  += ni[:, jj] * const.n_contr[jj] * const.charge[jj]
 
         for kk in range(3):
-            Ji[:, kk] += nu[:, jj, kk] * n_contr[jj] * charge[jj]
+            Ji[:, kk] += nu[:, jj, kk] * const.n_contr[jj] * const.charge[jj]
 
-    if field_periodic == True:
+    if const.field_periodic == True:
         # Need to fill this in later
         pass
     else:
         # Mirror source term contributions at edge back into domain: Simulates having
         # some sort of source on the outside of the physical space boundary.
-        q_dens[ND]          += q_dens[ND - 1]
-        q_dens[ND + NX - 1] += q_dens[ND + NX]
+        q_dens[const.ND]                += q_dens[const.ND - 1]
+        q_dens[const.ND + const.NX - 1] += q_dens[const.ND + const.NX]
     
         for ii in range(3):
             # Mirror source term contributions
-            Ji[ND, ii]          += Ji[ND - 1, ii]
-            Ji[ND + NX - 1, ii] += Ji[ND + NX, ii]
+            Ji[const.ND, ii]                += Ji[const.ND - 1, ii]
+            Ji[const.ND + const.NX - 1, ii] += Ji[const.ND + const.NX, ii]
     
             # Set damping cell source values (copy last)
-            Ji[:ND, ii]    = Ji[ND, ii]
-            Ji[ND+NX:, ii] = Ji[ND+NX-1, ii]
+            Ji[:const.ND, ii]          = Ji[const.ND, ii]
+            Ji[const.ND+const.NX:, ii] = Ji[const.ND+const.NX-1, ii]
             
         # Set damping cell source values (copy last)
-        q_dens[:ND]    = q_dens[ND]
-        q_dens[ND+NX:] = q_dens[ND+NX-1]
+        q_dens[:const.ND]    = q_dens[const.ND]
+        q_dens[const.ND+const.NX:] = q_dens[const.ND+const.NX-1]
         
     # Implement smoothing filter: If enabled
-    if source_smoothing == 1:
+    if const.source_smoothing == 1:
         three_point_smoothing(q_dens, ni[:, 0])
         for ii in range(3):
             three_point_smoothing(Ji[:, ii], ni[:, 0])
 
     # Set density minimum
     for ii in range(q_dens.shape[0]):
-        if q_dens[ii] < min_dens * ne * q:
-            q_dens[ii] = min_dens * ne * q
+        if q_dens[ii] < const.min_dens * const.ne * const.q:
+            q_dens[ii] = const.min_dens * const.ne * const.q
     return
 
 
