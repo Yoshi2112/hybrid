@@ -556,10 +556,13 @@ def initialize_particles():
         idx    -- Particle type index
     '''
     if radix_loading == True:
+        print('Loading particles with reversed-radix scrambling sets...')
         pos, vel, idx = uniform_config_reverseradix_velocity()
     elif gaussian_T == True:
+        print('Loading particles randomly with spatially Gaussian temperature...')
         pos, vel, idx = uniform_config_random_velocity_gaussian_T()
     else:
+        print('Loading particles with random normal distributions...')
         pos, vel, idx = uniform_config_random_velocity()
     
     Ie      = np.zeros(N, dtype=np.uint16)

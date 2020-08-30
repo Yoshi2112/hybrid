@@ -46,7 +46,8 @@ if os.name == 'posix':
     #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214105605000_H_ONLY.txt'
 else:
     run_input    = '../run_inputs/run_params.txt'
-    plasma_input = '../run_inputs/plasma_params.txt'
+    #plasma_input = '../run_inputs/plasma_params.txt'
+    plasma_input = '../run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt'
 
 # Load run parameters
 with open(run_input, 'r') as f:
@@ -197,7 +198,7 @@ if particle_open == 1:
     spare_ppc  = nsp_ppc.copy()
 else:
     spare_ppc  = np.zeros(Nj, dtype=int)
-N = N_species.sum() + (spare_ppc * NX).sum()
+N = N_species.sum() + (spare_ppc * 10).sum()
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order

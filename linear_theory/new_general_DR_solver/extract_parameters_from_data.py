@@ -145,9 +145,9 @@ def convert_data_to_hybrid_plasmafile(time_start, time_end, probe, pad, comp=Non
                           2048,   2048,    2048,   
                           2048,   2048,    2048])
     
-    dens[0] = 1e-3 * cold_dens * comp[0];  dens[3] = hope_dens[0];  dens[6] = spice_dens[0];
-    dens[1] = 1e-3 * cold_dens * comp[1];  dens[4] = hope_dens[1];  dens[7] = spice_dens[1];
-    dens[2] = 1e-3 * cold_dens * comp[2];  dens[5] = hope_dens[2];  dens[8] = spice_dens[2];
+    dens[0] = 1e-2 * cold_dens * comp[0];  dens[3] = hope_dens[0];  dens[6] = spice_dens[0];
+    dens[1] = 1e-2 * cold_dens * comp[1];  dens[4] = hope_dens[1];  dens[7] = spice_dens[1];
+    dens[2] = 1e-2 * cold_dens * comp[2];  dens[5] = hope_dens[2];  dens[8] = spice_dens[2];
 
     Tperp[0] = cold_temp; Tperp[3] = hope_temp[0]; Tperp[6] = spice_temp[0]
     Tperp[1] = cold_temp; Tperp[4] = hope_temp[1]; Tperp[7] = spice_temp[1]
@@ -203,7 +203,7 @@ def convert_data_to_hybrid_plasmafile(time_start, time_end, probe, pad, comp=Non
 
 if __name__ == '__main__':
     _rbsp_path  = 'E://DATA//RBSP//'
-    _time_start = np.datetime64('2013-07-25T21:00:00')
+    _time_start = np.datetime64('2013-07-25T21:20:00')
     _time_end   = np.datetime64('2013-07-25T22:00:00')
     _probe      = 'a'
     _pad        = 0
