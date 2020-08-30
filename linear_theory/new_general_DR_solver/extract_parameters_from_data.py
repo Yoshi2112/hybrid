@@ -90,8 +90,8 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_pa
     return den_times, Bi*1e-9, cold_dens*1e6, ihope_dens*1e6, ihope_temp, ihope_anis, ispice_dens*1e6, ispice_temp, ispice_anis
 
 
-#import pdb
-def convert_data_to_hybrid_plasmafile(time_start, time_end, probe, pad, cmp=[70, 20, 10]):
+import pdb
+def convert_data_to_hybrid_plasmafile(time_start, time_end, probe, pad, comp=None):
     '''
     Generate plasma_params_***.txt and run_params_***.txt files based on
     data at each point. run_params.txt only needed because it specifies 
@@ -101,89 +101,103 @@ def convert_data_to_hybrid_plasmafile(time_start, time_end, probe, pad, cmp=[70,
     Don't bother putting too much stuff in the function args: Too much to change.
     
     Also, run_params won't generate unless asked'
+    
+    # What do we know? 
+    Magnetic field is pretty solid
+    Warm/Hot particles are pretty accurate (to within relativistic error)
+    The biggest uncertainty is the cold composition.
     '''
-    grid    = True; save_path='/runs/BLANK/';
-    run_dir = 'C:/Users/iarey/Documents/GitHub/hybrid/simulation_codes//run_inputs/from_data/'
-    run_ext = 'TEST'           
-                           
+    run_dir  = 'C:/Users/iarey/Documents/GitHub/hybrid/simulation_codes//run_inputs/from_data/'
+    run_ext  = '10He'           
+    run_dir +=  run_ext + '/'        
+                   
     if os.path.exists(run_dir) == False: os.makedirs(run_dir)
     
-    # GENERAL RUN PARAMETERS
-    DRIVE = 'F:/' if grid == False else '/home/c3134027/'
-    RUN   = '-';    SAVE_PARTICLE_FLAG = 0;    SAVE_FIELD_FLAG	=0
-    SEED=65846146;    CPU_AFFINITY='-';
-    
-    HOMOGENOUS_B0_FLAG = 0 ; PERIODIC_FLAG         = 0 ; REFLECT_FLAG = 0
-    REINIT_FLAG        = 0 ; FIELD_PERIODIC	       = 0 ; NOWAVES_FLAG =0
-    TE0_EQUAL_FLAG     = 0 ; SOURCE_SMOOTHING_FLAG = 0
-    E_DAMPING_FLAG     = 0 ; QUIET_START_FLAG      = 1
-    RADIX_LOADING      = 1 ; DAMPING_MULTIPLIER_RD = 0.05
-    
-    NX  = 3072 ; ND      = 1536 ; MAX_REV = 200
-    DXM	= 1.0  ; L       = 5.35 ; R_A	  = 120e3
-    IE  = 1    ; MIN_DENS= 0.05 ; B_EQ    = '-' ; RC_HWIDTH='-'
-    GYROPERIOD_RESOLUTION= 0.02 ; FREQUENCY_RESOLUTION= 0.02		
-    PARTICLE_DUMP_FREQ   = 0.25 ; FIELD_DUMP_FREQ     = 0.10
-    COMMENT = 'First test of auto-generated files'
+    if comp is None:
+        comp = [90, 10, 0]
     
     times, B0, cold_dens, hope_dens, hope_temp, hope_anis, spice_dens, spice_temp, spice_anis =\
         load_and_interpolate_plasma_params(time_start, time_end, probe, pad)
+    
+    cold_dens /= 1e6  ; hope_dens /= 1e6; spice_dens /= 1e6   # Cast densities    from /m to /cm
+    cold_temp  = 5e-3 ; hope_temp /= 1e3; spice_temp /= 1e3   # Cast temperatures from eV to keV
     
     Nt    = times.shape[0]
     dens  = np.zeros((9, Nt), dtype=float)
     Tperp = np.zeros((9, Nt), dtype=float)
     A     = np.zeros((9, Nt), dtype=float)
 
-    name    = np.array([   'cold $H^{+}$',    'cold $He^{+}$',    'cold $O^{+}$',
-                            'HOPE $H^{+}$',    'HOPE $He^{+}$',    'HOPE $O^{+}$',
-                         'RBSPICE $H^{+}$', 'RBSPICE $He^{+}$', 'RBSPICE $O^{+}$'])
+    names    = np.array(['cold $H^{+}$', 'cold $He^{+}$', 'cold $O^{+}$',
+                         'warm $H^{+}$', 'warm $He^{+}$', 'warm $O^{+}$',
+                         'hot $H^{+}$' , 'hot $He^{+}$' , 'hot $O^{+}$'])
     
-    mass    = np.array([1.0, 4.0, 16.0, 1.0, 4.0, 16.0, 1.0, 4.0, 16.0])
-    charge  = np.array([1.0, 1.0,  1.0, 1.0, 1.0,  1.0, 1.0, 1.0,  1.0])
+    colors   = np.array(['b'      , 'm'     , 'g',
+                        'r'      , 'gold'  , 'purple',
+                        'tomato' , 'orange', 'deeppink'])
     
-    dens[0] = cold_dens * cmp[0];  dens[3] = hope_dens[0];  dens[6] = spice_dens[0];
-    dens[1] = cold_dens * cmp[1];  dens[4] = hope_dens[1];  dens[7] = spice_dens[1];
-    dens[2] = cold_dens * cmp[2];  dens[5] = hope_dens[2];  dens[8] = spice_dens[2];
+    temp_flag = np.array([0,     0,    0,   1,   1,    1,   1,   1,    1])
+    dist_flag = np.array([0,     0,    0,   0,   0,    0,   0,   0,    0])
+    mass      = np.array([1.0, 4.0, 16.0, 1.0, 4.0, 16.0, 1.0, 4.0, 16.0])
+    charge    = np.array([1.0, 1.0,  1.0, 1.0, 1.0,  1.0, 1.0, 1.0,  1.0])
+    drift     = np.array([0.0, 0.0,  0.0, 0.0, 0.0,  0.0, 0.0, 0.0,  0.0])
+    
+    nsp_ppc   = np.array([256,     256,     256,   
+                          2048,   2048,    2048,   
+                          2048,   2048,    2048])
+    
+    dens[0] = 1e-3 * cold_dens * comp[0];  dens[3] = hope_dens[0];  dens[6] = spice_dens[0];
+    dens[1] = 1e-3 * cold_dens * comp[1];  dens[4] = hope_dens[1];  dens[7] = spice_dens[1];
+    dens[2] = 1e-3 * cold_dens * comp[2];  dens[5] = hope_dens[2];  dens[8] = spice_dens[2];
 
-    Tperp[0] = 5.0; Tperp[3] = hope_temp[0]; Tperp[6] = spice_temp[0]
-    Tperp[1] = 5.0; Tperp[4] = hope_temp[1]; Tperp[7] = spice_temp[1]
-    Tperp[2] = 5.0; Tperp[5] = hope_temp[2]; Tperp[8] = spice_temp[2]
+    Tperp[0] = cold_temp; Tperp[3] = hope_temp[0]; Tperp[6] = spice_temp[0]
+    Tperp[1] = cold_temp; Tperp[4] = hope_temp[1]; Tperp[7] = spice_temp[1]
+    Tperp[2] = cold_temp; Tperp[5] = hope_temp[2]; Tperp[8] = spice_temp[2]
 
     A[0]  = 0.0; A[3]  = hope_anis[0]; A[6]  = spice_anis[0];
     A[1]  = 0.0; A[4]  = hope_anis[1]; A[7]  = spice_anis[1];
     A[2]  = 0.0; A[5]  = hope_anis[2]; A[8]  = spice_anis[2];
+
+    # Number of rows with species-specific stuff
+    N_rows    = 11
+    N_species = 9
+    
+    row_labels = ['LABEL', 'COLOUR', 'TEMP_FLAG', 'DIST_FLAG', 'NSP_PPC', 'MASS_PROTON', 
+                  'CHARGE_ELEM', 'DRIFT_VA', 'DENSITY_CM3', 'ANISOTROPY', 'ENERGY_PERP', 
+                  'ELECTRON_EV', 'BETA_FLAG', 'L', 'B_EQ']
+    
+    row_params = [names, colors, temp_flag, dist_flag, nsp_ppc, mass, charge, drift, 
+                  dens, A, Tperp]
+
+    electron_ev = cold_temp
+    beta_flag   = 0
+    L           = 5.35
+    b_eq        = '-'
     
     for ii in range(Nt):
         suffix = times[ii].astype(object).strftime('_%Y%m%d_%H%M%S%f_') + run_ext
-        # Write run_params.txt file
+        
         run_file = run_dir + 'run_params' + suffix + '.txt'
         
         with open(run_file, 'w') as f:
-            print('DRIVE            {}'.format(), file=f)
-            print('SAVE_PATH        {}'.format(), file=f)
-            print('RUN              {}'.format(), file=f)
-            print('SAVE_PARTICLE_FLAG {}'.format(), file=f)
-            print('SAVE_FIELD_FLAG  {}'.format(), file=f)
-            print('SEED  {}'.format(), file=f)
-            print('CPU_AFFINITY  {}'.format(), file=f)
-            print('HOMOGENOUS_B0_FLAG  {}'.format(), file=f)
-            print('PERIODIC_FLAG  {}'.format(), file=f)
-            print('REFLECT_FLAG  {}'.format(), file=f)
-            print('REINIT_FLAG  {}'.format(), file=f)
-            print('FIELD_PERIODIC  {}'.format(), file=f)
-            print('NOWAVES_FLAG  {}'.format(), file=f)
-            print('TE0_EQUAL_FLAG  {}'.format(), file=f)
-            print('SOURCE_SMOOTHING_FLAG  {}'.format(), file=f)
-            print('E_DAMPING_FLAG  {}'.format(), file=f)
-            print('QUIET_START_FLAG  {}'.format(), file=f)
-            print('RADIX_LOADING  {}'.format(), file=f)
-            print('DAMPING_MULTIPLIER_RD  {}'.format(), file=f)
-            print('NX  {}'.format(), file=f)
-            print('ND  {}'.format(), file=f)
-            print('MAX_REV  {}'.format(), file=f)
-            print('DXM  {}'.format(), file=f)
-    
-        
+            
+            # Print the row label for each row, and then entries for each species
+            for jj in range(N_rows):
+                print('{0: <15}'.format(row_labels[jj]), file=f, end='')
+                
+                # Loop through species to print that row's stuff (separated by spaces)
+                for kk in range(N_species):
+                    
+                    if dens[kk, ii] != 0.0:
+                        if jj > 7: 
+                            print('{0: <15}'.format(round(row_params[jj][kk, ii], 9)), file=f, end='')
+                        else:
+                            print('{0: <15}'.format(row_params[jj][kk]), file=f, end='')
+                print('', file=f)
+            # Single print specific stuff
+            print('ELECTRON_EV    {}'.format(electron_ev), file=f)
+            print('BETA_FLAG      {}'.format(beta_flag), file=f)
+            print('L              {}'.format(L), file=f)
+            print('B_EQ           {}'.format(b_eq), file=f)        
     return
 
 
@@ -194,7 +208,7 @@ if __name__ == '__main__':
     _probe      = 'a'
     _pad        = 0
     
-    convert_data_to_hybrid_plasmafile(_time_start, _time_end, _probe, _pad, cmp=[70, 20, 10])
+    convert_data_to_hybrid_plasmafile(_time_start, _time_end, _probe, _pad)
    
     #_times, _B0, _cold_dens, _hope_dens, _hope_temp, _hope_anis, _spice_dens, _spice_temp, _spice_anis =\
     #    load_and_interpolate_plasma_params(_time_start, _time_end, _probe, _pad)

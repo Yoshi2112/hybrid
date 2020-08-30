@@ -1,5 +1,12 @@
 ## PYTHON MODULES ##
 from timeit import default_timer as timer
+import sys
+try:
+    plasmafile = sys.argv[1]
+    print('Input file is', sys.argv[1])
+except:
+    print('No input argument found, defaulting')
+    plasmafile = None
 
 ## HYBRID MODULES ##
 import init_1D       as init

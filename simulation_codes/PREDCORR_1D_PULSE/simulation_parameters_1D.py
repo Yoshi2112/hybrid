@@ -15,6 +15,9 @@ import numpy as np
 import sys
 import os
 
+from main_1D import plasmafile
+print(plasmafile)
+sys.exit()
 # Random options for testing purposes. Nothing here that'll probably be used
 # Except under pretty specific circumstances.
 gaussian_T  = False
@@ -97,9 +100,9 @@ with open(plasma_input, 'r') as f:
     density    = np.array(f.readline().split()[1:], dtype=float)*1e6
     anisotropy = np.array(f.readline().split()[1:], dtype=float)
     
-    # Particle energy: If beta == 1, energies are in beta. If not, they are in eV                                    
+    # Particle energy: If beta == 1, energies are in beta. If not, they are in keV                                    
     E_perp     = np.array(f.readline().split()[1:], dtype=float)
-    E_e        = float(f.readline().split()[1])
+    E_e        = float(f.readline().split()[1])*1e3
     beta_flag  = int(f.readline().split()[1])
     L          = float(f.readline().split()[1])         # Field line L shell
     B_eq       = f.readline().split()[1]                # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
