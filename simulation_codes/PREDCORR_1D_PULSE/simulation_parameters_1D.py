@@ -11,13 +11,11 @@ every single value on each run. Makes doing pearl-studies much easier.
 This script will just be about loading them in, doing checks, and initializing
 derived values/casting to SI units (e.g. alfven velocity)
 """
+import main_1D
 import numpy as np
 import sys
 import os
 
-from main_1D import plasmafile
-print(plasmafile)
-sys.exit()
 # Random options for testing purposes. Nothing here that'll probably be used
 # Except under pretty specific circumstances.
 gaussian_T  = False
@@ -365,3 +363,5 @@ if particle_periodic + particle_reflect + particle_reinit > 1:
     print('--------------------------------------------------')
     
 os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
+
+main_1D.main(save_particles, save_fields)

@@ -6,8 +6,10 @@ Created on Fri Sep 22 17:23:44 2017
 """
 import numba as nb
 import numpy as np
-from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios,\
-                                        B_eq, a, particle_periodic, nsp_ppc
+
+import simulation_parameters_1D as const
+#from   simulation_parameters_1D  import NX, ND, dx, xmin, xmax, qm_ratios,\
+#                                        B_eq, a, particle_periodic, nsp_ppc
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -61,6 +63,7 @@ def assign_weighting_TSC(pos, idx, I, W, E_nodes=True):
     Could vectorize this with the temp_N array, then check for particles on the boundaries (for
     manual setting)
     '''
+    NX = const.NX;  ND = const.ND;  dx = const.dx;  xmax = const.xmax;  xmin = const.xmin
     Np         = pos.shape[1]
     epsil      = 1e-15
     
@@ -104,7 +107,7 @@ def eval_B0_particle(pos, Bp):
     These values are added onto the existing value of B at the particle location,
     Bp. B0x is simply equated since we never expect a non-zero wave field in x.
     '''
-    constant = - a * B_eq 
+    constant = - const.a * const.B_eq 
     Bp[0]    =   eval_B0x(pos[0])   
     Bp[1]   += constant * pos[0] * pos[1]
     Bp[2]   += constant * pos[0] * pos[2]
@@ -125,9 +128,9 @@ def eval_B0_particle_1D(pos, vel, idx, Bp):
     array for memory allocation or something
     '''
     Bp[0]    =   eval_B0x(pos[0])  
-    constant = a * B_eq 
+    constant = const.a * const.B_eq 
     for ii in range(idx.shape[0]):
-        l_cyc      = qm_ratios[idx[ii]] * Bp[0, ii]
+        l_cyc      = const.qm_ratios[idx[ii]] * Bp[0, ii]
         
         Bp[1, ii] += constant * pos[0, ii] * vel[2, ii] / l_cyc
         Bp[2, ii] -= constant * pos[0, ii] * vel[1, ii] / l_cyc
@@ -162,7 +165,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
     eval_B0_particle(pos, Bp)  
     
     for ii in range(vel.shape[1]):
-        qmi[ii] = 0.5 * DT * qm_ratios[idx[ii]]                         # q/m for ion of species idx[ii]
+        qmi[ii] = 0.5 * DT * const.qm_ratios[idx[ii]]                         # q/m for ion of species idx[ii]
         for jj in range(3):                                             # Nodes
             for kk in range(3):                                         # Components
                 Ep[kk, ii] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]       # Vector E-field  at particle location
@@ -219,13 +222,14 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
     IDEA: INSTEAD OF STORING POS_OLD, USE Ie INSTEAD, SINCE IT STORES THE CLOSEST
     CELL CENTER - IF IT WAS IN LHS BOUNDARY CELL Ie[ii] == ND (+1?)
     '''
+    xmin = const.xmin; xmax = const.xmax; dx = const.dx
     pos_old[:, :] = pos
     
     pos[0, :] += vel[0, :] * DT
     pos[1, :] += vel[1, :] * DT
     pos[2, :] += vel[2, :] * DT
     
-    if particle_periodic == 1:
+    if const.particle_periodic == 1:
         for ii in nb.prange(pos.shape[1]):           
             if pos[0, ii] > xmax:
                 pos[0, ii] += xmin - xmax
@@ -243,7 +247,7 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
         
         # Check number of spare particles
         num_spare = (idx < 0).sum()
-        if num_spare < 2 * nsp_ppc.sum():
+        if num_spare < 2 * const.nsp_ppc.sum():
             print('WARNING :: Less than two cells worth of spare particles remaining.')
             if num_spare == 0:
                 print('WARNING :: No space particles remaining. Exiting simulation.')

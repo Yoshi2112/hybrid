@@ -8,14 +8,16 @@ import numpy as np
 import numba as nb
 
 import auxilliary_1D as aux
-from simulation_parameters_1D import dx, ne, q, mu0, kB, ie, B_eq, a,         \
-                                     disable_waves, E_damping, field_periodic,\
-                                     driven_freq, driven_ampl, ND, NX,\
-                                     pulse_offset, pulse_width, driven_k, pol_wave
+import simulation_parameters_1D as const
+
+#from simulation_parameters_1D import dx, ne, q, mu0, kB, ie, B_eq, a,         \
+#                                     disable_waves, E_damping, field_periodic,\
+#                                     driven_freq, driven_ampl, ND, NX,\
+#                                     pulse_offset, pulse_width, driven_k, pol_wave
 
 @nb.njit()
 def eval_B0x(x):
-    return B_eq * (1. + a * x**2)
+    return const.B_eq * (1. + const.a * x**2)
 
 @nb.njit()
 def get_curl_E(E, dE):
@@ -54,7 +56,7 @@ def get_curl_E(E, dE):
     dE[NC, 1]     += 2*(dE[NC, 1] - dE[NC - 1, 1])
     dE[NC, 2]     += 2*(dE[NC, 2] - dE[NC - 1, 2])
     
-    dE /= dx
+    dE /= const.dx
     return 
 
 @nb.njit()
@@ -78,7 +80,7 @@ def push_B(B, E, curlE, DT, qq, damping_array, half_flag=1):
 
     B       -= 0.5 * DT * curlE                          # Advance using curl (apply retarding factor here?)
     
-    if field_periodic == 1:
+    if const.field_periodic == 1:
         # Copy field value into opposite cell
         pass
     else:
@@ -100,7 +102,7 @@ def curl_B_term(B, curlB):
         curlB[ii, 1] = - (B[ii + 1, 2] - B[ii, 2])
         curlB[ii, 2] =    B[ii + 1, 1] - B[ii, 1]
     
-    curlB /= (dx * mu0)
+    curlB /= (const.dx * const.mu0)
     return 
 
 @nb.njit()
@@ -109,11 +111,11 @@ def get_electron_temp(qn, Te, Te0):
     Calculate the electron temperature in each cell. Depends on the charge density of each cell
     and the treatment of electrons: i.e. isothermal (ie=0) or adiabatic (ie=1)
     '''
-    if ie == 0:
+    if const.ie == 0:
         Te[:] = np.ones(qn.shape[0]) * Te0
-    elif ie == 1:
+    elif const.ie == 1:
         gamma_e = 5./3. - 1.
-        Te[:] = Te0 * np.power(qn / (q*ne), gamma_e)
+        Te[:] = Te0 * np.power(qn / (const.q*const.ne), gamma_e)
     return
 
 @nb.njit()
@@ -135,13 +137,13 @@ def get_grad_P(qn, te, grad_P, temp):
     temp     *= 0; grad_P *= 0
     
     nc        = qn.shape[0]
-    grad_P[:] = qn * kB * te / q       # Store Pe in grad_P array for calculation
+    grad_P[:] = qn * const.kB * te / const.q       # Store Pe in grad_P array for calculation
 
     # Central differencing, internal points
     for ii in nb.prange(1, nc - 1):
         temp[ii] = (grad_P[ii + 1] - grad_P[ii - 1])
     
-    temp    /= (2*dx)
+    temp    /= (2*const.dx)
     
     # Return value
     grad_P[:]    = temp[:nc]
@@ -160,14 +162,14 @@ def add_J_ext(qq, Ji, DT, half_flag):
     # Should put some sort of ramp on it?
     # Also needs to be polarised. By or Bz lagging/leading?
     phase = -90
-    N_eq  = ND + NX//2
+    N_eq  = const.ND + const.NX//2
     time  = qq*DT - 0.5*half_flag*DT
     
-    gaussian = np.exp(- ((time - pulse_offset)/ pulse_width) ** 2 )
+    gaussian = np.exp(- ((time - const.pulse_offset)/ const.pulse_width) ** 2 )
 
     # Set new field values in array as soft source
-    Ji[N_eq, 1] += driven_ampl * gaussian*np.sin(2 * np.pi * driven_freq * time)
-    Ji[N_eq, 2] += driven_ampl * gaussian*np.sin(2 * np.pi * driven_freq * time + phase * np.pi / 180.)    
+    Ji[N_eq, 1] += const.driven_ampl * gaussian*np.sin(2 * np.pi * const.driven_freq * time)
+    Ji[N_eq, 2] += const.driven_ampl * gaussian*np.sin(2 * np.pi * const.driven_freq * time + phase * np.pi / 180.)    
     return
 
 @nb.njit()
@@ -193,16 +195,16 @@ def add_J_ext_pol(qq, Ji, DT, half_flag):
     # Should put some sort of ramp on it?
     # Also needs to be polarised. By or Bz lagging/leading?
     phase = -np.pi / 2
-    N_eq  = ND + NX//2
+    N_eq  = const.ND + const.NX//2
     time  = qq*DT - 0.5*half_flag*DT
-    v_ph  = driven_freq / driven_k
+    v_ph  = const.driven_freq / const.driven_k
     
     for off in np.arange(-2, 3):
-        delay = off*dx / v_ph
-        gauss = driven_ampl * np.exp(- ((time - pulse_offset - delay)/ pulse_width) ** 2 )
+        delay = off*const.dx / v_ph
+        gauss = const.driven_ampl * np.exp(- ((time - const.pulse_offset - delay)/ const.pulse_width) ** 2 )
         
-        Ji[N_eq + off, 1] += gauss * np.sin(2 * np.pi * driven_freq * (time - delay))
-        Ji[N_eq + off, 2] += gauss * np.sin(2 * np.pi * driven_freq * (time - delay) + phase)    
+        Ji[N_eq + off, 1] += gauss * np.sin(2 * np.pi * const.driven_freq * (time - delay))
+        Ji[N_eq + off, 2] += gauss * np.sin(2 * np.pi * const.driven_freq * (time - delay) + phase)    
     return
 
 @nb.njit()
@@ -230,13 +232,13 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_dampi
     '''
     curl_B_term(B, temp3De)                                   # temp3De is now curl B term
 
-    if pol_wave == 0:
+    if const.pol_wave == 0:
         # No driving
         pass
-    elif pol_wave == 1:
+    elif const.pol_wave == 1:
         # Single point source
         add_J_ext(qq, Ji, DT, half_flag=half_flag)
-    elif pol_wave == 2:
+    elif const.pol_wave == 2:
         # Multi-point source
         add_J_ext_pol(qq, Ji, DT, half_flag=half_flag)
 
@@ -251,19 +253,19 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_dampi
 
     aux.cross_product(Ve, temp3Db[:temp3Db.shape[0]-1, :], temp3De)                  # temp3De is now Ve x B term
     
-    if field_periodic == 0:
-        if E_damping == True:
+    if const.field_periodic == 0:
+        if const.E_damping == 1:
             temp3De *= E_damping_array
     
     E[:, 0]  = - temp3De[:, 0] - grad_P[:] / q_dens[:]
     E[:, 1]  = - temp3De[:, 1]
     E[:, 2]  = - temp3De[:, 2]
     
-    if field_periodic == 1:
+    if const.field_periodic == 1:
         # Copy field values into ghost cells
         pass
     
     # Diagnostic flag for testing
-    if disable_waves == 1:   
+    if const.disable_waves == 1:   
         E *= 0.
     return 

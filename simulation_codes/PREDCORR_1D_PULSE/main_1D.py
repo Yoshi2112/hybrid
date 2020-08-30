@@ -1,12 +1,6 @@
+# -*- coding: utf-8 -*-
 ## PYTHON MODULES ##
 from timeit import default_timer as timer
-import sys
-try:
-    plasmafile = sys.argv[1]
-    print('Input file is', sys.argv[1])
-except:
-    print('No input argument found, defaulting')
-    plasmafile = None
 
 ## HYBRID MODULES ##
 import init_1D       as init
@@ -16,10 +10,9 @@ import fields_1D     as fields
 import sources_1D    as sources
 import save_routines as save
 
-from simulation_parameters_1D import save_particles, save_fields
 
 
-if __name__ == '__main__':
+def main(save_particles, save_fields):
     start_time = timer()
     
     # Initialize simulation: Allocate memory and set time parameters
@@ -80,3 +73,4 @@ if __name__ == '__main__':
     if save_fields == 1 or save_particles == 1:
         save.add_runtime_to_header(runtime)
     print("Time to execute program: {0:.2f} seconds".format(runtime))
+    return

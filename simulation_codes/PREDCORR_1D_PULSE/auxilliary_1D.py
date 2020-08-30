@@ -11,7 +11,9 @@ import particles_1D as particles
 import fields_1D    as fields
 import init_1D      as init
 
-from simulation_parameters_1D import dx, NC, NX, ND, qm_ratios, freq_res, orbit_res, E_nodes, disable_waves
+import simulation_parameters_1D as const
+
+#from simulation_parameters_1D import dx, NC, NX, ND, qm_ratios, freq_res, orbit_res, E_nodes, disable_waves
 
 @nb.njit()
 def cross_product(A, B, C):
@@ -47,6 +49,7 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
     This might be able to be done without the intermediate y2 array since the interpolated
     points don't require previous point values.
     '''
+    NC      = const.NC
     y2      = np.zeros(B.shape, dtype=nb.float64)
     interp *= 0.
     
@@ -72,7 +75,7 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
     
     # Add B0x to interpolated array
     for ii in range(NC):
-        interp[ii, 0] = fields.eval_B0x(E_nodes[ii])
+        interp[ii, 0] = fields.eval_B0x(const.E_nodes[ii])
     return
 
 
@@ -93,20 +96,22 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
     time-dependent counters and quantities are doubled. Velocity is then retarded back
     half a timestep to de-sync back into a leapfrog scheme.
     '''
+    ND = const.ND;    NX = const.NX
+    
     interpolate_edges_to_center(B, B_center)
     B_magnitude     = np.sqrt(B_center[ND:ND+NX+1, 0] ** 2 +
                               B_center[ND:ND+NX+1, 1] ** 2 +
                               B_center[ND:ND+NX+1, 2] ** 2)
-    gyfreq          = qm_ratios.max() * B_magnitude.max()     
-    ion_ts          = orbit_res / gyfreq
+    gyfreq          = const.qm_ratios.max() * B_magnitude.max()     
+    ion_ts          = const.orbit_res / gyfreq
     
     if E[:, 0].max() != 0:
-        elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / np.abs(vel).max()).max())               # Electron acceleration "frequency"
-        Eacc_ts         = freq_res / elecfreq                            
+        elecfreq        = const.qm_ratios.max()*(np.abs(E[:, 0] / np.abs(vel).max()).max())               # Electron acceleration "frequency"
+        Eacc_ts         = const.freq_res / elecfreq                            
     else:
         Eacc_ts = ion_ts
 
-    vel_ts          = 0.60 * dx / np.abs(vel[0, :]).max()                        # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
+    vel_ts          = 0.60 * const.dx / np.abs(vel[0, :]).max()                        # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
     DT_part         = min(Eacc_ts, vel_ts, ion_ts)                      # Smallest of the allowable timesteps
     
     if DT_part < 0.9*DT:
@@ -143,6 +148,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     to resync everything, and calculate steps to next stop.
     If no saves, steps_to_go = max_inc
     '''
+    NC = const.NC
     # Check timestep
     #print('MAIN   Checking timestep')
     qq, DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array   \
@@ -160,7 +166,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     q_dens *= 0.5
     q_dens += 0.5 * q_dens_adv
     
-    if disable_waves == 0:
+    if const.disable_waves == 0:
         # Push B from N to N + 1/2
         fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
         
