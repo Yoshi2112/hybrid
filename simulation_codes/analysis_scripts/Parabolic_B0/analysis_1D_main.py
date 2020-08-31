@@ -3495,11 +3495,69 @@ def get_reflection_coefficient(save=True, incl_damping_cells=True):
     return
 
 
+def plot_tx_with_boundary_parameters(component='By', tmax=None, saveas='tx_boundaries_plot', save=True):
+    plt.ioff()
+
+    t, arr = cf.get_array(component)
+    
+    fontsize = 18
+    font     = 'monospace'
+    
+    tick_label_size = 14
+    mpl.rcParams['xtick.labelsize'] = tick_label_size 
+    mpl.rcParams['ytick.labelsize'] = tick_label_size 
+    
+    if component[0] == 'B':
+        arr *= 1e9
+        x    = cf.B_nodes / cf.dx
+    else:
+        arr *= 1e3
+        x    = cf.E_nodes / cf.dx
+        
+    if tmax is None:
+        lbl = 'full'
+    else:
+        lbl = '{:04}'.format(tmax)
+    
+    ## PLOT IT
+    fig, [[axl], [ax], [axr]] = plt.subplots(nrows=1, ncols=3, figsize=(15, 10),
+                                             sharey=True, gridspec_kw={'width_ratios':[1,2,1]})
+    
+    vmin = arr.min()
+    vmax = arr.max()
+    im1 = ax.pcolormesh(x, t, arr, cmap='nipy_spectral', vmin=vmin, vmax=vmax)
+    suffix = ''
+    
+    cb  = fig.colorbar(im1)
+    
+    if component[0] == 'B':
+        cb.set_label('nT', rotation=0, family=font, fontsize=fontsize, labelpad=30)
+    else:
+        cb.set_label('mV/m', rotation=0, family=font, fontsize=fontsize, labelpad=30)
+
+    ax.set_title('Time-Space ($t-x$) Plot :: {} component'.format(component.upper()), fontsize=fontsize, family=font)
+    ax.set_ylabel('t (s)', rotation=0, labelpad=30, fontsize=fontsize, family=font)
+    ax.set_xlabel('x ($\Delta x$)', fontsize=fontsize, family=font)
+    ax.set_ylim(0, tmax)
+    
+    ax.set_xlim(x[0], x[-1])
+    ax.axvline(cf.xmin     / cf.dx, c='w', ls=':', alpha=1.0)
+    ax.axvline(cf.xmax     / cf.dx, c='w', ls=':', alpha=1.0)
+    ax.axvline(cf.grid_mid / cf.dx, c='w', ls=':', alpha=0.75)   
+        
+    if save == True:
+        fullpath = cf.anal_dir + saveas + '_{}_{}'.format(component.lower(), lbl) + suffix + '.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        print('t-x Plot saved')
+        plt.close('all')
+    return
+
+
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'F:'
+    drive       = 'G:'
 
-    for series in ['new_flux_test']:
+    for series in ['//_archive_new//ABC_newEMIC_nsp_test//']:
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -3508,22 +3566,22 @@ if __name__ == '__main__':
         clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
                 'darkorange', 'peru', 'yellow']
         
-        runs_to_do = [4,5]#range(num_runs)
-        
+        runs_to_do = [1]#range(num_runs)
+                    
 # =============================================================================
 #         fig1, axes1 = plt.subplots(2, sharex=True)
 #         fig2, axes2 = plt.subplots(2, sharex=True)
 # =============================================================================
-# =============================================================================
-#         # Extract all summary files and plot field stuff (quick)
-#         for run_num in runs_to_do:
-#             print('\nRun {}'.format(run_num))
-#             #cf.delete_analysis_folders(drive, series, run_num)
-#             cf.load_run(drive, series, run_num, extract_arrays=True)
-#             
-#             plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
-#             standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
-# =============================================================================
+        # Extract all summary files and plot field stuff (quick)
+        for run_num in runs_to_do:
+            print('\nRun {}'.format(run_num))
+            #cf.delete_analysis_folders(drive, series, run_num)
+            cf.load_run(drive, series, run_num, extract_arrays=True)
+            
+            plot_tx_with_boundary_parameters()
+            
+            #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
+            #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
             
 # =============================================================================
 #             # Quick & Easy way to do all runs: Plot function here
