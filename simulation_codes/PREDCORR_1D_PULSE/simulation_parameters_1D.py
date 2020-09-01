@@ -32,9 +32,9 @@ pulse_width  = 1.0      # Pulse width (proportional to 2*std. 3*width decayed to
 if os.name == 'posix':
     root_dir     = os.path.dirname(sys.path[0])
     run_input    = root_dir +  '/run_inputs/run_params.txt'
-    #plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
+    plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
     
-    plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt'
+    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt'
     #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213050105000_H_ONLY.txt'
     #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213221605000_H_ONLY.txt'
     #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213248105000_H_ONLY.txt'
@@ -46,8 +46,8 @@ if os.name == 'posix':
     #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214105605000_H_ONLY.txt'
 else:
     run_input    = '../run_inputs/run_params.txt'
-    #plasma_input = '../run_inputs/plasma_params.txt'
-    plasma_input = '../run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt'
+    plasma_input = '../run_inputs/plasma_params.txt'
+    #plasma_input = '../run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt'
 
 # Load run parameters
 with open(run_input, 'r') as f:

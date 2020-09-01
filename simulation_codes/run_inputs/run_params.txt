@@ -1,12 +1,12 @@
-DRIVE					/home/c3134027/
-SAVE_PATH				/runs/july25_minmax_10run_Honly/
+DRIVE					F:/
+SAVE_PATH				/runs/compare_open_and_periodic/
 RUN						-
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
 SEED					65846146
 CPU_AFFINITY			-
 HOMOGENOUS_B0_FLAG		0
-PERIODIC_FLAG			0
+PERIODIC_FLAG			1
 REFLECT_FLAG			0
 REINIT_FLAG				0
 FIELD_PERIODIC			0
@@ -29,4 +29,4 @@ GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02		
 PARTICLE_DUMP_FREQ		0.25
 FIELD_DUMP_FREQ			0.10
-July 25, 2013 event simulation. One of 10 datapoints interpolated from data at min/max growth rate points.
+Checking out open/periodic and homo/para B0 combinations - is there a big difference in resultant waveforms?

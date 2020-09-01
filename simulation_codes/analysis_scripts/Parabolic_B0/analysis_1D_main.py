@@ -10,6 +10,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 from   matplotlib.gridspec import GridSpec
+from   mpl_toolkits.axes_grid1 import make_axes_locatable
 import os
 import sys
 import pdb
@@ -3495,10 +3496,19 @@ def get_reflection_coefficient(save=True, incl_damping_cells=True):
     return
 
 
-def plot_tx_with_boundary_parameters(component='By', tmax=None, saveas='tx_boundaries_plot', save=True):
+def plot_abs_with_boundary_parameters(tmax=None, saveas='tx_boundaries_plot', save=True, B0_lim=None):
+    '''
+    B0_lim is in multiples of B0
+    '''
     plt.ioff()
 
-    t, arr = cf.get_array(component)
+    t, by    = cf.get_array('by')
+    t, bz    = cf.get_array('bz')
+    t, jx    = cf.get_array('jx')
+    t, ex    = cf.get_array('ex')
+    t, qdens = cf.get_array('qdens')
+    x        = cf.B_nodes / cf.dx
+    bt       = np.sqrt(by ** 2 + bz ** 2)*1e9
     
     fontsize = 18
     font     = 'monospace'
@@ -3507,36 +3517,27 @@ def plot_tx_with_boundary_parameters(component='By', tmax=None, saveas='tx_bound
     mpl.rcParams['xtick.labelsize'] = tick_label_size 
     mpl.rcParams['ytick.labelsize'] = tick_label_size 
     
-    if component[0] == 'B':
-        arr *= 1e9
-        x    = cf.B_nodes / cf.dx
-    else:
-        arr *= 1e3
-        x    = cf.E_nodes / cf.dx
-        
-    if tmax is None:
-        lbl = 'full'
-    else:
-        lbl = '{:04}'.format(tmax)
-    
     ## PLOT IT
-    fig, [[axl], [ax], [axr]] = plt.subplots(nrows=1, ncols=3, figsize=(15, 10),
+    fig, [axl, ax, axr] = plt.subplots(nrows=1, ncols=3, figsize=(15, 10),
                                              sharey=True, gridspec_kw={'width_ratios':[1,2,1]})
     
-    vmin = arr.min()
-    vmax = arr.max()
-    im1 = ax.pcolormesh(x, t, arr, cmap='nipy_spectral', vmin=vmin, vmax=vmax)
-    suffix = ''
+    axl2 = axl.twiny()    
+    vmin = 0.0
     
-    cb  = fig.colorbar(im1)
-    
-    if component[0] == 'B':
-        cb.set_label('nT', rotation=0, family=font, fontsize=fontsize, labelpad=30)
+    if B0_lim is None:
+        vmax   = bt.max()
     else:
-        cb.set_label('mV/m', rotation=0, family=font, fontsize=fontsize, labelpad=30)
-
-    ax.set_title('Time-Space ($t-x$) Plot :: {} component'.format(component.upper()), fontsize=fontsize, family=font)
-    ax.set_ylabel('t (s)', rotation=0, labelpad=30, fontsize=fontsize, family=font)
+        vmax   = cf.B_eq * B0_lim * 1e9
+        
+    im1 = ax.pcolormesh(x, t, bt, cmap='nipy_spectral', vmin=vmin, vmax=vmax)
+    
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes('top', size='5%', pad=0.40)
+    cb  = fig.colorbar(im1, cax=cax, orientation='horizontal')
+    cax.yaxis.set_ticks_position('right')
+    cb.set_label('$B_\perp$ nT', rotation=0, family=font, fontsize=fontsize, labelpad=-70)
+    
+    axl.set_ylabel('t (s)', rotation=0, labelpad=30, fontsize=fontsize, family=font)
     ax.set_xlabel('x ($\Delta x$)', fontsize=fontsize, family=font)
     ax.set_ylim(0, tmax)
     
@@ -3544,12 +3545,93 @@ def plot_tx_with_boundary_parameters(component='By', tmax=None, saveas='tx_bound
     ax.axvline(cf.xmin     / cf.dx, c='w', ls=':', alpha=1.0)
     ax.axvline(cf.xmax     / cf.dx, c='w', ls=':', alpha=1.0)
     ax.axvline(cf.grid_mid / cf.dx, c='w', ls=':', alpha=0.75)   
-        
+    
+    # Plot fluxes
+    LHS = cf.ND;    RHS = cf.ND + cf.NX - 1
+    axl.plot(jx[:, LHS]*1e6, t, c='b')
+    axl.set_xlabel('$J_x$\nLH Boundary', rotation=0, fontsize=fontsize, family=font)
+    
+    axr.plot(jx[:, RHS]*1e6, t, c='b')
+    axr.set_xlabel('$J_x$\nRH Boundary', rotation=0, fontsize=fontsize, family=font)
+    
+    av_density = qdens.mean(axis=1)/(qi*cf.ne)
+    
+    # Plot average density and Ex
+    axl2.plot(av_density, t, c='r')
+    axl2.set_xlim(0, 1.2*av_density.max())
+    axl2.set_title('Av. $\\rho_c$', fontsize=fontsize, family=font, color='r')
+    axl2.xaxis.label.set_color('r')
+    axl2.tick_params(axis='x', colors='r')
+    
+    fig.subplots_adjust(wspace=0)
+    
     if save == True:
-        fullpath = cf.anal_dir + saveas + '_{}_{}'.format(component.lower(), lbl) + suffix + '.png'
-        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        fullpath = cf.anal_dir + saveas + '.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
         print('t-x Plot saved')
         plt.close('all')
+    return
+
+
+def multiplot_fluxes(series, save=True):
+    '''
+    Load outside loop: Fluxes and charge density of all runs in a series
+    '''
+    series_dir  = '{}/runs//{}//'.format(drive, series)
+    num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+    runs_to_do  = range(num_runs)
+    
+    clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
+            'darkorange', 'peru', 'yellow']         
+    
+    plt.ioff()
+    fig1, axes1 = plt.subplots(2, sharex=True, figsize=(15, 10))
+    fig2, axes2 = plt.subplots(2, sharex=True, figsize=(15, 10))
+    for run_num in runs_to_do:
+        print('\nRun {}'.format(run_num))
+        cf.load_run(drive, series, run_num, extract_arrays=True)
+        
+        # Quick & Easy way to do all runs: Plot function here
+        ftime, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, \
+        qdens, field_sim_time, damping_array = cf.get_array(get_all=True)
+        qn0 = cf.ne * qi
+        LHS = cf.ND
+        # Density plot at boundary cell
+        axes1[0].set_title('Flux and density at LHS boundary')
+        axes1[0].plot(ftime, qdens[:, LHS], c=clrs[run_num], label=str(cf.nsp_ppc[1])+' hppc')
+        axes1[0].set_ylabel('$\\rho_c$', rotation=0, fontsize=14, labelpad=30)
+        axes1[0].legend()
+        axes1[0].axhline(qn0, c='k', ls=':', alpha=0.5)
+        
+        # Parallel current plot (proxy for total flux)
+        axes1[1].plot(ftime, jx[:, LHS], c=clrs[run_num], label=str(cf.nsp_ppc[1])+' hppc')
+        axes1[1].set_ylabel('$J_x$', rotation=0, fontsize=14, labelpad=30)
+        axes1[1].set_xlabel('Time (s)', fontsize=12)
+        axes1[1].set_xlim(0, None)
+        axes1[1].axhline(0.0, c='k', ls=':', alpha=0.5)
+        
+        RHS = cf.ND + cf.NX - 1
+        # Density plot at boundary cell
+        axes2[0].set_title('Flux and density at RHS boundary')
+        axes2[0].plot(ftime, qdens[:, RHS], c=clrs[run_num], label=str(cf.nsp_ppc[1])+' hppc')
+        axes2[0].set_ylabel('$\\rho_c$', rotation=0, fontsize=14, labelpad=30)
+        axes2[0].legend()
+        axes2[0].axhline(qn0, c='k', ls=':', alpha=0.5)
+        
+        # Parallel current plot (proxy for total flux)
+        axes2[1].plot(ftime, jx[:, RHS], c=clrs[run_num], label=str(cf.nsp_ppc[1])+' hppc')
+        axes2[1].set_ylabel('$J_x$', rotation=0, fontsize=14, labelpad=30)
+        axes2[1].set_xlabel('Time (s)', fontsize=12)
+        axes2[1].set_xlim(0, None)
+        axes2[1].axhline(0.0, c='k', ls=':', alpha=0.5)
+        
+        if save==True:
+            fig1.savefig(series_dir + 'LHS_moments.png', facecolor=fig1.get_facecolor(), edgecolor='none', bbox_inches='tight')
+            fig2.savefig(series_dir + 'RHS_moments.png', facecolor=fig1.get_facecolor(), edgecolor='none', bbox_inches='tight')
+            print('Boundary moment plots saved')
+            plt.close('all')
+        else:
+            plt.show()
     return
 
 
@@ -3557,85 +3639,57 @@ def plot_tx_with_boundary_parameters(component='By', tmax=None, saveas='tx_bound
 if __name__ == '__main__':
     drive       = 'G:'
 
-    for series in ['//_archive_new//ABC_newEMIC_nsp_test//']:
-        series_dir  = '{}/runs//{}//'.format(drive, series)
-        num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
-        print('{} runs in series {}'.format(num_runs, series))
-        
-        # Sample colour list just to draw from
-        clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
-                'darkorange', 'peru', 'yellow']
-        
-        runs_to_do = [1]#range(num_runs)
-                    
+    
+
+    if True:
+        for series in ['//_archive_new//ABC_newEMIC_nsp_test_radix//', 
+                       '//_archive_new//ABC_newEMIC_nsp_test_parabolic//',
+                       '//_archive_new//ABC_newEMIC_nsp_test//']:
+            
+            #multiplot_fluxes(series)
+            
+            series_dir  = '{}/runs//{}//'.format(drive, series)
+            num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+            print('{} runs in series {}'.format(num_runs, series))
+            
+            # Sample colour list just to draw from
+            clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
+                    'darkorange', 'peru', 'yellow']
+            
+            runs_to_do = range(num_runs)
+            
+            # Extract all summary files and plot field stuff (quick)
+            for run_num in runs_to_do:
+                print('\nRun {}'.format(run_num))
+                #cf.delete_analysis_folders(drive, series, run_num)
+                cf.load_run(drive, series, run_num, extract_arrays=True)
+                
+                plot_abs_with_boundary_parameters(B0_lim=0.5)
+                
+                #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
+                #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
+                
+    
+                
+                #get_reflection_coefficient()
+            # Do particle analyses for each run (slow)
 # =============================================================================
-#         fig1, axes1 = plt.subplots(2, sharex=True)
-#         fig2, axes2 = plt.subplots(2, sharex=True)
+#             for run_num in runs_to_do:
+#                 print('\nRun {}'.format(run_num))
+#                 cf.load_run(drive, series, run_num, extract_arrays=True)
+#                 
+#                 #plot_E_components(save=True)
+#                 #check_fields()
+#                 
+#                 #plot_spatial_poynting(save=True, log=True)
+#                 #plot_spatial_poynting_helical(save=True, log=True)
+#                 
+#                 #scatterplot_velocities()
+#                 #find_the_particles(it_max=None)
+#                 #summary_plots(save=True, histogram=True)
+#                 for sp in range(2):
+#                     plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
 # =============================================================================
-        # Extract all summary files and plot field stuff (quick)
-        for run_num in runs_to_do:
-            print('\nRun {}'.format(run_num))
-            #cf.delete_analysis_folders(drive, series, run_num)
-            cf.load_run(drive, series, run_num, extract_arrays=True)
-            
-            plot_tx_with_boundary_parameters()
-            
-            #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
-            #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
-            
-# =============================================================================
-#             # Quick & Easy way to do all runs: Plot function here
-#             ftime, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, \
-#             qdens, field_sim_time, damping_array = cf.get_array(get_all=True)
-#             qn0 = cf.ne * qi
-#             LHS = cf.ND
-#             # Density plot at boundary cell
-#             axes1[0].set_title('Flux and density at LHS boundary')
-#             axes1[0].plot(ftime, qdens[:, LHS], c=clrs[run_num], label=str(cf.nsp_ppc[1])+' hppc')
-#             axes1[0].set_ylabel('$\\rho_c$', rotation=0, fontsize=14)
-#             axes1[0].legend()
-#             axes1[0].axhline(qn0, c='k', ls=':', alpha=0.5)
-#             
-#             # Parallel current plot (proxy for total flux)
-#             axes1[1].plot(ftime, jx[:, LHS], c=clrs[run_num], label=str(cf.nsp_ppc[1])+' hppc')
-#             axes1[1].set_ylabel('$J_x$', rotation=0, fontsize=14)
-#             axes1[1].set_xlabel('Time (s)', fontsize=12)
-#             axes1[1].set_xlim(0, None)
-#             axes1[1].axhline(0.0, c='k', ls=':', alpha=0.5)
-#             
-#             RHS = cf.ND + cf.NX - 1
-#             # Density plot at boundary cell
-#             axes2[0].set_title('Flux and density at RHS boundary')
-#             axes2[0].plot(ftime, qdens[:, RHS], c=clrs[run_num], label=str(cf.nsp_ppc[1])+' hppc')
-#             axes2[0].set_ylabel('$\\rho_c$', rotation=0, fontsize=14)
-#             axes2[0].legend()
-#             axes2[0].axhline(qn0, c='k', ls=':', alpha=0.5)
-#             
-#             # Parallel current plot (proxy for total flux)
-#             axes2[1].plot(ftime, jx[:, RHS], c=clrs[run_num], label=str(cf.nsp_ppc[1])+' hppc')
-#             axes2[1].set_ylabel('$J_x$', rotation=0, fontsize=14)
-#             axes2[1].set_xlabel('Time (s)', fontsize=12)
-#             axes2[1].set_xlim(0, None)
-#             axes2[1].axhline(0.0, c='k', ls=':', alpha=0.5)
-# =============================================================================
-            
-            #get_reflection_coefficient()
-        # Do particle analyses for each run (slow)
-        for run_num in runs_to_do:
-            print('\nRun {}'.format(run_num))
-            cf.load_run(drive, series, run_num, extract_arrays=True)
-            
-            #plot_E_components(save=True)
-            #check_fields()
-            
-            #plot_spatial_poynting(save=True, log=True)
-            #plot_spatial_poynting_helical(save=True, log=True)
-            
-            #scatterplot_velocities()
-            #find_the_particles(it_max=None)
-            #summary_plots(save=True, histogram=True)
-            for sp in range(2):
-                plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
             
         #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
             
