@@ -13,7 +13,7 @@ derived values/casting to SI units (e.g. alfven velocity)
 """
 import numpy as np
 import sys
-from os import system
+import os
 
 on_grid = False
 
@@ -34,7 +34,7 @@ with open(run_input, 'r') as f:
     ### RUN PARAMETERS ###
     drive             = f.readline().split()[1]        # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
     save_path         = f.readline().split()[1]        # Series save dir   : Folder containing all runs of a series
-    run               = int(f.readline().split()[1])   # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+    run               = f.readline().split()[1]        # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 
     save_particles    = int(f.readline().split()[1])   # Save data flag    : For later analysis
     save_fields       = int(f.readline().split()[1])   # Save plot flag    : To ensure hybrid is solving correctly during run
@@ -52,6 +52,7 @@ with open(run_input, 'r') as f:
     source_smoothing  = int(f.readline().split()[1])   # Smooth source terms with 3-point Gaussian filter
     E_damping         = int(f.readline().split()[1])   # Damp E in a manner similar to B for ABCs
     quiet_start       = int(f.readline().split()[1])   # Flag to use quiet start (False :: semi-quiet start)
+    radix_loading     = int(f.readline().split()[1])   # Load particles with reverse-radix scrambling sets (not implemented in this version)
     damping_multiplier= float(f.readline().split()[1]) # Multiplies the r-factor to increase/decrease damping rate.
 
     ### SIMULATION PARAMETERS ###
@@ -59,12 +60,10 @@ with open(run_input, 'r') as f:
     ND        = int(f.readline().split()[1])           # Damping region length: Multiple of NX (on each side of simulation domain)
     max_rev   = float(f.readline().split()[1])         # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
     dxm       = float(f.readline().split()[1])         # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
-    L         = float(f.readline().split()[1])         # Field line L shell
     r_A       = float(f.readline().split()[1])         # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
     
     ie        = int(f.readline().split()[1])           # Adiabatic electrons. 0: off (constant), 1: on.
     min_dens  = float(f.readline().split()[1])         # Allowable minimum charge density in a cell, as a fraction of ne*q
-    B_eq      = f.readline().split()[1]                # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
     rc_hwidth = f.readline().split()[1]                # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
       
     orbit_res = float(f.readline().split()[1])         # Orbit resolution
@@ -95,6 +94,10 @@ with open(plasma_input, 'r') as f:
     E_e        = float(f.readline().split()[1])
     beta_flag  = int(f.readline().split()[1])
 
+    L         = float(f.readline().split()[1])         # Field line L shell
+    B_eq      = f.readline().split()[1]                # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
+
+
 
 #%%### DERIVED SIMULATION PARAMETERS
 ### PHYSICAL CONSTANTS ###
@@ -114,6 +117,8 @@ E_par      = E_per / (anisotropy + 1)       # Parallel species energy
 
 if B_eq == '-':
     B_eq      = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
+else:
+    B_eq = float(B_eq)
     
 if rc_hwidth == '-':
     rc_hwidth = 0
@@ -162,7 +167,16 @@ N = N_species.sum()
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
 
-
+if run == '-':
+    # Work out how many runs exist, then add to it. Save a bit of work numerically increasing.
+    if os.path.exists(drive + save_path) == False:
+        run = 0
+    else:
+        run = len(os.listdir(drive + save_path))
+    print('Run number AUTOSET to ', run)
+else:
+    run = int(run)
+    
 ############################
 ### MAGNETIC FIELD STUFF ###
 ############################
@@ -286,4 +300,4 @@ if particle_periodic + particle_reflect + particle_reinit > 1:
     print('DO SOMETHING ABOUT IT')
     print('--------------------------------------------------')
     
-system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
+os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))

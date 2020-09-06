@@ -65,10 +65,10 @@ def get_linear_dispersion_from_sim(k, plot=False, save=False, zero_cold=True):
         Tper       -- eV
     '''
     from dispersion_solver_multispecies import get_dispersion_relations
-    from analysis_config                import Tper, Tpar, B_eq
+    from analysis_config                import Tperp, Tpar, B_eq
         
-    anisotropy = Tper / Tpar - 1
-    t_perp     = cf.Tper.copy() / 11603.  
+    anisotropy = Tperp / Tpar - 1
+    t_perp     = cf.Tperp.copy() / 11603.  
     
     if zero_cold == True:
         for ii in range(t_perp.shape[0]):

@@ -1520,30 +1520,35 @@ def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, t
     for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
         print('2D summary for {}'.format(comp))
         
-        try:
-            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
-            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=tmax)
-        except:
-            pass
+# =============================================================================
+#         try:
+#             plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
+#             plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=tmax)
+#         except:
+#             pass
+# =============================================================================
 
         if tx_only == False:
-            try:
-                plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
-                plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , save=True, linear_overlay=False, pcyc_mult=None)
-            except:
-                pass
+# =============================================================================
+#             try:
+#                 plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
+#                 plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , save=True, linear_overlay=False, pcyc_mult=None)
+#             except:
+#                 pass
+# =============================================================================
     
-            try:
-                plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
-            except:
-                pass
+            #try:
+            plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
+            #except:
+            #    print('w/k plot failed, skipping...')
+            #    pass
             
             try:
                 plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
             except:
                 pass
 
-            if True:
+            if False:
                 try:
                     plot_spatial_poynting(save=True, log=True)
                     plot_spatial_poynting_helical(save=True, log=True)
@@ -3637,59 +3642,51 @@ def multiplot_fluxes(series, save=True):
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'G:'
+    drive       = 'F:'
 
-    
+    for series in ['compare_old_new_LTcheck_homogenous']:
+        
+        #multiplot_fluxes(series)
+        
+        series_dir  = '{}/runs//{}//'.format(drive, series)
+        num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+        print('{} runs in series {}'.format(num_runs, series))
+        
+        # Sample colour list just to draw from
+        clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
+                'darkorange', 'peru', 'yellow']
+        
+        runs_to_do = [0, 1]#range(num_runs)
+        
+        # Extract all summary files and plot field stuff (quick)
+        for run_num in runs_to_do:
+            print('\nRun {}'.format(run_num))
+            #cf.delete_analysis_folders(drive, series, run_num)
+            cf.load_run(drive, series, run_num, extract_arrays=True)
+            
+            #plot_abs_with_boundary_parameters(B0_lim=0.5)
+            
+            plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
+            #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
+                
 
-    if True:
-        for series in ['//_archive_new//ABC_newEMIC_nsp_test_radix//', 
-                       '//_archive_new//ABC_newEMIC_nsp_test_parabolic//',
-                       '//_archive_new//ABC_newEMIC_nsp_test//']:
-            
-            #multiplot_fluxes(series)
-            
-            series_dir  = '{}/runs//{}//'.format(drive, series)
-            num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
-            print('{} runs in series {}'.format(num_runs, series))
-            
-            # Sample colour list just to draw from
-            clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
-                    'darkorange', 'peru', 'yellow']
-            
-            runs_to_do = range(num_runs)
-            
-            # Extract all summary files and plot field stuff (quick)
+            #get_reflection_coefficient()
+            # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
-                #cf.delete_analysis_folders(drive, series, run_num)
                 cf.load_run(drive, series, run_num, extract_arrays=True)
                 
-                plot_abs_with_boundary_parameters(B0_lim=0.5)
+                check_fields()
+                plot_E_components(save=True)
                 
-                #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
-                #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
+                #plot_spatial_poynting(save=True, log=True)
+                #plot_spatial_poynting_helical(save=True, log=True)
                 
-    
-                
-                #get_reflection_coefficient()
-            # Do particle analyses for each run (slow)
-# =============================================================================
-#             for run_num in runs_to_do:
-#                 print('\nRun {}'.format(run_num))
-#                 cf.load_run(drive, series, run_num, extract_arrays=True)
-#                 
-#                 #plot_E_components(save=True)
-#                 #check_fields()
-#                 
-#                 #plot_spatial_poynting(save=True, log=True)
-#                 #plot_spatial_poynting_helical(save=True, log=True)
-#                 
-#                 #scatterplot_velocities()
-#                 #find_the_particles(it_max=None)
-#                 #summary_plots(save=True, histogram=True)
-#                 for sp in range(2):
-#                     plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
-# =============================================================================
+                #scatterplot_velocities()
+                #find_the_particles(it_max=None)
+                #summary_plots(save=True, histogram=True)
+                #for sp in range(2):
+                    #plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
             
         #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
             

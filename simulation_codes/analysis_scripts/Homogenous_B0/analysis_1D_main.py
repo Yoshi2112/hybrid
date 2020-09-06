@@ -33,7 +33,7 @@ def plot_tx(component='By', saveas='tx_plot', save=False, tmax=None, yunits='sec
     plt.ioff()    
     
     tx = cf.get_array(component)
-    
+    pdb.set_trace()
     fontsize = 18
     font     = 'monospace'
     
@@ -1155,28 +1155,31 @@ def standard_analysis_package():
         
     for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
         plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True)
-        plot_wx(component=comp, saveas=disp_folder + 'wx_plot', save=True, linear_overlay=False,     pcyc_mult=1.1)
-        plot_wk(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=False, pcyc_mult=1.1)
+        plot_wx(component=comp, saveas=disp_folder + 'wx_plot', save=True, linear_overlay=False,    pcyc_mult=1.1)
+        plot_wk(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=True, pcyc_mult=1.1)
         plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
-        
-    plot_energies(normalize=True, save=True)
-    plot_ion_energy_components(save=True, tmax=1./cf.HM_frequency)
-    plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
-    single_point_helicity_timeseries()
-    plot_spatially_averaged_fields()
-    single_point_field_timeseries(tmax=1./cf.HM_frequency)
+        for zero_cold in [True, False]:
+            plot_wk_polished(component=comp, dispersion_overlay=True, save=True,
+                             pcyc_mult=1.25, zero_cold=zero_cold, xmax=20)
+    
+    if False:    
+        plot_energies(normalize=True, save=True)
+        plot_ion_energy_components(save=True, tmax=1./cf.HM_frequency)
+        plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
+        single_point_helicity_timeseries()
+        plot_spatially_averaged_fields()
+        single_point_field_timeseries(tmax=1./cf.HM_frequency)
     return
 
 
 def do_all_dynamic_spectra(ymax=None):
-    
     for component in ['Bx', 'By', 'Bz', 'Ex', 'Ey', 'Ez']:
         for cell in np.arange(cf.NX):
             plot_dynamic_spectra(component=component, ymax=ymax, save=True, cell=cell)
     return
 
 
-def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False, save=False,
+def plot_wk_polished(component='By', saveas='wk_plot_thesis', dispersion_overlay=False, save=False,
                      pcyc_mult=None, xmax=None, plot_alfven=False, zero_cold=False, overwrite=True):
     disp_folder = 'dispersion_plots_thesis/'
         
@@ -1275,26 +1278,16 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
 #%%
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'july_25_lingrowth_v3_check'
+    series      = 'compare_all_versions'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     dumb_offset = 0
     
-    for run_num in [0, 1]:#range(num_runs):
+    for run_num in [2]:
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
-        
-        disp_folder = 'dispersion_plots_new/'
-        
-        if os.path.exists(cf.anal_dir + disp_folder) == False:
-            os.makedirs(cf.anal_dir + disp_folder)
-        
-        for component in ['By', 'Bz', 'Ey', 'Ex', 'Ez']:
-            plot_tx(component=component, saveas=disp_folder + 'tx_plot', save=True, tmax=30., add_ND=True)
-            
-            for zero_cold in [True, False]:
-                plot_wk_polished(component=component, dispersion_overlay=True, save=True,
-                                 pcyc_mult=1.25, zero_cold=zero_cold, xmax=20)
+
+        standard_analysis_package()
         
         #single_point_both_fields_AGU()
         

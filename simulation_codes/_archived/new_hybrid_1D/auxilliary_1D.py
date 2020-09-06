@@ -9,7 +9,7 @@ import numba as nb
 import pdb
 from simulation_parameters_1D import t_res, plot_res, max_sec, dx, gyfreq, lam_res
 
-@nb.njit(cache=True)
+#@nb.njit(cache=True)
 def cross_product(A, B):
     '''Vector (cross) product between two vectors, A and B of same dimensions.
 
@@ -20,10 +20,12 @@ def cross_product(A, B):
         output -- The resultant cross product with same dimensions as input vectors
     '''
     output = np.zeros(A.shape)
-
-    output[:, 0] =    A[:, 1] * B[:, 2] - A[:, 2] * B[:, 1]
-    output[:, 1] = - (A[:, 0] * B[:, 2] - A[:, 2] * B[:, 0])
-    output[:, 2] =    A[:, 0] * B[:, 1] - A[:, 1] * B[:, 0]
+    try:
+        output[:, 0] =    A[:, 1] * B[:, 2] - A[:, 2] * B[:, 1]
+        output[:, 1] = - (A[:, 0] * B[:, 2] - A[:, 2] * B[:, 0])
+        output[:, 2] =    A[:, 0] * B[:, 1] - A[:, 1] * B[:, 0]
+    except:
+        pdb.set_trace()
 
     return output
 

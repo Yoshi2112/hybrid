@@ -58,7 +58,7 @@ def collect_density(nodes, weights, ptypes):
 
     n_i /= float(dx)                                    # Divide by cell dimensions to give densities per cubic metre
 
-    n_i  = manage_ghost_cells(n_i, 1)
+    n_i  = manage_ghost_cells(n_i)
 
     if smooth_sources == 1:
         for jj in range(Nj):
@@ -89,7 +89,7 @@ def collect_current(part, W_in):
         J_i[I,     idx, :] += (1 - W) * charge[idx] * n_contr[idx] * part[3:6, ii]
         J_i[I + 1, idx, :] +=  W      * charge[idx] * n_contr[idx] * part[3:6, ii]
 
-    J_i = manage_ghost_cells(J_i, 1)
+    J_i = manage_ghost_cells(J_i)
 
     for ii in range(3):
         J_i[:, :, ii] /= dx                                         # Get current density

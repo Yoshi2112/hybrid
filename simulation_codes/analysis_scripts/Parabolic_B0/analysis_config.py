@@ -290,7 +290,10 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
             print('Cell width      :: {:.1f} m'.format(dx), file=f)
             print('Simulation Min  :: {:.1f} m'.format(xmin), file=f)
             print('Simulation Max  :: {:.1f} m'.format(xmax), file=f)
-            print('Damping Multipl.:: {:.2f}'.format(damping_multiplier), file=f)
+            if damping_multiplier is not None:
+                print('Damping Multipl.:: {:.2f}'.format(damping_multiplier), file=f)
+            else:
+                print('Damping Multipl.::'.format(damping_multiplier), file=f)
             print('', file=f)
             print('Equatorial Field Strength :: {:.2f} nT'.format(B_eq*1e9), file=f)
             print('Boundary   Field Strength :: {:.2f} nT'.format(B_xmax*1e9), file=f)

@@ -9,30 +9,30 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Checking all versions against LT. This is PREDCORR_1D_INJECT_NEW'''
+run_description = '''Finding ways to avoid loss :: Test loss amount with N_ppc :: This run has a new ND-NX interface'''
 
 ### RUN PARAMETERS ###
-drive             = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path         = 'runs//compare_all_versions'         # Series save dir   : Folder containing all runs of a series
+drive             = 'D:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
+save_path         = 'runs//loss_test_nppc'        # Series save dir   : Folder containing all runs of a series
 run               = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles    = 1                             # Save data flag    : For later analysis
 save_fields       = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
-seed              = 65846146                       # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin         = None                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
+seed              = 3216587                       # RNG Seed          : Set to enable consistent results for parameter studies
+cpu_affin         = [(2*run)%8, (2*run + 1)%8]                        # Set CPU affinity for run. Must be list. Auto-assign: None. 
 
 ## DIAGNOSTIC FLAGS :: DOUBLE CHECK BEFORE EACH RUN! ##
 supress_text      = False                         # Supress initialization text
-homogenous        = True                          # Set B0 to homogenous (as test to compare to parabolic)
+homogenous        = False                         # Set B0 to homogenous (as test to compare to parabolic)
 disable_waves     = False                         # Zeroes electric field solution at each timestep
-shoji_approx      = False                         # Changes solution used for calculating particle B0r (1D vs. 3D)
-te0_equil         = False                         # Initialize te0 to be in equilibrium with density
-particle_boundary = 2                             # 0: Absorb, 1: Reflect, 2: Periodic
-                                                  # Only reflects cold particles. Hot particles converted to cold
+shoji_approx      = False
+te0_equil         = True                          # Initialize te0 to be in equilibrium with density
+particle_boundary = 0                             # 0: Absorb, 1: Reflect, 2: Periodic (This has been disabled)
+
 
 ### SIMULATION PARAMETERS ###
 NX        = 256                             # Number of cells - doesn't include ghost cells
-ND        = 128                             # Damping region length: Multiple of NX (on each side of simulation domain)
-max_rev   = 200                             # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+ND        = 64                              # Damping region length: Multiple of NX (on each side of simulation domain)
+max_rev   = 50                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 L         = 5.35                            # Field line L shell
 
@@ -42,29 +42,29 @@ rc_hwidth = 0                               # Ring current half-width in number 
   
 orbit_res = 0.02                            # Orbit resolution
 freq_res  = 0.02                            # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
-part_res  = 0.25                            # Data capture resolution in gyroperiod fraction: Particle information
-field_res = 0.10                            # Data capture resolution in gyroperiod fraction: Field information
+part_res  = 0.50                            # Data capture resolution in gyroperiod fraction: Particle information
+field_res = 0.20                            # Data capture resolution in gyroperiod fraction: Field information
 
 
 ### PARTICLE PARAMETERS ###
-species_lbl= [r'$H^+$ cold', r'$H^+$ warm']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
-temp_color = ['blue', 'red']
-temp_type  = np.array([0, 1])             	                # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-dist_type  = np.array([0, 0])                               # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-nsp_ppc    = np.array([200, 200])                           # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+species_lbl= [r'$H^+$ cold']                 # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
+temp_color = ['blue']
+temp_type  = np.array([0])             	                # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.array([0])                              # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+nsp_ppc    = np.array([2500])                           # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 
-mass       = np.array([1., 1.])    			                # Species ion mass (proton mass units)
-charge     = np.array([1., 1.])    			                # Species ion charge (elementary charge units)
-drift_v    = np.array([0., 0.])                             # Species parallel bulk velocity (alfven velocity units)
-density    = np.array([180., 20.]) * 1e6                    # Species density in /cc (cast to /m3)
-anisotropy = np.array([0.0, 4.0])                           # Particle anisotropy: A = T_per/T_par - 1
+mass       = np.array([1.])    			                # Species ion mass (proton mass units)
+charge     = np.array([1.])    			                # Species ion charge (elementary charge units)
+drift_v    = np.array([0.])                             # Species parallel bulk velocity (alfven velocity units)
+density    = np.array([180.]) * 1e6                    # Species density in /cc (cast to /m3)
+anisotropy = np.array([0.0])                           # Particle anisotropy: A = T_per/T_par - 1
 
 # Particle energy: Choose one                                    
-E_per      = np.array([5.0, 50000.])                        # Perpendicular energy in eV
-beta_par   = np.array([0.1, 10.])                           # Overrides E_per if not None. Uses B_eq for conversion
+E_per      = np.array([5.0])                        # Perpendicular energy in eV
+beta_par   = np.array([1.])                            # Overrides E_per if not None. Uses B_eq for conversion
 
 # External current properties (not yet implemented)
-J_amp          = 0.0                                        # External current : Amplitude  (A)
+J_amp          = 1.0                                        # External current : Amplitude  (A)
 J_freq         = 0.02                                       # External current : Frequency  (Hz)
 J_k            = 1e-7                                       # External current : Wavenumber (/m)
 
@@ -137,7 +137,6 @@ N = N_species.sum()
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
-
 
 ############################
 ### MAGNETIC FIELD STUFF ###
@@ -219,14 +218,14 @@ if supress_text == False:
     print('{} cells total'.format(NC))
     print('{} particles total\n'.format(N))
     
-if cpu_affin is not None:
-    import psutil
-    run_proc = psutil.Process()
-    run_proc.cpu_affinity(cpu_affin)
-    if len(cpu_affin) == 1:
-        print('CPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
-    else:
-        print('CPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
+    if None not in cpu_affin:
+        import psutil
+        run_proc = psutil.Process()
+        run_proc.cpu_affinity(cpu_affin)
+        if len(cpu_affin) == 1:
+            print('CPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
+        else:
+            print('CPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
     
 density_normal_sum = (charge / q) * (density / ne)
 

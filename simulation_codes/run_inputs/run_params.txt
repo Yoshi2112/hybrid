@@ -1,11 +1,11 @@
 DRIVE					F:/
-SAVE_PATH				/runs/compare_open_and_periodic/
+SAVE_PATH				/runs/compare_all_versions/
 RUN						-
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
 SEED					65846146
 CPU_AFFINITY			-
-HOMOGENOUS_B0_FLAG		0
+HOMOGENOUS_B0_FLAG		1
 PERIODIC_FLAG			1
 REFLECT_FLAG			0
 REINIT_FLAG				0
@@ -17,8 +17,8 @@ E_DAMPING_FLAG			0
 QUIET_START_FLAG		1
 RADIX_LOADING			0
 DAMPING_MULTIPLIER_RD   0.05
-NX 						1536
-ND 						768
+NX 						256
+ND 						128
 MAX_REV					200
 DXM						1.0
 R_A						120e3
@@ -29,4 +29,4 @@ GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02		
 PARTICLE_DUMP_FREQ		0.25
 FIELD_DUMP_FREQ			0.10
-Checking out open/periodic and homo/para B0 combinations - is there a big difference in resultant waveforms?
+Checking all versions against LT. This is PREDCORR_1D_PULSE

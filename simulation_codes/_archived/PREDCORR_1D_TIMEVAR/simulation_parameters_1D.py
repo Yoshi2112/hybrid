@@ -9,16 +9,16 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''SECOND RUN :: 25/07/2013 event :: Maximum growth parameters :: More particles'''
+run_description = '''Checking all versions against LT. This is PREDCORR_1D_TSC_TIMEVAR.'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs//july_25_lingrowth_v3_check'  # Series save dir   : Folder containing all runs of a series
-run_num         = 3                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path       = 'runs//compare_all_versions'  # Series save dir   : Folder containing all runs of a series
+run_num         = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles  = 1                             # Save data flag    : For later analysis
 save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
-seed            = 15401                         # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [(2*run_num)%8, (2*run_num + 1)%8]      # Set CPU affinity for run. Must be list. Auto-assign: None.
+seed            = 65846146                      # RNG Seed          : Set to enable consistent results for parameter studies
+cpu_affin       = None                          # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 ### PHYSICAL CONSTANTS ###
@@ -33,66 +33,38 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 1024                             # Number of cells - doesn't include ghost cells
-max_rev  = 50                               # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+NX       = 256                              # Number of cells - doesn't include ghost cells
+max_rev  = 200                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 
-nsp_ppc  = 1000                             # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+nsp_ppc  = 200                              # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
-B0       = 231.431e-9                       # Unform initial magnetic field value (in T)
+B0       = 200e-9                           # Unform initial magnetic field value (in T)
 
-orbit_res = 0.10                            # Particle orbit resolution: Fraction of gyroperiod in seconds
+orbit_res = 0.02                            # Particle orbit resolution: Fraction of gyroperiod in seconds
 freq_res  = 0.02                            # Frequency resolution     : Fraction of inverse radian cyclotron frequency
-part_res  = 0.20                            # Data capture resolution in gyroperiod fraction: Particle information
-field_res = 0.1                             # Data capture resolution in gyroperiod fraction: Field information
+part_res  = 0.25                            # Data capture resolution in gyroperiod fraction: Particle information
+field_res = 0.10                            # Data capture resolution in gyroperiod fraction: Field information
 
 
 ### PARTICLE PARAMETERS ###
-species_lbl= [r'$H^+$ cold', r'$He^+$ cold', r'$O^+$ cold',
-              r'$H^+$ warm', r'$He^+$ warm', r'$O^+$ warm',
-              r'$H^+$ hot' , r'$He^+$ hot' , r'$O^+$ hot']  # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
-
-temp_color = ['red'      , 'navy'    , 'purple',
-              'firebrick', 'darkblue', 'violet',
-              'rosybrown', 'blue'    , 'plum']
-
-temp_type  = np.asarray([0, 0, 0,
-                         1, 1, 1,
-                         1, 1, 1])                   	    # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-
-dist_type  = np.asarray([0, 0, 0,
-                         0, 0, 0,
-                         0, 0, 0])                          # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-
-mass       = np.asarray([1., 4., 16.,
-                         1., 4., 16.,
-                         1., 4., 16.])    			        # Species ion mass (proton mass units)
-
-charge     = np.asarray([1., 1., 1.,
-                         1., 1., 1.,
-                         1., 1., 1.])    			        # Species ion charge (elementary charge units)
-
-drift_v    = np.asarray([0., 0., 0.,
-                         0., 0., 0.,
-                         0., 0., 0.])                       # Species parallel bulk velocity (alfven velocity units)
-
-density    = np.asarray([166.469 , 47.562    , 23.781    ,
-                         1.72644 , 1.3931    , 0.583791  ,
-                         0.673249, 0.00739014, 0.00358241]) * 1e6
-
-E_per      = np.array([5.0    , 5.0    , 5.0    ,
-                       12785.2, 1178.23, 6124.12,
-                       54714.7, 98254.9, 159204])
-
-anisotropy = np.array([0.0      , 0.0    , 0.0     ,
-                       0.2555503, 0.22624, 0.117326,
-                       0.583481 , 1.27531, 0.686062])
+species_lbl= [r'$H^+$ cold', r'$H^+$ warm']  # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
+temp_color = ['blue', 'red']
+temp_type  = np.asarray([0, 1])                   	    # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.asarray([0, 0])                          # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+mass       = np.asarray([1., 1.])    			        # Species ion mass (proton mass units)
+charge     = np.asarray([1., 1.])    			        # Species ion charge (elementary charge units)
+drift_v    = np.asarray([0., 0.])                       # Species parallel bulk velocity (alfven velocity units)
+density    = np.asarray([180.0 , 20.0]) * 1e6
+E_per      = np.array([0.1, 50.])
+anisotropy = np.array([0.0, 4.0])
 
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
-E_e            = 200.0                                      # Electron energy (eV)
+E_e            = 0.1                                        # Electron energy (eV)
+beta_flag      = 1
 
 account_for_dispersion = False                              # Flag (True/False) whether or not to reduce timestep to prevent dispersion getting too high
 dispersion_allowance   = 1.                                 # Multiple of how much past frac*wD^-1 is allowed: Used to stop dispersion from slowing down sim too much  
@@ -110,9 +82,17 @@ HM_frequency   = 0.02                                       # Driven wave in Hz
 ne         = density.sum()
 E_par      = E_per / (anisotropy + 1)
     
-Te0        = E_e   * 11603.
-Tpar       = E_par * 11603.
-Tper       = E_per * 11603.
+if beta_flag == 0:
+    # Input energies as (perpendicular) eV
+    beta_per   = None
+    Te0        = E_e   * 11603.
+    Tpar       = E_par * 11603.
+    Tper       = E_per * 11603.
+else:    
+    # Input energies in terms of a (perpendicular) beta
+    Tpar       = E_par  * B0 ** 2 / (2 * mu0 * ne * kB)
+    Tper       = E_per  * B0 ** 2 / (2 * mu0 * ne * kB)
+    Te0        = E_e    * B0 ** 2 / (2 * mu0 * ne * kB)
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B0 / np.sqrt(mu0*ne*mp)                     # Alfven speed: Assuming pure proton plasma
@@ -183,7 +163,7 @@ print('Maximum sim time   : {}s ({} gyroperiods)'.format(round(max_rev * 2. * np
 print('\n{} particles per cell, {} cells'.format(cellpart, NX))
 print('{} particles total\n'.format(cellpart * NX))
 
-if None not in cpu_affin:
+if cpu_affin is not None:
     import psutil
     run_proc = psutil.Process()
     run_proc.cpu_affinity(cpu_affin)

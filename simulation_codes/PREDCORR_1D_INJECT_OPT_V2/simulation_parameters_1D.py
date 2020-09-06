@@ -15,39 +15,19 @@ import numpy as np
 import sys
 import os
 
-# Random options for testing purposes. Nothing here that'll probably be used
-# Except under pretty specific circumstances.
-gaussian_T  = False
-pol_wave    = 0         # 0: No wave, 1: Single point source, 2: Multi point source
+on_grid = False
 
-# DRIVEN B PARAMS: Sine part
-driven_freq = 2.2       # Driven wave frequency in Hz standard 2.2
-driven_ampl = 50e-7     # Driven wave amplitude in A/m (I think?) Standard 50e-7
-
-# Gaussian part
-pulse_offset = 5.0      # Pulse center time (s)
-pulse_width  = 1.0      # Pulse width (proportional to 2*std. 3*width decayed to 0.0123%) 
+script_dir = sys.path[0]
 
 ## INPUT FILES ##
-if os.name == 'posix':
-    root_dir     = os.path.dirname(sys.path[0])
-    run_input    = root_dir +  '/run_inputs/run_params.txt'
-    plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
-    
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt'
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213050105000_H_ONLY.txt'
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213221605000_H_ONLY.txt'
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213248105000_H_ONLY.txt'
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213307605000_H_ONLY.txt'
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213406605000_H_ONLY.txt'
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213703105000_H_ONLY.txt'
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213907605000_H_ONLY.txt'
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214026105000_H_ONLY.txt'
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214105605000_H_ONLY.txt'
-else:
+if on_grid == False:
     run_input    = '../run_inputs/run_params.txt'
     plasma_input = '../run_inputs/plasma_params.txt'
-    #plasma_input = '../run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt'
+else:
+    run_input    = script_dir + '/../run_inputs/run_params_grid.txt'
+    plasma_input = script_dir + '/../run_inputs/plasma_params_grid.txt'
+
+randomise_gyrophase = False
 
 # Load run parameters
 with open(run_input, 'r') as f:
@@ -59,7 +39,7 @@ with open(run_input, 'r') as f:
     save_particles    = int(f.readline().split()[1])   # Save data flag    : For later analysis
     save_fields       = int(f.readline().split()[1])   # Save plot flag    : To ensure hybrid is solving correctly during run
     seed              = int(f.readline().split()[1])   # RNG Seed          : Set to enable consistent results for parameter studies
-    cpu_affin_str     = f.readline().split()[1]        # Set CPU affinity for run as list. Set as '-' to auto-assign. 
+    cpu_affin         = f.readline().split()[1]        # Set CPU affinity for run as list. Set as None to auto-assign. 
 
     ## FLAGS ##
     homogenous        = int(f.readline().split()[1])   # Set B0 to homogenous (as test to compare to parabolic)
@@ -72,7 +52,7 @@ with open(run_input, 'r') as f:
     source_smoothing  = int(f.readline().split()[1])   # Smooth source terms with 3-point Gaussian filter
     E_damping         = int(f.readline().split()[1])   # Damp E in a manner similar to B for ABCs
     quiet_start       = int(f.readline().split()[1])   # Flag to use quiet start (False :: semi-quiet start)
-    radix_loading     = int(f.readline().split()[1])   # Flag to use bit-reversed radix scrambling sets to initialise velocities
+    radix_loading     = int(f.readline().split()[1])   # Load particles with reverse-radix scrambling sets (not implemented in this version)
     damping_multiplier= float(f.readline().split()[1]) # Multiplies the r-factor to increase/decrease damping rate.
 
     ### SIMULATION PARAMETERS ###
@@ -109,12 +89,14 @@ with open(plasma_input, 'r') as f:
     density    = np.array(f.readline().split()[1:], dtype=float)*1e6
     anisotropy = np.array(f.readline().split()[1:], dtype=float)
     
-    # Particle energy: If beta == 1, energies are in beta. If not, they are in keV                                    
-    E_perp     = np.array(f.readline().split()[1:], dtype=float)
-    E_e        = float(f.readline().split()[1])*1e3
+    # Particle energy: If beta == 1, energies are in beta. If not, they are in eV                                    
+    E_per      = np.array(f.readline().split()[1:], dtype=float)
+    E_e        = float(f.readline().split()[1])
     beta_flag  = int(f.readline().split()[1])
-    L          = float(f.readline().split()[1])         # Field line L shell
-    B_eq       = f.readline().split()[1]                # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
+
+    L         = float(f.readline().split()[1])         # Field line L shell
+    B_eq      = f.readline().split()[1]                # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
+
 
 
 #%%### DERIVED SIMULATION PARAMETERS
@@ -131,36 +113,24 @@ B_surf = 3.12e-5                            # Magnetic field strength at Earth s
 
 NC         = NX + 2*ND                      # Total number of cells
 ne         = density.sum()                  # Electron number density
-E_par      = E_perp / (anisotropy + 1)      # Parallel species energy/beta
-
-particle_open = 0
-if particle_reflect == 1 or particle_reinit == 1:
-    print('Only periodic or open boundaries supported, defaulting to open')
-    particle_reflect = particle_reinit = particle_periodic = 0
-    particle_open = 1
-elif particle_periodic == 0:
-    particle_open = 1
+E_par      = E_per / (anisotropy + 1)       # Parallel species energy
 
 if B_eq == '-':
-    B_eq = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
-else:
-    B_eq = float(B_eq)                 # Manually set
+    B_eq      = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
     
 if rc_hwidth == '-':
     rc_hwidth = 0
-else:
-    rc_hwidth = int(rc_hwidth)
     
 if beta_flag == 0:
     # Input energies as (perpendicular) eV
     beta_per   = None
     Te0_scalar = E_e   * 11603.
     Tpar       = E_par * 11603.
-    Tperp      = E_perp* 11603.
+    Tper       = E_per * 11603.
 else:    
     # Input energies in terms of a (perpendicular) beta
     Tpar       = E_par    * B_eq ** 2 / (2 * mu0 * ne * kB)
-    Tperp      = E_perp   * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Tper       = E_per    * B_eq ** 2 / (2 * mu0 * ne * kB)
     Te0_scalar = E_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
@@ -177,9 +147,6 @@ drift_v   *= va                                          # Cast species velocity
 Nj         = len(mass)                                   # Number of species
 n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
 
-vth_par  = np.sqrt(kB *  Tpar  /  mass)                  # Species thermal velocities
-vth_perp = np.sqrt(kB *  Tperp /  mass)
-
 # Number of sim particles for each species, total
 N_species  = np.zeros(Nj, dtype=np.int64)
 for jj in range(Nj):
@@ -193,14 +160,7 @@ for jj in range(Nj):
             N_species[jj] = nsp_ppc[jj] * NX + 2
         else:
             N_species[jj] = nsp_ppc[jj] * 2*rc_hwidth + 2    
-
-# Spare assumes same number in each cell (doesn't account for dist=1) 
-# THIS CAN BE CHANGED LATER TO BE MORE MEMORY EFFICIENT. LEAVE IT HUGE FOR DEBUGGING PURPOSES.
-if particle_open == 1:
-    spare_ppc  = nsp_ppc.copy()
-else:
-    spare_ppc  = np.zeros(Nj, dtype=int)
-N = N_species.sum() + (spare_ppc * 10).sum()
+N = N_species.sum()
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
@@ -214,26 +174,13 @@ if run == '-':
     print('Run number AUTOSET to ', run)
 else:
     run = int(run)
-
+    
 ############################
 ### MAGNETIC FIELD STUFF ###
 ############################
 B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx      # B grid points position in space
 E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
 
-# =============================================================================
-# if homogenous == 1:
-#     a      = 0
-#     B_xmax = B_eq
-#     
-#     # Also need to set any numeric values
-#     B_A            = 0.0
-#     loss_cone_eq   = 0.0
-#     loss_cone_xmax = 0.0
-#     theta_xmax     = 0.0
-#     lambda_L       = 0.0
-# =============================================================================
-#else:
 print('Calculating length of field line...')
 N_fl   = 1e5                                                                # Number of points to calculate field line length (higher is more accurate)
 lat0   = np.arccos(np.sqrt((RE + r_A)/(RE*L)))                              # Latitude for this L value (at ionosphere height)
@@ -267,13 +214,13 @@ B_xmax      = B_eq*np.sqrt(4 - 3*np.cos(theta_xmax)**2)/np.cos(theta_xmax)**6   
 a           = (B_xmax / B_eq - 1) / xmax ** 2                                       # Parabolic scale factor: Fitted to B_eq, B_xmax
 lambda_L    = np.arccos(np.sqrt(1.0 / L))                                           # Lattitude of Earth's surface at this L
 
-lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L)))       # Anchor latitude in radians
-B_A        = B_eq * np.sqrt(4 - 3*np.cos(lat_A) ** 2)\
-           / (np.cos(lat_A) ** 6)                        # Magnetic field at anchor point
-
 if homogenous == 1:
     a      = 0
     B_xmax = B_eq
+
+lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L)))       # Anchor latitude in radians
+B_A        = B_eq * np.sqrt(4 - 3*np.cos(lat_A) ** 2)\
+           / (np.cos(lat_A) ** 6)                        # Magnetic field at anchor point
 
 loss_cone_eq   = np.arcsin(np.sqrt(B_eq   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
 loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
@@ -284,18 +231,6 @@ gyfreq     = q*B_xmax/ mp                                # Proton Gyrofrequency 
 gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
-
-species_plasfreq_sq   = (density * charge ** 2) / (mass * e0)
-species_gyrofrequency = qm_ratios * B_eq
-
-# Looks right!
-driven_rad = driven_freq * 2 * np.pi
-driven_k  = (driven_rad / c) ** 2
-driven_k *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyrofrequency))).sum()
-driven_k = np.sqrt(driven_k)
-
-
-
 
 #%%### INPUT TESTS AND CHECKS
 if rc_hwidth == 0:
@@ -325,29 +260,17 @@ print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_rev * 2. * 
 
 print('{} spatial cells, {} with ring current, 2x{} damped cells'.format(NX, rc_print, ND))
 print('{} cells total'.format(NC))
-print('{} particles initialized'.format(N_species.sum()))
-print('{} particles spare'.format((spare_ppc * NX).sum()))
 print('{} particles total\n'.format(N))
 
-try:
-    if cpu_affin_str != '-':
-        
-        # If only one value in string
-        if len(cpu_affin_str) == 1:
-            cpu_affin = int(cpu_affin_str)
-        else:
-            cpu_affin = cpu_affin_str.split(',')
-            cpu_affin = [int(cpu_affin[xx]) for xx in range(len(cpu_affin))]
-        
-        import psutil
-        run_proc = psutil.Process()
-        run_proc.cpu_affinity(cpu_affin)
-        if len(cpu_affin_str) == 1:
-            print('CPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
-        else:
-            print('CPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
-except:
-    print('CPU affinity not set or set incorrectly.')
+if cpu_affin != '-':
+    import psutil
+    run_proc = psutil.Process()
+    run_proc.cpu_affinity(cpu_affin)
+    if len(cpu_affin) == 1:
+        print('CPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
+    else:
+        print('CPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
+    
 density_normal_sum = (charge / q) * (density / ne)
 
     

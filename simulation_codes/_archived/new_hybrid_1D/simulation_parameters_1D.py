@@ -7,17 +7,21 @@ Created on Fri Sep 22 11:00:58 2017
 import numpy as np
 from timeit import default_timer as timer
 
+'''
+This code is currently broken due to field gridpoints not being referenced right in field calculations. Fix
+if it ever becomes necessary again.
+'''
 
 ### RUN DESCRIPTION ###                     # Saves within run for easy referencing
-run_description = '''Winske 1D anisotropy simulation based on parameters from h1.f hybrid code (addendum to 1993 book)'''
+run_description = '''Checking all versions against LT. This is new_hybrid_1D.'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:/'                             # Drive letter or path for portable HDD e.g. 'E:/'
-save_path       = 'runs/winske_anisotropy_test/'    # Series save dir   : Folder containing all runs of a series
+save_path       = 'runs/compare_all_versions/'    # Series save dir   : Folder containing all runs of a series
 run_num         = 3                                 # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 generate_data   = 1                                 # Save data flag    : For later analysis
 generate_plots  = 1                                 # Save plot flag    : To ensure hybrid is solving correctly during run
-seed            = 101                               # RNG Seed          : Set to enable consistent results for parameter studies
+seed            = 65846146                               # RNG Seed          : Set to enable consistent results for parameter studies
 
 ### PHYSICAL CONSTANTS ###
 q   = 1.602e-19                             # Elementary charge (C)
@@ -30,15 +34,15 @@ e0  = 8.854e-12                             # Epsilon naught - permittivity of f
 RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
-dxm      = 1                                # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't resolvable by hybrid code)
+dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't resolvable by hybrid code)
 lam_res  = 0.02                             # Determines simulation DT by fraction of inverse radian gyrofrequency per timestep
-NX       = 128                              # Number of cells - doesn't include ghost cells
-max_sec  = 107.5                            # Simulation runtime, in seconds of simulated time
-cellpart = 80                               # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
-ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
-B0       = 140e-9                           # Unform initial magnetic field value (in T)
+NX       = 256                              # Number of cells - doesn't include ghost cells
+max_sec  = 65.59                            # Simulation runtime, in seconds of simulated time
+cellpart = 400                              # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
+B0       = 200e-9                           # Unform initial magnetic field value (in T)
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
-ne       = 50e6                             # Electron density in /m3 (used to assign portions of ion)
+ne       = 200e6                             # Electron density in /m3 (used to assign portions of ion)
 
 k        = 1                                # Sinusoidal Density Parameter - number of wavelengths in spatial domain
 mhd_equil= 0                                # Temperature varied to give MHD Equilibrium condition?
@@ -58,12 +62,13 @@ mass       = np.asarray([1.00 , 1.00 ])     # Species ion mass (amu to kg)
 charge     = np.asarray([1.00 , 1.00 ])     # Species ion charge (elementary charge units to Coulombs)
 velocity   = np.asarray([0.   , 0.   ])     # Species parallel bulk velocity (in multiples of the alfven velocity)
 density    = np.asarray([90.0 , 10.0 ])     # Species density as percentage of total density, n_e
-anisotropy = np.asarray([1.0  , 5.0 ])      # Defines particle T_perp/T_parallel relationship
+anisotropy = np.asarray([0.0  , 4.0 ])      # Defines particle T_perp/T_parallel relationship
 sim_repr   = np.asarray([50.0 , 50.0 ])     # Macroparticle weighting: Percentage of macroparticles assigned to each species
 
-Tpar       = np.array([487., 974. ])*11603  # Parallel ion temperature (K)
-Tper       = np.array([487., 4870.])*11603  # Perpendicular ion temperature (K)
-Te0        = 487.*11603                     # Electron temperature (K)
+beta_flag  = 1
+E_par      = np.array([0.1, 10.0])          # Parallel ion temperature (K)
+E_per      = np.array([0.1, 50.0])          # Perpendicular ion temperature (K)
+E_e        = 0.1                            # Electron temperature (K)
 
 
 #%% Allows B/n ratio and temperatures to be altered to make comparison with other codes easier
@@ -80,6 +85,18 @@ if set_override == 1:
     Te0  = B0 ** 2 * beta_e   / (2 * mu0 * ne * kB) # Temperatures in K
     Tpar = B0 ** 2 * beta_par / (2 * mu0 * ne * kB)
     Tper = B0 ** 2 * beta_per / (2 * mu0 * ne * kB)
+    
+elif beta_flag == 0:
+    # Input energies as (perpendicular) eV
+    beta_per   = None
+    Te0        = E_e   * 11603.
+    Tpar       = E_par * 11603.
+    Tper       = E_per * 11603.
+else:    
+    # Input energies in terms of a (perpendicular) beta
+    Tpar       = E_par  * B0 ** 2 / (2 * mu0 * ne * kB)
+    Tper       = E_per  * B0 ** 2 / (2 * mu0 * ne * kB)
+    Te0        = E_e    * B0 ** 2 / (2 * mu0 * ne * kB)
     
 #%%##################################                   ###############################################
 ### DERIVED SIMULATION PARAMETERS ###                   # Shouldn't need to touch anything below here #

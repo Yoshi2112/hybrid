@@ -167,7 +167,7 @@ def cubic_spline_interp(B):
     return B_interp
 
 
-@nb.njit(cache=True)
+#@nb.njit(cache=True)
 def push_E(B, J_i, n_i, dt):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
@@ -200,7 +200,8 @@ def push_E(B, J_i, n_i, dt):
         for kk in range(3):
             J[:, kk]  += J_i[:, jj, kk]                                     # Total ion current vector: J_k = qj * nj * Vj_k
 
-    JxB = cross_product(J, B)
+    B_center = 0.5*(B[:-1, :] + B[1:, :])
+    JxB      = cross_product(J[1:-1, :], B_center)
 
     for mm in range(1, size - 1):
 
@@ -219,7 +220,8 @@ def push_E(B, J_i, n_i, dt):
     E_out[:, 1] = (- JxB[:, 1] - del_p[:, 1] - (BdB[:, 1] / mu0)) / (qn[:])
     E_out[:, 2] = (- JxB[:, 2] - del_p[:, 2] - (BdB[:, 2] / mu0)) / (qn[:])
 
-    E_out = manage_ghost_cells(E_out, 0)
+    E_out[0]      = E_out[NX]
+    E_out[NX + 1] = E_out[1]
     return E_out
 
 

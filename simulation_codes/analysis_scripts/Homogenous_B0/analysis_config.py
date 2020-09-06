@@ -284,10 +284,6 @@ def extract_all_arrays():
     access. Note that magnetic field arrays exclude the last value due to periodic
     boundary conditions. This may be changed later.
     '''
-    
-    '''
-    GET RID OF THIS -- JUST CREATES A SINGLE ARRAY AND ASSIGNS ACCESS TO 14 VARIABLES. THIS IS REALLY DUMB.
-    '''
     bx_arr,ex_arr,by_arr,ey_arr,bz_arr,ez_arr,vex_arr,jx_arr,vey_arr,jy_arr,vez_arr,jz_arr,te_arr,qdns_arr\
     = [np.zeros((num_field_steps, NX)) for _ in range(14)]
 
