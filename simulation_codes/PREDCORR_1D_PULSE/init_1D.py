@@ -734,7 +734,7 @@ def set_timestep(vel, Te0):
     E_damping_array = np.ones(NC    , dtype=float)
     set_damping_array(B_damping_array, E_damping_array, DT)
 
-    print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))
+    print('Timestep: %.7fs, %d iterations total\n' % (DT, max_inc))
     return DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array
 
 

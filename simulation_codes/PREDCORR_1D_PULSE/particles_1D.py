@@ -224,6 +224,9 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
     can be copied and extended dynamically if required. Just need to check that 
     nothing relies purely on N.
     '''
+    # L/R boundary, species
+    n_flux = np.zeros(2)
+    
     pos_old[:, :] = pos
     
     pos[0, :] += vel[0, :] * DT
@@ -234,8 +237,10 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
         for ii in nb.prange(pos.shape[1]):           
             if pos[0, ii] > xmax:
                 pos[0, ii] += xmin - xmax
+                n_flux[1] += 1
             elif pos[0, ii] < xmin:
                 pos[0, ii] += xmax - xmin  
+                n_flux[0] += 1
     else:
         # Disable loop: Remove particles that leave the simulation space
         n_deleted = 0
@@ -292,6 +297,7 @@ def position_update(pos, vel, idx, pos_old, DT, Ie, W_elec):
                     idx[kk]    = idx[ii]
                     n_created += 1
    
+    print(n_flux)
     #print(n_created, 'created  ;  ', n_deleted, 'deleted')
     assign_weighting_TSC(pos, idx, Ie, W_elec)
     return

@@ -3197,7 +3197,7 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False):
         en = idx_end[jj]
         
         for kk in range(3):
-            counts, xedges, yedges, im1 = axes[kk].hist2d(pos[0, st:en]/cf.dx, vel[kk, st:en]/cf.va, 
+            counts, xedges, yedges, im1 = axes[kk].hist2d(pos[st:en]/cf.dx, vel[kk, st:en]/cf.va, 
                                                     bins=[xbins, vbins],
                                                     vmin=0, vmax=cf.nsp_ppc[jj] / cfac)
 
@@ -3356,10 +3356,10 @@ def scatterplot_velocities(it_max=None):
         fig, axes = plt.subplots(4, figsize=(15, 10), sharex=True)
         axes[0].set_title('All particles :: t = {:.3f}s :: x vs. vx'.format(ptime))
         
-        axes[0].scatter(pos[0, :]/cf.dx, vel[0, :]/cf.va, c='k', s=1)
+        axes[0].scatter(pos/cf.dx, vel[0, :]/cf.va, c='k', s=1)
         axes[0].set_ylabel('$v_\parallel$')
         
-        axes[1].scatter(pos[0, :]/cf.dx, v_perp/cf.va, c='k', s=1)
+        axes[1].scatter(pos/cf.dx, v_perp/cf.va, c='k', s=1)
         axes[1].set_ylabel('$v_\perp$')
         
         axes[0].set_ylim(-15, 15)
@@ -3644,7 +3644,7 @@ def multiplot_fluxes(series, save=True):
 if __name__ == '__main__':
     drive       = 'F:'
 
-    for series in ['compare_old_new_LTcheck_homogenous']:
+    for series in ['monte_carlo_test']:
         
         #multiplot_fluxes(series)
         
@@ -3656,7 +3656,7 @@ if __name__ == '__main__':
         clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
                 'darkorange', 'peru', 'yellow']
         
-        runs_to_do = [0, 1]#range(num_runs)
+        runs_to_do = range(num_runs)
         
         # Extract all summary files and plot field stuff (quick)
         for run_num in runs_to_do:
@@ -3666,27 +3666,29 @@ if __name__ == '__main__':
             
             #plot_abs_with_boundary_parameters(B0_lim=0.5)
             
-            plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
+            #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
             #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
                 
 
             #get_reflection_coefficient()
-            # Do particle analyses for each run (slow)
-            for run_num in runs_to_do:
-                print('\nRun {}'.format(run_num))
-                cf.load_run(drive, series, run_num, extract_arrays=True)
-                
-                check_fields()
-                plot_E_components(save=True)
-                
-                #plot_spatial_poynting(save=True, log=True)
-                #plot_spatial_poynting_helical(save=True, log=True)
-                
-                #scatterplot_velocities()
-                #find_the_particles(it_max=None)
-                #summary_plots(save=True, histogram=True)
-                #for sp in range(2):
-                    #plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
+            
+            
+        # Do particle analyses for each run (slow)
+        for run_num in runs_to_do:
+            print('\nRun {}'.format(run_num))
+            cf.load_run(drive, series, run_num, extract_arrays=True)
+            
+            #check_fields()
+            #plot_E_components(save=True)
+            
+            #plot_spatial_poynting(save=True, log=True)
+            #plot_spatial_poynting_helical(save=True, log=True)
+            
+            scatterplot_velocities()
+            #find_the_particles(it_max=None)
+            #summary_plots(save=True, histogram=True)
+            #for sp in range(2):
+            plot_vi_vs_x(it_max=None, jj=0, save=True, shuffled_idx=True)
             
         #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
             
