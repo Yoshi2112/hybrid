@@ -8,7 +8,7 @@ CPU_AFFINITY			-
 HOMOGENOUS_B0_FLAG		1
 PERIODIC_FLAG			0
 REFLECT_FLAG			0
-REINIT_FLAG				1
+REINIT_FLAG				0
 FIELD_PERIODIC			0
 NOWAVES_FLAG			1
 TE0_EQUAL_FLAG			0
@@ -29,4 +29,4 @@ GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02		
 PARTICLE_DUMP_FREQ		0.25
 FIELD_DUMP_FREQ			0.10
-Test of new reinit code with velocities sampled from flux distribution (monte-carlo method).
+Test of new reinit code with velocities sampled from flux distribution (monte-carlo method). Constant injection version. Two species version. Tryna fix it.

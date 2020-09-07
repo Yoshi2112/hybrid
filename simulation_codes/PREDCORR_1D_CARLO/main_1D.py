@@ -20,7 +20,7 @@ if __name__ == '__main__':
     B, E_int, E_half, Ve, Te, Te0                       = init.initialize_fields()
     q_dens, q_dens_adv, Ji, ni, nu                      = init.initialize_source_arrays()
     old_particles, old_fields, temp3De, temp3Db, temp1D,\
-                                          v_prime, S, T = init.initialize_tertiary_arrays()
+                                v_prime, S, T, mp_flux  = init.initialize_tertiary_arrays()
     
     # Collect initial moments and save initial state
     sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu) 
@@ -49,7 +49,7 @@ if __name__ == '__main__':
     while qq < max_inc:
         qq, DT, max_inc, part_save_iter, field_save_iter =                                \
         aux.main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T, temp_N,\
-              B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,                           \
+              B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu, mp_flux,                  \
               Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields,           \
               B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter, field_save_iter)
 
@@ -68,6 +68,7 @@ if __name__ == '__main__':
             
             mins         = rem // 60
             sec          = rem %  60
+            
             print('Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(qq, max_inc, hrs, mins, sec))
             
         qq       += 1

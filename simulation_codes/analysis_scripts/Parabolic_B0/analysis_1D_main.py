@@ -3163,8 +3163,10 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False):
     if it_max is None:
         it_max = len(os.listdir(cf.particle_dir))
               
-    cfac = 10 if cf.temp_type[jj] == 1 else 5
-    vlim = 7.5 if cf.temp_type[jj] == 1 else 2
+    vth = np.sqrt(kB * cf.Tperp[jj] / cf.mass[jj]) / cf.va
+        
+    cfac = 10    if cf.temp_type[jj] == 1 else 5
+    vlim = 5*vth
     
     # Manually specify bin edges for histogram
     vbins = np.linspace(-vlim, vlim, 101, endpoint=True)
@@ -3346,7 +3348,10 @@ def scatterplot_velocities(it_max=None):
         sys.stdout.write('\rPlotting particle data from p-file {}'.format(ii))
         sys.stdout.flush()
 
-        filename = 'velocity_scatterplot_{:05}'.format(ii)
+        filename = 'velocity_scatterplot_{:05}.png'.format(ii)
+        if os.path.exists(save_dir + filename):
+            print('Plot already exists, skipping...')
+            continue
 
         pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii)
         v_perp = np.sqrt(vel[1, :] ** 2 + vel[2, :] ** 2) * np.sign(vel[2, :])
@@ -3656,22 +3661,23 @@ if __name__ == '__main__':
         clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
                 'darkorange', 'peru', 'yellow']
         
-        runs_to_do = range(num_runs)
+        runs_to_do = [3]# range(num_runs)
         
-        # Extract all summary files and plot field stuff (quick)
-        for run_num in runs_to_do:
-            print('\nRun {}'.format(run_num))
-            #cf.delete_analysis_folders(drive, series, run_num)
-            cf.load_run(drive, series, run_num, extract_arrays=True)
-            
-            #plot_abs_with_boundary_parameters(B0_lim=0.5)
-            
-            #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
-            #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
-                
-
-            #get_reflection_coefficient()
-            
+# =============================================================================
+#         # Extract all summary files and plot field stuff (quick)
+#         for run_num in runs_to_do:
+#             print('\nRun {}'.format(run_num))
+#             #cf.delete_analysis_folders(drive, series, run_num)
+#             cf.load_run(drive, series, run_num, extract_arrays=True)
+#             
+#             #plot_abs_with_boundary_parameters(B0_lim=0.5)
+#             
+#             plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
+#             standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
+#                 
+# 
+#             #get_reflection_coefficient()
+# =============================================================================
             
         # Do particle analyses for each run (slow)
         for run_num in runs_to_do:
@@ -3684,11 +3690,11 @@ if __name__ == '__main__':
             #plot_spatial_poynting(save=True, log=True)
             #plot_spatial_poynting_helical(save=True, log=True)
             
-            scatterplot_velocities()
             #find_the_particles(it_max=None)
             #summary_plots(save=True, histogram=True)
-            #for sp in range(2):
-            plot_vi_vs_x(it_max=None, jj=0, save=True, shuffled_idx=True)
+            for sp in range(2):
+                plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
+            scatterplot_velocities()
             
         #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
             

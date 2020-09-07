@@ -10,7 +10,9 @@ import numpy as np
 import particles_1D as particles
 import fields_1D    as fields
 
-from simulation_parameters_1D import dx, NC, NX, ND, qm_ratios, freq_res, orbit_res, E_nodes
+from simulation_parameters_1D import dx, NC, NX, ND, qm_ratios, freq_res,     \
+                                     orbit_res, E_nodes, nsp_ppc, inject_rate,\
+                                     particle_open
 
 @nb.njit()
 def cross_product(A, B, C):
@@ -154,7 +156,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
 
 @nb.njit()
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N,                      \
-              B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu,          \
+              B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu, mp_flux,       \
               Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields,\
               B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter, field_save_iter):
     '''
@@ -173,9 +175,20 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, Ep, Bp, v_prime, S, T,temp_N,\
                      qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array)
     
+    # Check number of spare particles every 25 steps
+    if qq%25 == 0 and particle_open == 1:
+        num_spare = (idx < 0).sum()
+        if num_spare < nsp_ppc.sum():
+            print('WARNING :: Less than one cell of spare particles remaining.')
+            if num_spare < inject_rate.sum() * DT * 5.0:
+                # Change this to dynamically expand particle arrays later on (adding more particles)
+                # Can do it by cell lots (i.e. add a cell's worth each time)
+                print('WARNING :: No space particles remaining. Exiting simulation.')
+                raise IndexError
+            
     # Move particles, collect moments
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
-                                            B, E_int, DT, q_dens_adv, Ji, ni, nu)
+                                            B, E_int, DT, q_dens_adv, Ji, ni, nu, mp_flux)
     
     # Average N, N + 1 densities (q_dens at N + 1/2)
     q_dens *= 0.5
@@ -192,6 +205,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     ###################################
 
     # Store old values
+    mp_flux_old           = mp_flux.copy()
     old_particles[0  , :] = pos
     old_particles[1:4, :] = vel
     old_particles[4  , :] = Ie
@@ -211,7 +225,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
 
     # Advance particles to obtain source terms at N + 3/2
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
-                                            B, E_int, DT, q_dens, Ji, ni, nu, pc=1)
+                                            B, E_int, DT, q_dens, Ji, ni, nu, mp_flux, pc=1)
     
     q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
     
@@ -237,5 +251,6 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
 
     q_dens[:] = q_dens_adv
+    mp_flux   = mp_flux_old.copy()
 
     return qq, DT, max_inc, part_save_iter, field_save_iter

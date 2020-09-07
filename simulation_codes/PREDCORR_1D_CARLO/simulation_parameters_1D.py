@@ -115,6 +115,10 @@ NC         = NX + 2*ND                      # Total number of cells
 ne         = density.sum()                  # Electron number density
 E_par      = E_per / (anisotropy + 1)       # Parallel species energy
 
+particle_open = 0
+if particle_reflect + particle_reinit + particle_periodic == 0:
+    particle_open = 1
+    
 if B_eq == '-':
     B_eq      = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
 else:
@@ -135,8 +139,6 @@ else:
     Tper       = E_per    * B_eq ** 2 / (2 * mu0 * ne * kB)
     Te0_scalar = E_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
 
-
-
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma
 
@@ -155,19 +157,14 @@ Nj         = len(mass)                                   # Number of species
 n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
 
 # Number of sim particles for each species, total
-N_species  = np.zeros(Nj, dtype=np.int64)
-for jj in range(Nj):
-    # Cold species in every cell NX 
-    if temp_type[jj] == 0:                               
-        N_species[jj] = nsp_ppc[jj] * NX + 2   
-        
-    # Warm species only in simulation center, unless rc_hwidth = 0 (disabled)           
-    elif temp_type[jj] == 1:
-        if rc_hwidth == 0:
-            N_species[jj] = nsp_ppc[jj] * NX + 2
-        else:
-            N_species[jj] = nsp_ppc[jj] * 2*rc_hwidth + 2    
-N = N_species.sum()
+N_species = nsp_ppc * NX + 2   
+
+# Add number of spare particles proportional to # cells worth
+if particle_open == 1:
+    spare_ppc  = 5*nsp_ppc.copy()
+else:
+    spare_ppc  = np.zeros(Nj, dtype=int)
+N = N_species.sum() + spare_ppc.sum()
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
@@ -188,49 +185,57 @@ else:
 B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx      # B grid points position in space
 E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
 
-print('Calculating length of field line...')
-N_fl   = 1e5                                                                # Number of points to calculate field line length (higher is more accurate)
-lat0   = np.arccos(np.sqrt((RE + r_A)/(RE*L)))                              # Latitude for this L value (at ionosphere height)
-h      = 2.0*lat0/float(N_fl)                                               # Step size of lambda (latitude)
-f_len  = 0.0
-for ii in range(int(N_fl)):
-    lda        = ii*h - lat0                                                # Lattitude for this step
-    f_len     += L*RE*np.cos(lda)*np.sqrt(4.0 - 3.0*np.cos(lda) ** 2) * h   # Field line length accruance
-print('Field line length = {:.2f} RE'.format(f_len/RE))
-print('Simulation length = {:.2f} RE'.format(2*xmax/RE))
-
-if xmax > f_len / 2:
-    sys.exit('Simulation length longer than field line. Aboring...')
-    
-print('Finding simulation boundary MLAT...')
-dlam   = 1e-5                                            # Latitude increment in radians
-fx_len = 0.0; ii = 1                                     # Arclength/increment counters
-while fx_len < xmax:
-    lam_i   = dlam * ii                                                             # Current latitude
-    d_len   = L * RE * np.cos(lam_i) * np.sqrt(4.0 - 3.0*np.cos(lam_i) ** 2) * dlam     # Length increment
-    fx_len += d_len                                                                 # Accrue arclength
-    ii     += 1                                                                     # Increment counter
-
-    sys.stdout.write('\r{:.1f}% complete'.format(fx_len/xmax * 100.))
-    sys.stdout.flush()
-print('\n')
-
-theta_xmax  = lam_i                                                                 # Latitude of simulation boundary
-r_xmax      = L * RE * np.cos(theta_xmax) ** 2                                      # Radial distance of simulation boundary
-B_xmax      = B_eq*np.sqrt(4 - 3*np.cos(theta_xmax)**2)/np.cos(theta_xmax)**6       # Magnetic field intensity at boundary
-a           = (B_xmax / B_eq - 1) / xmax ** 2                                       # Parabolic scale factor: Fitted to B_eq, B_xmax
-lambda_L    = np.arccos(np.sqrt(1.0 / L))                                           # Lattitude of Earth's surface at this L
-
 if homogenous == 1:
     a      = 0
     B_xmax = B_eq
+    
+    # Also need to set any numeric values
+    B_A            = 0.0
+    loss_cone_eq   = 0.0
+    loss_cone_xmax = 0.0
+    theta_xmax     = 0.0
+    lambda_L       = 0.0
+    lat_A          = 0.0
+else:
+    print('Calculating length of field line...')
+    N_fl   = 1e5                                                                # Number of points to calculate field line length (higher is more accurate)
+    lat0   = np.arccos(np.sqrt((RE + r_A)/(RE*L)))                              # Latitude for this L value (at ionosphere height)
+    h      = 2.0*lat0/float(N_fl)                                               # Step size of lambda (latitude)
+    f_len  = 0.0
+    for ii in range(int(N_fl)):
+        lda        = ii*h - lat0                                                # Lattitude for this step
+        f_len     += L*RE*np.cos(lda)*np.sqrt(4.0 - 3.0*np.cos(lda) ** 2) * h   # Field line length accruance
+    print('Field line length = {:.2f} RE'.format(f_len/RE))
+    print('Simulation length = {:.2f} RE'.format(2*xmax/RE))
+    
+    if xmax > f_len / 2:
+        sys.exit('Simulation length longer than field line. Aboring...')
+        
+    print('Finding simulation boundary MLAT...')
+    dlam   = 1e-5                                            # Latitude increment in radians
+    fx_len = 0.0; ii = 1                                     # Arclength/increment counters
+    while fx_len < xmax:
+        lam_i   = dlam * ii                                                             # Current latitude
+        d_len   = L * RE * np.cos(lam_i) * np.sqrt(4.0 - 3.0*np.cos(lam_i) ** 2) * dlam     # Length increment
+        fx_len += d_len                                                                 # Accrue arclength
+        ii     += 1                                                                     # Increment counter
+    
+        sys.stdout.write('\r{:.1f}% complete'.format(fx_len/xmax * 100.))
+        sys.stdout.flush()
+    print('\n')
 
-lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L)))       # Anchor latitude in radians
-B_A        = B_eq * np.sqrt(4 - 3*np.cos(lat_A) ** 2)\
-           / (np.cos(lat_A) ** 6)                        # Magnetic field at anchor point
+    theta_xmax  = lam_i                                                                 # Latitude of simulation boundary
+    r_xmax      = L * RE * np.cos(theta_xmax) ** 2                                      # Radial distance of simulation boundary
+    B_xmax      = B_eq*np.sqrt(4 - 3*np.cos(theta_xmax)**2)/np.cos(theta_xmax)**6       # Magnetic field intensity at boundary
+    a           = (B_xmax / B_eq - 1) / xmax ** 2                                       # Parabolic scale factor: Fitted to B_eq, B_xmax
+    lambda_L    = np.arccos(np.sqrt(1.0 / L))                                           # Lattitude of Earth's surface at this L
 
-loss_cone_eq   = np.arcsin(np.sqrt(B_eq   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
-loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
+    lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L)))       # Anchor latitude in radians
+    B_A        = B_eq * np.sqrt(4 - 3*np.cos(lat_A) ** 2)\
+               / (np.cos(lat_A) ** 6)                        # Magnetic field at anchor point
+    
+    loss_cone_eq   = np.arcsin(np.sqrt(B_eq   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
+    loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
 
 
 # Freqs based on highest magnetic field value (at simulation boundaries)
@@ -238,6 +243,12 @@ gyfreq     = q*B_xmax/ mp                                # Proton Gyrofrequency 
 gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
+
+# Calculate injection rate
+if particle_open == 1:
+    inject_rate = nsp_ppc * (vth_par / dx) / np.sqrt(2 * np.pi)
+else:
+    inject_rate = nsp_ppc * 0.0
 
 #%%### INPUT TESTS AND CHECKS
 if rc_hwidth == 0:
@@ -265,7 +276,7 @@ print('Equat. Gyroperiod: : {}s'.format(round(2. * np.pi / gyfreq, 3)))
 print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 3)))
 print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_rev * 2. * np.pi / gyfreq_eq, 2), max_rev))
 
-print('{} spatial cells, {} with ring current, 2x{} damped cells'.format(NX, rc_print, ND))
+print('{} spatial cells, 2x{} damped cells'.format(NX, ND))
 print('{} cells total'.format(NC))
 print('{} particles total\n'.format(N))
 
@@ -277,20 +288,6 @@ if cpu_affin != '-':
         print('CPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
     else:
         print('CPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
-    
-density_normal_sum = (charge / q) * (density / ne)
-
-    
-simulated_density_per_cell = (n_contr * charge * nsp_ppc).sum()
-real_density_per_cell      = ne*q
-
-if abs(simulated_density_per_cell - real_density_per_cell) / real_density_per_cell > 1e-10:
-    print('--------------------------------------------------------------------------------')
-    print('WARNING: DENSITY CALCULATION ISSUE: RECHECK HOW MACROPARTICLE CONTRIBUTIONS WORK')
-    print('--------------------------------------------------------------------------------')
-    print('')
-    print('ABORTING...')
-    sys.exit()
 
 if theta_xmax > lambda_L:
     print('--------------------------------------------------')

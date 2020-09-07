@@ -13,10 +13,10 @@ import particles_1D as particles
 import fields_1D    as fields
 import sources_1D as sources
 
-from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A, dist_type,  \
+from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A,  \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
                                      rc_hwidth, temp_type, Te0_scalar,\
-                                     ne, q, N_species, damping_multiplier, quiet_start
+                                     ne, q, damping_multiplier, quiet_start
 
 
 @nb.njit()
@@ -83,48 +83,20 @@ def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
 
 
 @nb.njit()
-def check_boundary_particles(pos, vel):
-    '''
-    Make sure boundary particles are exactly on the boundary
-    Also make sure their velocities are pointing inwards
-    '''
-    print('Checking boundary particles')
-    p_thres = 0.01 # If within 1cm of boundary
-    for ii in nb.prange(pos.shape[1]):
-        if np.abs(pos[0, ii] - const.xmin) < p_thres:
-            pos[0, ii] = const.xmin
-            vel[0, ii] = np.abs(vel[0, ii])
-
-        elif np.abs(pos[0, ii] - const.xmax) < p_thres:
-            pos[0, ii] = const.xmax
-            vel[0, ii] = -np.abs(vel[0, ii])
-
-    return
-
-
-@nb.njit()
 def uniform_gaussian_distribution_quiet():
     '''Creates an N-sampled normal distribution across all particle species within each simulation cell
 
     OUTPUT:
-        pos -- 3xN array of particle positions. Pos[0] is uniformly distributed with boundaries depending on its temperature type
+        pos -- 1xN array of particle positions. Pos[0] is uniformly distributed with boundaries depending on its temperature type
         vel -- 3xN array of particle velocities. Each component initialized as a Gaussian with a scale factor determined by the species perp/para temperature
         idx -- N   array of particle indexes, indicating which species it belongs to. Coded as an 8-bit signed integer, allowing values between +/-128
     
-    Note: y,z components of particle positions intialized with identical gyrophases, since only the projection
-    onto the x-axis interacts with the simulation fields. pos y,z are kept ONLY to calculate/track the Larmor radius 
-    of each particle. This initial position suffers the same issue as trying to update the radial field using 
-    B0r = 0 for the Larmor radius approximation, however because this is only an initial condition, at worst this
-    will just cause a variation in the Larmor radius with position in x, but this will at least be conserved 
-    throughout the simulation, and not drift with time.
-    
-    CHECK THIS LATER: BUT ITS ONLY AN INITIAL CONDITION SO IT SHOULD BE OK FOR NOW
-
-    # Could use temp_type[jj] == 1 for RC LCD only
+    New code: Removed all 3D position things because we won't need it for long. Check this later, since its easy to change
+            Also removed all references to dist_type since initializing particles in the middle is stupid.
     '''
     pos = np.zeros(N, dtype=np.float64)
     vel = np.zeros((3, N), dtype=np.float64)
-    idx = np.zeros(N,      dtype=np.int8)
+    idx = np.ones(N,       dtype=np.int8) * -1
     np.random.seed(seed)
 
     for jj in range(Nj):
@@ -133,95 +105,54 @@ def uniform_gaussian_distribution_quiet():
         sf_par = np.sqrt(kB *  Tpar[jj] /  mass[jj])  # Scale factors for velocity initialization
         sf_per = np.sqrt(kB *  Tper[jj] /  mass[jj])
         
-        if dist_type[jj] == 0:                            # Uniform position distribution (incl. limitied RC)
-            half_n = nsp_ppc[jj] // 2                     # Half particles per cell - doubled later
-            if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
+        half_n = nsp_ppc[jj] // 2                     # Half particles per cell - doubled later
+        if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
+            NC_load = NX
+        else:
+            if rc_hwidth == 0 or rc_hwidth > NX//2:   # Need to change this to be something like the FWHM or something
                 NC_load = NX
             else:
-                if rc_hwidth == 0 or rc_hwidth > NX//2:   # Need to change this to be something like the FWHM or something
-                    NC_load = NX
-                else:
-                    NC_load = 2*rc_hwidth
-            
-            # Load particles in each applicable cell
-            acc = 0; offset  = 0
-            for ii in range(NC_load):
-                # Add particle if last cell (for symmetry)
-                if ii == NC_load - 1:
-                    half_n += 1
-                    offset  = 1
-                    
-                # Particle index ranges
-                st = idx_start[jj] + acc
-                en = idx_start[jj] + acc + half_n
-                
-                # Set position for half: Analytically uniform
-                for kk in range(half_n):
-                    pos[st + kk] = dx*(float(kk) / (half_n - offset) + ii)
-                
-                # Turn [0, NC] distro into +/- NC/2 distro
-                pos[st: en]-= NC_load*dx/2              
-                
-                # Set velocity for half: Randomly Maxwellian
-                vel[0, st: en] = np.random.normal(0, sf_par, half_n) +  drift_v[jj]
-                vel[1, st: en] = np.random.normal(0, sf_per, half_n)
-                vel[2, st: en] = np.random.normal(0, sf_per, half_n)
-    
-                # Set Loss Cone Distribution: Reinitialize particles in loss cone (move to a function)
-                if const.homogenous == 0 and temp_type[jj] == 1:
-                    LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj)
-                    
-                # Quiet start : Initialize second half
-                if quiet_start == 1:
-                    vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set parallel
-                else:
-                    vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Set anti-parallel
-                    
-                pos[en: en + half_n] = pos[st: en]                # Other half, same position
-                vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
-                vel[2, en: en + half_n] = vel[2, st: en] * -1.0
-                
-                acc                    += half_n * 2
+                NC_load = 2*rc_hwidth
         
-        else:
-            # Gaussian position distribution
-            # Remember :: N_species just gives a total number of species particles
-            # which was scaled by the size of rc_hwidth
-            if rc_hwidth == 0:
-                rc_hwidth_norm = NX // 2
-            else:
-                rc_hwidth_norm = rc_hwidth
+        # Load particles in each applicable cell
+        acc = 0; offset  = 0
+        for ii in range(NC_load):
+            # Add particle if last cell (for symmetry)
+            if ii == NC_load - 1:
+                half_n += 1
+                offset  = 1
+                
+            # Particle index ranges
+            st = idx_start[jj] + acc
+            en = idx_start[jj] + acc + half_n
             
-            half_n = N_species[jj] // 2
-            sigma  = rc_hwidth_norm*dx / (2 * np.sqrt(2 * np.log(2)))
+            # Set position for half: Analytically uniform
+            for kk in range(half_n):
+                pos[st + kk] = dx*(float(kk) / (half_n - offset) + ii)
             
-            st = idx_start[jj]
-            en = idx_start[jj] + half_n
+            # Turn [0, NC] distro into +/- NC/2 distro
+            pos[st: en]-= NC_load*dx/2              
             
-            pos[st: en] = np.random.normal(0, sigma, half_n)
+            # Set velocity for half: Randomly Maxwellian
             vel[0, st: en] = np.random.normal(0, sf_par, half_n) +  drift_v[jj]
             vel[1, st: en] = np.random.normal(0, sf_per, half_n)
             vel[2, st: en] = np.random.normal(0, sf_per, half_n)
-            
-            # Reinitialize particles outside simulation bounds
-            for ii in range(st, en):
-                while abs(pos[ii]) > const.xmax:
-                    pos[st: en] = np.random.normal(0, sigma)
-                    
+
+            # Set Loss Cone Distribution: Reinitialize particles in loss cone (move to a function)
             if const.homogenous == 0 and temp_type[jj] == 1:
-                    LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj)
-                    
-            # Initialize second half
-            if quiet_start == 1:
-                vel[0, en: en + half_n] = vel[0, st: en]
-            else:
-                vel[0, en: en + half_n] = vel[0, st: en] * -1.0
+                LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj)
                 
-            vel[1, en: en + half_n] = vel[1, st: en] * -1.0
+            # Quiet start : Initialize second half
+            if quiet_start == 1:
+                vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set parallel
+            else:
+                vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Set anti-parallel
+                
+            pos[en: en + half_n] = pos[st: en]                # Other half, same position
+            vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
             vel[2, en: en + half_n] = vel[2, st: en] * -1.0
             
-            pos[en: en + half_n] = pos[st: en]            # Other half, same position
-
+            acc                    += half_n * 2
     return pos, vel, idx
 
 
@@ -358,7 +289,9 @@ def initialize_tertiary_arrays():
         temp1D        -- Swap-file scalar array with E-grid dimensions
         old_particles -- Location to store old particle values (positions, velocities, weights)
                          as part of predictor-corrector routine
-        old_fields   -- Location to store old B, Ji, Ve, Te field values for predictor-corrector routine
+        old_fields    -- Location to store old B, Ji, Ve, Te field values for predictor-corrector routine
+        mp_flux       -- Tracking variable designed to accrue the flux at each timestep (in terms of macroparticles
+                             at each boundary and for each species) and trigger an injection if >= 2.
     '''
     temp3Db       = np.zeros((NC + 1, 3),  dtype=nb.float64)
     temp3De       = np.zeros((NC    , 3),  dtype=nb.float64)
@@ -370,8 +303,9 @@ def initialize_tertiary_arrays():
     T       = np.zeros((3, N),      dtype=nb.float64)
         
     old_particles = np.zeros((9, N),      dtype=nb.float64)
+    mp_flux       = np.zeros((2, Nj),     dtype=nb.float64)
         
-    return old_particles, old_fields, temp3De, temp3Db, temp1D, v_prime, S, T
+    return old_particles, old_fields, temp3De, temp3Db, temp1D, v_prime, S, T, mp_flux
 
 
 def set_equilibrium_te0(q_dens, Te0):
@@ -493,22 +427,11 @@ def set_timestep(vel, Te0):
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
    
-    #POS, VEL, IDX = uniform_gaussian_distribution_quiet()
-    #POS, VEL, IDX = uniform_accounting_for_beta()
+    POS, VEL, IDX = uniform_gaussian_distribution_quiet()
     
-    POS, VEL, IE, WE, IB, WM, IDX, EP, BP, TEMP_N = initialize_particles()
-    QD, QD2, JI, NI, NU  = initialize_source_arrays()
-    
-    sources.collect_moments(VEL, IE, WE, IDX, QD, JI, NI, NU)
-    
-    #plt.plot(const.E_nodes, NU[:, 1, 0])
-    #plt.show()
-    
-# =============================================================================
-#     V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
-#     V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
-#     V_PARA = VEL[0] / va
-# =============================================================================
+    V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
+    V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
+    V_PARA = VEL[0] / va
     
     #diag.check_velocity_components_vs_space(POS, VEL, jj=1)
     #diag.plot_temperature_extremes()

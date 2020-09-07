@@ -400,7 +400,7 @@ def load_particles(ii, shuffled_idx=False):
     if shuffled_idx == True:
         order = np.argsort(tidx)                # Retrieve order of elements by index
         tidx  = tidx[order]
-        tx    = tx[:, order]
+        tx    = tx[order]
         tv    = tv[:, order]
     
         idx_start = np.zeros(Nj, dtype=int)

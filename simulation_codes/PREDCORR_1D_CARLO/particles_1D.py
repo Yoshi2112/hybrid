@@ -7,9 +7,9 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ratios,\
-                                        B_eq, a, particle_periodic, particle_reflect,\
+                                        B_eq, a, particle_periodic, particle_reflect, particle_open,\
                                         particle_reinit, loss_cone_xmax, randomise_gyrophase, \
-                                        vth_perp, vth_par
+                                        vth_perp, vth_par, inject_rate, Nj
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -17,12 +17,12 @@ from fields_1D import eval_B0x
 
 @nb.njit()
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T, temp_N,\
-                                  B, E, DT, q_dens_adv, Ji, ni, nu, pc=0):
+                                  B, E, DT, q_dens_adv, Ji, ni, nu, mp_flux, pc=0):
     '''
     Helper function to group the particle advance and moment collection functions
     '''
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, temp_N, DT)
-    position_update(pos, vel, idx, DT, Ie, W_elec)  
+    position_update(pos, vel, idx, DT, Ie, W_elec, mp_flux)  
     collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, ni, nu)
     return
 
@@ -142,17 +142,18 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
     Bp *= 0
     Ep *= 0
     
-    assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)                 # Calculate magnetic node weights
+    assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)                       # Calculate magnetic node weights
     eval_B0_particle_1D(pos, Bp, idx, Bp)  
     
     for ii in range(vel.shape[1]):
-        qmi[ii] = 0.5 * DT * qm_ratios[idx[ii]]                         # q/m for ion of species idx[ii]
-        for jj in range(3):                                             # Nodes
-            for kk in range(3):                                         # Components
-                Ep[kk, ii] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]       # Vector E-field  at particle location
-                Bp[kk, ii] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]       # Vector b1-field at particle location
+        if idx[ii] >= 0:
+            qmi[ii] = 0.5 * DT * qm_ratios[idx[ii]]                           # q/m for ion of species idx[ii]
+            for jj in range(3):                                               # Nodes
+                for kk in range(3):                                           # Components
+                    Ep[kk, ii] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]         # Vector E-field  at particle location
+                    Bp[kk, ii] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]         # Vector b1-field at particle location
 
-    vel[:, :] += qmi[:] * Ep[:, :]                                      # First E-field half-push IS NOW V_MINUS
+    vel[:, :] += qmi[:] * Ep[:, :]                                            # First E-field half-push IS NOW V_MINUS
 
     T[:, :] = qmi[:] * Bp[:, :]                                               # Vector Boris variable
     S[:, :] = 2.*T[:, :] / (1. + T[0, :] ** 2 + T[1, :] ** 2 + T[2, :] ** 2)  # Vector Boris variable
@@ -187,9 +188,10 @@ def generate_vx(vth):
     
 
 @nb.njit()
-def position_update(pos, vel, idx, DT, Ie, W_elec):
+def position_update(pos, vel, idx, DT, Ie, W_elec, mp_flux):
     '''
     Updates the position of the particles using x = x0 + vt. 
+    Injects particles at boundaries if particle_open == 1 using mp_flux
     Also updates particle nearest node and weighting.
 
     INPUT:
@@ -199,6 +201,7 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
         DT     -- Simulation time step
         Ie     -- Particle leftmost to nearest node array (Also output)
         W_elec -- Particle weighting array (Also output)
+        mp_flux-- Macroparticle flux at each boundary, for each species. Accrued and used per timestep
         
     Note: This function also controls what happens when a particle leaves the 
     simulation boundary.
@@ -207,9 +210,15 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
     multiplying by -np.sign(pos) (i.e. positive in negative half and negative
     in positive half)
     '''
-    pos += vel[0, :] * DT
+    pos     += vel[0, :] * DT
+    
+    # Add flux at each boundary 
+    # (particles that would have entered but haven't yet been initialized)
+    for kk in range(2):
+        mp_flux[kk, :] += inject_rate*DT
+    #print('Flux:          ', mp_flux)
          
-    # Check Particle boundary conditions: Re-initialize if at edges
+    # Import Particle boundary conditions: Re-initialize if at edges
     for ii in nb.prange(pos.shape[0]):
         if (pos[ii] < xmin or pos[ii] > xmax):
             if particle_reinit == 1: 
@@ -262,10 +271,82 @@ def position_update(pos, vel, idx, DT, Ie, W_elec):
                     
                 vel[0, ii] *= -1.0
                     
-            else:
-                # DEACTIVATE PARTICLE (Negative index means they're not pushed or counted in sources)
-                idx[ii]    -= 128
-                vel[:, ii] *= 0.0
+            else:                
+                # Disable loop: Remove particles that leave the simulation space (open boundary only)
+                n_deleted = 0
+                for ii in nb.prange(pos.shape[0]):
+                    if (pos[ii] < xmin or pos[ii] > xmax):
+                        pos[ii]    *= 0.0
+                        vel[:, ii] *= 0.0
+                        idx[ii]     = -1
+                        n_deleted  += 1
+        
+    #print('Number deleted:', n_deleted)
+    # Put this into its own function later? Don't bother for now.
+    if particle_open == 1:
+        # For each boundary
+        # For each species
+        # If flux > 2
+        # Find two empty indices
+        # Initialise pair of quiet particles
+        # Subtract from total
+        acc = 0; n_created = 0
+        for ii in range(2):
+            for jj in range(Nj):
+                while mp_flux[ii, jj] >= 2.0:
                     
+                    # Find two empty particles (Yes clumsy coding but it works)
+                    for kk in nb.prange(acc, pos.shape[0]):
+                        if idx[kk] < 0:
+                            kk1 = kk
+                            acc = kk + 1
+                            break
+                    for kk in nb.prange(acc, pos.shape[0]):
+                        if idx[kk] < 0:
+                            kk2 = kk
+                            acc = kk + 1
+                            break
+
+                    # Reinitialize vx based on flux distribution
+                    vel[0, kk1] = generate_vx(vth_par[jj])
+                    idx[kk1]    = jj
+                    
+                    # Re-initialize v_perp and check pitch angle
+                    if temp_type[jj] == 0:
+                        vel[1, kk1] = np.random.normal(0, vth_perp[jj])
+                        vel[2, kk1] = np.random.normal(0, vth_perp[jj])
+                    else:
+                        particle_PA = 0.0
+                        while np.abs(particle_PA) < loss_cone_xmax:
+                            vel[1, kk1] = np.random.normal(0, vth_perp[jj])
+                            vel[2, kk1] = np.random.normal(0, vth_perp[jj])
+                            v_perp      = np.sqrt(vel[1, kk1] ** 2 + vel[2, kk1] ** 2)
+                            particle_PA = np.arctan(v_perp / vel[0, kk1])
+                    
+                    # Amount travelled (vel always +ve at first)
+                    dpos = np.random.uniform(0, 1) * vel[0, kk1] * DT
+                    
+                    # Left boundary injection
+                    if ii == 0:
+                        pos[kk1]    = xmin + dpos
+                        vel[0, kk1] = np.abs(vel[0, kk1])
+                        
+                    # Right boundary injection
+                    else:
+                        pos[kk1]    = xmax - dpos
+                        vel[0, kk1] = -np.abs(vel[0, kk1])
+                    
+                    # Copy values to second particle (Same position, xvel. Opposite v_perp) 
+                    idx[kk2]    = idx[kk1]
+                    pos[kk2]    = pos[kk1]
+                    vel[0, kk2] = vel[0, kk1]
+                    vel[1, kk2] = vel[1, kk1] * -1.0
+                    vel[2, kk2] = vel[2, kk1] * -1.0
+                    
+                    # Subtract new macroparticles from accrued flux
+                    mp_flux[ii, jj] -= 2.0
+                    n_created       += 2
+                    
+    #print('Number created:', n_created)
     assign_weighting_TSC(pos, Ie, W_elec)
     return
