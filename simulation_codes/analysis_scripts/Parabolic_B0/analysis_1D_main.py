@@ -2061,15 +2061,12 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True, skip
     for path in [path_cone, path_mag, path_comp]:
         if os.path.exists(path) == False:                                   # Create directories
             os.makedirs(path)
-        
-    final_pos, final_vel, final_idx, ptime2 = cf.load_particles(it_max-1)
-    lost_indices, N_lost                    = locate_lost_ions(final_idx, cf.Nj)
     
-    v_max = 16
+    v_max = np.sqrt(kB * cf.Tperp.max() / cf.mass[0]) / cf.va
     
     for ii in range(0, it_max, skip):
         print('Plotting phase space diagrams for particle output {}'.format(ii))
-        pos, vel, idx, ptime = cf.load_particles(ii)
+        pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii, shuffled_idx=True)
     
         vel   /= cf.va 
         v_mag  = np.sqrt(vel[0] ** 2 + vel[1] ** 2 + vel[2] ** 2)
@@ -2082,27 +2079,19 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True, skip
         fig3, ax3 = plt.subplots(3, sharex=True, figsize=(15, 10))
         
         for jj in [1]:#range(cf.Nj):
-            if lost_black == True:
-                lc = 'k'
-            else:
-                lc = cf.temp_color[jj]
-        
-            lost_vals = lost_indices[cf.idx_start[jj]: cf.idx_end[jj]].nonzero()[0] + cf.idx_start[jj]
     
             if True:
                 # Loss cone diagram
-                ax1.scatter(v_perp[cf.idx_start[jj]: cf.idx_end[jj]], v_para[cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
-                ax1.scatter(v_perp[lost_vals], v_para[lost_vals], c=lc, marker='x', s=20)
+                ax1.scatter(v_perp[idx_start[jj]: idx_end[jj]], v_para[idx_start[jj]: idx_end[jj]], s=1, c=cf.temp_color[jj])
                 ax1.set_title('Initial Loss Cone Distribution :: t = {:5.4f}'.format(ptime))
                 ax1.set_ylabel('$v_\parallel$ (m/s)')
                 ax1.set_xlabel('$v_\perp$ (m/s)')
                 ax1.set_xlim(-v_max, v_max)
                 ax1.set_ylim(-v_max, v_max)
             
-            if True:
+            if False:
                 # v_mag vs. x
-                ax2.scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], v_mag[cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])       
-                ax2.scatter(pos[0, lost_vals], v_mag[lost_vals], c=lc, marker='x', s=20)
+                ax2.scatter(pos[idx_start[jj]: idx_end[jj]], v_mag[idx_start[jj]: idx_end[jj]], s=1, c=cf.temp_color[jj])       
                 ax2.set_title('Initial Velocity vs. Position :: t = {:5.4f}'.format(ptime))
                 ax2.set_xlabel('Position (m)')
                 ax2.set_ylabel('Velocity |v| (m/s)')
@@ -2112,13 +2101,9 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True, skip
             
             if True:
                 # v components vs. x (3 plots)
-                ax3[0].scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[0, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
-                ax3[1].scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[1, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
-                ax3[2].scatter(pos[0, cf.idx_start[jj]: cf.idx_end[jj]], vel[2, cf.idx_start[jj]: cf.idx_end[jj]], s=1, c=cf.temp_color[jj])
-       
-                ax3[0].scatter(pos[0, lost_vals], vel[0, lost_vals], c=lc, marker='x', s=20)
-                ax3[1].scatter(pos[0, lost_vals], vel[1, lost_vals], c=lc, marker='x', s=20)
-                ax3[2].scatter(pos[0, lost_vals], vel[2, lost_vals], c=lc, marker='x', s=20)
+                ax3[0].scatter(pos[idx_start[jj]: idx_end[jj]], vel[0, idx_start[jj]: idx_end[jj]], s=1, c=cf.temp_color[jj])
+                ax3[1].scatter(pos[idx_start[jj]: idx_end[jj]], vel[1, idx_start[jj]: idx_end[jj]], s=1, c=cf.temp_color[jj])
+                ax3[2].scatter(pos[idx_start[jj]: idx_end[jj]], vel[2, idx_start[jj]: idx_end[jj]], s=1, c=cf.temp_color[jj])
                 
                 ax3[0].set_ylabel('$v_x$ (m/s)')
                 ax3[1].set_ylabel('$v_y$ (m/s)')
@@ -3661,7 +3646,7 @@ if __name__ == '__main__':
         clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
                 'darkorange', 'peru', 'yellow']
         
-        runs_to_do = [3]# range(num_runs)
+        runs_to_do = [5]# range(num_runs)
         
 # =============================================================================
 #         # Extract all summary files and plot field stuff (quick)
@@ -3695,6 +3680,8 @@ if __name__ == '__main__':
             for sp in range(2):
                 plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
             scatterplot_velocities()
+            
+            plot_phase_space_with_time()
             
         #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
             

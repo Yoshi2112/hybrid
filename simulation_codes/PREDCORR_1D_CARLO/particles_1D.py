@@ -9,7 +9,7 @@ import numpy as np
 from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ratios,\
                                         B_eq, a, particle_periodic, particle_reflect, particle_open,\
                                         particle_reinit, loss_cone_xmax, randomise_gyrophase, \
-                                        vth_perp, vth_par, inject_rate, Nj
+                                        vth_perp, vth_par, inject_rate, Nj, homogenous
 from   sources_1D                import collect_moments
 
 from fields_1D import eval_B0x
@@ -312,12 +312,12 @@ def position_update(pos, vel, idx, DT, Ie, W_elec, mp_flux):
                     idx[kk1]    = jj
                     
                     # Re-initialize v_perp and check pitch angle
-                    if temp_type[jj] == 0:
+                    if temp_type[jj] == 0 or homogenous == True:
                         vel[1, kk1] = np.random.normal(0, vth_perp[jj])
                         vel[2, kk1] = np.random.normal(0, vth_perp[jj])
                     else:
                         particle_PA = 0.0
-                        while np.abs(particle_PA) < loss_cone_xmax:
+                        while np.abs(particle_PA) <= loss_cone_xmax:
                             vel[1, kk1] = np.random.normal(0, vth_perp[jj])
                             vel[2, kk1] = np.random.normal(0, vth_perp[jj])
                             v_perp      = np.sqrt(vel[1, kk1] ** 2 + vel[2, kk1] ** 2)
