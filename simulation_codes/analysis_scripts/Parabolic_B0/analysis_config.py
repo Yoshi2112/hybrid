@@ -109,7 +109,9 @@ def load_simulation_params():
            rc_hwidth, L, B_nodes, E_nodes, xmin, grid_min, grid_max, \
            grid_mid, run_time, run_time_str, particle_periodic, particle_reflect, \
            particle_reinit, particle_open, disable_waves, source_smoothing, \
-           E_damping, quiet_start, homogenous, field_periodic, damping_multiplier
+           E_damping, quiet_start, homogenous, field_periodic, damping_multiplier, \
+           driven_freq, driven_ampl, pulse_offset, pulse_offset, pulse_width, driven_k,\
+           driver_status
 
     h_name = os.path.join(data_dir, 'simulation_parameters.pckl')       # Load header file
     f      = open(h_name, 'rb')                                         # Open header file
@@ -214,6 +216,22 @@ def load_simulation_params():
         # If it is, make it a vector
         Te0 = np.ones(NC, dtype=float) * Te0
         
+    try:
+        driven_freq   = obj['driven_freq']
+        driven_ampl   = obj['driven_ampl']
+        pulse_offset  = obj['pulse_offset']
+        pulse_offset  = obj['pulse_offset']
+        pulse_width   = obj['pulse_width']
+        driven_k      = obj['driven_k']
+        driver_status = obj['driver_status']
+    except:
+        driven_freq   = None
+        driven_ampl   = None
+        pulse_offset  = None
+        pulse_offset  = None
+        pulse_width   = None
+        driven_k      = None
+        driver_status = None
     
     return 
 
@@ -525,6 +543,8 @@ def get_array(component='by', get_all=False, timebase=None):
     kwargs:
         get_all  :: Flag to retrieve all recorded fields (Default False)
         timebase :: Flag to change timebase to 'gyperiod' or 'radperiod' (Default seconds)
+        
+     Arrays are (time, space)
     '''
     if get_all == False:
         arr_path   = temp_dir + component.lower() + '_array' + '.npy'

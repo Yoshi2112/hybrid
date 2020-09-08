@@ -8,7 +8,7 @@ import numba as nb
 import numpy as np
 from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ratios,\
                                         B_eq, a, particle_periodic, particle_reflect, particle_open,\
-                                        particle_reinit, loss_cone_xmax, randomise_gyrophase, \
+                                        particle_reinit, loss_cone_xmax, \
                                         vth_perp, vth_par, inject_rate, Nj, homogenous
 from   sources_1D                import collect_moments
 
@@ -216,12 +216,14 @@ def position_update(pos, vel, idx, DT, Ie, W_elec, mp_flux):
     # (particles that would have entered but haven't yet been initialized)
     for kk in range(2):
         mp_flux[kk, :] += inject_rate*DT
-    #print('Flux:          ', mp_flux)
          
     # Import Particle boundary conditions: Re-initialize if at edges
     for ii in nb.prange(pos.shape[0]):
         if (pos[ii] < xmin or pos[ii] > xmax):
+            
             if particle_reinit == 1: 
+                # This needs to have a flag in it to reinitialize particles in
+                # pairs, to keep the quiet distribution thing going.
                 
                 # Reinitialize vx based on flux distribution
                 vel[0, ii]  = generate_vx(vth_par[idx[ii]])
@@ -245,43 +247,30 @@ def position_update(pos, vel, idx, DT, Ie, W_elec, mp_flux):
                     pos[ii] = xmin + np.random.uniform(0, 1) * vel[0, ii] * DT
                 elif pos[ii] > xmax:
                     pos[ii] = xmax + np.random.uniform(0, 1) * vel[0, ii] * DT
-                
+
             elif particle_periodic == 1:  
                 # Mario (Periodic)
                 if pos[ii] > xmax:
                     pos[ii] += xmin - xmax
                 elif pos[ii] < xmin:
                     pos[ii] += xmax - xmin 
-                    
-                # Randomise gyrophase: Prevent bunching at initialization
-                if randomise_gyrophase == True:
-                    v_perp = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
-                    theta  = np.random.uniform(0, 2*np.pi)
-                
-                    vel[1, ii] = v_perp * np.sin(theta)
-                    vel[2, ii] = v_perp * np.cos(theta)
-                        
-                    
+                   
             elif particle_reflect == 1:
                 # Reflect
                 if pos[ii] > xmax:
                     pos[ii] = 2*xmax - pos[ii]
                 elif pos[ii] < xmin:
                     pos[ii] = 2*xmin - pos[ii]
-                    
                 vel[0, ii] *= -1.0
                     
             else:                
                 # Disable loop: Remove particles that leave the simulation space (open boundary only)
-                n_deleted = 0
                 for ii in nb.prange(pos.shape[0]):
                     if (pos[ii] < xmin or pos[ii] > xmax):
                         pos[ii]    *= 0.0
                         vel[:, ii] *= 0.0
                         idx[ii]     = -1
-                        n_deleted  += 1
         
-    #print('Number deleted:', n_deleted)
     # Put this into its own function later? Don't bother for now.
     if particle_open == 1:
         # For each boundary
@@ -290,7 +279,7 @@ def position_update(pos, vel, idx, DT, Ie, W_elec, mp_flux):
         # Find two empty indices
         # Initialise pair of quiet particles
         # Subtract from total
-        acc = 0; n_created = 0
+        acc = 0
         for ii in range(2):
             for jj in range(Nj):
                 while mp_flux[ii, jj] >= 2.0:
@@ -345,8 +334,6 @@ def position_update(pos, vel, idx, DT, Ie, W_elec, mp_flux):
                     
                     # Subtract new macroparticles from accrued flux
                     mp_flux[ii, jj] -= 2.0
-                    n_created       += 2
                     
-    #print('Number created:', n_created)
     assign_weighting_TSC(pos, Ie, W_elec)
     return

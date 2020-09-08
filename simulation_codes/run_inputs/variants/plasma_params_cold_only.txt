@@ -9,7 +9,7 @@ DRIFT_VA     0.
 DENSITY_CM3  180.
 ANISOTROPY   0.0
 ENERGY_PERP  0.1
-ELECTRON_EV  1.    
+ELECTRON_EV  0.1    
 BETA_FLAG    1
 L            5.35
 B_EQ         -

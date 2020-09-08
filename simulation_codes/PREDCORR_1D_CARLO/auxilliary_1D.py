@@ -198,7 +198,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
     
     # Calculate E at N + 1/2
-    fields.calculate_E(B, Ji, q_dens, E_half, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
+    fields.calculate_E(B, Ji, q_dens, E_half, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array, qq, DT, 0)
 
     ###################################
     ### PREDICTOR CORRECTOR SECTION ###
@@ -231,7 +231,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     
     # Compute predicted fields at N + 3/2
     fields.push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
-    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
+    fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array, qq, DT, 1)
     
     # Determine corrected fields at N + 1 
     E_int *= 0.5;    E_int += 0.5 * E_half

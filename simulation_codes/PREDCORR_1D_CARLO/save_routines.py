@@ -101,7 +101,14 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
                    ('disable_waves', const.disable_waves),
                    ('source_smoothing', const.source_smoothing),
                    ('E_damping', const.E_damping),
-                   ('quiet_start', const.quiet_start)
+                   ('quiet_start', const.quiet_start),
+                   ('driven_freq', const.driven_freq),
+                   ('driven_ampl', const.driven_ampl),
+                   ('pulse_offset', const.pulse_offset),
+                   ('pulse_offset', const.pulse_offset),
+                   ('pulse_width', const.pulse_width),
+                   ('driven_k', const.driven_k),
+                   ('driver_status', const.driver_status),
                    ])
 
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:

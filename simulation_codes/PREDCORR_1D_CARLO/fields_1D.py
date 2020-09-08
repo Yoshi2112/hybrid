@@ -8,7 +8,10 @@ import numpy as np
 import numba as nb
 
 import auxilliary_1D as aux
-from simulation_parameters_1D import dx, ne, q, mu0, kB, ie, B_eq, a, disable_waves, E_damping
+from simulation_parameters_1D import dx, ne, q, mu0, kB, ie, B_eq, a,         \
+                                     disable_waves, E_damping, driven_freq,   \
+                                     driven_ampl, ND, NX, pulse_offset,       \
+                                     pulse_width, driven_k, driver_status
 
 
 @nb.njit()
@@ -150,7 +153,73 @@ def get_grad_P(qn, te, grad_P, temp):
 
 
 @nb.njit()
-def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_damping_array):
+def add_J_ext(qq, Ji, DT, half_flag):
+    '''
+    Driven J designed as energy input into simulation. All parameters specified
+    in the simulation_parameters script/file
+    
+    Designed as a Gaussian pulse so that things don't freak out by rising too 
+    quickly. Just test with one source point at first
+    
+    L mode is -90 degree phase in Jz
+    '''
+    # Soft source wave (What t corresponds to this?)
+    # Should put some sort of ramp on it?
+    # Also needs to be polarised. By or Bz lagging/leading?
+    phase = -90
+    N_eq  = ND + NX//2
+    time  = qq*DT - 0.5*half_flag*DT
+    
+    gaussian = np.exp(- ((time - pulse_offset)/ pulse_width) ** 2 )
+
+    # Set new field values in array as soft source
+    Ji[N_eq, 1] += driven_ampl * gaussian*np.sin(2 * np.pi * driven_freq * time)
+    Ji[N_eq, 2] += driven_ampl * gaussian*np.sin(2 * np.pi * driven_freq * time + phase * np.pi / 180.)    
+    return
+
+@nb.njit()
+def add_J_ext_pol(qq, Ji, DT, half_flag):
+    '''
+    Driven J designed as energy input into simulation. All parameters specified
+    in the simulation_parameters script/file
+    
+    Designed as a Gaussian pulse so that things don't freak out by rising too 
+    quickly. Just test with one source point at first
+    
+    Polarised with a LH mode only, uses five points with both w, k specified
+    -- Not quite sure how to code this... do you just add a time delay (td, i.e. phase)
+        to both the envelope and sin values at each point? 
+        
+    -- Source node as td=0, other nodes have td depending on distance from source, 
+        (ii*dx) and the wave phase velocity v_ph = w/k (which are both known)
+    
+    P.S. A bunch of these values could be put in the simulation_parameters script.
+    Optimize later (after testing shows that it actually works!)
+    
+    Try delay in gaussian only
+    '''
+    # Soft source wave (What t corresponds to this?)
+    # Should put some sort of ramp on it?
+    # Also needs to be polarised. By or Bz lagging/leading?
+    phase = -np.pi / 2
+    N_eq  = ND + NX//2
+    time  = qq*DT - 0.5*half_flag*DT
+    v_ph  = driven_freq / driven_k
+    omega = 2 * np.pi * driven_freq
+    
+    for off in np.arange(-2, 3):
+        x     = off*dx
+        delay = x / v_ph
+        gauss = driven_ampl * np.exp(- ((time - pulse_offset - delay)/ pulse_width) ** 2 )
+        
+        # A = A0 * sin(kx - wt + phase)
+        Ji[N_eq + off, 1] += gauss * np.sin(driven_k * x - omega * time)
+        Ji[N_eq + off, 2] += gauss * np.sin(driven_k * x - omega * time + phase)    
+    return
+
+
+@nb.njit()
+def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_damping_array, qq, DT, half_flag):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
     and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
@@ -172,6 +241,16 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_dampi
     
     12/06/2020 -- Added E-field damping option as per Hu & Denton (2010), Ve x B term only
     '''
+    # No driven wave
+    if   driver_status == 0:  
+        pass
+    # Single point source
+    elif driver_status == 1:
+        add_J_ext(qq, Ji, DT, half_flag=half_flag)
+    # Multi-point source
+    elif driver_status == 2:
+        add_J_ext_pol(qq, Ji, DT, half_flag=half_flag)
+        
     curl_B_term(B, temp3De)                                   # temp3De is now curl B term
 
     Ve[:, 0] = (Ji[:, 0] - temp3De[:, 0]) / q_dens

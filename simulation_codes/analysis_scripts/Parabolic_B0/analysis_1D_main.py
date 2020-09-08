@@ -1520,13 +1520,11 @@ def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, t
     for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
         print('2D summary for {}'.format(comp))
         
-# =============================================================================
-#         try:
-#             plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
-#             plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=tmax)
-#         except:
-#             pass
-# =============================================================================
+        try:
+            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
+            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=tmax)
+        except:
+            pass
 
         if tx_only == False:
 # =============================================================================
@@ -2062,7 +2060,7 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True, skip
         if os.path.exists(path) == False:                                   # Create directories
             os.makedirs(path)
     
-    v_max = np.sqrt(kB * cf.Tperp.max() / cf.mass[0]) / cf.va
+    v_max = 4.0 * np.sqrt(kB * cf.Tperp.max() / cf.mass[0]) / cf.va
     
     for ii in range(0, it_max, skip):
         print('Plotting phase space diagrams for particle output {}'.format(ii))
@@ -3143,6 +3141,10 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False):
      
     Issue : Bins along v changing depending on time (how to set max/min bins? Specify arrays manually)
     '''
+    if jj >= cf.Nj:
+        print('No species with index {}, skipping.'.format(jj))
+        return
+    
     lt = ['x', 'y', 'z']
     print('Calculating distribution f(v) vs. x for species {},...'.format(jj))
     if it_max is None:
@@ -3386,6 +3388,16 @@ def get_reflection_coefficient(save=True, incl_damping_cells=True):
     definitely need it polarised, too.
     
     Would definitely be easier with a Poynting method
+    
+    What if we did a frequency-based reflection coefficient: Incident J(w) vs. outgoing J(w)
+    or even by spatial? Incident J(k) vs outgoing J(k)
+    
+    OR
+    
+    Pick two times and compare field energy at t1 with field energy at t2. Maybe even field
+    energy vs. time?
+    
+    I think my indices for space/time are ass backwards.
     '''
     t_arr, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens, field_sim_time, damping_array\
         = cf.get_array(get_all=True)
@@ -3426,15 +3438,14 @@ def get_reflection_coefficient(save=True, incl_damping_cells=True):
     # Magnetic field energy is simply the total summation of values at each 
     # point in space and time, within some boundaries.
     # Why am I getting wildly different values for each side?
-    I_inL  = bt2[x1L:x2L, ti1:ti2].sum()
-    I_outL = bt2[x1L:x2L, tr1:tr2].sum()
+    I_inL  = bt2[ti1:ti2, x1L:x2L].sum()
+    I_outL = bt2[tr1:tr2, x1L:x2L].sum()
     reflL  = 10 * np.log10(I_outL/I_inL)
     
-    I_inR  = bt2[x1R:x2R, ti1:ti2].sum()
-    I_outR = bt2[x1R:x2R, tr1:tr2].sum()
+    I_inR  = bt2[ti1:ti2, x1R:x2R].sum()
+    I_outR = bt2[tr1:tr2, x1R:x2R].sum()
     reflR  = 10 * np.log10(I_outR/I_inR)
     
-    pdb.set_trace()
     plt.ioff()
     tick_label_size = 14
     mpl.rcParams['xtick.labelsize'] = tick_label_size 
@@ -3489,6 +3500,94 @@ def get_reflection_coefficient(save=True, incl_damping_cells=True):
     else:
         plt.show()
     return
+
+
+def field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None):
+    '''
+    Note: For B-field cells, 7 grid points for 6 'cells'
+    Maybe could even do this for each half of the simulation space?
+    
+    Arrays are time, space
+    
+    Equatorial gridpoint is at NC//2
+    '''
+    t, by    = cf.get_array('by')
+    t, bz    = cf.get_array('bz')
+    bt       = np.sqrt(by ** 2 + bz ** 2) 
+    
+    dt       = t[1] - t[0] 
+    eq       = cf.NC//2
+    st       = cf.ND; en = cf.ND + cf.NX + 1
+    x        = cf.B_nodes / cf.dx
+    t_cut_idx= int(4.0 / dt)
+
+    mag_energy_L = np.zeros(t.shape[0])
+    mag_energy_R = np.zeros(t.shape[0])
+    for ii in range(t.shape[0]):
+        bt_sq_L          = (by[ii,   st:eq] ** 2 + bz[ii,   st:eq] ** 2)
+        bt_sq_R          = (by[ii, eq+1:en] ** 2 + bz[ii, eq+1:en] ** 2)
+        
+        mag_energy_L[ii] = (0.5 / mu0) * bt_sq_L.sum() * (cf.NX //2) * cf.dx
+        mag_energy_R[ii] = (0.5 / mu0) * bt_sq_R.sum() * (cf.NX //2) * cf.dx
+    
+    L_refl = 100. * mag_energy_L[t_cut_idx:].min() / mag_energy_L.max()
+    R_refl = 100. * mag_energy_R[t_cut_idx:].min() / mag_energy_R.max()
+
+    if save is not None:
+        plt.ioff()
+        
+        ## PLOT IT
+        fontsize = 18
+        font     = 'monospace'
+        
+        tick_label_size = 14
+        mpl.rcParams['xtick.labelsize'] = tick_label_size 
+        mpl.rcParams['ytick.labelsize'] = tick_label_size 
+        
+        fig, [axl, ax, axr] = plt.subplots(nrows=1, ncols=3, figsize=(15, 10),
+                                                 sharey=True, gridspec_kw={'width_ratios':[1,2,1]})
+    
+        im1 = ax.pcolormesh(x, t, bt, cmap='jet', vmin=0.0)
+        
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes('top', size='5%', pad=0.40)
+        cb  = fig.colorbar(im1, cax=cax, orientation='horizontal')
+        cax.yaxis.set_ticks_position('right')
+        cb.set_label('$B_\perp$ nT', rotation=0, family=font, fontsize=fontsize, labelpad=-70)
+        
+        axl.set_ylabel('t (s)', rotation=0, labelpad=30, fontsize=fontsize, family=font)
+        ax.set_xlabel('x ($\Delta x$)', fontsize=fontsize, family=font)
+        ax.set_ylim(0, tmax)
+        
+        ax.set_xlim(x[0], x[-1])
+        ax.axvline(cf.xmin     / cf.dx, c='w', ls=':', alpha=1.0)
+        ax.axvline(cf.xmax     / cf.dx, c='w', ls=':', alpha=1.0)
+        ax.axvline(cf.grid_mid / cf.dx, c='w', ls=':', alpha=0.75)   
+        
+        # Plot energy
+        axl.plot(mag_energy_L/mag_energy_L.max(), t, c='b')
+        axl.set_xlabel('$U_B$ Left\nNormalized', rotation=0, fontsize=fontsize, family=font)
+        axl.set_xlim(0.01, 1)
+        axl.set_title('$\Gamma_L = %.2f$%%' % L_refl)
+        axl.invert_xaxis()
+        
+        axr.plot(mag_energy_R/mag_energy_R.max(), t, c='b')
+        axr.set_xlabel('$U_B$ Right\nNormalized', rotation=0, fontsize=fontsize, family=font)
+        axr.set_xlim(0.01, 1)
+        axr.set_title('$\Gamma_R = %.2f$%%' % R_refl)
+        #axl.invert_xaxis()
+                
+        fig.subplots_adjust(wspace=0)
+        
+        if save == True:
+            fullpath = cf.anal_dir + saveas + '.png'
+            plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+            print('t-x Plot saved')
+            plt.close('all')
+        else:
+            plt.show()
+        
+    return L_refl, R_refl
 
 
 def plot_abs_with_boundary_parameters(tmax=None, saveas='tx_boundaries_plot', save=True, B0_lim=None):
@@ -3630,58 +3729,101 @@ def multiplot_fluxes(series, save=True):
     return
 
 
+def plot_reflection_coefficients(series, save=False):
+    series_dir  = '{}/runs//{}//'.format(drive, series)
+    num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+    print('{} runs in series {}'.format(num_runs, series))
+    
+    runs_to_do = range(num_runs)
+    
+    Lr = np.zeros(num_runs); Rr = np.zeros(num_runs); drv_freq = np.zeros(num_runs)
+    
+    # Also need to extract driven frequency for each run
+    for run_num in runs_to_do:
+        print('\nRun {}'.format(run_num))
+        cf.load_run(drive, series, run_num, extract_arrays=True)
+        Lr[run_num], Rr[run_num] = field_energy_vs_time(save=None)
+        drv_freq[run_num]        = cf.driven_freq
+
+    # Plot the thing:
+    plt.ioff()
+    fig, ax = plt.subplots(figsize=(15, 10))
+    
+    ax.plot(drv_freq, Lr, label='$\Gamma_L$', marker='o')
+    ax.plot(drv_freq, Rr, label='$\Gamma_R$', marker='o')
+    ax.legend()
+    ax.set_xlim(0, drv_freq.max())
+    ax.set_ylim(0, 20.)
+    ax.set_xlabel('Driver Frequency (Hz)')
+    ax.set_ylabel('Reflection Coefficient %')
+    ax.set_title('Absorbing Boundary Efficiency')
+    #ax.set_yscale('log')
+    
+    if save == True:
+        fig.savefig(series_dir + 'reflection_coefficients.png', facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        print('Reflection coefficient plots saved')
+        plt.close('all')
+    else:
+        plt.show()
+    return
+
+
 #%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
 
-    for series in ['monte_carlo_test']:
+    for series in ['monte_carlo_ABC_freq_test']:
         
         #multiplot_fluxes(series)
+        plot_reflection_coefficients(series, save=True)
         
-        series_dir  = '{}/runs//{}//'.format(drive, series)
-        num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
-        print('{} runs in series {}'.format(num_runs, series))
-        
-        # Sample colour list just to draw from
-        clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
-                'darkorange', 'peru', 'yellow']
-        
-        runs_to_do = [5]# range(num_runs)
-        
+        if False:
+            series_dir  = '{}/runs//{}//'.format(drive, series)
+            num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+            print('{} runs in series {}'.format(num_runs, series))
+            
+            # Sample colour list just to draw from
+            clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
+                    'darkorange', 'peru', 'yellow']
+            
+            runs_to_do = range(num_runs)
+            
+            # Extract all summary files and plot field stuff (quick)
+            for run_num in runs_to_do:
+                print('\nRun {}'.format(run_num))
+                #cf.delete_analysis_folders(drive, series, run_num)
+                cf.load_run(drive, series, run_num, extract_arrays=True)
+                
+                #plot_abs_with_boundary_parameters(B0_lim=0.5)
+                field_energy_vs_time(save=True)
+
 # =============================================================================
-#         # Extract all summary files and plot field stuff (quick)
+#             plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None)
+#             standard_analysis_package(thesis=False, tx_only=True, disp_overlay=True)
+# =============================================================================
+            
+            #get_reflection_coefficient()
+            
+# =============================================================================
+#         # Do particle analyses for each run (slow)
 #         for run_num in runs_to_do:
 #             print('\nRun {}'.format(run_num))
-#             #cf.delete_analysis_folders(drive, series, run_num)
 #             cf.load_run(drive, series, run_num, extract_arrays=True)
 #             
-#             #plot_abs_with_boundary_parameters(B0_lim=0.5)
+#             check_fields()
+#             plot_E_components(save=True)
 #             
-#             plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=True, B0_lim=0.4)
-#             standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
-#                 
-# 
-#             #get_reflection_coefficient()
+#             #plot_spatial_poynting(save=True, log=True)
+#             #plot_spatial_poynting_helical(save=True, log=True)
+#             
+#             #find_the_particles(it_max=None)
+#             summary_plots(save=True, histogram=True)
+#             for sp in range(2):
+#                 plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
+#             scatterplot_velocities()
 # =============================================================================
             
-        # Do particle analyses for each run (slow)
-        for run_num in runs_to_do:
-            print('\nRun {}'.format(run_num))
-            cf.load_run(drive, series, run_num, extract_arrays=True)
-            
-            #check_fields()
-            #plot_E_components(save=True)
-            
-            #plot_spatial_poynting(save=True, log=True)
-            #plot_spatial_poynting_helical(save=True, log=True)
-            
-            #find_the_particles(it_max=None)
-            #summary_plots(save=True, histogram=True)
-            for sp in range(2):
-                plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
-            scatterplot_velocities()
-            
-            plot_phase_space_with_time()
+            #plot_phase_space_with_time()
             
         #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
             

@@ -5,12 +5,13 @@ Created on Fri Sep 22 17:55:15 2017
 @author: iarey
 """
 import numba as nb
-from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, q, ne, min_dens, source_smoothing
-
+from simulation_parameters_1D import ND, NX, Nj, n_contr, charge, q, ne, min_dens, \
+                                     source_smoothing, ND_src_type
 
 @nb.njit()
 def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
-    '''Collect number and velocity moments in each cell, weighted by their distance
+    '''
+    Collect number and velocity moments in each cell, weighted by their distance
     from cell nodes.
 
     INPUT:
@@ -22,13 +23,6 @@ def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
     OUTPUT:
         ni     -- Species number moment array(size, Nj)
         nui    -- Species velocity moment array (size, Nj)
-        
-    13/03/2020 :: Modified to ignore contributions from particles with negative
-                    indices (i.e. "deactivated" particles)
-                    
-    07/05/2020 :: Modified to allow contributions from negatively indexed particles
-                    if reflection is enabled - these *were* hot particles, now
-                    counted as cold.
     '''
     for ii in nb.prange(vel.shape[1]):
         I   = Ie[ii]
@@ -64,19 +58,6 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
     TERTIARY:
         ni
         nu
-        temp1D
-        
-    Source terms in damping region set to be equal to last valid cell value. 
-    Smoothing routines deleted (can be found in earlier versions) since TSC 
-    weighting effectively also performs smoothing.
-    
-    07/05/2020 :: Changed damped source terms to give zero gradient at ND-NX
-                    boundary. Remaining gradient probably a particle
-                    initialization error.
-                    
-    28/05/2020 :: Implemented 3-point smoothing
-    
-    QUESTION :: The values in the green cells are still giving me pause.
     '''
     q_dens *= 0.
     Ji     *= 0.
@@ -102,14 +83,32 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
         Ji[ND, ii]          += Ji[ND - 1, ii]
         Ji[ND + NX - 1, ii] += Ji[ND + NX, ii]
 
+        if ND_src_type == 0:
+            # Set damping cell source values (copy last)
+            Ji[:ND, ii] = Ji[ND, ii]
+            Ji[ND+NX:, ii]  = Ji[ND+NX-1, ii]
+        elif ND_src_type == 1:
+            # Set damping cell source values (zero gradient)
+            Ji[:ND, ii]    = Ji[ND + 1, ii]
+            Ji[ND+NX:, ii] = Ji[ND+NX - 2, ii]
+        else:
+            # Set damping cell source values (zero second derivative)
+            Ji[:ND, ii]    = 2*Ji[ND,      ii] - Ji[ND + 1     , ii]
+            Ji[ND+NX:, ii] = 2*Ji[ND+NX-1, ii] - Ji[ND + NX - 2, ii]
+    
+    if ND_src_type == 0:
+        # Set damping cell source values (copy last)
+        q_dens[:ND]    = q_dens[ND]
+        q_dens[ND+NX:] = q_dens[ND+NX-1]
+    elif ND_src_type == 1:
         # Set damping cell source values (zero gradient)
-        Ji[:ND, ii]    = Ji[ND + 1, ii]
-        Ji[ND+NX:, ii] = Ji[ND+NX - 2, ii]
-        
-    # Set damping cell source values (zero gradient)
-    q_dens[:ND]    = q_dens[ND + 1]
-    q_dens[ND+NX:] = q_dens[ND+NX - 2]
-        
+        q_dens[:ND]    = q_dens[ND + 1]
+        q_dens[ND+NX:] = q_dens[ND+NX - 2]
+    else:
+        # Set damping cell source values
+        q_dens[:ND]    = 2*q_dens[ND]      - q_dens[ND + 1]
+        q_dens[ND+NX:] = 2*q_dens[ND+NX-1] - q_dens[ND+NX-2]
+       
     # Implement smoothing filter: If enabled
     if source_smoothing == 1:
         three_point_smoothing(q_dens, ni[:, 0])
@@ -140,25 +139,3 @@ def three_point_smoothing(arr, temp):
     
     arr[:]       = temp
     return
- 
-
-# OLD CODE
-
-# =============================================================================
-#         # Set damping cell source values (zero second derivative)
-#         Ji[:ND, ii]    = 2*Ji[ND,      ii] - Ji[ND + 1     , ii]
-#         Ji[ND+NX:, ii] = 2*Ji[ND+NX-1, ii] - Ji[ND + NX - 2, ii]
-#         
-#     # Set damping cell source values
-#     q_dens[:ND]    = 2*q_dens[ND]      - q_dens[ND + 1]
-#     q_dens[ND+NX:] = 2*q_dens[ND+NX-1] - q_dens[ND+NX-2]
-# =============================================================================
-# =============================================================================
-#         # Set damping cell source values (copy last)
-#         Ji[:ND, ii] = Ji[ND, ii]
-#         Ji[ND+NX:]  = Ji[ND+NX-1]
-#         
-#     # Set damping cell source values
-#     q_dens[:ND]    = q_dens[ND]
-#     q_dens[ND+NX:] = q_dens[ND+NX-1]
-# =============================================================================

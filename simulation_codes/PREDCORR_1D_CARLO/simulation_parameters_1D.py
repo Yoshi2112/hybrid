@@ -15,21 +15,34 @@ import numpy as np
 import sys
 import os
 
-on_grid = False
+# Offset to move the ABCs inwards (i.e. damping in cells with particles, not just outside)
+ND_offset = 0
 
-script_dir = sys.path[0]
-
-## INPUT FILES ##
-if on_grid == False:
+## INPUT FILE LOCATIONS ##
+if os.name == 'posix':
+    root_dir     = os.path.dirname(sys.path[0])
+    run_input    = root_dir +  '/run_inputs/run_params.txt'
+    plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
+    driver_input = root_dir +  '/run_inputs/driver_params.txt'
+    
+    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt'
+    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213050105000_H_ONLY.txt'
+    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213221605000_H_ONLY.txt'
+    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213248105000_H_ONLY.txt'
+    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213307605000_H_ONLY.txt'
+    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213406605000_H_ONLY.txt'
+    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213703105000_H_ONLY.txt'
+    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213907605000_H_ONLY.txt'
+    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214026105000_H_ONLY.txt'
+    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214105605000_H_ONLY.txt'
+else:
     run_input    = '../run_inputs/run_params.txt'
     plasma_input = '../run_inputs/plasma_params.txt'
-else:
-    run_input    = script_dir + '/../run_inputs/run_params_grid.txt'
-    plasma_input = script_dir + '/../run_inputs/plasma_params_grid.txt'
+    driver_input = '../run_inputs/driver_params.txt'
+    #plasma_input = '../run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt'
 
-randomise_gyrophase = False
 
-# Load run parameters
+## SIMULATION PARAMETERS ##
 with open(run_input, 'r') as f:
     ### RUN PARAMETERS ###
     drive             = f.readline().split()[1]        # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
@@ -74,8 +87,9 @@ with open(run_input, 'r') as f:
     ### RUN DESCRIPTION ###
     run_description = f.readline()         # Commentary to attach to runs, helpful to have a quick description
 
+
+### PARTICLE/PLASMA PARAMETERS ###
 with open(plasma_input, 'r') as f:
-    ### PARTICLE PARAMETERS ###
     species_lbl = np.array(f.readline().split()[1:])
     
     temp_color = np.array(f.readline().split()[1:])
@@ -98,6 +112,13 @@ with open(plasma_input, 'r') as f:
     B_eq      = f.readline().split()[1]                # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
 
 
+## DRIVER PARAMETERS ##
+with open(driver_input, 'r') as f:
+    driver_status = float(f.readline().split()[1])     # 0: No wave, 1: Single point source, 2: Multi point source
+    driven_freq   = float(f.readline().split()[1])     # Driven wave frequency in Hz standard 2.2
+    driven_ampl   = float(f.readline().split()[1])     # Driven wave amplitude in A/m (I think?) Standard 50e-7
+    pulse_offset  = float(f.readline().split()[1])     # Pulse center time (s)
+    pulse_width   = float(f.readline().split()[1])     # Pulse width (proportional to 2*std. 3*width decayed to 0.0123%) 
 
 #%%### DERIVED SIMULATION PARAMETERS
 ### PHYSICAL CONSTANTS ###
@@ -111,9 +132,10 @@ mu0    = (4e-7) * np.pi                     # Magnetic Permeability of Free Spac
 RE     = 6.371e6                            # Earth radius in metres
 B_surf = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
-NC         = NX + 2*ND                      # Total number of cells
-ne         = density.sum()                  # Electron number density
-E_par      = E_per / (anisotropy + 1)       # Parallel species energy
+NC          = NX + 2*ND                     # Total number of cells
+ne          = density.sum()                 # Electron number density
+E_par       = E_per / (anisotropy + 1)      # Parallel species energy
+ND_src_type = 0                             # 0: Copy last, 1: Zero gradient, 2: Zero second derivative
 
 particle_open = 0
 if particle_reflect + particle_reinit + particle_periodic == 0:
@@ -249,13 +271,18 @@ if particle_open == 1:
     inject_rate = nsp_ppc * (vth_par / dx) / np.sqrt(2 * np.pi)
 else:
     inject_rate = nsp_ppc * 0.0
+    
+species_plasfreq_sq   = (density * charge ** 2) / (mass * e0)
+species_gyrofrequency = qm_ratios * B_eq
+
+# Looks right!
+driven_rad = driven_freq * 2 * np.pi
+driven_k  = (driven_rad / c) ** 2
+driven_k *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyrofrequency))).sum()
+driven_k = np.sqrt(driven_k)
+
 
 #%%### INPUT TESTS AND CHECKS
-if rc_hwidth == 0:
-    rc_print = NX
-else:
-    rc_print = rc_hwidth*2
-
 print('Run Started')
 print('Run Series         : {}'.format(save_path.split('//')[-1]))
 print('Run Number         : {}'.format(run))

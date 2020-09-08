@@ -222,6 +222,7 @@ def set_damping_array(B_damping_array, E_damping_array, DT):
     # Do E-damping array
     E_dist_from_mp  = np.abs(np.arange(NC) + 0.5 - 0.5*NC)                # Distance of each B-node from midpoint
     for ii in range(NC):
+        # Put the offset in brackets with the NX, i.e. (NX - offset), e.g (NX - 32)
         if E_dist_from_mp[ii] > 0.5*NX:
             E_damping_array[ii] = 1. - r_damp * ((E_dist_from_mp[ii] - 0.5*NX) / ND) ** 2 
         else:
@@ -394,11 +395,12 @@ def set_timestep(vel, Te0):
            be initial limiting factor. This may change for inhomogenous loading
            of particles or initial fields.
     '''
-    ion_ts   = const.orbit_res / const.gyfreq               # Timestep to resolve gyromotion
-    vel_ts   = 0.5 * const.dx / np.max(np.abs(vel[0, :]))   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
+    ion_ts   = const.orbit_res / const.gyfreq                       # Timestep to resolve gyromotion
+    vel_ts   = 0.5 * const.dx / np.max(np.abs(vel[0, :]))           # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
+    drv_ts   = const.orbit_res / (2 * np.pi * const.driven_freq)    # Timestep to resolve driving frequency
 
     gyperiod = 2 * np.pi / const.gyfreq
-    DT       = min(ion_ts, vel_ts)
+    DT       = min(ion_ts, vel_ts, drv_ts)
     max_time = const.max_rev * 2 * np.pi / const.gyfreq_eq     # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1                          # Total number of time steps
 
