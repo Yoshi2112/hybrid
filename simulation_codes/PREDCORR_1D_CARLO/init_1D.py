@@ -15,7 +15,7 @@ import sources_1D as sources
 
 from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A,  \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
-                                     rc_hwidth, temp_type, Te0_scalar,\
+                                     rc_hwidth, temp_type, Te0_scalar, ND_offset,\
                                      ne, q, damping_multiplier, quiet_start
 
 
@@ -193,38 +193,32 @@ def initialize_particles():
 def set_damping_array(B_damping_array, E_damping_array, DT):
     '''Create masking array for magnetic field damping used to apply open
     boundaries. Based on applcation by Shoji et al. (2011) and
-    Umeda et al. (2001)
-    
-    Shoji's application multiplies by the resulting field before it 
-    is returned at each timestep (or each time called?), but Umeda's variant 
-    includes a damping on the increment as well as the solution, with a
-    different r for each (one damps, one changes the phase velocity and
-    increases the "effective damping length").
-    
-    Also, using Shoji's parameters, mask at most damps 98.7% at end grid 
-    points. Relying on lots of time spend there? Or some sort of error?
-    Can just play with r value/damping region length once it doesn't explode.
+    Umeda et al. (2001) with explanation/mention in Birdsall and Langdon (1985)
     
     23/03/2020 Put factor of 0.5 in front of va to set group velocity approx.
     14/05/2020 Put factor of 0.5 in front of DT since B is only ever pushed 0.5DT
+    
+    For offset, need to change if condition, as well as parabola function?
     '''
-    r_damp   = np.sqrt(29.7 * 0.5 * va * (0.5 * DT / dx) / ND)   # Damping coefficient
+    n_damp   = ND + ND_offset   # Takes the place of ND for the offset
+    n_real   = NX - ND_offset   # Takes the place of NX for the offset
+    
+    r_damp   = np.sqrt(29.7 * 0.5 * va * (0.5 * DT / dx) / n_damp)
     r_damp  *= damping_multiplier
     
     # Do B-damping array
-    B_dist_from_mp  = np.abs(np.arange(NC + 1) - 0.5*NC)                # Distance of each B-node from midpoint
+    B_dist_from_mp  = np.abs(np.arange(NC + 1) - 0.5*NC)
     for ii in range(NC + 1):
-        if B_dist_from_mp[ii] > 0.5*NX:
-            B_damping_array[ii] = 1. - r_damp * ((B_dist_from_mp[ii] - 0.5*NX) / ND) ** 2 
+        if B_dist_from_mp[ii] > (0.5*n_real):
+            B_damping_array[ii] = 1. - r_damp * ((B_dist_from_mp[ii] - 0.5*n_real) / n_damp) ** 2 
         else:
             B_damping_array[ii] = 1.0
-            
+    
     # Do E-damping array
-    E_dist_from_mp  = np.abs(np.arange(NC) + 0.5 - 0.5*NC)                # Distance of each B-node from midpoint
+    E_dist_from_mp  = np.abs(np.arange(NC) + 0.5 - 0.5*NC)
     for ii in range(NC):
-        # Put the offset in brackets with the NX, i.e. (NX - offset), e.g (NX - 32)
-        if E_dist_from_mp[ii] > 0.5*NX:
-            E_damping_array[ii] = 1. - r_damp * ((E_dist_from_mp[ii] - 0.5*NX) / ND) ** 2 
+        if E_dist_from_mp[ii] > (0.5*n_real):
+            E_damping_array[ii] = 1. - r_damp * ((E_dist_from_mp[ii] - 0.5*n_real) / n_damp) ** 2 
         else:
             E_damping_array[ii] = 1.0
     return

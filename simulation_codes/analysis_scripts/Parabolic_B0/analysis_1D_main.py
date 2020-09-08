@@ -3504,12 +3504,16 @@ def get_reflection_coefficient(save=True, incl_damping_cells=True):
 
 def field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None):
     '''
-    Note: For B-field cells, 7 grid points for 6 'cells'
-    Maybe could even do this for each half of the simulation space?
+    Arrays are time, space. Equatorial gridpoint is at NC//2
     
-    Arrays are time, space
+    Note: Calculating reflection coefficient as max vs. min isn't entirely 
+    accurate, since energy continues to leave the simulation even after 
+    the wave is no longer incident on the boundary. Better to specify a before
+    vs. after point (i.e. right before incident vs. right after, and indicate 
+    on graph that those are the two points being used).
     
-    Equatorial gridpoint is at NC//2
+    However, each frequency has different phase velocity - can't just use the 
+    same calculation point for them all.
     '''
     t, by    = cf.get_array('by')
     t, bz    = cf.get_array('bz')
@@ -3523,12 +3527,15 @@ def field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None):
 
     mag_energy_L = np.zeros(t.shape[0])
     mag_energy_R = np.zeros(t.shape[0])
+    mag_energy   = np.zeros(t.shape[0])
     for ii in range(t.shape[0]):
         bt_sq_L          = (by[ii,   st:eq] ** 2 + bz[ii,   st:eq] ** 2)
         bt_sq_R          = (by[ii, eq+1:en] ** 2 + bz[ii, eq+1:en] ** 2)
+        bt_sq            = (by[ii,   st:en] ** 2 + bz[ii,   st:en] ** 2)
         
         mag_energy_L[ii] = (0.5 / mu0) * bt_sq_L.sum() * (cf.NX //2) * cf.dx
         mag_energy_R[ii] = (0.5 / mu0) * bt_sq_R.sum() * (cf.NX //2) * cf.dx
+        mag_energy[  ii] = (0.5 / mu0) * bt_sq.sum()   * (cf.NX //2) * cf.dx
     
     L_refl = 100. * mag_energy_L[t_cut_idx:].min() / mag_energy_L.max()
     R_refl = 100. * mag_energy_R[t_cut_idx:].min() / mag_energy_R.max()
@@ -3568,13 +3575,13 @@ def field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None):
         axl.plot(mag_energy_L/mag_energy_L.max(), t, c='b')
         axl.set_xlabel('$U_B$ Left\nNormalized', rotation=0, fontsize=fontsize, family=font)
         axl.set_xlim(0.01, 1)
-        axl.set_title('$\Gamma_L = %.2f$%%' % L_refl)
+        #axl.set_title('$\Gamma_L = %.2f$%%' % L_refl)
         axl.invert_xaxis()
         
         axr.plot(mag_energy_R/mag_energy_R.max(), t, c='b')
         axr.set_xlabel('$U_B$ Right\nNormalized', rotation=0, fontsize=fontsize, family=font)
         axr.set_xlim(0.01, 1)
-        axr.set_title('$\Gamma_R = %.2f$%%' % R_refl)
+        #axr.set_title('$\Gamma_R = %.2f$%%' % R_refl)
         #axl.invert_xaxis()
                 
         fig.subplots_adjust(wspace=0)
@@ -3587,7 +3594,7 @@ def field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None):
         else:
             plt.show()
         
-    return L_refl, R_refl
+    return t, mag_energy
 
 
 def plot_abs_with_boundary_parameters(tmax=None, saveas='tx_boundaries_plot', save=True, B0_lim=None):
@@ -3729,38 +3736,37 @@ def multiplot_fluxes(series, save=True):
     return
 
 
-def plot_reflection_coefficients(series, save=False):
+def plot_mag_energy(series, save=False):
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     print('{} runs in series {}'.format(num_runs, series))
     
     runs_to_do = range(num_runs)
-    
-    Lr = np.zeros(num_runs); Rr = np.zeros(num_runs); drv_freq = np.zeros(num_runs)
-    
-    # Also need to extract driven frequency for each run
-    for run_num in runs_to_do:
-        print('\nRun {}'.format(run_num))
-        cf.load_run(drive, series, run_num, extract_arrays=True)
-        Lr[run_num], Rr[run_num] = field_energy_vs_time(save=None)
-        drv_freq[run_num]        = cf.driven_freq
 
     # Plot the thing:
     plt.ioff()
     fig, ax = plt.subplots(figsize=(15, 10))
     
-    ax.plot(drv_freq, Lr, label='$\Gamma_L$', marker='o')
-    ax.plot(drv_freq, Rr, label='$\Gamma_R$', marker='o')
-    ax.legend()
-    ax.set_xlim(0, drv_freq.max())
-    ax.set_ylim(0, 20.)
-    ax.set_xlabel('Driver Frequency (Hz)')
-    ax.set_ylabel('Reflection Coefficient %')
-    ax.set_title('Absorbing Boundary Efficiency')
-    #ax.set_yscale('log')
+    cmap = mpl.cm.get_cmap('jet')
+    clrs = cmap(np.linspace(0, 1, num_runs))
     
+    for run_num in runs_to_do:
+        print('\nRun {}'.format(run_num))
+        cf.load_run(drive, series, run_num, extract_arrays=True)
+        time, mag_energy = field_energy_vs_time(save=True)
+
+        ax.plot(time, mag_energy, c=clrs[run_num], label='{} Hz'.format(cf.driven_freq))
+        
+        ax.set_xlim(0, time[-1])
+        ax.set_ylim(0, 0.5)
+        ax.set_xlabel('Time (s)')
+        ax.set_ylabel('Normalized $U_B$')
+        ax.set_title('Absorbing Boundary Efficiency vs. Driver Frequency')
+        #ax.set_yscale('log')
+    
+    ax.legend()
     if save == True:
-        fig.savefig(series_dir + 'reflection_coefficients.png', facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        fig.savefig(series_dir + 'mag_energy.png', facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
         print('Reflection coefficient plots saved')
         plt.close('all')
     else:
@@ -3772,10 +3778,10 @@ def plot_reflection_coefficients(series, save=False):
 if __name__ == '__main__':
     drive       = 'F:'
 
-    for series in ['monte_carlo_ABC_freq_test']:
+    for series in ['monte_carlo_ABC_freq_test_with_E']:
         
         #multiplot_fluxes(series)
-        plot_reflection_coefficients(series, save=True)
+        plot_mag_energy(series, save=True)
         
         if False:
             series_dir  = '{}/runs//{}//'.format(drive, series)

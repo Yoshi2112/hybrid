@@ -16,7 +16,7 @@ import sys
 import os
 
 # Offset to move the ABCs inwards (i.e. damping in cells with particles, not just outside)
-ND_offset = 0
+ND_offset = 32
 
 ## INPUT FILE LOCATIONS ##
 if os.name == 'posix':
