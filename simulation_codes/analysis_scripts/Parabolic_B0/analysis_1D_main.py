@@ -3736,41 +3736,45 @@ def multiplot_fluxes(series, save=True):
     return
 
 
-def plot_mag_energy(series, save=False):
-    series_dir  = '{}/runs//{}//'.format(drive, series)
-    num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
-    print('{} runs in series {}'.format(num_runs, series))
+def plot_mag_energy(save=False):
     
-    runs_to_do = range(num_runs)
-
-    # Plot the thing:
-    plt.ioff()
-    fig, ax = plt.subplots(figsize=(15, 10))
+    lstyle = ['-', '--', ':']
     
-    cmap = mpl.cm.get_cmap('jet')
-    clrs = cmap(np.linspace(0, 1, num_runs))
-    
-    for run_num in runs_to_do:
-        print('\nRun {}'.format(run_num))
-        cf.load_run(drive, series, run_num, extract_arrays=True)
-        time, mag_energy = field_energy_vs_time(save=True)
-
-        ax.plot(time, mag_energy, c=clrs[run_num], label='{} Hz'.format(cf.driven_freq))
+    for series, ls  in zip(['monte_carlo_ABC_freq_test_with_BE_64offset'], lstyle):
+        series_dir  = '{}/runs//{}//'.format(drive, series)
+        num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+        print('{} runs in series {}'.format(num_runs, series))
         
-        ax.set_xlim(0, time[-1])
-        ax.set_ylim(0, 0.5)
-        ax.set_xlabel('Time (s)')
-        ax.set_ylabel('Normalized $U_B$')
-        ax.set_title('Absorbing Boundary Efficiency vs. Driver Frequency')
-        #ax.set_yscale('log')
+        runs_to_do = range(num_runs)
     
-    ax.legend()
-    if save == True:
-        fig.savefig(series_dir + 'mag_energy.png', facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-        print('Reflection coefficient plots saved')
-        plt.close('all')
-    else:
-        plt.show()
+        # Plot the thing:
+        plt.ioff()
+        fig, ax = plt.subplots(figsize=(15, 10))
+        
+        cmap = mpl.cm.get_cmap('jet')
+        clrs = cmap(np.linspace(0, 1, num_runs))
+        
+        for run_num in runs_to_do:
+            print('\nRun {}'.format(run_num))
+            cf.load_run(drive, series, run_num, extract_arrays=True)
+            time, mag_energy = field_energy_vs_time(save=True)
+    
+            ax.plot(time, mag_energy, c=clrs[run_num], label='{} Hz'.format(cf.driven_freq))
+            
+            ax.set_xlim(0, time[-1])
+            ax.set_ylim(0, 0.5)
+            ax.set_xlabel('Time (s)')
+            ax.set_ylabel('Normalized $U_B$')
+            ax.set_title('Absorbing Boundary Efficiency vs. Driver Frequency')
+            #ax.set_yscale('log')
+        
+        ax.legend()
+        if save == True:
+            fig.savefig(series_dir + 'mag_energy.png', facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+            print('Reflection coefficient plots saved')
+            plt.close('all')
+        else:
+            plt.show()
     return
 
 
@@ -3778,10 +3782,11 @@ def plot_mag_energy(series, save=False):
 if __name__ == '__main__':
     drive       = 'F:'
 
-    for series in ['monte_carlo_ABC_freq_test_with_E']:
+    plot_mag_energy(save=True)
+
+    for series in ['monte_carlo_ABC_freq_test_with_BE_64offset']:
         
         #multiplot_fluxes(series)
-        plot_mag_energy(series, save=True)
         
         if False:
             series_dir  = '{}/runs//{}//'.format(drive, series)

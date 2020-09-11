@@ -16,7 +16,7 @@ import sys
 import os
 
 # Offset to move the ABCs inwards (i.e. damping in cells with particles, not just outside)
-ND_offset = 32
+ND_offset = 64
 
 ## INPUT FILE LOCATIONS ##
 if os.name == 'posix':
@@ -277,9 +277,9 @@ species_gyrofrequency = qm_ratios * B_eq
 
 # Looks right!
 driven_rad = driven_freq * 2 * np.pi
-driven_k  = (driven_rad / c) ** 2
-driven_k *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyrofrequency))).sum()
-driven_k = np.sqrt(driven_k)
+driven_k   = (driven_rad / c) ** 2
+driven_k  *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyrofrequency))).sum()
+driven_k   = np.sqrt(driven_k)
 
 
 #%%### INPUT TESTS AND CHECKS
