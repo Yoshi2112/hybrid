@@ -16,15 +16,16 @@ import sys
 import os
 
 # Offset to move the ABCs inwards (i.e. damping in cells with particles, not just outside)
-ND_offset = 64
+ND_offset = 64; event_inputs = False
 
 ## INPUT FILE LOCATIONS ##
 if os.name == 'posix':
     root_dir     = os.path.dirname(sys.path[0])
-    run_input    = root_dir +  '/run_inputs/run_params.txt'
-    plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
-    driver_input = root_dir +  '/run_inputs/driver_params.txt'
+else:
+    root_dir     = '..'
     
+if event_inputs == True:
+    pass
     #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt'
     #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213050105000_H_ONLY.txt'
     #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213221605000_H_ONLY.txt'
@@ -36,10 +37,10 @@ if os.name == 'posix':
     #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214026105000_H_ONLY.txt'
     #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214105605000_H_ONLY.txt'
 else:
-    run_input    = '../run_inputs/run_params.txt'
-    plasma_input = '../run_inputs/plasma_params.txt'
-    driver_input = '../run_inputs/driver_params.txt'
-    #plasma_input = '../run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt'
+    run_input    = root_dir +  '/run_inputs/run_params.txt'
+    plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
+    driver_input = root_dir +  '/run_inputs/driver_params.txt'
+
 
 
 ## SIMULATION PARAMETERS ##

@@ -7,13 +7,13 @@ Created on Fri Sep 22 11:00:58 2017
 import numpy as np
 
 ### RUN DESCRIPTION ###                     # Saves within run for easy referencing
-run_description = '''Test of Triangular Shaped Cloud weighting.'''
+run_description = '''Testing against linear theory and PREDCORR :: CIC version'''
 
 ### RUN PARAMETERS ###
-drive           = 'E:/'                     # Drive letter or path for portable HDD e.g. 'E:/'
-save_path       = 'runs/CAM_CL_TSC_test/'   # Series save dir   : Folder containing all runs of a series
+drive           = 'F:/'                     # Drive letter or path for portable HDD e.g. 'E:/'
+save_path       = 'runs/CAM_CL_LT/'         # Series save dir   : Folder containing all runs of a series
 run_num         = 0                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-generate_data   = 0                         # Save data flag    : For later analysis
+generate_data   = 1                         # Save data flag    : For later analysis
 generate_plots  = 0                         # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                       # RNG Seed          : Set to enable consistent results for parameter studies
 
@@ -29,21 +29,20 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 128                              # Number of cells - doesn't include ghost cells
-max_rev  = 16                               # Simulation runtime, in multiples of the gyroperiod
+NX       = 512                              # Number of cells - doesn't include ghost cells
+max_rev  = 200                              # Simulation runtime, in multiples of the gyroperiod
 
-dxm         = 1                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't resolvable by hybrid code)
-subcycles   = 12                            # Number of field subcycling steps for Cyclic Leapfrog
-cellpart    = 80                            # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+dxm         = 1.0                           # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't resolvable by hybrid code)
+subcycles   = 8                             # Number of field subcycling steps for Cyclic Leapfrog
+cellpart    = 400                           # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
-ie       = 0                                # Adiabatic electrons. 0: off (constant), 1: on.
-
+ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
 B0       = 200e-9                           # Unform initial magnetic field value (in T)
-ne       = 50e6                             # Electron density (in /m3, same as total ion density)
+ne       = 200e6                            # Electron density (in /m3, same as total ion density)
 
-orbit_res= 0.25                             # Particle orbit resolution: fraction of gyroperiod (gyrofraction, lol)
-data_res = 0                                # Data capture resolution in gyrofraction
+orbit_res= 0.10                             # Particle orbit resolution: fraction of gyroperiod (gyrofraction, lol)
+data_res = 0.1                              # Data capture resolution in gyrofraction
 plot_res = 0                                # Plot capture resolution in gyrofraction
 
 
@@ -54,17 +53,17 @@ dist_type  = np.asarray([0, 0])                             # Particle distribut
 
 mass       = np.asarray([1.00 , 1.00])                      # Species ion mass (proton mass units)
 charge     = np.asarray([1.00 , 1.00])                      # Species ion charge (elementary charge units)
-velocity   = np.asarray([0.00 , 1.00])                      # Species parallel bulk velocity (alfven velocity units)
+velocity   = np.asarray([0.00 , 0.00])                      # Species parallel bulk velocity (alfven velocity units)
 density    = np.asarray([0.90 , 0.10])                      # Species charge density as fraction of total (charge) density
 sim_repr   = np.asarray([50.0 , 50.0])                      # Macroparticle weighting: Percentage of macroparticles assigned to each species
 
-beta_e     = 1.                                             # Electron beta
-beta_par   = np.array([1., 10.])                            # Ion species parallel beta
-beta_per   = np.array([1., 50.])                            # Ion species perpendicular beta
+beta_e     = 0.1                                            # Electron beta
+beta_par   = np.array([0.1, 10.])                           # Ion species parallel beta
+beta_per   = np.array([0.1, 50.])                           # Ion species perpendicular beta
 
 do_parallel    = False                                      # Flag (True/False) for auto-parallel using numba.njit()
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
-set_override   = 1                                          # Flag to override magnetic field value for specific regime
+set_override   = 0                                          # Flag to override magnetic field value for specific regime
 wpiwci         = 1e4                                        # Desired plasma/cyclotron frequency ratio for override
 
 
