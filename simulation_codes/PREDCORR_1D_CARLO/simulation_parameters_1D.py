@@ -20,24 +20,24 @@ ND_offset = 0; event_inputs = True
 
 # Hard-coded some plasma param files. Loads based on position in array and run number if event_inputs True
 # Can update and change these later if desired. Or even use a string format to replace run series (e.g. H_ONLY)
-plasma_list = ['/run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213050105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213221605000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213248105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213307605000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213406605000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213703105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213907605000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214026105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214105605000_H_ONLY.txt']
+# =============================================================================
+# plasma_list = ['/run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213050105000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213221605000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213248105000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213307605000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213406605000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213703105000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213907605000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214026105000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214105605000_H_ONLY.txt']
+# =============================================================================
 
-# =============================================================================
-# plasma_list = ['/run_inputs/variants/plasma_params_protons.txt',
-#                '/run_inputs/variants/plasma_params_w_helium.txt',
-#                '/run_inputs/variants/plasma_params_w_oxygen.txt',
-#                '/run_inputs/variants/plasma_params_w_helium_and_oxygen.txt',
-#                ]
-# =============================================================================
+plasma_list = ['/run_inputs/variants/plasma_params_protons.txt',
+               '/run_inputs/variants/plasma_params_w_helium.txt',
+               '/run_inputs/variants/plasma_params_w_oxygen.txt',
+               '/run_inputs/variants/plasma_params_w_helium_and_oxygen.txt',
+               ]
 
 ## INPUT RUN/DRIVER FILE LOCATIONS ##
 if os.name == 'posix':
@@ -331,14 +331,23 @@ print('{} spatial cells, 2x{} damped cells'.format(NX, ND))
 print('{} cells total'.format(NC))
 print('{} particles total\n'.format(N))
 
+if driver_status != 0:
+    print('-----------------------')
+    print('EXTERNAL DRIVER ENABLED')
+    print('-----------------------\n')
+
 if cpu_affin != '-':
+    if len(cpu_affin) == 1:
+        cpu_affin = [int(cpu_affin)]        
+    else:
+        cpu_affin = list(map(int, cpu_affin.split(',')))
+    
     import psutil
     run_proc = psutil.Process()
     run_proc.cpu_affinity(cpu_affin)
-    if len(cpu_affin) == 1:
-        print('CPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
-    else:
-        print('CPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
+    print('CPU affinity for run (PID {}) set to :: {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
+else:
+    print('CPU affinity not set.')
 
 if theta_xmax > lambda_L:
     print('--------------------------------------------------')

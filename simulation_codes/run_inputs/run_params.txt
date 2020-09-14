@@ -1,5 +1,5 @@
 DRIVE					/home/c3134027/
-SAVE_PATH				/runs/event_jul25_parabolic_Honly/
+SAVE_PATH				/runs/event_jul25_ParaOPEN_Honly/
 RUN						-
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
@@ -17,16 +17,16 @@ E_DAMPING_FLAG			0
 QUIET_START_FLAG		1
 RADIX_LOADING			0
 DAMPING_MULTIPLIER_RD   0.05
-NX 						1536
-ND 						1536
-MAX_REV					400
+NX 						1024
+ND 						1024
+MAX_REV					210
 DXM						1.0
 R_A						120e3
 IE						1
 MIN_DENS				0.05
 RC_HWIDTH				-
 GYROPERIOD_RESOLUTION	0.02
-FREQUENCY_RESOLUTION	0.02		
+FREQUENCY_RESOLUTION	0.02	
 PARTICLE_DUMP_FREQ		0.25
 FIELD_DUMP_FREQ			0.10
-Simulation runs using parameters extract from the RBSP-A July 25 event. Might not be right, validation isn't totally over, but time is of the essence (might get lucky!).
+Event comparison, July 25, particles as seen by RBSP-A at 10 points (10 runs)
