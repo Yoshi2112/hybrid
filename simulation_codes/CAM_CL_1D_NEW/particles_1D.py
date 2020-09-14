@@ -20,7 +20,7 @@ def two_step_algorithm(v0, Bp, Ep, dt, idx):
 
 
 @nb.njit()
-def assign_weighting_TSC(pos, E_nodes=True):
+def assign_weighting_TSC(pos, I, W, E_nodes=True):
     '''Triangular-Shaped Cloud (TSC) weighting scheme used to distribute particle densities to
     nodes and interpolate field values to particle positions.
 
@@ -35,8 +35,6 @@ def assign_weighting_TSC(pos, E_nodes=True):
     '''
     Np         = pos.shape[0]
     epsilon    = 1e-15
-    left_node  = np.zeros(Np,      dtype=np.uint16)
-    weights    = np.zeros((3, Np), dtype=np.float64)
     
     if E_nodes == True:
         grid_offset   = 0.5
@@ -44,13 +42,13 @@ def assign_weighting_TSC(pos, E_nodes=True):
         grid_offset   = 1.0
     
     for ii in np.arange(Np):
-        left_node[ii]  = int(round(pos[ii] / dx + grid_offset + epsilon) - 1.0)
-        delta_left     = left_node[ii] - (pos[ii] + epsilon) / dx - grid_offset
+        I[ii]       = int(round(pos[ii] / dx + grid_offset + epsilon) - 1.0)
+        delta_left  = I[ii] - (pos[ii] + epsilon) / dx - grid_offset
     
-        weights[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))
-        weights[1, ii] = 0.75 - np.square(delta_left + 1.)
-        weights[2, ii] = 1.0  - weights[0, ii] - weights[1, ii]
-    return left_node, weights
+        W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))
+        W[1, ii] = 0.75 - np.square(delta_left + 1.)
+        W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
+    return
 
 
 @nb.njit()
@@ -104,7 +102,7 @@ def interpolate_forces_to_particle(E, B, J, Ie, W_elec, Ib, W_mag, idx):
 
 
 @nb.njit()
-def velocity_update(pos, vel, Ie, W_elec, idx, B, E, J, dt):
+def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, J, dt):
     '''
     Interpolates the fields to the particle positions using TSC weighting, then
     updates velocities using a Boris particle pusher.
@@ -120,12 +118,12 @@ def velocity_update(pos, vel, Ie, W_elec, idx, B, E, J, dt):
     OUTPUT:
         vel  -- Returns particle array with updated velocities
     '''
-    Ib, W_mag = assign_weighting_TSC(pos, E_nodes=False)     # Magnetic field weighting
+    assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)     # Magnetic field weighting
     
     for ii in np.arange(N):
         Ep, Bp     = interpolate_forces_to_particle(E, B, J, Ie[ii], W_elec[:, ii], Ib[ii], W_mag[:, ii], idx[ii])
         vel[:, ii] = boris_algorithm(   vel[:, ii], Bp, Ep, dt, idx[ii])
-    return vel
+    return
 
 
 @nb.njit()

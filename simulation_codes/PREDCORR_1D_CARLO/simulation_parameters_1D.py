@@ -20,17 +20,24 @@ ND_offset = 0; event_inputs = True
 
 # Hard-coded some plasma param files. Loads based on position in array and run number if event_inputs True
 # Can update and change these later if desired. Or even use a string format to replace run series (e.g. H_ONLY)
-plasma_list = ['/run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213050105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213221605000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213248105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213307605000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213406605000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213703105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213907605000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214026105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214105605000_H_ONLY.txt']
+# =============================================================================
+# plasma_list = ['/run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213050105000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213221605000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213248105000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213307605000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213406605000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213703105000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213907605000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214026105000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214105605000_H_ONLY.txt']
+# =============================================================================
 
+plasma_list = ['/run_inputs/variants/plasma_params_protons.txt',
+               '/run_inputs/variants/plasma_params_w_helium.txt',
+               '/run_inputs/variants/plasma_params_w_oxygen.txt',
+               '/run_inputs/variants/plasma_params_w_helium_and_oxygen.txt',
+               ]
 
 ## INPUT RUN/DRIVER FILE LOCATIONS ##
 if os.name == 'posix':
@@ -281,11 +288,17 @@ else:
 species_plasfreq_sq   = (density * charge ** 2) / (mass * e0)
 species_gyrofrequency = qm_ratios * B_eq
 
-# Looks right!
-driven_rad = driven_freq * 2 * np.pi
-driven_k   = (driven_rad / c) ** 2
-driven_k  *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyrofrequency))).sum()
-driven_k   = np.sqrt(driven_k)
+# =============================================================================
+# # Looks right! Or not, for some reason now. Complex? But no.
+# driven_rad = driven_freq * 2 * np.pi
+# 
+# driven_k   = (driven_rad / c) ** 2
+# driven_k  *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyrofrequency))).sum()
+# driven_k   = np.sqrt(driven_k)
+# =============================================================================
+
+# Not actually, just to stop errors popping up.
+driven_k = 1.0e-5
 
 
 #%%### INPUT TESTS AND CHECKS

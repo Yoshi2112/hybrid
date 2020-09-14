@@ -3778,6 +3778,7 @@ def plot_mag_energy(save=False):
     return
 
 
+
 #%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'

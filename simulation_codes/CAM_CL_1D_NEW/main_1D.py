@@ -17,13 +17,16 @@ from simulation_parameters_1D import adaptive_timestep, save_particles, save_fie
 if __name__ == '__main__':
     start_time = timer()
 
-    pos, vel, Ie, W_elec, idx = init.initialize_particles()
-    B, E                      = init.initialize_fields()
+    pos, vel, Ie, W_elec, Ib, W_mag, idx             = init.initialize_particles()
+    B, E                                             = init.initialize_fields()
+    rho_int, rho_half, J_minus, J_plus, J_init, G, L = init.initialize_sources()
+    Ep, Bp, v_prime, S, T, qmi                       = init.initialize_extra_arrays()
+    ni_init, ni, nu_init, nu_minus, nu_plus          = init.initialize_tertiary_arrays()
 
     DT, max_inc, part_save_iter, field_save_iter, subcycles = aux.set_timestep(vel)
 
     print('Loading initial state...\n')
-    pos, Ie, W_elec, dns_int, dns_half, J_plus, J_minus, G, L   = sources.init_collect_moments(pos, vel, Ie, W_elec, idx, 0.5*DT)
+    sources.init_collect_moments(pos, vel, Ie, W_elec, idx, rho_int, rho_half, J_plus, J_init, G, L, 0.5*DT)
 
     qq      = 0
     print('Starting loop...')
@@ -32,29 +35,29 @@ if __name__ == '__main__':
         ##### EXAMINE TIMESTEP #####
         ############################
         if adaptive_timestep == 1:
-            pos, qq, DT, max_inc, part_save_iter, field_save_iter, change_flag, subcycles = aux.check_timestep(qq, DT, pos, vel, B, E, dns_int, max_inc, part_save_iter, field_save_iter, subcycles)
+            pos, qq, DT, max_inc, part_save_iter, field_save_iter, change_flag, subcycles = aux.check_timestep(qq, DT, pos, vel, B, E, rho_int, max_inc, part_save_iter, field_save_iter, subcycles)
     
             if change_flag == 1:
                 print('Timestep halved. Syncing particle velocity/position with DT = {}'.format(DT))
-                pos, Ie, W_elec, dns_int, dns_half, J_plus, J_minus, G, L   = sources.init_collect_moments(pos, vel, Ie, W_elec, idx, 0.5*DT)
+                sources.init_collect_moments(pos, vel, Ie, W_elec, idx, rho_int, rho_half, J_plus, J_init, G, L, 0.5*DT)
             elif change_flag == 2:
                 print('Timestep doubled. Syncing particle velocity/position with DT = {}'.format(DT))
-                pos, Ie, W_elec, dns_int, dns_half, J_plus, J_minus, G, L   = sources.init_collect_moments(pos, vel, Ie, W_elec, idx, 0.5*DT)
+                sources.init_collect_moments(pos, vel, Ie, W_elec, idx, rho_int, rho_half, J_plus, J_init, G, L, 0.5*DT)
         
         
         #######################
         ###### MAIN LOOP ######
         #######################
-        B         = fields.cyclic_leapfrog(B, dns_int, J_minus, DT, subcycles)
+        B         = fields.cyclic_leapfrog(B, rho_int, J_minus, DT, subcycles)
         E, Ve, Te = fields.calculate_E(B, J_minus, dns_half)
         J         = sources.push_current(J_plus, E, B, L, G, DT)
         E, Ve, Te = fields.calculate_E(B, J, dns_half)
 
-        vel = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, J, DT)
+        particles.velocity_update_vectorised(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, qmi, DT)
 
         # Store pc(1/2) here while pc(3/2) is collected
         dns_int = dns_half          
-        pos, Ie, W_elec, dns_half, J_plus, J_minus, G, L = sources.collect_moments(pos, vel, Ie, W_elec, idx, DT)
+        sources.collect_moments(pos, vel, Ie, W_elec, idx, rho, J_minus, J_plus, J_init, G, L, DT)
         
         dns_int = 0.5 * (dns_int + dns_half)
         J       = 0.5 * (J_plus  +  J_minus)

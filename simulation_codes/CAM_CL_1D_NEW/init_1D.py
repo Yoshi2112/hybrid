@@ -103,8 +103,42 @@ def initialize_particles():
     W_elec     = np.zeros((3, N), dtype=np.float64)
     W_mag      = np.zeros((3, N), dtype=np.float64)
     
-    Ie, W_elec = assign_weighting_TSC(pos)
-    return pos, vel, Ie, W_elec, idx
+    Ie, W_elec = assign_weighting_TSC(pos, Ie, W_elec)
+    return pos, vel, Ie, W_elec, Ib, W_mag, idx
+
+
+def initialize_extra_arrays():
+    v_prime = np.zeros((3, N),      dtype=np.float64)
+    S       = np.zeros((3, N),      dtype=np.float64)
+    T       = np.zeros((3, N),      dtype=np.float64)
+    
+    Bp      = np.zeros((3, N), dtype=np.float64)
+    Ep      = np.zeros((3, N), dtype=np.float64)
+    temp_N  = np.zeros((N),    dtype=np.float64)
+    
+    return Ep, Bp, v_prime, S, T, temp_N
+
+
+def initialize_sources():
+    size    = NX + 3
+    rho_0   = np.zeros( size)
+    rho     = np.zeros( size)   
+    J_minus = np.zeros((size, 3))
+    J_plus  = np.zeros((size, 3))
+    J_init  = np.zeros((size, 3))
+    L       = np.zeros( size)
+    G       = np.zeros((size, 3))
+    return rho_0, rho, J_minus, J_plus, J_init, L, G
+
+
+def initialize_tertiary_arrays():
+    size      = NX + 3
+    ni        = np.zeros((size, Nj))
+    ni_init   = np.zeros((size, Nj))
+    nu_init   = np.zeros((size, Nj, 3))
+    nu_minus  = np.zeros((size, Nj, 3))
+    nu_plus   = np.zeros((size, Nj, 3))    
+    return ni_init, ni, nu_init, nu_minus, nu_plus
 
 
 def initialize_fields():

@@ -9,7 +9,7 @@ import sys
 import platform
 
 ### RUN DESCRIPTION ###
-run_description = '''Testing against linear theory and PREDCORR :: TSC version'''
+run_description = '''Testing against linear theory and PREDCORR :: TSC version with multi-ions, He'''
 
 
 ### RUN PARAMETERS ###
@@ -17,7 +17,7 @@ run_description = '''Testing against linear theory and PREDCORR :: TSC version''
 #drive           = '/media/yoshi/UNI_HD/'
 drive           = 'F:/'
 save_path       = 'runs/CAM_CL_LT/'           # Series save dir   : Folder containing all runs of a series 
-run_num         = 1                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+run_num         = 2                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles  = 1                           # Save data flag    : For later analysis
 save_fields     = 1                           # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 15401                       # RNG Seed          : Set to enable consistent results for parameter studies

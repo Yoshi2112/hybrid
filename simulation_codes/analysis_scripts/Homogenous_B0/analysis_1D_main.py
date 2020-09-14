@@ -1277,17 +1277,17 @@ def plot_wk_polished(component='By', saveas='wk_plot_thesis', dispersion_overlay
 
 #%%
 if __name__ == '__main__':
-    drive       = 'E:'
-    series      = 'CAM_CL_LT'
+    drive       = 'F:'
+    series      = 'compare_old_new_LTcheck_homogenous'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     dumb_offset = 0
     
-    for run_num in [1]:
+    for run_num in [2]:
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
 
-        standard_analysis_package()
+        #standard_analysis_package()
         
         #single_point_both_fields_AGU()
         

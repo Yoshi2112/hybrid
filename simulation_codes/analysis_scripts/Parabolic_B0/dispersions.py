@@ -148,9 +148,11 @@ def get_wk(component):
     fft_matrix  = np.zeros(arr.shape, dtype='complex128')
     fft_matrix2 = np.zeros(arr.shape, dtype='complex128')
 
-    for ii in range(arr.shape[0]): # Take spatial FFT at each time
+    # Take spatial FFT at each time
+    for ii in range(arr.shape[0]): 
         fft_matrix[ii, :] = np.fft.fft(arr[ii, :] - arr[ii, :].mean())
 
+    # Take temporal FFT at each position (now k)
     for ii in range(arr.shape[1]):
         fft_matrix2[:, ii] = np.fft.fft(fft_matrix[:, ii] - fft_matrix[:, ii].mean())
 
