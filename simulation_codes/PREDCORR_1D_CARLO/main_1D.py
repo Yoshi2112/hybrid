@@ -16,6 +16,7 @@ if __name__ == '__main__':
     start_time = timer()
     
     # Initialize simulation: Allocate memory and set time parameters
+    print('Initializing arrays...')
     pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp,temp_N = init.initialize_particles()
     B, E_int, E_half, Ve, Te, Te0                       = init.initialize_fields()
     q_dens, q_dens_adv, Ji, ni, nu                      = init.initialize_source_arrays()

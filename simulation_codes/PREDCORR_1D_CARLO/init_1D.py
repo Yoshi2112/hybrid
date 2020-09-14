@@ -388,6 +388,7 @@ def set_timestep(vel, Te0):
            be initial limiting factor. This may change for inhomogenous loading
            of particles or initial fields.
     '''
+    print('Setting timestep...')
     ion_ts   = const.orbit_res / const.gyfreq                       # Timestep to resolve gyromotion
     vel_ts   = 0.5 * const.dx / np.max(np.abs(vel[0, :]))           # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
     drv_ts   = const.orbit_res / (2 * np.pi * const.driven_freq)    # Timestep to resolve driving frequency

@@ -113,6 +113,7 @@ else:
     plasma_input = root_dir +  plasma_list[run]
 print('LOADING PLASMA: {}'.format(plasma_input))
 
+
 ### PARTICLE/PLASMA PARAMETERS ###
 with open(plasma_input, 'r') as f:
     species_lbl = np.array(f.readline().split()[1:])
