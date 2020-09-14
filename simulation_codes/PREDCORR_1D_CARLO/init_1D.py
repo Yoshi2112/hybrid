@@ -15,7 +15,7 @@ import fields_1D    as fields
 from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A,  \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
                                      rc_hwidth, temp_type, Te0_scalar, ND_offset,\
-                                     ne, q, damping_multiplier, quiet_start
+                                     ne, q, damping_multiplier, quiet_start, driver_status
 
 
 @nb.njit()
@@ -391,8 +391,12 @@ def set_timestep(vel, Te0):
     print('Setting timestep...')
     ion_ts   = const.orbit_res / const.gyfreq                       # Timestep to resolve gyromotion
     vel_ts   = 0.5 * const.dx / np.max(np.abs(vel[0, :]))           # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
-    drv_ts   = const.orbit_res / (2 * np.pi * const.driven_freq)    # Timestep to resolve driving frequency
-
+    
+    if driver_status != 0:
+        drv_ts = const.orbit_res / (2 * np.pi * const.driven_freq)    # Timestep to resolve driving frequency
+    else:
+        drv_ts = ion_ts
+        
     gyperiod = 2 * np.pi / const.gyfreq
     DT       = min(ion_ts, vel_ts, drv_ts)
     max_time = const.max_rev * 2 * np.pi / const.gyfreq_eq     # Total runtime in seconds
@@ -410,7 +414,7 @@ def set_timestep(vel, Te0):
 
     if const.save_fields == 1 or const.save_particles == 1:
         save.store_run_parameters(DT, part_save_iter, field_save_iter, Te0)
-
+    
     B_damping_array = np.ones(NC + 1, dtype=float)
     E_damping_array = np.ones(NC    , dtype=float)
     set_damping_array(B_damping_array, E_damping_array, DT)

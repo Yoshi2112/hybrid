@@ -190,6 +190,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
                 raise IndexError
     
     # Move particles, collect moments
+    print('Advancing particles')
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
                                             B, E_int, DT, q_dens_adv, Ji, ni, nu, mp_flux)
     
@@ -197,10 +198,9 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     q_dens *= 0.5
     q_dens += 0.5 * q_dens_adv
     
-    # Push B from N to N + 1/2
+    # Compute fields at N + 1/2
+    print('Computing fields at N + 1/2')
     fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
-    
-    # Calculate E at N + 1/2
     fields.calculate_E(B, Ji, q_dens, E_half, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array, qq, DT, 0)
 
     ###################################
@@ -220,6 +220,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     old_fields[:NC, 6:9]  = Ve
     old_fields[:NC,   9]  = Te
     
+    print('Predicting fields at N + 1')
     # Predict fields
     E_int *= -1.0
     E_int +=  2.0 * E_half
@@ -227,18 +228,22 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
 
     # Advance particles to obtain source terms at N + 3/2
+    print('Second particle push')
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
                                             B, E_int, DT, q_dens, Ji, ni, nu, mp_flux, pc=1)
     
     q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
     
     # Compute predicted fields at N + 3/2
+    print('Predicting fields at N + 3/2')
     fields.push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
     fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array, qq, DT, 1)
     
-    # Determine corrected fields at N + 1 
+    # Determine corrected fields at N + 1
+    print('Correcting fields at N + 1')
     E_int *= 0.5;    E_int += 0.5 * E_half
 
+    print('Restoring values for next timestep')
     # Restore old values: [:] allows reference to same memory (instead of creating new, local instance)
     pos[:]    = old_particles[0  , :]
     vel[:]    = old_particles[1:4, :]
