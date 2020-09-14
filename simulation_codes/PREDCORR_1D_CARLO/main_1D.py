@@ -50,6 +50,7 @@ if __name__ == '__main__':
     qq       = 1;    sim_time = DT
     print('Starting main loop...')
     while qq < max_inc:
+        print('Timestep 1...')
         qq, DT, max_inc, part_save_iter, field_save_iter =                                \
         aux.main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T, temp_N,\
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu, mp_flux,                  \

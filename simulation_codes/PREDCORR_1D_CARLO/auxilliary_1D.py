@@ -171,12 +171,15 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     If no saves, steps_to_go = max_inc
     '''
     # Check timestep
-    qq, DT, max_inc, part_save_iter, field_save_iter, damping_array \
-    = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, Ep, Bp, v_prime, S, T,temp_N,\
-                     qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array)
+    if qq%50 == 0:
+        print('Checking timestep')
+        qq, DT, max_inc, part_save_iter, field_save_iter, damping_array \
+        = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, Ep, Bp, v_prime, S, T,temp_N,\
+                         qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array)
     
     # Check number of spare particles every 25 steps
     if qq%25 == 0 and particle_open == 1:
+        print('Checking number of spare particles')
         num_spare = (idx < 0).sum()
         if num_spare < nsp_ppc.sum():
             print('WARNING :: Less than one cell of spare particles remaining.')
@@ -185,7 +188,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
                 # Can do it by cell lots (i.e. add a cell's worth each time)
                 print('WARNING :: No space particles remaining. Exiting simulation.')
                 raise IndexError
-            
+    
     # Move particles, collect moments
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
                                             B, E_int, DT, q_dens_adv, Ji, ni, nu, mp_flux)
