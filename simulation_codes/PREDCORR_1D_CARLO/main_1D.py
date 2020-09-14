@@ -23,6 +23,7 @@ if __name__ == '__main__':
     old_particles, old_fields, temp3De, temp3Db, temp1D,\
                                 v_prime, S, T, mp_flux  = init.initialize_tertiary_arrays()
     
+    print('Collecting initial moments...')
     # Collect initial moments and save initial state
     sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu) 
     
@@ -34,6 +35,7 @@ if __name__ == '__main__':
         
     fields.calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array, 0, DT, 0)
     
+    print('Saving initial conditions...')
     if save_particles == 1:
         save.save_particle_data(0, DT, part_save_iter, 0, pos, vel, idx)
         
