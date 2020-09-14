@@ -16,31 +16,30 @@ import sys
 import os
 
 # Offset to move the ABCs inwards (i.e. damping in cells with particles, not just outside)
-ND_offset = 64; event_inputs = False
+ND_offset = 0; event_inputs = True
 
-## INPUT FILE LOCATIONS ##
+
+# Hard-coded some plasma param files. Loads based on position in array and run number if event_inputs True
+plasma_list = ['/run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt',
+               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213050105000_H_ONLY.txt',
+               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213221605000_H_ONLY.txt',
+               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213248105000_H_ONLY.txt',
+               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213307605000_H_ONLY.txt',
+               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213406605000_H_ONLY.txt',
+               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213703105000_H_ONLY.txt',
+               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213907605000_H_ONLY.txt',
+               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214026105000_H_ONLY.txt',
+               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214105605000_H_ONLY.txt']
+
+
+## INPUT RUN/DRIVER FILE LOCATIONS ##
 if os.name == 'posix':
     root_dir     = os.path.dirname(sys.path[0])
 else:
     root_dir     = '..'
-    
-if event_inputs == True:
-    pass
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt'
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213050105000_H_ONLY.txt'
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213221605000_H_ONLY.txt'
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213248105000_H_ONLY.txt'
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213307605000_H_ONLY.txt'
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213406605000_H_ONLY.txt'
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213703105000_H_ONLY.txt'
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213907605000_H_ONLY.txt'
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214026105000_H_ONLY.txt'
-    #plasma_input = root_dir +  '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214105605000_H_ONLY.txt'
-else:
-    run_input    = root_dir +  '/run_inputs/run_params.txt'
-    plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
-    driver_input = root_dir +  '/run_inputs/driver_params.txt'
 
+run_input    = root_dir +  '/run_inputs/run_params.txt'
+driver_input = root_dir +  '/run_inputs/driver_params.txt'
 
 
 ## SIMULATION PARAMETERS ##
@@ -88,6 +87,22 @@ with open(run_input, 'r') as f:
     ### RUN DESCRIPTION ###
     run_description = f.readline()         # Commentary to attach to runs, helpful to have a quick description
 
+
+if run == '-':
+    # Work out how many runs exist, then add to it. Save a bit of work numerically increasing.
+    if os.path.exists(drive + save_path) == False:
+        run = 0
+    else:
+        run = len(os.listdir(drive + save_path))
+    print('Run number AUTOSET to ', run)
+else:
+    run = int(run)
+
+# Set plasma parameter file
+if event_inputs == False:
+    plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
+else:
+    plasma_input = root_dir +  plasma_list[run]
 
 ### PARTICLE/PLASMA PARAMETERS ###
 with open(plasma_input, 'r') as f:
@@ -191,16 +206,6 @@ N = N_species.sum() + spare_ppc.sum()
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
-
-if run == '-':
-    # Work out how many runs exist, then add to it. Save a bit of work numerically increasing.
-    if os.path.exists(drive + save_path) == False:
-        run = 0
-    else:
-        run = len(os.listdir(drive + save_path))
-    print('Run number AUTOSET to ', run)
-else:
-    run = int(run)
     
 ############################
 ### MAGNETIC FIELD STUFF ###

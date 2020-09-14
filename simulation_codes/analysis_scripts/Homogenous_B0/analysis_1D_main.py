@@ -33,7 +33,7 @@ def plot_tx(component='By', saveas='tx_plot', save=False, tmax=None, yunits='sec
     plt.ioff()    
     
     tx = cf.get_array(component)
-    pdb.set_trace()
+
     fontsize = 18
     font     = 'monospace'
     
@@ -1155,8 +1155,8 @@ def standard_analysis_package():
         
     for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
         plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True)
-        plot_wx(component=comp, saveas=disp_folder + 'wx_plot', save=True, linear_overlay=False,    pcyc_mult=1.1)
-        plot_wk(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=True, pcyc_mult=1.1)
+        plot_wx(component=comp, saveas=disp_folder + 'wx_plot', save=True, linear_overlay=False,    pcyc_mult=1.25)
+        plot_wk(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=True, pcyc_mult=1.25)
         plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
         for zero_cold in [True, False]:
             plot_wk_polished(component=comp, dispersion_overlay=True, save=True,
@@ -1277,13 +1277,13 @@ def plot_wk_polished(component='By', saveas='wk_plot_thesis', dispersion_overlay
 
 #%%
 if __name__ == '__main__':
-    drive       = 'F:'
-    series      = 'compare_all_versions'
+    drive       = 'E:'
+    series      = 'CAM_CL_LT'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     dumb_offset = 0
     
-    for run_num in [2]:
+    for run_num in [1]:
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
 
