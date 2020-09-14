@@ -3783,36 +3783,31 @@ def plot_mag_energy(save=False):
 if __name__ == '__main__':
     drive       = 'F:'
 
-    plot_mag_energy(save=True)
-
-    for series in ['monte_carlo_ABC_freq_test_with_BE_64offset']:
+    #plot_mag_energy(save=True)
+    #multiplot_fluxes(series)
+    
+    for series in ['monte_carlo_test']:
+        series_dir  = '{}/runs//{}//'.format(drive, series)
+        num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+        print('{} runs in series {}'.format(num_runs, series))
         
-        #multiplot_fluxes(series)
+        # Sample colour list just to draw from
+        clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
+                'darkorange', 'peru', 'yellow']
         
-        if False:
-            series_dir  = '{}/runs//{}//'.format(drive, series)
-            num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
-            print('{} runs in series {}'.format(num_runs, series))
+        runs_to_do = range(num_runs)
+        
+        # Extract all summary files and plot field stuff (quick)
+        for run_num in runs_to_do:
+            print('\nRun {}'.format(run_num))
+            #cf.delete_analysis_folders(drive, series, run_num)
+            cf.load_run(drive, series, run_num, extract_arrays=True)
             
-            # Sample colour list just to draw from
-            clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
-                    'darkorange', 'peru', 'yellow']
-            
-            runs_to_do = range(num_runs)
-            
-            # Extract all summary files and plot field stuff (quick)
-            for run_num in runs_to_do:
-                print('\nRun {}'.format(run_num))
-                #cf.delete_analysis_folders(drive, series, run_num)
-                cf.load_run(drive, series, run_num, extract_arrays=True)
-                
-                #plot_abs_with_boundary_parameters(B0_lim=0.5)
-                field_energy_vs_time(save=True)
+            plot_abs_with_boundary_parameters(B0_lim=0.5)
+            field_energy_vs_time(save=True)
 
-# =============================================================================
-#             plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None)
-#             standard_analysis_package(thesis=False, tx_only=True, disp_overlay=True)
-# =============================================================================
+            plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None)
+            standard_analysis_package(thesis=False, tx_only=True, disp_overlay=True)
             
             #get_reflection_coefficient()
             

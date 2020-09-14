@@ -13,7 +13,7 @@ run_description = '''Checking all versions against LT. This is PREDCORR_1D_TSC_T
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs//compare_all_versions'  # Series save dir   : Folder containing all runs of a series
+save_path       = 'runs//compare_all_versions2' # Series save dir   : Folder containing all runs of a series
 run_num         = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles  = 1                             # Save data flag    : For later analysis
 save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run

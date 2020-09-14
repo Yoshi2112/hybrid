@@ -92,11 +92,11 @@ with open(run_input, 'r') as f:
     field_res = float(f.readline().split()[1])         # Data capture resolution in gyroperiod fraction: Field information
 
     ### RUN DESCRIPTION ###
-    run_description = f.readline()         # Commentary to attach to runs, helpful to have a quick description
+    run_description = f.readline()                     # Commentary to attach to runs, helpful to have a quick description
 
 
+# Load run num from file, autoset if necessary
 if run == '-':
-    # Work out how many runs exist, then add to it. Save a bit of work numerically increasing.
     if os.path.exists(drive + save_path) == False:
         run = 0
     else:
@@ -105,11 +105,13 @@ if run == '-':
 else:
     run = int(run)
 
+
 # Set plasma parameter file
 if event_inputs == False:
     plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
 else:
     plasma_input = root_dir +  plasma_list[run]
+
 
 ### PARTICLE/PLASMA PARAMETERS ###
 with open(plasma_input, 'r') as f:
@@ -142,6 +144,8 @@ with open(driver_input, 'r') as f:
     driven_ampl   = float(f.readline().split()[1])     # Driven wave amplitude in A/m (I think?) Standard 50e-7
     pulse_offset  = float(f.readline().split()[1])     # Pulse center time (s)
     pulse_width   = float(f.readline().split()[1])     # Pulse width (proportional to 2*std. 3*width decayed to 0.0123%) 
+
+
 
 #%%### DERIVED SIMULATION PARAMETERS
 ### PHYSICAL CONSTANTS ###

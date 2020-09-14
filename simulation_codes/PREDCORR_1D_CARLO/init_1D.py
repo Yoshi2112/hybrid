@@ -11,7 +11,6 @@ import save_routines as save
 
 import particles_1D as particles
 import fields_1D    as fields
-import sources_1D as sources
 
 from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A,  \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \
@@ -293,9 +292,9 @@ def initialize_tertiary_arrays():
     temp1D        = np.zeros( NC    ,      dtype=nb.float64) 
     old_fields    = np.zeros((NC + 1, 10), dtype=nb.float64)
     
-    v_prime = np.zeros((3, N),      dtype=nb.float64)
-    S       = np.zeros((3, N),      dtype=nb.float64)
-    T       = np.zeros((3, N),      dtype=nb.float64)
+    v_prime       = np.zeros((3, N),      dtype=nb.float64)
+    S             = np.zeros((3, N),      dtype=nb.float64)
+    T             = np.zeros((3, N),      dtype=nb.float64)
         
     old_particles = np.zeros((9, N),      dtype=nb.float64)
     mp_flux       = np.zeros((2, Nj),     dtype=nb.float64)
