@@ -111,7 +111,7 @@ if event_inputs == False:
     plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
 else:
     plasma_input = root_dir +  plasma_list[run]
-
+print('LOADING PLASMA: {}'.format(plasma_input))
 
 ### PARTICLE/PLASMA PARAMETERS ###
 with open(plasma_input, 'r') as f:
