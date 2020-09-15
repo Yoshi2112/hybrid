@@ -4,16 +4,16 @@ Created on Tue Apr 30 11:24:46 2019
 
 @author: Yoshi
 """
-import sys
-data_scripts_dir = 'F://Google Drive//Uni//PhD 2017//Data//Scripts//'
-sys.path.append(data_scripts_dir)
-from analysis_scripts import analytic_signal
+#import sys
+#data_scripts_dir = 'F://Google Drive//Uni//PhD 2017//Data//Scripts//'
+#sys.path.append(data_scripts_dir)
+#from analysis_scripts import analytic_signal
 
 import numpy as np
 import numba as nb
 import os
 import analysis_config as cf
-import pdb
+#import pdb
 '''
 Dump general processing scripts here that don't require global variables: i.e. 
 they are completely self-contained or can be easily imported.
@@ -498,9 +498,11 @@ def get_derivative(arr):
     return deriv
 
 
-def get_envelope(arr):
-    signal_envelope = analytic_signal(arr, dt=cf.dx)
-    return signal_envelope
+# =============================================================================
+# def get_envelope(arr):
+#     signal_envelope = analytic_signal(arr, dt=cf.dx)
+#     return signal_envelope
+# =============================================================================
 
 
 if __name__ == '__main__':

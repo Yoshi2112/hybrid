@@ -3780,7 +3780,7 @@ def plot_mag_energy(save=False):
 #%% MAIN
 if __name__ == '__main__':
     drive       = '/home/c3134027/'
-
+    
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     
