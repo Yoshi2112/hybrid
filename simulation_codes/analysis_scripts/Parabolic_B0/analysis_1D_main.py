@@ -18,7 +18,7 @@ import pdb
 import analysis_backend as bk
 import analysis_config  as cf
 import dispersions      as disp
-import get_growth_rates as ggg
+#import get_growth_rates as ggg
 
 # Ignore common warnings. If shit goes funky, turn them back on by replacing 'ignore' with 'default'
 import warnings
