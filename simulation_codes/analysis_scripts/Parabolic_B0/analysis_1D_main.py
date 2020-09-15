@@ -301,14 +301,16 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
             cyc    = qi * cf.Bc[:, 0] / (2 * np.pi * mp * M[ii])
             ax.plot(cf.B_nodes, cyc, linestyle='--', c=clr[ii], label=lbl[ii])
     
-    if linear_overlay == True:
-        try:
-            freqs, cgr, stop = disp.get_cgr_from_sim()
-            max_idx          = np.where(cgr == cgr.max())
-            max_lin_freq     = freqs[max_idx]
-            plt.axhline(max_lin_freq, c='green', linestyle='--', label='CGR')
-        except:
-            pass
+# =============================================================================
+#     if linear_overlay == True:
+#         try:
+#             freqs, cgr, stop = disp.get_cgr_from_sim()
+#             max_idx          = np.where(cgr == cgr.max())
+#             max_lin_freq     = freqs[max_idx]
+#             plt.axhline(max_lin_freq, c='green', linestyle='--', label='CGR')
+#         except:
+#             pass
+# =============================================================================
 
     ax.set_title('Frequency-Space ($\omega-x$) Plot :: {} component'.format(component.upper()), fontsize=14)
     ax.set_ylabel(r'f (Hz)', rotation=0, labelpad=15)
@@ -3022,11 +3024,13 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
         ax.set_ylim(0, None)
     
     alpha=0.5
-    if dispersion_overlay == True:
-        k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=zero_cold)
-        for ii in range(CPDR_solns.shape[1]):
-            ax.plot(xfac*k_vals, CPDR_solns[:, ii],      c='k', linestyle='--', label='CPDR' if ii == 0 else '', alpha=alpha)
-            ax.plot(xfac*k_vals, warm_solns[:, ii].real, c='k', linestyle='-',  label='WPDR' if ii == 0 else '', alpha=alpha)
+# =============================================================================
+#     if dispersion_overlay == True:
+#         k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=zero_cold)
+#         for ii in range(CPDR_solns.shape[1]):
+#             ax.plot(xfac*k_vals, CPDR_solns[:, ii],      c='k', linestyle='--', label='CPDR' if ii == 0 else '', alpha=alpha)
+#             ax.plot(xfac*k_vals, warm_solns[:, ii].real, c='k', linestyle='-',  label='WPDR' if ii == 0 else '', alpha=alpha)
+# =============================================================================
       
     if plot_alfven == True:
         # Plot Alfven velocity on here just to see
@@ -3808,7 +3812,7 @@ if __name__ == '__main__':
             field_energy_vs_time(save=True)
 
             plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None)
-            standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
+            standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
             
             #get_reflection_coefficient()
             
@@ -3827,7 +3831,7 @@ if __name__ == '__main__':
             summary_plots(save=True, histogram=True)
             for sp in range(2):
                 plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
-            scatterplot_velocities()
+            #scatterplot_velocities()
             
             #plot_phase_space_with_time()
             

@@ -10,8 +10,8 @@ import numpy as np
 import sys
 
 from scipy import signal
-data_scripts_dir = 'C://Users//iarey//Documents//GitHub//hybrid//linear_theory//new_general_DR_solver//'
-sys.path.append(data_scripts_dir)
+#data_scripts_dir = 'C://Users//iarey//Documents//GitHub//hybrid//linear_theory//new_general_DR_solver//'
+#sys.path.append(data_scripts_dir)
 
 
 def get_cgr_from_sim(norm_flag=0):
