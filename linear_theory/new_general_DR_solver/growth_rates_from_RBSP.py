@@ -209,7 +209,10 @@ def plot_growth_rate_with_time(times, k_vals, all_WPDR, save=False, short=False,
         ax1.set_xlim(time_start, time_end)
         figsave_path = save_dir + '_LT_timeseries_CC_{:03}_{:03}_{:03}_{}.png'.format(ccomp[0], ccomp[1], ccomp[2], save_string)
 
-        
+    for ii in range(len(timee)):
+        mark = dayy + timee[ii]
+        ax1.axvline(np.datetime64(mark), color='k', ls=':', alpha=0.4)
+
     if save == True:
         print('Saving {}'.format(figsave_path))
         fig.savefig(figsave_path, bbox_inches='tight')
@@ -235,23 +238,20 @@ def load_and_plot_timeseries(ccomp=[70,20,10]):
     files = [this_file]#os.listdir(save_dir)
     for file in files:
         if file[-4:] == '.npz':
-            try:
-                cstring = file[20:31].split('_')
-                cH      = int(cstring[0])
-                cHe     = int(cstring[1])
-                cO      = int(cstring[2])
-                ccomp   = [cH, cHe, cO]
-                
-                # DRs stored as (Nt, Nk, solns)
-                data_pointer = np.load(save_dir + file)
-                all_WPDR     = data_pointer['all_WPDR']
-                all_k        = data_pointer['all_k']
-                
-                plot_growth_rate_with_time(times, all_k, all_WPDR, save=False,
-                                           short=True, norm_w=True, B0=B0, ccomp=ccomp)
-            except:
-                print('Error with file', file)
-                continue
+            cstring = file[20:31].split('_')
+            cH      = int(cstring[0])
+            cHe     = int(cstring[1])
+            cO      = int(cstring[2])
+            ccomp   = [cH, cHe, cO]
+            
+            # DRs stored as (Nt, Nk, solns)
+            data_pointer = np.load(save_dir + file)
+            all_WPDR     = data_pointer['all_WPDR']
+            all_k        = data_pointer['all_k']
+            
+            plot_growth_rate_with_time(times, all_k, all_WPDR, save=False,
+                                       short=True, norm_w=True, B0=B0, ccomp=ccomp)
+
     return
 
 
@@ -486,6 +486,18 @@ if __name__ == '__main__':
     
     if os.path.exists(save_dir) == False:
         os.makedirs(save_dir)
+    
+    dayy  = '2013-07-25T'
+    timee = ['21:30:04.105',
+            '21:30:50.105',
+            '21:32:21.605',
+            '21:32:48.105',
+            '21:33:07.605',
+            '21:34:06.605',
+            '21:37:03.105',
+            '21:39:07.605',
+            '21:40:26.105',
+            '21:41:05.605']
     
     #get_all_DRs(time_start, time_end, probe, pad, cmp, Nk=_Nk)
     
