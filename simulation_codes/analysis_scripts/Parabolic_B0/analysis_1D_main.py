@@ -1527,13 +1527,11 @@ def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, t
             pass
 
         if tx_only == False:
-# =============================================================================
-#             try:
-#                 plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
-#                 plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , save=True, linear_overlay=False, pcyc_mult=None)
-#             except:
-#                 pass
-# =============================================================================
+            try:
+                plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
+                plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , save=True, linear_overlay=False, pcyc_mult=None)
+            except:
+                pass
     
             #try:
             plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
@@ -1546,7 +1544,7 @@ def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, t
             except:
                 pass
 
-            if False:
+            if True:
                 try:
                     plot_spatial_poynting(save=True, log=True)
                     plot_spatial_poynting_helical(save=True, log=True)
@@ -3781,12 +3779,12 @@ def plot_mag_energy(save=False):
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'F:'
+    drive       = '/home/c3134027/'
 
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     
-    for series in ['monte_carlo_test']:
+    for series in ['july25_minmax_10run_Honly']:
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -3795,7 +3793,10 @@ if __name__ == '__main__':
         clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
                 'darkorange', 'peru', 'yellow']
         
-        runs_to_do = range(num_runs)
+        if True:
+            runs_to_do = range(num_runs)
+        else:
+            runs_to_do = [14, 15]
         
         # Extract all summary files and plot field stuff (quick)
         for run_num in runs_to_do:
@@ -3807,28 +3808,26 @@ if __name__ == '__main__':
             field_energy_vs_time(save=True)
 
             plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None)
-            standard_analysis_package(thesis=False, tx_only=True, disp_overlay=True)
+            standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
             
             #get_reflection_coefficient()
             
-# =============================================================================
-#         # Do particle analyses for each run (slow)
-#         for run_num in runs_to_do:
-#             print('\nRun {}'.format(run_num))
-#             cf.load_run(drive, series, run_num, extract_arrays=True)
-#             
-#             check_fields()
-#             plot_E_components(save=True)
-#             
-#             #plot_spatial_poynting(save=True, log=True)
-#             #plot_spatial_poynting_helical(save=True, log=True)
-#             
-#             #find_the_particles(it_max=None)
-#             summary_plots(save=True, histogram=True)
-#             for sp in range(2):
-#                 plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
-#             scatterplot_velocities()
-# =============================================================================
+        # Do particle analyses for each run (slow)
+        for run_num in runs_to_do:
+            print('\nRun {}'.format(run_num))
+            cf.load_run(drive, series, run_num, extract_arrays=True)
+            
+            #check_fields()
+            #plot_E_components(save=True)
+            
+            #plot_spatial_poynting(save=True, log=True)
+            #plot_spatial_poynting_helical(save=True, log=True)
+            
+            #find_the_particles(it_max=None)
+            summary_plots(save=True, histogram=True)
+            for sp in range(2):
+                plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
+            scatterplot_velocities()
             
             #plot_phase_space_with_time()
             
