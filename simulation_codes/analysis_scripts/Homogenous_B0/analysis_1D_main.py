@@ -1140,7 +1140,7 @@ def summary_plots(save=True):
     return
 
 
-def standard_analysis_package():
+def standard_analysis_package(save=True):
     '''
     Need a high-pass option for the wk? Or will it do all of it?
     It should do all of it (show the Pc4 branch and the Pc1 branch)
@@ -1152,20 +1152,24 @@ def standard_analysis_package():
         
     if os.path.exists(cf.anal_dir + disp_folder) == False:
         os.makedirs(cf.anal_dir + disp_folder)
-        
-    for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
-        plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True)
-        plot_wx(component=comp, saveas=disp_folder + 'wx_plot', save=True, linear_overlay=False,    pcyc_mult=1.25)
-        plot_wk(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=True, pcyc_mult=1.25)
-        plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
-        for zero_cold in [True, False]:
-            plot_wk_polished(component=comp, dispersion_overlay=True, save=True,
-                             pcyc_mult=1.25, zero_cold=zero_cold, xmax=20)
+    
+    plot_wk_polished(component='by', dispersion_overlay=True, save=False,
+                                 pcyc_mult=1.25, zero_cold=True, xmax=None)
+    
+    if False:
+        for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
+            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=save)
+            plot_wx(component=comp, saveas=disp_folder + 'wx_plot', save=save, linear_overlay=False,    pcyc_mult=1.25)
+            plot_wk(component=comp, saveas=disp_folder + 'wk_plot', save=save, dispersion_overlay=True, pcyc_mult=1.25)
+            plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=save)
+            for zero_cold in [True, False]:
+                plot_wk_polished(component=comp, dispersion_overlay=True, save=save,
+                                 pcyc_mult=1.25, zero_cold=zero_cold, xmax=20)
     
     if False:    
         plot_energies(normalize=True, save=True)
         plot_ion_energy_components(save=True, tmax=1./cf.HM_frequency)
-        plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
+        plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=save)
         single_point_helicity_timeseries()
         plot_spatially_averaged_fields()
         single_point_field_timeseries(tmax=1./cf.HM_frequency)
@@ -1196,7 +1200,7 @@ def plot_wk_polished(component='By', saveas='wk_plot_thesis', dispersion_overlay
     mpl.rcParams['ytick.labelsize'] = tick_label_size 
     
     k, f, wk = disp.get_wk(component)
-
+    pdb.set_trace()
     xfac = 1e6
     xlab = '$\mathtt{k (\\times 10^{-6}m^{-1})}$'
     ylab = 'f\n(Hz)'
@@ -1278,16 +1282,16 @@ def plot_wk_polished(component='By', saveas='wk_plot_thesis', dispersion_overlay
 #%%
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'compare_old_new_LTcheck_homogenous'
+    series      = 'long_large_run'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     dumb_offset = 0
     
-    for run_num in [2]:
+    for run_num in [3]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
 
-        #standard_analysis_package()
+        standard_analysis_package()
         
         #single_point_both_fields_AGU()
         

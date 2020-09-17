@@ -1518,51 +1518,54 @@ def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, t
         
     if os.path.exists(cf.anal_dir + disp_folder) == False:
         os.makedirs(cf.anal_dir + disp_folder)
-        
-    for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
-        print('2D summary for {}'.format(comp))
-        
-        try:
-            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
-            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=tmax)
-        except:
-            pass
+    
+    plot_wk_polished(component='by', saveas=disp_folder + 'wk_plot', save=False, dispersion_overlay=True, pcyc_mult=1.25)
 
-        if tx_only == False:
+    if False:    
+        for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
+            print('2D summary for {}'.format(comp))
+            
             try:
-                plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
-                plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , save=True, linear_overlay=False, pcyc_mult=None)
+                plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
+                plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=tmax)
             except:
                 pass
     
-            #try:
-            plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
-            #except:
-            #    print('w/k plot failed, skipping...')
-            #    pass
-            
-            try:
-                plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
-            except:
-                pass
-
-            if True:
+            if tx_only == False:
                 try:
-                    plot_spatial_poynting(save=True, log=True)
-                    plot_spatial_poynting_helical(save=True, log=True)
+                    plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
+                    plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , save=True, linear_overlay=False, pcyc_mult=None)
                 except:
                     pass
+        
+                #try:
+                plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
+                #except:
+                #    print('w/k plot failed, skipping...')
+                #    pass
                 
-                #plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
-                #plot_initial_configurations()
-            
-            if False:
-                check_fields()
-                plot_energies(normalize=True, save=True)
-                plot_ion_energy_components(save=True, tmax=1./cf.HM_frequency)
-                single_point_helicity_timeseries()
-                plot_spatially_averaged_fields()
-                single_point_field_timeseries(tmax=1./cf.HM_frequency)
+                try:
+                    plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
+                except:
+                    pass
+    
+                if False:
+                    try:
+                        plot_spatial_poynting(save=True, log=True)
+                        plot_spatial_poynting_helical(save=True, log=True)
+                    except:
+                        pass
+                    
+                    #plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
+                    #plot_initial_configurations()
+                
+                if False:
+                    check_fields()
+                    plot_energies(normalize=True, save=True)
+                    plot_ion_energy_components(save=True, tmax=1./cf.HM_frequency)
+                    single_point_helicity_timeseries()
+                    plot_spatially_averaged_fields()
+                    single_point_field_timeseries(tmax=1./cf.HM_frequency)
     return
 
 
@@ -2979,7 +2982,7 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
     mpl.rcParams['ytick.labelsize'] = tick_label_size 
     
     k, f, wk = disp.get_wk(component)
-
+    pdb.set_trace()
     xfac = 1e6
     xlab = '$\mathtt{k (\\times 10^{-6}m^{-1})}$'
     ylab = 'f\n(Hz)'
@@ -3024,13 +3027,11 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
         ax.set_ylim(0, None)
     
     alpha=0.5
-# =============================================================================
-#     if dispersion_overlay == True:
-#         k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=zero_cold)
-#         for ii in range(CPDR_solns.shape[1]):
-#             ax.plot(xfac*k_vals, CPDR_solns[:, ii],      c='k', linestyle='--', label='CPDR' if ii == 0 else '', alpha=alpha)
-#             ax.plot(xfac*k_vals, warm_solns[:, ii].real, c='k', linestyle='-',  label='WPDR' if ii == 0 else '', alpha=alpha)
-# =============================================================================
+    if dispersion_overlay == True:
+        k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=zero_cold)
+        for ii in range(CPDR_solns.shape[1]):
+            ax.plot(xfac*k_vals, CPDR_solns[:, ii],      c='k', linestyle='--', label='CPDR' if ii == 0 else '', alpha=alpha)
+            ax.plot(xfac*k_vals, warm_solns[:, ii].real, c='k', linestyle='-',  label='WPDR' if ii == 0 else '', alpha=alpha)
       
     if plot_alfven == True:
         # Plot Alfven velocity on here just to see
@@ -3783,12 +3784,12 @@ def plot_mag_energy(save=False):
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = '/home/c3134027/'
+    drive       = 'F:'
     
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     
-    for series in ['july25_minmax_10run_Honly']:
+    for series in ['multicomponent_LT_verification_test']:
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -3797,10 +3798,10 @@ if __name__ == '__main__':
         clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
                 'darkorange', 'peru', 'yellow']
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [14, 15]
+            runs_to_do = [3]
         
         # Extract all summary files and plot field stuff (quick)
         for run_num in runs_to_do:
@@ -3808,32 +3809,33 @@ if __name__ == '__main__':
             #cf.delete_analysis_folders(drive, series, run_num)
             cf.load_run(drive, series, run_num, extract_arrays=True)
             
-            plot_abs_with_boundary_parameters(B0_lim=0.5)
-            field_energy_vs_time(save=True)
+            #plot_abs_with_boundary_parameters(B0_lim=0.5)
+            #field_energy_vs_time(save=True)
 
-            plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None)
-            standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False)
+            #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None)
+            standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
             
             #get_reflection_coefficient()
+        
+        if False:
+            # Do particle analyses for each run (slow)
+            for run_num in runs_to_do:
+                print('\nRun {}'.format(run_num))
+                cf.load_run(drive, series, run_num, extract_arrays=True)
+                
+                #check_fields()
+                #plot_E_components(save=True)
+                
+                #plot_spatial_poynting(save=True, log=True)
+                #plot_spatial_poynting_helical(save=True, log=True)
+                
+                #find_the_particles(it_max=None)
+                summary_plots(save=True, histogram=True)
+                for sp in range(2):
+                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
+                #scatterplot_velocities()
             
-        # Do particle analyses for each run (slow)
-        for run_num in runs_to_do:
-            print('\nRun {}'.format(run_num))
-            cf.load_run(drive, series, run_num, extract_arrays=True)
-            
-            #check_fields()
-            #plot_E_components(save=True)
-            
-            #plot_spatial_poynting(save=True, log=True)
-            #plot_spatial_poynting_helical(save=True, log=True)
-            
-            #find_the_particles(it_max=None)
-            summary_plots(save=True, histogram=True)
-            for sp in range(2):
-                plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
-            #scatterplot_velocities()
-            
-            #plot_phase_space_with_time()
+        #plot_phase_space_with_time()
             
         #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
             

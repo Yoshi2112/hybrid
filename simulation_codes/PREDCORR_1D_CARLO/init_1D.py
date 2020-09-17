@@ -147,7 +147,7 @@ def uniform_gaussian_distribution_quiet():
             else:
                 vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Set anti-parallel
                 
-            pos[en: en + half_n] = pos[st: en]                # Other half, same position
+            pos[en: en + half_n] = pos[st: en]                      # Other half, same position
             vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
             vel[2, en: en + half_n] = vel[2, st: en] * -1.0
             
@@ -155,6 +155,39 @@ def uniform_gaussian_distribution_quiet():
     return pos, vel, idx
 
 
+@nb.njit()
+def CAM_CL_loading():
+    '''
+    No quiet start, loads just like old CAM_CL code, just for comparison.
+    '''
+    np.random.seed(seed)
+    pos  = np.zeros(N)
+    vel  = np.zeros((3, N))
+    idx  = np.zeros(N, dtype=np.uint8)
+
+     # For each species
+    for jj in range(Nj):                   
+        acc = 0
+        idx[idx_start[jj]: idx_end[jj]] = jj
+        
+        # For each cell
+        for ii in range(NX):                
+            n_particles = nsp_ppc[jj]
+
+            for kk in range(n_particles):   # For each particle in that cell
+                pos[idx_start[0] + acc + kk] = dx*(float(kk) / n_particles + ii)
+            acc += n_particles
+            
+            
+    for jj in range(Nj):
+        acc = 0                  # Species accumulator
+        for ii in range(NX):
+            n_particles = nsp_ppc[jj]
+            vel[0, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tpar[jj]) /  mass[jj]), n_particles) +  drift_v[jj]
+            vel[1, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tper[jj]) /  mass[jj]), n_particles)
+            vel[2, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tper[jj]) /  mass[jj]), n_particles)
+            acc += n_particles
+    return pos, vel, idx
 
 
 @nb.njit()
@@ -173,7 +206,8 @@ def initialize_particles():
         W_mag  -- Initial particle weights on B-grid
         idx    -- Particle type index
     '''
-    pos, vel, idx = uniform_gaussian_distribution_quiet()
+    #pos, vel, idx = uniform_gaussian_distribution_quiet()
+    pos, vel, idx = CAM_CL_loading()
     
     Ie         = np.zeros(N,      dtype=nb.uint16)
     Ib         = np.zeros(N,      dtype=nb.uint16)

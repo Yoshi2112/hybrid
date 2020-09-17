@@ -16,7 +16,7 @@ import sys
 import os
 
 # Offset to move the ABCs inwards (i.e. damping in cells with particles, not just outside)
-ND_offset = 0; event_inputs = True
+ND_offset = 0; event_inputs = False
 
 # Hard-coded some plasma param files. Loads based on position in array and run number if event_inputs True
 # Can update and change these later if desired. Or even use a string format to replace run series (e.g. H_ONLY)
