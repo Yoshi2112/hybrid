@@ -1519,43 +1519,24 @@ def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, t
     if os.path.exists(cf.anal_dir + disp_folder) == False:
         os.makedirs(cf.anal_dir + disp_folder)
     
-    plot_wk_polished(component='by', saveas=disp_folder + 'wk_plot', save=False, dispersion_overlay=True, pcyc_mult=1.25)
+    #plot_wk_polished(component='by', saveas=disp_folder + 'wk_plot', save=False, dispersion_overlay=True, pcyc_mult=1.25)
 
-    if False:    
+    if True:    
         for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
             print('2D summary for {}'.format(comp))
-            
-            try:
-                plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
-                plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=tmax)
-            except:
-                pass
-    
+
+            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
+            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=tmax)
+
             if tx_only == False:
-                try:
-                    plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
-                    plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , save=True, linear_overlay=False, pcyc_mult=None)
-                except:
-                    pass
-        
-                #try:
+                plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
+                plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , save=True, linear_overlay=False, pcyc_mult=None)
                 plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
-                #except:
-                #    print('w/k plot failed, skipping...')
-                #    pass
-                
-                try:
-                    plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
-                except:
-                    pass
+                plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
     
                 if False:
-                    try:
-                        plot_spatial_poynting(save=True, log=True)
-                        plot_spatial_poynting_helical(save=True, log=True)
-                    except:
-                        pass
-                    
+                    plot_spatial_poynting(save=True, log=True)
+                    plot_spatial_poynting_helical(save=True, log=True)
                     #plot_helical_waterfall(title='{}: Run {}'.format(series, run_num), save=True)
                     #plot_initial_configurations()
                 
@@ -2982,7 +2963,7 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
     mpl.rcParams['ytick.labelsize'] = tick_label_size 
     
     k, f, wk = disp.get_wk(component)
-    pdb.set_trace()
+
     xfac = 1e6
     xlab = '$\mathtt{k (\\times 10^{-6}m^{-1})}$'
     ylab = 'f\n(Hz)'
@@ -3789,7 +3770,7 @@ if __name__ == '__main__':
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     
-    for series in ['multicomponent_LT_verification_test']:
+    for series in ['quick_test']:
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -3801,7 +3782,7 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [3]
+            runs_to_do = [2]
         
         # Extract all summary files and plot field stuff (quick)
         for run_num in runs_to_do:

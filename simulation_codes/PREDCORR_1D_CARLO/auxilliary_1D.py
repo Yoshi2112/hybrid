@@ -113,10 +113,10 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
     ion_ts          = orbit_res / gyfreq
     
     if E[:, 0].max() != 0:
-        elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / np.abs(vel).max()).max())               # Electron acceleration "frequency"
-        Eacc_ts         = freq_res / elecfreq                            
+        elecfreq = qm_ratios.max()*(np.abs(E[:, 0] / np.abs(vel).max()).max())               # Electron acceleration "frequency"
+        Eacc_ts  = freq_res / elecfreq                            
     else:
-        Eacc_ts = ion_ts
+        Eacc_ts  = ion_ts
 
     vel_ts          = 0.60 * dx / np.abs(vel[0, :]).max()                        # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
     DT_part         = min(Eacc_ts, vel_ts, ion_ts)                      # Smallest of the allowable timesteps
@@ -171,15 +171,15 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     If no saves, steps_to_go = max_inc
     '''
     # Check timestep
-    if qq%50 == 0:
-        print('Checking timestep')
+    if qq%20 == 0:
+        #print('Checking timestep')
         qq, DT, max_inc, part_save_iter, field_save_iter, damping_array \
         = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, Ep, Bp, v_prime, S, T,temp_N,\
                          qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array)
     
     # Check number of spare particles every 25 steps
-    if qq%25 == 0 and particle_open == 1:
-        print('Checking number of spare particles')
+    if qq%50 == 0 and particle_open == 1:
+        #print('Checking number of spare particles')
         num_spare = (idx < 0).sum()
         if num_spare < nsp_ppc.sum():
             print('WARNING :: Less than one cell of spare particles remaining.')
@@ -200,7 +200,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     # Compute fields at N + 1/2
     fields.push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
     fields.calculate_E(B, Ji, q_dens, E_half, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array, qq, DT, 0)
-
+    
     ###################################
     ### PREDICTOR CORRECTOR SECTION ###
     ###################################
@@ -218,7 +218,6 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     old_fields[:NC, 6:9]  = Ve
     old_fields[:NC,   9]  = Te
     
-    print('Predicting fields at N + 1')
     # Predict fields
     E_int *= -1.0
     E_int +=  2.0 * E_half

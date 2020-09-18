@@ -156,6 +156,70 @@ def uniform_gaussian_distribution_quiet():
 
 
 @nb.njit()
+def uniform_gaussian_distribution():
+    '''Creates an N-sampled normal distribution across all particle species within each simulation cell
+
+    OUTPUT:
+        pos -- 1xN array of particle positions. Pos[0] is uniformly distributed with boundaries depending on its temperature type
+        vel -- 3xN array of particle velocities. Each component initialized as a Gaussian with a scale factor determined by the species perp/para temperature
+        idx -- N   array of particle indexes, indicating which species it belongs to. Coded as an 8-bit signed integer, allowing values between +/-128
+    
+    New code: Removed all 3D position things because we won't need it for long. Check this later, since its easy to change
+            Also removed all references to dist_type since initializing particles in the middle is stupid.
+    '''
+    pos = np.zeros(N, dtype=np.float64)
+    vel = np.zeros((3, N), dtype=np.float64)
+    idx = np.ones(N,       dtype=np.int8) * -1
+    np.random.seed(seed)
+
+    for jj in range(Nj):
+        sf_par = np.sqrt(kB *  Tpar[jj] /  mass[jj])  # Scale factors for velocity initialization
+        sf_per = np.sqrt(kB *  Tper[jj] /  mass[jj])
+        
+        n_particles = nsp_ppc[jj]                     # Half particles per cell - doubled later
+        if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
+            NC_load = NX
+        else:
+            if rc_hwidth == 0 or rc_hwidth > NX//2:   # Need to change this to be something like the FWHM or something
+                NC_load = NX
+            else:
+                NC_load = 2*rc_hwidth
+        
+        # Load particles in each applicable cell
+        acc = 0; offset  = 0
+        for ii in range(NC_load):
+            
+            # Add particle if last cell (for symmetry)
+            if ii == NC_load - 1:
+                n_particles += 1
+                offset       = 1
+                
+            # Particle index ranges
+            st = idx_start[jj] + acc
+            en = idx_start[jj] + acc + n_particles
+            
+            # Set position for half: Analytically uniform
+            for kk in range(n_particles):
+                pos[st + kk] = dx*(float(kk) / (n_particles - offset) + ii)
+                idx[st + kk] = jj
+            
+            # Turn [0, NC] distro into +/- NC/2 distro
+            pos[st: en]-= NC_load*dx/2              
+            
+            # Set velocity for half: Randomly Maxwellian
+            vel[0, st: en] = np.random.normal(0, sf_par, n_particles) +  drift_v[jj]
+            vel[1, st: en] = np.random.normal(0, sf_per, n_particles)
+            vel[2, st: en] = np.random.normal(0, sf_per, n_particles)
+
+            # Set Loss Cone Distribution: Reinitialize particles in loss cone (move to a function)
+            if const.homogenous == 0 and temp_type[jj] == 1:
+                LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj)
+
+            acc += n_particles
+    return pos, vel, idx
+
+
+@nb.njit()
 def CAM_CL_loading():
     '''
     No quiet start, loads just like old CAM_CL code, just for comparison.
@@ -163,26 +227,33 @@ def CAM_CL_loading():
     np.random.seed(seed)
     pos  = np.zeros(N)
     vel  = np.zeros((3, N))
-    idx  = np.zeros(N, dtype=np.uint8)
+    idx  = np.ones(N, dtype=np.uint8) *-1
 
-     # For each species
+    # For each species
     for jj in range(Nj):                   
         acc = 0
         idx[idx_start[jj]: idx_end[jj]] = jj
         
         # For each cell
-        for ii in range(NX):                
+        for ii in range(NX):  
             n_particles = nsp_ppc[jj]
-
+            if ii == NX - 1:
+                n_particles += 1
+                offset       = 1              
+            
             for kk in range(n_particles):   # For each particle in that cell
-                pos[idx_start[0] + acc + kk] = dx*(float(kk) / n_particles + ii)
+                pos[idx_start[0] + acc + kk] = dx*(float(kk) / (n_particles - offset) + ii)
             acc += n_particles
             
+    # Turn (0, xmax) distro into (+/- xmax/2) distro
+    pos -= NX*dx/2  
             
     for jj in range(Nj):
         acc = 0                  # Species accumulator
         for ii in range(NX):
             n_particles = nsp_ppc[jj]
+            if ii == NX - 1:
+                n_particles += 1
             vel[0, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tpar[jj]) /  mass[jj]), n_particles) +  drift_v[jj]
             vel[1, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tper[jj]) /  mass[jj]), n_particles)
             vel[2, (idx_start[jj] + acc): (idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tper[jj]) /  mass[jj]), n_particles)
@@ -206,8 +277,12 @@ def initialize_particles():
         W_mag  -- Initial particle weights on B-grid
         idx    -- Particle type index
     '''
-    #pos, vel, idx = uniform_gaussian_distribution_quiet()
-    pos, vel, idx = CAM_CL_loading()
+    if quiet_start == 1:
+        print('Initializing quiet distribution')
+        pos, vel, idx = uniform_gaussian_distribution_quiet()
+    else:
+        pos, vel, idx = uniform_gaussian_distribution()
+    #pos, vel, idx = CAM_CL_loading()
     
     Ie         = np.zeros(N,      dtype=nb.uint16)
     Ib         = np.zeros(N,      dtype=nb.uint16)
@@ -461,11 +536,17 @@ def set_timestep(vel, Te0):
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
    
-    POS, VEL, IDX = uniform_gaussian_distribution_quiet()
+    POS, VEL, IE, WE, IB, WM, IDX, EP, BP, TEMP = initialize_particles()
+   
     
-    V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
-    V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
-    V_PARA = VEL[0] / va
+    
+# =============================================================================
+#     POS, VEL, IDX = uniform_gaussian_distribution_quiet()
+#     
+#     V_MAG  = np.sqrt(VEL[0] ** 2 + VEL[1] ** 2 + VEL[2] ** 2) / va 
+#     V_PERP = np.sign(VEL[2]) * np.sqrt(VEL[1] ** 2 + VEL[2] ** 2) / va
+#     V_PARA = VEL[0] / va
+# =============================================================================
     
     #diag.check_velocity_components_vs_space(POS, VEL, jj=1)
     #diag.plot_temperature_extremes()

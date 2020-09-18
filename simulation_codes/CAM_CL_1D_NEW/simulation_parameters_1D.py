@@ -9,19 +9,19 @@ import sys
 import platform
 
 ### RUN DESCRIPTION ###
-run_description = '''Testing against linear theory and PREDCORR :: TSC version'''
+run_description = '''Linear Theory test, Long-Large Run parameters (again). Running unoptimized just to see.'''
 
 
 ### RUN PARAMETERS ###
 #drive           = 'G://MODEL_RUNS//Josh_Runs//' # Drive letter or path for portable HDD e.g. 'E:/'
 #drive           = '/media/yoshi/UNI_HD/'
 drive           = 'F:/'
-save_path       = 'runs/CAM_CL_LT/'           # Series save dir   : Folder containing all runs of a series 
+save_path       = 'runs/CAM_CL_LLR2/'         # Series save dir   : Folder containing all runs of a series 
 run_num         = 1                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles  = 1                           # Save data flag    : For later analysis
+save_particles  = 0                           # Save data flag    : For later analysis
 save_fields     = 1                           # Save plot flag    : To ensure hybrid is solving correctly during run
-seed            = 15401                       # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [2, 3]                      # Set CPU affinity for run. Must be list. Auto-assign: None.
+seed            = 101                         # RNG Seed          : Set to enable consistent results for parameter studies
+cpu_affin       = [6, 7]                      # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 
@@ -37,12 +37,12 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 512                              # Number of cells - doesn't include ghost cells
-max_rev  = 200                              # Simulation runtime, in multiples of the gyroperiod
+NX       = 1024                             # Number of cells - doesn't include ghost cells
+max_rev  = 150                              # Simulation runtime, in multiples of the gyroperiod
 
 dxm         = 1.0                           # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
 subcycles   = 8                             # Number of field subcycling steps for Cyclic Leapfrog
-cellpart    = 400                           # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart    = 8000                          # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
@@ -56,21 +56,21 @@ field_res = 0.10                            # Data capture resolution in gyroper
 
 
 ### PARTICLE PARAMETERS ###
-species_lbl= [r'$H^+$ hot', r'$H^+$ cold']                  # Species name/labels        : Used for plotting
-temp_color = ['r', 'b']
-temp_type  = np.asarray([1, 0])                      	    # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-dist_type  = np.asarray([0, 0])                             # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+species_lbl= [r'$H^+$ hot', r'$H^+$ cold', '$He^+$ cold', '$O^+$ cold']   # Species name/labels        : Used for plotting
+temp_color = ['r', 'b', 'purple', 'k']
+temp_type  = np.asarray([1, 0, 0, 0])                          # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.asarray([0, 0, 0, 0])                          # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
 
-mass       = np.asarray([1.000, 1.000])    				    # Species ion mass (proton mass units)
-charge     = np.asarray([1.000, 1.000])    				    # Species ion charge (elementary charge units)
-density    = np.asarray([0.100, 0.900])          			# Species charge density as normalized fraction (add to 1.0)
-drift_v    = np.asarray([0.000, 0.000])          			# Species parallel bulk velocity (alfven velocity units)
-sim_repr   = np.asarray([0.5  , 0.5  ])          		    # Macroparticle weighting: Percentage of macroparticles assigned to each species
+mass       = np.asarray([1.000, 1.000, 4.000, 16.0])    	        # Species ion mass (proton mass units)
+charge     = np.asarray([1.000, 1.000, 1.000, 1.00])       	    # Species ion charge (elementary charge units)
+density    = np.asarray([0.100, 0.600, 0.200, 0.10])     			# Species charge density as normalized fraction (add to 1.0)
+drift_v    = np.asarray([0.000, 0.000, 0.000, 0.00])     			# Species parallel bulk velocity (alfven velocity units)
+sim_repr   = np.asarray([1/4  , 1/4, 1/4, 1/4  ])      		    # Macroparticle weighting: Percentage of macroparticles assigned to each species
 
 beta       = True                                           # Flag: Specify temperatures by beta (True) or energy in eV (False)
 E_e        = 0.1                                            # Electron beta
-E_par      = np.array([10.0, 0.1])                 			# Ion species parallel beta
-E_per      = np.array([50.0, 0.1])                 			# Ion species perpendicular beta
+E_par      = np.array([10.0, 0.1, 0.1, 0.1])            			# Ion species parallel beta
+E_per      = np.array([25.0, 0.1, 0.1, 0.1])            			# Ion species perpendicular beta
 
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
@@ -156,7 +156,7 @@ LH_res_is  = 1. / (gyfreq * e_gyfreq) + 1. / wpi ** 2    # Lower Hybrid Resonanc
 LH_res     = 1. / np.sqrt(LH_res_is)                     # Lower Hybrid Resonance frequency: DID I CHECK THIS???
 
 e_resis    = (LH_frac * LH_res)  / (e0 * wpe ** 2)       # Electron resistivity (using intial conditions for wpi/wpe)
-qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
+
 
 
 

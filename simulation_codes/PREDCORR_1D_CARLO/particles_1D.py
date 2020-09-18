@@ -111,10 +111,11 @@ def eval_B0_particle_1D(pos, vel, idx, Bp):
     Bp[0]    =   eval_B0x(pos)  
     constant = a * B_eq 
     for ii in range(idx.shape[0]):
-        l_cyc      = qm_ratios[idx[ii]] * Bp[0, ii]
-        
-        Bp[1, ii] += constant * pos[ii] * vel[2, ii] / l_cyc
-        Bp[2, ii] -= constant * pos[ii] * vel[1, ii] / l_cyc
+        if idx[ii] >= 0:
+            l_cyc      = qm_ratios[idx[ii]] * Bp[0, ii]
+            
+            Bp[1, ii] += constant * pos[ii] * vel[2, ii] / l_cyc
+            Bp[2, ii] -= constant * pos[ii] * vel[1, ii] / l_cyc
     return
 
 
@@ -143,7 +144,7 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime,
     Ep *= 0
     
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)                       # Calculate magnetic node weights
-    eval_B0_particle_1D(pos, Bp, idx, Bp)  
+    eval_B0_particle_1D(pos, vel, idx, Bp)  
     
     for ii in range(vel.shape[1]):
         if idx[ii] >= 0:

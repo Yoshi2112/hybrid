@@ -8,7 +8,7 @@ import particles_1D  as particles
 import fields_1D     as fields
 import sources_1D    as sources
 import save_routines as save
-
+import pdb
 from simulation_parameters_1D import save_particles, save_fields, te0_equil
 
 

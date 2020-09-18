@@ -7,20 +7,12 @@ Created on Fri Sep 22 17:23:44 2017
 import numba as nb
 import numpy as np
 
-from simulation_parameters_1D  import N, dx, xmax, xmin, charge, mass, e_resis, q, qm_ratios
+from simulation_parameters_1D  import N, dx, xmax, xmin, charge, mass, e_resis, q
 import auxilliary_1D as aux
 
 
 @nb.njit()
-def two_step_algorithm(v0, Bp, Ep, dt, idx):
-    fac        = 0.5*dt*charge[idx]/mass[idx]
-    v_half     = v0 + fac*(Ep + aux.cross_product_single(v0, Bp))
-    v0        += 2*fac*(Ep + aux.cross_product_single(v_half, Bp))
-    return v0
-
-
-@nb.njit()
-def assign_weighting_TSC(pos, I, W, E_nodes=True):
+def assign_weighting_TSC(pos, E_nodes=True):
     '''Triangular-Shaped Cloud (TSC) weighting scheme used to distribute particle densities to
     nodes and interpolate field values to particle positions.
 
@@ -35,6 +27,8 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
     '''
     Np         = pos.shape[0]
     epsilon    = 1e-15
+    left_node  = np.zeros(Np,      dtype=np.uint16)
+    weights    = np.zeros((3, Np), dtype=np.float64)
     
     if E_nodes == True:
         grid_offset   = 0.5
@@ -42,13 +36,13 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
         grid_offset   = 1.0
     
     for ii in np.arange(Np):
-        I[ii]       = int(round(pos[ii] / dx + grid_offset + epsilon) - 1.0)
-        delta_left  = I[ii] - (pos[ii] + epsilon) / dx - grid_offset
+        left_node[ii]  = int(round(pos[ii] / dx + grid_offset + epsilon) - 1.0)
+        delta_left     = left_node[ii] - (pos[ii] + epsilon) / dx - grid_offset
     
-        W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))
-        W[1, ii] = 0.75 - np.square(delta_left + 1.)
-        W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
-    return
+        weights[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))
+        weights[1, ii] = 0.75 - np.square(delta_left + 1.)
+        weights[2, ii] = 1.0  - weights[0, ii] - weights[1, ii]
+    return left_node, weights
 
 
 @nb.njit()
@@ -102,7 +96,7 @@ def interpolate_forces_to_particle(E, B, J, Ie, W_elec, Ib, W_mag, idx):
 
 
 @nb.njit()
-def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, J, dt):
+def velocity_update(pos, vel, Ie, W_elec, idx, B, E, J, dt):
     '''
     Interpolates the fields to the particle positions using TSC weighting, then
     updates velocities using a Boris particle pusher.
@@ -118,63 +112,13 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, J, dt):
     OUTPUT:
         vel  -- Returns particle array with updated velocities
     '''
-    assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)     # Magnetic field weighting
+    Ib, W_mag = assign_weighting_TSC(pos, E_nodes=False)     # Magnetic field weighting
     
     for ii in np.arange(N):
         Ep, Bp     = interpolate_forces_to_particle(E, B, J, Ie[ii], W_elec[:, ii], Ib[ii], W_mag[:, ii], idx[ii])
         vel[:, ii] = boris_algorithm(   vel[:, ii], Bp, Ep, dt, idx[ii])
-    return
-
-
-@nb.njit()
-def velocity_update_vectorised(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, qmi, DT):
-    '''
-    updates velocities using a Boris particle pusher.
-    Based on Birdsall & Langdon (1985), pp. 59-63.
-
-    INPUT:
-        part -- Particle array containing velocities to be updated
-        B    -- Magnetic field on simulation grid
-        E    -- Electric field on simulation grid
-        dt   -- Simulation time cadence
-        W    -- Weighting factor of particles to rightmost node
-
-    OUTPUT:
-        None -- vel array is mutable (I/O array)
-        
-    Notes: Still not sure how to parallelise this: There are a lot of array operations
-    Probably need to do it more algebraically? Find some way to not create those temp arrays.
-    Removed the "cross product" and "field interpolation" functions because I'm
-    not convinced they helped.
-    '''
-    # Add B0 to these arrays, except that B0 doesn't do anything except in the JxB sense.
-    Bp *= 0
-    Ep *= 0
-    
-    assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)                       # Calculate magnetic node weights
-    
-    for ii in range(vel.shape[1]):
-        qmi[ii] = 0.5 * DT * qm_ratios[idx[ii]]                               # q/m for ion of species idx[ii]
-        for jj in range(3):                                                   # Nodes
-            for kk in range(3):                                               # Components
-                Ep[kk, ii] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]             # Vector E-field  at particle location
-                Bp[kk, ii] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]             # Vector b1-field at particle location
-
-    vel[:, :] += qmi[:] * Ep[:, :]                                            # First E-field half-push IS NOW V_MINUS
-
-    T[:, :] = qmi[:] * Bp[:, :]                                               # Vector Boris variable
-    S[:, :] = 2.*T[:, :] / (1. + T[0, :] ** 2 + T[1, :] ** 2 + T[2, :] ** 2)  # Vector Boris variable
-    
-    v_prime[0, :] = vel[0, :] + vel[1, :] * T[2, :] - vel[2, :] * T[1, :]     # Magnetic field rotation
-    v_prime[1, :] = vel[1, :] + vel[2, :] * T[0, :] - vel[0, :] * T[2, :]
-    v_prime[2, :] = vel[2, :] + vel[0, :] * T[1, :] - vel[1, :] * T[0, :]
-            
-    vel[0, :] += v_prime[1, :] * S[2, :] - v_prime[2, :] * S[1, :]
-    vel[1, :] += v_prime[2, :] * S[0, :] - v_prime[0, :] * S[2, :]
-    vel[2, :] += v_prime[0, :] * S[1, :] - v_prime[1, :] * S[0, :]
-    
-    vel[:, :] += qmi[:] * Ep[:, :]                                           # Second E-field half-push
-    return
+        #vel[:, ii] = two_step_algorithm(vel[:, ii], Bp, Ep, dt, idx[ii])
+    return vel
 
 
 @nb.njit()
@@ -190,13 +134,12 @@ def position_update(pos, vel, dt):
         pos    -- Particle updated positions
         W_elec -- (0) Updated nearest E-field node value and (1-2) left/centre weights
     '''
-    pos += vel[0, :] * dt
-    
-    for ii in nb.prange(pos.shape[0]):        
+    pos += vel[0] * dt
+    for ii in np.arange(pos.shape[0]):
         if pos[ii] < xmin:
             pos[ii] += xmax
         elif pos[ii] > xmax:
             pos[ii] -= xmax
             
     Ie, W_elec = assign_weighting_TSC(pos)
-    return pos, Ie, W_elec
+    return Ie, W_elec
