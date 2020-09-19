@@ -37,7 +37,7 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 256                              # Number of cells - doesn't include ghost cells
+NX       = 128                              # Number of cells - doesn't include ghost cells
 max_rev  = 150                              # Simulation runtime, in multiples of the gyroperiod
 
 dxm         = 1.0                           # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
@@ -63,7 +63,7 @@ dist_type  = np.asarray([0, 0])                          # Particle distribution
 
 mass       = np.asarray([1.000, 1.000])    	        # Species ion mass (proton mass units)
 charge     = np.asarray([1.000, 1.000])       	    # Species ion charge (elementary charge units)
-density    = np.asarray([0.100, 0.900])     			# Species charge density as normalized fraction (add to 1.0)
+density    = np.asarray([0.100, 0.600])     			# Species charge density as normalized fraction (add to 1.0)
 drift_v    = np.asarray([0.000, 0.000])     			# Species parallel bulk velocity (alfven velocity units)
 sim_repr   = np.asarray([0.5  , 0.5])      		    # Macroparticle weighting: Percentage of macroparticles assigned to each species
 

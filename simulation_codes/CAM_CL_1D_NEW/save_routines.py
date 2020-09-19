@@ -11,17 +11,16 @@ import os
 import sys
 from shutil import rmtree
 import simulation_parameters_1D as const
-from   simulation_parameters_1D import drive, save_path, NX, ne, density, save_particles, save_fields
-from   simulation_parameters_1D import idx_bounds, Nj, species_lbl, temp_type, dist_type, mass, charge, drift_v, sim_repr, Tpar, Tper, temp_color
+
 
 def manage_directories():
     print('Checking directories...')
-    if (save_particles == 1 or save_fields == 1) == True:
-        if os.path.exists('%s/%s' % (drive, save_path)) == False:
-            os.makedirs('%s/%s' % (drive, save_path))                        # Create master test series directory
+    if (const.save_particles == 1 or const.save_fields == 1) == True:
+        if os.path.exists('%s/%s' % (const.drive, const.save_path)) == False:
+            os.makedirs('%s/%s' % (const.drive, const.save_path))                        # Create master test series directory
             print('Master directory created')
 
-        path = ('%s/%s/run_%d' % (drive, save_path, const.run_num))          
+        path = ('%s/%s/run_%d' % (const.drive, const.save_path, const.run_num))          
 
         if os.path.exists(path) == False:
             os.makedirs(path)
@@ -40,7 +39,7 @@ def manage_directories():
 
 
 def store_run_parameters(dt, part_save_iter, field_save_iter):
-    d_path = '%s/%s/run_%d/data/' % (drive, save_path, const.run_num)     # Set main dir for data
+    d_path = '%s/%s/run_%d/data/' % (const.drive, const.save_path, const.run_num)     # Set main dir for data
     f_path = d_path + '/fields/'
     p_path = d_path + '/particles/'
     manage_directories()
@@ -51,15 +50,14 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
 
     # Save simulation parameters to file
     params = dict([('seed', const.seed),
-                   ('Nj', Nj),
+                   ('Nj', const.Nj),
                    ('dt', dt),
-                   ('NX', NX),
+                   ('NX', const.NX),
                    ('dxm', const.dxm),
                    ('dx', const.dx),
-                   ('cellpart', const.cellpart),
                    ('subcycles', const.subcycles),
                    ('B0', const.B0),
-                   ('ne', ne),
+                   ('ne', const.ne),
                    ('Te0', const.Te0),
                    ('ie', const.ie),
                    ('theta', const.theta),
@@ -70,7 +68,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                    ('orbit_res', const.orbit_res),
                    ('freq_res', const.freq_res),
                    ('run_desc', const.run_description),
-                   ('method_type', 'CAM_CL'),
+                   ('method_type', 'CAM_CL_NEW'),
                    ('particle_shape', 'TSC')
                    ])
 
@@ -82,36 +80,40 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
     
     # Save particle parameters to file
     p_file = os.path.join(d_path, 'particle_parameters')
-    np.savez(p_file, idx_bounds  = idx_bounds,
-                     species_lbl = species_lbl,
-                     temp_color  = temp_color,
-                     temp_type   = temp_type,
-                     dist_type   = dist_type,
-                     mass        = mass,
-                     charge      = charge,
-                     drift_v     = drift_v,
-                     density     = density,
-                     sim_repr    = sim_repr,
-                     Tpar        = Tpar,
-                     Tper        = Tper)
+    np.savez(p_file, idx_start   = const.idx_start,
+                     idx_end     = const.idx_end,
+                     species_lbl = const.species_lbl,
+                     temp_color  = const.temp_color,
+                     temp_type   = const.temp_type,
+                     dist_type   = const.dist_type,
+                     mass        = const.mass,
+                     charge      = const.charge,
+                     drift_v     = const.drift_v,
+                     nsp_ppc     = const.nsp_ppc,
+                     N_species   = const.N_species,
+                     density     = const.density,
+                     Tpar        = const.Tpar,
+                     Tper        = const.Tper,
+                     Bc          = const.Bc)
     
     print('Particle parameters saved')
     return
 
 
 def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns):
-    d_path = '%s/%s/run_%d/data/fields/' % (drive, save_path, const.run_num)
+    NX = const.NX
+    d_path = '%s/%s/run_%d/data/fields/' % (const.drive, const.save_path, const.run_num)
     r      = qq / field_save_iter
 
     d_fullpath = d_path + 'data%05d' % r
     
     np.savez(d_fullpath, E = E[1:NX+1, 0:3], B = B[1:NX+2, 0:3], J = Ji[1:NX+1],
-                         dns = dns[1:NX+1], Ve = Ve[1:NX+1], Te = Te[1:NX+1])   # Data file for each iteration
+                         dns = dns[1:NX+1], Ve = Ve[1:NX+1], Te = Te[1:NX+1])
     
     
 def save_particle_data(dt, part_save_iter, qq, pos, vel):
-    d_path = '%s/%s/run_%d/data/particles/' % (drive, save_path, const.run_num)
-    r      = qq / part_save_iter                                          # Capture number
+    d_path = '%s/%s/run_%d/data/particles/' % (const.drive, const.save_path, const.run_num)
+    r      = qq / part_save_iter
 
     d_filename = 'data%05d' % r
     d_fullpath = os.path.join(d_path, d_filename)

@@ -7,14 +7,14 @@ Created on Fri Sep 22 11:00:58 2017
 import numpy as np
 
 ### RUN DESCRIPTION ###
-run_description = '''Testing optimized CAM_CL version - this is the NEW code'''
+run_description = '''Testing optimized CAM_CL version'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:/'
 save_path       = 'runs/CAM_CL_NEW_test/'     # Series save dir   : Folder containing all runs of a series 
 run_num         = 0                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles  = 1                           # Save data flag    : For later analysis
-save_fields     = 1                           # Save plot flag    : To ensure hybrid is solving correctly during run
+save_particles  = 0                           # Save data flag    : For later analysis
+save_fields     = 0                           # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                         # RNG Seed          : Set to enable consistent results for parameter studies
 cpu_affin       = [0, 1]                      # Set CPU affinity for run. Must be list. Auto-assign: None.
 
@@ -31,7 +31,7 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX        = 256                             # Number of cells - doesn't include ghost cells
+NX        = 128                             # Number of cells - doesn't include ghost cells
 max_rev   = 150                             # Simulation runtime, in multiples of the gyroperiod
 
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
@@ -48,16 +48,16 @@ field_res = 0.10                            # Data capture resolution in gyroper
 
 
 ### PARTICLE PARAMETERS ###
-species_lbl= [r'$H^+$ hot', r'$H^+$ cold']   # Species name/labels        : Used for plotting
-temp_color = ['r', 'b']
-temp_type  = np.array([1, 0])                         # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-dist_type  = np.array([0, 0])                         # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+species_lbl= [r'$H^+$ hot', r'$H^+$ cold', '$He^+$ cold', '$O^+$ cold']   # Species name/labels        : Used for plotting
+temp_color = ['r', 'b', 'purple', 'k']
+temp_type  = np.array([1, 0, 0, 0])                         # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.array([0, 0, 0, 0])                         # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
 
-mass       = np.array([1.000, 1.000])    	    # Species ion mass (proton mass units)
-charge     = np.array([1.000, 1.000])       	# Species ion charge (elementary charge units)
-density    = np.array([0.100, 0.900])     	    # Species charge density as normalized fraction (add to 1.0)
-drift_v    = np.array([0.000, 0.000])     	    # Species parallel bulk velocity (alfven velocity units)
-nsp_ppc    = np.array([256 , 256])
+mass       = np.array([1.000, 1.000, 4.000, 16.0])    	    # Species ion mass (proton mass units)
+charge     = np.array([1.000, 1.000, 1.000, 1.00])       	# Species ion charge (elementary charge units)
+density    = np.array([0.100, 0.600, 0.200, 0.10])     	    # Species charge density as normalized fraction (add to 1.0)
+drift_v    = np.array([0.000, 0.000, 0.000, 0.00])     	    # Species parallel bulk velocity (alfven velocity units)
+nsp_ppc    = np.array([256 , 256  , 256  , 256 ])
 
 beta       = 1                                              # Flag: Specify temperatures by beta (True) or energy in eV (False)
 E_e        = 0.1                                            # Electron beta
@@ -157,7 +157,7 @@ print('Maximum simulation time: {}s ({} gyroperiods)'.format(round(max_rev * 2. 
 print('\n{} particles per cell, {} cells'.format(cellpart, NX))
 print('{} particles total\n'.format(N))
 
-if cpu_affin is not None:
+if None not in cpu_affin:
     import psutil
     run_proc = psutil.Process()
     run_proc.cpu_affinity(cpu_affin)

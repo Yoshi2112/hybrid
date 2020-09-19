@@ -203,6 +203,43 @@ def check_timestep(qq, DT, pos, vel, B, E, dns, max_inc, part_save_iter, field_s
     return pos, qq, DT, max_inc, part_save_iter, field_save_iter, change_flag, subcycles
 
 
+def dump_to_file(pos, vel, E, Ve, Te, B, J, J_minus, J_plus, rho_int, rho_half, qq, suff='', print_particles=False):
+    import os, sys
+    np.set_printoptions(threshold=sys.maxsize)
+    
+    dirpath = const.drive + const.save_path + '/run_{}/ts_{:05}/'.format(const.run_num, qq, suff) 
+    if os.path.exists(dirpath) == False:
+        os.makedirs(dirpath)
+    
+    print('Dumping arrays to file')
+    if print_particles == True:
+        with open(dirpath + 'pos{}.txt'.format(suff), 'w') as f:
+            print(pos, file=f)
+        with open(dirpath + 'vel{}.txt'.format(suff), 'w') as f:
+            print(vel, file=f)
+    with open(dirpath + 'E{}.txt'.format(suff), 'w') as f:
+        print(E, file=f)
+    with open(dirpath + 'Ve{}.txt'.format(suff), 'w') as f:
+        print(Ve, file=f)
+    with open(dirpath + 'Te{}.txt'.format(suff), 'w') as f:
+        print(Te, file=f)
+    with open(dirpath + 'B{}.txt'.format(suff), 'w') as f:
+        print(B, file=f)
+    with open(dirpath + 'J{}.txt'.format(suff), 'w') as f:
+        print(J, file=f)
+    with open(dirpath + 'J_minus{}.txt'.format(suff), 'w') as f:
+        print(J_minus, file=f)
+    with open(dirpath + 'J_plus{}.txt'.format(suff), 'w') as f:
+        print(J_plus, file=f)
+    with open(dirpath + 'rho_int{}.txt'.format(suff), 'w') as f:
+        print(rho_int, file=f)
+    with open(dirpath + 'rho_half{}.txt'.format(suff), 'w') as f:
+        print(rho_half, file=f)
+    np.set_printoptions(threshold=1000)
+    return
+
+
+
 
 #%%
 #%% DEPRECATED OR UNTESTED FUNCTIONS

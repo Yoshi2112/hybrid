@@ -12,7 +12,7 @@ from simulation_parameters_1D import NX, dx, Te0, ne, q, mu0, kB, ie, e_resis
 
 
 @nb.njit()
-def get_curl_B(field, DX=dx):
+def get_curl_B(field):
     ''' Returns a vector quantity for the curl of a field valid at the positions 
     between its gridpoints (i.e. curl(B) -> E-grid, etc.)
     
@@ -38,11 +38,12 @@ def get_curl_B(field, DX=dx):
     curl[field.shape[0] - 1] = curl[2]
     curl[field.shape[0] - 2] = curl[1]
     curl[0] = curl[field.shape[0] - 3]
-    return curl / DX
+    curl   /= dx
+    return curl
 
 
 @nb.njit()
-def get_curl_E(field, DX=dx):
+def get_curl_E(field, curl):
     ''' Returns a vector quantity for the curl of a field valid at the positions 
     between its gridpoints (i.e. curl(E) -> B-grid, etc.)
     
@@ -57,15 +58,15 @@ def get_curl_E(field, DX=dx):
     NOTE: This function will only work with this specific 1D hybrid code due to both 
           E and B fields having the same number of nodes (due to TSC weighting) and
          the lack of derivatives in y, z
-    '''
-    curl = np.zeros(field.shape)
-    
+    '''   
+    curl *= 0.
     for ii in np.arange(1, field.shape[0]):
         curl[ii, 1] = - (field[ii, 2] - field[ii - 1, 2])
         curl[ii, 2] =    field[ii, 1] - field[ii - 1, 1]
 
-    curl = set_periodic_boundaries(curl)
-    return curl / DX
+    set_periodic_boundaries(curl)
+    curl /= dx
+    return
 
 
 @nb.njit()
@@ -83,7 +84,7 @@ def get_electron_temp(qn):
 
 
 @nb.njit()
-def get_grad_P(qn, te, DX=dx, inter_type=1):
+def get_grad_P(qn, te, inter_type=1):
     '''
     Returns the electron pressure gradient (in 1D) on the E-field grid using P = nkT and 
     finite difference.
@@ -103,7 +104,7 @@ def get_grad_P(qn, te, DX=dx, inter_type=1):
     Pe            = qn * kB * te / q
 
     for ii in np.arange(1, qn.shape[0]):
-        grad_pe_B[ii] = (Pe[ii] - Pe[ii - 1])  / DX
+        grad_pe_B[ii] = (Pe[ii] - Pe[ii - 1])
         
     grad_pe_B[0] = grad_pe_B[qn.shape[0] - 3]
     
@@ -111,11 +112,12 @@ def get_grad_P(qn, te, DX=dx, inter_type=1):
     if inter_type == 0:
         grad_P = interpolate_to_center_linear_1D(grad_pe_B)           
     elif inter_type == 1:
-        grad_P = interpolate_to_center_cspline1D(grad_pe_B, DX=DX)
+        grad_P = interpolate_to_center_cspline1D(grad_pe_B)
 
     grad_P[0]               = grad_P[qn.shape[0] - 3]
     grad_P[qn.shape[0] - 2] = grad_P[1]
     grad_P[qn.shape[0] - 1] = grad_P[2] 
+    grad_P /= dx
     return grad_P
 
 
@@ -132,11 +134,11 @@ def set_periodic_boundaries(B):
     
     B[0]      = B[NX]
     B[NX+2]   = B[2]
-    return B
+    return
 
 
 @nb.njit()
-def cyclic_leapfrog(B, rho_i, J_i, DT, subcycles):
+def cyclic_leapfrog(B1, B2, rho, J, curl, DT, subcycles):
     '''
     Solves for the magnetic field push by keeping two copies and subcycling between them,
     averaging them at the end of the cycle as per Matthews (1994). The source terms are
@@ -144,21 +146,23 @@ def cyclic_leapfrog(B, rho_i, J_i, DT, subcycles):
     inherent in explicit hybrid simulations.
     
     INPUT:
-        B     -- Magnetic field to update
+        B1    -- Magnetic field to update (return value comes through here)
+        B2    -- Empty array for second copy
         rho_i -- Total ion charge density
         J_i   -- Total ionic current density
         DT    -- Master simulation timestep. This function advances the field by 0.5*DT
         subcycles -- The number of subcycle steps to be performed. 
     '''
-    H  = 0.5 * DT  
-    dh = H / subcycles  
-    B1 = np.copy(B)
+    H     = 0.5 * DT
+    dh    = H / subcycles
+    B2[:] = B1[:]
 
     ## DESYNC SECOND FIELD COPY - PUSH BY DH ##
-    E, Ve, Te = calculate_E(B, J_i, rho_i)
-    B2        = np.copy(B) - dh * get_curl_E(E) 
-    B2        = set_periodic_boundaries(B2)                              
-    
+    E, Ve, Te = calculate_E(B1, J, rho)
+    get_curl_E(E, curl) 
+    B2       -= dh * curl
+    set_periodic_boundaries(B2)                              
+
     ## RETURN IF NO SUBCYCLES REQUIRED ##
     if subcycles == 1:
         return B2
@@ -166,32 +170,35 @@ def cyclic_leapfrog(B, rho_i, J_i, DT, subcycles):
     ## MAIN SUBCYCLE LOOP ##
     for ii in range(subcycles - 1):             
         if ii%2 == 0:
-            E, Ve, Te = calculate_E(B2, J_i, rho_i)
-            B1  -= 2 * dh * get_curl_E(E)
-            B1   = set_periodic_boundaries(B1)
+            E, Ve, Te = calculate_E(B2, J, rho)
+            get_curl_E(E, curl) 
+            B1  -= 2 * dh * curl
+            set_periodic_boundaries(B1)
         else:
-            E, Ve, Te = calculate_E(B1, J_i, rho_i)
-            B2  -= 2 * dh * get_curl_E(E)
-            B2   = set_periodic_boundaries(B2)
+            E, Ve, Te = calculate_E(B1, J, rho)
+            get_curl_E(E, curl) 
+            B2  -= 2 * dh * curl
+            set_periodic_boundaries(B2)
             
     ## RESYNC FIELD COPIES ##
     if ii%2 == 0:
-        E, Ve, Te = calculate_E(B2, J_i, rho_i)
-        B2  -= dh * get_curl_E(E)
-        B2   = set_periodic_boundaries(B2)
+        E, Ve, Te = calculate_E(B2, J, rho)
+        get_curl_E(E, curl) 
+        B2  -= dh * curl
+        set_periodic_boundaries(B2)
     else:
-        E, Ve, Te = calculate_E(B1, J_i, rho_i)
-        B1  -= dh * get_curl_E(E)
-        B1   = set_periodic_boundaries(B1)
+        E, Ve, Te = calculate_E(B1, J, rho)
+        get_curl_E(E, curl) 
+        B1  -= dh * curl
+        set_periodic_boundaries(B1)
 
     ## AVERAGE FIELD SOLUTIONS: COULD PERFORM A CONVERGENCE TEST HERE IN FUTURE ##
-    B = 0.5 * (B1 + B2)
-    return B
-
+    B1 += B2; B1 /= 2.0
+    return
 
 
 @nb.njit()
-def calculate_E(B, J, qn, DX=dx):
+def calculate_E(B, J, qn):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
     and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
@@ -202,8 +209,8 @@ def calculate_E(B, J, qn, DX=dx):
     OUTPUT:
         E_out -- Updated electric field array
     '''
-    curlB    = get_curl_B(B, DX=DX) / mu0
-        
+    curlB    = get_curl_B(B) / mu0
+       
     Ve       = np.zeros((J.shape[0], 3)) 
     Ve[:, 0] = (J[:, 0] - curlB[:, 0]) / qn
     Ve[:, 1] = (J[:, 1] - curlB[:, 1]) / qn
@@ -212,7 +219,7 @@ def calculate_E(B, J, qn, DX=dx):
     Te       = get_electron_temp(qn)
     del_p    = get_grad_P(qn, Te)
     
-    B_center = interpolate_to_center_cspline3D(B, DX=DX)
+    B_center = interpolate_to_center_cspline3D(B)
     VexB     = cross_product(Ve, B_center)    
 
     E_out        = np.zeros((J.shape[0], 3))                 
@@ -226,39 +233,3 @@ def calculate_E(B, J, qn, DX=dx):
     E_out[J.shape[0] - 2]   = E_out[1]
     E_out[J.shape[0] - 1]   = E_out[2]                                  # This doesn't really get used, but might as well
     return E_out, Ve, Te
-
-
-#%% DEPRECATED OR UNTESTED
-#@nb.njit()
-def calculate_E_old(B, J, qn, DX=dx):
-    '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
-    electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
-    and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
-
-    INPUT:
-        B   -- Magnetic field array. Displaced from E-field array by half a spatial step.
-        J   -- Ion current density. Source term, based on particle velocities
-        qn  -- Charge density. Source term, based on particle positions
-
-    OUTPUT:
-        E_out -- Updated electric field array
-    '''
-    Te       = get_electron_temp(qn)
-
-    B_center = interpolate_to_center_cspline3D(B, DX=DX)
-    JxB      = cross_product(J, B_center)    
-    curlB    = get_curl_B(B, DX=DX)
-    BdB      = cross_product(B_center, curlB) / mu0
-    del_p    = get_grad_P(qn, Te)
-
-    E_out       = np.zeros((J.shape[0], 3))                 
-    E_out[:, 0] = (- JxB[:, 0] - BdB[:, 0] - del_p ) / qn
-    E_out[:, 1] = (- JxB[:, 1] - BdB[:, 1]         ) / qn
-    E_out[:, 2] = (- JxB[:, 2] - BdB[:, 2]         ) / qn
-
-    E_out[0]                = E_out[J.shape[0] - 3]
-    E_out[J.shape[0] - 2]   = E_out[1]
-    E_out[J.shape[0] - 1]   = E_out[2]                                  # This doesn't really get used, but might as well
-    return E_out
-
-

@@ -14,12 +14,12 @@ from auxilliary_1D            import cross_product
 
 
 @nb.njit()
-def push_current(J, E, B, L, G, dt):
+def push_current(J_in, J_out, E, B, L, G, dt):
     '''Uses an MHD-like equation to advance the current with a moment method as 
     per Matthews (1994) CAM-CL method. Fills in ghost cells at edges (excluding very last one)
     
     INPUT:
-        J  -- Ionic current
+        J  -- Ionic current (J plus)
         E  -- Electric field
         B  -- Magnetic field (offset from E by 0.5dx)
         L  -- "Lambda" MHD variable
@@ -27,23 +27,23 @@ def push_current(J, E, B, L, G, dt):
         dt -- Timestep
         
     OUTPUT:
-        J_out -- Advanced current
+        J_plus in main() becomes J_half (same memory space)
     '''
-    J_out        = np.zeros(J.shape)
+    J_out *= 0
     B_center     = interpolate_to_center_cspline3D(B)
     G_cross_B    = cross_product(G, B_center)
     
     for ii in range(3):
-        J_out[:, ii] = J[:, ii] + 0.5*dt * (L * E[:, ii] + G_cross_B[:, ii]) 
+        J_out[:, ii] = J_in[:, ii] + 0.5*dt * (L * E[:, ii] + G_cross_B[:, ii]) 
 
-    J_out[0]                = J_out[J.shape[0] - 3]
-    J_out[J.shape[0] - 2]   = J_out[1]
-    J_out[J.shape[0] - 1]   = J_out[2]
-    return J_out
+    J_out[0]                    = J_out[J_out.shape[0] - 3]
+    J_out[J_out.shape[0] - 2]   = J_out[1]
+    J_out[J_out.shape[0] - 1]   = J_out[2]
+    return
 
 
 @nb.njit()
-def deposit_both_moments(pos, vel, Ie, W_elec, idx):
+def deposit_both_moments(pos, vel, Ie, W_elec, idx, n_i, nu_i):
     '''Collect number and velocity moments in each cell, weighted by their distance
     from cell nodes.
 
@@ -57,11 +57,7 @@ def deposit_both_moments(pos, vel, Ie, W_elec, idx):
     OUTPUT:
         n_i    -- Species number moment array(size, Nj)
         nu_i   -- Species velocity moment array (size, Nj)
-    '''
-    size      = NX + 3
-    n_i       = np.zeros((size, Nj))
-    nu_i      = np.zeros((size, Nj, 3))
-    
+    '''    
     for ii in np.arange(pos.shape[0]):
         I   = Ie[ ii]
         sp  = idx[ii]
@@ -75,13 +71,13 @@ def deposit_both_moments(pos, vel, Ie, W_elec, idx):
         n_i[I + 1, sp] += W_elec[1, ii]
         n_i[I + 2, sp] += W_elec[2, ii]
 
-    n_i   = manage_ghost_cells(n_i)
-    nu_i  = manage_ghost_cells(nu_i)
-    return n_i, nu_i
+    manage_ghost_cells(n_i)
+    manage_ghost_cells(nu_i)
+    return
 
 
 @nb.njit()
-def deposit_velocity_moments(vel, Ie, W_elec, idx):
+def deposit_velocity_moments(vel, Ie, W_elec, idx, nu_i):
     '''Collect velocity moment in each cell, weighted by their distance
     from cell nodes.
 
@@ -94,9 +90,6 @@ def deposit_velocity_moments(vel, Ie, W_elec, idx):
     OUTPUT:
         nu_i   -- Species velocity moment array (size, Nj)
     '''
-    size      = NX + 3
-    nu_i      = np.zeros((size, Nj, 3))
-
     for ii in range(N):
         I   = Ie[ ii]
         sp  = idx[ii]
@@ -107,11 +100,12 @@ def deposit_velocity_moments(vel, Ie, W_elec, idx):
             nu_i[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
                       
     nu_i  = manage_ghost_cells(nu_i)
-    return nu_i
+    return
 
 
 @nb.njit()
-def init_collect_moments(pos, vel, Ie, W_elec, idx, DT):
+def init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plus, 
+                         rho_0, rho, J_init, J_plus, L, G, dt):
     '''Moment collection and position advance function. Specifically used at initialization or
     after timestep synchronization.
 
@@ -134,18 +128,20 @@ def init_collect_moments(pos, vel, Ie, W_elec, idx, DT):
         G       -- "Gamma"  MHD variable for current advance : Current-like
         L       -- "Lambda" MHD variable for current advance :  Charge-like
     '''
-    size    = NX + 3
-    
-    rho_0   = np.zeros( size)
-    rho     = np.zeros( size)    
-    J_plus  = np.zeros((size, 3))
-    J_init  = np.zeros((size, 3))
-    L       = np.zeros( size)
-    G       = np.zeros((size, 3))
-
-    ni_init, nu_init     = deposit_both_moments(pos, vel, Ie, W_elec, idx)      # Collects sim_particles/cell/species
-    pos, Ie, W_elec      = particles.position_update(pos, vel, DT)
-    ni, nu_plus          = deposit_both_moments(pos, vel, Ie, W_elec, idx)
+    ni      *= 0.0
+    ni_init *= 0.0
+    rho_0   *= 0.0
+    rho     *= 0.0
+    nu_init *= 0.0
+    nu_plus *= 0.0
+    J_init  *= 0.0
+    J_plus  *= 0.0
+    L       *= 0.0
+    G       *= 0.0
+                         
+    deposit_both_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init)      # Collects sim_particles/cell/species
+    particles.position_update(pos, vel, Ie, W_elec, dt)
+    deposit_both_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus)
 
     if smooth_sources == 1:
         for jj in range(Nj):
@@ -165,17 +161,18 @@ def init_collect_moments(pos, vel, Ie, W_elec, idx, DT):
             J_plus[ :, kk] += nu_plus[:, jj, kk] * n_contr[jj] * charge[jj]
             G[      :, kk] += nu_plus[:, jj, kk] * n_contr[jj] * charge[jj] ** 2 / mass[jj]
     
-    for ii in range(size):
+    for ii in range(rho_0.shape[0]):
         if rho_0[ii] < min_dens * ne * q:
             rho_0[ii] = min_dens * ne * q
             
         if rho[ii] < min_dens * ne * q:
             rho[ii] = min_dens * ne * q
-    return pos, Ie, W_elec, rho_0, rho, J_plus, J_init, G, L
+    return
 
 
 @nb.njit()
-def collect_moments(pos, vel, Ie, W_elec, idx, DT):
+def collect_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus, nu_minus, 
+                         rho, J_minus, J_plus, L, G, dt):
     '''
     Moment collection and position advance function.
 
@@ -197,17 +194,18 @@ def collect_moments(pos, vel, Ie, W_elec, idx, DT):
         G       -- "Gamma"  MHD variable for current advance
         L       -- "Lambda" MHD variable for current advance    
     '''
-    size    = NX + 3
+    ni       *= 0.0
+    rho      *= 0.0
+    nu_minus *= 0.0
+    nu_plus  *= 0.0
+    J_minus  *= 0.0
+    J_plus   *= 0.0
+    L        *= 0.0
+    G        *= 0.0
     
-    rho     = np.zeros(size)    
-    J_plus  = np.zeros((size, 3))
-    J_minus = np.zeros((size, 3))
-    L       = np.zeros(size)
-    G       = np.zeros((size, 3))
-    
-    nu_minus        = deposit_velocity_moments(vel, Ie, W_elec, idx)
-    pos, Ie, W_elec = particles.position_update(pos, vel, DT)
-    ni, nu_plus     = deposit_both_moments(pos, vel, Ie, W_elec, idx)
+    deposit_velocity_moments(vel, Ie, W_elec, idx, nu_minus)
+    particles.position_update(pos, vel, Ie, W_elec, dt)
+    deposit_both_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus)
     
     if smooth_sources == 1:
         for jj in range(Nj):
@@ -226,11 +224,11 @@ def collect_moments(pos, vel, Ie, W_elec, idx, DT):
             J_plus[ :, kk] += nu_plus[ :, jj, kk] * n_contr[jj] * charge[jj]
             G[      :, kk] += nu_plus[ :, jj, kk] * n_contr[jj] * charge[jj] ** 2 / mass[jj]
         
-    for ii in range(size):
+    for ii in range(rho.shape[0]):
         if rho[ii] < min_dens * ne * q:
             rho[ii] = min_dens * ne * q
             
-    return pos, Ie, W_elec, rho, J_plus, J_minus, G, L
+    return
 
 
 @nb.njit()

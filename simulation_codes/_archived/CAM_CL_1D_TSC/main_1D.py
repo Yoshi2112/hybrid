@@ -9,6 +9,7 @@ import fields_1D     as fields
 import sources_1D    as sources
 import save_routines as save
 
+import pdb, sys
 #import diagnostics   as diag
 
 from simulation_parameters_1D import adaptive_timestep, save_particles, save_fields
@@ -24,10 +25,11 @@ if __name__ == '__main__':
 
     print('Loading initial state...\n')
     pos, Ie, W_elec, dns_int, dns_half, J_plus, J_minus, G, L   = sources.init_collect_moments(pos, vel, Ie, W_elec, idx, 0.5*DT)
-
+                                               #J_init?? Should be J
     qq      = 0
     print('Starting loop...')
     while qq < max_inc:
+        print('Timestep', qq)
         ############################
         ##### EXAMINE TIMESTEP #####
         ############################
@@ -40,16 +42,17 @@ if __name__ == '__main__':
             elif change_flag == 2:
                 print('Timestep doubled. Syncing particle velocity/position with DT = {}'.format(DT))
                 pos, Ie, W_elec, dns_int, dns_half, J_plus, J_minus, G, L   = sources.init_collect_moments(pos, vel, Ie, W_elec, idx, 0.5*DT)
-        
+                                                        
         
         #######################
         ###### MAIN LOOP ######
         #######################
         B         = fields.cyclic_leapfrog(B, dns_int, J_minus, DT, subcycles)
         E, Ve, Te = fields.calculate_E(B, J_minus, dns_half)
+
         J         = sources.push_current(J_plus, E, B, L, G, DT)
         E, Ve, Te = fields.calculate_E(B, J, dns_half)
-
+        
         vel = particles.velocity_update(pos, vel, Ie, W_elec, idx, B, E, J, DT)
 
         # Store pc(1/2) here while pc(3/2) is collected
@@ -73,8 +76,21 @@ if __name__ == '__main__':
             save.save_field_data(DT, field_save_iter, qq, J, E, B, Ve, Te, dns_int)
 
         if (qq + 1)%25 == 0:
-            print('Timestep {} of {} complete'.format(qq + 1, max_inc))
+            running_time = int(timer() - start_time)
+            hrs          = running_time // 3600
+            rem          = running_time %  3600
+            
+            mins         = rem // 60
+            sec          = rem %  60
+            
+            print('Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(qq, max_inc, hrs, mins, sec))
 
+# =============================================================================
+#         if qq == 100:
+#             aux.dump_to_file(pos, vel, E, Ve, Te, B, J, J_minus, J_plus, dns_int, dns_half, qq, suff='')
+#             sys.exit()
+# =============================================================================
+        
         qq += 1
 
     print("Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2)))  # Time taken to run simulation
