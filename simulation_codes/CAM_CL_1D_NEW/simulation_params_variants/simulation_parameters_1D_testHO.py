@@ -7,16 +7,16 @@ Created on Fri Sep 22 11:00:58 2017
 import numpy as np
 
 ### RUN DESCRIPTION ###
-run_description = '''Testing optimized CAM_CL version'''
+run_description = '''Multispecies test for LT with new CAM_CL code.'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:/'
-save_path       = 'runs/CAM_CL_NEW_test/'     # Series save dir   : Folder containing all runs of a series 
-run_num         = 0                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles  = 0                           # Save data flag    : For later analysis
-save_fields     = 0                           # Save plot flag    : To ensure hybrid is solving correctly during run
+save_path       = 'runs/CAM_CL_LLR_NEW/'     # Series save dir   : Folder containing all runs of a series 
+run_num         = 2                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_particles  = 1                           # Save data flag    : For later analysis
+save_fields     = 1                           # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                         # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [0, 1]                      # Set CPU affinity for run. Must be list. Auto-assign: None.
+cpu_affin       = [6, 7]                      # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 ### PHYSICAL CONSTANTS ###
@@ -31,38 +31,38 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX        = 128                             # Number of cells - doesn't include ghost cells
-max_rev   = 150                             # Simulation runtime, in multiples of the gyroperiod
+NX        = 2048                            # Number of cells - doesn't include ghost cells
+max_rev   = 300                             # Simulation runtime, in multiples of the gyroperiod
 
 dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
 subcycles = 12                              # Number of field subcycling steps for Cyclic Leapfrog
-ie        = 0                               # Adiabatic electrons. 0: off (constant), 1: on.
+ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
 theta     = 0                               # Angle of B0 to x axis (in xy plane in units of degrees)
 B0        = 200e-9                          # Unform initial magnetic field value (in T)
 ne        = 200e6                           # Electron density (in /m3, same as total ion density (for singly charged ions))
 
-orbit_res = 0.10                            # Particle orbit resolution: Fraction of gyroperiod in seconds
-freq_res  = 0.05                            # Frequency resolution: Fraction of inverse radian frequencies
+orbit_res = 0.05                            # Particle orbit resolution: Fraction of gyroperiod in seconds
+freq_res  = 0.02                            # Frequency resolution: Fraction of inverse radian frequencies
 part_res  = 0.25                            # Data capture resolution in gyroperiod fraction: Particle information
 field_res = 0.10                            # Data capture resolution in gyroperiod fraction: Field information
 
 
 ### PARTICLE PARAMETERS ###
-species_lbl= [r'$H^+$ hot', r'$H^+$ cold', '$He^+$ cold', '$O^+$ cold']   # Species name/labels        : Used for plotting
-temp_color = ['r', 'b', 'purple', 'k']
-temp_type  = np.array([1, 0, 0, 0])                         # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-dist_type  = np.array([0, 0, 0, 0])                         # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+species_lbl= [r'$H^+$ hot', r'$H^+$ cold', r'$O^+$ cold']   # Species name/labels        : Used for plotting
+temp_color = ['r', 'b', 'purple']
+temp_type  = np.array([1, 0, 0])                         # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.array([0, 0, 0])                         # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
 
-mass       = np.array([1.000, 1.000, 4.000, 16.0])    	    # Species ion mass (proton mass units)
-charge     = np.array([1.000, 1.000, 1.000, 1.00])       	# Species ion charge (elementary charge units)
-density    = np.array([0.100, 0.600, 0.200, 0.10])     	    # Species charge density as normalized fraction (add to 1.0)
-drift_v    = np.array([0.000, 0.000, 0.000, 0.00])     	    # Species parallel bulk velocity (alfven velocity units)
-nsp_ppc    = np.array([256 , 256  , 256  , 256 ])
+mass       = np.array([1.000, 1.000, 16.000])    	    # Species ion mass (proton mass units)
+charge     = np.array([1.000, 1.000, 1.000])       	# Species ion charge (elementary charge units)
+density    = np.array([0.100, 0.600, 0.300])     	    # Species charge density as normalized fraction (add to 1.0)
+drift_v    = np.array([0.000, 0.000, 0.000])     	    # Species parallel bulk velocity (alfven velocity units)
+nsp_ppc    = np.array([2048 ,  512 ,  512 ])
 
 beta       = 1                                              # Flag: Specify temperatures by beta (True) or energy in eV (False)
 E_e        = 0.1                                            # Electron beta
-E_par      = np.array([10.0, 0.1, 0.1, 0.1])            	# Ion species parallel energy
-E_per      = np.array([25.0, 0.1, 0.1, 0.1])            	# Ion species perpendicular energy
+E_par      = np.array([10.0, 0.1, 0.1])            	# Ion species parallel energy
+E_per      = np.array([25.0, 0.1, 0.1])            	# Ion species perpendicular energy
 
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
@@ -121,13 +121,11 @@ n_contr    = density / nsp_ppc                           # Species density contr
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
-idx_bounds = np.stack((idx_start, idx_end)).transpose()                              # idx_bounds[species, start/end]
 
 qm_ratios  = np.divide(charge, mass)
 gyfreq     = q*B0/mp                                     # Proton   Gyrofrequency (rad/s) (since this will be the highest of all ion species)
 e_gyfreq   = q*B0/me                                     # Electron Gyrofrequency (rad/s)
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
-
 
 diag_file = drive + save_path + 'ne_{}_log.txt'.format(ne)
 
@@ -157,7 +155,7 @@ print('Maximum simulation time: {}s ({} gyroperiods)'.format(round(max_rev * 2. 
 print('\n{} particles per cell, {} cells'.format(cellpart, NX))
 print('{} particles total\n'.format(N))
 
-if None not in cpu_affin:
+if cpu_affin is not None:
     import psutil
     run_proc = psutil.Process()
     run_proc.cpu_affinity(cpu_affin)

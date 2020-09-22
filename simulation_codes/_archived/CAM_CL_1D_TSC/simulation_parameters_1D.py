@@ -16,12 +16,12 @@ run_description = '''Testing optimized CAM_CL version - this is the OLD code for
 #drive           = 'G://MODEL_RUNS//Josh_Runs//' # Drive letter or path for portable HDD e.g. 'E:/'
 #drive           = '/media/yoshi/UNI_HD/'
 drive           = 'F:/'
-save_path       = 'runs/CAM_CL_NEW_test/'         # Series save dir   : Folder containing all runs of a series 
+save_path       = 'runs/CAM_CL_NEW_test/'     # Series save dir   : Folder containing all runs of a series 
 run_num         = 1                           # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles  = 1                           # Save data flag    : For later analysis
 save_fields     = 1                           # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 101                         # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [6, 7]                      # Set CPU affinity for run. Must be list. Auto-assign: None.
+cpu_affin       = [0, 1]                      # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 
@@ -37,8 +37,8 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 256                              # Number of cells - doesn't include ghost cells
-max_rev  = 150                              # Simulation runtime, in multiples of the gyroperiod
+NX       = 512                              # Number of cells - doesn't include ghost cells
+max_rev  = 300                              # Simulation runtime, in multiples of the gyroperiod
 
 dxm         = 1.0                           # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
 subcycles   = 12                            # Number of field subcycling steps for Cyclic Leapfrog
@@ -69,8 +69,8 @@ sim_repr   = np.asarray([0.5  , 0.5])      		    # Macroparticle weighting: Perc
 
 beta       = True                                           # Flag: Specify temperatures by beta (True) or energy in eV (False)
 E_e        = 0.1                                            # Electron beta
-E_par      = np.array([10.0, 0.1, 0.1, 0.1])            			# Ion species parallel beta
-E_per      = np.array([25.0, 0.1, 0.1, 0.1])            			# Ion species perpendicular beta
+E_par      = np.array([10.0, 0.1])            			# Ion species parallel beta
+E_per      = np.array([25.0, 0.1])            			# Ion species perpendicular beta
 
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q

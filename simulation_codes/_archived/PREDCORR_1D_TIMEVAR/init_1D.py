@@ -68,7 +68,7 @@ def uniform_gaussian_distribution_quiet(ppc):
             vel[2, st: en] = np.random.normal(0, sf_per, half_n)
 
             pos[   en: en + half_n] = pos[   st: en]            # Other half, same position
-            vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Inverted velocities (v2 = -v1)
+            vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Inverted velocities (v2 = -v1)
             vel[1, en: en + half_n] = vel[1, st: en] * -1.0
             vel[2, en: en + half_n] = vel[2, st: en] * -1.0
             

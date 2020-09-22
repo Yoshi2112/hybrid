@@ -9,16 +9,16 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''Checking all versions against LT. This is PREDCORR_1D_TSC_TIMEVAR.'''
+run_description = '''PREDCORR_1D_TSC_TIMEVAR :: Second LT check, quiet start, more res.'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs//compare_all_versions2' # Series save dir   : Folder containing all runs of a series
-run_num         = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+save_path       = 'runs//compare_TIMEVAR_and_CARLO' # Series save dir   : Folder containing all runs of a series
+run_num         = 2                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 save_particles  = 1                             # Save data flag    : For later analysis
 save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 65846146                      # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = None                          # Set CPU affinity for run. Must be list. Auto-assign: None.
+cpu_affin       = [0, 1]                          # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 ### PHYSICAL CONSTANTS ###
@@ -33,10 +33,10 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 256                              # Number of cells - doesn't include ghost cells
-max_rev  = 200                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+NX       = 1024                             # Number of cells - doesn't include ghost cells
+max_rev  = 300                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 
-nsp_ppc  = 200                              # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+nsp_ppc  = 2048                             # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
@@ -58,12 +58,12 @@ mass       = np.asarray([1., 1.])    			        # Species ion mass (proton mass 
 charge     = np.asarray([1., 1.])    			        # Species ion charge (elementary charge units)
 drift_v    = np.asarray([0., 0.])                       # Species parallel bulk velocity (alfven velocity units)
 density    = np.asarray([180.0 , 20.0]) * 1e6
-E_per      = np.array([0.1, 50.])
+E_per      = np.array([0.01, 50.])
 anisotropy = np.array([0.0, 4.0])
 
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
-E_e            = 0.1                                        # Electron energy (eV)
+E_e            = 0.01                                        # Electron energy (eV)
 beta_flag      = 1
 
 account_for_dispersion = False                              # Flag (True/False) whether or not to reduce timestep to prevent dispersion getting too high

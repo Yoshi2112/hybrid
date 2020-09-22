@@ -1008,8 +1008,8 @@ def summary_plots(save=True):
         ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
         ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
         for jj in range(cf.Nj):
-            ax_vx.scatter(pos[cf.idx_bounds[jj, 0]: cf.idx_bounds[jj, 1]], vel[0, cf.idx_bounds[jj, 0]: cf.idx_bounds[jj, 1]], s=3, c=cf.temp_color[jj], lw=0, label=cf.species_lbl[jj])
-            ax_vy.scatter(pos[cf.idx_bounds[jj, 0]: cf.idx_bounds[jj, 1]], vel[1, cf.idx_bounds[jj, 0]: cf.idx_bounds[jj, 1]], s=3, c=cf.temp_color[jj], lw=0)
+            ax_vx.scatter(pos[cf.idx_start[jj]: cf.idx_end[jj]], vel[0, cf.idx_start[jj]: cf.idx_end[jj]], s=3, c=cf.temp_color[jj], lw=0, label=cf.species_lbl[jj])
+            ax_vy.scatter(pos[cf.idx_start[jj]: cf.idx_end[jj]], vel[1, cf.idx_start[jj]: cf.idx_end[jj]], s=3, c=cf.temp_color[jj], lw=0)
     
         ax_vx.legend()
         ax_vx.set_title(r'Particle velocities vs. Position (x)')
@@ -1140,7 +1140,7 @@ def summary_plots(save=True):
     return
 
 
-def standard_analysis_package(save=True):
+def standard_analysis_package(save=True, tx_only=False, disp_overlay=False):
     '''
     Need a high-pass option for the wk? Or will it do all of it?
     It should do all of it (show the Pc4 branch and the Pc1 branch)
@@ -1153,19 +1153,21 @@ def standard_analysis_package(save=True):
     if os.path.exists(cf.anal_dir + disp_folder) == False:
         os.makedirs(cf.anal_dir + disp_folder)
     
-    plot_wk_polished(component='by', dispersion_overlay=True, save=False,
-                                 pcyc_mult=1.25, zero_cold=True, xmax=None)
+    #plot_wk_polished(component='by', dispersion_overlay=True, save=False,
+    #                             pcyc_mult=1.25, zero_cold=True, xmax=None)
     
-    if False:
+    if True:
         for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
             plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=save)
-            plot_wx(component=comp, saveas=disp_folder + 'wx_plot', save=save, linear_overlay=False,    pcyc_mult=1.25)
-            plot_wk(component=comp, saveas=disp_folder + 'wk_plot', save=save, dispersion_overlay=True, pcyc_mult=1.25)
-            plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=save)
-            for zero_cold in [True, False]:
-                plot_wk_polished(component=comp, dispersion_overlay=True, save=save,
-                                 pcyc_mult=1.25, zero_cold=zero_cold, xmax=20)
-    
+            
+            if tx_only == False:
+                plot_wx(component=comp, saveas=disp_folder + 'wx_plot', save=save, linear_overlay=False,    pcyc_mult=1.25)
+                #plot_wk(component=comp, saveas=disp_folder + 'wk_plot', save=save, dispersion_overlay=disp_overlay, pcyc_mult=1.25)
+                plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=save)
+                for zero_cold in [True, False]:
+                    plot_wk_polished(component=comp, dispersion_overlay=disp_overlay, save=save,
+                                     pcyc_mult=1.25, zero_cold=zero_cold, xmax=None)
+
     if False:    
         plot_energies(normalize=True, save=True)
         plot_ion_energy_components(save=True, tmax=1./cf.HM_frequency)
@@ -1200,7 +1202,7 @@ def plot_wk_polished(component='By', saveas='wk_plot_thesis', dispersion_overlay
     mpl.rcParams['ytick.labelsize'] = tick_label_size 
     
     k, f, wk = disp.get_wk(component)
-    pdb.set_trace()
+
     xfac = 1e6
     xlab = '$\mathtt{k (\\times 10^{-6}m^{-1})}$'
     ylab = 'f\n(Hz)'
@@ -1282,16 +1284,16 @@ def plot_wk_polished(component='By', saveas='wk_plot_thesis', dispersion_overlay
 #%%
 if __name__ == '__main__':
     drive       = 'F:'
-    series      = 'long_large_run'
+    series      = 'compare_TIMEVAR_and_CARLO'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     dumb_offset = 0
     
-    for run_num in [3]:#range(num_runs):
+    for run_num in [0]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
 
-        standard_analysis_package()
+        standard_analysis_package(tx_only=False, disp_overlay=True)
         
         #single_point_both_fields_AGU()
         

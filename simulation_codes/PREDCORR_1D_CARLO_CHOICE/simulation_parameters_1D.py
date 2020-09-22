@@ -185,9 +185,9 @@ if beta_flag == 0:
     Tper       = E_per * 11603.
 else:    
     # Input energies in terms of a (perpendicular) beta
-    Tpar       = E_par * B_eq ** 2 / (2 * mu0 * ne * kB)
-    Tper       = E_per * B_eq ** 2 / (2 * mu0 * ne * kB)
-    Te0_scalar = E_e   * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Tpar       = E_par    * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Tper       = E_per    * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Te0_scalar = E_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma

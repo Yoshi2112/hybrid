@@ -55,8 +55,11 @@ if __name__ == '__main__':
 
     temp3d   = np.zeros((size, 3), dtype=np.float64)
 
-    pos, idx = init.uniform_distribution()
-    vel      = init.gaussian_distribution()
+    if False:
+        pos, idx = init.uniform_distribution()
+        vel      = init.gaussian_distribution()
+    else:
+        pos, vel, idx = init.quiet_start()
     
     B[:, 0]  = Bc[0]      # Set Bx initial
     B[:, 1]  = Bc[1]      # Set By initial
@@ -70,10 +73,10 @@ if __name__ == '__main__':
     sources.init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plus, 
                          rho_int, rho_half, J, J_plus, L, G, 0.5*DT)
 
-    qq      = 0#; max_inc = 0
+    # Put init into qq = 0 and save as usual, qq = 1 will be at t = dt
+    qq      = 0
     print('Starting loop...')
     while qq < max_inc:
-        print('Timestep', qq)
         ############################
         ##### EXAMINE TIMESTEP #####
         ############################
@@ -89,8 +92,10 @@ if __name__ == '__main__':
         # Debug: Test if everything is the same if J is replaced with J_minus at each loop.
         # Yes it is after loop 0 and loop 1 up until collect_moments()
         # Disable this at some point and see if it improves (or even changes) anything.
-        if qq > 0:
-            J[:, :] = J_minus[:, :]
+# =============================================================================
+#         if qq > 0:
+#             J[:, :] = J_minus[:, :]
+# =============================================================================
         
         #######################
         ###### MAIN LOOP ######
@@ -123,8 +128,8 @@ if __name__ == '__main__':
 
         if qq%field_save_iter == 0 and save_fields == 1:                                   # Save data, if flagged
             save.save_field_data(DT, field_save_iter, qq, J, E, B, Ve, Te, rho_int)
-
-        if (qq + 1)%50 == 0:
+        
+        if qq%50 == 0:
             running_time = int(timer() - start_time)
             hrs          = running_time // 3600
             rem          = running_time %  3600
@@ -141,5 +146,12 @@ if __name__ == '__main__':
 # =============================================================================
         
         qq += 1
-
-    print("Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2)))  # Time taken to run simulation
+        
+    # Resync particle positions for end step? Not really necessary.
+    end_time = int(timer() - start_time)
+    hrs          = running_time // 3600
+    rem          = running_time %  3600
+    
+    mins         = rem // 60
+    sec          = rem %  60
+    print('Time to execute program :: {:02}:{:02}:{:02}'.format(hrs, mins, sec))  # Time taken to run simulation

@@ -54,14 +54,14 @@ def manage_dirs(drive, series, run_num, create_new=True):
     return
 
 def load_species_params():
-    global species_present, density, dist_type, idx_bounds, charge, mass, Tper, \
-           sim_repr, temp_type, temp_color, velocity, Tpar, species_lbl, n_contr, drift_v
+    global species_present, density, dist_type, charge, mass, Tper,      \
+           sim_repr, temp_type, temp_color, velocity, Tpar, species_lbl, \
+           n_contr, drift_v, idx_start, idx_end
 
     p_path = os.path.join(data_dir, 'particle_parameters.npz')                  # File location
     p_data = np.load(p_path)                                                    # Load file
 
     density    = p_data['density']
-    idx_bounds = p_data['idx_bounds']
     charge     = p_data['charge']
     mass       = p_data['mass']
     Tper       = p_data['Tper']
@@ -79,17 +79,24 @@ def load_species_params():
         drift_v    = p_data['drift_v']
         
     try:
-        sim_repr   = p_data['sim_repr']
+        sim_repr = p_data['sim_repr']
     except:
-        pass
+        sim_repr = None
         
     try:
-        n_contr    = density / (cellpart*sim_repr)                              # Species density contribution: Each macroparticle contributes this density to a cell
+        n_contr    = density / nsp_ppc                               # Species density contribution: Each macroparticle contributes this density to a cell
     except:
-        n_contr    = density / nsp_ppc                                          # Species density contribution: Each macroparticle contributes this density to a cell
+        n_contr    = None                                    # Species density contribution: Each macroparticle contributes this density to a cell
 
-    species_present = [False, False, False]                                     # Test for the presence of singly charged H, He, O
-        
+    try:
+        idx_bounds = p_data['idx_bounds']
+        idx_start  = idx_bounds[:, 0]
+        idx_end    = idx_bounds[:, 1]
+    except:
+        idx_start = p_data['idx_start']
+        idx_end   = p_data['idx_end']
+
+    species_present = [False, False, False]                                     # Test for the presence of singly charged H, He, O        
     for ii in range(Nj):
         if 'H^+' in species_lbl[ii]:
             species_present[0] = True
@@ -123,7 +130,12 @@ def load_simulation_params():
     NX              = obj['NX']
     dxm             = obj['dxm']
     dx              = obj['dx']
-    cellpart        = obj['cellpart']
+    
+    try:
+        cellpart    = obj['cellpart']
+    except:
+        cellpart    = None
+        
     B0              = obj['B0']
     ne              = obj['ne']
     Te0             = obj['Te0']
@@ -148,11 +160,14 @@ def load_simulation_params():
     try:
         HM_amplitude = obj['HM_amplitude']
         HM_frequency = obj['HM_frequency']
-        nsp_ppc      = obj['nsp_ppc']
     except:
         HM_amplitude = 0
         HM_frequency = 0
-        nsp_ppc      = 0
+        
+    try:
+        nsp_ppc = obj['nsp_ppc']
+    except:
+        nsp_ppc = None
     
     dt_field        = dt_sim * field_save_iter                         # Time between data slices (seconds)
     dt_particle     = dt_sim * part_save_iter

@@ -135,25 +135,33 @@ def get_kt(component):
 
 
 def get_wk(component):
+    '''
+    Spatial boundaries start at index
+    '''
     ftime, arr = cf.get_array(component)
+    
+    if component.upper()[0] == 'B':
+        st = cf.ND; en = cf.ND + cf.NX + 1
+    else:
+        st = cf.ND; en = cf.ND + cf.NX
     
     num_times = arr.shape[0]
 
     df = 1. / (num_times * cf.dt_field)
-    dk = 1. / (cf.NX * cf.dx)
+    dk = 1. / (cf.NX     * cf.dx)
 
     f  = np.arange(0, 1. / (2*cf.dt_field), df)
     k  = np.arange(0, 1. / (2*cf.dx), dk)
     
-    fft_matrix  = np.zeros(arr.shape, dtype='complex128')
-    fft_matrix2 = np.zeros(arr.shape, dtype='complex128')
+    fft_matrix  = np.zeros(arr[:, st:en].shape, dtype='complex128')
+    fft_matrix2 = np.zeros(arr[:, st:en].shape, dtype='complex128')
 
     # Take spatial FFT at each time
     for ii in range(arr.shape[0]): 
-        fft_matrix[ii, :] = np.fft.fft(arr[ii, :] - arr[ii, :].mean())
+        fft_matrix[ii, :] = np.fft.fft(arr[ii, st:en] - arr[ii, st:en].mean())
 
     # Take temporal FFT at each position (now k)
-    for ii in range(arr.shape[1]):
+    for ii in range(fft_matrix.shape[1]):
         fft_matrix2[:, ii] = np.fft.fft(fft_matrix[:, ii] - fft_matrix[:, ii].mean())
 
     wk = fft_matrix2[:f.shape[0], :k.shape[0]] * np.conj(fft_matrix2[:f.shape[0], :k.shape[0]])

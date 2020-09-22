@@ -211,7 +211,7 @@ def plot_spatial_poynting_helical(saveas='poynting_helical_plot', save=False, lo
                 plt.close('all')
     return
 
-def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None):
+def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None, remove_ND=False):
     plt.ioff()
 
     t, arr = cf.get_array(component)
@@ -234,6 +234,11 @@ def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None):
         lbl = 'full'
     else:
         lbl = '{:04}'.format(tmax)
+    
+    if remove_ND == True:
+        x_lim = [cf.xmin / cf.dx, cf.xmax / cf.dx]
+    else:
+        x_lim = [x[0], x[-1]]
     
     ## PLOT IT
     fig, ax = plt.subplots(1, figsize=(15, 10))
@@ -260,10 +265,10 @@ def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None):
     ax.set_xlabel('x ($\Delta x$)', fontsize=fontsize, family=font)
     ax.set_ylim(0, tmax)
     
-    ax.set_xlim(x[0], x[-1])
     ax.axvline(cf.xmin     / cf.dx, c='w', ls=':', alpha=1.0)
     ax.axvline(cf.xmax     / cf.dx, c='w', ls=':', alpha=1.0)
     ax.axvline(cf.grid_mid / cf.dx, c='w', ls=':', alpha=0.75)   
+    ax.set_xlim(x_lim[0], x_lim[1])
         
     if save == True:
         fullpath = cf.anal_dir + saveas + '_{}_{}'.format(component.lower(), lbl) + suffix + '.png'
@@ -273,7 +278,7 @@ def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None):
     return
 
 
-def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, pcyc_mult=None):
+def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, pcyc_mult=None, remove_ND=False):
     plt.ioff()
     ftime, wx = disp.get_wx(component)
     
@@ -284,9 +289,13 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
         
     f  = np.fft.rfftfreq(ftime.shape[0], d=cf.dt_field)
     
+    if remove_ND == True:
+        x_lim = [cf.xmin, cf.xmax]
+    else:
+        x_lim = [x[0], x[-1]]
+    
     ## PLOT IT
     fig, ax = plt.subplots(1, figsize=(15, 10))
-
     im1 = ax.pcolormesh(x, f, wx, cmap='nipy_spectral')      # Remove f[0] since FFT[0] >> FFT[1, 2, ... , k]
     fig.colorbar(im1)
     
@@ -321,10 +330,10 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
     else:
         ax.set_ylim(0, None)
 
-    ax.set_xlim(cf.grid_min, cf.grid_max)
     ax.axvline(cf.xmin, c='w', ls=':', alpha=1.0)
     ax.axvline(cf.xmax, c='w', ls=':', alpha=1.0)
     ax.axvline(cf.grid_mid, c='w', ls=':', alpha=0.75)   
+    ax.set_xlim(x_lim[0], x_lim[1])
 
     if save == True:
         fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
@@ -356,7 +365,7 @@ def plot_kt(component='By', saveas='kt_plot', save=False):
     return
 
 
-def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=False, B0_lim=None):
+def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=False):
     '''
     Plot pcolormesh of tranverse magnetic field in space (x) and time (y).
     
@@ -395,6 +404,11 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
         lbl = 'full'
     else:
         lbl = '{:04}'.format(tmax)
+        
+    if remove_ND == True:
+        xlim = [cf.xmin, cf.xmax]
+    else:
+        xlim = [x[0], x[-1]]
     
     ## PLOT IT
     fig, ax = plt.subplots(1, figsize=(15, 10))
@@ -424,11 +438,12 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
     ax.set_xlabel('x ($\Delta x$)', fontsize=fontsize, family=font)
     ax.set_ylim(0, tmax)
     
-    ax.set_xlim(x[0], x[-1])
+    
     ax.axvline(cf.xmin     / cf.dx, c='w', ls=':', alpha=1.0)
     ax.axvline(cf.xmax     / cf.dx, c='w', ls=':', alpha=1.0)
     ax.axvline(cf.grid_mid / cf.dx, c='w', ls=':', alpha=0.75)   
-        
+    ax.set_xlim(xlim[0], xlim[1])    
+    
     if save == True:
         fullpath = cf.anal_dir + saveas + '_BPERP_{}{}{}'.format(lbl, suff, logsuff) + '.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
@@ -1503,7 +1518,7 @@ def summary_plots(save=True, histogram=True):
     return
 
 
-def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, tx_only=False, tmax=30):
+def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, tx_only=False, tmax=30, remove_ND=False):
     '''
     Need a high-pass option for the wk? Or will it do all of it?
     It should do all of it (show the Pc4 branch and the Pc1 branch)
@@ -1525,14 +1540,14 @@ def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, t
         for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
             print('2D summary for {}'.format(comp))
 
-            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None)
-            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=tmax)
+            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None, remove_ND=remove_ND)
+            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=tmax, remove_ND=remove_ND)
 
             if tx_only == False:
-                plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
-                plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , save=True, linear_overlay=False, pcyc_mult=None)
-                plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
+                plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', remove_ND=remove_ND, save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
+                plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , remove_ND=remove_ND, save=True, linear_overlay=False, pcyc_mult=None)
                 plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
+                plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
     
                 if False:
                     plot_spatial_poynting(save=True, log=True)
@@ -3770,7 +3785,7 @@ if __name__ == '__main__':
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     
-    for series in ['quick_test']:
+    for series in ['//compare_TIMEVAR_and_CARLO//']:
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -3782,7 +3797,7 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [2]
+            runs_to_do = [1]
         
         # Extract all summary files and plot field stuff (quick)
         for run_num in runs_to_do:
@@ -3793,8 +3808,8 @@ if __name__ == '__main__':
             #plot_abs_with_boundary_parameters(B0_lim=0.5)
             #field_energy_vs_time(save=True)
 
-            #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None)
-            standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True)
+            #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
+            standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=True)
             
             #get_reflection_coefficient()
         
@@ -3812,8 +3827,10 @@ if __name__ == '__main__':
                 
                 #find_the_particles(it_max=None)
                 summary_plots(save=True, histogram=True)
-                for sp in range(2):
-                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
+# =============================================================================
+#                 for sp in range(2):
+#                     plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
+# =============================================================================
                 #scatterplot_velocities()
             
         #plot_phase_space_with_time()

@@ -72,7 +72,7 @@ def get_linear_dispersion_from_sim(k, plot=False, save=False, zero_cold=True):
     t_perp     = cf.Tper.copy() / 11603.  
     
     if zero_cold == True:
-        for ii in range(t_perp.shape[0]):
+        for ii in range(cf.Nj):
             if cf.temp_type[ii] == 0:
                 t_perp[ii] = 0.0
     

@@ -29,7 +29,7 @@ if __name__ == '__main__':
     qq      = 0
     print('Starting loop...')
     while qq < max_inc:
-        print('Timestep', qq)
+        #print('Timestep', qq)
         ############################
         ##### EXAMINE TIMESTEP #####
         ############################
