@@ -36,7 +36,7 @@ RE  = 6.371e6                               # Earth radius in metres
 NX       = 1024                             # Number of cells - doesn't include ghost cells
 max_rev  = 300                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 
-nsp_ppc  = 2048                             # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+nsp_ppc  = 1024                             # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.

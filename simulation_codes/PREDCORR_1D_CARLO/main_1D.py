@@ -78,7 +78,6 @@ if __name__ == '__main__':
         sim_time += DT
     
     runtime = round(timer() - start_time,2)
-    
     if save_fields == 1 or save_particles == 1:
         save.add_runtime_to_header(runtime)
     print("Time to execute program: {0:.2f} seconds".format(runtime))

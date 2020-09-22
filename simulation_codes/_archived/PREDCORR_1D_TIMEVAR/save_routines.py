@@ -12,7 +12,7 @@ import sys
 from shutil import rmtree
 import simulation_parameters_1D as const
 from   simulation_parameters_1D import drive, save_path, NX, ne, density, save_particles, save_fields
-from   simulation_parameters_1D import idx_bounds, Nj, species_lbl, temp_type, dist_type, mass, charge,\
+from   simulation_parameters_1D import idx_start, idx_end, Nj, species_lbl, temp_type, dist_type, mass, charge,\
                                        drift_v, Tpar, Tper, temp_color, HM_amplitude, HM_frequency, nsp_ppc
 
 
@@ -58,8 +58,11 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                    ('Nj', Nj),
                    ('dt', dt),
                    ('NX', NX),
+                   ('N' , const.N),
                    ('dxm', const.dxm),
                    ('dx', const.dx),
+                   ('xmax', const.xmax),
+                   ('xmin', const.xmin),
                    ('cellpart', const.cellpart),
                    ('B0', const.B0),
                    ('HM_amplitude', HM_amplitude),
@@ -74,6 +77,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                    ('orbit_res', const.orbit_res),
                    ('freq_res', const.freq_res),
                    ('run_desc', const.run_description),
+                   ('run_time', None),
                    ('method_type', 'PREDCORR_HM'),
                    ('particle_shape', 'TSC')
                    ])
@@ -85,7 +89,8 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
         
     # Particle values: Array parameters
     p_file = d_path + 'particle_parameters'
-    np.savez(p_file, idx_bounds  = idx_bounds,
+    np.savez(p_file, idx_start   = idx_start,
+                     idx_end     = idx_end,
                      species_lbl = species_lbl,
                      temp_color  = temp_color,
                      temp_type   = temp_type,
@@ -120,3 +125,21 @@ def save_particle_data(dt, part_save_iter, qq, pos, vel):
     
     np.savez(d_fullpath, pos = pos, vel = vel, sim_time = sim_time)
     print('Particle data saved')
+    
+    
+def add_runtime_to_header(runtime):
+    d_path = ('%s/%s/run_%d/data/' % (drive, save_path, const.run))     # Data path
+    
+    h_name = os.path.join(d_path, 'simulation_parameters.pckl')         # Header file path
+    f      = open(h_name, 'rb')                                         # Open header file
+    params = pickle.load(f)                                             # Load variables from header file into dict
+    f.close()  
+    
+    params['run_time'] = runtime
+    
+    # Re-save
+    with open(d_path + 'simulation_parameters.pckl', 'wb') as f:
+        pickle.dump(params, f)
+        f.close()
+        print('Run time appended to simulation header file')
+    return

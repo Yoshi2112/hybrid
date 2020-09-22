@@ -52,10 +52,20 @@ if __name__ == '__main__':
         if qq%field_save_iter == 0 and save_fields == 1:
             save.save_field_data(DT, field_save_iter, qq, Ji, E_int, B, Ve, Te, q_dens)
             
-        if qq%25 == 0:
-            print('Timestep {} of {} complete'.format(qq, max_inc))
+        if qq%50 == 0:
+            running_time = int(timer() - start_time)
+            hrs          = running_time // 3600
+            rem          = running_time %  3600
+            
+            mins         = rem // 60
+            sec          = rem %  60
+            
+            print('Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(qq, max_inc, hrs, mins, sec))
 
         qq += 1
         
+    runtime = round(timer() - start_time,2)
+    if save_fields == 1 or save_particles == 1:
+        save.add_runtime_to_header(runtime)
     print("Time to execute program: {0:.2f} seconds".format(round(timer() - start_time,2)))
 
