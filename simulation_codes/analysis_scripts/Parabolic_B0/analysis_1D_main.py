@@ -3735,7 +3735,7 @@ def multiplot_fluxes(series, save=True):
     return
 
 
-def plot_mag_energy(save=False):
+def multiplot_mag_energy(save=False):
     
     lstyle = ['-', '--', ':']
     
@@ -3797,40 +3797,39 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [1]
+            runs_to_do = [6]
         
         # Extract all summary files and plot field stuff (quick)
-        for run_num in runs_to_do:
-            print('\nRun {}'.format(run_num))
-            #cf.delete_analysis_folders(drive, series, run_num)
-            cf.load_run(drive, series, run_num, extract_arrays=True)
-            
-            #plot_abs_with_boundary_parameters(B0_lim=0.5)
-            #field_energy_vs_time(save=True)
-
-            #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
-            standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=True)
-            
-            #get_reflection_coefficient()
+        if True:
+            for run_num in runs_to_do:
+                print('\nRun {}'.format(run_num))
+                #cf.delete_analysis_folders(drive, series, run_num)
+                cf.load_run(drive, series, run_num, extract_arrays=True)
+                
+                plot_abs_with_boundary_parameters()
+                field_energy_vs_time(save=True)
+    
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
+                standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)
+                
+                #get_reflection_coefficient()
         
-        if False:
+        if True:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 cf.load_run(drive, series, run_num, extract_arrays=True)
                 
                 #check_fields()
-                #plot_E_components(save=True)
+                plot_E_components(save=True)
                 
                 #plot_spatial_poynting(save=True, log=True)
                 #plot_spatial_poynting_helical(save=True, log=True)
                 
                 #find_the_particles(it_max=None)
                 summary_plots(save=True, histogram=True)
-# =============================================================================
-#                 for sp in range(2):
-#                     plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
-# =============================================================================
+                for sp in range(2):
+                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
                 #scatterplot_velocities()
             
         #plot_phase_space_with_time()

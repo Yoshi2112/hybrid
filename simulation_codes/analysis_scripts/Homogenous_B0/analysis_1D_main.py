@@ -1289,7 +1289,7 @@ if __name__ == '__main__':
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     dumb_offset = 0
     
-    for run_num in [0]:#range(num_runs):
+    for run_num in [2]:#range(num_runs):
         print('Run {}'.format(run_num))
         cf.load_run(drive, series, run_num)
 
