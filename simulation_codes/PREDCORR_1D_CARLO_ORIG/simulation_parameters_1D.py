@@ -91,6 +91,9 @@ with open(run_input, 'r') as f:
     ### RUN DESCRIPTION ###
     run_description = f.readline()                     # Commentary to attach to runs, helpful to have a quick description
 
+# Override because I keep forgetting to change this
+if os.name == 'posix':
+    drive = '/home/c3134027/'
 
 # Load run num from file, autoset if necessary
 if run == '-':
