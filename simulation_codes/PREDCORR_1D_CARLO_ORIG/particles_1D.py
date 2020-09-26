@@ -8,7 +8,7 @@ import numba as nb
 import numpy as np
 from   simulation_parameters_1D  import temp_type, NX, ND, dx, xmin, xmax, qm_ratios,\
                                         B_eq, a, particle_periodic, particle_reflect, particle_open,\
-                                        particle_reinit, loss_cone_xmax, randomise_gyrophase, \
+                                        particle_reinit, loss_cone_xmax,  \
                                         vth_perp, vth_par, inject_rate, Nj, homogenous
 from   sources_1D                import collect_moments
 
@@ -111,10 +111,11 @@ def eval_B0_particle_1D(pos, vel, idx, Bp):
     Bp[0]    =   eval_B0x(pos)  
     constant = a * B_eq 
     for ii in range(idx.shape[0]):
-        l_cyc      = qm_ratios[idx[ii]] * Bp[0, ii]
-        
-        Bp[1, ii] += constant * pos[ii] * vel[2, ii] / l_cyc
-        Bp[2, ii] -= constant * pos[ii] * vel[1, ii] / l_cyc
+        if idx[ii] >= 0:
+            l_cyc      = qm_ratios[idx[ii]] * Bp[0, ii]
+            
+            Bp[1, ii] += constant * pos[ii] * vel[2, ii] / l_cyc
+            Bp[2, ii] -= constant * pos[ii] * vel[1, ii] / l_cyc
     return
 
 
@@ -252,16 +253,7 @@ def position_update(pos, vel, idx, DT, Ie, W_elec, mp_flux):
                     pos[ii] += xmin - xmax
                 elif pos[ii] < xmin:
                     pos[ii] += xmax - xmin 
-                    
-                # Randomise gyrophase: Prevent bunching at initialization
-                if randomise_gyrophase == True:
-                    v_perp = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
-                    theta  = np.random.uniform(0, 2*np.pi)
-                
-                    vel[1, ii] = v_perp * np.sin(theta)
-                    vel[2, ii] = v_perp * np.cos(theta)
-                        
-                    
+                   
             elif particle_reflect == 1:
                 # Reflect
                 if pos[ii] > xmax:

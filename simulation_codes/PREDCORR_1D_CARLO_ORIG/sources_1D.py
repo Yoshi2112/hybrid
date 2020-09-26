@@ -102,13 +102,13 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
         Ji[ND, ii]          += Ji[ND - 1, ii]
         Ji[ND + NX - 1, ii] += Ji[ND + NX, ii]
 
-        # Set damping cell source values (zero gradient)
-        Ji[:ND, ii]    = Ji[ND + 1, ii]
-        Ji[ND+NX:, ii] = Ji[ND+NX - 2, ii]
+        # Set damping cell source values (copy last)
+        Ji[:ND, ii] = Ji[ND, ii]
+        Ji[ND+NX:, ii]  = Ji[ND+NX-1, ii]
         
-    # Set damping cell source values (zero gradient)
-    q_dens[:ND]    = q_dens[ND + 1]
-    q_dens[ND+NX:] = q_dens[ND+NX - 2]
+    # Set damping cell source values (copy last)
+    q_dens[:ND]    = q_dens[ND]
+    q_dens[ND+NX:] = q_dens[ND+NX-1]
         
     # Implement smoothing filter: If enabled
     if source_smoothing == 1:

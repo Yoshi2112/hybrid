@@ -15,21 +15,38 @@ import numpy as np
 import sys
 import os
 
-on_grid = False
+event_inputs = False
 
-script_dir = sys.path[0]
+# Hard-coded some plasma param files. Loads based on position in array and run number if event_inputs True
+# Can update and change these later if desired. Or even use a string format to replace run series (e.g. H_ONLY)
+plasma_list = ['/run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt',
+               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213050105000_H_ONLY.txt',
+               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213221605000_H_ONLY.txt',
+               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213248105000_H_ONLY.txt',
+               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213307605000_H_ONLY.txt',
+               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213406605000_H_ONLY.txt',
+               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213703105000_H_ONLY.txt',
+               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213907605000_H_ONLY.txt',
+               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214026105000_H_ONLY.txt',
+               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214105605000_H_ONLY.txt']
 
-## INPUT FILES ##
-if on_grid == False:
-    run_input    = '../run_inputs/run_params.txt'
-    plasma_input = '../run_inputs/plasma_params.txt'
+# =============================================================================
+# plasma_list = ['/run_inputs/variants/plasma_params_protons.txt',
+#                '/run_inputs/variants/plasma_params_w_helium.txt',
+#                '/run_inputs/variants/plasma_params_w_oxygen.txt',
+#                '/run_inputs/variants/plasma_params_w_helium_and_oxygen.txt',
+#                ]
+# =============================================================================
+
+## INPUT RUN/DRIVER FILE LOCATIONS ##
+if os.name == 'posix':
+    root_dir     = os.path.dirname(sys.path[0])
 else:
-    run_input    = script_dir + '/../run_inputs/run_params_grid.txt'
-    plasma_input = script_dir + '/../run_inputs/plasma_params_grid.txt'
+    root_dir     = '..'
 
-randomise_gyrophase = False
+run_input    = root_dir +  '/run_inputs/run_params.txt'
 
-# Load run parameters
+## SIMULATION PARAMETERS ##
 with open(run_input, 'r') as f:
     ### RUN PARAMETERS ###
     drive             = f.readline().split()[1]        # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
@@ -72,10 +89,30 @@ with open(run_input, 'r') as f:
     field_res = float(f.readline().split()[1])         # Data capture resolution in gyroperiod fraction: Field information
 
     ### RUN DESCRIPTION ###
-    run_description = f.readline()         # Commentary to attach to runs, helpful to have a quick description
+    run_description = f.readline()                     # Commentary to attach to runs, helpful to have a quick description
 
+
+# Load run num from file, autoset if necessary
+if run == '-':
+    if os.path.exists(drive + save_path) == False:
+        run = 0
+    else:
+        run = len(os.listdir(drive + save_path))
+    print('Run number AUTOSET to ', run)
+else:
+    run = int(run)
+
+
+# Set plasma parameter file
+if event_inputs == False:
+    plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
+else:
+    plasma_input = root_dir +  plasma_list[run]
+print('LOADING PLASMA: {}'.format(plasma_input))
+
+
+### PARTICLE/PLASMA PARAMETERS ###
 with open(plasma_input, 'r') as f:
-    ### PARTICLE PARAMETERS ###
     species_lbl = np.array(f.readline().split()[1:])
     
     temp_color = np.array(f.readline().split()[1:])
@@ -111,9 +148,10 @@ mu0    = (4e-7) * np.pi                     # Magnetic Permeability of Free Spac
 RE     = 6.371e6                            # Earth radius in metres
 B_surf = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
-NC         = NX + 2*ND                      # Total number of cells
-ne         = density.sum()                  # Electron number density
-E_par      = E_per / (anisotropy + 1)       # Parallel species energy
+NC          = NX + 2*ND                     # Total number of cells
+ne          = density.sum()                 # Electron number density
+E_par       = E_per / (anisotropy + 1)      # Parallel species energy
+ND_src_type = 0                             # 0: Copy last, 1: Zero gradient, 2: Zero second derivative
 
 particle_open = 0
 if particle_reflect + particle_reinit + particle_periodic == 0:
@@ -135,9 +173,9 @@ if beta_flag == 0:
     Tper       = E_per * 11603.
 else:    
     # Input energies in terms of a (perpendicular) beta
-    Tpar       = E_par    * B_eq ** 2 / (2 * mu0 * ne * kB)
-    Tper       = E_per    * B_eq ** 2 / (2 * mu0 * ne * kB)
-    Te0_scalar = E_par[0] * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Tpar       = E_par * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Tper       = E_per * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Te0_scalar = E_e   * B_eq ** 2 / (2 * mu0 * ne * kB)
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma
@@ -168,16 +206,6 @@ N = N_species.sum() + spare_ppc.sum()
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
-
-if run == '-':
-    # Work out how many runs exist, then add to it. Save a bit of work numerically increasing.
-    if os.path.exists(drive + save_path) == False:
-        run = 0
-    else:
-        run = len(os.listdir(drive + save_path))
-    print('Run number AUTOSET to ', run)
-else:
-    run = int(run)
     
 ############################
 ### MAGNETIC FIELD STUFF ###
@@ -249,13 +277,12 @@ if particle_open == 1:
     inject_rate = nsp_ppc * (vth_par / dx) / np.sqrt(2 * np.pi)
 else:
     inject_rate = nsp_ppc * 0.0
+    
+species_plasfreq_sq   = (density * charge ** 2) / (mass * e0)
+species_gyrofrequency = qm_ratios * B_eq
+
 
 #%%### INPUT TESTS AND CHECKS
-if rc_hwidth == 0:
-    rc_print = NX
-else:
-    rc_print = rc_hwidth*2
-
 print('Run Started')
 print('Run Series         : {}'.format(save_path.split('//')[-1]))
 print('Run Number         : {}'.format(run))
@@ -280,14 +307,19 @@ print('{} spatial cells, 2x{} damped cells'.format(NX, ND))
 print('{} cells total'.format(NC))
 print('{} particles total\n'.format(N))
 
+
 if cpu_affin != '-':
+    if len(cpu_affin) == 1:
+        cpu_affin = [int(cpu_affin)]        
+    else:
+        cpu_affin = list(map(int, cpu_affin.split(',')))
+    
     import psutil
     run_proc = psutil.Process()
     run_proc.cpu_affinity(cpu_affin)
-    if len(cpu_affin) == 1:
-        print('CPU affinity for run (PID {}) set to logical core {}'.format(run_proc.pid, run_proc.cpu_affinity()[0]))
-    else:
-        print('CPU affinity for run (PID {}) set to logical cores {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
+    print('CPU affinity for run (PID {}) set to :: {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
+else:
+    print('CPU affinity not set.')
 
 if theta_xmax > lambda_L:
     print('--------------------------------------------------')
