@@ -2978,7 +2978,10 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
     mpl.rcParams['ytick.labelsize'] = tick_label_size 
     
     k, f, wk = disp.get_wk(component)
-
+    if wk.mean() == 0:
+        print('No_waves flag enabled, no plot generated')
+        return
+    
     xfac = 1e6
     xlab = '$\mathtt{k (\\times 10^{-6}m^{-1})}$'
     ylab = 'f\n(Hz)'
@@ -3797,7 +3800,7 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [6]
+            runs_to_do = [4, 7]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
