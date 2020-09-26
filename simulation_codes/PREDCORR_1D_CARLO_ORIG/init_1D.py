@@ -11,7 +11,6 @@ import save_routines as save
 
 import particles_1D as particles
 import fields_1D    as fields
-import sources_1D as sources
 
 from simulation_parameters_1D import dx, NX, ND, NC, N, kB, Nj, nsp_ppc, va, B_A,  \
                                      idx_start, idx_end, seed, Tpar, Tper, mass, drift_v,  \

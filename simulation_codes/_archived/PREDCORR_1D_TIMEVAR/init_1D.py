@@ -14,6 +14,8 @@ from simulation_parameters_1D import dx, NX, N, kB, B0, Nj, dist_type, nsp_ppc, 
                                      seed, Tpar, Tper, mass, drift_v, theta
 from fields_1D                import uniform_HM_field_value
 
+import pdb
+
 @nb.njit()
 def particles_per_cell():
     '''
@@ -213,7 +215,7 @@ def set_timestep(vel):
     DT       = min(ion_ts, vel_ts)
     max_time = const.max_rev * gyperiod               # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1                 # Total number of time steps
-
+    pdb.set_trace()
     if const.part_res == 0:
         part_save_iter = 1
     else:

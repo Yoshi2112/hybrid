@@ -37,7 +37,7 @@ if __name__ == '__main__':
     particles.assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
     particles.velocity_update(vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT)
 
-    qq      = 1
+    qq      = 1; max_inc=0
     print('Starting main loop...')
     while qq < max_inc:
         qq, DT, max_inc, part_save_iter, field_save_iter =               \
