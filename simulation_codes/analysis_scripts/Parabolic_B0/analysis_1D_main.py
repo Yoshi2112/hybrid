@@ -3800,7 +3800,7 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [8]
+            runs_to_do = [11]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -3810,20 +3810,20 @@ if __name__ == '__main__':
                 cf.load_run(drive, series, run_num, extract_arrays=True)
                 
                 #plot_abs_with_boundary_parameters()
-                #field_energy_vs_time(save=True)
+                field_energy_vs_time(save=True)
     
-                #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
                 standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=True)
                 
                 #get_reflection_coefficient()
         
-        if False:
+        if True:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 cf.load_run(drive, series, run_num, extract_arrays=True)
                 
-                #check_fields()
+                check_fields()
                 plot_E_components(save=True)
                 
                 #plot_spatial_poynting(save=True, log=True)

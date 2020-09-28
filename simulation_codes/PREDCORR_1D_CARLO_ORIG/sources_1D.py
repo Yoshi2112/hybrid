@@ -156,7 +156,7 @@ def three_point_smoothing(arr, temp):
 # =============================================================================
 #         # Set damping cell source values (copy last)
 #         Ji[:ND, ii] = Ji[ND, ii]
-#         Ji[ND+NX:]  = Ji[ND+NX-1]
+#         Ji[ND+NX:, ii]  = Ji[ND+NX-1, ii]
 #         
 #     # Set damping cell source values
 #     q_dens[:ND]    = q_dens[ND]

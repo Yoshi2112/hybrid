@@ -1,5 +1,6 @@
 ## PYTHON MODULES ##
 from timeit import default_timer as timer
+import pdb
 
 ## HYBRID MODULES ##
 import init_1D       as init
@@ -24,7 +25,7 @@ if __name__ == '__main__':
     
     # Collect initial moments and save initial state
     sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu) 
-    
+
     if te0_equil == 1:
         init.set_equilibrium_te0(q_dens, Te0)
     
@@ -74,6 +75,9 @@ if __name__ == '__main__':
         qq       += 1
         sim_time += DT
     
+        if qq == 2:
+            print('First loop complete.')
+            
     runtime = round(timer() - start_time,2)
     
     if save_fields == 1 or save_particles == 1:

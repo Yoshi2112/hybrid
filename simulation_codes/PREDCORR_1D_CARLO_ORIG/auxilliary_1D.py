@@ -6,13 +6,14 @@ Created on Fri Sep 22 17:15:59 2017
 """
 import numba as nb
 import numpy as np
+import sys, pdb
 
 import particles_1D as particles
 import fields_1D    as fields
 
 from simulation_parameters_1D import dx, NC, NX, ND, qm_ratios, freq_res,     \
                                      orbit_res, E_nodes, nsp_ppc, inject_rate,\
-                                     particle_open
+                                     particle_open, drive, save_path, run
 
 @nb.njit()
 def cross_product(A, B, C):
@@ -155,6 +156,44 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
 
 
 @nb.njit()
+def increase_particle_array_size(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T, temp_N, old_particles):
+    '''
+    Allocates more memory in case spare particles run out. Super inefficient way of doing it, so 
+    when this function is called, it'll probably double the size of the program in memory. Maybe
+    numba/numpy has a native function that will let us do this?
+    '''
+    old_N    = pos.shape[0]
+    inc_size = 5*nsp_ppc.sum()
+    
+    # Initialize 'increased' arrays
+    ipos    = np.zeros((   old_N + inc_size), dtype=nb.float64)
+    ivel    = np.zeros((3, old_N + inc_size), dtype=nb.float64)
+    iidx    = np.zeros((   old_N + inc_size), dtype=nb.uint16)
+    iIe     = np.zeros((   old_N + inc_size), dtype=nb.uint16)
+    iIb     = np.zeros((   old_N + inc_size), dtype=nb.uint16)
+    iW_elec = np.zeros((3, old_N + inc_size), dtype=nb.float64)
+    iW_mag  = np.zeros((3, old_N + inc_size), dtype=nb.float64)
+    
+    iEp      = np.zeros((3, old_N + inc_size), dtype=nb.float64)
+    iBp      = np.zeros((3, old_N + inc_size), dtype=nb.float64)
+    iv_prime = np.zeros((3, old_N + inc_size), dtype=nb.float64)
+    iS       = np.zeros((3, old_N + inc_size), dtype=nb.float64)
+    iT       = np.zeros((3, old_N + inc_size), dtype=nb.float64)
+    itemp_N  = np.zeros((   old_N + inc_size), dtype=nb.float64)
+    
+    iold_particles = np.zeros((old_particles.shape[0], old_N + inc_size), dtype=nb.float64)
+    
+    # Fill new arrays with existing values except W_mag, Ib, Ep, Bp, S, T, v_prime, temp_N and old_particles
+    # Since these will either be zeroed or overwritten
+    ipos[      :old_N] = pos[:]
+    ivel[:,    :old_N] = vel[:, :]
+    iidx[      :old_N] = idx[:]
+    iIe[       :old_N] = Ie[:]
+    iW_elec[:, :old_N] = W_elec[:, :]
+    return ipos, ivel, iidx, iIe, iIb, iW_elec, iW_mag, iEp, iBp, iv_prime, iS, iT, itemp_N, iold_particles
+
+
+@nb.njit()
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N,                      \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu, mp_flux,       \
               Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields,\
@@ -175,16 +214,17 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, Ep, Bp, v_prime, S, T,temp_N,\
                      qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array)
     
-    # Check number of spare particles every 25 steps
-    if qq%25 == 0 and particle_open == 1:
-        num_spare = (idx < 0).sum()
-        if num_spare < nsp_ppc.sum():
-            print('WARNING :: Less than one cell of spare particles remaining.')
-            if num_spare < inject_rate.sum() * DT * 5.0:
-                # Change this to dynamically expand particle arrays later on (adding more particles)
-                # Can do it by cell lots (i.e. add a cell's worth each time)
-                print('WARNING :: No space particles remaining. Exiting simulation.')
-                raise IndexError
+# =============================================================================
+#     # Check number of spare particles every 25 steps
+#     if qq%25 == 0 and particle_open == 1:
+#         num_spare = (idx < 0).sum()
+#         if num_spare < inject_rate.sum() * DT * 5.0:
+#             # Change this to dynamically expand particle arrays later on (adding more particles)
+#             print('WARNING :: Less than 5 time increments of spare particles remaining. Widening arrays...')
+#             pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T, temp_N, old_particles = \
+#             increase_particle_array_size(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, 
+#                                          S, T, temp_N, old_particles)
+# =============================================================================
             
     # Move particles, collect moments
     particles.advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
@@ -252,5 +292,41 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
 
     q_dens[:] = q_dens_adv
     mp_flux   = mp_flux_old.copy()
+    
+    
 
     return qq, DT, max_inc, part_save_iter, field_save_iter
+
+
+def dump_to_file(pos, vel, E, Ve, Te, B, Ji, rho, qq, suff='', print_particles=False):
+    import os
+    np.set_printoptions(threshold=sys.maxsize)
+    
+    dirpath = drive + save_path + '/run_{}/ts_{:05}/'.format(run, qq, suff) 
+    if os.path.exists(dirpath) == False:
+        os.makedirs(dirpath)
+        
+    print('Dumping arrays to file')
+    if print_particles == True:
+        with open(dirpath + 'pos{}.txt'.format(suff), 'w') as f:
+            print(pos, file=f)
+        with open(dirpath + 'vel{}.txt'.format(suff), 'w') as f:
+            print(vel, file=f)
+    with open(dirpath + 'E{}.txt'.format(suff), 'w') as f:
+        print(E, file=f)
+    with open(dirpath + 'Ve{}.txt'.format(suff), 'w') as f:
+        print(Ve, file=f)
+    with open(dirpath + 'Te{}.txt'.format(suff), 'w') as f:
+        print(Te, file=f)
+    with open(dirpath + 'B{}.txt'.format(suff), 'w') as f:
+        print(B, file=f)
+    with open(dirpath + 'J{}.txt'.format(suff), 'w') as f:
+        print(Ji, file=f)
+
+    np.set_printoptions(threshold=1000)
+    return
+
+# =============================================================================
+#     dump_to_file(pos, vel, E_int, Ve, Te, B, Ji, q_dens, qq, suff='', print_particles=True)
+#     sys.exit('Exiting simulation...')
+# =============================================================================
