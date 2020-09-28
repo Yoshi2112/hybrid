@@ -15,7 +15,7 @@ import numpy as np
 import sys
 import os
 
-event_inputs = False
+event_inputs = True
 
 # Hard-coded some plasma param files. Loads based on position in array and run number if event_inputs True
 # Can update and change these later if desired. Or even use a string format to replace run series (e.g. H_ONLY)
