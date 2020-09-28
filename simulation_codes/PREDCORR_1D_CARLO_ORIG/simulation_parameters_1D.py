@@ -251,9 +251,11 @@ else:
         fx_len += d_len                                                                 # Accrue arclength
         ii     += 1                                                                     # Increment counter
     
-        sys.stdout.write('\r{:.1f}% complete'.format(fx_len/xmax * 100.))
-        sys.stdout.flush()
-    print('\n')
+# =============================================================================
+#         sys.stdout.write('\r{:.1f}% complete'.format(fx_len/xmax * 100.))
+#         sys.stdout.flush()
+#     print('\n')
+# =============================================================================
 
     theta_xmax  = lam_i                                                                 # Latitude of simulation boundary
     r_xmax      = L * RE * np.cos(theta_xmax) ** 2                                      # Radial distance of simulation boundary
