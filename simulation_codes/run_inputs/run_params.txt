@@ -1,9 +1,4 @@
 DRIVE					/home/c3134027/
-<<<<<<< Updated upstream
-SAVE_PATH				/runs/new_Jul25_ParaRuns_changingA/
-=======
-SAVE_PATH				/runs/new_Jul25_ParaRuns_changing_cHe/
->>>>>>> Stashed changes
 RUN						-
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
@@ -33,8 +28,4 @@ GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02	
 PARTICLE_DUMP_FREQ		0.25
 FIELD_DUMP_FREQ			0.10
-<<<<<<< Updated upstream
-Exact same spatial parameters with different particle composition for Jul 25 event. Single time, changing anisotropy to look for growth.
-=======
 Exact same spatial parameters with different particle composition for Jul 25 event. Single time, adding cold He to look for growth.
->>>>>>> Stashed changes
