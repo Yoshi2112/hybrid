@@ -1,0 +1,2 @@
+Variations on parameters found on RBSP-A Jul 25 2013 21:39:07.6 UT which represets the highest growth rate initially tested with only cold hydrogen (plus 6 energetic H/He/O components )
+This test serves to examine at what point a hydrogen only 2-species plasma will support wave growth by changing either A or T_perp

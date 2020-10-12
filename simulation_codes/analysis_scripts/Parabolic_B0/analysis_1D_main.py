@@ -3783,12 +3783,12 @@ def multiplot_mag_energy(save=False):
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'F:'
+    drive       = 'G:'
     
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     
-    for series in ['//compare_TIMEVAR_and_CARLO//']:
+    for series in ['//new_event_runs//']:
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -3800,24 +3800,29 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [11]
+            runs_to_do = range(6, num_runs)
         
         # Extract all summary files and plot field stuff (quick)
         if True:
+            
             for run_num in runs_to_do:
-                print('\nRun {}'.format(run_num))
-                #cf.delete_analysis_folders(drive, series, run_num)
-                cf.load_run(drive, series, run_num, extract_arrays=True)
-                
-                #plot_abs_with_boundary_parameters()
-                field_energy_vs_time(save=True)
-    
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
-                standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=True)
-                
-                #get_reflection_coefficient()
+                try:
+                    print('\nRun {}'.format(run_num))
+                    #cf.delete_analysis_folders(drive, series, run_num)
+                    cf.load_run(drive, series, run_num, extract_arrays=True)
+                    
+                    #plot_abs_with_boundary_parameters()
+                    field_energy_vs_time(save=True)
         
-        if True:
+                    plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=False)
+                    standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False, remove_ND=False)
+                    
+                    #get_reflection_coefficient()
+                except:
+                    print('Error with run {}, skipping...'.format(run_num))
+            
+        
+        if False:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
