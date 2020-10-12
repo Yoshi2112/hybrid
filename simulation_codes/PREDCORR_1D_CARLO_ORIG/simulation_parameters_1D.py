@@ -19,24 +19,43 @@ event_inputs = True
 
 # Hard-coded some plasma param files. Loads based on position in array and run number if event_inputs True
 # Can update and change these later if desired. Or even use a string format to replace run series (e.g. H_ONLY)
-plasma_list = ['/run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213050105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213221605000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213248105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213307605000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213406605000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213703105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213907605000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214026105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214105605000_H_ONLY.txt']
+change_T = False
+if change_T == True:
+    plasma_list = ['/run_inputs/from_data/LGRT_tested_modified/Changing_T/LGRT_changing_T_01.txt',
+                   '/run_inputs/from_data/LGRT_tested_modified/Changing_T/LGRT_changing_T_02.txt',
+                   '/run_inputs/from_data/LGRT_tested_modified/Changing_T/LGRT_changing_T_03.txt',
+                   '/run_inputs/from_data/LGRT_tested_modified/Changing_T/LGRT_changing_T_04.txt',
+                   '/run_inputs/from_data/LGRT_tested_modified/Changing_T/LGRT_changing_T_05.txt',
+                   '/run_inputs/from_data/LGRT_tested_modified/Changing_T/LGRT_changing_T_06.txt',
+                   '/run_inputs/from_data/LGRT_tested_modified/Changing_T/LGRT_changing_T_07.txt',
+                   '/run_inputs/from_data/LGRT_tested_modified/Changing_T/LGRT_changing_T_08.txt',
+                   ]
+else:
+    plasma_list = ['/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_01.txt',
+                   '/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_02.txt',
+                   '/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_03.txt',
+                   '/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_04.txt',
+                   '/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_05.txt',
+                   '/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_06.txt',
+                   '/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_07.txt',
+                   '/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_08.txt',
+                   '/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_09.txt',
+                   '/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_10.txt',
+                   ]
 
 # =============================================================================
-# plasma_list = ['/run_inputs/variants/plasma_params_protons.txt',
-#                '/run_inputs/variants/plasma_params_w_helium.txt',
-#                '/run_inputs/variants/plasma_params_w_oxygen.txt',
-#                '/run_inputs/variants/plasma_params_w_helium_and_oxygen.txt',
-#                ]
+# plasma_list = ['/run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213050105000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213221605000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213248105000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213307605000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213406605000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213703105000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213907605000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214026105000_H_ONLY.txt',
+#                '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214105605000_H_ONLY.txt']
 # =============================================================================
+
 
 ## INPUT RUN/DRIVER FILE LOCATIONS ##
 if os.name == 'posix':

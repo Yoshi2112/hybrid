@@ -1,5 +1,5 @@
 DRIVE					/home/c3134027/
-SAVE_PATH				/runs/new_Jul25_ParaRuns/
+SAVE_PATH				/runs/new_Jul25_ParaRuns_changingT/
 RUN						-
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
@@ -19,7 +19,7 @@ RADIX_LOADING			0
 DAMPING_MULTIPLIER_RD   0.05
 NX 						1024
 ND 						1024
-MAX_REV					210
+MAX_REV					300
 DXM						1.0
 R_A						120e3
 IE						1
@@ -29,4 +29,4 @@ GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02	
 PARTICLE_DUMP_FREQ		0.25
 FIELD_DUMP_FREQ			0.10
-Third attempt at event runs for Jul 25 2013.
+Exact same spatial parameters with different particle composition for Jul 25 event. Single time, changing T_perp to look for growth.
