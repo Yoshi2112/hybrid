@@ -19,29 +19,19 @@ event_inputs = True
 
 # Hard-coded some plasma param files. Loads based on position in array and run number if event_inputs True
 # Can update and change these later if desired. Or even use a string format to replace run series (e.g. H_ONLY)
-change_T = False
-if change_T == True:
-    plasma_list = ['/run_inputs/from_data/LGRT_tested_modified/Changing_T/LGRT_changing_T_01.txt',
-                   '/run_inputs/from_data/LGRT_tested_modified/Changing_T/LGRT_changing_T_02.txt',
-                   '/run_inputs/from_data/LGRT_tested_modified/Changing_T/LGRT_changing_T_03.txt',
-                   '/run_inputs/from_data/LGRT_tested_modified/Changing_T/LGRT_changing_T_04.txt',
-                   '/run_inputs/from_data/LGRT_tested_modified/Changing_T/LGRT_changing_T_05.txt',
-                   '/run_inputs/from_data/LGRT_tested_modified/Changing_T/LGRT_changing_T_06.txt',
-                   '/run_inputs/from_data/LGRT_tested_modified/Changing_T/LGRT_changing_T_07.txt',
-                   '/run_inputs/from_data/LGRT_tested_modified/Changing_T/LGRT_changing_T_08.txt',
-                   ]
-else:
-    plasma_list = ['/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_01.txt',
-                   '/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_02.txt',
-                   '/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_03.txt',
-                   '/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_04.txt',
-                   '/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_05.txt',
-                   '/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_06.txt',
-                   '/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_07.txt',
-                   '/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_08.txt',
-                   '/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_09.txt',
-                   '/run_inputs/from_data/LGRT_tested_modified/Changing_A/LGRT_changing_A_10.txt',
-                   ]
+
+plasma_list = ['/run_inputs/from_data/LGRT_tested_modified/Changing_Cold_He/LGRT_changing_cHe_01.txt',
+               '/run_inputs/from_data/LGRT_tested_modified/Changing_Cold_He/LGRT_changing_cHe_02.txt',
+               '/run_inputs/from_data/LGRT_tested_modified/Changing_Cold_He/LGRT_changing_cHe_03.txt',
+               '/run_inputs/from_data/LGRT_tested_modified/Changing_Cold_He/LGRT_changing_cHe_04.txt',
+               '/run_inputs/from_data/LGRT_tested_modified/Changing_Cold_He/LGRT_changing_cHe_05.txt',
+               '/run_inputs/from_data/LGRT_tested_modified/Changing_Cold_He/LGRT_changing_cHe_06.txt',
+               '/run_inputs/from_data/LGRT_tested_modified/Changing_Cold_He/LGRT_changing_cHe_07.txt',
+               '/run_inputs/from_data/LGRT_tested_modified/Changing_Cold_He/LGRT_changing_cHe_08.txt',
+               '/run_inputs/from_data/LGRT_tested_modified/Changing_Cold_He/LGRT_changing_cHe_09.txt',
+               '/run_inputs/from_data/LGRT_tested_modified/Changing_Cold_He/LGRT_changing_cHe_10.txt',
+               ]
+
 
 # =============================================================================
 # plasma_list = ['/run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt',
