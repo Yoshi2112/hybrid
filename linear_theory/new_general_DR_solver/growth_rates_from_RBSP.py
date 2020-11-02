@@ -28,7 +28,7 @@ mu0 = 4.000e-07*np.pi
  - From result, calculate group velocity and CGR
  - Plot as timeseries using max values (or maybe some sort of 2D thing for each band
 '''
-def get_raw_data():
+def get_raw_data(rbsp_path):
     save_file = save_dir + 'extracted_data_{}.npz'.format(save_string)
     
     if os.path.exists(save_file) == False:
@@ -57,7 +57,7 @@ def get_raw_data():
     return times, B0, cold_dens, hope_dens, hope_temp, hope_anis, spice_dens, spice_temp, spice_anis
 
 
-def extract_species_arrays(time_start, time_end, probe, pad, cmp, return_raw_ne=False):
+def extract_species_arrays(rbsp_path, time_start, time_end, probe, pad, cmp, return_raw_ne=False, HM_filter_mhz=50):
     '''
     Data module only extracts the 3 component species dictionary from HOPE and RBSPICE 
     energetic measurements. This function creates the single axis arrays required to 
@@ -68,7 +68,8 @@ def extract_species_arrays(time_start, time_end, probe, pad, cmp, return_raw_ne=
     
     
     times, B0, cold_dens, hope_dens, hope_temp, hope_anis, spice_dens, spice_temp, spice_anis\
-        = data.load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_path=rbsp_path)
+        = data.load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_path=rbsp_path,
+                                                  HM_filter_mhz=HM_filter_mhz)
 
     Nt       = times.shape[0]
     _density = np.zeros((9, Nt), dtype=float)
@@ -467,7 +468,7 @@ def check_if_exists():
 
 if __name__ == '__main__':
     gdrive    = 'F://Google Drive//'
-    rbsp_path = 'G://DATA//RBSP//'
+    _rbsp_path = 'G://DATA//RBSP//'
     dump_drive= 'G://'
     
     _Nk       = 500

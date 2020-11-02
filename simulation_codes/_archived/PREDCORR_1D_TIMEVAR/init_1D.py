@@ -215,7 +215,7 @@ def set_timestep(vel):
     DT       = min(ion_ts, vel_ts)
     max_time = const.max_rev * gyperiod               # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1                 # Total number of time steps
-    pdb.set_trace()
+
     if const.part_res == 0:
         part_save_iter = 1
     else:

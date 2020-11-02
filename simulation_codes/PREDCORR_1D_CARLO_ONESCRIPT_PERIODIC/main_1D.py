@@ -118,8 +118,8 @@ def uniform_gaussian_distribution_quiet():
         # Load particles in each applicable cell
         acc = 0; offset  = 0
         for ii in range(NC_load):
-            # Add particle if last cell (for symmetry)
-            if ii == NC_load - 1:
+            # Add particle if last cell (for symmetry, but only with open field boundaries)
+            if ii == NC_load - 1 and field_periodic == 0:
                 half_n += 1
                 offset  = 1
                 
@@ -149,7 +149,7 @@ def uniform_gaussian_distribution_quiet():
             else:
                 vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Set anti-parallel
                 
-            pos[en: en + half_n] = pos[st: en]                # Other half, same position
+            pos[en: en + half_n]    = pos[st: en]                   # Other half, same position
             vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
             vel[2, en: en + half_n] = vel[2, st: en] * -1.0
             
@@ -180,9 +180,9 @@ def initialize_particles():
     W_elec     = np.zeros((3, N), dtype=nb.float64)
     W_mag      = np.zeros((3, N), dtype=nb.float64)
     
-    Bp      = np.zeros((3, N), dtype=nb.float64)
-    Ep      = np.zeros((3, N), dtype=nb.float64)
-    temp_N  = np.zeros((N),    dtype=nb.float64)
+    Bp         = np.zeros((3, N), dtype=nb.float64)
+    Ep         = np.zeros((3, N), dtype=nb.float64)
+    temp_N     = np.zeros((N),    dtype=nb.float64)
     
     assign_weighting_TSC(pos, Ie, W_elec)
     return pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, temp_N
@@ -193,19 +193,6 @@ def set_damping_array(B_damping_array, E_damping_array, DT):
     '''Create masking array for magnetic field damping used to apply open
     boundaries. Based on applcation by Shoji et al. (2011) and
     Umeda et al. (2001)
-    
-    Shoji's application multiplies by the resulting field before it 
-    is returned at each timestep (or each time called?), but Umeda's variant 
-    includes a damping on the increment as well as the solution, with a
-    different r for each (one damps, one changes the phase velocity and
-    increases the "effective damping length").
-    
-    Also, using Shoji's parameters, mask at most damps 98.7% at end grid 
-    points. Relying on lots of time spend there? Or some sort of error?
-    Can just play with r value/damping region length once it doesn't explode.
-    
-    23/03/2020 Put factor of 0.5 in front of va to set group velocity approx.
-    14/05/2020 Put factor of 0.5 in front of DT since B is only ever pushed 0.5DT
     '''
     r_damp   = np.sqrt(29.7 * 0.5 * va * (0.5 * DT / dx) / ND)   # Damping coefficient
     r_damp  *= damping_multiplier
@@ -445,7 +432,7 @@ def eval_B0_particle_1D(pos, vel, idx, Bp):
     Could totally vectorise this. Would have to change to give a particle_temp
     array for memory allocation or something
     '''
-    Bp[0]    =   eval_B0x(pos)  
+    Bp[0]    = eval_B0x(pos)  
     constant = a * B_eq 
     for ii in range(idx.shape[0]):
         if idx[ii] >= 0:
@@ -744,23 +731,48 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
         for kk in range(3):
             Ji[:, kk] += nu[:, jj, kk] * n_contr[jj] * charge[jj]
 
-    # Mirror source term contributions at edge back into domain: Simulates having
-    # some sort of source on the outside of the physical space boundary.
-    q_dens[ND]          += q_dens[ND - 1]
-    q_dens[ND + NX - 1] += q_dens[ND + NX]
-
-    for ii in range(3):
-        # Mirror source term contributions
-        Ji[ND, ii]          += Ji[ND - 1, ii]
-        Ji[ND + NX - 1, ii] += Ji[ND + NX, ii]
-
+    if field_periodic == 0:
+        # Mirror source term contributions at edge back into domain: Simulates having
+        # some sort of source on the outside of the physical space boundary.
+        q_dens[ND]          += q_dens[ND - 1]
+        q_dens[ND + NX - 1] += q_dens[ND + NX]
+    
+        for ii in range(3):
+            # Mirror source term contributions
+            Ji[ND, ii]          += Ji[ND - 1, ii]
+            Ji[ND + NX - 1, ii] += Ji[ND + NX, ii]
+    
+            # Set damping cell source values (copy last)
+            Ji[:ND, ii] = Ji[ND, ii]
+            Ji[ND+NX:, ii]  = Ji[ND+NX-1, ii]
+            
         # Set damping cell source values (copy last)
-        Ji[:ND, ii] = Ji[ND, ii]
-        Ji[ND+NX:, ii]  = Ji[ND+NX-1, ii]
+        q_dens[:ND]    = q_dens[ND]
+        q_dens[ND+NX:] = q_dens[ND+NX-1]
+    else:
+        # If homogenous, move contributions
+        q_dens[li1] += q_dens[ro1]
+        q_dens[li2] += q_dens[ro2]
+        q_dens[ri1] += q_dens[lo1]
+        q_dens[ri2] += q_dens[lo2]
         
-    # Set damping cell source values (copy last)
-    q_dens[:ND]    = q_dens[ND]
-    q_dens[ND+NX:] = q_dens[ND+NX-1]
+        # ...and copy periodic values
+        q_dens[ro1] = q_dens[li1]
+        q_dens[ro2] = q_dens[li2]
+        q_dens[lo1] = q_dens[ri1]
+        q_dens[lo2] = q_dens[ri2]
+        
+        for ii in range(3):
+            Ji[li1, ii] += Ji[ro1, ii]
+            Ji[li2, ii] += Ji[ro2, ii]
+            Ji[ri1, ii] += Ji[lo1, ii]
+            Ji[ri2, ii] += Ji[lo2, ii]
+            
+            # ...and copy periodic values
+            Ji[ro1, ii] = Ji[li1, ii]
+            Ji[ro2, ii] = Ji[li2, ii]
+            Ji[lo1, ii] = Ji[ri1, ii]
+            Ji[lo2, ii] = Ji[ri2, ii]
         
     # Implement smoothing filter: If enabled
     if source_smoothing == 1:
@@ -780,6 +792,11 @@ def three_point_smoothing(arr, temp):
     '''
     Three point Gaussian (1/4-1/2-1/4) smoothing function. arr, temp are both
     1D arrays of size NC = NX + 2*ND (i.e. on the E-grid)
+    
+    NOT IMPLEMENTED FOR HOMOGENOUS CONDITIONS YET
+        --- Smooth spatial values only
+        --- Do ghost cell move/copy in temp array
+        --- Overwrite main array afterwards
     '''
     NC = arr.shape[0]
     
@@ -825,20 +842,6 @@ def get_curl_E(E, dE):
     for ii in nb.prange(NC - 1):
         dE[ii + 1, 1] = - (E[ii + 1, 2] - E[ii, 2])
         dE[ii + 1, 2] =    E[ii + 1, 1] - E[ii, 1]
-
-    # Curl at E[0] : Forward/Backward difference (stored in B[0]/B[NC])
-    dE[0, 1] = -(-3*E[0, 2] + 4*E[1, 2] - E[2, 2]) / 2
-    dE[0, 2] =  (-3*E[0, 1] + 4*E[1, 1] - E[2, 1]) / 2
-    
-    dE[NC, 1] = -(3*E[NC - 1, 2] - 4*E[NC - 2, 2] + E[NC - 3, 2]) / 2
-    dE[NC, 2] =  (3*E[NC - 1, 1] - 4*E[NC - 2, 1] + E[NC - 3, 1]) / 2
-    
-    # Linearly extrapolate to endpoints
-    dE[0, 1]      -= 2*(dE[1, 1] - dE[0, 1])
-    dE[0, 2]      -= 2*(dE[1, 2] - dE[0, 2])
-    
-    dE[NC, 1]     += 2*(dE[NC, 1] - dE[NC - 1, 1])
-    dE[NC, 2]     += 2*(dE[NC, 2] - dE[NC - 1, 2])
     
     dE /= dx
     return 
@@ -861,10 +864,24 @@ def push_B(B, E, curlE, DT, qq, damping_array, half_flag=1):
     '''
     get_curl_E(E, curlE)
 
-    B       -= 0.5 * DT * curlE                          # Advance using curl (apply retarding factor here?)
+    B -= 0.5 * DT * curlE                                # Advance using curl
     
-    for ii in nb.prange(1, B.shape[1]):                  # Apply damping, skipping x-axis
-        B[:, ii] *= damping_array                        # Not sure if this needs to modified for half steps?
+    if field_periodic == 0:
+        for ii in nb.prange(1, B.shape[1]):              # Apply damping, skipping x-axis
+            B[:, ii] *= damping_array                    # Not sure if this needs to modified for half steps?
+    else:
+        for ii in nb.prange(1, B.shape[1]):
+            # Boundary value (should be equal)
+            end_bit = 0.5 * (B[ND, ii] + B[ND + NX, ii])
+
+            B[ND,      ii] = end_bit
+            B[ND + NX, ii] = end_bit
+            
+            B[ND - 1, ii]  = B[ND + NX - 1, ii]
+            B[ND - 2, ii]  = B[ND + NX - 2, ii]
+            
+            B[ND + NX + 1, ii] = B[ND + 1, ii]
+            B[ND + NX + 2, ii] = B[ND + 2, ii]
     return
 
 
@@ -914,7 +931,7 @@ def get_grad_P(qn, te, grad_P, temp):
                   density and temperature may vary (with adiabatic approx.)
         
     Forwards/backwards differencing at the simulation cells at the edge of the
-    physical space domain. Guard cells set to zero. (Actually not anymore. Just take FD over all space)
+    physical space domain.
     '''
     temp     *= 0; grad_P *= 0
     
@@ -922,13 +939,9 @@ def get_grad_P(qn, te, grad_P, temp):
     grad_P[:] = qn * kB * te / q       # Store Pe in grad_P array for calculation
 
     # Central differencing, internal points
-    # 2020-05-12 :: Changed limits from (ND + 1, LC - 1), removed F/B FD.
     for ii in nb.prange(1, nc - 1):
         temp[ii] = (grad_P[ii + 1] - grad_P[ii - 1])
-    
-    # Forwards/Backwards difference at physical boundaries
-    #temp[ND] = -3*grad_P[ND] + 4*grad_P[ND + 1] - grad_P[ND + 2]
-    #temp[LC] =  3*grad_P[LC] - 4*grad_P[LC - 1] + grad_P[LC - 2]
+
     temp    /= (2*dx)
     
     # Return value
@@ -967,17 +980,25 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_dampi
 
     get_electron_temp(q_dens, Te, Te0)
 
-    get_grad_P(q_dens, Te, grad_P, temp3Db[:, 0])            # temp1D is now del_p term, temp3D2 slice used for computation
-    interpolate_edges_to_center(B, temp3Db)              # temp3db is now B_center
+    get_grad_P(q_dens, Te, grad_P, temp3Db[:, 0])             # temp1D is now del_p term, temp3D2 slice used for computation
+    interpolate_edges_to_center(B, temp3Db)                   # temp3db is now B_center
 
     cross_product(Ve, temp3Db[:temp3Db.shape[0]-1, :], temp3De)                  # temp3De is now Ve x B term
-    if E_damping == 1:
+    if E_damping == 1 and field_periodic == 0:
         temp3De *= E_damping_array
     
     E[:, 0]  = - temp3De[:, 0] - grad_P[:] / q_dens[:]
     E[:, 1]  = - temp3De[:, 1]
     E[:, 2]  = - temp3De[:, 2]
-    
+        
+    # Copy periodic values
+    if field_periodic == 1:
+        for ii in range(3):
+            E[ro1, ii] = E[li1, ii]
+            E[ro2, ii] = E[li2, ii]
+            E[lo1, ii] = E[ri1, ii]
+            E[lo2, ii] = E[ri2, ii]
+            
     # Diagnostic flag for testing
     if disable_waves == 1:   
         E *= 0.
@@ -1402,6 +1423,8 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     return qq, DT, max_inc, part_save_iter, field_save_iter
 
 
+def control_loop():
+    return
 
 
 
@@ -1526,9 +1549,18 @@ if __name__ == '__main__':
 #####################################
 ### DERIVED SIMULATION PARAMETERS ###
 #####################################
+    if ND < 2:
+        ND = 2                                  # Set minimum (used for array addresses)
+    
     NC          = NX + 2*ND                     # Total number of cells
     ne          = density.sum()                 # Electron number density
     E_par       = E_per / (anisotropy + 1)      # Parallel species energy
+    
+    if field_periodic == 1:
+        if particle_periodic == 0:
+            print('Periodic field compatible only with periodic particles.')
+            particle_periodic = 1
+            particle_reflect = particle_reinit = 0
     
     particle_open = 0
     if particle_reflect + particle_reinit + particle_periodic == 0:
@@ -1572,7 +1604,9 @@ if __name__ == '__main__':
     n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
     
     # Number of sim particles for each species, total
-    N_species = nsp_ppc * NX + 2   
+    N_species = nsp_ppc * NX
+    if field_periodic == 0:
+        N_species += 2   
     
     # Add number of spare particles proportional to # cells worth
     if particle_open == 1:
@@ -1650,6 +1684,13 @@ if __name__ == '__main__':
         
     species_plasfreq_sq   = (density * charge ** 2) / (mass * e0)
     species_gyrofrequency = qm_ratios * B_eq
+    
+    # E-field nodes around boundaries (used for sources and E-fields)
+    lo1 = ND - 1 ; lo2 = ND - 2             # Left outer (to boundary)
+    ro1 = ND + NX; ro2 = ND + NX + 1        # Right outer
+    
+    li1 = ND         ; li2 = ND + 1         # Left inner
+    ri1 = ND + NX - 1; ri2 = ND + NX - 2    # Right inner
     
 ##############################
 ### INPUT TESTS AND CHECKS ###

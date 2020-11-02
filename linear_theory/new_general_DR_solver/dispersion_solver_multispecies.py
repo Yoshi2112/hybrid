@@ -181,7 +181,16 @@ def dispersion_relation_solver(Species, PlasmaParams, norm_k_in=True, norm_k_out
             
             warm_solns[ii, jj], infodict, warm_ier[ii, jj], warm_msg[ii, jj] =\
                 fsolve(warm_plasma_dispersion_relation, x0=warm_solns[ii - 1, jj], args=(k_vals[ii], Species), xtol=tol, maxfev=fev, full_output=True)
-            
+    
+    # Resolve at k = 0 because working out specific bands is hard
+    # Hard bit isn't solving the equation, its making sure the initial guess doesn't jump onto the wrong solution for multi-component systems
+    for jj in range(N_solns):
+        CPDR_solns[0, jj], infodict, cold_ier[0, jj], cold_msg[0, jj] =\
+            fsolve(cold_plasma_dispersion_relation, x0=CPDR_solns[1, jj], args=(k_vals[0], Species), xtol=tol, maxfev=fev, full_output=True)
+        
+        warm_solns[0, jj], infodict, warm_ier[0, jj], warm_msg[0, jj] =\
+            fsolve(warm_plasma_dispersion_relation, x0=warm_solns[1, jj], args=(k_vals[0], Species), xtol=tol, maxfev=fev, full_output=True)
+
     warm_solns = estimate_first_and_complexify(warm_solns)
 
     # Filter out bad solutions
@@ -336,9 +345,10 @@ def create_species_array(B0, name, mass, charge, density, tper, ani):
                                             0.)], dtype=Species.dtype))
     
     PlasParams = {}
-    PlasParams['va']    = B0 / np.sqrt(mu0*(density * mass).sum())  # Alfven speed
-    PlasParams['n0']    = ne                                        # Electron number density
-    PlasParams['p_cyc'] = q*B0 / mp                                 # Proton cyclotron frequency
+    PlasParams['va']       = B0 / np.sqrt(mu0*(density * mass).sum())  # Alfven speed (m/s)
+    PlasParams['n0']       = ne                                        # Electron number density (/m3)
+    PlasParams['pcyc_rad'] = q*B0 / mp                                 # Proton cyclotron frequency (rad/s)
+    PlasParams['B0']       = B0                                        # Magnetic field value (T)
     return Species, PlasParams
 
 

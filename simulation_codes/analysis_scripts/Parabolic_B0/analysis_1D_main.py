@@ -3783,14 +3783,15 @@ def multiplot_mag_energy(save=False):
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'G:'
+    drive       = 'F:'
     
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     
-    for series in ['//new_event_runs//']:
-        series_dir  = '{}/runs//{}//'.format(drive, series)
-        num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+    for series in ['CARLO_periodic_test']:
+        
+        series_dir = '{}/runs//{}//'.format(drive, series)
+        num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
         # Sample colour list just to draw from
@@ -3800,11 +3801,10 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = range(6, num_runs)
+            runs_to_do = [2]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
-            
             for run_num in runs_to_do:
                 try:
                     print('\nRun {}'.format(run_num))
