@@ -7,7 +7,7 @@ Created on Thu Oct 22 22:52:48 2020
 Note: This is a super inefficient solve-as-you-go script (e.g. I solve for k(w)
 about 10 times in some places). Can always optimize later.
 """
-import sys, pdb
+import sys, warnings, pdb
 import numpy as np
 import matplotlib.pyplot as plt
 from   scipy.special     import wofz
@@ -16,17 +16,30 @@ sys.path.append('..//new_general_DR_solver//')
 
 from dispersion_solver_multispecies import create_species_array, dispersion_relation_solver
 
+# Constants
+qp     = 1.602e-19
+qe     =-1.602e-19
+mp     = 1.673e-27
+me     = 9.110e-31
+e0     = 8.854e-12
+mu0    = 4e-7*np.pi
+RE     = 6.371e6
+c      = 3e8
+kB     = 1.380649e-23
+B_surf = 3.12e-5
+
 def get_k_cold(w, Species):
     '''
     Calculate the k of a specific angular frequency w in a cold multicomponent plasma
     '''
-    cold_sum = 0.0
-    for ii in range(Species.shape[0]):
-        cold_sum += Species[ii]['plasma_freq_sq'] / (w * (w - Species[ii]['gyrofreq']))
-
-    k = np.sqrt(1 - cold_sum) * w / c
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        cold_sum = 0.0
+        for ii in range(Species.shape[0]):
+            cold_sum += Species[ii]['plasma_freq_sq'] / (w * (w - Species[ii]['gyrofreq']))
+    
+        k = np.sqrt(1 - cold_sum) * w / c
     return k
-
 
 def get_gamma_c(w, Species):
     # Electron bit (gyfreq is signed, so this is a minus)
@@ -37,7 +50,6 @@ def get_gamma_c(w, Species):
         cold_sum += Species[ii]['plasma_freq_sq'] / (Species[ii]['gyrofreq'] - w)
     return cold_sum
 
-
 def get_cold_dispersion_omura(w, Species):
     '''
     UNFINISHED
@@ -45,7 +57,6 @@ def get_cold_dispersion_omura(w, Species):
     k     = get_k_cold(w, Species)
     gam_c = get_gamma_c(w, Species)
     return
-
 
 def get_group_velocity(w, k, Species):
     gam_c = get_gamma_c(w, Species) 
@@ -59,16 +70,25 @@ def get_group_velocity(w, k, Species):
     Vg    = 2 * c * c * k / denom
     return Vg
 
-
 def get_resonance_velocity(w, k, Species, PP):
     Vr = (w - PP['pcyc_rad']) / k
     return Vr
 
-
 def get_phase_velocity(w, k, Species):
     return w / k
 
-
+def get_velocities(w, Species, PP, normalize=False):
+    k  = get_k_cold(w, Species)
+    Vg = get_group_velocity(w, k, Species)
+    Vr = get_resonance_velocity(w, k, Species, PP)
+    Vp = get_phase_velocity(w, k, Species)
+    
+    if normalize == False:
+        return Vg, Vp, Vr
+    else:
+        return Vg/c, Vp/c, Vr/c
+    
+    
 def get_inhomogeneity_terms(w, Species, PP, Vth_perp):
     '''
     Validated about as much as possible. Results are dimensionless since 
@@ -81,21 +101,9 @@ def get_inhomogeneity_terms(w, Species, PP, Vth_perp):
     pcyc       = PP['pcyc_rad']
     
     s0 = Vth_perp / Vp
-    s1 = (1 - Vr/Vg) ** 2
+    s1 = (1.0 - Vr/Vg) ** 2
     s2 = (Vth_perp**2/(2*Vp**2) + Vr**2 / (Vp*Vg) - Vr**2/(2*Vp**2))*(w / pcyc) - Vr/Vp
     return np.array([s0, s1, s2])
-
-
-def get_velocities(w, Species, PP, normalize=False):
-    k  = get_k_cold(w, Species)
-    Vg = get_group_velocity(w, k, Species)
-    Vr = get_resonance_velocity(w, k, Species, PP)
-    Vp = get_phase_velocity(w, k, Species)
-    
-    if normalize == False:
-        return Vg, Vp, Vr
-    else:
-        return Vg/c, Vp/c, Vr/c
 
 
 def nonlinear_growth_rate(w, Species, PP, nh, Q, Vth_para, Vth_perp, Bw):
@@ -142,7 +150,7 @@ def Z(arg):
     return 1j*np.sqrt(np.pi)*wofz(arg)
 
 
-def linear_growth_rates(w, Species):
+def linear_growth_rates_chen(w, Species):
     '''
     Linear theory bit from Chen. Should be able to support multiple hot and
     cold species in the Species array, but the Omura functions probably can't.
@@ -295,16 +303,21 @@ def push_w(w_old, Om, s, dt):
 
 def get_threshold_value_normalized(w, wph2, Q, s, a, Vp, Vr, Vth_para, Vth_perp):
     '''
-    This is mega sensitive to initial frequency
+    Input values are their normalized counterparts, as per eqn. (62) of Omura et al. (2010)
     '''
-    t1 = 100 * (np.pi * Vp) ** 3 / (w * wph2 ** 2 * Vth_perp ** 5)
-    t2 = (a * s[2] * Vth_para / Q) ** 2
-    t3 = np.exp((Vr / Vth_para)**2)
-    return t1 * t2 * t3
+    t1    = 100 * np.pi ** 3 * Vp ** 3 / (w * wph2 ** 2 * Vth_perp ** 5)
+    t2    = (a * s[2] * Vth_para / Q) ** 2
+    t3    = np.exp(Vr**2 / Vth_para**2)
+    om_th = t1 * t2 * t3
+    return om_th
 
 
 def get_threshold_value(w, Species, PP, nh, a, Q, Vth_para, Vth_perp, Bw):
-    '''None of these values are normalized'''
+    '''
+    This is the un-normalized input-output for B_th from Omura et al. (2010)
+    eqn (60). However, it relies on the calculation for non-linear growth rate
+    Gamma_NL, which has not as yet been verified.
+    '''
     Vg, Vp, Vr = get_velocities(w, Species, PP)
     s          = get_inhomogeneity_terms(w, Species, PP, Vth_perp)
     NL         = nonlinear_growth_rate(w, Species, PP, nh, Q, Vth_para, Vth_perp, Bw)
@@ -316,7 +329,8 @@ def get_threshold_value(w, Species, PP, nh, a, Q, Vth_para, Vth_perp, Bw):
 
 def get_threshold_value_UNIO(w, Species, PP, nh, Vth_para, Vth_perp, Q, L):
     '''
-    Un-normalized input, converted to un-normalized output
+    Input and Output values are un-normalized, but the calculation is done
+    using the normalized eqn (62) of Omura et al. (2010). 
     '''
     # Un-normalized values
     #B0         = PP['B0']
@@ -346,7 +360,7 @@ def get_threshold_value_UNIO(w, Species, PP, nh, Vth_para, Vth_perp, Q, L):
     return Bth
 
 
-def solve_coupled_equations(Species, PP, init_f, init_Bw, L, nh, Q, Vth_para, Vth_perp):
+def leapfrog_coupled_equations(Species, PP, init_f, init_Bw, L, nh, Q, Vth_para, Vth_perp):
     '''
     Each time the frequency changes, the velocities will change (changing the s factors).
     Constants will be:
@@ -366,7 +380,7 @@ def solve_coupled_equations(Species, PP, init_f, init_Bw, L, nh, Q, Vth_para, Vt
     # Constants:
     B0        = PP['B0']                                 # Equatorial magnetic field
     pcyc_eq   = PP['pcyc_rad']                           # Equatorial proton cyclotron frequency
-    wph2      = nh * qp ** 2 / (mp * e0)                 # Hot proton plasma frequency squared (normalized)
+    wph2      = nh * qp ** 2 / (mp * e0)                 # Hot proton plasma frequency squared
     a         = 4.5 / ((L * RE)**2)                      # Parabolic magnetic field scale factor
     w_init    = 0.4*pcyc_eq #2 * np.pi * init_f
 
@@ -391,22 +405,10 @@ def solve_coupled_equations(Species, PP, init_f, init_Bw, L, nh, Q, Vth_para, Vt
     w_arr[0]  = w_init  / pcyc_eq
     Om_arr[0] = init_Bw / B0
     
-    ## TEST STUFF :: CAN DELETE
-    Species[0]['plasma_freq_sq'] = (679.0*pcyc_eq) ** 2
-    Species[1]['plasma_freq_sq'] = (117.0*pcyc_eq) ** 2
-    Species[2]['plasma_freq_sq'] = (58.30*pcyc_eq) ** 2
-    ## UP TO HERE
-    
     # Get initial parameters, solve for threshold
     Vg, Vp, Vr = get_velocities(w_arr[0]*pcyc_eq, Species, PP, normalize=True)
     s          = get_inhomogeneity_terms(w_arr[0]*pcyc_eq, Species, PP, Vth_perp*c)
     
-    # Still can't get this to be right - still comes out at ~1nT (1.087nT) instead of 0.48nT
-    Om_thresh_norm = get_threshold_value_normalized(w_arr[0], wph2, Q, s, a, Vp, Vr, Vth_para, Vth_perp)
-    Bw_thresh_norm = Om_thresh_norm*B0*1e9
-    print('Threshold |Bw|: {:>6.2f} nT'.format(Bw_thresh_norm*B0*1e9))
-    #return None, None, None
-    pdb.set_trace()
     
     # Retard initial w soln to N - 1/2 (overwriting w[0]):
     w_arr[0]   = push_w(w_arr[0], Om_arr[0], s, -0.5*dt) 
@@ -434,238 +436,235 @@ def solve_coupled_equations(Species, PP, init_f, init_Bw, L, nh, Q, Vth_para, Vt
     return t_arr, f_arr, Bw_arr
 
 
-    
-if __name__ == '__main__':
-    qp = 1.602e-19
-    qe =-1.602e-19
-    mp = 1.673e-27
-    me = 9.110e-31
-    e0 = 8.854e-12
-    mu0= 4e-7*np.pi
-    RE = 6.371e6
-    c  = 3e8
-    kB     = 1.380649e-23
-    B_surf = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
-    
-    
-    # Parameters from Omura et al. (2010)
-    
-    # Plasma and energetic parameters
-    pcyc     = 3.7 # Hz
-    Th_para  = (mp * (6e5)**2 / kB) / 11603.
-    Th_perp  = (mp * (8e5)**2 / kB) / 11603.
-    Ah       = Th_perp / Th_para - 1
-    apar_h   = np.sqrt(2.0 * qp * Th_para  / mp)
-    
+#####################################################################################
+### FUNCTIONS USED JUST TO TEST EQUATIONS :: DEFINING PLASMA REGIMES AND PLOTTING ###
+#####################################################################################
+
+def define_omura2010_parameters(include_energetic=False):
+    '''
+    Ambient plasma parameters from Omura et al. (2010) to recreate plots
+    '''
     # Parameters in SI units (Note: Added the hot bit here. Is it going to break anything?) nh = 7.2
-    _B0      = 2 * np.pi * mp * pcyc / qp
-    _name    = np.array(['H'    , 'He'  , 'O' ])
-    _mass    = np.array([1.0    , 4.0   , 16.0]) * mp
-    _charge  = np.array([1.0    , 1.0   , 1.0 ]) * qp
-    _density = np.array([144.0  , 17.0  , 17.0]) * 1e6
-    _tpar    = np.array([0.0    , 0.0   , 0.0 ])
-    _ani     = np.array([0.0    , 0.0   , 0.0 ])
-    _tper    = (_ani + 1) * _tpar
+    pcyc    = 3.7 # Hz
+    B0      = 2 * np.pi * mp * pcyc / qp
     
-    _Species, _PP = create_species_array(_B0, _name, _mass, _charge, _density, _tper, _ani)
+    if include_energetic == True:
+        Th_para  = (mp * (6e5)**2 / kB) / 11603.
+        Th_perp  = (mp * (8e5)**2 / kB) / 11603.
+        Ah       = Th_perp / Th_para - 1
+        #apar_h   = np.sqrt(2.0 * qp * Th_para  / mp)
+    
+        name    = np.array(['H'    , 'He'  , 'O'  , 'Hot H'])
+        mass    = np.array([1.0    , 4.0   , 16.0 , 1.0    ]) * mp
+        charge  = np.array([1.0    , 1.0   , 1.0  , 1.0    ]) * qp
+        density = np.array([136.8  , 17.0  , 17.0 , 7.2    ]) * 1e6
+        ani     = np.array([0.0    , 0.0   , 0.0  , Ah])
+        tpar    = np.array([0.0    , 0.0   , 0.0  , Th_para])
+        tper    = (ani + 1) * tpar
+    else:
+        name    = np.array(['H'    , 'He'  , 'O' ])
+        mass    = np.array([1.0    , 4.0   , 16.0]) * mp
+        charge  = np.array([1.0    , 1.0   , 1.0 ]) * qp
+        density = np.array([144.0  , 17.0  , 17.0]) * 1e6
+        ani     = np.array([0.0    , 0.0   , 0.0 ])
+        tpar    = np.array([0.0    , 0.0   , 0.0 ])
+        tper    = (ani + 1) * tpar
+    
+    Species, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
+    return Species, PP
 
-    
-    # Shoji et al. (2012) recreation of 2D plot
-    #   --- Varies with normalized frequency (to pcyc) and ion density (plasma freq. proxy)
-    #   --- Need to get Bth first, then NL growth rate calculated with Bw = Bth
-    #   --- BTH ALMOST VALIDATED. Min growth region looked a little off, and weird nan's at bottom left.
-    #       -- NOPE, H band completely different (way lower in higher density lower frequency section). Error?
-    if False:
-        Nw   = 500
-        _B0  = 243e-9   # T 
-        pcyc = 23.2     # rad/s 
-        ecyc = 4.27e4   # rad/s
-        
-        Nr          = 500
-        wpe_wce_max = 17    # Ratio max
-        
-        # Frequency axis
-        pcyc_min = 0.375
-        pcyc_max = 1.0
-        w_axis   = np.linspace(pcyc_min, pcyc_max, Nw)
-        _w       = w_axis * pcyc
-        
-        # Density axis 
-        wpe_wce  = np.linspace(0.0, wpe_wce_max, Nr)
-        ne       = wpe_wce ** 2 * _B0 ** 2 * e0 / me
-        
-        # Energetic plasma parameters
-        _Q        = 0.5
-        _Vth_para = 0.00800*c
-        _Vth_perp = 0.01068*c
-        
-        # Other parameters
-        _L        = 4.0
-        _Bw_init  = 0.5e-9
-        
-        # Cold plasma parameters
-        _name    = np.array(['H'    , 'He'  , 'O'   ])
-        _mass    = np.array([1.0    , 4.0   , 16.0  ]) * mp
-        _charge  = np.array([1.0    , 1.0   , 1.0   ]) * qp
-        _tpar    = np.array([0.0    , 0.0   , 0.0   ])
-        _ani     = np.array([0.0    , 0.0   , 0.0   ])
-        _tper    = (_ani + 1) * _tpar
-    
-        _BTH = np.zeros((Nr, Nw), dtype=float)
-        for MM in range(Nr):
-            _nh           = 0.0081 * ne[MM]
-            _density      = np.array([0.8019 , 0.0950, 0.0950]) * ne[MM]
-            _Species, _PP = create_species_array(_B0, _name, _mass, _charge, _density, _tper, _ani)
 
-            _BTH[MM] = get_threshold_value_UNIO(_w, _Species, _PP, _nh, _Vth_para, _Vth_perp, _Q, _L)
-        
-        
-        fig, ax = plt.subplots()
-        
-        im1 = ax.pcolormesh(w_axis, wpe_wce, _BTH, cmap='jet', vmin=0.0, vmax=0.1)
-        fig.colorbar(im1)
-        
-        
-        #NL = nonlinear_growth_rate(_w, _Species, _PP, _nh, _Q, _Vth_para, _Vth_perp, _Bw_init)
+def calculate_threshold_amplitude():
+    '''
+    Self-consistent function designed to try and work out this threshold thing
+    from Omura et al. (2010)
     
+    Ideas: Does hot H have to be subtracted from cold H? Won't affect threshold
+    '''
+    Species, PP = define_omura2010_parameters()
     
+    B0       = PP['B0']                        # Background magnetic field
+    pcyc     = 3.7 * 2 * np.pi                 # Cyclotron frequency (in rad/s)
+    Q        = 0.5                             # Q-factor (proton hole depletion)
+    L        = 4.27
+    
+    w0       = 0.4                             # Normalized initial wave frequency
+    Vth_para = 0.002                           # Parallel thermal velocity
+    Vth_perp = 0.00267                         # Perpendicular thermal velocity
+    
+    a        = 4.5 / ((L * RE)**2)             # Parabolic magnetic field scale factor
+    a       *= (c / pcyc) ** 2                 # Normalized
+    
+    # Redefine densities based on paper
+    Species[0]['plasma_freq_sq'] = (679.0 * pcyc) ** 2
+    Species[1]['plasma_freq_sq'] = (117.0 * pcyc) ** 2
+    Species[2]['plasma_freq_sq'] = (58.30 * pcyc) ** 2
+    
+    wph2  = 0.05*Species[0]['plasma_freq_sq'] / pcyc ** 2
+    
+    s          = get_inhomogeneity_terms(w0*pcyc, Species, PP, Vth_perp*c)
+    Vg, Vp, Vr = get_velocities(w0*pcyc, Species, PP, normalize=True)
+    
+    # Input values need to be normalized
+    Omth = get_threshold_value_normalized(w0, wph2, Q, s, a, Vp, Vr, Vth_para, Vth_perp)
+    print('Bth = {:.2f} nT'.format(Omth*B0*1e9))
+    return
+
+
+def plot_omura2010_velocities_and_dispersion():
+    '''
+    Looks good
+    '''
+    Species, PP = define_omura2010_parameters()
     
     # Cold Plasma Dispersion Plot (Figure 3, validated)
-    if False:
-        wlength = 4e4
-        kmax    = 2 * np.pi / wlength
+    wlength = 4e4
+    kmax    = 2 * np.pi / wlength
+
+    k_vals, CPDR_solns, warm_solns = dispersion_relation_solver(Species, PP, norm_k_in=False, norm_k_out=False, \
+                                     norm_w=False, plot=False, kmin=0.0, kmax=kmax, Nk=1000)
     
-        k_vals, CPDR_solns, warm_solns = dispersion_relation_solver(_Species, _PP, norm_k_in=False, norm_k_out=False, \
-                                         norm_w=False, plot=False, kmin=0.0, kmax=kmax, Nk=1000)
-        
-        # Cast to linear frequency
-        CPDR_solns /= 2 * np.pi
-        
-        fig, ax = plt.subplots()
-        for ss in range(CPDR_solns.shape[1]):
-            ax.plot(1e3*k_vals / (2*np.pi), CPDR_solns[:, ss], c='k')
-            
-        ax.set_xlim(0, 0.025)
-        ax.set_ylim(0, 3.5)
-        
-        ax.set_title('Cold Plasma Dispersion Relation')
-        ax.set_xlabel('f (Hz)', fontsize=14)
-        ax.set_ylabel(r'$\frac{1}{\lambda}$ ($m^{-1}$)', rotation=0, fontsize=14, labelpad=30)
-        
-        
+    # Cast to linear frequency
+    CPDR_solns /= 2 * np.pi
     
+    fig, ax = plt.subplots()
+    for ss in range(CPDR_solns.shape[1]):
+        ax.plot(1e3*k_vals / (2*np.pi), CPDR_solns[:, ss], c='k')
+        
+    ax.set_xlim(0, 0.025)
+    ax.set_ylim(0, 3.5)
+    
+    ax.set_title('Cold Plasma Dispersion Relation')
+    ax.set_xlabel('f (Hz)', fontsize=14)
+    ax.set_ylabel(r'$\frac{1}{\lambda}$ ($m^{-1}$)', rotation=0, fontsize=14, labelpad=30)
+        
+        
     # Resonance and Group Velocities plot (Figure 4a,b validated)
-    if False:
-        f_max  = 4.0
-        f_vals = np.linspace(0.0, f_max, 10000)
-        w_vals = 2 * np.pi * f_vals
-        
-        V_group, V_phase, V_resonance = get_velocities(w_vals, _Species, _PP)
-
-        fig, ax = plt.subplots()
-        ax.plot(f_vals, V_resonance/1e3)
-        ax.set_xlabel('f (Hz)', fontsize=14)
-        ax.set_ylabel('$V_R$\nkm/s', rotation=0, fontsize=14, labelpad=30)
-        ax.set_xlim(0, f_max)
-        ax.set_ylim(-1500, 0)
-
-        fig, ax = plt.subplots()
-        ax.plot(f_vals, V_group/1e3)
-        ax.set_xlabel('f (Hz)', fontsize=14)
-        ax.set_ylabel('$V_g$\nkm/s', rotation=0, fontsize=14, labelpad=30)
-        ax.set_xlim(0, f_max)
-        ax.set_ylim(0, 250)
-        
-        fig, ax = plt.subplots()
-        ax.plot(f_vals, V_phase/1e3)
-        ax.set_xlabel('f (Hz)', fontsize=14)
-        ax.set_ylabel('$V_p$\nkm/s', rotation=0, fontsize=14, labelpad=30)
-        ax.set_xlim(0, f_max)
-        #ax.set_ylim(0, 250)
-        
+    f_max  = 4.0
+    f_vals = np.linspace(0.0, f_max, 10000)
+    w_vals = 2 * np.pi * f_vals
     
-    # Non-linear growth rate (Works, looks good, but no validation)
-    if False:
-        _nh               = 0.05*_Species[0]['density']
-        vth_parallel      = 6e5
-        vth_perpendicular = 8e5
-        Q_value           = 0.5
-        Bw_init           = 0.5e-9
-        
-        f_max  = 4.0
-        f_vals = np.linspace(0.0, f_max, 10000)
-        w_vals = 2 * np.pi * f_vals
-        
-        Gamma_NL = nonlinear_growth_rate(w_vals, _Species, _PP, _nh, Q_value, vth_parallel, vth_perpendicular, Bw_init)
-        
-        fig, ax = plt.subplots()
-        ax.plot(f_vals, Gamma_NL)
-        ax.set_title('Non-linear Growth Rate by Frequency (Omura et al., 2010)')
-        ax.set_xlabel('f (Hz)', fontsize=14)
-        ax.set_ylabel('$\Gamma_{NL}$\n$(s^{-1})$', rotation=0, fontsize=14, labelpad=30)
-        ax.set_xlim(0, f_max)
-        #ax.set_ylim(0, 250)
-        
-        
-    # Chen et al. (2013) :: Temporal and Convective Growth rates, group velocity
-    # -- Group velocity test (Validated)
-    # -- This also validates the derivative expressions in the function
-    if False:
-        f_max  = 4.0
-        f_vals = np.linspace(0.0, f_max, 10000)
-        w_vals = 2 * np.pi * f_vals
-        
-        V_group_omura, V_phase, V_resonance               = get_velocities(w_vals, _Species, _PP)
-        temporal_GR, convective_GR, V_group_chen, k_cold  = linear_growth_rates(w_vals, _Species) 
-        
-        
-        fig, ax = plt.subplots()
-        ax.plot(f_vals, V_group_omura/1e3, label='Omura')
-        ax.plot(f_vals, V_group_chen/1e3, label='Chen')
-        ax.set_title('Group velocity: Chen vs. Omura comparison')
-        ax.set_xlabel('f (Hz)', fontsize=14)
-        ax.set_ylabel('$V_g$\nkm/s', rotation=0, fontsize=14, labelpad=30)
-        ax.set_xlim(0, f_max)
-        ax.set_ylim(0, 250)
-        ax.legend()
-        
-    
-    # Check convective growth rate - Not really any way to validate it, but
-    # both Vg and the linear growth rate have been cross-validated
-    # Hot proton quantities need to be in Species array (unlike other functions)
-    if False:
-        f_max  = 4.0
-        f_vals = np.linspace(0.0, f_max, 10000)
-        w_vals = 2 * np.pi * f_vals
+    Species, PP = define_omura2010_parameters()
+    V_group, V_phase, V_resonance = get_velocities(w_vals, Species, PP)
 
-        temporal_GR, convective_GR, V_group, k_cold = linear_growth_rates(w_vals, _Species) 
-        
-        sb0, sb1 = get_stop_bands(k_cold)
-        
-        fig, ax = plt.subplots(3, sharex=True)
-        ax[0].set_title('Convective Growth Rate and Parameters')
-        
-        ax[0].plot(f_vals, temporal_GR)
-        ax[0].set_ylim(None, None)
-        ax[0].set_ylabel('$\gamma$\n$(s^{-1})$', rotation=0, fontsize=14, labelpad=30)
-               
-        ax[1].plot(f_vals, V_group)
-        ax[1].set_ylim(0, 250e3)
-        ax[1].set_ylabel('$V_G$\n$(ms^{-1})$', rotation=0, fontsize=14, labelpad=30)
-        
-        ax[2].plot(f_vals, convective_GR)
-        ax[2].set_ylim(None, None)
-        ax[2].set_ylabel('$S$\n$(m^{-1})$', rotation=0, fontsize=14, labelpad=30)
-        
-        ax[2].set_xlabel('f (Hz)', fontsize=14)
-        ax[2].set_xlim(0, f_max)
-        
-        for AX in ax:
-            for st, en in zip(sb0, sb1):
-                AX.axvspan(f_vals[st], f_vals[en], color='k', alpha=0.5, lw=0)
-        
-        
+    fig, ax = plt.subplots()
+    ax.plot(f_vals, V_resonance/1e3)
+    ax.set_xlabel('f (Hz)', fontsize=14)
+    ax.set_ylabel('$V_R$\nkm/s', rotation=0, fontsize=14, labelpad=30)
+    ax.set_xlim(0, f_max)
+    ax.set_ylim(-1500, 0)
+
+    fig, ax = plt.subplots()
+    ax.plot(f_vals, V_group/1e3)
+    ax.set_xlabel('f (Hz)', fontsize=14)
+    ax.set_ylabel('$V_g$\nkm/s', rotation=0, fontsize=14, labelpad=30)
+    ax.set_xlim(0, f_max)
+    ax.set_ylim(0, 250)
     
+    fig, ax = plt.subplots()
+    ax.plot(f_vals, V_phase/1e3)
+    ax.set_xlabel('f (Hz)', fontsize=14)
+    ax.set_ylabel('$V_p$\nkm/s', rotation=0, fontsize=14, labelpad=30)
+    ax.set_xlim(0, f_max)
+    #ax.set_ylim(0, 250)
+    return
+
+
+def plot_omura2010_freqamp():
+    '''
+    Plots Frequency/Amplitude timeseries using parameters from Omura et al. (2010)
+    
+    Could also use this to plot Figs 5d, 6, 7 of Nakamura et al. (2015)
+    '''
+    Species, PP = define_omura2010_parameters()
+    
+    f0   = 1.50                             # Initial frequency (Hz)
+    Bw0  = 0.5e-9                           # Initial wave field (T)
+    L    = 4.27                             # L-shell
+    nh   = 0.05*Species[0]['density']       # Hot proton density (/m3)
+    Q    = 0.5                              # Q-factor (proton hole depletion)
+    vpar = 6.00e5                           # Parallel thermal velocity (m/s)
+    vper = 8.00e5                           # Perpendicular thermal velocity (m/s)
+    
+    t, f, Bw = leapfrog_coupled_equations(Species, PP, f0, Bw0, L, nh, Q, vpar, vper)
+    
+    fig, ax = plt.subplots(2, sharex=True)
+    
+    ax[0].plot(t, Bw*1e9)
+    ax[0].set_xlabel('t (s)', fontsize=14)
+    ax[0].set_ylabel('Bw (nT)', rotation=0, fontsize=14, labelpad=30)
+    #ax[0].set_xlim(0, 30)
+    #ax[0].set_ylim(0, 14)
+    
+    ax[1].plot(t, f)
+    ax[1].set_xlabel('t (s)', fontsize=14)
+    ax[1].set_ylabel('f (Hz)', rotation=0, fontsize=14, labelpad=30)
+    #ax[1].set_xlim(0, 30)
+    #ax[1].set_ylim(0, 3.0)
+    return
+
+
+def plot_omura2010_NLGrowth():
+    Species, PP = define_omura2010_parameters()
+    
+    nh                = 0.05*Species[0]['density']
+    vth_parallel      = 6e5
+    vth_perpendicular = 8e5
+    Q_value           = 0.5
+    Bw_init           = 0.5e-9
+    
+    f_max  = 4.0
+    f_vals = np.linspace(0.0, f_max, 10000)
+    w_vals = 2 * np.pi * f_vals
+    
+    Gamma_NL = nonlinear_growth_rate(w_vals, Species, PP, nh, Q_value, vth_parallel, vth_perpendicular, Bw_init)
+    
+    fig, ax = plt.subplots()
+    ax.plot(f_vals, Gamma_NL)
+    ax.set_title('Non-linear Growth Rate by Frequency (Omura et al., 2010)')
+    ax.set_xlabel('f (Hz)', fontsize=14)
+    ax.set_ylabel('$\Gamma_{NL}$\n$(s^{-1})$', rotation=0, fontsize=14, labelpad=30)
+    ax.set_xlim(0, f_max)
+    #ax.set_ylim(0, 250)
+    return
+
+
+def plot_check_group_velocity_chen():
+    '''
+    This plot checks the group velocities as derived by Chen et al. (2011) and
+    the cold approx as written in Omura et al. (2010). The single (Species, PP)
+    call could be doubled to include hot_protons=True, False argument, since
+    Chen equation accepts both hot and cold species in its equations.
+    '''
+    f_max  = 4.0
+    f_vals = np.linspace(0.0, f_max, 10000)
+    w_vals = 2 * np.pi * f_vals
+    
+    # Including (w)arm species, (c)old species only
+    wSpecies, wPP = define_omura2010_parameters(include_energetic=True)
+    cSpecies, cPP = define_omura2010_parameters(include_energetic=False)
+    
+    V_group_omura, V_phase, V_resonance               = get_velocities(w_vals, cSpecies, cPP)
+    temporal_GR, convective_GR, V_group_chen, k_cold  = linear_growth_rates_chen(w_vals, wSpecies) 
+    
+    fig, ax = plt.subplots()
+    ax.plot(f_vals, V_group_omura/1e3, label='Omura')
+    ax.plot(f_vals, V_group_chen/1e3, label='Chen')
+    ax.set_title('Group velocity: Chen vs. Omura comparison')
+    ax.set_xlabel('f (Hz)', fontsize=14)
+    ax.set_ylabel('$V_g$\nkm/s', rotation=0, fontsize=14, labelpad=30)
+    ax.set_xlim(0, f_max)
+    ax.set_ylim(0, 250)
+    ax.legend()
+    return
+
+
+def plot_check_temporal_growth_rate_chen():
+    '''
+    This plot checks the temporal growth rates of the linear equations in Chen
+    et al. (2011) using k derived from the cold approximation.... (Double check
+    this whole Wang/Chen thing. Weren't they from the same equations?
+    '''
     # -- Temporal growth rate validation (Validated)
     # NOTE :: Old TGR code calculated with k's from WPDR. May not perfectly match because
     #         these k's come from CPDR. But maybe they will? Who knows. k variation is v. small.
@@ -677,65 +676,155 @@ if __name__ == '__main__':
     # Also, free-k solver doesn't seem to lock onto the right solution for Nf=1000 (needs higher #)
     # Might want to double check linear growth stuff with Omura's version, since only very small density
     # and marginal growth rate.
-    if False:
-        Nf      = 10000
-        f_max   = 3.5
-        f_vals  = np.linspace(0.0, f_max, Nf)
-        w_vals  = 2 * np.pi * f_vals
-        k_cold  = get_k_cold(w_vals, _Species)
-        kmax    = k_cold[np.isnan(k_cold) == False].max()
+    Species, PP = define_omura2010_parameters(include_energetic=True)
+    
+    Nf      = 10000
+    f_max   = 3.5
+    f_vals  = np.linspace(0.0, f_max, Nf)
+    w_vals  = 2 * np.pi * f_vals
+    k_cold  = get_k_cold(w_vals, Species)
+    kmax    = k_cold[np.isnan(k_cold) == False].max()
+    
+    temporal_GR, convective_GR, V_group_chen, k_cold = linear_growth_rates_chen(w_vals, Species) 
+    
+    k_warm, CPDR_solns, WPDR_solns = dispersion_relation_solver(Species, PP, norm_k_in=False, norm_k_out=False, \
+                                     norm_w=False, plot=False, kmin=0.0, kmax=kmax, Nk=Nf)
+    
+    fig, ax = plt.subplots(2)
+    ax[0].plot(f_vals, temporal_GR, label='Chen')
+    ax[0].set_title('Temporal Growth Rate :: Chen et al. (2013)')
+    ax[0].set_xlabel('f (Hz)', fontsize=14)
+    ax[0].set_ylabel('$\gamma$', rotation=0, fontsize=14, labelpad=30)
+    ax[0].set_xlim(0, f_max)
+    
+    sb0, sb1 = get_stop_bands(k_cold)
+    for st, en in zip(sb0, sb1):
+        ax[0].axvspan(f_vals[st], f_vals[en], color='k', alpha=0.5, lw=0)
+    
+    ax[1].plot(k_cold[1:], temporal_GR[1:], label='Chen', c='b')
+    ax[1].plot(k_warm[1:], WPDR_solns[1:].imag,  label='Wang', c='r')
+    ax[1].set_xlabel('k (/m)', fontsize=14)
+    ax[1].set_ylabel('$\gamma$', rotation=0, fontsize=14, labelpad=30)
+    ax[1].set_xlim(0, kmax)
+    ax[1].legend()
+    return
+
+
+def plot_convective_growth_rate_chen():
+    f_max  = 4.0
+    f_vals = np.linspace(0.0, f_max, 10000)
+    w_vals = 2 * np.pi * f_vals
+
+    Species, PP = define_omura2010_parameters(include_energetic=True)
+
+    temporal_GR, convective_GR, V_group, k_cold = linear_growth_rates_chen(w_vals, Species) 
+    
+    fig, ax = plt.subplots(3, sharex=True)
+    ax[0].set_title('Convective Growth Rate and Parameters')
+    
+    ax[0].plot(f_vals, temporal_GR)
+    ax[0].set_ylim(None, None)
+    ax[0].set_ylabel('$\gamma$\n$(s^{-1})$', rotation=0, fontsize=14, labelpad=30)
+           
+    ax[1].plot(f_vals, V_group)
+    ax[1].set_ylim(0, 250e3)
+    ax[1].set_ylabel('$V_G$\n$(ms^{-1})$', rotation=0, fontsize=14, labelpad=30)
+    
+    ax[2].plot(f_vals, convective_GR)
+    ax[2].set_ylim(None, None)
+    ax[2].set_ylabel('$S$\n$(m^{-1})$', rotation=0, fontsize=14, labelpad=30)
+    
+    ax[2].set_xlabel('f (Hz)', fontsize=14)
+    ax[2].set_xlim(0, f_max)
+    
+    sb0, sb1 = get_stop_bands(k_cold)
+    for AX in ax:
+        for st, en in zip(sb0, sb1):
+            AX.axvspan(f_vals[st], f_vals[en], color='k', alpha=0.5, lw=0)
+    return
+
+
+def plot_shoji2012_2D():
+    # Shoji et al. (2012) recreation of 2D plot
+    #   --- Varies with normalized frequency (to pcyc) and ion density (plasma freq. proxy)
+    #   --- Need to get Bth first, then NL growth rate calculated with Bw = Bth
+    #   --- BTH ALMOST VALIDATED. Min growth region looked a little off, and weird nan's at bottom left.
+    #       -- NOPE, H band completely different (way lower in higher density lower frequency section). Error?
+    Nw   = 500
+    B0   = 243e-9   # T 
+    pcyc = 23.2     # rad/s 
+    #ecyc = 4.27e4   # rad/s
+    
+    Nr          = 500
+    wpe_wce_max = 17    # Ratio max
+    
+    # Frequency axis
+    pcyc_min = 0.375
+    pcyc_max = 1.0
+    w_axis   = np.linspace(pcyc_min, pcyc_max, Nw)
+    w        = w_axis * pcyc
+    
+    # Density axis 
+    wpe_wce  = np.linspace(0.0, wpe_wce_max, Nr)
+    ne       = wpe_wce ** 2 * B0 ** 2 * e0 / me
+    
+    # Energetic plasma parameters
+    Q        = 0.5
+    Vth_para = 0.00800*c
+    Vth_perp = 0.01068*c
+    
+    # Other parameters
+    L        = 4.0
+    #Bw_init  = 0.5e-9
+    
+    # Cold plasma parameters
+    name    = np.array(['H'    , 'He'  , 'O'   ])
+    mass    = np.array([1.0    , 4.0   , 16.0  ]) * mp
+    charge  = np.array([1.0    , 1.0   , 1.0   ]) * qp
+    tpar    = np.array([0.0    , 0.0   , 0.0   ])
+    ani     = np.array([0.0    , 0.0   , 0.0   ])
+    tper    = (ani + 1) * tpar
+
+    BTH = np.zeros((Nr, Nw), dtype=float)
+    for MM in range(Nr):
+        nh           = 0.0081 * ne[MM]
+        density      = np.array([0.8019 , 0.0950, 0.0950]) * ne[MM]
+        Species, PP  = create_species_array(B0, name, mass, charge, density, tper, ani)
+
+        BTH[MM] = get_threshold_value_UNIO(w, Species, PP, nh, Vth_para, Vth_perp, Q, L)
         
-        temporal_GR, convective_GR, V_group_chen, k_cold = linear_growth_rates(w_vals, _Species) 
+    fig, ax = plt.subplots()
         
-        k_warm, CPDR_solns, WPDR_solns = dispersion_relation_solver(_Species, _PP, norm_k_in=False, norm_k_out=False, \
-                                         norm_w=False, plot=False, kmin=0.0, kmax=kmax, Nk=Nf)
-        
-        fig, ax = plt.subplots(2)
-        ax[0].plot(f_vals, temporal_GR, label='Omura')
-        ax[0].set_title('Temporal Growth Rate :: Chen et al. (2013)')
-        ax[0].set_xlabel('f (Hz)', fontsize=14)
-        ax[0].set_ylabel('$\gamma$', rotation=0, fontsize=14, labelpad=30)
-        ax[0].set_xlim(0, f_max)
-        
-        ax[1].plot(k_cold[1:], temporal_GR[1:], label='Chen', c='b')
-        ax[1].plot(k_warm[1:], WPDR_solns[1:].imag,  label='Wang', c='r')
-        ax[1].set_xlabel('k (/m)', fontsize=14)
-        ax[1].set_ylabel('$\gamma$', rotation=0, fontsize=14, labelpad=30)
-        ax[1].set_xlim(0, kmax)
-        ax[1].legend()
-        
-        
-    # Time integration of equations for wave amplitude and frequency (DOESN"T WORK)
-    # Things to check:
-    # --- Why doesn't it meet the threshold criteria? Error in eqns or input? NOPE??
-    # --- Maybe check the ration of plasma frequencies to cyclotron frequencies, make sure they match
-    #           --- ACCURATE TO 3 S.F. (ALMOST, wO IS OFF A LITTLE). Why the difference? Does it matter?
-    if False:
-        ## QUESTION: WHERE'S THE DISTINCTION BETWEEN TRIGGER FREQUENCY AND 
-        ##           FREQUENCY OF EMISSION?
-        
-        f0   = 1.50                             # Initial frequency (Hz)
-        Bw0  = 0.5e-9                           # Initial wave field (T)
-        _L   = 4.27                             # L-shell
-        _nh  = 0.05*_Species[0]['density']      # Hot proton density (/m3)
-        _Q   = 0.5                              # Q-factor (proton hole depletion)
-        vpar = 6.00e5                           # Parallel thermal velocity (m/s)
-        vper = 8.00e5                           # Perpendicular thermal velocity (m/s)
-        
-        _t, _f, _Bw = solve_coupled_equations(_Species, _PP, f0, Bw0, _L, _nh, _Q, vpar, vper)
-        
-        #fig, ax = plt.subplots(2, sharex=True)
-        
-# =============================================================================
-#         ax[0].plot(_t, _Bw*1e9)
-#         ax[0].set_xlabel('t (s)', fontsize=14)
-#         ax[0].set_ylabel('Bw (nT)', rotation=0, fontsize=14, labelpad=30)
-#         #ax[0].set_xlim(0, 30)
-#         #ax[0].set_ylim(0, 14)
-#         
-#         ax[1].plot(_t, _f)
-#         ax[1].set_xlabel('t (s)', fontsize=14)
-#         ax[1].set_ylabel('f (Hz)', rotation=0, fontsize=14, labelpad=30)
-#         #ax[1].set_xlim(0, 30)
-#         #ax[1].set_ylim(0, 3.0)
-# =============================================================================
+    im1 = ax.pcolormesh(w_axis, wpe_wce, BTH, cmap='jet', vmin=0.0, vmax=0.1)
+    fig.colorbar(im1)
+    
+    #NL = nonlinear_growth_rate(_w, _Species, _PP, _nh, _Q, _Vth_para, _Vth_perp, _Bw_init)
+    return
+
+    
+def plot_optimum_amplitudes():
+    # To do (e.g. Nakamura et al. 2016, Shoji et al. 2013)
+    return
+
+
+
+if __name__ == '__main__':
+    '''
+    Ideas to try:
+        - Make frequencies constant with integration. (This won't fix threshold issues)
+    '''
+    # --- From Omura et al. (2010)
+    #plot_omura2010_velocities_and_dispersion()
+    #plot_omura2010_NLGrowth()
+    #plot_omura2010_freqamp()
+    calculate_threshold_amplitude()
+    
+    # --- Check Chen et al. (2011) equations
+    #plot_check_group_velocity_chen()
+    #plot_check_temporal_growth_rate_chen()
+    #plot_convective_growth_rate_chen()
+    
+    # --- Check plots of other papers that use these base equations
+    #plot_shoji2012_2D()
+    pass
+    

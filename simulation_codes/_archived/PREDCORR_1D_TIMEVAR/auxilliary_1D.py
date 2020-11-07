@@ -85,8 +85,8 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
     B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
 
     dispfreq        = ((np.pi / const.dx) ** 2) * (B_tot / (const.mu0 * q_dens)).max()           # Dispersion frequency
-    gyfreq          = const.high_rat  * np.abs(B_tot).max() / (2 * np.pi)      
-    ion_ts          = const.orbit_res * 1./gyfreq
+    gyfreq          = const.high_rat  * np.abs(B_tot).max()      
+    ion_ts          = const.orbit_res / gyfreq
     
     if E[:, 0].max() != 0:
         elecfreq        = const.high_rat*(np.abs(E[:, 0] / vel.max()).max())               # Electron acceleration "frequency"
@@ -99,8 +99,8 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_cent, \
     else:
         disp_ts     = ion_ts
 
-    vel_ts          = 0.80 * const.dx / vel[0, :].max()                          # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
-    DT_part         = min(Eacc_ts, vel_ts, ion_ts, disp_ts)                      # Smallest of the allowable timesteps
+    vel_ts          = 0.80 * const.dx / np.max(np.abs(vel[0, :]))                   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
+    DT_part         = min(Eacc_ts, vel_ts, ion_ts, disp_ts)                         # Smallest of the allowable timesteps
     
     if DT_part < 0.9*DT:
 

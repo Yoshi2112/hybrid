@@ -9,7 +9,7 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''PREDCORR_1D_TSC_TIMEVAR :: Comparing against CARLO_periodic'''
+run_description = '''PREDCORR_1D_TSC_TIMEVAR :: Comparing against CARLO_periodic with fixed timestep'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'

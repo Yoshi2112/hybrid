@@ -310,12 +310,12 @@ def set_timestep(vel, Te0):
     '''
     ion_ts   = orbit_res / gyfreq               # Timestep to resolve gyromotion
     vel_ts   = 0.5 * dx / np.max(np.abs(vel[0, :]))   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
-
-    gyperiod = 2 * np.pi / gyfreq
+    
     DT       = min(ion_ts, vel_ts)
     max_time = max_rev * 2 * np.pi / gyfreq_eq     # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1                          # Total number of time steps
 
+    gyperiod = 2 * np.pi / gyfreq
     if part_res == 0:
         part_save_iter = 1
     else:
@@ -743,7 +743,7 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
             Ji[ND + NX - 1, ii] += Ji[ND + NX, ii]
     
             # Set damping cell source values (copy last)
-            Ji[:ND, ii] = Ji[ND, ii]
+            Ji[:ND, ii]     = Ji[ND, ii]
             Ji[ND+NX:, ii]  = Ji[ND+NX-1, ii]
             
         # Set damping cell source values (copy last)
@@ -762,6 +762,10 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
         q_dens[lo1] = q_dens[ri1]
         q_dens[lo2] = q_dens[ri2]
         
+        # ...and Fill remaining ghost cells
+        q_dens[:lo2] = q_dens[lo2]
+        q_dens[ro2:] = q_dens[ro2]
+        
         for ii in range(3):
             Ji[li1, ii] += Ji[ro1, ii]
             Ji[li2, ii] += Ji[ro2, ii]
@@ -773,6 +777,10 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
             Ji[ro2, ii] = Ji[li2, ii]
             Ji[lo1, ii] = Ji[ri1, ii]
             Ji[lo2, ii] = Ji[ri2, ii]
+            
+            # ...and Fill remaining ghost cells
+            Ji[:lo2, ii] = Ji[lo2, ii]
+            Ji[ro2:, ii] = Ji[ro2, ii]
         
     # Implement smoothing filter: If enabled
     if source_smoothing == 1:
@@ -994,10 +1002,15 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, Te0, temp3De, temp3Db, grad_P, E_dampi
     # Copy periodic values
     if field_periodic == 1:
         for ii in range(3):
+            # Copy edge cells
             E[ro1, ii] = E[li1, ii]
             E[ro2, ii] = E[li2, ii]
             E[lo1, ii] = E[ri1, ii]
             E[lo2, ii] = E[ri2, ii]
+            
+            # Fill remaining ghost cells
+            E[:lo2, ii] = E[lo2, ii]
+            E[ro2:, ii] = E[ro2, ii]
             
     # Diagnostic flag for testing
     if disable_waves == 1:   
@@ -1745,9 +1758,15 @@ if __name__ == '__main__':
         print('DO SOMETHING ABOUT IT')
         print('--------------------------------------------------')
         
+    if field_periodic == 1 and damping_multiplier != 0:
+        damping_multiplier = 0.0
+        print('---------------------------------------------')
+        print('PERIODIC FIELDS SELECTED :: DISABLING DAMPING')
+        print('---------------------------------------------')
+        
     if  os.name != 'posix':
         os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
-    
+
 ########################
 ### START SIMULATION ###
 ########################

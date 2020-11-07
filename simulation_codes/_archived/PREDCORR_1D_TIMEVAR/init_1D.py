@@ -207,15 +207,15 @@ def set_timestep(vel):
     Note : Assumes no dispersion effects or electric field acceleration to
            be initial limiting factor. This may change for inhomogenous loading
            of particles or initial fields.
-    '''
-    gyperiod = (2*np.pi) / const.gyfreq               # Gyroperiod within uniform field, initial B0 (s)         
-    ion_ts   = const.orbit_res * gyperiod             # Timestep to resolve gyromotion
-    vel_ts   = 0.5 * const.dx / np.max(vel[0, :])     # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
+    '''       
+    ion_ts   = const.orbit_res / const.gyfreq             # Timestep to resolve gyromotion
+    vel_ts   = 0.5 * const.dx / np.max(np.abs(vel[0, :])) # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
 
     DT       = min(ion_ts, vel_ts)
-    max_time = const.max_rev * gyperiod               # Total runtime in seconds
-    max_inc  = int(max_time / DT) + 1                 # Total number of time steps
+    max_time = const.max_rev * 2 * np.pi / const.gyfreq   # Total runtime in seconds
+    max_inc  = int(max_time / DT) + 1                     # Total number of time steps
 
+    gyperiod = 2 * np.pi / const.gyfreq
     if const.part_res == 0:
         part_save_iter = 1
     else:
