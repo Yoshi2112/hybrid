@@ -18,7 +18,7 @@ import pdb
 import analysis_backend as bk
 import analysis_config  as cf
 import dispersions      as disp
-#import get_growth_rates as ggg
+import get_growth_rates as ggg
 
 # Ignore common warnings. If shit goes funky, turn them back on by replacing 'ignore' with 'default'
 import warnings
@@ -3806,23 +3806,22 @@ if __name__ == '__main__':
         # Extract all summary files and plot field stuff (quick)
         if True:
             for run_num in runs_to_do:
-                try:
-                    print('\nRun {}'.format(run_num))
-                    #cf.delete_analysis_folders(drive, series, run_num)
-                    cf.load_run(drive, series, run_num, extract_arrays=True)
-                    
-                    #plot_abs_with_boundary_parameters()
-                    field_energy_vs_time(save=True)
-        
-                    plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=False)
-                    standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False, remove_ND=False)
-                    
-                    #get_reflection_coefficient()
-                except:
-                    print('Error with run {}, skipping...'.format(run_num))
+                print('\nRun {}'.format(run_num))
+                #cf.delete_analysis_folders(drive, series, run_num)
+                cf.load_run(drive, series, run_num, extract_arrays=True)
+                
+                ggg.straight_line_fit()
+                
+                #plot_abs_with_boundary_parameters()
+                #field_energy_vs_time(save=True)
+    
+                #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=False)
+                #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False, remove_ND=False)
+                
+                #get_reflection_coefficient()
             
         
-        if True:
+        if False:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))

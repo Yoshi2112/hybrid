@@ -348,3 +348,52 @@ def get_linear_growth(plot=False):
 #             pass
 # =============================================================================
     return
+
+
+def straight_line_fit(plot=True, normalized_output=False):
+    '''
+    To do: Check units. Get growth rate from amplitude only? How to do across space
+    
+     -- Go from 0.25 - 0.75 of the saturation time (max B) to get just the straight-line segment
+     -- Divide by saturation amplitude? How to get growth rate indept. of units (while also keeping
+         it in terms of nT/s? OR nah)
+    '''
+    print('Calculating growth rate...')
+    ftime, by  = cf.get_array('By')
+    ftime, bz  = cf.get_array('Bz')
+    bt         = np.sqrt(by ** 2 + bz ** 2)
+    qp         = 1.602e-19
+    mp         = 1.673e-27
+    mu0        = (4e-7) * np.pi
+    U_B        = np.square(bt[:, :]).sum(axis=1) * cf.NX * cf.dx / mu0 * 0.5
+    pcyc       = qp * cf.B_eq / mp
+            
+    max_idx = np.argmax(U_B)
+    st = int(0.3 * max_idx)
+    en = int(0.7 * max_idx)
+            
+    # Rise/Run method (super basic, up to max_B)
+    rise          = np.log(U_B[en]) - np.log(U_B[st]) 
+    run           = ftime[en] - ftime[st]
+    growth_rate   = rise/run
+    normalized_gr = growth_rate / pcyc
+    
+    # Plot to check
+    fig, ax = plt.subplots(figsize=(15, 10))
+    
+    ax.semilogy(ftime, U_B)
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('$U_B$')
+    ax.set_xlim(0, ftime[-1])
+    ax.set_ylim(None, None)
+    
+    # Mark growth rate indicators
+    ax.scatter(ftime[max_idx], U_B[max_idx], c='r', s=20, marker='x')
+    ax.scatter(ftime[st]     , U_B[st], c='r', s=20, marker='o')
+    ax.scatter(ftime[en]     , U_B[en], c='r', s=20, marker='o')
+    ax.semilogy([ftime[st], ftime[en]], [U_B[st], U_B[en]], c='r', ls='--', lw=2.0)
+    
+    if normalized_output == True:
+        return normalized_gr
+    else:
+        return growth_rate
