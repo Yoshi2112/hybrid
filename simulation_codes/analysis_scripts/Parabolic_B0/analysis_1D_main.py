@@ -1254,6 +1254,96 @@ def analyse_helicity(overwrite=False, save=True):
     return
 
 
+def winske_summary_plots(save=True):
+    '''
+    Plot summaries as per Winske et al. (1993)
+    Really only works for Winske load files.
+    0: Cold
+    1: Hot
+    '''  
+    np.set_printoptions(suppress=True)
+    
+    num_particle_steps = len(os.listdir(cf.particle_dir))
+    if num_particle_steps == 0:
+        print('ABORT: No particle data present to create summary plots.')
+        return
+
+    path = cf.anal_dir + '/winske_plots/'
+    if os.path.exists(path) == False:                                   # Create data directory
+        os.makedirs(path)
+    
+    plt.ioff()
+    ptime_sec, pbx, pby, pbz, pex, pey, pez, pvex, pvey,\
+    pvez, pte, pjx, pjy, pjz, pqdens = cf.interpolate_fields_to_particle_time(num_particle_steps)
+
+    radperiods = ptime_sec * cf.gyfreq
+    gperiods   = ptime_sec / cf.gyperiod
+    
+    # Normalize units
+    qdens_norm = pqdens / (cf.density*cf.charge).sum()     
+    BY_norm    = pby / cf.B_eq
+    BZ_norm    = pbz / cf.B_eq
+    PHI        = np.arctan2(BZ_norm, BY_norm)
+    
+    for ii in range(num_particle_steps):
+        filename = 'winske_summary%05d.png' % ii
+        fullpath = path + filename
+        
+        if os.path.exists(fullpath):
+            sys.stdout.write('\rSummary plot already present for timestep [{}]{}'.format(run_num, ii))
+            sys.stdout.flush()
+            continue
+        
+        sys.stdout.write('\rCreating summary plot for particle timestep [{}]{}'.format(run_num, ii))
+        sys.stdout.flush()
+
+        fig, axes = plt.subplots(5, figsize=(20,10), sharex=True)                  # Initialize Figure Space
+
+        xp, vp, idx, psim_time, idx_start, idx_end = cf.load_particles(ii)
+        
+        pos       = xp / cf.dx
+        vel       = vp / c
+        cell_B    = cf.B_nodes/cf.dx
+        cell_E    = cf.E_nodes/cf.dx
+        st, en    = idx_start[1], idx_end[1]
+        xmin      = cf.xmin / cf.dx
+        xmax      = cf.xmax / cf.dx
+
+        axes[0].scatter(pos[st: en], vel[0, st: en], s=1, c='k')
+        axes[1].scatter(pos[st: en], vel[1, st: en], s=1, c='k')
+        axes[2].plot(cell_E, qdens_norm[ii], color='k', lw=1.0)
+        axes[3].plot(cell_B, BY_norm[ii], color='k')
+        axes[4].plot(cell_B, PHI[ii],     color='k')
+        
+        axes[0].set_ylabel('VX ', labelpad=20, rotation=0)
+        axes[1].set_ylabel('VY ', labelpad=20, rotation=0)
+        axes[2].set_ylabel('DN ', labelpad=20, rotation=0)
+        axes[3].set_ylabel('BY ', labelpad=20)
+        axes[4].set_ylabel('PHI', labelpad=20)
+        fig.align_ylabels()
+        
+        axes[0].set_title('BEAM')
+        axes[1].set_title('BEAM')
+        
+        axes[0].set_ylim(-2e-3, 2e-3)
+        axes[1].set_ylim(-2e-3, 2e-3)
+        axes[2].set_ylim(0.5, 1.5)
+        axes[4].set_ylim(-np.pi, np.pi)
+        
+        axes[0].set_title('WINSKE RUNS :: IT={:04d} :: T={:5.2f} :: GP={:5.2f}'.format(ii, radperiods[ii], gperiods[ii]), family='monospace')
+        axes[4].set_xlabel('X')
+        
+        for ax in axes:
+            ax.set_xlim(xmin, xmax)
+        
+        if save == True:
+            plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+        plt.close('all')
+
+    print('\n')
+    return
+
+
 def summary_plots(save=True, histogram=True):
     '''
     Plot summary plot of raw values for each particle timestep
@@ -3781,6 +3871,7 @@ def multiplot_mag_energy(save=False):
 
 
 
+
 #%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
@@ -3788,7 +3879,7 @@ if __name__ == '__main__':
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     
-    for series in ['CARLO_periodic_test']:
+    for series in ['winske_params_test']:
         
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
@@ -3798,7 +3889,7 @@ if __name__ == '__main__':
         clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
                 'darkorange', 'peru', 'yellow']
         
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
             runs_to_do = [0]
@@ -3810,13 +3901,14 @@ if __name__ == '__main__':
                 #cf.delete_analysis_folders(drive, series, run_num)
                 cf.load_run(drive, series, run_num, extract_arrays=True)
                 
-                ggg.straight_line_fit()
+                winske_summary_plots(save=True)
+                #ggg.straight_line_fit()
                 
                 #plot_abs_with_boundary_parameters()
                 #field_energy_vs_time(save=True)
     
-                #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=False)
-                #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False, remove_ND=False)
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
+                #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False, remove_ND=True)
                 
                 #get_reflection_coefficient()
             

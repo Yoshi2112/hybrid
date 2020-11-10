@@ -595,7 +595,7 @@ def get_array(component='by', get_all=False, timebase=None):
 
 def interpolate_fields_to_particle_time(num_particle_steps, timebase=None):
     '''
-    For each particle timestep, interpolate field values
+    For each particle timestep, interpolate field values. Arrays are (time, space)
     '''
     ftime, bx, by, bz, ex, ey, ez, vex, vey, vez,\
     te, jx, jy, jz, qdens, fsim_time, damping_array = get_array(get_all=True)

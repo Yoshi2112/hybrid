@@ -1,5 +1,5 @@
 DRIVE					F:/
-SAVE_PATH			    /runs/fu_comparison_tests/
+SAVE_PATH			    /runs/winske_params_test/
 RUN						-
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
@@ -14,19 +14,19 @@ NOWAVES_FLAG			0
 TE0_EQUAL_FLAG			0
 SOURCE_SMOOTHING_FLAG	0
 E_DAMPING_FLAG			0
-QUIET_START_FLAG		1
+QUIET_START_FLAG		0
 RADIX_LOADING			0
 DAMPING_MULTIPLIER_RD   0.05
-NX 						256
-ND 						5
-MAX_REV					100
-DXM						1.0
+NX 						10
+ND 						3
+MAX_REV					32
+DXM						2.0
 R_A						120e3
 IE						1
 MIN_DENS				0.05
 RC_HWIDTH				-
 GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02	
-PARTICLE_DUMP_FREQ		0.25
+PARTICLE_DUMP_FREQ		0.50
 FIELD_DUMP_FREQ			0.10
-Testing wave growth rates using sample events from Fu et al. (2016). Periodic boundary conditions for waves and fields. Max growth run.
+Sanity checks against Winske et al. (1993) params. Resonant instability.

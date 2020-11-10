@@ -13,12 +13,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import os
 import pdb
 
-import simulation_parameters_1D as const
-import particles_1D             as particles
-import sources_1D               as sources
-import fields_1D                as fields
-import auxilliary_1D            as aux
-import init_1D as init
+import main_1D
 
 from timeit import default_timer as timer
 
@@ -54,33 +49,33 @@ def collect_macroparticle_moments(pos, vel, idx): #
     I = np.zeros(pos.shape[1], dtype=int)
     W = np.zeros(pos.shape   , dtype=float)
     
-    ni = np.zeros((const.NC, const.Nj),    dtype=nb.float64)
-    nu = np.zeros((const.NC, const.Nj, 3), dtype=nb.float64)
+    ni = np.zeros((main_1D.NC, main_1D.Nj),    dtype=nb.float64)
+    nu = np.zeros((main_1D.NC, main_1D.Nj, 3), dtype=nb.float64)
     
     # Zeroth and First moment calculations
-    particles.assign_weighting_TSC(pos, I, W, E_nodes=True)
-    sources.deposit_moments_to_grid(vel, I, W, idx, ni, nu)
+    main_1D.assign_weighting_TSC(pos, I, W, E_nodes=True)
+    main_1D.deposit_moments_to_grid(vel, I, W, idx, ni, nu)
     
     fig, [ax1, ax2] = plt.subplots(2, figsize=(15, 10))
     
-    x_arr = np.arange(const.NC)
+    x_arr = np.arange(main_1D.NC)
     
     ax1.plot(x_arr, ni)
     ax2.plot(x_arr, nu)
     return
 
 
-def check_cell_velocity_distribution(pos, vel, node_number=const.NX // 2, j=0): #
+def check_cell_velocity_distribution(pos, vel, node_number=main_1D.NX // 2, j=0): #
     '''Checks the velocity distribution of a particle species within a specified cell
     '''
     # Account for damping nodes. Node_number should be "real" node count.
-    node_number += const.ND
-    x_node = const.E_nodes[node_number]
+    node_number += main_1D.ND
+    x_node = main_1D.E_nodes[node_number]
     f      = np.zeros((1, 3))
     
     count = 0
-    for ii in np.arange(const.idx_start[j], const.idx_end[j]):
-        if (abs(pos[0, ii] - x_node) <= 0.5*const.dx):
+    for ii in np.arange(main_1D.idx_start[j], main_1D.idx_end[j]):
+        if (abs(pos[0, ii] - x_node) <= 0.5*main_1D.dx):
             f = np.append(f, [vel[0:3, ii]], axis=0)
             count += 1
 
@@ -88,7 +83,7 @@ def check_cell_velocity_distribution(pos, vel, node_number=const.NX // 2, j=0): 
     fig = plt.figure(figsize=(12,10))
     fig.suptitle('Particle velocity distribution of species {} in cell {}'.format(j, node_number))
     fig.patch.set_facecolor('w')
-    num_bins = const.nsp_ppc[j] // 20
+    num_bins = main_1D.nsp_ppc[j] // 20
 
     ax_x = plt.subplot2grid((2, 3), (0,0), colspan=2, rowspan=2)
     ax_y = plt.subplot2grid((2, 3), (0,2))
@@ -97,19 +92,19 @@ def check_cell_velocity_distribution(pos, vel, node_number=const.NX // 2, j=0): 
     for ax in [ax_x, ax_y, ax_z]:
         ax.axvline(0, c='k', ls=':', alpha=0.25)
 
-    xs, BinEdgesx = np.histogram((f[:, 0] - const.drift_v[j]) / const.va, bins=num_bins)
+    xs, BinEdgesx = np.histogram((f[:, 0] - main_1D.drift_v[j]) / main_1D.va, bins=num_bins)
     bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
     ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
     ax_x.set_xlabel(r'$v_x / v_A$')
     #ax_x.set_xlim(-2, 2)
 
-    ys, BinEdgesy = np.histogram(f[:, 1] / const.va, bins=num_bins)
+    ys, BinEdgesy = np.histogram(f[:, 1] / main_1D.va, bins=num_bins)
     by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
     ax_y.plot(by, ys, '-', c='c', drawstyle='steps')
     ax_y.set_xlabel(r'$v_y / v_A$')
     #ax_y.set_xlim(-2, 2)
 
-    zs, BinEdgesz = np.histogram(f[:, 2] / const.va, bins=num_bins)
+    zs, BinEdgesz = np.histogram(f[:, 2] / main_1D.va, bins=num_bins)
     bz = 0.5 * (BinEdgesz[1:] + BinEdgesz[:-1])
     ax_z.plot(bz, zs, '-', c='c', drawstyle='steps')
     ax_z.set_xlabel(r'$v_z / v_A$')
@@ -119,7 +114,7 @@ def check_cell_velocity_distribution(pos, vel, node_number=const.NX // 2, j=0): 
     return
 
 
-def check_cell_velocity_distribution_2D(pos, vel, node_number=const.NX // 2, jj=0, show_cone=False, save=False, qq=None): #
+def check_cell_velocity_distribution_2D(pos, vel, node_number=main_1D.NX // 2, jj=0, show_cone=False, save=False, qq=None): #
     '''
     Checks the velocity distribution of a particle species within a specified cell
     
@@ -127,18 +122,18 @@ def check_cell_velocity_distribution_2D(pos, vel, node_number=const.NX // 2, jj=
     Damping cell offset is handled by function
     '''
     if node_number is None:
-        node_number = np.arange(const.NX)
+        node_number = np.arange(main_1D.NX)
         
     # Account for damping nodes. Node_number should be "real" node count.
     for node in node_number:
         print('Collecting particle info in cell {}'.format(node))
-        node += const.ND
-        x_node = const.E_nodes[node]
+        node += main_1D.ND
+        x_node = main_1D.E_nodes[node]
         f      = np.zeros((1, 3))
         
         count = 0
-        for ii in np.arange(const.idx_start[jj], const.idx_end[jj]):
-            if (abs(pos[0, ii] - x_node) <= 0.5*const.dx):
+        for ii in np.arange(main_1D.idx_start[jj], main_1D.idx_end[jj]):
+            if (abs(pos[0, ii] - x_node) <= 0.5*main_1D.dx):
                 f = np.append(f, [vel[0:3, ii]], axis=0)
                 count += 1
     
@@ -148,18 +143,18 @@ def check_cell_velocity_distribution_2D(pos, vel, node_number=const.NX // 2, jj=
         fig.suptitle('Particle velocity distribution of species {} in cell {}'.format(jj, node))
         fig.patch.set_facecolor('w')
     
-        V_PERP = np.sign(f[:, 2]) * np.sqrt(f[:, 1] ** 2 + f[:, 2] ** 2) / const.va
-        V_PARA = f[:, 0] / const.va
+        V_PERP = np.sign(f[:, 2]) * np.sqrt(f[:, 1] ** 2 + f[:, 2] ** 2) / main_1D.va
+        V_PARA = f[:, 0] / main_1D.va
     
-        ax1.scatter(V_PERP, V_PARA, s=1, c=const.temp_color[jj])
+        ax1.scatter(V_PERP, V_PARA, s=1, c=main_1D.temp_color[jj])
     
         ax1.set_ylabel('$v_\parallel (/v_A)$')
         ax1.set_xlabel('$v_\perp (/v_A)$')
         ax1.axis('equal')
         
         # Plot loss cone lines 
-        B_at_nodes     = fields.eval_B0x(np.array([x_node + const.dx, x_node - const.dx]))
-        end_loss_cones = np.arcsin(np.sqrt(B_at_nodes/const.B_A)).max()                    # Calculate max loss cone
+        B_at_nodes     = main_1D.eval_B0x(np.array([x_node + main_1D.dx, x_node - main_1D.dx]))
+        end_loss_cones = np.arcsin(np.sqrt(B_at_nodes/main_1D.B_A)).max()                    # Calculate max loss cone
         
         yst, yend = ax1.get_ylim()                  # Get V_PARA lims
         yarr      = np.linspace(yst, yend, 100)     # V_PARA values on axis
@@ -171,7 +166,7 @@ def check_cell_velocity_distribution_2D(pos, vel, node_number=const.NX // 2, jj=
         ax1.set_ylim(yst, yend)
         
         if save == True:
-            save_path = const.drive + '//' + const.save_path + '//' + 'run_{}//LCD_plot_sp_{}//'.format(const.run, jj)
+            save_path = main_1D.drive + '//' + main_1D.save_path + '//' + 'run_{}//LCD_plot_sp_{}//'.format(main_1D.run, jj)
             
             if os.path.exists(save_path) == False:
                 os.makedirs(save_path)
@@ -191,21 +186,21 @@ def check_position_distribution(pos, num_bins=None):
     
     Called by main_1D()
     '''
-    for j in range(const.Nj):
+    for j in range(main_1D.Nj):
         fig = plt.figure(figsize=(12,10))
-        fig.suptitle('Configuration space distribution of {}'.format(const.species_lbl[j]))
+        fig.suptitle('Configuration space distribution of {}'.format(main_1D.species_lbl[j]))
         fig.patch.set_facecolor('w')
         
         if num_bins is None:
-            num_bins = const.NX
+            num_bins = main_1D.NX
     
         ax_x = plt.subplot()
     
-        xs, BinEdgesx = np.histogram(pos[0, const.idx_start[j]: const.idx_end[j]], bins=num_bins)
+        xs, BinEdgesx = np.histogram(pos[0, main_1D.idx_start[j]: main_1D.idx_end[j]], bins=num_bins)
         bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
-        ax_x.plot(bx, xs, '-', c=const.temp_color[const.temp_type[j]], drawstyle='steps')
+        ax_x.plot(bx, xs, '-', c=main_1D.temp_color[main_1D.temp_type[j]], drawstyle='steps')
         ax_x.set_xlabel(r'$x_p (m)$')
-        ax_x.set_xlim(const.xmin, const.xmax)
+        ax_x.set_xlim(main_1D.xmin, main_1D.xmax)
 
     plt.show()
     return
@@ -213,27 +208,27 @@ def check_position_distribution(pos, num_bins=None):
 def check_velocity_distribution(vel):
     '''Checks the velocity distribution of an entire species across the simulation domain
     '''
-    for j in range(const.Nj):
+    for j in range(main_1D.Nj):
         fig = plt.figure(figsize=(12,10))
         fig.suptitle('Velocity distribution of species {} in simulation domain'.format(j))
         fig.patch.set_facecolor('w')
-        num_bins = const.nsp_ppc[j] // 5
+        num_bins = main_1D.nsp_ppc[j] // 5
     
         ax_x = plt.subplot2grid((2, 3), (0,0), colspan=2, rowspan=2)
         ax_y = plt.subplot2grid((2, 3), (0,2))
         ax_z = plt.subplot2grid((2, 3), (1,2))
     
-        xs, BinEdgesx = np.histogram(vel[0, const.idx_start[j]: const.idx_end[j]] / const.va, bins=num_bins)
+        xs, BinEdgesx = np.histogram(vel[0, main_1D.idx_start[j]: main_1D.idx_end[j]] / main_1D.va, bins=num_bins)
         bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
         ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
         ax_x.set_xlabel(r'$v_x / v_A$')
     
-        ys, BinEdgesy = np.histogram(vel[1, const.idx_start[j]: const.idx_end[j]] / const.va, bins=num_bins)
+        ys, BinEdgesy = np.histogram(vel[1, main_1D.idx_start[j]: main_1D.idx_end[j]] / main_1D.va, bins=num_bins)
         by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
         ax_y.plot(by, ys, '-', c='c', drawstyle='steps')
         ax_y.set_xlabel(r'$v_y / v_A$')
     
-        zs, BinEdgesz = np.histogram(vel[2, const.idx_start[j]: const.idx_end[j]] / const.va, bins=num_bins)
+        zs, BinEdgesz = np.histogram(vel[2, main_1D.idx_start[j]: main_1D.idx_end[j]] / main_1D.va, bins=num_bins)
         bz = 0.5 * (BinEdgesz[1:] + BinEdgesz[:-1])
         ax_z.plot(bz, zs, '-', c='c', drawstyle='steps')
         ax_z.set_xlabel(r'$v_z / v_A$')
@@ -251,34 +246,34 @@ def check_velocity_components_vs_space(pos, vel, jj=1):
     '''
     print('Calculating velocity distributions vs. space for species {},...'.format(jj))
     comp = ['x', 'y', 'z']
-    cfac = 10 if const.temp_type[jj] == 1 else 5
-    vlim = 15 if const.temp_type[jj] == 1 else 5
+    cfac = 10 if main_1D.temp_type[jj] == 1 else 5
+    vlim = 15 if main_1D.temp_type[jj] == 1 else 5
     
-    V_PERP = np.sign(vel[2]) * np.sqrt(vel[1] ** 2 + vel[2] ** 2) / const.va
-    V_PARA = vel[0] / const.va
+    V_PERP = np.sign(vel[2]) * np.sqrt(vel[1] ** 2 + vel[2] ** 2) / main_1D.va
+    V_PARA = vel[0] / main_1D.va
     
     # Manually specify bin edges for histogram
     vbins = np.linspace(-vlim, vlim, 101, endpoint=True)
-    xbins = np.linspace(const.xmin/const.dx, const.xmax/const.dx, const.NX + 1, endpoint=True)
+    xbins = np.linspace(main_1D.xmin/main_1D.dx, main_1D.xmax/main_1D.dx, main_1D.NX + 1, endpoint=True)
         
     # Do the plotting
     plt.ioff()
     
     fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
-    axes[0].set_title('f(v) vs. x :: {}'.format(const.species_lbl[jj]))
+    axes[0].set_title('f(v) vs. x :: {}'.format(main_1D.species_lbl[jj]))
     
-    st = const.idx_start[jj]
-    en = const.idx_end[jj]
+    st = main_1D.idx_start[jj]
+    en = main_1D.idx_end[jj]
     
     for ii in range(3):
-        counts, xedges, yedges, im1 = axes[ii].hist2d(pos[0, st:en]/const.dx, vel[ii, st:en]/const.va, 
+        counts, xedges, yedges, im1 = axes[ii].hist2d(pos[0, st:en]/main_1D.dx, vel[ii, st:en]/main_1D.va, 
                                                 bins=[xbins, vbins],
-                                                vmin=0, vmax=const.nsp_ppc[jj] / cfac)
+                                                vmin=0, vmax=main_1D.nsp_ppc[jj] / cfac)
     
         cb = fig.colorbar(im1, ax=axes[ii])
         cb.set_label('Counts')
         
-        axes[ii].set_xlim(const.xmin/const.dx, const.xmax/const.dx)
+        axes[ii].set_xlim(main_1D.xmin/main_1D.dx, main_1D.xmax/main_1D.dx)
         axes[ii].set_ylim(-vlim, vlim)
         
         axes[ii].set_ylabel('v{}\n($v_A$)'.format(comp[ii]), rotation=0)
@@ -303,19 +298,19 @@ def plot_temperature_extremes():
     
     from scipy.stats import norm
     
-    T_eq_par = const.beta_par[jj] * const.B_eq ** 2 / (2 * const.mu0 * const.ne * const.kB)
-    T_eq_per = const.beta_per[jj] * const.B_eq ** 2 / (2 * const.mu0 * const.ne * const.kB)
+    T_eq_par = main_1D.beta_par[jj] * main_1D.B_eq ** 2 / (2 * main_1D.mu0 * main_1D.ne * main_1D.kB)
+    T_eq_per = main_1D.beta_per[jj] * main_1D.B_eq ** 2 / (2 * main_1D.mu0 * main_1D.ne * main_1D.kB)
     
-    T_xmax_par = const.beta_par[jj] * const.B_xmax ** 2 / (2 * const.mu0 * const.ne * const.kB)
-    T_xmax_per = const.beta_per[jj] * const.B_xmax ** 2 / (2 * const.mu0 * const.ne * const.kB)
+    T_xmax_par = main_1D.beta_par[jj] * main_1D.B_xmax ** 2 / (2 * main_1D.mu0 * main_1D.ne * main_1D.kB)
+    T_xmax_per = main_1D.beta_per[jj] * main_1D.B_xmax ** 2 / (2 * main_1D.mu0 * main_1D.ne * main_1D.kB)
     
-    sf_eq_par = np.sqrt(const.kB *  T_eq_par /  const.mass[jj])
-    sf_eq_per = np.sqrt(const.kB *  T_eq_per /  const.mass[jj])
+    sf_eq_par = np.sqrt(main_1D.kB *  T_eq_par /  main_1D.mass[jj])
+    sf_eq_per = np.sqrt(main_1D.kB *  T_eq_per /  main_1D.mass[jj])
     
-    sf_xmax_par = np.sqrt(const.kB *  T_xmax_par /  const.mass[jj])
-    sf_xmax_per = np.sqrt(const.kB *  T_xmax_per /  const.mass[jj])
+    sf_xmax_par = np.sqrt(main_1D.kB *  T_xmax_par /  main_1D.mass[jj])
+    sf_xmax_per = np.sqrt(main_1D.kB *  T_xmax_per /  main_1D.mass[jj])
     
-    x = np.linspace(-vlim*const.va, vlim*const.va, 100)
+    x = np.linspace(-vlim*main_1D.va, vlim*main_1D.va, 100)
     
     prob_eq_par   = norm.pdf(x, 0.0, sf_eq_par)
     prob_eq_per   = norm.pdf(x, 0.0, sf_eq_per)
@@ -376,7 +371,7 @@ def test_particle_orbit():
     print('Gyroperiod: {}s'.format(round(gyperiod, 2)))
     print('Timestep: {}s'.format(round(dt, 3)))
     
-    particles.velocity_update(vp, Ie, We, Ib, Wb, idx, B, E, -0.5*dt)
+    main_1D.velocity_update(vp, Ie, We, Ib, Wb, idx, B, E, -0.5*dt)
     
     xy    = np.zeros((maxtime+1, 2))
     
@@ -385,7 +380,7 @@ def test_particle_orbit():
         xy[ii, 1] = xp[2]
 
         position_update(xp, vp, dt)
-        particles.velocity_update(vp, Ie, We, Ib, Wb, idx, B, E, dt)
+        main_1D.velocity_update(vp, Ie, We, Ib, Wb, idx, B, E, dt)
     print(xp)
     print(vp)  
     #plt.plot(xy[:, 0], xy[:, 1])
@@ -401,30 +396,30 @@ def test_weight_conservation():
     nspace        = 100
 
     positions     = np.zeros((3, nspace), dtype=float)
-    positions[0]  = np.linspace(const.xmin, const.xmax, nspace, endpoint=True)
+    positions[0]  = np.linspace(main_1D.xmin, main_1D.xmax, nspace, endpoint=True)
     normal_weight = np.zeros(positions.shape[1])
     left_nodes    = np.zeros(positions.shape[1], dtype=int)
     weights       = np.zeros((3, positions.shape[1]))
     
-    particles.assign_weighting_TSC(positions, left_nodes, weights, E_nodes=False)
+    main_1D.assign_weighting_TSC(positions, left_nodes, weights, E_nodes=False)
     
     for ii in range(positions.shape[1]):
         normal_weight[ii] = weights[:, ii].sum()
 
     plt.plot(positions[0], normal_weight)
-    plt.xlim(const.xmin, const.xmax)
+    plt.xlim(main_1D.xmin, main_1D.xmax)
     return
 
 
 def test_weight_shape_and_alignment():
     plt.ion()
     
-    positions  = np.array([-1.5]) * const.dx
+    positions  = np.array([-1.5]) * main_1D.dx
     
-    XMIN       = const.xmin
-    XMAX       = const.xmax
-    E_nodes    = const.E_nodes
-    B_nodes    = const.B_nodes    
+    XMIN       = main_1D.xmin
+    XMAX       = main_1D.xmax
+    E_nodes    = main_1D.E_nodes
+    B_nodes    = main_1D.B_nodes    
     
     E_grid     = False
     arr_offset = 0       if E_grid is True else 1
@@ -432,13 +427,13 @@ def test_weight_shape_and_alignment():
     X_color    = 'r'     if E_grid is True else 'b'
     
     Np         = positions.shape[0]
-    Nc         = const.NX + 2*const.ND + arr_offset
+    Nc         = main_1D.NX + 2*main_1D.ND + arr_offset
     
     W_test     = np.zeros(Nc) 
     left_nodes = np.zeros(Np, dtype=int)
     weights    = np.zeros((3, Np))
 
-    particles.assign_weighting_TSC(positions, left_nodes, weights, E_nodes=E_grid)
+    main_1D.assign_weighting_TSC(positions, left_nodes, weights, E_nodes=E_grid)
     
     plt.figure(figsize=(16,10))
     for ii in range(positions.shape[0]):
@@ -470,8 +465,8 @@ def check_source_term_boundaries(qn, ji):
     '''
     Called in main_1D()
     '''
-    E_nodes  = (np.arange(const.NX + 2*const.ND    ) - const.ND  + 0.5) * const.dx / 1e3
-    B_nodes  = (np.arange(const.NX + 2*const.ND + 1) - const.ND  - 0.0) * const.dx / 1e3
+    E_nodes  = (np.arange(main_1D.NX + 2*main_1D.ND    ) - main_1D.ND  + 0.5) * main_1D.dx / 1e3
+    B_nodes  = (np.arange(main_1D.NX + 2*main_1D.ND + 1) - main_1D.ND  - 0.0) * main_1D.dx / 1e3
     
     plt.figure()
     plt.plot(E_nodes, qn, marker='o')
@@ -483,8 +478,8 @@ def check_source_term_boundaries(qn, ji):
     plt.axvline(B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
     plt.axvline(B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
     
-    plt.axvline(const.xmin / 1e3, linestyle=':', c='k', alpha=0.5)
-    plt.axvline(const.xmax / 1e3, linestyle=':', c='k', alpha=0.5)
+    plt.axvline(main_1D.xmin / 1e3, linestyle=':', c='k', alpha=0.5)
+    plt.axvline(main_1D.xmax / 1e3, linestyle=':', c='k', alpha=0.5)
     plt.ylabel('Charge density')
     plt.xlabel('x (km)')
     
@@ -498,8 +493,8 @@ def check_source_term_boundaries(qn, ji):
     plt.axvline(B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
     plt.axvline(B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
     
-    plt.axvline(const.xmin / 1e3, linestyle=':', c='k', alpha=0.5)
-    plt.axvline(const.xmax / 1e3, linestyle=':', c='k', alpha=0.5)
+    plt.axvline(main_1D.xmin / 1e3, linestyle=':', c='k', alpha=0.5)
+    plt.axvline(main_1D.xmax / 1e3, linestyle=':', c='k', alpha=0.5)
     plt.ylabel('Current density')
     plt.xlabel('x (km)')
     
@@ -510,11 +505,11 @@ def check_source_term_boundaries(qn, ji):
 def test_density_and_velocity_deposition():
     # Change dx to 1 and NX/ND/ppc to something reasonable to make this nice
     # Use the sim_params with only one species
-    POS, VEL, IE, W_ELEC, IB, W_MAG, IDX  = init.initialize_particles()
-    Q_DENS, Q_DENS_ADV, JI, NI, NU        = init.initialize_source_arrays()
-    temp1D                                = np.zeros(const.NC, dtype=np.float64) 
+    POS, VEL, IE, W_ELEC, IB, W_MAG, IDX  = main_1D.initialize_particles()
+    Q_DENS, Q_DENS_ADV, JI, NI, NU        = main_1D.initialize_source_arrays()
+    temp1D                                = np.zeros(main_1D.NC, dtype=np.float64) 
     
-    sources.collect_moments(VEL, IE, W_ELEC, IDX, Q_DENS, JI, NI, NU, temp1D) 
+    main_1D.collect_moments(VEL, IE, W_ELEC, IDX, Q_DENS, JI, NI, NU, temp1D) 
     
     if False:
         # Two species
@@ -528,16 +523,16 @@ def test_density_and_velocity_deposition():
         plt.scatter(POS[0], ypos + 0.1, c='b')
         
     # Plot charge density
-    plt.plot(const.E_nodes, Q_DENS / Q_DENS.max(), marker='o')
+    plt.plot(main_1D.E_nodes, Q_DENS / Q_DENS.max(), marker='o')
         
-    for ii in range(const.E_nodes.shape[0]):
-        plt.axvline(const.E_nodes[ii], linestyle='--', c='r', alpha=0.2)
-        plt.axvline(const.B_nodes[ii], linestyle='--', c='b', alpha=0.2)
+    for ii in range(main_1D.E_nodes.shape[0]):
+        plt.axvline(main_1D.E_nodes[ii], linestyle='--', c='r', alpha=0.2)
+        plt.axvline(main_1D.B_nodes[ii], linestyle='--', c='b', alpha=0.2)
      
-    plt.axvline(const.xmin, color='k')
-    plt.axvline(const.xmax, color='k')
-    plt.axvline(const.B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
-    plt.axvline(const.B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(main_1D.xmin, color='k')
+    plt.axvline(main_1D.xmax, color='k')
+    plt.axvline(main_1D.B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(main_1D.B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
     return
 
 
@@ -545,7 +540,7 @@ def check_density_deposition():
     # Change dx to 1 and NX/ND to reasonable values to make this nice
     # Don't forget to comment out the density floor AND re-enable it when done.
     #positions   = np.array([2.00])
-    positions = np.arange(-const.NX/2, const.NX/2 + dy, dy)
+    positions = np.arange(-main_1D.NX/2, main_1D.NX/2 + dy, dy)
 
     Np  = positions.shape[0]
     pos = np.zeros((3, Np))
@@ -558,76 +553,76 @@ def check_density_deposition():
     Ie         = np.zeros(Np, dtype=np.uint16)
     W_elec     = np.zeros((3, Np), dtype=np.float64)
     
-    q_dens, q_dens_adv, Ji, ni, nu = init.initialize_source_arrays()
-    temp1D                         = np.zeros(const.NC, dtype=np.float64) 
+    q_dens, q_dens_adv, Ji, ni, nu = main_1D.initialize_source_arrays()
+    temp1D                         = np.zeros(main_1D.NC, dtype=np.float64) 
     
-    particles.assign_weighting_TSC(pos, Ie, W_elec)
-    sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D) 
+    main_1D.assign_weighting_TSC(pos, Ie, W_elec)
+    main_1D.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu, temp1D) 
     
     # Plot normalized charge density
-    q_dens /= (const.q * const.n_contr[0])
+    q_dens /= (main_1D.q * main_1D.n_contr[0])
     #pdb.set_trace()
     #print(q_dens.sum())
     ypos = np.ones(Np) * q_dens.max() * 1.1
-    plt.plot(const.E_nodes, q_dens, marker='o')
+    plt.plot(main_1D.E_nodes, q_dens, marker='o')
     plt.scatter(pos[0], ypos, marker='x', c='k')
         
-    for ii in range(const.E_nodes.shape[0]):
-        plt.axvline(const.E_nodes[ii], linestyle='--', c='r', alpha=0.2)
-        plt.axvline(const.B_nodes[ii], linestyle='--', c='b', alpha=0.2)
+    for ii in range(main_1D.E_nodes.shape[0]):
+        plt.axvline(main_1D.E_nodes[ii], linestyle='--', c='r', alpha=0.2)
+        plt.axvline(main_1D.B_nodes[ii], linestyle='--', c='b', alpha=0.2)
      
-    plt.axvline(const.xmin, linestyle=':', c='k'       , alpha=0.7)
-    plt.axvline(const.xmax, linestyle=':', c='k'       , alpha=0.7)
-    plt.axvline(const.B_nodes[ 0], linestyle='-', c='darkblue', alpha=0.7)
-    plt.axvline(const.B_nodes[-1], linestyle='-', c='darkblue', alpha=0.7)
+    plt.axvline(main_1D.xmin, linestyle=':', c='k'       , alpha=0.7)
+    plt.axvline(main_1D.xmax, linestyle=':', c='k'       , alpha=0.7)
+    plt.axvline(main_1D.B_nodes[ 0], linestyle='-', c='darkblue', alpha=0.7)
+    plt.axvline(main_1D.B_nodes[-1], linestyle='-', c='darkblue', alpha=0.7)
     return
 
 
 
 def test_velocity_deposition():
-    E_nodes = (np.arange(const.NX + 3) - 0.5) #* const.dx
-    B_nodes = (np.arange(const.NX + 3) - 1.0) #* const.dx
+    E_nodes = (np.arange(main_1D.NX + 3) - 0.5) #* main_1D.dx
+    B_nodes = (np.arange(main_1D.NX + 3) - 1.0) #* main_1D.dx
     
     dt       = 0.1
-    velocity = np.array([[0.3 * const.dx / dt, 0.0],
+    velocity = np.array([[0.3 * main_1D.dx / dt, 0.0],
                          [ 0., 0.0],
                          [ 0., 0.0]])
     
-    position = np.array([16.5, 16.5]) * const.dx
+    position = np.array([16.5, 16.5]) * main_1D.dx
     idx      = np.array([0, 0]) 
     
-    left_nodes, weights = particles.assign_weighting_TSC(position)
-    n_i, nu_i = sources.deposit_velocity_moments(velocity, left_nodes, weights, idx)
+    left_nodes, weights = main_1D.assign_weighting_TSC(position)
+    n_i, nu_i = main_1D.deposit_velocity_moments(velocity, left_nodes, weights, idx)
 
-    for jj in range(const.Nj):
-        normalized_density = (const.cellpart / const.Nj)*n_i[:, jj] / const.density[jj]
-        species_color = const.temp_color[jj]
+    for jj in range(main_1D.Nj):
+        normalized_density = (main_1D.cellpart / main_1D.Nj)*n_i[:, jj] / main_1D.density[jj]
+        species_color = main_1D.temp_color[jj]
         plt.plot(E_nodes, normalized_density, marker='o', c=species_color)
         
         print('Normalized total density contribution of species {} is {}'.format(jj, normalized_density.sum()))
 
-    for ii in range(const.NX + 3):
+    for ii in range(main_1D.NX + 3):
         plt.axvline(E_nodes[ii], linestyle='--', c='r', alpha=0.2)
         plt.axvline(B_nodes[ii], linestyle='--', c='b', alpha=0.2)
         
-    plt.axvline(const.xmin/const.dx, linestyle='-', c='k', alpha=0.2)
-    plt.axvline(const.xmax/const.dx, linestyle='-', c='k', alpha=0.2)
+    plt.axvline(main_1D.xmin/main_1D.dx, linestyle='-', c='k', alpha=0.2)
+    plt.axvline(main_1D.xmax/main_1D.dx, linestyle='-', c='k', alpha=0.2)
     return
 
 
 def test_force_interpolation():
-    E = np.zeros((const.NX + 3, 3))
-    B = np.zeros((const.NX + 3, 3))
+    E = np.zeros((main_1D.NX + 3, 3))
+    B = np.zeros((main_1D.NX + 3, 3))
     
-    E_nodes = (np.arange(const.NX + 3) - 0.5) #* const.dx
-    B_nodes = (np.arange(const.NX + 3) - 1.0) #* const.dx
+    E_nodes = (np.arange(main_1D.NX + 3) - 0.5) #* main_1D.dx
+    B_nodes = (np.arange(main_1D.NX + 3) - 1.0) #* main_1D.dx
     
-    B[:, 0] = np.arange(const.NX + 3) * 5e-9            # Linear
-    B[:, 1] = np.sin(0.5*np.arange(const.NX + 3) + 5)   # Sinusoidal
+    B[:, 0] = np.arange(main_1D.NX + 3) * 5e-9            # Linear
+    B[:, 1] = np.sin(0.5*np.arange(main_1D.NX + 3) + 5)   # Sinusoidal
     B[:, 2] = 4e-9                                      # Constant
     
-    E[:, 0] = np.arange(const.NX + 3) * 1e-5        # Linear
-    E[:, 1] = np.sin(0.5*np.arange(const.NX + 3))   # Sinusoidal
+    E[:, 0] = np.arange(main_1D.NX + 3) * 1e-5        # Linear
+    E[:, 1] = np.sin(0.5*np.arange(main_1D.NX + 3))   # Sinusoidal
     E[:, 2] = 3e-5                                  # Constant
     
     fig = plt.figure(figsize=(12, 8))
@@ -638,17 +633,17 @@ def test_force_interpolation():
     fig.subplots_adjust(hspace=0)
     
     which_field = 'B'
-    for ii in np.arange(0, const.NX + 2, 0.5):
-        position   = np.array([ii]) * const.dx
+    for ii in np.arange(0, main_1D.NX + 2, 0.5):
+        position   = np.array([ii]) * main_1D.dx
         
-        Ie, W_elec = particles.assign_weighting_TSC(position, E_nodes=True)
-        Ib, W_mag  = particles.assign_weighting_TSC(position, E_nodes=False)
+        Ie, W_elec = main_1D.assign_weighting_TSC(position, E_nodes=True)
+        Ib, W_mag  = main_1D.assign_weighting_TSC(position, E_nodes=False)
     
-        Ep, Bp     = particles.interpolate_forces_to_particle(E, B, Ie[0], W_elec[:, 0], Ib[0], W_mag[:, 0])
+        Ep, Bp     = main_1D.interpolate_forces_to_particle(E, B, Ie[0], W_elec[:, 0], Ib[0], W_mag[:, 0])
 
         for ax, jj in zip([ax1, ax2, ax3], list(range(3))):
             ax.clear()
-            ax.set_xlim(-1.5, const.NX + 2)
+            ax.set_xlim(-1.5, main_1D.NX + 2)
             
             if which_field == 'E':
                 ax1.set_title('Electric field interpolation to Particle')
@@ -659,12 +654,12 @@ def test_force_interpolation():
                 ax.plot(B_nodes, B[:, jj])
                 ax.scatter(ii, Bp[jj])
  
-            for kk in range(const.NX + 3):
+            for kk in range(main_1D.NX + 3):
                 ax.axvline(E_nodes[kk], linestyle='--', c='r', alpha=0.2)
                 ax.axvline(B_nodes[kk], linestyle='--', c='b', alpha=0.2)
                 
-                ax.axvline(const.xmin/const.dx, linestyle='-', c='k', alpha=0.2)
-                ax.axvline(const.xmax/const.dx, linestyle='-', c='k', alpha=0.2)
+                ax.axvline(main_1D.xmin/main_1D.dx, linestyle='-', c='k', alpha=0.2)
+                ax.axvline(main_1D.xmax/main_1D.dx, linestyle='-', c='k', alpha=0.2)
     
         plt.pause(0.01)
     
@@ -677,44 +672,44 @@ def test_curl_B():
     '''
     Confirmed
     '''
-    NC   = const.NC   
-    k    = 2 * np.pi / (2 * const.xmax)
+    NC   = main_1D.NC   
+    k    = 2 * np.pi / (2 * main_1D.xmax)
 
     # Inputs and analytic solutions
     B_input       = np.zeros((NC + 1, 3))
-    B_input[:, 0] = np.cos(1.0*k*const.B_nodes)
-    B_input[:, 1] = np.cos(1.5*k*const.B_nodes)
-    B_input[:, 2] = np.cos(2.0*k*const.B_nodes)
+    B_input[:, 0] = np.cos(1.0*k*main_1D.B_nodes)
+    B_input[:, 1] = np.cos(1.5*k*main_1D.B_nodes)
+    B_input[:, 2] = np.cos(2.0*k*main_1D.B_nodes)
     
     curl_B_anal       = np.zeros((NC, 3))
-    curl_B_anal[:, 1] =  2.0 * k * np.sin(2.0*k*const.E_nodes)
-    curl_B_anal[:, 2] = -1.5 * k * np.sin(1.5*k*const.E_nodes)
+    curl_B_anal[:, 1] =  2.0 * k * np.sin(2.0*k*main_1D.E_nodes)
+    curl_B_anal[:, 2] = -1.5 * k * np.sin(1.5*k*main_1D.E_nodes)
     
     curl_B_FD = np.zeros((NC, 3))
-    fields.curl_B_term(B_input, curl_B_FD)
+    main_1D.curl_B_term(B_input, curl_B_FD)
     
-    curl_B_FD *= const.mu0
+    curl_B_FD *= main_1D.mu0
     
     ## DO THE PLOTTING ##
     plt.figure(figsize=(15, 15))
     marker_size = None
         
-    plt.scatter(const.E_nodes, curl_B_anal[:, 1], marker='o', c='k', s=marker_size, label='By Node Solution')
-    plt.scatter(const.E_nodes, curl_B_FD[  :, 1], marker='x', c='b', s=marker_size, label='By Finite Difference')
+    plt.scatter(main_1D.E_nodes, curl_B_anal[:, 1], marker='o', c='k', s=marker_size, label='By Node Solution')
+    plt.scatter(main_1D.E_nodes, curl_B_FD[  :, 1], marker='x', c='b', s=marker_size, label='By Finite Difference')
       
-    plt.scatter(const.E_nodes, curl_B_anal[:, 2], marker='o', c='k', s=marker_size, label='Bz Node Solution')
-    plt.scatter(const.E_nodes, curl_B_FD[  :, 2], marker='x', c='r', s=marker_size, label='Bz Finite Difference')   
+    plt.scatter(main_1D.E_nodes, curl_B_anal[:, 2], marker='o', c='k', s=marker_size, label='Bz Node Solution')
+    plt.scatter(main_1D.E_nodes, curl_B_FD[  :, 2], marker='x', c='r', s=marker_size, label='Bz Finite Difference')   
     plt.title(r'Test of $\nabla \times B$')
 
-    for ii in range(const.E_nodes.shape[0]):
-        plt.axvline(const.E_nodes[ii], linestyle='--', c='r', alpha=0.2)
-        plt.axvline(const.B_nodes[ii], linestyle='--', c='b', alpha=0.2)
+    for ii in range(main_1D.E_nodes.shape[0]):
+        plt.axvline(main_1D.E_nodes[ii], linestyle='--', c='r', alpha=0.2)
+        plt.axvline(main_1D.B_nodes[ii], linestyle='--', c='b', alpha=0.2)
      
-    plt.axvline(const.B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
-    plt.axvline(const.B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(main_1D.B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(main_1D.B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
     
-    plt.axvline(const.xmin, linestyle=':', c='k', alpha=0.5)
-    plt.axvline(const.xmax, linestyle=':', c='k', alpha=0.5)
+    plt.axvline(main_1D.xmin, linestyle=':', c='k', alpha=0.5)
+    plt.axvline(main_1D.xmax, linestyle=':', c='k', alpha=0.5)
     plt.xlabel('x (km)')
     
     plt.legend()
@@ -725,21 +720,21 @@ def test_curl_E():
     '''
     Confirmed with parabolic B0 code
     '''
-    NC   = const.NC   
-    k    = 2 * np.pi / (2 * const.xmax)
+    NC   = main_1D.NC   
+    k    = 2 * np.pi / (2 * main_1D.xmax)
 
     # Inputs and analytic solutions
     E_input       = np.zeros((NC, 3))
-    E_input[:, 0] = np.cos(1.0*k*const.E_nodes)
-    E_input[:, 1] = np.cos(1.5*k*const.E_nodes)
-    E_input[:, 2] = np.cos(2.0*k*const.E_nodes)
+    E_input[:, 0] = np.cos(1.0*k*main_1D.E_nodes)
+    E_input[:, 1] = np.cos(1.5*k*main_1D.E_nodes)
+    E_input[:, 2] = np.cos(2.0*k*main_1D.E_nodes)
 
     curl_E_FD = np.zeros((NC + 1, 3))
-    fields.get_curl_E(E_input, curl_E_FD)
+    main_1D.get_curl_E(E_input, curl_E_FD)
     
     curl_E_anal       = np.zeros((NC + 1, 3))
-    curl_E_anal[:, 1] =  2.0 * k * np.sin(2.0*k*const.B_nodes)
-    curl_E_anal[:, 2] = -1.5 * k * np.sin(1.5*k*const.B_nodes)
+    curl_E_anal[:, 1] =  2.0 * k * np.sin(2.0*k*main_1D.B_nodes)
+    curl_E_anal[:, 2] = -1.5 * k * np.sin(1.5*k*main_1D.B_nodes)
     
     
     ## PLOT
@@ -747,29 +742,29 @@ def test_curl_E():
     marker_size = None
 
     if False:
-        plt.scatter(const.E_nodes, E_input[:, 0], marker='o', c='k', s=marker_size, label='Ex Node Solution')
-        plt.scatter(const.E_nodes, E_input[:, 1], marker='o', c='k', s=marker_size, label='Ey Node Solution')
-        plt.scatter(const.E_nodes, E_input[:, 2], marker='o', c='k', s=marker_size, label='Ez Node Solution')
+        plt.scatter(main_1D.E_nodes, E_input[:, 0], marker='o', c='k', s=marker_size, label='Ex Node Solution')
+        plt.scatter(main_1D.E_nodes, E_input[:, 1], marker='o', c='k', s=marker_size, label='Ey Node Solution')
+        plt.scatter(main_1D.E_nodes, E_input[:, 2], marker='o', c='k', s=marker_size, label='Ez Node Solution')
 
     if True:
-        plt.scatter(const.B_nodes, curl_E_anal[:, 1], marker='o', c='k', s=marker_size, label='By Node Solution')
-        plt.scatter(const.B_nodes, curl_E_FD[  :, 1], marker='x', c='b', s=marker_size, label='By Finite Difference')
+        plt.scatter(main_1D.B_nodes, curl_E_anal[:, 1], marker='o', c='k', s=marker_size, label='By Node Solution')
+        plt.scatter(main_1D.B_nodes, curl_E_FD[  :, 1], marker='x', c='b', s=marker_size, label='By Finite Difference')
           
-        plt.scatter(const.B_nodes, curl_E_anal[:, 2], marker='o', c='k', s=marker_size, label='Bz Node Solution')
-        plt.scatter(const.B_nodes, curl_E_FD[  :, 2], marker='x', c='r', s=marker_size, label='Bz Finite Difference')   
+        plt.scatter(main_1D.B_nodes, curl_E_anal[:, 2], marker='o', c='k', s=marker_size, label='Bz Node Solution')
+        plt.scatter(main_1D.B_nodes, curl_E_FD[  :, 2], marker='x', c='r', s=marker_size, label='Bz Finite Difference')   
     
     plt.title(r'Test of $\nabla \times E$')
 
     ## Add node markers and boundaries
     for kk in range(NC):
-        plt.axvline(const.E_nodes[kk], linestyle='--', c='r', alpha=0.2)
-        plt.axvline(const.B_nodes[kk], linestyle='--', c='b', alpha=0.2)
+        plt.axvline(main_1D.E_nodes[kk], linestyle='--', c='r', alpha=0.2)
+        plt.axvline(main_1D.B_nodes[kk], linestyle='--', c='b', alpha=0.2)
     
-    plt.axvline(const.B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
-    plt.axvline(const.B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(main_1D.B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(main_1D.B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
     
-    plt.axvline(const.xmin, linestyle='-', c='k', alpha=0.2)
-    plt.axvline(const.xmax, linestyle='-', c='k', alpha=0.2)
+    plt.axvline(main_1D.xmin, linestyle='-', c='k', alpha=0.2)
+    plt.axvline(main_1D.xmax, linestyle='-', c='k', alpha=0.2)
     
     plt.legend()
     return
@@ -780,42 +775,42 @@ def test_grad_P():
     Verified for parabolic B0 :: Analytic solutions are a pain, but these come
     out looking sinusoidal as expected
     '''
-    k    = 2 * np.pi / (2 * const.xmax)
+    k    = 2 * np.pi / (2 * main_1D.xmax)
     
     # Set analytic solutions (input/output)
     if False:
-        q_dens    = np.cos(1.0 * k * const.E_nodes)  * const.q * const.ne
-        te_input  = np.ones(const.NC)*const.Te0_scalar
+        q_dens    = np.cos(1.0 * k * main_1D.E_nodes)  * main_1D.q * main_1D.ne
+        te_input  = np.ones(main_1D.NC)*main_1D.Te0_scalar
     elif False:
-        q_dens    = np.ones(const.NC) * const.q * const.ne
-        te_input  = np.cos(1.0 * k * const.E_nodes)*const.Te0_scalar
+        q_dens    = np.ones(main_1D.NC) * main_1D.q * main_1D.ne
+        te_input  = np.cos(1.0 * k * main_1D.E_nodes)*main_1D.Te0_scalar
     else:
-        q_dens    = np.cos(1.0 * k * const.E_nodes)* const.q * const.ne
-        te_input  = np.cos(1.0 * k * const.E_nodes)*const.Te0_scalar
+        q_dens    = np.cos(1.0 * k * main_1D.E_nodes)* main_1D.q * main_1D.ne
+        te_input  = np.cos(1.0 * k * main_1D.E_nodes)*main_1D.Te0_scalar
     
-    gp_diff   = np.zeros(const.NC)
-    temp      = np.zeros(const.NC + 1)
+    gp_diff   = np.zeros(main_1D.NC)
+    temp      = np.zeros(main_1D.NC + 1)
     
     # Finite differences
-    fields.get_grad_P(q_dens, te_input, gp_diff, temp)
+    main_1D.get_grad_P(q_dens, te_input, gp_diff, temp)
 
     ## PLOT ##
     plt.figure(figsize=(15, 15))
     marker_size = None
 
-    plt.scatter(const.E_nodes, gp_diff, marker='x', c='r', s=marker_size, label='Finite Difference')
+    plt.scatter(main_1D.E_nodes, gp_diff, marker='x', c='r', s=marker_size, label='Finite Difference')
     
     plt.title(r'Test of $\nabla p_e$')
 
-    for kk in range(const.NC):
-        plt.axvline(const.E_nodes[kk], linestyle='--', c='r', alpha=0.2)
-        plt.axvline(const.B_nodes[kk], linestyle='--', c='b', alpha=0.2)
+    for kk in range(main_1D.NC):
+        plt.axvline(main_1D.E_nodes[kk], linestyle='--', c='r', alpha=0.2)
+        plt.axvline(main_1D.B_nodes[kk], linestyle='--', c='b', alpha=0.2)
     
-    plt.axvline(const.B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
-    plt.axvline(const.B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(main_1D.B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(main_1D.B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
     
-    plt.axvline(const.xmin, linestyle='-', c='k', alpha=0.2)
-    plt.axvline(const.xmax, linestyle='-', c='k', alpha=0.2)
+    plt.axvline(main_1D.xmin, linestyle='-', c='k', alpha=0.2)
+    plt.axvline(main_1D.xmax, linestyle='-', c='k', alpha=0.2)
     
     plt.legend()
     return
@@ -826,23 +821,23 @@ def test_grad_P_with_init_loading():
     Init density is homogenous :: Confirmed
     
     '''
-    pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, temp_N = init.initialize_particles()
-    q_dens, q_dens2, Ji, ni, nu                          = init.initialize_source_arrays()
+    pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, temp_N = main_1D.initialize_particles()
+    q_dens, q_dens2, Ji, ni, nu                          = main_1D.initialize_source_arrays()
     
-    sources.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu)
+    main_1D.collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu)
     
-    te_input  = np.ones(const.NC)*const.Te0_scalar
-    gp_diff   = np.zeros(const.NC)
-    temp      = np.zeros(const.NC + 1)
+    te_input  = np.ones(main_1D.NC)*main_1D.Te0_scalar
+    gp_diff   = np.zeros(main_1D.NC)
+    temp      = np.zeros(main_1D.NC + 1)
     
-    fields.get_grad_P(q_dens, te_input, gp_diff, temp)
+    main_1D.get_grad_P(q_dens, te_input, gp_diff, temp)
     
     fig, ax = plt.subplots(4, figsize=(15, 10), sharex=True)
     ax[0].set_title('Particle Moments')
-    ax[0].plot(const.E_nodes, q_dens)
-    ax[1].plot(const.E_nodes, Ji[:, 0])
-    ax[2].plot(const.E_nodes, Ji[:, 1])
-    ax[3].plot(const.E_nodes, Ji[:, 2])
+    ax[0].plot(main_1D.E_nodes, q_dens)
+    ax[1].plot(main_1D.E_nodes, Ji[:, 0])
+    ax[2].plot(main_1D.E_nodes, Ji[:, 1])
+    ax[3].plot(main_1D.E_nodes, Ji[:, 2])
     
     ax[0].set_ylabel(r'$\rho_c$')
     ax[1].set_ylabel(r'$J_x$')
@@ -852,7 +847,7 @@ def test_grad_P_with_init_loading():
     fig2, ax2 = plt.subplots(figsize=(15, 10))
     
     ax2.set_title('E-field contribution of initial density loading')
-    ax2.plot(const.E_nodes, gp_diff / q_dens)
+    ax2.plot(main_1D.E_nodes, gp_diff / q_dens)
     
     return
 
@@ -882,7 +877,7 @@ def test_cross_product():
     anal_result[:, 2] =   s2x*c3x - c2x*s3x
 
     test_result = np.zeros(A.shape)
-    aux.cross_product(A, B, test_result)
+    main_1D.cross_product(A, B, test_result)
     
     plt.plot(anal_result[:, 0], marker='o')
     plt.plot(test_result[:, 0], marker='x')
@@ -902,8 +897,8 @@ def test_E_convective():
     
     B-field is kept uniform in order to ensure curl(B) = 0
     '''
-    xmin = 0.0     #const.xmin
-    xmax = 2*np.pi #const.xmax
+    xmin = 0.0     #main_1D.xmin
+    xmax = 2*np.pi #main_1D.xmax
     k    = 1.0
     
     NX   = 32
@@ -921,7 +916,7 @@ def test_E_convective():
     J_input[:, 1] = np.sin(2.0*k*E_nodes)
     J_input[:, 2] = np.sin(3.0*k*E_nodes)
     
-    E_FD = fields.calculate_E(B_input, J_input, qn_input, DX=dx)
+    E_FD = main_1D.calculate_E(B_input, J_input, qn_input, DX=dx)
     
     E_anal       = np.zeros((NX + 3, 3))
     E_anal[:, 0] = np.sin(3.0*k*E_nodes) - np.sin(2.0*k*E_nodes)
@@ -958,8 +953,8 @@ def test_E_convective_exelectron():
     
     B-field is kept uniform in order to ensure curl(B) = 0
     '''
-    xmin = 0.0     #const.xmin
-    xmax = 2*np.pi #const.xmax
+    xmin = 0.0     #main_1D.xmin
+    xmax = 2*np.pi #main_1D.xmax
     k    = 1.0
     
     NX   = 32
@@ -977,8 +972,8 @@ def test_E_convective_exelectron():
     J_input[:, 1] = np.sin(2.0*k*E_nodes)
     J_input[:, 2] = np.sin(3.0*k*E_nodes)
     
-    E_FD  = fields.calculate_E(       B_input, J_input, qn_input, DX=dx)
-    E_FD2 = fields.calculate_E_w_exel(B_input, J_input, qn_input, DX=dx)
+    E_FD  = main_1D.calculate_E(       B_input, J_input, qn_input, DX=dx)
+    E_FD2 = main_1D.calculate_E_w_exel(B_input, J_input, qn_input, DX=dx)
     
     E_anal       = np.zeros((NX + 3, 3))
     E_anal[:, 0] = np.sin(3.0*k*E_nodes) - np.sin(2.0*k*E_nodes)
@@ -1026,9 +1021,9 @@ def test_E_hall():
 # =============================================================================
     
     #for NX, ii in zip(grids, range(len(grids))):
-    NX   = 32      #const.NX
-    xmin = 0.0     #const.xmin
-    xmax = 2*np.pi #const.xmax
+    NX   = 32      #main_1D.NX
+    xmin = 0.0     #main_1D.xmin
+    xmax = 2*np.pi #main_1D.xmax
     
     dx   = xmax / NX
     k    = 1.0
@@ -1058,25 +1053,25 @@ def test_E_hall():
     Be_input[:, 0] = Bxe
     Be_input[:, 1] = Bye
     Be_input[:, 2] = Bze
-    B_center       = aux.interpolate_to_center_cspline3D(B_input, DX=dx)
+    B_center       = main_1D.interpolate_to_center_cspline3D(B_input, DX=dx)
     
     
     ## TEST CURL B (AGAIN JUST TO BE SURE)
-    curl_B_FD   = fields.get_curl_B(B_input, DX=dx)
+    curl_B_FD   = main_1D.get_curl_B(B_input, DX=dx)
     curl_B_anal = np.zeros((NX + 3, 3))
     curl_B_anal[:, 1] = -dBz
     curl_B_anal[:, 2] =  dBy
 
 
     ## ELECTRIC FIELD CALCULATION ## 
-    E_FD         =   fields.calculate_E(       B_input, np.zeros((NX + 3, 3)), np.ones(NX + 3), DX=dx)
-    E_FD2        =   fields.calculate_E_w_exel(B_input, np.zeros((NX + 3, 3)), np.ones(NX + 3), DX=dx)
+    E_FD         =   main_1D.calculate_E(       B_input, np.zeros((NX + 3, 3)), np.ones(NX + 3), DX=dx)
+    E_FD2        =   main_1D.calculate_E_w_exel(B_input, np.zeros((NX + 3, 3)), np.ones(NX + 3), DX=dx)
     
     E_anal       = np.zeros((NX + 3, 3))
     E_anal[:, 0] = - (Bye * dBy + Bze * dBz)
     E_anal[:, 1] = Bxe * dBy
     E_anal[:, 2] = Bxe * dBz
-    E_anal      /= const.mu0
+    E_anal      /= main_1D.mu0
         
 
 # =============================================================================
@@ -1150,44 +1145,44 @@ def test_cspline_interpolation():
     marker_size = 20
 
     # Interpolation
-    B_input       = np.zeros((const.NC + 1, 3))
-    B_input[:, 0] = np.cos(1.0*k*const.B_nodes)
-    B_input[:, 1] = np.cos(2.0*k*const.B_nodes)
-    B_input[:, 2] = np.cos(3.0*k*const.B_nodes)
+    B_input       = np.zeros((main_1D.NC + 1, 3))
+    B_input[:, 0] = np.cos(1.0*k*main_1D.B_nodes)
+    B_input[:, 1] = np.cos(2.0*k*main_1D.B_nodes)
+    B_input[:, 2] = np.cos(3.0*k*main_1D.B_nodes)
     
     
     # Analytic solution
-    Bxe        = np.cos(1.0*k*const.E_nodes)
-    Bye        = np.cos(2.0*k*const.E_nodes)
-    Bze        = np.cos(3.0*k*const.E_nodes)  
+    Bxe        = np.cos(1.0*k*main_1D.E_nodes)
+    Bye        = np.cos(2.0*k*main_1D.E_nodes)
+    Bze        = np.cos(3.0*k*main_1D.E_nodes)  
     
-    B_center      = np.zeros((const.NC, 3))
+    B_center      = np.zeros((main_1D.NC, 3))
 
     ## TEST INTERPOLATION ##
-    B_center = aux.interpolate_edges_to_center(B_input, B_center)
+    B_center = main_1D.interpolate_edges_to_center(B_input, B_center)
 
     plot = True
     if plot == True:
         plt.figure()
-        plt.scatter(const.B_nodes, B_input[:, 0], s=marker_size, c='b', marker='x')
-        plt.scatter(const.B_nodes, B_input[:, 1], s=marker_size, c='b', marker='x')
-        plt.scatter(const.B_nodes, B_input[:, 2], s=marker_size, c='b', marker='x')
+        plt.scatter(main_1D.B_nodes, B_input[:, 0], s=marker_size, c='b', marker='x')
+        plt.scatter(main_1D.B_nodes, B_input[:, 1], s=marker_size, c='b', marker='x')
+        plt.scatter(main_1D.B_nodes, B_input[:, 2], s=marker_size, c='b', marker='x')
         
-        plt.scatter(const.E_nodes, Bxe, s=marker_size, c='k', marker='o')
-        plt.scatter(const.E_nodes, Bye, s=marker_size, c='k', marker='o')
-        plt.scatter(const.E_nodes, Bze, s=marker_size, c='k', marker='o')
+        plt.scatter(main_1D.E_nodes, Bxe, s=marker_size, c='k', marker='o')
+        plt.scatter(main_1D.E_nodes, Bye, s=marker_size, c='k', marker='o')
+        plt.scatter(main_1D.E_nodes, Bze, s=marker_size, c='k', marker='o')
         
-        plt.scatter(const.E_nodes, B_center[:, 0], s=marker_size, c='r', marker='x')
-        plt.scatter(const.E_nodes, B_center[:, 1], s=marker_size, c='r', marker='x')
-        plt.scatter(const.E_nodes, B_center[:, 2], s=marker_size, c='r', marker='x')
+        plt.scatter(main_1D.E_nodes, B_center[:, 0], s=marker_size, c='r', marker='x')
+        plt.scatter(main_1D.E_nodes, B_center[:, 1], s=marker_size, c='r', marker='x')
+        plt.scatter(main_1D.E_nodes, B_center[:, 2], s=marker_size, c='r', marker='x')
         
-        for kk in range(const.NC):
-            plt.axvline(const.E_nodes[kk], linestyle='--', c='r', alpha=0.2)
-            plt.axvline(const.B_nodes[kk], linestyle='--', c='b', alpha=0.2)
-        plt.axvline(const.B_nodes[kk+1], linestyle='--', c='b', alpha=0.2)
+        for kk in range(main_1D.NC):
+            plt.axvline(main_1D.E_nodes[kk], linestyle='--', c='r', alpha=0.2)
+            plt.axvline(main_1D.B_nodes[kk], linestyle='--', c='b', alpha=0.2)
+        plt.axvline(main_1D.B_nodes[kk+1], linestyle='--', c='b', alpha=0.2)
             
-        plt.axvline(const.xmin, linestyle='-', c='k', alpha=0.2)
-        plt.axvline(const.xmax, linestyle='-', c='k', alpha=0.2)
+        plt.axvline(main_1D.xmin, linestyle='-', c='k', alpha=0.2)
+        plt.axvline(main_1D.xmax, linestyle='-', c='k', alpha=0.2)
     
         plt.legend()
     return
@@ -1200,9 +1195,9 @@ def test_interp_cross_manual():
     grids  = [16, 32, 64, 128, 256, 512, 1024]
     errors = np.zeros(len(grids))
     
-    #NX   = 32      #const.NX
-    xmin = 0.0     #const.xmin
-    xmax = 2*np.pi #const.xmax
+    #NX   = 32      #main_1D.NX
+    xmin = 0.0     #main_1D.xmin
+    xmax = 2*np.pi #main_1D.xmax
     k    = 1.0
     marker_size = 20
     
@@ -1234,7 +1229,7 @@ def test_interp_cross_manual():
         A[:, 1] = Ay ; B[:, 1] = By ; Be[:, 1] = Bye
         A[:, 2] = Az ; B[:, 2] = Bz ; Be[:, 2] = Bze
         
-        B_inter      = aux.interpolate_to_center_cspline3D(B)
+        B_inter      = main_1D.interpolate_to_center_cspline3D(B)
         
         ## RESULTS (AxB) ##
         anal_result       = np.ones((NX + 3, 3))
@@ -1242,8 +1237,8 @@ def test_interp_cross_manual():
         anal_result[:, 1] = Az*Bxe - Ax*Bze
         anal_result[:, 2] = Ax*Bye - Ay*Bxe
         
-        test_result  = aux.cross_product(A, Be)
-        inter_result = aux.cross_product(A, B_inter)
+        test_result  = main_1D.cross_product(A, Be)
+        inter_result = main_1D.cross_product(A, B_inter)
 
         error_x    = abs(anal_result[:, 0] - inter_result[:, 0]).max()
         error_y    = abs(anal_result[:, 1] - inter_result[:, 1]).max()
@@ -1300,9 +1295,9 @@ def plot_dipole_field_line(length=True, get_from_sim=True):
         lat_st = 80  
         lat_en = 100
     else:
-        Ls     = [const.L]
-        lat_st = 90 - const.theta_xmax * 180./np.pi
-        lat_en = 90 + const.theta_xmax * 180./np.pi
+        Ls     = [main_1D.L]
+        lat_st = 90 - main_1D.theta_xmax * 180./np.pi
+        lat_en = 90 + main_1D.theta_xmax * 180./np.pi
     
     plt.figure()
     plt.gcf().gca().add_artist(plt.Circle((0,0), 1.0, color='k'))
@@ -1334,14 +1329,26 @@ def check_particle_position_individual():
     '''
     Verified. RC and cold population positions load fine
     '''
-    pos, vel, idx = init.uniform_gaussian_distribution_quiet()
-
+    pos, vel, idx = main_1D.uniform_gaussian_distribution_quiet()
+    
     plt.figure()
-    for jj in range(const.Nj):
-        st = const.idx_start[jj]
-        en = const.idx_end[  jj]    
+    for jj in range(main_1D.Nj):
+        st = main_1D.idx_start[jj]
+        en = main_1D.idx_end[  jj]    
         Np = en - st
-        plt.scatter(pos[st:en], np.ones(Np)*jj, color=const.temp_color[jj])
+        plt.scatter(pos[st:en]/main_1D.dx, np.ones(Np)*jj, color=main_1D.temp_color[jj])
+        
+    ## Add node markers and boundaries
+    for kk in range(main_1D.NC):
+        plt.axvline(main_1D.E_nodes[kk]/main_1D.dx, linestyle='--', c='r', alpha=0.2)
+        plt.axvline(main_1D.B_nodes[kk]/main_1D.dx, linestyle='--', c='b', alpha=0.2)
+    
+    plt.axvline(main_1D.B_nodes[ 0]/main_1D.dx, linestyle='-', c='darkblue', alpha=1.0)
+    plt.axvline(main_1D.B_nodes[-1]/main_1D.dx, linestyle='-', c='darkblue', alpha=1.0)
+    
+    plt.axvline(main_1D.xmin/main_1D.dx, linestyle='-', c='k', alpha=0.2)
+    plt.axvline(main_1D.xmax/main_1D.dx, linestyle='-', c='k', alpha=0.2)
+    plt.ylim(-0.1, 2)
     return
 
 
@@ -1424,10 +1431,10 @@ def test_boris():
     Contains stripped down version of the particle-push (velocity/position updates) loop
     in order to test accuracy of boris pusher.
     '''
-    B0        = const.B_xmax
-    v0_perp   = const.va
+    B0        = main_1D.B_xmax
+    v0_perp   = main_1D.va
     
-    gyfreq    = const.gyfreq / (2 * np.pi)
+    gyfreq    = main_1D.gyfreq / (2 * np.pi)
     orbit_res = 0.05
     max_rev   = 1000
     dt        = orbit_res / gyfreq 
@@ -1435,12 +1442,12 @@ def test_boris():
     max_inc   = int(max_t / dt)
     
     pos       = np.array([0])
-    vel       = np.array([const.va, const.va, const.va]).reshape((3, 1))
+    vel       = np.array([main_1D.va, main_1D.va, main_1D.va]).reshape((3, 1))
     idx       = np.array([0])
     
     # Dummy arrays so the functions work
-    E       = np.zeros((const.NC    , 3))
-    B       = np.zeros((const.NC + 1, 3))
+    E       = np.zeros((main_1D.NC    , 3))
+    B       = np.zeros((main_1D.NC + 1, 3))
     
     W_mag   = np.array([0, 1, 0]).reshape((3, 1))
     W_elec  = np.array([0, 1, 0]).reshape((3, 1))
@@ -1452,19 +1459,19 @@ def test_boris():
     
     B[:, 0]+= B0; tt = 0; t_total = 0
     
-    particles.assign_weighting_TSC(pos, Ie, W_elec)
-    particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*dt)
+    main_1D.assign_weighting_TSC(pos, Ie, W_elec)
+    main_1D.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*dt)
     while tt < max_inc:
         pos_history[tt] = pos
         vel_history[tt] = vel[:, 0]
         
-        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt)
-        particles.position_update(pos, vel, dt, Ie, W_elec)  
+        main_1D.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt)
+        main_1D.position_update(pos, vel, dt, Ie, W_elec)  
         
-        if pos[0] < const.xmin:
-            pos[0] += const.xmax
-        elif pos[0] > const.xmax:
-            pos[0] -= const.xmax
+        if pos[0] < main_1D.xmin:
+            pos[0] += main_1D.xmax
+        elif pos[0] > main_1D.xmax:
+            pos[0] -= main_1D.xmax
                 
         tt      += 1
         t_total += dt
@@ -1545,8 +1552,8 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
     Ie     = np.zeros(Np, dtype=int)
     Ib     = np.zeros(Np, dtype=int)
     qmi    = np.zeros(Np)
-    B_test = np.zeros((const.NC + 1, 3), dtype=np.float64) 
-    E_test = np.zeros((const.NC, 3),     dtype=np.float64) 
+    B_test = np.zeros((main_1D.NC + 1, 3), dtype=np.float64) 
+    E_test = np.zeros((main_1D.NC, 3),     dtype=np.float64) 
     
     vel       = np.zeros((3, Np), dtype=np.float64)
     pos       = np.zeros((3, Np), dtype=np.float64)
@@ -1570,8 +1577,8 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
         pdb.set_trace()
     else:
         # Set initial velocity based on pitch angle and particle energy
-        v_par  = v_mag * const.va * np.cos(pitch * np.pi / 180.)
-        v_perp = v_mag * const.va * np.sin(pitch * np.pi / 180.)
+        v_par  = v_mag * main_1D.va * np.cos(pitch * np.pi / 180.)
+        v_perp = v_mag * main_1D.va * np.sin(pitch * np.pi / 180.)
         
         #initial_gyrophase  = 270            # degrees
         #initial_gyrophase *= np.pi / 180.   # convert to radians
@@ -1580,7 +1587,7 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
         vel[1, :] = 0.0  #- v_perp * np.sin(initial_gyrophase)
         vel[2, :] = -v_perp  #v_perp * np.cos(initial_gyrophase)
                 
-        rL = const.mp * v_perp / (const.q * const.B_eq)
+        rL = main_1D.mp * v_perp / (main_1D.q * main_1D.B_eq)
         
         pos[0, :] = 0.0  
         pos[1, :] = rL   #rL * np.cos(initial_gyrophase)
@@ -1589,9 +1596,9 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
     # Initial quantities
     init_pos = pos.copy() 
     init_vel = vel.copy()
-    gyfreq   = const.gyfreq / (2 * np.pi)
-    ion_ts   = const.orbit_res / gyfreq
-    vel_ts   = 0.5 * const.dx / np.max(np.abs(vel[0, :]))
+    gyfreq   = main_1D.gyfreq / (2 * np.pi)
+    ion_ts   = main_1D.orbit_res / gyfreq
+    vel_ts   = 0.5 * main_1D.dx / np.max(np.abs(vel[0, :]))
 
     DT       = min(ion_ts, vel_ts) * dt_mult
     
@@ -1607,7 +1614,7 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
     vel_gphase  = np.zeros((max_inc - 1))
 
     # Retard velocity for stability
-    particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B_test, E_test, v_prime, S, T, qmi, -0.5*DT)
+    main_1D.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B_test, E_test, v_prime, S, T, qmi, -0.5*DT)
     
     # Record initial values
 # =============================================================================
@@ -1629,8 +1636,8 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
         tt      += 1
         t_total += DT
         
-        particles.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B_test, E_test, v_prime, S, T, qmi, DT)
-        particles.position_update(pos, vel, idx, DT, Ie, W_elec)
+        main_1D.velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B_test, E_test, v_prime, S, T, qmi, DT)
+        main_1D.position_update(pos, vel, idx, DT, Ie, W_elec)
         
 # =============================================================================
 #         time[         tt]       = t_total
@@ -1662,10 +1669,10 @@ def velocity_update(pos, vel, dt):
     and no E-field)
     '''
     for ii in range(pos.shape[0]):
-        qmi = const.q / const.mp
+        qmi = main_1D.q / main_1D.mp
         vn  = vel[:, ii]
         
-        B_p = particles.eval_B0_particle(pos[ii], vel[:, ii], qmi, np.array([0., 0., 0.]))
+        B_p = main_1D.eval_B0_particle(pos[ii], vel[:, ii], qmi, np.array([0., 0., 0.]))
         
         # Intermediate calculations
         h  = qmi * dt
@@ -1705,9 +1712,9 @@ def test_mirror_motion():
             # Calculate parameter timeseries using recorded values
             init_vperp  = np.sqrt(init_vel[1] ** 2 + init_vel[2] ** 2)
             #init_vpara = init_vel[0]
-            #init_KE    = 0.5 * const.mp * init_vel ** 2
+            #init_KE    = 0.5 * main_1D.mp * init_vel ** 2
             #init_pitch = np.arctan(init_vperp / init_vpara) * 180. / np.pi
-            init_mu    = 0.5 * const.mp * init_vperp ** 2 / const.B_eq
+            init_mu    = 0.5 * main_1D.mp * init_vperp ** 2 / main_1D.B_eq
             
             #vel_perp      = np.sqrt(vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
             #vel_para      = vel_history[:, 0]
@@ -1718,8 +1725,8 @@ def test_mirror_motion():
             #B_perp      = np.sqrt(mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
             #B_magnitude = np.sqrt(mag_history[:, 0] ** 2 + mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
             
-            KE_perp = 0.5 * const.mp * (vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
-            #KE_para = 0.5 * const.mp *  vel_history[:, 0] ** 2
+            KE_perp = 0.5 * main_1D.mp * (vel_history[:, 1] ** 2 + vel_history[:, 2] ** 2)
+            #KE_para = 0.5 * main_1D.mp *  vel_history[:, 0] ** 2
             #KE_tot  = KE_para + KE_perp
             
             #mu_x = KE_perp / np.sqrt(mag_history_x ** 2 + mag_history[:, 1] ** 2 + mag_history[:, 2] ** 2)
@@ -1743,7 +1750,7 @@ def test_mirror_motion():
         
         axes[0].set_ylabel('v (km)')
         axes[0].set_xlabel('t (s)')
-        #axes[0].set_title(r'Velocity/Magnetic Field at Particle, v0 = [%4.1f, %4.1f, %4.1f]km/s, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (init_vel[0, 0], init_vel[1, 0], init_vel[2, 0], const.loss_cone, init_pitch))
+        #axes[0].set_title(r'Velocity/Magnetic Field at Particle, v0 = [%4.1f, %4.1f, %4.1f]km/s, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (init_vel[0, 0], init_vel[1, 0], init_vel[2, 0], main_1D.loss_cone, init_pitch))
         #axes[0].legend()
 
         #axes[1].legend()
@@ -1842,7 +1849,7 @@ def test_mirror_motion():
         # Invariant (with parameters) timeseries
         fig, axes = plt.subplots(3, sharex=True)
         axes[0].plot(time,            mu*1e10, label='$\mu(t_v)$', lw=0.5, c='k')
-        #axes[0].set_title(r'First Invariant $\mu$ for single trapped particle, v0 = [%3.1f, %3.1f, %3.1f]$v_{A,eq}^{-1}$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (init_vel[0, 0]/const.va, init_vel[1, 0]/const.va, init_vel[2, 0]/const.va, const.loss_cone, init_pitch))
+        #axes[0].set_title(r'First Invariant $\mu$ for single trapped particle, v0 = [%3.1f, %3.1f, %3.1f]$v_{A,eq}^{-1}$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (init_vel[0, 0]/main_1D.va, init_vel[1, 0]/main_1D.va, init_vel[2, 0]/main_1D.va, main_1D.loss_cone, init_pitch))
         axes[0].set_title(r'First Invariant $\mu$ for single trapped particle :: TEST DT = %7.5fs :: Max $\delta \mu = $%6.4f%%' % (DT, mu_percent))
         axes[0].set_ylabel(r'$(\times 10^{-10})$', rotation=0, labelpad=30)
         axes[0].get_yaxis().get_major_formatter().set_useOffset(False)
@@ -1852,7 +1859,7 @@ def test_mirror_motion():
         mag_interp           = (mag_history_x[1:] + mag_history_x[:-1]) / 2
         mag_interp_magnitude = np.sqrt(mag_interp ** 2 + mag_history[1:, 1] ** 2 + mag_history[1:, 2] ** 2)
         
-        mu_interp  = 0.5*const.mp*(vel_history[1:, 1] ** 2 + vel_history[1:, 2] ** 2) / mag_interp_magnitude
+        mu_interp  = 0.5*main_1D.mp*(vel_history[1:, 1] ** 2 + vel_history[1:, 2] ** 2) / mag_interp_magnitude
 
         axes[0].plot(time,          mu_x*1e10, label='$\mu(t_x)$')
         axes[0].plot(time[1:], mu_interp*1e10, label='$\mu(t_v)$ interpolated')
@@ -1879,7 +1886,7 @@ def test_mirror_motion():
         
         axes[0].set_ylabel('v (km)')
         axes[0].set_xlabel('t (s)')
-        axes[0].set_title(r'Velocity/Magnetic Field at Particle, v0 = [%4.1f, %4.1f, %4.1f]km/s, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (init_vel[0, 0], init_vel[1, 0], init_vel[2, 0], const.loss_cone, init_pitch))
+        axes[0].set_title(r'Velocity/Magnetic Field at Particle, v0 = [%4.1f, %4.1f, %4.1f]km/s, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (init_vel[0, 0], init_vel[1, 0], init_vel[2, 0], main_1D.loss_cone, init_pitch))
         #axes[0].set_xlim(0, None)
         axes[0].legend()
         
@@ -1895,23 +1902,23 @@ def test_mirror_motion():
     if False:
         ## Plots 3-velocity timeseries ##
         fig, axes = plt.subplots(3, sharex=True)
-        axes[0].set_title(r'Position/Velocity of Particle : v0 = [%3.1f, %3.1f, %3.1f]$v_A$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (init_vel[0, 0]/const.va, init_vel[1, 0]/const.va, init_vel[2, 0]/const.va, const.loss_cone, init_pitch))
+        axes[0].set_title(r'Position/Velocity of Particle : v0 = [%3.1f, %3.1f, %3.1f]$v_A$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg' % (init_vel[0, 0]/main_1D.va, init_vel[1, 0]/main_1D.va, init_vel[2, 0]/main_1D.va, main_1D.loss_cone, init_pitch))
 
         axes[0].plot(time, pos_history*1e-3)
         axes[0].set_xlabel('t (s)')
         axes[0].set_ylabel(r'x (km)')
-        axes[0].axhline(const.xmin*1e-3, color='k', ls=':')
-        axes[0].axhline(const.xmax*1e-3, color='k', ls=':')
+        axes[0].axhline(main_1D.xmin*1e-3, color='k', ls=':')
+        axes[0].axhline(main_1D.xmax*1e-3, color='k', ls=':')
         axes[0].legend()
         
-        axes[1].plot(time, vel_history[:, 0]/const.va, label='$v_\parallel$')
-        axes[1].plot(time,            vel_perp/const.va, label='$v_\perp$')
+        axes[1].plot(time, vel_history[:, 0]/main_1D.va, label='$v_\parallel$')
+        axes[1].plot(time,            vel_perp/main_1D.va, label='$v_\perp$')
         axes[1].set_xlabel('t (s)')
         axes[1].set_ylabel(r'$v_\parallel$ ($v_{A,eq}^{-1}$)')
         axes[1].legend()
         
-        axes[2].plot(time, vel_history[:, 1]/const.va, label='vy')
-        axes[2].plot(time, vel_history[:, 2]/const.va, label='vz')
+        axes[2].plot(time, vel_history[:, 1]/main_1D.va, label='vy')
+        axes[2].plot(time, vel_history[:, 2]/main_1D.va, label='vz')
         axes[2].set_xlabel('t (s)')
         axes[2].set_ylabel(r'$v_\perp$ ($v_{A,eq}^{-1}$)')
         axes[2].legend()
@@ -1932,9 +1939,9 @@ def test_mirror_motion():
         ## Plot parallel and perpendicular kinetic energies/velocities
         plt.figure()
         plt.title('Kinetic energy of single particle: Full Bottle')
-        plt.plot(time, KE_para/const.q, c='b', label=r'$KE_\parallel$')
-        plt.plot(time, KE_perp/const.q, c='r', label=r'$KE_\perp$')
-        plt.plot(time, KE_tot /const.q, c='k', label=r'$KE_{total}$')
+        plt.plot(time, KE_para/main_1D.q, c='b', label=r'$KE_\parallel$')
+        plt.plot(time, KE_perp/main_1D.q, c='r', label=r'$KE_\perp$')
+        plt.plot(time, KE_tot /main_1D.q, c='k', label=r'$KE_{total}$')
         plt.gca().get_yaxis().get_major_formatter().set_useOffset(False)
         plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
         plt.ylabel('Energy (eV)')
@@ -1963,31 +1970,31 @@ def test_mirror_motion():
         ax.plot(pos_history*1e-3, vel_perp,               c='r', label=r'$v_\perp$')
         ax.set_xlabel('x (km)')
         ax.set_ylabel('v (km/s)')
-        ax.set_xlim(const.xmin*1e-3, const.xmax*1e-3)
+        ax.set_xlim(main_1D.xmin*1e-3, main_1D.xmax*1e-3)
         ax.legend()
 
     if False:
         # Invariant and parameters vs. space
         fig, axes = plt.subplots(3, sharex=True)
         axes[0].plot(pos_history*1e-3, mu*1e10)
-        axes[0].set_title(r'First Invariant $\mu$ for single trapped particle, v0 = [%3.1f, %3.1f, %3.1f]$v_{A,eq}^{-1}$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg, $t_{max} = %5.0fs$' % (init_vel[0, 0]/const.va, init_vel[1, 0]/const.va, init_vel[2, 0]/const.va, const.loss_cone, init_pitch, max_t))
+        axes[0].set_title(r'First Invariant $\mu$ for single trapped particle, v0 = [%3.1f, %3.1f, %3.1f]$v_{A,eq}^{-1}$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg, $t_{max} = %5.0fs$' % (init_vel[0, 0]/main_1D.va, init_vel[1, 0]/main_1D.va, init_vel[2, 0]/main_1D.va, main_1D.loss_cone, init_pitch, max_t))
         axes[0].set_ylabel(r'$\mu (\times 10^{-10})$', rotation=0, labelpad=20)
         axes[0].get_yaxis().get_major_formatter().set_useOffset(False)
         axes[0].axhline(init_mu*1e10, c='k', ls=':')
         
-        axes[1].plot(pos_history*1e-3, KE_perp/const.q)
+        axes[1].plot(pos_history*1e-3, KE_perp/main_1D.q)
         axes[1].set_ylabel(r'$KE_\perp (eV)$', rotation=0, labelpad=20)
 
         axes[2].plot(pos_history*1e-3, B_magnitude*1e9)
         axes[2].set_ylabel(r'$|B|$ (nT)', rotation=0, labelpad=20)
         
         axes[2].set_xlabel('Position (km)')
-        axes[2].set_xlim(const.xmin*1e-3, const.xmax*1e-3)
+        axes[2].set_xlim(main_1D.xmin*1e-3, main_1D.xmax*1e-3)
         
     if False:
         fig, axes = plt.subplots(2, sharex=True)
         axes[0].plot(pos_history*1e-3, mag_history[:, 0] * 1e9, lw=0.25, c='k')
-        axes[0].set_title(r'Magnetic fields taken at v, x times :: v0 = [%3.1f, %3.1f, %3.1f]$v_{A,eq}^{-1}$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg, $t_{max} = %5.0fs$' % (init_vel[0, 0]/const.va, init_vel[1, 0]/const.va, init_vel[2, 0]/const.va, const.loss_cone, init_pitch, max_t))
+        axes[0].set_title(r'Magnetic fields taken at v, x times :: v0 = [%3.1f, %3.1f, %3.1f]$v_{A,eq}^{-1}$, $\alpha_L$=%4.1f deg, $\alpha_{p,eq}$=%4.1f deg, $t_{max} = %5.0fs$' % (init_vel[0, 0]/main_1D.va, init_vel[1, 0]/main_1D.va, init_vel[2, 0]/main_1D.va, main_1D.loss_cone, init_pitch, max_t))
         axes[0].set_ylabel(r'$B0_x(t_v) (nT)$', rotation=0, labelpad=20)
         
         axes[1].plot(pos_history*1e-3, mag_history_x * 1e9, lw=0.25, c='k')
@@ -2026,8 +2033,8 @@ def test_mirror_motion():
         ax[0].set_ylabel('$\mu$\n(J/T)', rotation=0, labelpad=20)
         ax[0].axhline(init_mu*1e10, c='k', ls=':')
         
-        ax[1].plot(time, KE_perp/const.q, label='$KE_\perp$',     c='k', marker='o')
-        ax[1].plot(time, KE_av/const.q,   label='$KE_\perp$ av.', c='r', marker='x', ms=1.0)
+        ax[1].plot(time, KE_perp/main_1D.q, label='$KE_\perp$',     c='k', marker='o')
+        ax[1].plot(time, KE_av/main_1D.q,   label='$KE_\perp$ av.', c='r', marker='x', ms=1.0)
         ax[1].set_ylabel('$KE_\perp$\n(eV)', rotation=0, labelpad=20)
         
         ax[2].plot(time, B_magnitude*1e9, label='$|B|$',     c='k', marker='o')
@@ -2098,14 +2105,14 @@ def test_B0_analytic():
     #       super simple. I guess we'll find out...
     '''
     b1  = np.zeros(3)
-    qmi = const.qm_ratios[0]
+    qmi = main_1D.qm_ratios[0]
     
     if False:
         # Test: For a given (vr, x) is the resulting magnetic field output (B0x, B0r) constant in theta?
         # Yes, B0r is constant in theta, as expected
-        x  = const.xmax
-        vx = const.va
-        vr = const.va
+        x  = main_1D.xmax
+        vx = main_1D.va
+        vr = main_1D.va
         
         Ntheta = 1000
         theta  = np.linspace(0, 2*np.pi, Ntheta)
@@ -2122,7 +2129,7 @@ def test_B0_analytic():
             vya[ii] = vy
             vza[ii] = vz
             # Check if 
-            B0_particle = particles.eval_B0_particle(x, vel, qmi, b1)
+            B0_particle = main_1D.eval_B0_particle(x, vel, qmi, b1)
             
             br = np.sqrt(B0_particle[1] ** 2 + B0_particle[2] ** 2)
             
@@ -2147,12 +2154,12 @@ def test_B0_analytic():
         # Plot magnetic mirror from raw equation (independent of energy yet, r != rL yet)
         Nx  = 1000; Nr = 40000
         
-        x_space   = np.linspace(const.xmin , const.xmax, Nx)    # Simulation domain
+        x_space   = np.linspace(main_1D.xmin , main_1D.xmax, Nx)    # Simulation domain
         r_space   = np.linspace(0, 400000, Nr)                  # Derived for a maximum speed of around 400km/s
         B0_output = np.zeros((2, Nx, Nr))                       # Each spatial point, radial distance
         
         print('Plotting magnetic map from equations...')
-        analytic_B0_equation(r_space, x_space, const.a, const.B_eq, B0_output)
+        analytic_B0_equation(r_space, x_space, main_1D.a, main_1D.B_eq, B0_output)
         
         B_magnitude = np.sqrt(B0_output[0] ** 2 + B0_output[1] ** 2)
 
@@ -2160,7 +2167,7 @@ def test_B0_analytic():
             # Not great: Flips the vertical axis without telling you (and plots the wrong y axis)
             plt.figure()
             plt.imshow(np.flip(B0_output[1].T*1e9, axis=0), cmap=mpl.cm.get_cmap('Blues_r'),
-                       extent=[const.xmin, const.xmax, 0, 400000], aspect='auto')
+                       extent=[main_1D.xmin, main_1D.xmax, 0, 400000], aspect='auto')
             plt.title(r'Contour Plot of $B0_r$ with abs(x) in equation')
             plt.xlabel('x (m)')
             plt.ylabel('r (m)')
@@ -2168,7 +2175,7 @@ def test_B0_analytic():
             
             plt.figure()
             plt.imshow(np.flip(B0_output[0].T*1e9, axis=0), cmap='Blues',
-                       extent=[const.xmin, const.xmax, 0, 400000], aspect='auto')
+                       extent=[main_1D.xmin, main_1D.xmax, 0, 400000], aspect='auto')
             plt.title(r'Contour Plot of $B0_x$')
             plt.xlabel('x (m)')
             plt.ylabel('r (m)')
@@ -2176,7 +2183,7 @@ def test_B0_analytic():
             
             plt.figure()
             plt.imshow(np.flip(B_magnitude.T*1e9, axis=0), cmap='Blues',
-                       extent=[const.xmin, const.xmax, 0, 400000], aspect='auto')
+                       extent=[main_1D.xmin, main_1D.xmax, 0, 400000], aspect='auto')
             plt.title(r'Contour Plot of $|B0|$')
             plt.xlabel('x (m)')
             plt.ylabel('r (m)')
@@ -2217,15 +2224,15 @@ def interrogate_B0_function(theta=0):
     
     DEPRECATED. RETURNS TOO MUCH.
     '''
-    qmi = const.q / const.mp
+    qmi = main_1D.q / main_1D.mp
     b1  = np.zeros(3)
 
     Nx = 2500       # Number of points in space
     Nv = 2500       # Number of points in velocity
     VM = 10         # vA multiplier: Velocity space is between +/- va * VM
 
-    x_axis      = np.linspace(  const.xmin,  const.xmax, Nx)    
-    v_perp_axis = np.linspace(-VM*const.va, VM*const.va, Nv)
+    x_axis      = np.linspace(  main_1D.xmin,  main_1D.xmax, Nx)    
+    v_perp_axis = np.linspace(-VM*main_1D.va, VM*main_1D.va, Nv)
     vx          = 0.
 
     B0xr_surface = np.zeros((3, Nx, Nv))
@@ -2239,13 +2246,13 @@ def interrogate_B0_function(theta=0):
             vy = v_perp_axis[jj] * np.cos(theta * np.pi / 180.)
             vz = v_perp_axis[jj] * np.sin(theta * np.pi / 180.)
             
-            B0 = particles.eval_B0_particle(x_axis[ii], np.array([vx, vy, vz]), qmi, b1)
+            B0 = main_1D.eval_B0_particle(x_axis[ii], np.array([vx, vy, vz]), qmi, b1)
             
             B0xr_surface[0, ii, jj] = B0[0]
             B0xr_surface[1, ii, jj] = B0[1]
             B0xr_surface[2, ii, jj] = B0[2]
             
-            r_pos[ii, jj] = const.mp * v_perp_axis[jj] / (const.q * B0[0])
+            r_pos[ii, jj] = main_1D.mp * v_perp_axis[jj] / (main_1D.q * B0[0])
             
             x_pos[ii, jj] = x_axis[ii]
             y_pos[ii, jj] = r_pos[ii, jj] * np.cos(theta * np.pi / 180.)
@@ -2328,11 +2335,11 @@ def return_2D_slice_rtheta(x_val=0., Nv=500, Nt=360, VM=10.):
     
     Has to be regridded onto something more regular.
     '''
-    qmi    = const.q / const.mp
+    qmi    = main_1D.q / main_1D.mp
     b1     = np.zeros(3)
     vx     = 0.
 
-    v_perp_axis = np.linspace(-VM*const.va, VM*const.va, Nv)
+    v_perp_axis = np.linspace(-VM*main_1D.va, VM*main_1D.va, Nv)
     theta_axis  = np.linspace(0, 360., Nt)
 
     # In order to keep the coordinates flat
@@ -2346,13 +2353,13 @@ def return_2D_slice_rtheta(x_val=0., Nv=500, Nt=360, VM=10.):
             
             vy = v_perp_axis[ii] * np.cos(theta_axis[jj] * np.pi / 180.)
             vz = v_perp_axis[ii] * np.sin(theta_axis[jj] * np.pi / 180.)
-            B0 = particles.eval_B0_particle(x_val, np.array([vx, vy, vz]), qmi, b1)
+            B0 = main_1D.eval_B0_particle(x_val, np.array([vx, vy, vz]), qmi, b1)
             
             B0xr_surface[0, xx] = B0[0]
             B0xr_surface[1, xx] = B0[1]
             B0xr_surface[2, xx] = B0[2]
 
-            r_pos     = const.mp * v_perp_axis[ii] / (const.q * B0[0])
+            r_pos     = main_1D.mp * v_perp_axis[ii] / (main_1D.q * B0[0])
             y_pos[xx] = r_pos * np.cos(theta_axis[jj] * np.pi / 180.)
             z_pos[xx] = r_pos * np.sin(theta_axis[jj] * np.pi / 180.)
             
@@ -2368,7 +2375,7 @@ def plot_single_2D_slice():
     from scipy.interpolate import griddata
     
     # Get irregularly spaced (y,z) points with 3D field at each point
-    x_val = const.xmax
+    x_val = main_1D.xmax
     y_pos, z_pos, B0xr_slice = return_2D_slice_rtheta(x_val=x_val)
 
     length = 165        # Box diameter for interpolation
@@ -2428,13 +2435,13 @@ def calculate_all_2D_slices():
     save_dir = 'F://runs//magnetic_bottle_savefiles//'
     
     # Get extrema
-    y_pos, z_pos, B0xr_slice = return_2D_slice_rtheta(x_val=const.xmax)
+    y_pos, z_pos, B0xr_slice = return_2D_slice_rtheta(x_val=main_1D.xmax)
     
     length = roundup(y_pos.max()*1e-3, nearest=10.)     # Box diameter for interpolation (in km)
     Nl     = 100                                        # Number of gridpoints per side
     Nx     = 100                                        # Number of gridpoints along simulation domain
 
-    x_axis = np.linspace(const.xmin, const.xmax, Nx)
+    x_axis = np.linspace(main_1D.xmin, main_1D.xmax, Nx)
     
     # Create grid for each 2D slice (in m)
     y_axis = np.linspace(-length*1e3, length*1e3, Nl)
@@ -2485,15 +2492,15 @@ def smart_interrogate_B0(Nx=100, Nl=50, v_max_va=10):
     particle would gyrate CCW as viewed from behind (going down +x)
     '''
     # Get extrema, where rL is at maximum (boundary)
-    y_pos, z_pos, B0xr_slice = return_2D_slice_rtheta(x_val=const.xmax, VM=v_max_va)
+    y_pos, z_pos, B0xr_slice = return_2D_slice_rtheta(x_val=main_1D.xmax, VM=v_max_va)
     
     length = roundup(y_pos.max()*1e-3, nearest=10.)     # Box diameter for interpolation (in km)
 
-    x_axis = np.linspace(const.xmin, const.xmax, Nx)
+    x_axis = np.linspace(main_1D.xmin, main_1D.xmax, Nx)
     y_axis = np.linspace(-length*1e3, length*1e3, Nl)
     z_axis = np.linspace(-length*1e3, length*1e3, Nl)
     
-    qmi    = const.q / const.mp
+    qmi    = main_1D.q / main_1D.mp
     b1     = np.zeros(3)
     vx     = 0.
 
@@ -2501,7 +2508,7 @@ def smart_interrogate_B0(Nx=100, Nl=50, v_max_va=10):
     
     for ii in nb.prange(Nx):
         
-        B0x = fields.eval_B0x(x_axis[ii])  
+        B0x = main_1D.eval_B0x(x_axis[ii])  
         
         for jj in range(Nl):
             for kk in range(Nl):
@@ -2512,7 +2519,7 @@ def smart_interrogate_B0(Nx=100, Nl=50, v_max_va=10):
                 vy =    v_perp * np.sin(theta)
                 vz =  - v_perp * np.cos(theta)
                 
-                B0 = particles.eval_B0_particle(x_axis[ii], np.array([vx, vy, vz]), qmi, b1)
+                B0 = main_1D.eval_B0_particle(x_axis[ii], np.array([vx, vy, vz]), qmi, b1)
                 
                 B0_grid[ii, jj, kk, 0] = B0[0]
                 B0_grid[ii, jj, kk, 1] = B0[1]
@@ -2639,7 +2646,7 @@ if __name__ == '__main__':
     #test_density_and_velocity_deposition()
     #visualize_inhomogenous_B()
     #plot_dipole_field_line()
-    #check_particle_position_individual()
+    check_particle_position_individual()
     #test_cross_product()
     #test_cspline_interpolation()
     #test_E_convective()
@@ -2652,7 +2659,7 @@ if __name__ == '__main__':
     #test_push_B_w_varying_background()
     
     #test_weight_conservation()
-    check_density_deposition()
+    #check_density_deposition()
     #test_weight_shape_and_alignment()
     
     #compare_parabolic_to_dipole()
@@ -2700,7 +2707,7 @@ if __name__ == '__main__':
 #         
 #         axes[0].plot(time, larmor, c='k', label='r_L')
 #         
-#         axes[0].set_title('Test :: Single Particle :: NX = {}'.format(const.NX))
+#         axes[0].set_title('Test :: Single Particle :: NX = {}'.format(main_1D.NX))
 #         axes[0].set_ylabel('x (km)')
 #         axes[1].set_ylabel('v (km/s)')
 #         axes[1].set_xlabel('t (s)')    
