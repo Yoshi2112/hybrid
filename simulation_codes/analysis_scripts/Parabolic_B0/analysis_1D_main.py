@@ -1344,6 +1344,32 @@ def winske_summary_plots(save=True):
     return
 
 
+def winske_magnetic_density_plot():
+    np.set_printoptions(suppress=True)
+
+    path = cf.anal_dir
+
+    ftime, by = cf.get_array('By')
+    ftime, bz = cf.get_array('Bz')
+    b_squared = (by ** 2 + bz ** 2) / cf.B_eq ** 2
+
+    radperiods = ftime * cf.gyfreq
+    
+    filename = 'winske_magnetic_timeseries.png'
+    fullpath = path + filename
+
+    fig, ax = plt.subplots(figsize=(20,10), sharex=True)                  # Initialize Figure Space
+
+    ax.plot(radperiods, b_squared.sum(axis=1), color='k')
+    ax.set_ylabel('B**2', labelpad=20, rotation=0)
+    ax.set_ylim(0, None)
+    ax.set_xlabel('T')
+            
+    plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+    plt.close('all')
+    return
+
+
 def summary_plots(save=True, histogram=True):
     '''
     Plot summary plot of raw values for each particle timestep
@@ -3902,6 +3928,10 @@ if __name__ == '__main__':
                 cf.load_run(drive, series, run_num, extract_arrays=True)
                 
                 winske_summary_plots(save=True)
+                plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
+                winske_magnetic_density_plot()
+                
+                
                 #ggg.straight_line_fit()
                 
                 #plot_abs_with_boundary_parameters()

@@ -17,16 +17,16 @@ E_DAMPING_FLAG			0
 QUIET_START_FLAG		0
 RADIX_LOADING			0
 DAMPING_MULTIPLIER_RD   0.05
-NX 						10
+NX 						128
 ND 						3
-MAX_REV					32
-DXM						2.0
+MAX_REV					200
+DXM						1.0
 R_A						120e3
 IE						1
 MIN_DENS				0.05
 RC_HWIDTH				-
 GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02	
-PARTICLE_DUMP_FREQ		0.50
+PARTICLE_DUMP_FREQ		0.25
 FIELD_DUMP_FREQ			0.10
-Sanity checks against Winske et al. (1993) params. Resonant instability.
+Sanity checks against Winske et al. (1993) params. Anisotropy instability.
