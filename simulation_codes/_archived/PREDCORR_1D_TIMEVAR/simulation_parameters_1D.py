@@ -9,16 +9,16 @@ import sys
 from os import system
 
 ### RUN DESCRIPTION ###
-run_description = '''PREDCORR_1D_TSC_TIMEVAR :: Comparing against CARLO_periodic with fixed timestep'''
+run_description = '''PREDCORR_1D_TSC_TIMEVAR :: Fu test comparisons, lower particle count, fig4_comparison'''
 
 ### RUN PARAMETERS ###
 drive           = 'F:'                          # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-save_path       = 'runs//CARLO_periodic_test/' # Series save dir   : Folder containing all runs of a series
+save_path       = 'runs//fu_comparison_tests_TIMEVAR/' # Series save dir   : Folder containing all runs of a series
 run_num         = 1                             # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-save_particles  = 1                             # Save data flag    : For later analysis
+save_particles  = 0                             # Save data flag    : For later analysis
 save_fields     = 1                             # Save plot flag    : To ensure hybrid is solving correctly during run
 seed            = 65846146                      # RNG Seed          : Set to enable consistent results for parameter studies
-cpu_affin       = [6, 7]                          # Set CPU affinity for run. Must be list. Auto-assign: None.
+cpu_affin       = [6, 7]                        # Set CPU affinity for run. Must be list. Auto-assign: None.
 
 
 ### PHYSICAL CONSTANTS ###
@@ -34,9 +34,8 @@ RE  = 6.371e6                               # Earth radius in metres
 
 ### SIMULATION PARAMETERS ###
 NX       = 256                              # Number of cells - doesn't include ghost cells
-max_rev  = 200                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+max_rev  = 150                              # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
 
-nsp_ppc  = 256                              # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
 dxm      = 1.0                              # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
@@ -50,21 +49,24 @@ field_res = 0.10                            # Data capture resolution in gyroper
 
 
 ### PARTICLE PARAMETERS ###
-species_lbl= [r'$H^+$ cold', r'$H^+$ warm']  # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
-temp_color = ['blue', 'red']
-temp_type  = np.asarray([0, 1])                   	    # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-dist_type  = np.asarray([0, 0])                          # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
-mass       = np.asarray([1., 1.])    			        # Species ion mass (proton mass units)
-charge     = np.asarray([1., 1.])    			        # Species ion charge (elementary charge units)
-drift_v    = np.asarray([0., 0.])                       # Species parallel bulk velocity (alfven velocity units)
-density    = np.asarray([180.0 , 20.0]) * 1e6
-E_per      = np.array([0.01, 50.])
-anisotropy = np.array([0.0, 4.0])
+species_lbl= [r'$H^+$ warm', r'$H^+$ cold', r'$He^+$ cold']  # Species name/labels        : Used for plotting. Can use LaTeX math formatted strings
+temp_color = ['red', 'blue', 'purple']
+temp_type  = np.array([1, 0, 0])                       # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.array([0, 0, 0])                       # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+mass       = np.array([1., 1., 1.])    			        # Species ion mass (proton mass units)
+charge     = np.array([1., 1., 1.])    			        # Species ion charge (elementary charge units)
+drift_v    = np.array([0., 0., 0.])                     # Species parallel bulk velocity (alfven velocity units)
+density    = np.array([48.6 , 913.6, 9.72]) * 1e6
+E_per      = np.array([920.0, 5.0, 5.0])
+anisotropy = np.array([2.0, 0.0, 0.0])
+nsp_ppc    = np.array([3000, 200, 200])             # Number of particles per cell, per species - i.e. each species has equal representation (or code this to be an array later?)
+
+
 
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
 min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
-E_e            = 0.01                                        # Electron energy (eV)
-beta_flag      = 1
+E_e            = 5.0                                        # Electron energy (eV)
+beta_flag      = 0
 
 account_for_dispersion = False                              # Flag (True/False) whether or not to reduce timestep to prevent dispersion getting too high
 dispersion_allowance   = 1.                                 # Multiple of how much past frac*wD^-1 is allowed: Used to stop dispersion from slowing down sim too much  
@@ -106,7 +108,7 @@ mass      *= mp                                          # Cast species mass to 
 drift_v   *= va                                          # Cast species velocity to m/s
 
 Nj         = len(mass)                                   # Number of species
-cellpart   = nsp_ppc * Nj                                # Number of Particles per cell.
+cellpart   = nsp_ppc.sum()                               # Number of Particles per cell.
 N          = cellpart*NX                                 # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
 
 n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
@@ -161,7 +163,7 @@ print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 2)))
 print('Maximum sim time   : {}s ({} gyroperiods)'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev))
 
 print('\n{} particles per cell, {} cells'.format(cellpart, NX))
-print('{} particles total\n'.format(cellpart * NX))
+print('{} particles total\n'.format(N))
 
 if cpu_affin is not None:
     import psutil

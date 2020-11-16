@@ -32,7 +32,7 @@ def particles_per_cell():
 
     for ii in range(Nj):
         if dist_type[ii] == 0:
-            ppc[ii, :] = nsp_ppc
+            ppc[ii, :] = nsp_ppc[ii]
     return ppc
 
 

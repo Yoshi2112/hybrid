@@ -54,7 +54,6 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
 
     # Single parameters
     params = dict([('seed', const.seed),
-                   ('nsp_ppc', nsp_ppc),
                    ('Nj', Nj),
                    ('dt', dt),
                    ('NX', NX),
@@ -100,7 +99,8 @@ def store_run_parameters(dt, part_save_iter, field_save_iter):
                      drift_v     = drift_v,
                      density     = density,
                      Tpar        = Tpar,
-                     Tper        = Tper)
+                     Tper        = Tper,
+                     nsp_ppc     = nsp_ppc)
     print('Particle data saved')
     return
 
