@@ -381,7 +381,7 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
 
     t, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens, field_sim_time, damping_array\
         = cf.get_array(get_all=True)
-    
+
     fontsize = 18
     font     = 'monospace'
     
@@ -3905,7 +3905,7 @@ if __name__ == '__main__':
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     
-    for series in ['winske_params_test']:
+    for series in ['fu_comparison_tests']:
         
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
@@ -3915,10 +3915,10 @@ if __name__ == '__main__':
         clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
                 'darkorange', 'peru', 'yellow']
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [0]
+            runs_to_do = [2]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -3927,10 +3927,9 @@ if __name__ == '__main__':
                 #cf.delete_analysis_folders(drive, series, run_num)
                 cf.load_run(drive, series, run_num, extract_arrays=True)
                 
-                winske_summary_plots(save=True)
-                plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
-                winske_magnetic_density_plot()
-                
+                #winske_summary_plots(save=True)
+                #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
+                #winske_magnetic_density_plot()
                 
                 #ggg.straight_line_fit()
                 

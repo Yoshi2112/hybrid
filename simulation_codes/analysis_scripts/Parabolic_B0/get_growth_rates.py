@@ -350,13 +350,13 @@ def get_linear_growth(plot=False):
     return
 
 
-def straight_line_fit(plot=True, normalized_output=False):
+def straight_line_fit(save=True, normalized_output=False):
     '''
     To do: Check units. Get growth rate from amplitude only? How to do across space
-    
-     -- Go from 0.25 - 0.75 of the saturation time (max B) to get just the straight-line segment
-     -- Divide by saturation amplitude? How to get growth rate indept. of units (while also keeping
-         it in terms of nT/s? OR nah)
+    -- Is wave power averaged/summed across space analogous to a single point? Or do I have to do single point?
+    -- How to calculate growth rate of energy summed across space?
+    -- Start with the simple and go from there. Saturation amplitudes have to match too?
+    -- How do the Winske saturation amplitudes look? It might just be the Fu thing being fucky.
     '''
     print('Calculating growth rate...')
     ftime, by  = cf.get_array('By')
@@ -365,12 +365,13 @@ def straight_line_fit(plot=True, normalized_output=False):
     qp         = 1.602e-19
     mp         = 1.673e-27
     mu0        = (4e-7) * np.pi
-    U_B        = np.square(bt[:, :]).sum(axis=1) * cf.NX * cf.dx / mu0 * 0.5
+    dB         = np.square(bt[:, :]).sum(axis=1)
+    U_B        = dB * cf.NX * cf.dx / mu0 * 0.5
     pcyc       = qp * cf.B_eq / mp
-            
+    
     max_idx = np.argmax(U_B)
-    st = int(0.3 * max_idx)
-    en = int(0.7 * max_idx)
+    st      = int(0.3 * max_idx)
+    en      = int(0.7 * max_idx)
             
     # Rise/Run method (super basic, up to max_B)
     rise          = np.log(U_B[en]) - np.log(U_B[st]) 
