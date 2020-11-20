@@ -3920,7 +3920,7 @@ if __name__ == '__main__':
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     
-    for series in ['winske_params_test']:
+    for series in ['winske_anisotropy_test', 'winske_anisotropy_test_changes']:
         
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
@@ -3930,7 +3930,7 @@ if __name__ == '__main__':
         clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
                 'darkorange', 'peru', 'yellow']
         
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
             runs_to_do = [2, 5]
@@ -3948,13 +3948,13 @@ if __name__ == '__main__':
                 #disp.plot_kt_winske()
                 #disp.plot_fourier_mode_timeseries(it_max=None)
                 
-                plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=0.8)
-                ggg.straight_line_fit(save=True, normfit_min=0.2, normfit_max=0.6)
+                plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=1.0)
+                ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7)
                 
                 #plot_abs_with_boundary_parameters()
                 #field_energy_vs_time(save=True)
     
-                #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
                 #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False, remove_ND=True)
                 
                 #get_reflection_coefficient()

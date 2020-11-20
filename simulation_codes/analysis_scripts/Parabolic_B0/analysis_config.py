@@ -72,17 +72,19 @@ def load_species_params():
     density    = p_data['density']
     N_species  = p_data['N_species']
     nsp_ppc    = p_data['nsp_ppc']
-    Tpar       = p_data['Tpar']
+    
     Bc         = p_data['Bc']
     
     idx_start0 = p_data['idx_start']
     idx_end0   = p_data['idx_end']
 
-    try:
-        Tperp  = p_data['Tperp']
-    except:
-        Tperp  = p_data['Tper']
+    Tpar       = p_data['Tpar']
 
+    try:
+        Tperp      = p_data['Tperp']
+    except:
+        Tperp      = p_data['Tper']
+    
     try:
         Te0_arr = p_data['Te0']
     except:

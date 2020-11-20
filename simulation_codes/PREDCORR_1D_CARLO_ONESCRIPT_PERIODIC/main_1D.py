@@ -1269,7 +1269,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
                      density     = density,
                      N_species   = N_species,
                      Tpar        = None,
-                     Tper        = None,
+                     Tperp       = None,
                      vth_par     = vth_par,
                      vth_perp    = vth_perp,
                      Bc          = Bc,
@@ -1703,9 +1703,6 @@ if particle_open == 1:
     inject_rate = nsp_ppc * (vth_par / dx) / np.sqrt(2 * np.pi)
 else:
     inject_rate = nsp_ppc * 0.0
-    
-species_plasfreq_sq   = (density * charge ** 2) / (mass * e0)
-species_gyrofrequency = qm_ratios * B_eq
 
 # E-field nodes around boundaries (used for sources and E-fields)
 lo1 = ND - 1 ; lo2 = ND - 2             # Left outer (to boundary)
@@ -1755,23 +1752,15 @@ else:
     print('CPU affinity not set.')
 
 if theta_xmax > lambda_L:
-    print('--------------------------------------------------')
-    print('WARNING : SIMULATION DOMAIN LONGER THAN FIELD LINE')
-    print('DO SOMETHING ABOUT IT')
-    print('--------------------------------------------------')
+    print('ABORT : SIMULATION DOMAIN LONGER THAN FIELD LINE')
     sys.exit()
 
 if particle_periodic + particle_reflect + particle_reinit > 1:
-    print('--------------------------------------------------')
-    print('WARNING : ONLY ONE PARTICLE BOUNDARY CONDITION ALLOWED')
-    print('DO SOMETHING ABOUT IT')
-    print('--------------------------------------------------')
+    print('ABORT : ONLY ONE PARTICLE BOUNDARY CONDITION ALLOWED')
+    sys.exit()
     
 if field_periodic == 1 and damping_multiplier != 0:
     damping_multiplier = 0.0
-    print('---------------------------------------------')
-    print('PERIODIC FIELDS SELECTED :: DISABLING DAMPING')
-    print('---------------------------------------------')
     
 if  os.name != 'posix':
     os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
@@ -1779,6 +1768,7 @@ if  os.name != 'posix':
 ########################
 ### START SIMULATION ###
 ########################
+#sys.exit()
 if __name__ == '__main__':
     start_time = timer()
     
@@ -1834,10 +1824,10 @@ if __name__ == '__main__':
             sec          = rem %  60
             
             print('Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(qq, max_inc, hrs, mins, sec))
-            
+        
         qq       += 1
         sim_time += DT
-    
+        
         if qq == 2:
             print('First loop complete.')
             

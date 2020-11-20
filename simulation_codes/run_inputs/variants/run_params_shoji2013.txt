@@ -1,15 +1,15 @@
 DRIVE					F:/
-SAVE_PATH			    /runs/winske_anisotropy_test/
+SAVE_PATH			    /runs/shoji_2013_comparison/
 RUN						-
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
 SEED					98327
 CPU_AFFINITY			-
-HOMOGENOUS_B0_FLAG		1
-PERIODIC_FLAG			1
+HOMOGENOUS_B0_FLAG		0
+PERIODIC_FLAG			0
 REFLECT_FLAG			0
 REINIT_FLAG				0
-FIELD_PERIODIC			1
+FIELD_PERIODIC			0
 NOWAVES_FLAG			0
 TE0_EQUAL_FLAG			0
 SOURCE_SMOOTHING_FLAG	0
@@ -17,9 +17,9 @@ E_DAMPING_FLAG			0
 QUIET_START_FLAG		1
 RADIX_LOADING			0
 DAMPING_MULTIPLIER_RD   0.05
-NX 						256
-ND 						3
-MAX_REV					100
+NX 						4096
+ND 						1536
+MAX_REV					1500
 DXM						0.1
 R_A						120e3
 IE						1
@@ -29,4 +29,4 @@ GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02	
 PARTICLE_DUMP_FREQ		0.25
 FIELD_DUMP_FREQ			0.10
-Sanity checks against Winske et al. (1993) params. Anisotropy instability. Increasing number of particles per run to test convergence. Also doubled spatial domain length for better k-resolution.
+Comparison run against Shoji et a. (2013) with open particle and field boundaries and parabolic background magnetic field.
