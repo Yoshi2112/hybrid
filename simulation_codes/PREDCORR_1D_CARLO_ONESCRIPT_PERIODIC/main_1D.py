@@ -101,12 +101,9 @@ def uniform_gaussian_distribution_quiet():
     np.random.seed(seed)
 
     for jj in range(Nj):
-        idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle idx
-        
-        sf_par = np.sqrt(kB *  Tpar[jj] /  mass[jj])  # Scale factors for velocity initialization
-        sf_per = np.sqrt(kB *  Tper[jj] /  mass[jj])
-        
+        idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle idx        
         half_n = nsp_ppc[jj] // 2                     # Half particles per cell - doubled later
+       
         if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
             NC_load = NX
         else:
@@ -135,13 +132,13 @@ def uniform_gaussian_distribution_quiet():
             pos[st: en]-= NC_load*dx/2              
             
             # Set velocity for half: Randomly Maxwellian
-            vel[0, st: en] = np.random.normal(0, sf_par, half_n)  
-            vel[1, st: en] = np.random.normal(0, sf_per, half_n)
-            vel[2, st: en] = np.random.normal(0, sf_per, half_n)
+            vel[0, st: en] = np.random.normal(0, vth_par[ jj], half_n)  
+            vel[1, st: en] = np.random.normal(0, vth_perp[jj], half_n)
+            vel[2, st: en] = np.random.normal(0, vth_perp[jj], half_n)
 
             # Set Loss Cone Distribution: Reinitialize particles in loss cone (move to a function)
             if homogenous == 0 and temp_type[jj] == 1:
-                LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj)
+                LCD_by_rejection(pos, vel, vth_par[jj], vth_perp[jj], st, en, jj)
                 
             # Quiet start : Initialize second half
             if quiet_start == 1:
@@ -153,7 +150,7 @@ def uniform_gaussian_distribution_quiet():
             vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
             vel[2, en: en + half_n] = vel[2, st: en] * -1.0
             
-            vel[0, st: en + half_n] += drift_v[jj]                  # Add drift offset
+            vel[0, st: en + half_n] += drift_v[jj] * va             # Add drift offset
             
             acc                    += half_n * 2
     return pos, vel, idx
@@ -1267,12 +1264,12 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
                      dist_type   = dist_type,
                      mass        = mass,
                      charge      = charge,
-                     drift_v     = drift_v,
+                     drift_v     = drift_v*va,
                      nsp_ppc     = nsp_ppc,
                      density     = density,
                      N_species   = N_species,
-                     Tpar        = Tpar,
-                     Tper        = Tper,
+                     Tpar        = None,
+                     Tper        = None,
                      vth_par     = vth_par,
                      vth_perp    = vth_perp,
                      Bc          = Bc,
@@ -1570,10 +1567,12 @@ with open(plasma_input, 'r') as f:
     E_e        = float(f.readline().split()[1])
     beta_flag  = int(f.readline().split()[1])
 
-    L         = float(f.readline().split()[1])         # Field line L shell
-    B_eq      = f.readline().split()[1]                # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
+    L         = float(f.readline().split()[1])           # Field line L shell
+    B_eq      = f.readline().split()[1]                  # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
 
-    
+charge    *= q                                           # Cast species charge to Coulomb
+mass      *= mp                                          # Cast species mass to kg
+
 #####################################
 ### DERIVED SIMULATION PARAMETERS ###
 #####################################
@@ -1603,31 +1602,27 @@ if rc_hwidth == '-':
     rc_hwidth = 0
     
 if beta_flag == 0:
-    # Input energies as (perpendicular) eV
+    # Input energies in eV
     beta_per   = None
-    Te0_scalar = E_e   * 11603.
-    Tpar       = E_par * 11603.
-    Tper       = E_per * 11603.
-else:    
-    # Input energies in terms of a (perpendicular) beta
-    Tpar       = E_par * B_eq ** 2 / (2 * mu0 * ne * kB)
-    Tper       = E_per * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Te0_scalar = q * E_e / kB
+    vth_perp   = np.sqrt(q * charge *  E_per /  mass)    # Perpendicular thermal velocities
+    vth_par    = np.sqrt(q * charge *  E_par /  mass)    # Parallel thermal velocities
+else:
+    # Input energies in terms of beta
+    kbt_par    = E_par * B_eq ** 2 / (2 * mu0 * ne)
+    kbt_per    = E_per * B_eq ** 2 / (2 * mu0 * ne)
     Te0_scalar = E_e   * B_eq ** 2 / (2 * mu0 * ne * kB)
+    vth_perp   = np.sqrt(kbt_per /  mass)                # Perpendicular thermal velocities
+    vth_par    = np.sqrt(kbt_par /  mass)                # Parallel thermal velocities
 
-charge    *= q                                           # Cast species charge to Coulomb
-mass      *= mp                                          # Cast species mass to kg
 rho        = (mass*density).sum()                        # Mass density for alfven velocity calc.
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*rho)                     # Alfven speed at equator: Assuming pure proton plasma
 gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
-drift_v   *= va                                          # Cast species velocity to m/s
 dx         = va / gyfreq_eq                              # Alternate method of calculating dx (better for multicomponent plasmas)
 #dx         = dxm * c / wpi                               # Spatial cadence, based on ion inertial length
 xmax       = NX // 2 * dx                                # Maximum simulation length, +/-ve on each side
 xmin       =-NX // 2 * dx
-vth_perp   = np.sqrt(kB *  Tper /  mass)                 # Perpendicular thermal velocities
-vth_par    = np.sqrt(kB *  Tpar /  mass)                 # Parallel thermal velocities
-
 Nj         = len(mass)                                   # Number of species
 n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
 
