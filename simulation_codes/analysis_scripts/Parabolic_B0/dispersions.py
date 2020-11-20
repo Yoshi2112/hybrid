@@ -125,7 +125,7 @@ def get_kt(component):
         en = cf.ND + cf.NX
         k  = np.fft.fftfreq(cf.NX, cf.dx)
                   
-    k   = k[k>=0] * 1e6
+    k   = k[k>=0]
     
     fft_matrix  = np.zeros((arr.shape[0], en-st), dtype='complex128')
     for ii in range(arr.shape[0]): # Take spatial FFT at each time, ii

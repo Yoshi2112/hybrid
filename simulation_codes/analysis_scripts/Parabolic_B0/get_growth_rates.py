@@ -350,7 +350,7 @@ def get_linear_growth(plot=False):
     return
 
 
-def straight_line_fit(save=True, normalized_output=False):
+def straight_line_fit(save=True, normalized_output=True, normfit_min=0.2, normfit_max=0.6):
     '''
     To do: Check units. Get growth rate from amplitude only? How to do across space
     
@@ -362,43 +362,58 @@ def straight_line_fit(save=True, normalized_output=False):
     ftime, by  = cf.get_array('By')
     ftime, bz  = cf.get_array('Bz')
     bt         = np.sqrt(by ** 2 + bz ** 2)
-    qp         = 1.602e-19
-    mp         = 1.673e-27
+    btn        = np.square(bt[:, :]).sum(axis=1) / cf.B_eq ** 2
     mu0        = (4e-7) * np.pi
     U_B        = 0.5 / mu0 * np.square(bt[:, :]).sum(axis=1) * cf.dx
-    pcyc       = qp * cf.B_eq / mp
             
     max_idx = np.argmax(U_B)
-    st = int(0.3 * max_idx)
-    en = int(0.7 * max_idx)
-            
-    # Rise/Run method (super basic, up to max_B)
-    rise          = np.log(U_B[en]) - np.log(U_B[st]) 
-    run           = ftime[en] - ftime[st]
-    gradient      = rise/run
-    growth_rate   = 0.5*gradient
-    normalized_gr = growth_rate / pcyc
+    st = int(normfit_min * max_idx)
+    en = int(normfit_max * max_idx)
+    
+    # Data to fit straight line to 
+    linear_xvals = ftime[st:en]
+    linear_yvals = np.log(U_B[st:en])
+    
+    gradient, y_intercept = np.polyfit(linear_xvals, linear_yvals, 1)
+
+    # Calculate growth rate and normalize H to cyclotron frequency
+    gamma         = 0.5*gradient
+    normalized_gr = gamma / cf.gyfreq
+    
+    # Create line data to plot what we fitted
+    linear_yfit = gradient * linear_xvals + y_intercept         # Returns y-values on log sscale
+    log_yfit    = np.exp(linear_yfit)                           # Convert to linear values to use with semilogy()
     
     # Plot to check
-    fig, ax = plt.subplots(figsize=(15, 10))
+    plt.ioff()
+    fig, ax = plt.subplots(nrows=2, figsize=(15, 10), sharex=True)
+      
+    ax[0].set_title('Growth Rate :: $\gamma / \Omega_H$ = %.4f' % normalized_gr, fontsize=20)
+    ax[0].plot(ftime, btn)
+    ax[0].set_ylabel(r'$\frac{B^2}{B_0^2}$', rotation=0, labelpad=30, fontsize=18)
+    ax[0].set_xlim(0, ftime[-1])
+    ax[0].set_ylim(0, None)
     
-    ax.semilogy(ftime, U_B)
-    ax.set_xlabel('Time (s)')
-    ax.set_ylabel('$U_B$')
-    ax.set_xlim(0, ftime[-1])
-    ax.set_ylim(None, None)
-    ax.set_title('Growth Rate :: $\gamma / \Omega_H$ = %.4f' % normalized_gr)
+    # Plot energy log scale
+    ax[1].semilogy(ftime, U_B)
+    ax[1].set_xlabel('Time (s)', fontsize=18)
+    ax[1].set_ylabel('$U_B$', rotation=0, labelpad=30, fontsize=18)
+    ax[1].set_xlim(0, ftime[-1])
+    ax[1].set_ylim(None, None)
     
     # Mark growth rate indicators
-    ax.scatter(ftime[max_idx], U_B[max_idx], c='r', s=20, marker='x')
-    ax.scatter(ftime[st]     , U_B[st], c='r', s=20, marker='o')
-    ax.scatter(ftime[en]     , U_B[en], c='r', s=20, marker='o')
-    ax.semilogy([ftime[st], ftime[en]], [U_B[st], U_B[en]], c='r', ls='--', lw=2.0)
+    ax[1].scatter(ftime[max_idx], U_B[max_idx], c='r', s=20, marker='x')
+    ax[1].scatter(ftime[st]     , U_B[st], c='r', s=20, marker='o')
+    ax[1].scatter(ftime[en]     , U_B[en], c='r', s=20, marker='o')
+    ax[1].semilogy(linear_xvals, log_yfit, c='r', ls='--', lw=2.0)
     
     if save == True:
-        
+        fig.savefig(cf.anal_dir + 'growth_rate_energy.png')
+        plt.close('all')
+    else:
+        plt.show()
         
     if normalized_output == True:
         return normalized_gr
     else:
-        return growth_rate
+        return gamma

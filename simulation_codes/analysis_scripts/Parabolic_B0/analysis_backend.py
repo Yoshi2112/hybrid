@@ -400,6 +400,10 @@ def calculate_helicity(Fy, Fz):
     
     This code has been checked by comparing the transverse field magnitude of
     the inputs and outputs, as this should be conserved (and it is).
+    
+    This can be done much faster by taking the FFT/power spectrum of
+    F = Fy + iFz and the k values are explicitly stated. Check this 
+    for sure later.
     '''
     x   = np.linspace(0, cf.NX*cf.dx, cf.NX)
     st  = cf.ND

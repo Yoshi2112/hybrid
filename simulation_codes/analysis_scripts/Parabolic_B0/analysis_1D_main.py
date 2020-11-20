@@ -343,27 +343,34 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
     return
 
 
-def plot_kt(component='By', saveas='kt_plot', save=False, normalize=False):
+def plot_kt(component='By', saveas='kt_plot', save=False, normalize_x=False, xlim=None):
+    '''
+    Note: k values from fftfreq() are their linear counterparts. Need to multiply by 2pi
+    to compare with theory
+    '''
     plt.ioff()
     k, ftime, kt, st, en = disp.get_kt(component)
     
     fig = plt.figure(1, figsize=(15, 10))
     ax  = fig.add_subplot(111)
     
-    if normalize == False:
-        im1 = ax.pcolormesh(k, ftime, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
+    if normalize_x == False:
+        im1 = ax.pcolormesh(k*1e6, ftime, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
         fig.colorbar(im1)
         ax.set_title('Wavenumber-Time ($k-t$) Plot :: {} component'.format(component.upper()), fontsize=14)
         ax.set_ylabel(r'$\Omega_i t$', rotation=0)
         ax.set_xlabel(r'$k (m^{-1}) \times 10^6$')
         #ax.set_ylim(0, 15)
     else:
-        im1 = ax.pcolormesh(k, ftime, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
+        k_plot = 2*np.pi*k * c / cf.wpi
+        
+        im1 = ax.pcolormesh(k_plot, ftime, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
         fig.colorbar(im1)
         ax.set_title('Wavenumber-Time ($k-t$) Plot :: {} component'.format(component.upper()), fontsize=14)
         ax.set_ylabel(r'$\Omega_i t$', rotation=0)
-        ax.set_xlabel(r'$k (m^{-1}) \times 10^6$')
+        ax.set_xlabel(r'$kc/\omega_{pi}$')
         #ax.set_ylim(0, 15)
+        ax.set_xlim(0, xlim)
     
     if save == True:
         fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
@@ -3923,10 +3930,10 @@ if __name__ == '__main__':
         clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
                 'darkorange', 'peru', 'yellow']
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [0]
+            runs_to_do = [2, 5]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -3939,9 +3946,10 @@ if __name__ == '__main__':
                 #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
                 #winske_magnetic_density_plot()
                 #disp.plot_kt_winske()
-                disp.plot_fourier_mode_timeseries(it_max=None)
+                #disp.plot_fourier_mode_timeseries(it_max=None)
                 
-                #ggg.straight_line_fit()
+                plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=0.8)
+                ggg.straight_line_fit(save=True, normfit_min=0.2, normfit_max=0.6)
                 
                 #plot_abs_with_boundary_parameters()
                 #field_energy_vs_time(save=True)
