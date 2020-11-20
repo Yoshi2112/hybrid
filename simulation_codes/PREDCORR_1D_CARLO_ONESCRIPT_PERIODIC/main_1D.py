@@ -1273,6 +1273,8 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
                      N_species   = N_species,
                      Tpar        = Tpar,
                      Tper        = Tper,
+                     vth_par     = vth_par,
+                     vth_perp    = vth_perp,
                      Bc          = Bc,
                      Te0         = Te0)
     print('Particle data saved')
@@ -1367,9 +1369,10 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     If no saves, steps_to_go = max_inc
     '''
     # Check timestep
-    qq, DT, max_inc, part_save_iter, field_save_iter, damping_array \
-    = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, Ep, Bp, v_prime, S, T,temp_N,\
-                     qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array)
+    if adaptive_timestep == True:
+        qq, DT, max_inc, part_save_iter, field_save_iter, damping_array \
+        = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, Ep, Bp, v_prime, S, T,temp_N,\
+                         qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array)
             
     # Move particles, collect moments
     advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
@@ -1452,17 +1455,14 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     return qq, DT, max_inc, part_save_iter, field_save_iter
 
 
-def control_loop():
-    return
-
-
 
 ### ##
 ### MAIN GLOBAL CONTROL
 ### ##
 
-    
-event_inputs = False
+# A few internal flags
+event_inputs      = False      # Can be set for lists of input files for easy batch-runs
+adaptive_timestep = True       # Disable adaptive timestep if you hate when it doubles
 
 #################################
 ### FILENAMES AND DIRECTORIES ###
@@ -1614,19 +1614,19 @@ else:
     Tper       = E_per * B_eq ** 2 / (2 * mu0 * ne * kB)
     Te0_scalar = E_e   * B_eq ** 2 / (2 * mu0 * ne * kB)
 
-wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
-va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma
-
-dx         = dxm * c / wpi                               # Spatial cadence, based on ion inertial length
-xmax       = NX // 2 * dx                                # Maximum simulation length, +/-ve on each side
-xmin       =-NX // 2 * dx
-
 charge    *= q                                           # Cast species charge to Coulomb
 mass      *= mp                                          # Cast species mass to kg
+rho        = (mass*density).sum()                        # Mass density for alfven velocity calc.
+wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
+va         = B_eq / np.sqrt(mu0*rho)                     # Alfven speed at equator: Assuming pure proton plasma
+gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
 drift_v   *= va                                          # Cast species velocity to m/s
-
-vth_perp   = np.sqrt(kB *  Tper /  mass)
-vth_par    = np.sqrt(kB *  Tpar /  mass)
+dx         = va / gyfreq_eq                              # Alternate method of calculating dx (better for multicomponent plasmas)
+#dx         = dxm * c / wpi                               # Spatial cadence, based on ion inertial length
+xmax       = NX // 2 * dx                                # Maximum simulation length, +/-ve on each side
+xmin       =-NX // 2 * dx
+vth_perp   = np.sqrt(kB *  Tper /  mass)                 # Perpendicular thermal velocities
+vth_par    = np.sqrt(kB *  Tpar /  mass)                 # Parallel thermal velocities
 
 Nj         = len(mass)                                   # Number of species
 n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
@@ -1701,7 +1701,6 @@ else:
     loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
 
 gyfreq     = q*B_xmax/ mp                                # Proton Gyrofrequency (rad/s) at boundary (highest)
-gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
 
