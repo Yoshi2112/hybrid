@@ -321,8 +321,8 @@ def get_energies():
             print('Loading field file {}'.format(ii))
             B, E, Ve, Te, J, q_dns, sim_time, damping_array = cf.load_fields(ii)
             
-            mag_energy[ii]      = (0.5 / mu0) * np.square(B[1:-2]).sum() * NX * dx
-            electron_energy[ii] = 1.5 * (kB * Te * q_dns / q).sum() * NX * dx
+            mag_energy[ii]      = (0.5 / mu0) * np.square(B[1:-2]).sum() * dx
+            electron_energy[ii] = 1.5 * (kB * Te * q_dns / q).sum() * dx
     
         for ii in range(num_particle_steps):
             print('Loading particle file {}'.format(ii))
@@ -374,12 +374,12 @@ def get_helical_components(overwrite=False, field='B'):
     if os.path.exists(temp_dir + '{}_positive_helicity.npy'.format(field)) == False or overwrite == True:
         ftime, Fy = cf.get_array('{}y'.format(field))
         ftime, Fz = cf.get_array('{}z'.format(field))
-
-        Ft_pos = np.zeros(Fy.shape, dtype=np.complex128)
-        Ft_neg = np.zeros(Fy.shape, dtype=np.complex128)
+        
+        Ft_pos = np.zeros((ftime.shape[0], cf.NX), dtype=np.complex128)
+        Ft_neg = np.zeros((ftime.shape[0], cf.NX), dtype=np.complex128)
         
         for ii in range(Fy.shape[0]):
-            Ft_pos[ii, :], Ft_neg[ii, :] = calculate_helicity(Fy[ii], Fz[ii], cf.dx)
+            Ft_pos[ii, :], Ft_neg[ii, :] = calculate_helicity(Fy[ii], Fz[ii])
         
         print('Saving {}-helicities to file'.format(field))
         np.save(temp_dir + '{}_positive_helicity.npy'.format(field), Ft_pos)
@@ -393,7 +393,7 @@ def get_helical_components(overwrite=False, field='B'):
     return ftime, Ft_pos, Ft_neg
 
 
-def calculate_helicity(Fy, Fz, dx):
+def calculate_helicity(Fy, Fz):
     '''
     For a single snapshot in time, calculate the positive and negative helicity
     components from the y, z components of a field.
@@ -401,12 +401,13 @@ def calculate_helicity(Fy, Fz, dx):
     This code has been checked by comparing the transverse field magnitude of
     the inputs and outputs, as this should be conserved (and it is).
     '''
-    NX      = Fy.shape[0]
-    x       = np.linspace(0, NX*dx, NX)
+    x   = np.linspace(0, cf.NX*cf.dx, cf.NX)
+    st  = cf.ND
+    en  = cf.ND + cf.NX
 
-    k_modes = np.fft.rfftfreq(x.shape[0], d=dx)
-    Fy_fft  = (1 / k_modes.shape[0]) * np.fft.rfft(Fy)
-    Fz_fft  = (1 / k_modes.shape[0]) * np.fft.rfft(Fz)
+    k_modes = np.fft.rfftfreq(x.shape[0], d=cf.dx)
+    Fy_fft  = (1 / k_modes.shape[0]) * np.fft.rfft(Fy[st:en])
+    Fz_fft  = (1 / k_modes.shape[0]) * np.fft.rfft(Fz[st:en])
     
     # Four fourier coefficients from FFT (since real inputs give symmetric outputs)
     # If there are any sign issues, it'll be with the sin components, here

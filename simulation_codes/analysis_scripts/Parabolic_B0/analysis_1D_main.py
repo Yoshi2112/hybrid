@@ -343,19 +343,27 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
     return
 
 
-def plot_kt(component='By', saveas='kt_plot', save=False):
+def plot_kt(component='By', saveas='kt_plot', save=False, normalize=False):
     plt.ioff()
     k, ftime, kt, st, en = disp.get_kt(component)
     
     fig = plt.figure(1, figsize=(15, 10))
     ax  = fig.add_subplot(111)
     
-    im1 = ax.pcolormesh(k, ftime, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
-    fig.colorbar(im1)
-    ax.set_title('Wavenumber-Time ($k-t$) Plot :: {} component'.format(component.upper()), fontsize=14)
-    ax.set_ylabel(r'$\Omega_i t$', rotation=0)
-    ax.set_xlabel(r'$k (m^{-1}) \times 10^6$')
-    #ax.set_ylim(0, 15)
+    if normalize == False:
+        im1 = ax.pcolormesh(k, ftime, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
+        fig.colorbar(im1)
+        ax.set_title('Wavenumber-Time ($k-t$) Plot :: {} component'.format(component.upper()), fontsize=14)
+        ax.set_ylabel(r'$\Omega_i t$', rotation=0)
+        ax.set_xlabel(r'$k (m^{-1}) \times 10^6$')
+        #ax.set_ylim(0, 15)
+    else:
+        im1 = ax.pcolormesh(k, ftime, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
+        fig.colorbar(im1)
+        ax.set_title('Wavenumber-Time ($k-t$) Plot :: {} component'.format(component.upper()), fontsize=14)
+        ax.set_ylabel(r'$\Omega_i t$', rotation=0)
+        ax.set_xlabel(r'$k (m^{-1}) \times 10^6$')
+        #ax.set_ylim(0, 15)
     
     if save == True:
         fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
@@ -406,7 +414,7 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
         lbl = '{:04}'.format(tmax)
         
     if remove_ND == True:
-        xlim = [cf.xmin, cf.xmax]
+        xlim = [cf.xmin/cf.dx, cf.xmax/cf.dx]
     else:
         xlim = [x[0], x[-1]]
     
@@ -422,7 +430,7 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
             vmax = cf.B_eq * B0_lim * 1e9
         else:
             vmax = B0_lim
-    
+
     if log == False:
         im1     = ax.pcolormesh(x, t, bt, cmap='jet', vmin=vmin, vmax=vmax)
         logsuff = ''
@@ -3927,17 +3935,18 @@ if __name__ == '__main__':
                 #cf.delete_analysis_folders(drive, series, run_num)
                 cf.load_run(drive, series, run_num, extract_arrays=True)
                 
-                winske_summary_plots(save=True)
-                plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
-                winske_magnetic_density_plot()
-                
+                #winske_summary_plots(save=True)
+                #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
+                #winske_magnetic_density_plot()
+                #disp.plot_kt_winske()
+                disp.plot_fourier_mode_timeseries(it_max=None)
                 
                 #ggg.straight_line_fit()
                 
                 #plot_abs_with_boundary_parameters()
                 #field_energy_vs_time(save=True)
     
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
+                #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
                 #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False, remove_ND=True)
                 
                 #get_reflection_coefficient()
