@@ -211,7 +211,7 @@ def plot_spatial_poynting_helical(saveas='poynting_helical_plot', save=False, lo
                 plt.close('all')
     return
 
-def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None, remove_ND=False):
+def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None, remove_ND=False, normalize=False):
     plt.ioff()
 
     t, arr = cf.get_array(component)
@@ -229,6 +229,9 @@ def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None, 
     else:
         arr *= 1e3
         x    = cf.E_nodes / cf.dx
+        
+    if normalize == True and component[0].lower() == 'b':
+        arr /= (cf.B_eq*1e9)
         
     if tmax is None:
         lbl = 'full'
@@ -256,7 +259,11 @@ def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None, 
     cb  = fig.colorbar(im1)
     
     if component[0] == 'B':
-        cb.set_label('nT', rotation=0, family=font, fontsize=fontsize, labelpad=30)
+        if normalize == True:
+            cb.set_label(r'$\frac{B_%s}{B_{0eq}}$' % component[1].lower(), rotation=0,
+                         family=font, fontsize=fontsize, labelpad=30)
+        else:
+            cb.set_label('nT', rotation=0, family=font, fontsize=fontsize, labelpad=30)
     else:
         cb.set_label('mV/m', rotation=0, family=font, fontsize=fontsize, labelpad=30)
 
@@ -3920,8 +3927,7 @@ if __name__ == '__main__':
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     
-    for series in ['winske_anisotropy_test', 'winske_anisotropy_test_changes']:
-        
+    for series in ['winske_anisotropy_test_RCchangeonly']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -3933,28 +3939,31 @@ if __name__ == '__main__':
         if True:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [2, 5]
+            runs_to_do = [3]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
-                cf.load_run(drive, series, run_num, extract_arrays=True)
-                
+                cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
+
                 #winske_summary_plots(save=True)
                 #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
                 #winske_magnetic_density_plot()
                 #disp.plot_kt_winske()
                 #disp.plot_fourier_mode_timeseries(it_max=None)
                 
-                plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=1.0)
-                ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7)
+                #plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=1.0)
+                #ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7)
                 
                 #plot_abs_with_boundary_parameters()
                 #field_energy_vs_time(save=True)
     
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
+                #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
+                for comp in ['By', 'Bz']:        
+                    plot_tx(component=comp, saveas='tx_plot', save=True, tmax=None, remove_ND=True, normalize=True)
+                
                 #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False, remove_ND=True)
                 
                 #get_reflection_coefficient()

@@ -1056,11 +1056,11 @@ def cross_product(A, B, C):
 
 
 @nb.njit()
-def interpolate_edges_to_center(B, interp, zero_boundaries=False):
+def interpolate_edges_to_center(B, interp, zero_boundaries=True):
     ''' 
     Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
     with a 3D array (e.g. B). Second derivative y2 is calculated on the B-grid, with
-    forwards/backwards difference used for endpoints.
+    forwards/backwards difference used for endpoints. (i.e. y2 at data points)
     
     interp has one more gridpoint than required just because of the array used. interp[-1]
     should remain zero.
@@ -1068,38 +1068,82 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
     This might be able to be done without the intermediate y2 array since the interpolated
     points don't require previous point values.
     
+    As long as B-grid is filled properly in the push_B() routine, this shouldn't have to
+    vary for homogenous boundary conditions
+    
     ADDS B0 TO X-AXIS ON TOP OF INTERPOLATION
     '''
     y2      = np.zeros(B.shape, dtype=nb.float64)
     interp *= 0.
+    mx      = B.shape[0] - 1
     
     # Calculate second derivative
     for jj in range(1, B.shape[1]):
         
         # Interior B-nodes, Centered difference
-        for ii in range(1, NC):
+        for ii in range(1, mx):
             y2[ii, jj] = B[ii + 1, jj] - 2*B[ii, jj] + B[ii - 1, jj]
                 
         # Edge B-nodes, Forwards/Backwards difference
         if zero_boundaries == True:
             y2[0 , jj] = 0.
-            y2[NC, jj] = 0.
+            y2[mx, jj] = 0.
         else:
             y2[0,  jj] = 2*B[0 ,    jj] - 5*B[1     , jj] + 4*B[2     , jj] - B[3     , jj]
-            y2[NC, jj] = 2*B[NC,    jj] - 5*B[NC - 1, jj] + 4*B[NC - 2, jj] - B[NC - 3, jj]
+            y2[mx, jj] = 2*B[mx,    jj] - 5*B[mx - 1, jj] + 4*B[mx - 2, jj] - B[mx - 3, jj]
         
     # Do spline interpolation: E[ii] is bracketed by B[ii], B[ii + 1]
     for jj in range(1, B.shape[1]):
-        for ii in range(NC):
+        for ii in range(mx):
             interp[ii, jj] = 0.5 * (B[ii, jj] + B[ii + 1, jj] + (1/6) * (y2[ii, jj] + y2[ii + 1, jj]))
     
     # Add B0x to interpolated array
-    for ii in range(NC):
+    for ii in range(mx):
         interp[ii, 0] = eval_B0x(E_nodes[ii])
+    return
+
+
+@nb.njit()
+def interpolate_centers_to_edge(E, interp, zero_boundaries=False):
+    '''
+    As above, but interpolating center values (E) to edge positions (B)
     
-    # This bit could be removed to allow B0x to vary in green cells naturally
-    # interp[:ND,      0] = interp[ND,    0]
-    # interp[ND+NX+1:, 0] = interp[ND+NX, 0]
+    Might need forward/backwards difference for interpolation boundary cells
+    at ii = 0, NC
+    '''
+    y2      = np.zeros(E.shape, dtype=np.float64)
+    interp *= 0.
+    mx      = E.shape[0]
+    
+    # Calculate y2 at E-field data points
+    for jj in range(E.shape[1]):
+        
+        # Interior E-nodes, Centered difference
+        for ii in range(1, mx - 1):
+            y2[ii, jj] = E[ii + 1, jj] - 2*E[ii, jj] + E[ii - 1, jj]
+                
+        # Edge E-nodes, Forwards/Backwards difference
+        if zero_boundaries == True:
+            y2[0 ,     jj] = 0.
+            y2[mx - 1, jj] = 0.
+        else:
+            y2[0,      jj] = 2*E[0     , jj] - 5*E[1     , jj] + 4*E[2     , jj] - E[3     , jj]
+            y2[mx - 1, jj] = 2*E[mx - 1, jj] - 5*E[mx - 2, jj] + 4*E[mx - 3, jj] - E[mx - 4, jj]
+
+    # Return to test y2
+    #y2 /= (dx ** 2)
+    #return y2
+    
+    # Do spline interpolation: B[ii] is bracketed by E[ii - 1], E[ii]
+    # Center points only
+    for jj in range(E.shape[1]):
+        for ii in range(1, mx):
+            interp[ii, jj] = 0.5 * (E[ii - 1, jj] + E[ii, jj] + (1/6) * (y2[ii - 1, jj] + y2[ii, jj]))
+    
+    if field_periodic == True:
+        for jj in range(E.shape[1]):
+            interp[0,  jj] = interp[mx - 1, jj]
+            interp[mx, jj] = interp[1, jj]
     return
 
 

@@ -1137,54 +1137,155 @@ def test_E_hall():
 
 
 
-def test_cspline_interpolation():
+def test_E2C_interpolation():
     '''
-    Tests cubic spline interpolation
+    Tests Edge-to-Center (B to E) cubic spline interpolation. 
+    Only tests y component, since x is constant offset and z should be identical.
     '''
-    k           = 1.0
     marker_size = 20
+    LENGTH      = main_1D.xmax - main_1D.xmin
+    k           = 1.0 / LENGTH
 
     # Interpolation
     B_input       = np.zeros((main_1D.NC + 1, 3))
-    B_input[:, 0] = np.cos(1.0*k*main_1D.B_nodes)
-    B_input[:, 1] = np.cos(2.0*k*main_1D.B_nodes)
-    B_input[:, 2] = np.cos(3.0*k*main_1D.B_nodes)
-    
+    B_input[:, 1] = np.cos(2*np.pi*k*main_1D.B_nodes)    
     
     # Analytic solution
-    Bxe        = np.cos(1.0*k*main_1D.E_nodes)
-    Bye        = np.cos(2.0*k*main_1D.E_nodes)
-    Bze        = np.cos(3.0*k*main_1D.E_nodes)  
+    B_anal        = np.zeros((main_1D.NC, 3))
+    B_anal[:, 1]  = np.cos(2*np.pi*k*main_1D.E_nodes)
     
-    B_center      = np.zeros((main_1D.NC, 3))
-
     ## TEST INTERPOLATION ##
-    B_center = main_1D.interpolate_edges_to_center(B_input, B_center)
+    B_cent        = np.zeros((main_1D.NC, 3))
+    main_1D.interpolate_edges_to_center(B_input, B_cent)
 
-    plot = True
-    if plot == True:
-        plt.figure()
-        plt.scatter(main_1D.B_nodes, B_input[:, 0], s=marker_size, c='b', marker='x')
-        plt.scatter(main_1D.B_nodes, B_input[:, 1], s=marker_size, c='b', marker='x')
-        plt.scatter(main_1D.B_nodes, B_input[:, 2], s=marker_size, c='b', marker='x')
-        
-        plt.scatter(main_1D.E_nodes, Bxe, s=marker_size, c='k', marker='o')
-        plt.scatter(main_1D.E_nodes, Bye, s=marker_size, c='k', marker='o')
-        plt.scatter(main_1D.E_nodes, Bze, s=marker_size, c='k', marker='o')
-        
-        plt.scatter(main_1D.E_nodes, B_center[:, 0], s=marker_size, c='r', marker='x')
-        plt.scatter(main_1D.E_nodes, B_center[:, 1], s=marker_size, c='r', marker='x')
-        plt.scatter(main_1D.E_nodes, B_center[:, 2], s=marker_size, c='r', marker='x')
-        
-        for kk in range(main_1D.NC):
-            plt.axvline(main_1D.E_nodes[kk], linestyle='--', c='r', alpha=0.2)
-            plt.axvline(main_1D.B_nodes[kk], linestyle='--', c='b', alpha=0.2)
-        plt.axvline(main_1D.B_nodes[kk+1], linestyle='--', c='b', alpha=0.2)
-            
-        plt.axvline(main_1D.xmin, linestyle='-', c='k', alpha=0.2)
-        plt.axvline(main_1D.xmax, linestyle='-', c='k', alpha=0.2)
+    fig, ax = plt.subplots()
+    ax.scatter(main_1D.B_nodes, B_input[:, 1], s=marker_size, c='k', marker='o', label='Input')
+    ax.scatter(main_1D.E_nodes, B_anal[ :, 1], s=marker_size, c='b', marker='x', label='Analytic Soln')
+    ax.scatter(main_1D.E_nodes, B_cent[ :, 1], s=marker_size, c='r', marker='x', label='Numerical Soln')
     
-        plt.legend()
+    for kk in range(main_1D.NC):
+        ax.axvline(main_1D.E_nodes[kk], linestyle='--', c='r', alpha=0.2)
+        ax.axvline(main_1D.B_nodes[kk], linestyle='--', c='b', alpha=0.2)
+    ax.axvline(main_1D.B_nodes[kk+1], linestyle='--', c='b', alpha=0.2)
+        
+    ax.axvline(main_1D.xmin, linestyle='-', c='k', alpha=0.2)
+    ax.axvline(main_1D.xmax, linestyle='-', c='k', alpha=0.2)
+
+    ax.legend()
+    plt.show()
+    return
+
+
+def test_C2E_interpolation():
+    '''
+    Tests Center-to-Edge (E to B) cubic spline interpolation. 
+    Only tests x component, as the rest should be fine
+    
+    y2 tested and validated, although its not great near edges. May also invalidated
+    how '4th order' the cubic spline is (derivative uses 2nd order finite difference)
+    '''
+    marker_size = 20
+    LENGTH      = main_1D.xmax - main_1D.xmin
+    k           = 1.0 / LENGTH
+
+    # Interpolation
+    E_input       = np.zeros((main_1D.NC, 3))
+    E_input[:, 1] = np.cos(2*np.pi*k*main_1D.E_nodes)    
+    
+    # Analytic solution
+    E_anal        = np.zeros((main_1D.NC + 1, 3))
+    E_anal[:, 1]  = np.cos(2*np.pi*k*main_1D.B_nodes)
+    
+    # Test y2 Analytic solution (needs return after y2 calculation)
+    if False:
+        y2_anal       = np.zeros((main_1D.NC, 3))
+        y2_anal[:, 1] = (-(2*np.pi*k) ** 2) * np.cos(2*np.pi*k*main_1D.E_nodes)
+       
+        E_edge        = np.zeros((main_1D.NC + 1, 3))
+        y2 = main_1D.interpolate_centers_to_edge(E_input, E_edge)
+    
+        fig, ax = plt.subplots()
+        ax.scatter(main_1D.E_nodes, y2_anal[:, 1], s=marker_size, c='k', marker='o', label='Analytic  y2')
+        ax.scatter(main_1D.E_nodes, y2[     :, 1], s=marker_size, c='r', marker='x', label='Numerical y2')
+    
+    ## TEST INTERPOLATION ##
+    E_edge        = np.zeros((main_1D.NC + 1, 3))
+    main_1D.interpolate_centers_to_edge(E_input, E_edge)
+
+    fig, ax = plt.subplots()
+    ax.scatter(main_1D.E_nodes, E_input[:, 1], s=marker_size, c='k', marker='o', label='Input')
+    ax.scatter(main_1D.B_nodes, E_anal[ :, 1], s=marker_size, c='b', marker='x', label='Analytic Soln')
+    ax.scatter(main_1D.B_nodes, E_edge[ :, 1], s=marker_size, c='r', marker='x', label='Numerical Soln')
+    
+    for kk in range(main_1D.NC):
+        ax.axvline(main_1D.E_nodes[kk], linestyle='--', c='r', alpha=0.2)
+        ax.axvline(main_1D.B_nodes[kk], linestyle='--', c='b', alpha=0.2)
+    ax.axvline(main_1D.B_nodes[kk+1], linestyle='--', c='b', alpha=0.2)
+        
+    ax.axvline(main_1D.xmin, linestyle='-', c='k', alpha=0.2)
+    ax.axvline(main_1D.xmax, linestyle='-', c='k', alpha=0.2)
+
+    ax.legend()
+    plt.show()
+    return
+
+
+def test_cspline_order():
+    '''
+    dx not used in these interpolations, so solution order is calculated by
+    having the same waveform sampled with different numbers of cells across
+    LENGTH.
+    '''
+    marker_size = 20
+    grids       = [128, 256]
+    E2C_errors  = np.zeros(len(grids))
+    C2E_errors  = np.zeros(len(grids))
+    
+    for mx, ii in zip(grids, list(range(len(grids)))):
+        print('Testing interpolation :: {} points'.format(mx))
+        xmax   = 2*np.pi
+        dx     = xmax / mx
+        k      = 2.0 / xmax
+        
+        # Physical location of nodes
+        B_nodes  = (np.arange(mx + 1) - mx // 2)       * dx      # B grid points position in space
+        E_nodes  = (np.arange(mx)     - mx // 2 + 0.5) * dx      # E grid points position in space
+    
+        edge_soln       = np.zeros((mx + 1, 3))                    # Input at B nodes
+        edge_soln[:, 1] = np.cos(2*np.pi*k*B_nodes)
+        
+        center_soln        = np.zeros((mx, 3))
+        center_soln[:, 1]  = np.cos(2*np.pi*k*E_nodes)                # Solution at E nodes
+    
+        ## TEST INTERPOLATIONs ##
+        center_interp = np.zeros((mx, 3))
+        main_1D.interpolate_edges_to_center(edge_soln, center_interp, zero_boundaries=False)
+
+        edge_interp  = np.zeros((mx + 1, 3))
+        main_1D.interpolate_centers_to_edge(center_soln, edge_interp, zero_boundaries=False)
+
+        E2C_errors[ii] = abs(center_interp[:, 1] - center_soln[:, 1]).max()
+        C2E_errors[ii] = abs(edge_interp[  :, 1] - edge_soln[  :, 1]).max()
+        
+        if ii == 0:
+            plt.figure()
+            plt.title('E2C Interpolation :: {} points'.format(mx))
+            plt.scatter(B_nodes, edge_soln[    :, 1], s=marker_size, c='k', marker='o', label='Input')
+            plt.scatter(E_nodes, center_soln[  :, 1], s=marker_size, c='b', marker='x', label='Analytic  Soln')
+            plt.scatter(E_nodes, center_interp[:, 1], s=marker_size, c='r', marker='x', label='Numerical Soln')
+            plt.legend()
+            
+            plt.figure()
+            plt.title('C2E Interpolation :: {} points'.format(mx))
+            plt.scatter(E_nodes, center_soln[:, 1], s=marker_size, c='k', marker='o', label='Input')
+            plt.scatter(B_nodes, edge_soln[  :, 1], s=marker_size, c='b', marker='x', label='Analytic  Soln')
+            plt.scatter(B_nodes, edge_interp[:, 1], s=marker_size, c='r', marker='x', label='Numerical Soln')
+            plt.legend()
+
+    for ii in range(len(grids) - 1):
+        E2C_order = np.log(E2C_errors[ii] / E2C_errors[ii + 1]) / np.log(2)
+        C2E_order = np.log(C2E_errors[ii] / C2E_errors[ii + 1]) / np.log(2)
+        print(E2C_order, C2E_order)
     return
 
 
@@ -2646,9 +2747,11 @@ if __name__ == '__main__':
     #test_density_and_velocity_deposition()
     #visualize_inhomogenous_B()
     #plot_dipole_field_line()
-    check_particle_position_individual()
+    #check_particle_position_individual()
     #test_cross_product()
-    #test_cspline_interpolation()
+    #test_E2C_interpolation()
+    #test_C2E_interpolation()
+    test_cspline_order()
     #test_E_convective()
     #test_E_hall()
     #test_interp_cross_manual()

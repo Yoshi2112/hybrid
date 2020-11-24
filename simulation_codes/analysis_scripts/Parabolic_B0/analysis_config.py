@@ -53,12 +53,13 @@ def manage_dirs(drive, series, run_num):
 
 
 def load_species_params():
-    global species_present, density, dist_type, charge, mass, Tperp,      \
-           temp_type, temp_color, Tpar, species_lbl, n_contr,  \
-           drift_v, N_species, Bc, nsp_ppc, Te0_arr, idx_start0, idx_end0
+    global species_present, density, dist_type, charge, mass, Tperp,       \
+           temp_type, temp_color, Tpar, species_lbl, n_contr,              \
+           drift_v, N_species, Bc, nsp_ppc, Te0_arr, idx_start0, idx_end0, \
+            vth_par, vth_perp
 
     p_path = os.path.join(data_dir, 'particle_parameters.npz')                  # File location
-    p_data = np.load(p_path)                                                    # Load file
+    p_data = np.load(p_path, allow_pickle=True )                                # Load file
 
     species_lbl= p_data['species_lbl']
     temp_color = p_data['temp_color']
@@ -79,11 +80,13 @@ def load_species_params():
     idx_end0   = p_data['idx_end']
 
     Tpar       = p_data['Tpar']
-
     try:
         Tperp      = p_data['Tperp']
     except:
         Tperp      = p_data['Tper']
+    
+    vth_par     = p_data['vth_par']
+    vth_perp    = p_data['vth_perp']
     
     try:
         Te0_arr = p_data['Te0']
@@ -253,14 +256,15 @@ def initialize_simulation_variables():
 
 
 def output_simulation_parameter_file(series, run, overwrite_summary=False):
-    output_file = run_dir + 'simulation_parameter_file.txt'
+    '''
+    To do:
+        -- Reformat to make particle parameters clearer
+        -- Use thermal velocities, energies, and betas instead of temperature
+    '''
+    q   = 1.602e-19               # Elementary charge (C)
+    mp  = 1.673e-27               # Mass of proton (kg)
     
-    mu0    = (4e-7) * np.pi  # Magnetic Permeability of Free Space (SI units)
-    kB     = 1.38065e-23     # Boltzmann's Constant (J/K)
-
-    beta_e   = (2 * mu0 * ne * kB * Te0 ) / B_eq ** 2
-    beta_par = (2 * mu0 * ne * kB * Tpar) / B_eq ** 2
-    beta_per = (2 * mu0 * ne * kB * Tperp) / B_eq ** 2
+    output_file = run_dir + 'simulation_parameter_file.txt'
 
     if particle_open == 1:
         particle_boundary = 'Open: Zero moment derivative'
@@ -273,16 +277,28 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
     else:
         particle_boundary = '-'
 
+    if ie == 0:
+        electron_treatment = 'Isothermal'
+    elif ie == 1:
+        electron_treatment = 'Adiabatic'
+    else:
+        electron_treatment = 'Other'
+
+    echarge  = charge / q
+    pmass    = mass   / mp
+    va_drift = drift_v / va
+
     if os.path.exists(output_file) == True and overwrite_summary == False:
         pass
     else:
         with open(output_file, 'w') as f:
             print('HYBRID SIMULATION :: PARAMETER FILE', file=f)
             print('', file=f)
-            print('Series[run]  :: {}[{}]'.format(series, run), file=f)
-            print('Series Desc. :: {}'.format(run_desc), file=f)
-            print('Hybrid Type  :: {}'.format(method_type), file=f)
-            print('Random Seed  :: {}'.format(seed), file=f)
+            print('Series[run]   :: {}[{}]'.format(series, run), file=f)
+            print('Series Desc.  :: {}'.format(run_desc), file=f)
+            print('Hybrid Type   :: {}'.format(method_type), file=f)
+            print('Random Seed   :: {}'.format(seed), file=f)
+            print('Final runtime :: {}'.format(run_time_str), file=f)
             print('', file=f)
             print('Flags', file=f)
             print('Disable Wave Growth:: {}'.format(disable_waves), file=f)
@@ -293,36 +309,34 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
             print('Field Periodic BCs :: {}'.format(field_periodic), file=f)
             print('', file=f)
             print('Temporal Parameters', file=f)
-            print('Maximum Sim. Time  :: {} GPeriods'.format(max_rev), file=f)
+            print('Maximum Sim. Time  :: {}   gyroperiods'.format(max_rev), file=f)
             print('Simulation cadence :: {:.5f} seconds'.format(dt_sim), file=f)
             print('Particle Dump Time :: {:.5f} seconds'.format(dt_particle), file=f)
             print('Field Dump Time    :: {:.5f} seconds'.format(dt_field), file=f)
-            print('Frequency Resol.   :: {:.5f} GPeriods'.format(freq_res), file=f)
-            print('Gyperiod Resol.    :: {:.5f}'.format(orbit_res), file=f)
-            print('Final runtime      :: {}'.format(run_time_str), file=f)
+            print('Frequency Resol.   :: {:.5f} gyroperiods'.format(freq_res), file=f)
+            print('Gyro-orbit Resol.  :: {:.5f} gyroperiods'.format(orbit_res), file=f)
             print('', file=f)
             print('Simulation Parameters', file=f)
-            print('# Spatial Cells :: {}'.format(NX), file=f)
-            print('# Damping Cells :: {}'.format(ND), file=f)
-            print('# Cells Total   :: {}'.format(NC), file=f)
-            print('# RC Cells      :: {}'.format(rc_hwidth*2), file=f)
-            print('InerLen per dx  :: {}'.format(dxm), file=f)
-            print('Cell width      :: {:.1f} m'.format(dx), file=f)
-            print('Simulation Min  :: {:.1f} m'.format(xmin), file=f)
-            print('Simulation Max  :: {:.1f} m'.format(xmax), file=f)
+            print('# Spatial Cells    :: {}'.format(NX), file=f)
+            print('# Damping Cells    :: {}'.format(ND), file=f)
+            print('# Cells Total      :: {}'.format(NC), file=f)
+            print('va/pcyc per dx     :: {}'.format(dxm), file=f)
+            print('Cell width         :: {:.1f} km'.format(dx*1e-3), file=f)
+            print('Simulation Min     :: {:.1f} km'.format(xmin*1e-3), file=f)
+            print('Simulation Max     :: {:.1f} km'.format(xmax*1e-3), file=f)
             if damping_multiplier is not None:
                 print('Damping Multipl.:: {:.2f}'.format(damping_multiplier), file=f)
             else:
                 print('Damping Multipl.::'.format(damping_multiplier), file=f)
             print('', file=f)
-            print('Equatorial Field Strength :: {:.2f} nT'.format(B_eq*1e9), file=f)
-            print('Boundary   Field Strength :: {:.2f} nT'.format(B_xmax*1e9), file=f)
-            print('MLAT max/min extent       :: {:.2f} deg'.format(theta_xmax * 180. / np.pi), file=f)
-            print('McIlwain L value equiv.   :: {:.2f}'.format(L), file=f)
-            print('Parabolic scale factor, a :: {}'.format(a), file=f)
+            print('Equatorial B0       :: {:.2f} nT'.format(B_eq*1e9), file=f)
+            print('Boundary   B0       :: {:.2f} nT'.format(B_xmax*1e9), file=f)
+            print('max MLAT            :: {:.2f} deg'.format(theta_xmax * 180. / np.pi), file=f)
+            print('McIlwain L value    :: {:.2f}'.format(L), file=f)
+            print('Parabolic s.f. (a)  :: {}'.format(a), file=f)
             print('', file=f)
-            print('Electron Density     :: {} /cc'.format(ne*1e-6), file=f)
-            print('Electron Treatment   :: {}'.format(ie), file=f)
+            print('Electron Density    :: {} /cc'.format(ne*1e-6), file=f)
+            print('Electron Treatment  :: {}'.format(electron_treatment), file=f)
             #print('Electron Temperature :: {}K'.format(Te0), file=f)
             #print('Electron Beta        :: {}'.format(beta_e), file=f)
             print('', file=f)
@@ -334,18 +348,36 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
             print('Particle Shape Func :: {}'.format(particle_shape), file=f)
             print('Particle Bound. Cond:: {}'.format(particle_boundary), file=f)
             print('', file=f)
+            
+            
             print('Ion Composition', file=f)
-            print('Species Name    :: {}'.format(species_lbl), file=f)
-            print('Species Type    :: {}'.format(temp_type), file=f)
-            print('Species Dens    :: {} /cc'.format(density*1e-6), file=f)
-            print('Species Charge  :: {}'.format(charge), file=f)
-            print('Species Mass    :: {} kg'.format(mass), file=f)
-            print('Drift Velocity  :: {} m/s'.format(drift_v), file=f)
-            print('Perp Temp       :: {} K'.format(Tperp), file=f)
-            print('Para Temp       :: {} K'.format(Tpar), file=f)
-            print('Perp Beta       :: {}'.format(beta_per), file=f)
-            print('Para Beta       :: {}'.format(beta_par), file=f)
-            print('MParticle Contr.:: {} real particles/macroparticle'.format(n_contr), file=f)
+            
+            ccdens   = density*1e-6
+            va_para  = vth_par  / va
+            va_perp  = vth_perp / va
+            
+            species_str = temp_str = cdens_str = charge_str = va_perp_str = \
+            va_para_str = mass_str = drift_str = contr_str = ''
+            for ii in range(Nj):
+                species_str += '{:>12}'.format(species_lbl[ii])
+                temp_str    += '{:>12d}'.format(temp_type[ii])
+                cdens_str   += '{:>12.3f}'.format(ccdens[ii])
+                charge_str  += '{:>12.1f}'.format(echarge[ii])
+                mass_str    += '{:>12.1f}'.format(pmass[ii])
+                drift_str   += '{:>12.1f}'.format(va_drift[ii])
+                va_perp_str += '{:>12.2f}'.format(va_perp[ii])
+                va_para_str += '{:>12.2f}'.format(va_para[ii])
+                contr_str   += '{:>12.1f}'.format(n_contr[ii])
+    
+            print('Species Name    :: {}'.format(species_str), file=f)
+            print('Species Type    :: {}'.format(temp_str), file=f)
+            print('Species Dens    :: {} /cc'.format(cdens_str), file=f)
+            print('Species Charge  :: {} elementary units'.format(charge_str), file=f)
+            print('Species Mass    :: {} proton masses'.format(mass_str), file=f)
+            print('Drift Velocity  :: {} vA'.format(drift_str), file=f)
+            print('V_thermal Perp  :: {} vA'.format(va_perp_str), file=f)
+            print('V_thermal Para  :: {} vA'.format(va_para_str), file=f)
+            print('MParticle s.f   :: {} real particles/macroparticle'.format(contr_str), file=f)
     return
 
 
