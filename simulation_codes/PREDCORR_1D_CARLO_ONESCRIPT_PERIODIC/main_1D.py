@@ -1192,6 +1192,8 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
     after wave-particle interactions are complete and energetic particles are slower. This
     criteria is higher in order to provide a little hysteresis and prevent constantly switching
     timesteps.
+    
+    Shoji code blowing up because of Eacc_ts - what is this and does it matter?
     '''
     interpolate_edges_to_center(B, B_center)
     B_magnitude     = np.sqrt(B_center[ND:ND+NX+1, 0] ** 2 +
@@ -1201,7 +1203,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
     ion_ts          = orbit_res / gyfreq
     
     if E[:, 0].max() != 0:
-        elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / np.abs(vel).max()).max())               # Electron acceleration "frequency"
+        elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / np.abs(vel).max()).max())    # E-field acceleration "frequency"
         Eacc_ts         = freq_res / elecfreq                            
     else:
         Eacc_ts = ion_ts
@@ -1222,7 +1224,6 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
 
         velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T,temp_N,-0.5*DT)   # De-sync vel/pos 
         print('Timestep halved. Syncing particle velocity...')
-
     return qq, DT, max_inc, part_save_iter, field_save_iter, damping_array
 
 
@@ -1561,7 +1562,7 @@ with open(run_input, 'r') as f:
     save_fields       = int(f.readline().split()[1])   # Save plot flag    : To ensure hybrid is solving correctly during run
     seed              = f.readline().split()[1]        # RNG Seed          : Set to enable consistent results for parameter studies
     cpu_affin         = f.readline().split()[1]        # Set CPU affinity for run as list. Set as None to auto-assign. 
-
+    
     homogenous        = int(f.readline().split()[1])   # Set B0 to homogenous (as test to compare to parabolic)
     particle_periodic = int(f.readline().split()[1])   # Set particle boundary conditions to periodic
     particle_reflect  = int(f.readline().split()[1])   # Set particle boundary conditions to reflective
@@ -1605,6 +1606,11 @@ if run == '-':
     print('Run number AUTOSET to ', run)
 else:
     run = int(run)
+
+if seed == '-':
+    seed = None
+else:
+    seed = int(seed)
 
 # Set plasma parameter file
 if event_inputs == False:
@@ -1663,7 +1669,7 @@ if particle_reflect + particle_reinit + particle_periodic == 0:
     particle_open = 1
     
 if B_eq == '-':
-    B_eq      = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
+    B_eq = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
 else:
     B_eq = float(B_eq)
     
@@ -1674,8 +1680,8 @@ if beta_flag == 0:
     # Input energies in eV
     beta_per   = None
     Te0_scalar = q * E_e / kB
-    vth_perp   = np.sqrt(q * charge *  E_per /  mass)    # Perpendicular thermal velocities
-    vth_par    = np.sqrt(q * charge *  E_par /  mass)    # Parallel thermal velocities
+    vth_perp   = np.sqrt(charge *  E_per /  mass)    # Perpendicular thermal velocities
+    vth_par    = np.sqrt(charge *  E_par /  mass)    # Parallel thermal velocities
 else:
     # Input energies in terms of beta
     kbt_par    = E_par * B_eq ** 2 / (2 * mu0 * ne)
@@ -1689,7 +1695,8 @@ wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequ
 va         = B_eq / np.sqrt(mu0*rho)                     # Alfven speed at equator: Assuming pure proton plasma
 gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
 dx         = va / gyfreq_eq                              # Alternate method of calculating dx (better for multicomponent plasmas)
-#dx         = dxm * c / wpi                               # Spatial cadence, based on ion inertial length
+#dx         = dxm * c / wpi                              # Spatial cadence, based on ion inertial length
+
 xmax       = NX // 2 * dx                                # Maximum simulation length, +/-ve on each side
 xmin       =-NX // 2 * dx
 Nj         = len(mass)                                   # Number of species
