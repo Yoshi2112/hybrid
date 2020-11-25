@@ -421,8 +421,8 @@ def calculate_helicity(Fy, Fz):
     Fz_sin = Fz_fft.imag
     
     # Construct spiral mode k-coefficients
-    Fk_pos = 0.5 * ( (Fy_cos + Fz_sin) + 1j * (Fz_cos - Fy_sin ) )
-    Fk_neg = 0.5 * ( (Fy_cos - Fz_sin) + 1j * (Fz_cos + Fy_sin ) )
+    Fk_pos = 0.5 * ((Fy_cos + Fz_sin) + 1j * (Fz_cos - Fy_sin ))
+    Fk_neg = 0.5 * ((Fy_cos - Fz_sin) + 1j * (Fz_cos + Fy_sin ))
     
     # Construct spiral mode timeseries
     Ft_pos = np.zeros(x.shape[0], dtype=np.complex128)
@@ -432,7 +432,6 @@ def calculate_helicity(Fy, Fz):
     for ii in range(k_modes.shape[0]):
         Ft_pos += Fk_pos[ii] * np.exp(-2j*np.pi*k_modes[ii]*x)
         Ft_neg += Fk_neg[ii] * np.exp( 2j*np.pi*k_modes[ii]*x)
-
     return Ft_pos, Ft_neg
 
 

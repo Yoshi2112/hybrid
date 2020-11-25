@@ -7,9 +7,10 @@ MASS_PROTON  1.         1.         4.           16.
 CHARGE_ELEM  1.         1.         1.           1.
 DRIFT_VA     0.         0.         0.           0.
 DENSITY_CM3  7.209      136.971    16.91        16.91
-ANISOTROPY   1.5        0.0        0.0          0.0
-ENERGY_PERP  25.        0.1        0.1          0.1
-ELECTRON_EV  0.1
-BETA_FLAG    1
+ANISOTROPY   1.0        0.0        0.0          0.0
+ENERGY_PERP  7530       5.0        5.0          5.0
+ELECTRON_EV  5.0
+BETA_FLAG    0
 L            4.3
-B_EQ         200.
+B_EQ         243e-9
+B_XMAX       -

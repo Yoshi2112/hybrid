@@ -84,16 +84,13 @@ def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
 
 
 @nb.njit()
-def uniform_gaussian_distribution_quiet():
+def quiet_start_bimaxwellian():
     '''Creates an N-sampled normal distribution across all particle species within each simulation cell
 
     OUTPUT:
         pos -- 1xN array of particle positions. Pos[0] is uniformly distributed with boundaries depending on its temperature type
         vel -- 3xN array of particle velocities. Each component initialized as a Gaussian with a scale factor determined by the species perp/para temperature
         idx -- N   array of particle indexes, indicating which species it belongs to. Coded as an 8-bit signed integer, allowing values between +/-128
-    
-    New code: Removed all 3D position things because we won't need it for long. Check this later, since its easy to change
-            Also removed all references to dist_type since initializing particles in the middle is stupid.
     '''
     pos = np.zeros(N, dtype=np.float64)
     vel = np.zeros((3, N), dtype=np.float64)
@@ -141,18 +138,42 @@ def uniform_gaussian_distribution_quiet():
                 LCD_by_rejection(pos, vel, vth_par[jj], vth_perp[jj], st, en, jj)
                 
             # Quiet start : Initialize second half
-            if quiet_start == 1:
-                vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set parallel
-            else:
-                vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Set anti-parallel
-                
             pos[en: en + half_n]    = pos[st: en]                   # Other half, same position
+            vel[0, en: en + half_n] = vel[0, st: en] *  1.0         # Set parallel
             vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
             vel[2, en: en + half_n] = vel[2, st: en] * -1.0
             
             vel[0, st: en + half_n] += drift_v[jj] * va             # Add drift offset
             
-            acc                    += half_n * 2
+            acc                     += half_n * 2
+    return pos, vel, idx
+
+
+@nb.njit()
+def uniform_bimaxwellian():
+    np.random.seed(seed)
+    pos   = np.zeros(N)
+    vel   = np.zeros((3, N))
+    idx   = np.zeros(N, dtype=np.uint8)
+
+    # Initialize unformly in space, gaussian in 3-velocity
+    for jj in range(Nj):
+        acc = 0
+        idx[idx_start[jj]: idx_end[jj]] = jj
+        
+        for ii in range(NX):
+            n_particles = nsp_ppc[jj]
+
+            for kk in range(n_particles):
+                pos[idx_start[jj] + acc + kk] = dx*(float(kk) / n_particles + ii)
+              
+            vel[0, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, vth_par[jj],  n_particles) + drift_v[jj] * va
+            vel[1, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, vth_perp[jj], n_particles)
+            vel[2, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, vth_perp[jj], n_particles)
+                        
+            acc += n_particles
+    
+    pos    -= 0.5*NX*dx
     return pos, vel, idx
 
 
@@ -172,16 +193,19 @@ def initialize_particles():
         W_mag  -- Initial particle weights on B-grid
         idx    -- Particle type index
     '''
-    pos, vel, idx = uniform_gaussian_distribution_quiet()
+    if quiet_start == 1:
+        pos, vel, idx = quiet_start_bimaxwellian()
+    else:
+        pos, vel, idx = uniform_bimaxwellian()
+
+    Ie         = np.zeros(N,      dtype=np.uint16)
+    Ib         = np.zeros(N,      dtype=np.uint16)
+    W_elec     = np.zeros((3, N), dtype=np.float64)
+    W_mag      = np.zeros((3, N), dtype=np.float64)
     
-    Ie         = np.zeros(N,      dtype=nb.uint16)
-    Ib         = np.zeros(N,      dtype=nb.uint16)
-    W_elec     = np.zeros((3, N), dtype=nb.float64)
-    W_mag      = np.zeros((3, N), dtype=nb.float64)
-    
-    Bp         = np.zeros((3, N), dtype=nb.float64)
-    Ep         = np.zeros((3, N), dtype=nb.float64)
-    temp_N     = np.zeros((N),    dtype=nb.float64)
+    Bp         = np.zeros((3, N), dtype=np.float64)
+    Ep         = np.zeros((3, N), dtype=np.float64)
+    temp_N     = np.zeros((N),    dtype=np.float64)
     
     assign_weighting_TSC(pos, Ie, W_elec)
     return pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, temp_N
@@ -1535,7 +1559,7 @@ with open(run_input, 'r') as f:
 
     save_particles    = int(f.readline().split()[1])   # Save data flag    : For later analysis
     save_fields       = int(f.readline().split()[1])   # Save plot flag    : To ensure hybrid is solving correctly during run
-    seed              = int(f.readline().split()[1])   # RNG Seed          : Set to enable consistent results for parameter studies
+    seed              = f.readline().split()[1]        # RNG Seed          : Set to enable consistent results for parameter studies
     cpu_affin         = f.readline().split()[1]        # Set CPU affinity for run as list. Set as None to auto-assign. 
 
     homogenous        = int(f.readline().split()[1])   # Set B0 to homogenous (as test to compare to parabolic)
@@ -1613,6 +1637,7 @@ with open(plasma_input, 'r') as f:
 
     L         = float(f.readline().split()[1])           # Field line L shell
     B_eq      = f.readline().split()[1]                  # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
+    B_xmax_ovr= f.readline().split()[1]
 
 charge    *= q                                           # Cast species charge to Coulomb
 mass      *= mp                                          # Cast species mass to kg
@@ -1684,7 +1709,7 @@ N = N_species.sum() + spare_ppc.sum()
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
-        
+
 ############################
 ### MAGNETIC FIELD STUFF ###
 ############################
@@ -1721,12 +1746,11 @@ else:
     dlam   = 1e-5                                            # Latitude increment in radians
     fx_len = 0.0; ii = 1                                     # Arclength/increment counters
     while fx_len < xmax:
-        lam_i   = dlam * ii                                                             # Current latitude
-        d_len   = L * RE * np.cos(lam_i) * np.sqrt(4.0 - 3.0*np.cos(lam_i) ** 2) * dlam     # Length increment
-        fx_len += d_len                                                                 # Accrue arclength
-        ii     += 1                                                                     # Increment counter
+        theta_xmax = dlam * ii                                                             # Current latitude
+        d_len      = L * RE * np.cos(theta_xmax) * np.sqrt(4.0 - 3.0*np.cos(theta_xmax) ** 2) * dlam # Length increment
+        fx_len    += d_len                                                                 # Accrue arclength
+        ii        += 1                                                                     # Increment counter
 
-    theta_xmax  = lam_i                                                                 # Latitude of simulation boundary
     r_xmax      = L * RE * np.cos(theta_xmax) ** 2                                      # Radial distance of simulation boundary
     B_xmax      = B_eq*np.sqrt(4 - 3*np.cos(theta_xmax)**2)/np.cos(theta_xmax)**6       # Magnetic field intensity at boundary
     a           = (B_xmax / B_eq - 1) / xmax ** 2                                       # Parabolic scale factor: Fitted to B_eq, B_xmax
@@ -1754,7 +1778,15 @@ ro1 = ND + NX; ro2 = ND + NX + 1        # Right outer
 
 li1 = ND         ; li2 = ND + 1         # Left inner
 ri1 = ND + NX - 1; ri2 = ND + NX - 2    # Right inner
-    
+
+## DIAGNOSTICS ##
+#print(wpi / gyfreq)
+#print(c   / va)
+#print(va / gyfreq)
+#print(c / wpi)
+#sys.exit()
+#################
+
 ##############################
 ### INPUT TESTS AND CHECKS ###
 ##############################
@@ -1812,7 +1844,6 @@ if  os.name != 'posix':
 ########################
 ### START SIMULATION ###
 ########################
-#sys.exit()
 if __name__ == '__main__':
     start_time = timer()
     

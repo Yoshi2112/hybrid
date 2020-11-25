@@ -659,7 +659,7 @@ def plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None):
     
     sep    = 1.
     dark   = 1.0
-    cells  = np.arange(cf.NC + 1)
+    cells  = np.arange(cf.NX)
 
     plt.ioff()
     fig1 = plt.figure(figsize=(18, 10))
@@ -704,10 +704,13 @@ def plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None):
     ax5  = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
     ax6  = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
 
+    st  = cf.ND
+    en  = cf.ND + cf.NX
+
     for ii in np.arange(it_max):
         if ii%skip == 0:
-            ax5.plot(cells, amp*(By_raw[ii] / By_raw.max()) + sep*ii, c='k', alpha=dark)
-            ax6.plot(cells, amp*(Bz_raw[ii] / Bz_raw.max()) + sep*ii, c='k', alpha=dark)
+            ax5.plot(cells, amp*(By_raw[ii, st:en] / By_raw.max()) + sep*ii, c='k', alpha=dark)
+            ax6.plot(cells, amp*(Bz_raw[ii, st:en] / Bz_raw.max()) + sep*ii, c='k', alpha=dark)
 
     ax5.set_title('By Raw')
     ax6.set_title('Bz Raw')
@@ -1373,7 +1376,7 @@ def winske_magnetic_density_plot():
 
     ftime, by = cf.get_array('By')
     ftime, bz = cf.get_array('Bz')
-    b_squared = (by ** 2 + bz ** 2) / cf.B_eq ** 2
+    b_squared = (by ** 2 + bz ** 2).mean(axis=1) / cf.B_eq ** 2
 
     radperiods = ftime * cf.gyfreq
     
@@ -1382,9 +1385,10 @@ def winske_magnetic_density_plot():
 
     fig, ax = plt.subplots(figsize=(20,10), sharex=True)                  # Initialize Figure Space
 
-    ax.plot(radperiods, b_squared.sum(axis=1), color='k')
+    ax.plot(radperiods, b_squared, color='k')
     ax.set_ylabel('B**2', labelpad=20, rotation=0)
-    ax.set_ylim(0, None)
+    ax.set_xlim(0, 100)
+    ax.set_ylim(0, 0.48)
     ax.set_xlabel('T')
             
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
@@ -3927,7 +3931,7 @@ if __name__ == '__main__':
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     
-    for series in ['winske_anisotropy_test_RCchangeonly']:
+    for series in ['winske_resonant_shape_test']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -3936,10 +3940,10 @@ if __name__ == '__main__':
         clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
                 'darkorange', 'peru', 'yellow']
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [3]
+            runs_to_do = [2, 3]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -3949,8 +3953,8 @@ if __name__ == '__main__':
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
 
                 #winske_summary_plots(save=True)
-                #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
-                #winske_magnetic_density_plot()
+                plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
+                winske_magnetic_density_plot()
                 #disp.plot_kt_winske()
                 #disp.plot_fourier_mode_timeseries(it_max=None)
                 
@@ -3958,11 +3962,10 @@ if __name__ == '__main__':
                 #ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7)
                 
                 #plot_abs_with_boundary_parameters()
-                #field_energy_vs_time(save=True)
     
-                #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
-                for comp in ['By', 'Bz']:        
-                    plot_tx(component=comp, saveas='tx_plot', save=True, tmax=None, remove_ND=True, normalize=True)
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
+                #for comp in ['By', 'Bz']:        
+                #    plot_tx(component=comp, saveas='tx_plot', save=True, tmax=None, remove_ND=True, normalize=True)
                 
                 #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False, remove_ND=True)
                 
