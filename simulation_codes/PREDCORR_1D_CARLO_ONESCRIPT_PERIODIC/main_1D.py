@@ -1917,4 +1917,7 @@ if __name__ == '__main__':
     
     if save_fields == 1 or save_particles == 1:
         add_runtime_to_header(runtime)
+        fin_path = '%s/%s/run_%d/run_finished.txt' % (drive, save_path, run)
+        with open(fin_path, 'w') as open_file:
+            pass
     print("Time to execute program: {0:.2f} seconds".format(runtime))

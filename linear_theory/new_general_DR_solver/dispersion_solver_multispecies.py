@@ -146,7 +146,7 @@ def dispersion_relation_solver(Species, PlasmaParams, norm_k_in=True, norm_k_out
     
     # Initialize k space: (un)Normalized by va/pcyc to get into SI units
     if norm_k_in == True:
-        knorm_fac = PlasmaParams['p_cyc'] / PlasmaParams['va']
+        knorm_fac = PlasmaParams['pcyc_rad'] / PlasmaParams['va']
         k_min     = kmin  * knorm_fac
         k_max     = kmax  * knorm_fac
         k_vals    = np.linspace(k_min, k_max, Nk, endpoint=False)
@@ -220,18 +220,18 @@ def plot_dispersion(k_vals, CPDR_solns, warm_solns, PlasmaParams,
     ## NORMALIZE ##
     ###############
     if norm_w == True:
-        y_cold      = CPDR_solns.copy() / PlasmaParams['p_cyc']
-        y_warm      = warm_solns.copy() / PlasmaParams['p_cyc']   
+        y_cold      = CPDR_solns.copy() / PlasmaParams['pcyc_rad']
+        y_warm      = warm_solns.copy() / PlasmaParams['pcyc_rad']   
         f_max       = 1.0
         ysuff       = '$/\Omega_p$'
     else:
         y_cold      = CPDR_solns.copy() / (2 * np.pi)
         y_warm      = warm_solns.copy() /(2 * np.pi)
-        f_max       = PlasmaParams['p_cyc'] / (2 * np.pi)
+        f_max       = PlasmaParams['pcyc_rad'] / (2 * np.pi)
         ysuff       = ' (Hz)'
          
     if norm_k == True:
-        x_vals  = k_vals.copy() / PlasmaParams['p_cyc'] * PlasmaParams['va']
+        x_vals  = k_vals.copy() / PlasmaParams['pcyc_rad'] * PlasmaParams['va']
         xlab    = r'$kv_A / \Omega_p$'
     else:
         x_vals  = k_vals

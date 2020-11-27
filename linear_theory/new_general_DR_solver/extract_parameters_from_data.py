@@ -13,18 +13,18 @@ import rbsp_fields_loader  as rfl
 import analysis_scripts    as ascr
 
 
-def interpolate_to_edens(edens_time, data_time, data_array_dens, data_array_temp, data_array_anis):
+def interpolate_to_time(new_time, data_time, data_array_dens, data_array_temp, data_array_anis):
     '''
     edens_time  :: WAVES electron density time to interpolate data_array to (length M)
     data_time   :: Current data sample times (HOPE/RBSPICE) of length N
     data_array  :: Data arrays consisting of ni, Ti, Ai in a 3xN ndarra
     '''
-    new_data_dens = np.zeros((3, edens_time.shape[0]), dtype=np.float64)
-    new_data_temp = np.zeros((3, edens_time.shape[0]), dtype=np.float64)
-    new_data_anis = np.zeros((3, edens_time.shape[0]), dtype=np.float64)
+    new_data_dens = np.zeros((3, new_time.shape[0]), dtype=np.float64)
+    new_data_temp = np.zeros((3, new_time.shape[0]), dtype=np.float64)
+    new_data_anis = np.zeros((3, new_time.shape[0]), dtype=np.float64)
     
-    xi = edens_time.astype(np.int64)
-    xp =  data_time.astype(np.int64)
+    xi = new_time.astype(np.int64)
+    xp = data_time.astype(np.int64)
     
     for ii in range(3):
         new_data_dens[ii, :] = np.interp(xi, xp, data_array_dens[ii, :])
@@ -34,30 +34,37 @@ def interpolate_to_edens(edens_time, data_time, data_array_dens, data_array_temp
     return new_data_dens, new_data_temp, new_data_anis
 
 
-def interpolate_B(edens_time, b_time, b_array, LP_filter=True):
+def interpolate_B(new_time, b_time, b_array, dt, LP_filter=True):
     '''
     To do: Add a LP filter. Or does interp already do that?
     '''
     # Filter at Nyquist frequency to prevent aliasing
     if LP_filter == True:
-        dt  = (edens_time[1] - edens_time[0]) / np.timedelta64(1, 's')
-        nyq = 1 / (2 * dt) 
+        nyq = 1.0 / (2.0 * dt) 
         for ii in range(3):
-            b_array[:, ii] = ascr.clw_low_pass(b_array[:, ii], nyq, 1./64., filt_order=4)
+            b_array[:, ii] = ascr.clw_low_pass(b_array[:, ii].copy(), nyq, 1./64., filt_order=4)
     
     xp = b_time.astype(np.int64)
     yp = np.sqrt(b_array[:, 0] ** 2 + b_array[:, 1] ** 2 + b_array[:, 2] ** 2)
     
-    xi = edens_time.astype(np.int64)
+    xi = new_time.astype(np.int64)
     yi = np.interp(xi, xp, yp)
     return yi
 
 
-def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_path='G://DATA//RBSP//',
-                                       HM_filter_mhz=None):
+def interpolate_ne(new_time, den_time, den_array):    
+    return np.interp(new_time.astype(np.int64), den_time.astype(np.int64), den_array)
+
+
+def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, nsec=1, 
+                                       rbsp_path='G://DATA//RBSP//', HM_filter_mhz=None):
     '''
     Outputs as SI units: B0 in nT, densities in /m3, temperatures in eV (pseudo SI)
+    
+    nsec is cadence of interpolated array in seconds
     '''
+    print('Loading and interpolating satellite data')
+    
     # Cold (total?) electron plasma density
     den_times, edens, dens_err = rfr.retrieve_RBSP_electron_density_data(rbsp_path, time_start, time_end, probe, pad=pad)
 
@@ -95,16 +102,21 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_pa
         spice_temp.append(this_temp)
         spice_anis.append(this_anis)
     
-    ihope_dens , ihope_temp , ihope_anis  = interpolate_to_edens(den_times, itime, hope_dens, hope_temp, hope_anis)
-    ispice_dens, ispice_temp, ispice_anis = interpolate_to_edens(den_times, spice_time, np.array(spice_dens),
+    # Interpolation step
+    time_array  = np.arange(time_start, time_end, np.timedelta64(nsec, 's'), dtype='datetime64[us]')
+    
+    
+    ihope_dens , ihope_temp , ihope_anis  = interpolate_to_time(time_array, itime, hope_dens, hope_temp, hope_anis)
+    ispice_dens, ispice_temp, ispice_anis = interpolate_to_time(time_array, spice_time, np.array(spice_dens),
                                                                  np.array(spice_temp), np.array(spice_anis))
     
-    Bi = interpolate_B(den_times, mag_times, filt_mags)
+    Bi     = interpolate_B(time_array, mag_times, filt_mags, nsec, LP_filter=False)
+    iedens = interpolate_ne(time_array, den_times, edens)
     
     # Subtract energetic components from total electron density (assuming each is singly charged)
-    cold_dens = edens - ihope_dens.sum(axis=0) - ispice_dens.sum(axis=0)
+    cold_dens = iedens - ihope_dens.sum(axis=0) - ispice_dens.sum(axis=0)
 
-    return den_times, Bi*1e-9, cold_dens*1e6, ihope_dens*1e6, ihope_temp, ihope_anis, ispice_dens*1e6, ispice_temp, ispice_anis
+    return time_array, Bi*1e-9, cold_dens*1e6, ihope_dens*1e6, ihope_temp, ihope_anis, ispice_dens*1e6, ispice_temp, ispice_anis
 
 
 def convert_data_to_hybrid_plasmafile(time_start, time_end, probe, pad, comp=None):
@@ -218,33 +230,27 @@ def convert_data_to_hybrid_plasmafile(time_start, time_end, probe, pad, comp=Non
 
 
 if __name__ == '__main__':
-    _rbsp_path  = 'E://DATA//RBSP//'
+    import sys
+    _rbsp_path  = 'G://DATA//RBSP//'
     _time_start = np.datetime64('2013-07-25T21:20:00')
-    _time_end   = np.datetime64('2013-07-25T22:00:00')
+    _time_end   = np.datetime64('2013-07-25T21:50:00')
     _probe      = 'a'
     _pad        = 0
     
     #convert_data_to_hybrid_plasmafile(_time_start, _time_end, _probe, _pad)
    
     _times, _B0, _cold_dens, _hope_dens, _hope_temp, _hope_anis, _spice_dens, _spice_temp, _spice_anis =\
-        load_and_interpolate_plasma_params(_time_start, _time_end, _probe, _pad)
+        load_and_interpolate_plasma_params(_time_start, _time_end, _probe, _pad, HM_filter_mhz=50)
     
-    
-    
-    # Compare against raw values
-    # Cold (total?) electron plasma density
+    ### LOAD RAW VALUES ###
     den_times, edens, dens_err = rfr.retrieve_RBSP_electron_density_data(_rbsp_path, _time_start, _time_end, _probe, pad=_pad)
-
-    # Magnetic magnitude
     mag_times, raw_mags = rfl.load_magnetic_field(_rbsp_path, _time_start, _time_end, _probe, return_raw=True, pad=3600)
     
-    # HOPE data
     itime, etime, pdict, perr = rfr.retrieve_RBSP_hope_moment_data(_rbsp_path, _time_start, _time_end, padding=_pad, probe=_probe)
     hope_dens = np.array([pdict['Dens_p_30'],       pdict['Dens_he_30'],       pdict['Dens_o_30']])
     hope_temp = np.array([pdict['Tperp_p_30'],      pdict['Tperp_he_30'],      pdict['Tperp_o_30']])
     hope_anis = np.array([pdict['Tperp_Tpar_p_30'], pdict['Tperp_Tpar_he_30'], pdict['Tperp_Tpar_o_30']]) - 1
     
-    # SPICE data
     spice_dens = [];    spice_temp = [];    spice_anis = []
     for product, spec in zip(['TOFxEH', 'TOFxEHe', 'TOFxEO'], ['P', 'He', 'O']):
         spice_time , spice_dict  = rfr.retrieve_RBSPICE_data(_rbsp_path, _time_start, _time_end, product , padding=_pad, probe=_probe)
@@ -261,9 +267,87 @@ if __name__ == '__main__':
         spice_temp.append(this_temp)
         spice_anis.append(this_anis)
     
-    
+    #%%
+    ### COMPARISON PLOTS FOR CHECKING ###
     import matplotlib.pyplot as plt
     
-    # Plot things
-    fig, ax = plt.subplots()
+    # Plot things :: B0HM, cold density, HOPE/RBSPICE hot densities (4 plots) 
+    fig, axes = plt.subplots(4)
+    
+    # B0
+    B0       = np.sqrt(raw_mags[:, 0] ** 2 + raw_mags[:, 1] ** 2 + raw_mags[:, 2] ** 2)
+    st, en   = ascr.boundary_idx64(mag_times, _time_start, _time_end)
+    _st, _en = ascr.boundary_idx64(_times,    _time_start, _time_end)
+    
+    axes[0].plot(mag_times[ st: en],  1e-9*B0[ st: en], c='k', label='raw')
+    axes[0].plot(   _times[_st:_en],      _B0[_st:_en], c='r', label='Filtered + Decimated', marker='o')
+    axes[0].legend()
+    
+    # Cold dens
+    axes[1].plot(den_times,  1e6*edens, c='k', label='raw')
+    axes[1].plot(   _times, _cold_dens, c='r', label='decimated') 
+    
+    # HOPE densities
+    axes[2].plot(itime, pdict['Dens_p_30']*1e6 , c='r')
+    axes[2].plot(itime, pdict['Dens_he_30']*1e6, c='green')  
+    axes[2].plot(itime, pdict['Dens_o_30']*1e6 , c='b')
+    
+    axes[2].plot(_times, _hope_dens[0] , c='r', ls='--')
+    axes[2].plot(_times, _hope_dens[1] , c='green', ls='--')  
+    axes[2].plot(_times, _hope_dens[2] , c='b', ls='--')
+    
+    # RBSPICE densities
+    axes[3].plot(spice_time, spice_dens[0]*1e6, c='r')
+    axes[3].plot(spice_time, spice_dens[1]*1e6, c='green')  
+    axes[3].plot(spice_time, spice_dens[2]*1e6, c='b')
+    
+    axes[3].plot(_times, _spice_dens[0], c='r', ls='--')
+    axes[3].plot(_times, _spice_dens[1], c='green', ls='--')  
+    axes[3].plot(_times, _spice_dens[2], c='b', ls='--')
+    
+    for ax in axes:
+        ax.set_xlim(_time_start, _time_end)
+    
+    # Also temp/anis for HOPE/RBSPICE (4 plots)
+    fig2, axes2 = plt.subplots(4)
+    
+    # HOPE Temps
+    axes2[0].plot(itime, pdict['Tperp_p_30'] , c='r')
+    axes2[0].plot(itime, pdict['Tperp_he_30'], c='green')  
+    axes2[0].plot(itime, pdict['Tperp_o_30'] , c='b')
+    
+    axes2[0].plot(_times, _hope_temp[0], c='r', ls='--')
+    axes2[0].plot(_times, _hope_temp[1], c='green', ls='--')  
+    axes2[0].plot(_times, _hope_temp[2], c='b', ls='--')
+    axes2[0].set_ylabel('HOPE TEMP')
+    
+    # RBSPICE Temps
+    axes2[1].plot(spice_time, spice_temp[0], c='r')
+    axes2[1].plot(spice_time, spice_temp[1], c='green')  
+    axes2[1].plot(spice_time, spice_temp[2], c='b')
+    
+    axes2[1].plot(_times, _spice_temp[0], c='r', ls='--')
+    axes2[1].plot(_times, _spice_temp[1], c='green', ls='--')  
+    axes2[1].plot(_times, _spice_temp[2], c='b', ls='--')
+    axes2[1].set_ylabel('RBSPICE TEMP')
+    
+    # HOPE Anisotropy
+    axes2[2].plot(itime, pdict['Tperp_Tpar_p_30'] - 1 , c='r')
+    axes2[2].plot(itime, pdict['Tperp_Tpar_he_30'] - 1, c='green')  
+    axes2[2].plot(itime, pdict['Tperp_Tpar_o_30'] - 1 , c='b')
+    
+    axes2[2].plot(_times, _hope_anis[0], c='r', ls='--')
+    axes2[2].plot(_times, _hope_anis[1], c='green', ls='--')  
+    axes2[2].plot(_times, _hope_anis[2], c='b', ls='--')
+    axes2[2].set_ylabel('HOPE A')
+    
+    # RBSPICE Anisotropy
+    axes2[3].plot(spice_time, spice_anis[0], c='r')
+    axes2[3].plot(spice_time, spice_anis[1], c='green')  
+    axes2[3].plot(spice_time, spice_anis[2], c='b')
+    
+    axes2[3].plot(_times, _spice_anis[0], c='r', ls='--')
+    axes2[3].plot(_times, _spice_anis[1], c='green', ls='--')  
+    axes2[3].plot(_times, _spice_anis[2], c='b', ls='--')
+    axes2[3].set_ylabel('RBSPICE A')
     

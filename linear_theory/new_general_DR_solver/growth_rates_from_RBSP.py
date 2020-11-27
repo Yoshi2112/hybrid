@@ -29,12 +29,13 @@ mu0 = 4.000e-07*np.pi
  - Plot as timeseries using max values (or maybe some sort of 2D thing for each band
 '''
 def get_raw_data(rbsp_path):
-    save_file = save_dir + 'extracted_data_{}.npz'.format(save_string)
+    save_file = save_dir + 'extracted_data_new{}.npz'.format(save_string)
     
     if os.path.exists(save_file) == False:
         times, B0, cold_dens, hope_dens, hope_temp, hope_anis, spice_dens, spice_temp, spice_anis\
-            = data.load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_path=rbsp_path)
-            
+            = data.load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_path=rbsp_path,
+                                                      HM_filter_mhz=50)
+
         print('Saving raw data...')
         np.savez(save_file, times=times, B0=B0, cold_dens=cold_dens,
                  hope_dens=hope_dens,   hope_temp=hope_temp,   hope_anis=hope_anis,
@@ -57,7 +58,8 @@ def get_raw_data(rbsp_path):
     return times, B0, cold_dens, hope_dens, hope_temp, hope_anis, spice_dens, spice_temp, spice_anis
 
 
-def extract_species_arrays(rbsp_path, time_start, time_end, probe, pad, cmp, return_raw_ne=False, HM_filter_mhz=50):
+def extract_species_arrays(rbsp_path, time_start, time_end, probe, pad,
+                           cmp, return_raw_ne=False, HM_filter_mhz=50):
     '''
     Data module only extracts the 3 component species dictionary from HOPE and RBSPICE 
     energetic measurements. This function creates the single axis arrays required to 
@@ -65,8 +67,6 @@ def extract_species_arrays(rbsp_path, time_start, time_end, probe, pad, cmp, ret
     
     All output values are in SI except temperature, which is in eV
     '''
-    
-    
     times, B0, cold_dens, hope_dens, hope_temp, hope_anis, spice_dens, spice_temp, spice_anis\
         = data.load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_path=rbsp_path,
                                                   HM_filter_mhz=HM_filter_mhz)
@@ -104,13 +104,13 @@ def extract_species_arrays(rbsp_path, time_start, time_end, probe, pad, cmp, ret
 def get_all_DRs(time_start, time_end, probe, pad, cmp, Nk=1000):
 
     times, B0, _name, _mass, _charge, _density, _tper, _ani, cold_dens = \
-    extract_species_arrays(time_start, time_end, probe, pad, cmp, return_raw_ne=True)
+    extract_species_arrays(_rbsp_path, time_start, time_end, probe, pad, cmp, return_raw_ne=True)
     
     # Do O concentrations from 1-30 percent
     # Do He concentrations from 1-30 percent
     # Need a special save for 0 percent (2 species) runs
-    for O_rat in np.arange(0.01, 0.11, 0.01):
-        for He_rat in np.arange(0.01, 0.31, 0.01):
+    for O_rat in [0.1]:#np.arange(0.01, 0.11, 0.01):
+        for He_rat in [0.2]:#np.arange(0.01, 0.31, 0.01):
             H_rat = (1.0 - O_rat - He_rat)
             
             print('Cold composition {:.0f}/{:.0f}/{:.0f}'.format(H_rat*100, He_rat*100, O_rat*100))
@@ -252,7 +252,6 @@ def load_and_plot_timeseries(ccomp=[70,20,10]):
             
             plot_growth_rate_with_time(times, all_k, all_WPDR, save=False,
                                        short=True, norm_w=True, B0=B0, ccomp=ccomp)
-
     return
 
 
@@ -483,7 +482,7 @@ if __name__ == '__main__':
     
     date_string = time_start.astype(object).strftime('%Y%m%d')
     save_string = time_start.astype(object).strftime('%Y%m%d_%H%M_') + time_end.astype(object).strftime('%H%M')
-    save_dir    = '{}NEW_LT//EVENT_{}//LINEAR_DISPERSION_RESULTS//'.format(dump_drive, date_string)
+    save_dir    = '{}NEW_LT//EVENT_{}//NEW_FIXED_DISPERSION_RESULTS//'.format(dump_drive, date_string)
     
     if os.path.exists(save_dir) == False:
         os.makedirs(save_dir)
@@ -500,10 +499,10 @@ if __name__ == '__main__':
             '21:40:26.105',
             '21:41:05.605']
     
-    #get_all_DRs(time_start, time_end, probe, pad, cmp, Nk=_Nk)
+    get_all_DRs(time_start, time_end, probe, pad, cmp=[0.7, 0.2, 0.1], Nk=_Nk)
     
     #plot_all_DRs()
-    load_and_plot_timeseries()
+    #load_and_plot_timeseries()
     
     #check_if_exists()
         
