@@ -230,7 +230,8 @@ def convert_data_to_hybrid_plasmafile(time_start, time_end, probe, pad, comp=Non
 
 
 if __name__ == '__main__':
-    import sys
+    from spacepy import pycdf
+    
     _rbsp_path  = 'G://DATA//RBSP//'
     _time_start = np.datetime64('2013-07-25T21:20:00')
     _time_end   = np.datetime64('2013-07-25T21:50:00')
@@ -238,116 +239,127 @@ if __name__ == '__main__':
     _pad        = 0
     
     #convert_data_to_hybrid_plasmafile(_time_start, _time_end, _probe, _pad)
-   
-    _times, _B0, _cold_dens, _hope_dens, _hope_temp, _hope_anis, _spice_dens, _spice_temp, _spice_anis =\
-        load_and_interpolate_plasma_params(_time_start, _time_end, _probe, _pad, HM_filter_mhz=50)
-    
-    ### LOAD RAW VALUES ###
-    den_times, edens, dens_err = rfr.retrieve_RBSP_electron_density_data(_rbsp_path, _time_start, _time_end, _probe, pad=_pad)
-    mag_times, raw_mags = rfl.load_magnetic_field(_rbsp_path, _time_start, _time_end, _probe, return_raw=True, pad=3600)
-    
-    itime, etime, pdict, perr = rfr.retrieve_RBSP_hope_moment_data(_rbsp_path, _time_start, _time_end, padding=_pad, probe=_probe)
-    hope_dens = np.array([pdict['Dens_p_30'],       pdict['Dens_he_30'],       pdict['Dens_o_30']])
-    hope_temp = np.array([pdict['Tperp_p_30'],      pdict['Tperp_he_30'],      pdict['Tperp_o_30']])
-    hope_anis = np.array([pdict['Tperp_Tpar_p_30'], pdict['Tperp_Tpar_he_30'], pdict['Tperp_Tpar_o_30']]) - 1
-    
-    spice_dens = [];    spice_temp = [];    spice_anis = []
-    for product, spec in zip(['TOFxEH', 'TOFxEHe', 'TOFxEO'], ['P', 'He', 'O']):
-        spice_time , spice_dict  = rfr.retrieve_RBSPICE_data(_rbsp_path, _time_start, _time_end, product , padding=_pad, probe=_probe)
+    magfold = _rbsp_path + 'EMFISIS//MAG//'
+    magname = 'rbsp-a_magnetometer_hires-gse_emfisis-L3_20130725_v1.3.4.cdf'
+    magfile = magfold + magname
+    if os.path.exists(magfile) == True:
+        print('File exists')
+    else:
+        print('File not found')
         
-        this_dens = spice_dict['F{}DU_Density'.format(spec)]
-        this_anis = spice_dict['F{}DU_PerpPressure'.format(spec)] / spice_dict['F{}DU_ParaPressure'.format(spec)] - 1
+    cdf_pointer = pycdf.CDF(magfile) 
+    print(cdf_pointer.keys())
+    
+    if False:
+        _times, _B0, _cold_dens, _hope_dens, _hope_temp, _hope_anis, _spice_dens, _spice_temp, _spice_anis =\
+            load_and_interpolate_plasma_params(_time_start, _time_end, _probe, _pad, HM_filter_mhz=50)
         
-        # Perp Temperature - Calculate as T = P/nk
-        kB            = 1.381e-23; q = 1.602e-19
-        t_perp_kelvin = 1e-9*spice_dict['F{}DU_PerpPressure'.format(spec)] / (kB*1e6*spice_dict['F{}DU_Density'.format(spec)])
-        this_temp     = kB * t_perp_kelvin / q  # Convert from K to eV
+        ### LOAD RAW VALUES ###
+        den_times, edens, dens_err = rfr.retrieve_RBSP_electron_density_data(_rbsp_path, _time_start, _time_end, _probe, pad=_pad)
+        mag_times, raw_mags = rfl.load_magnetic_field(_rbsp_path, _time_start, _time_end, _probe, return_raw=True, pad=3600)
         
-        spice_dens.append(this_dens)
-        spice_temp.append(this_temp)
-        spice_anis.append(this_anis)
-    
-    #%%
-    ### COMPARISON PLOTS FOR CHECKING ###
-    import matplotlib.pyplot as plt
-    
-    # Plot things :: B0HM, cold density, HOPE/RBSPICE hot densities (4 plots) 
-    fig, axes = plt.subplots(4)
-    
-    # B0
-    B0       = np.sqrt(raw_mags[:, 0] ** 2 + raw_mags[:, 1] ** 2 + raw_mags[:, 2] ** 2)
-    st, en   = ascr.boundary_idx64(mag_times, _time_start, _time_end)
-    _st, _en = ascr.boundary_idx64(_times,    _time_start, _time_end)
-    
-    axes[0].plot(mag_times[ st: en],  1e-9*B0[ st: en], c='k', label='raw')
-    axes[0].plot(   _times[_st:_en],      _B0[_st:_en], c='r', label='Filtered + Decimated', marker='o')
-    axes[0].legend()
-    
-    # Cold dens
-    axes[1].plot(den_times,  1e6*edens, c='k', label='raw')
-    axes[1].plot(   _times, _cold_dens, c='r', label='decimated') 
-    
-    # HOPE densities
-    axes[2].plot(itime, pdict['Dens_p_30']*1e6 , c='r')
-    axes[2].plot(itime, pdict['Dens_he_30']*1e6, c='green')  
-    axes[2].plot(itime, pdict['Dens_o_30']*1e6 , c='b')
-    
-    axes[2].plot(_times, _hope_dens[0] , c='r', ls='--')
-    axes[2].plot(_times, _hope_dens[1] , c='green', ls='--')  
-    axes[2].plot(_times, _hope_dens[2] , c='b', ls='--')
-    
-    # RBSPICE densities
-    axes[3].plot(spice_time, spice_dens[0]*1e6, c='r')
-    axes[3].plot(spice_time, spice_dens[1]*1e6, c='green')  
-    axes[3].plot(spice_time, spice_dens[2]*1e6, c='b')
-    
-    axes[3].plot(_times, _spice_dens[0], c='r', ls='--')
-    axes[3].plot(_times, _spice_dens[1], c='green', ls='--')  
-    axes[3].plot(_times, _spice_dens[2], c='b', ls='--')
-    
-    for ax in axes:
-        ax.set_xlim(_time_start, _time_end)
-    
-    # Also temp/anis for HOPE/RBSPICE (4 plots)
-    fig2, axes2 = plt.subplots(4)
-    
-    # HOPE Temps
-    axes2[0].plot(itime, pdict['Tperp_p_30'] , c='r')
-    axes2[0].plot(itime, pdict['Tperp_he_30'], c='green')  
-    axes2[0].plot(itime, pdict['Tperp_o_30'] , c='b')
-    
-    axes2[0].plot(_times, _hope_temp[0], c='r', ls='--')
-    axes2[0].plot(_times, _hope_temp[1], c='green', ls='--')  
-    axes2[0].plot(_times, _hope_temp[2], c='b', ls='--')
-    axes2[0].set_ylabel('HOPE TEMP')
-    
-    # RBSPICE Temps
-    axes2[1].plot(spice_time, spice_temp[0], c='r')
-    axes2[1].plot(spice_time, spice_temp[1], c='green')  
-    axes2[1].plot(spice_time, spice_temp[2], c='b')
-    
-    axes2[1].plot(_times, _spice_temp[0], c='r', ls='--')
-    axes2[1].plot(_times, _spice_temp[1], c='green', ls='--')  
-    axes2[1].plot(_times, _spice_temp[2], c='b', ls='--')
-    axes2[1].set_ylabel('RBSPICE TEMP')
-    
-    # HOPE Anisotropy
-    axes2[2].plot(itime, pdict['Tperp_Tpar_p_30'] - 1 , c='r')
-    axes2[2].plot(itime, pdict['Tperp_Tpar_he_30'] - 1, c='green')  
-    axes2[2].plot(itime, pdict['Tperp_Tpar_o_30'] - 1 , c='b')
-    
-    axes2[2].plot(_times, _hope_anis[0], c='r', ls='--')
-    axes2[2].plot(_times, _hope_anis[1], c='green', ls='--')  
-    axes2[2].plot(_times, _hope_anis[2], c='b', ls='--')
-    axes2[2].set_ylabel('HOPE A')
-    
-    # RBSPICE Anisotropy
-    axes2[3].plot(spice_time, spice_anis[0], c='r')
-    axes2[3].plot(spice_time, spice_anis[1], c='green')  
-    axes2[3].plot(spice_time, spice_anis[2], c='b')
-    
-    axes2[3].plot(_times, _spice_anis[0], c='r', ls='--')
-    axes2[3].plot(_times, _spice_anis[1], c='green', ls='--')  
-    axes2[3].plot(_times, _spice_anis[2], c='b', ls='--')
-    axes2[3].set_ylabel('RBSPICE A')
-    
+        itime, etime, pdict, perr = rfr.retrieve_RBSP_hope_moment_data(_rbsp_path, _time_start, _time_end, padding=_pad, probe=_probe)
+        hope_dens = np.array([pdict['Dens_p_30'],       pdict['Dens_he_30'],       pdict['Dens_o_30']])
+        hope_temp = np.array([pdict['Tperp_p_30'],      pdict['Tperp_he_30'],      pdict['Tperp_o_30']])
+        hope_anis = np.array([pdict['Tperp_Tpar_p_30'], pdict['Tperp_Tpar_he_30'], pdict['Tperp_Tpar_o_30']]) - 1
+        
+        spice_dens = [];    spice_temp = [];    spice_anis = []
+        for product, spec in zip(['TOFxEH', 'TOFxEHe', 'TOFxEO'], ['P', 'He', 'O']):
+            spice_time , spice_dict  = rfr.retrieve_RBSPICE_data(_rbsp_path, _time_start, _time_end, product , padding=_pad, probe=_probe)
+            
+            this_dens = spice_dict['F{}DU_Density'.format(spec)]
+            this_anis = spice_dict['F{}DU_PerpPressure'.format(spec)] / spice_dict['F{}DU_ParaPressure'.format(spec)] - 1
+            
+            # Perp Temperature - Calculate as T = P/nk
+            kB            = 1.381e-23; q = 1.602e-19
+            t_perp_kelvin = 1e-9*spice_dict['F{}DU_PerpPressure'.format(spec)] / (kB*1e6*spice_dict['F{}DU_Density'.format(spec)])
+            this_temp     = kB * t_perp_kelvin / q  # Convert from K to eV
+            
+            spice_dens.append(this_dens)
+            spice_temp.append(this_temp)
+            spice_anis.append(this_anis)
+        
+        #%%
+        ### COMPARISON PLOTS FOR CHECKING ###
+        import matplotlib.pyplot as plt
+        
+        # Plot things :: B0HM, cold density, HOPE/RBSPICE hot densities (4 plots) 
+        fig, axes = plt.subplots(4)
+        
+        # B0
+        B0       = np.sqrt(raw_mags[:, 0] ** 2 + raw_mags[:, 1] ** 2 + raw_mags[:, 2] ** 2)
+        st, en   = ascr.boundary_idx64(mag_times, _time_start, _time_end)
+        _st, _en = ascr.boundary_idx64(_times,    _time_start, _time_end)
+        
+        axes[0].plot(mag_times[ st: en],  1e-9*B0[ st: en], c='k', label='raw')
+        axes[0].plot(   _times[_st:_en],      _B0[_st:_en], c='r', label='Filtered + Decimated', marker='o')
+        axes[0].legend()
+        
+        # Cold dens
+        axes[1].plot(den_times,  1e6*edens, c='k', label='raw')
+        axes[1].plot(   _times, _cold_dens, c='r', label='decimated') 
+        
+        # HOPE densities
+        axes[2].plot(itime, pdict['Dens_p_30']*1e6 , c='r')
+        axes[2].plot(itime, pdict['Dens_he_30']*1e6, c='green')  
+        axes[2].plot(itime, pdict['Dens_o_30']*1e6 , c='b')
+        
+        axes[2].plot(_times, _hope_dens[0] , c='r', ls='--')
+        axes[2].plot(_times, _hope_dens[1] , c='green', ls='--')  
+        axes[2].plot(_times, _hope_dens[2] , c='b', ls='--')
+        
+        # RBSPICE densities
+        axes[3].plot(spice_time, spice_dens[0]*1e6, c='r')
+        axes[3].plot(spice_time, spice_dens[1]*1e6, c='green')  
+        axes[3].plot(spice_time, spice_dens[2]*1e6, c='b')
+        
+        axes[3].plot(_times, _spice_dens[0], c='r', ls='--')
+        axes[3].plot(_times, _spice_dens[1], c='green', ls='--')  
+        axes[3].plot(_times, _spice_dens[2], c='b', ls='--')
+        
+        for ax in axes:
+            ax.set_xlim(_time_start, _time_end)
+        
+        # Also temp/anis for HOPE/RBSPICE (4 plots)
+        fig2, axes2 = plt.subplots(4)
+        
+        # HOPE Temps
+        axes2[0].plot(itime, pdict['Tperp_p_30'] , c='r')
+        axes2[0].plot(itime, pdict['Tperp_he_30'], c='green')  
+        axes2[0].plot(itime, pdict['Tperp_o_30'] , c='b')
+        
+        axes2[0].plot(_times, _hope_temp[0], c='r', ls='--')
+        axes2[0].plot(_times, _hope_temp[1], c='green', ls='--')  
+        axes2[0].plot(_times, _hope_temp[2], c='b', ls='--')
+        axes2[0].set_ylabel('HOPE TEMP')
+        
+        # RBSPICE Temps
+        axes2[1].plot(spice_time, spice_temp[0], c='r')
+        axes2[1].plot(spice_time, spice_temp[1], c='green')  
+        axes2[1].plot(spice_time, spice_temp[2], c='b')
+        
+        axes2[1].plot(_times, _spice_temp[0], c='r', ls='--')
+        axes2[1].plot(_times, _spice_temp[1], c='green', ls='--')  
+        axes2[1].plot(_times, _spice_temp[2], c='b', ls='--')
+        axes2[1].set_ylabel('RBSPICE TEMP')
+        
+        # HOPE Anisotropy
+        axes2[2].plot(itime, pdict['Tperp_Tpar_p_30'] - 1 , c='r')
+        axes2[2].plot(itime, pdict['Tperp_Tpar_he_30'] - 1, c='green')  
+        axes2[2].plot(itime, pdict['Tperp_Tpar_o_30'] - 1 , c='b')
+        
+        axes2[2].plot(_times, _hope_anis[0], c='r', ls='--')
+        axes2[2].plot(_times, _hope_anis[1], c='green', ls='--')  
+        axes2[2].plot(_times, _hope_anis[2], c='b', ls='--')
+        axes2[2].set_ylabel('HOPE A')
+        
+        # RBSPICE Anisotropy
+        axes2[3].plot(spice_time, spice_anis[0], c='r')
+        axes2[3].plot(spice_time, spice_anis[1], c='green')  
+        axes2[3].plot(spice_time, spice_anis[2], c='b')
+        
+        axes2[3].plot(_times, _spice_anis[0], c='r', ls='--')
+        axes2[3].plot(_times, _spice_anis[1], c='green', ls='--')  
+        axes2[3].plot(_times, _spice_anis[2], c='b', ls='--')
+        axes2[3].set_ylabel('RBSPICE A')
+        
