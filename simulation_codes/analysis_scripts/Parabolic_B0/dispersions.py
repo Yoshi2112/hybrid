@@ -6,8 +6,10 @@ Created on Tue Apr 30 13:14:56 2019
 """
 import pdb
 import analysis_config as cf
+import analysis_backend as bk
 import numpy as np
-import sys
+import matplotlib.pyplot as plt
+import os, sys
 
 from scipy import signal
 data_scripts_dir = 'C://Users//iarey//Documents//GitHub//hybrid//linear_theory//new_general_DR_solver//'
@@ -123,7 +125,7 @@ def get_kt(component):
         en = cf.ND + cf.NX
         k  = np.fft.fftfreq(cf.NX, cf.dx)
                   
-    k   = k[k>=0] * 1e6
+    k   = k[k>=0]
     
     fft_matrix  = np.zeros((arr.shape[0], en-st), dtype='complex128')
     for ii in range(arr.shape[0]): # Take spatial FFT at each time, ii
@@ -132,6 +134,136 @@ def get_kt(component):
     kt = (fft_matrix[:, :k.shape[0]] * np.conj(fft_matrix[:, :k.shape[0]])).real
     
     return k, ftime, kt, st, en
+
+
+def plot_kt_winske(component='by'):
+    qi     = 1.602e-19       # Elementary charge (C)
+    c      = 3e8             # Speed of light (m/s)
+    mp     = 1.67e-27        # Mass of proton (kg)
+    e0     = 8.854e-12       # Epsilon naught - permittivity of free space
+    
+    ftime, arr = cf.get_array(component)
+    
+    radperiods = ftime * cf.gyfreq
+    gperiods   = ftime / cf.gyperiod
+    
+    ts_folder = cf.anal_dir + '//winske_fourier_modes//'
+    if os.path.exists(ts_folder) == False:
+        os.makedirs(ts_folder)
+    
+    # Get first/last indices for FFT range and k-space array
+    st = cf.ND
+    if component[0].upper() == 'B':
+        en = cf.ND + cf.NX
+        k  = np.fft.fftfreq(cf.NX, cf.dx)
+    else:
+        en = cf.ND + cf.NX
+        k  = np.fft.fftfreq(cf.NX, cf.dx)
+    
+    # Normalize to c/wpi
+    cwpi = c/np.sqrt(cf.ne * qi ** 2 / (mp * e0))
+    
+    k   *= cwpi
+    k    = k[k>=0]
+    kmax = k.shape[0]
+    
+    fft_matrix  = np.zeros((arr.shape[0], en-st), dtype='complex128')
+    for ii in range(arr.shape[0]): # Take spatial FFT at each time, ii
+        fft_matrix[ii, :] = np.fft.fft(arr[ii, st:en] - arr[ii, st:en].mean())
+
+    kt = (fft_matrix[:, :k.shape[0]] * np.conj(fft_matrix[:, :k.shape[0]])).real
+    
+    plt.ioff()
+
+    for ii in range(ftime.shape[0]):
+        fig, ax = plt.subplots()
+        ax.semilogy(k[1:kmax], kt[ii, 1:kmax], ds='steps-mid')
+        ax.set_title('IT={:04d} :: T={:5.2f} :: GP={:5.2f}'.format(ii, radperiods[ii], gperiods[ii]), family='monospace')
+        ax.set_xlabel('K')
+        ax.set_ylabel('BYK**2')
+        ax.set_xlim(k[1], k[kmax-1])
+        fig.savefig(ts_folder + 'winske_fourier_{}_{}.png'.format(component, ii), edgecolor='none')
+        plt.close('all') 
+        
+        sys.stdout.write('\rCreating fourier mode plot for timestep {}'.format(ii))
+        sys.stdout.flush()
+
+    print('\n')
+    return
+
+
+def plot_fourier_mode_timeseries(it_max=None):
+    '''
+    Load helical components Bt pos/neg, extract By_pos
+    For each snapshot in time, take spatial FFT of By_pos (similar to how helicity is done)
+    Save these snapshots in array
+    Plot single mode timeseries from this 2D array
+    
+    Test run: Seems relatively close qualitatively, with a smaller growth rate
+                and a few of the modes not quite as large. This could be any 
+                number of reasons - from the simulation method to the helicity.
+                Will be interesting to compare direct to linear theory via the
+                method outlined in Munoz et al. (2018).
+    '''
+    ftime, By_raw  = cf.get_array('By')
+    ftime, Bz_raw  = cf.get_array('Bz')
+    radperiods     = ftime * cf.gyfreq
+    
+    if it_max is None:
+        it_max = ftime.shape[0]
+    
+    ftime, Bt_pos, Bt_neg = bk.get_helical_components()
+
+    By_pos  = Bt_pos.real
+    x       = np.linspace(0, cf.NX*cf.dx, cf.NX)
+    k_modes = np.fft.rfftfreq(x.shape[0], d=cf.dx)
+    Byk_2   = np.zeros((ftime.shape[0], k_modes.shape[0]), dtype=np.float64) 
+    
+    # Do time loop here. Could also put normalization flag
+    for ii in range(ftime.shape[0]):
+        Byk          = (1 / k_modes.shape[0]) * np.fft.rfft(By_pos[ii])
+        Byk_2[ii, :] = (Byk * np.conj(Byk)).real / cf.B_eq ** 2
+
+    plt.ioff()
+    fig, axes = plt.subplots(ncols=2, nrows=3, sharex=True, figsize=(15, 10))
+    
+    axes[0, 0].semilogy(radperiods, Byk_2[:, 1])
+    axes[0, 0].set_title('m = 1')
+    axes[0, 0].set_xlim(0, 100)
+    axes[0, 0].set_ylim(1e-7, 1e-3) 
+    
+    axes[1, 0].semilogy(radperiods, Byk_2[:, 2])
+    axes[1, 0].set_title('m = 2')
+    axes[1, 0].set_xlim(0, 100)
+    axes[1, 0].set_ylim(1e-6, 1e-1) 
+    
+    axes[2, 0].semilogy(radperiods, Byk_2[:, 3])
+    axes[2, 0].set_title('m = 3')
+    axes[2, 0].set_xlim(0, 100)
+    axes[2, 0].set_ylim(1e-6, 1e-1) 
+    
+    axes[0, 1].semilogy(radperiods, Byk_2[:, 4])
+    axes[0, 1].set_title('m = 4')
+    axes[0, 1].set_xlim(0, 100)
+    axes[0, 1].set_ylim(1e-6, 1e-0) 
+    
+    axes[1, 1].semilogy(radperiods, Byk_2[:, 5])
+    axes[1, 1].set_title('m = 5')
+    axes[1, 1].set_xlim(0, 100)
+    axes[1, 1].set_ylim(1e-6, 1e-0) 
+    
+    axes[2, 1].semilogy(radperiods, Byk_2[:, 6])
+    axes[2, 1].set_title('m = 6')
+    axes[2, 1].set_xlim(0, 100)
+    axes[2, 1].set_ylim(1e-6, 1e-0) 
+    
+    fig.savefig(cf.anal_dir + 'fourier_modes.png')
+    plt.close('all')
+    
+    #axes[ii].set_xlim(0, 100)
+    #
+    #axes[ii].set_xlabel('$\Omega_i t$')
+    return
 
 
 def get_wk(component):

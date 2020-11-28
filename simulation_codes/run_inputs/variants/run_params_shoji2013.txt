@@ -1,8 +1,8 @@
 DRIVE					F:/
 SAVE_PATH			    /runs/shoji_2013_standard_units/
 RUN						-
-SAVE_PARTICLE_FLAG		0
-SAVE_FIELD_FLAG			0
+SAVE_PARTICLE_FLAG		1
+SAVE_FIELD_FLAG			1
 SEED					98327
 CPU_AFFINITY			-
 HOMOGENOUS_B0_FLAG		0
@@ -29,4 +29,4 @@ GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02	
 PARTICLE_DUMP_FREQ		0.5
 FIELD_DUMP_FREQ			0.10
-Comparison run against Shoji et al. (2013) with open particle and field boundaries and parabolic background magnetic field. dxm and nsp_ppc(hot) varying to see if wave growth still observed with less particles and/or less spatial resolution. Standard units means B_max and dx are calculated from physical inputs (B_eq, ne) from paper (this gives a dx far too big and an alfven speed too slow).
+Comparison run against Shoji et al. (2013) with open particle and field boundaries and parabolic background magnetic field. dxm and nsp_ppc(hot) varying to see if wave growth still observed with less particles and/or less spatial resolution. Standard units means B_max and dx are calculated from self-consistent physical inputs from paper (this gives a dx far too big and an alfven speed too slow).

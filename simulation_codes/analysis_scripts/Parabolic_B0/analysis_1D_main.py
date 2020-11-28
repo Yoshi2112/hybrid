@@ -211,7 +211,7 @@ def plot_spatial_poynting_helical(saveas='poynting_helical_plot', save=False, lo
                 plt.close('all')
     return
 
-def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None, remove_ND=False):
+def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None, remove_ND=False, normalize=False):
     plt.ioff()
 
     t, arr = cf.get_array(component)
@@ -229,6 +229,9 @@ def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None, 
     else:
         arr *= 1e3
         x    = cf.E_nodes / cf.dx
+        
+    if normalize == True and component[0].lower() == 'b':
+        arr /= (cf.B_eq*1e9)
         
     if tmax is None:
         lbl = 'full'
@@ -256,7 +259,11 @@ def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None, 
     cb  = fig.colorbar(im1)
     
     if component[0] == 'B':
-        cb.set_label('nT', rotation=0, family=font, fontsize=fontsize, labelpad=30)
+        if normalize == True:
+            cb.set_label(r'$\frac{B_%s}{B_{0eq}}$' % component[1].lower(), rotation=0,
+                         family=font, fontsize=fontsize, labelpad=30)
+        else:
+            cb.set_label('nT', rotation=0, family=font, fontsize=fontsize, labelpad=30)
     else:
         cb.set_label('mV/m', rotation=0, family=font, fontsize=fontsize, labelpad=30)
 
@@ -343,19 +350,34 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
     return
 
 
-def plot_kt(component='By', saveas='kt_plot', save=False):
+def plot_kt(component='By', saveas='kt_plot', save=False, normalize_x=False, xlim=None):
+    '''
+    Note: k values from fftfreq() are their linear counterparts. Need to multiply by 2pi
+    to compare with theory
+    '''
     plt.ioff()
     k, ftime, kt, st, en = disp.get_kt(component)
     
     fig = plt.figure(1, figsize=(15, 10))
     ax  = fig.add_subplot(111)
     
-    im1 = ax.pcolormesh(k, ftime, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
-    fig.colorbar(im1)
-    ax.set_title('Wavenumber-Time ($k-t$) Plot :: {} component'.format(component.upper()), fontsize=14)
-    ax.set_ylabel(r'$\Omega_i t$', rotation=0)
-    ax.set_xlabel(r'$k (m^{-1}) \times 10^6$')
-    #ax.set_ylim(0, 15)
+    if normalize_x == False:
+        im1 = ax.pcolormesh(k*1e6, ftime, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
+        fig.colorbar(im1)
+        ax.set_title('Wavenumber-Time ($k-t$) Plot :: {} component'.format(component.upper()), fontsize=14)
+        ax.set_ylabel(r'$\Omega_i t$', rotation=0)
+        ax.set_xlabel(r'$k (m^{-1}) \times 10^6$')
+        #ax.set_ylim(0, 15)
+    else:
+        k_plot = 2*np.pi*k * c / cf.wpi
+        
+        im1 = ax.pcolormesh(k_plot, ftime, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
+        fig.colorbar(im1)
+        ax.set_title('Wavenumber-Time ($k-t$) Plot :: {} component'.format(component.upper()), fontsize=14)
+        ax.set_ylabel(r'$\Omega_i t$', rotation=0)
+        ax.set_xlabel(r'$kc/\omega_{pi}$')
+        #ax.set_ylim(0, 15)
+        ax.set_xlim(0, xlim)
     
     if save == True:
         fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
@@ -406,7 +428,7 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
         lbl = '{:04}'.format(tmax)
         
     if remove_ND == True:
-        xlim = [cf.xmin, cf.xmax]
+        xlim = [cf.xmin/cf.dx, cf.xmax/cf.dx]
     else:
         xlim = [x[0], x[-1]]
     
@@ -422,7 +444,7 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
             vmax = cf.B_eq * B0_lim * 1e9
         else:
             vmax = B0_lim
-    
+
     if log == False:
         im1     = ax.pcolormesh(x, t, bt, cmap='jet', vmin=vmin, vmax=vmax)
         logsuff = ''
@@ -637,7 +659,7 @@ def plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None):
     
     sep    = 1.
     dark   = 1.0
-    cells  = np.arange(cf.NC + 1)
+    cells  = np.arange(cf.NX)
 
     plt.ioff()
     fig1 = plt.figure(figsize=(18, 10))
@@ -682,10 +704,13 @@ def plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None):
     ax5  = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
     ax6  = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
 
+    st  = cf.ND
+    en  = cf.ND + cf.NX
+
     for ii in np.arange(it_max):
         if ii%skip == 0:
-            ax5.plot(cells, amp*(By_raw[ii] / By_raw.max()) + sep*ii, c='k', alpha=dark)
-            ax6.plot(cells, amp*(Bz_raw[ii] / Bz_raw.max()) + sep*ii, c='k', alpha=dark)
+            ax5.plot(cells, amp*(By_raw[ii, st:en] / By_raw.max()) + sep*ii, c='k', alpha=dark)
+            ax6.plot(cells, amp*(Bz_raw[ii, st:en] / Bz_raw.max()) + sep*ii, c='k', alpha=dark)
 
     ax5.set_title('By Raw')
     ax6.set_title('Bz Raw')
@@ -1351,7 +1376,7 @@ def winske_magnetic_density_plot():
 
     ftime, by = cf.get_array('By')
     ftime, bz = cf.get_array('Bz')
-    b_squared = (by ** 2 + bz ** 2) / cf.B_eq ** 2
+    b_squared = (by ** 2 + bz ** 2).mean(axis=1) / cf.B_eq ** 2
 
     radperiods = ftime * cf.gyfreq
     
@@ -1360,9 +1385,10 @@ def winske_magnetic_density_plot():
 
     fig, ax = plt.subplots(figsize=(20,10), sharex=True)                  # Initialize Figure Space
 
-    ax.plot(radperiods, b_squared.sum(axis=1), color='k')
+    ax.plot(radperiods, b_squared, color='k')
     ax.set_ylabel('B**2', labelpad=20, rotation=0)
-    ax.set_ylim(0, None)
+    ax.set_xlim(0, 100)
+    ax.set_ylim(0, 0.48)
     ax.set_xlabel('T')
             
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
@@ -3905,8 +3931,7 @@ if __name__ == '__main__':
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     
-    for series in ['fu_comparison_tests']:
-        
+    for series in ['winske_resonant_shape_test']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -3918,25 +3943,30 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [2]
+            runs_to_do = [2, 3]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
-                cf.load_run(drive, series, run_num, extract_arrays=True)
-                
+                cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
+
                 #winske_summary_plots(save=True)
-                #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
-                #winske_magnetic_density_plot()
+                plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
+                winske_magnetic_density_plot()
+                #disp.plot_kt_winske()
+                #disp.plot_fourier_mode_timeseries(it_max=None)
                 
-                #ggg.straight_line_fit()
-                
+                #plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=1.0)
+                #ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7)
+
                 #plot_abs_with_boundary_parameters()
-                #field_energy_vs_time(save=True)
     
                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
+                #for comp in ['By', 'Bz']:        
+                #    plot_tx(component=comp, saveas='tx_plot', save=True, tmax=None, remove_ND=True, normalize=True)
+                
                 #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False, remove_ND=True)
                 
                 #get_reflection_coefficient()

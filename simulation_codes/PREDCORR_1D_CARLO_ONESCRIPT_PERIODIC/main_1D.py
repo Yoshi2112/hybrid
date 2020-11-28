@@ -84,16 +84,13 @@ def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
 
 
 @nb.njit()
-def uniform_gaussian_distribution_quiet():
+def quiet_start_bimaxwellian():
     '''Creates an N-sampled normal distribution across all particle species within each simulation cell
 
     OUTPUT:
         pos -- 1xN array of particle positions. Pos[0] is uniformly distributed with boundaries depending on its temperature type
         vel -- 3xN array of particle velocities. Each component initialized as a Gaussian with a scale factor determined by the species perp/para temperature
         idx -- N   array of particle indexes, indicating which species it belongs to. Coded as an 8-bit signed integer, allowing values between +/-128
-    
-    New code: Removed all 3D position things because we won't need it for long. Check this later, since its easy to change
-            Also removed all references to dist_type since initializing particles in the middle is stupid.
     '''
     pos = np.zeros(N, dtype=np.float64)
     vel = np.zeros((3, N), dtype=np.float64)
@@ -101,12 +98,9 @@ def uniform_gaussian_distribution_quiet():
     np.random.seed(seed)
 
     for jj in range(Nj):
-        idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle idx
-        
-        sf_par = np.sqrt(kB *  Tpar[jj] /  mass[jj])  # Scale factors for velocity initialization
-        sf_per = np.sqrt(kB *  Tper[jj] /  mass[jj])
-        
+        idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle idx        
         half_n = nsp_ppc[jj] // 2                     # Half particles per cell - doubled later
+       
         if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
             NC_load = NX
         else:
@@ -135,27 +129,51 @@ def uniform_gaussian_distribution_quiet():
             pos[st: en]-= NC_load*dx/2              
             
             # Set velocity for half: Randomly Maxwellian
-            vel[0, st: en] = np.random.normal(0, sf_par, half_n)  
-            vel[1, st: en] = np.random.normal(0, sf_per, half_n)
-            vel[2, st: en] = np.random.normal(0, sf_per, half_n)
+            vel[0, st: en] = np.random.normal(0, vth_par[ jj], half_n)  
+            vel[1, st: en] = np.random.normal(0, vth_perp[jj], half_n)
+            vel[2, st: en] = np.random.normal(0, vth_perp[jj], half_n)
 
             # Set Loss Cone Distribution: Reinitialize particles in loss cone (move to a function)
             if homogenous == 0 and temp_type[jj] == 1:
-                LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj)
+                LCD_by_rejection(pos, vel, vth_par[jj], vth_perp[jj], st, en, jj)
                 
             # Quiet start : Initialize second half
-            if quiet_start == 1:
-                vel[0, en: en + half_n] = vel[0, st: en] *  1.0     # Set parallel
-            else:
-                vel[0, en: en + half_n] = vel[0, st: en] * -1.0     # Set anti-parallel
-                
             pos[en: en + half_n]    = pos[st: en]                   # Other half, same position
+            vel[0, en: en + half_n] = vel[0, st: en] *  1.0         # Set parallel
             vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
             vel[2, en: en + half_n] = vel[2, st: en] * -1.0
             
-            vel[0, st: en + half_n] += drift_v[jj]                  # Add drift offset
+            vel[0, st: en + half_n] += drift_v[jj] * va             # Add drift offset
             
-            acc                    += half_n * 2
+            acc                     += half_n * 2
+    return pos, vel, idx
+
+
+@nb.njit()
+def uniform_bimaxwellian():
+    np.random.seed(seed)
+    pos   = np.zeros(N)
+    vel   = np.zeros((3, N))
+    idx   = np.zeros(N, dtype=np.uint8)
+
+    # Initialize unformly in space, gaussian in 3-velocity
+    for jj in range(Nj):
+        acc = 0
+        idx[idx_start[jj]: idx_end[jj]] = jj
+        
+        for ii in range(NX):
+            n_particles = nsp_ppc[jj]
+
+            for kk in range(n_particles):
+                pos[idx_start[jj] + acc + kk] = dx*(float(kk) / n_particles + ii)
+              
+            vel[0, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, vth_par[jj],  n_particles) + drift_v[jj] * va
+            vel[1, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, vth_perp[jj], n_particles)
+            vel[2, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, vth_perp[jj], n_particles)
+                        
+            acc += n_particles
+    
+    pos    -= 0.5*NX*dx
     return pos, vel, idx
 
 
@@ -175,16 +193,19 @@ def initialize_particles():
         W_mag  -- Initial particle weights on B-grid
         idx    -- Particle type index
     '''
-    pos, vel, idx = uniform_gaussian_distribution_quiet()
+    if quiet_start == 1:
+        pos, vel, idx = quiet_start_bimaxwellian()
+    else:
+        pos, vel, idx = uniform_bimaxwellian()
+
+    Ie         = np.zeros(N,      dtype=np.uint16)
+    Ib         = np.zeros(N,      dtype=np.uint16)
+    W_elec     = np.zeros((3, N), dtype=np.float64)
+    W_mag      = np.zeros((3, N), dtype=np.float64)
     
-    Ie         = np.zeros(N,      dtype=nb.uint16)
-    Ib         = np.zeros(N,      dtype=nb.uint16)
-    W_elec     = np.zeros((3, N), dtype=nb.float64)
-    W_mag      = np.zeros((3, N), dtype=nb.float64)
-    
-    Bp         = np.zeros((3, N), dtype=nb.float64)
-    Ep         = np.zeros((3, N), dtype=nb.float64)
-    temp_N     = np.zeros((N),    dtype=nb.float64)
+    Bp         = np.zeros((3, N), dtype=np.float64)
+    Ep         = np.zeros((3, N), dtype=np.float64)
+    temp_N     = np.zeros((N),    dtype=np.float64)
     
     assign_weighting_TSC(pos, Ie, W_elec)
     return pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, temp_N
@@ -1059,11 +1080,11 @@ def cross_product(A, B, C):
 
 
 @nb.njit()
-def interpolate_edges_to_center(B, interp, zero_boundaries=False):
+def interpolate_edges_to_center(B, interp, zero_boundaries=True):
     ''' 
     Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
     with a 3D array (e.g. B). Second derivative y2 is calculated on the B-grid, with
-    forwards/backwards difference used for endpoints.
+    forwards/backwards difference used for endpoints. (i.e. y2 at data points)
     
     interp has one more gridpoint than required just because of the array used. interp[-1]
     should remain zero.
@@ -1071,38 +1092,82 @@ def interpolate_edges_to_center(B, interp, zero_boundaries=False):
     This might be able to be done without the intermediate y2 array since the interpolated
     points don't require previous point values.
     
+    As long as B-grid is filled properly in the push_B() routine, this shouldn't have to
+    vary for homogenous boundary conditions
+    
     ADDS B0 TO X-AXIS ON TOP OF INTERPOLATION
     '''
     y2      = np.zeros(B.shape, dtype=nb.float64)
     interp *= 0.
+    mx      = B.shape[0] - 1
     
     # Calculate second derivative
     for jj in range(1, B.shape[1]):
         
         # Interior B-nodes, Centered difference
-        for ii in range(1, NC):
+        for ii in range(1, mx):
             y2[ii, jj] = B[ii + 1, jj] - 2*B[ii, jj] + B[ii - 1, jj]
                 
         # Edge B-nodes, Forwards/Backwards difference
         if zero_boundaries == True:
             y2[0 , jj] = 0.
-            y2[NC, jj] = 0.
+            y2[mx, jj] = 0.
         else:
             y2[0,  jj] = 2*B[0 ,    jj] - 5*B[1     , jj] + 4*B[2     , jj] - B[3     , jj]
-            y2[NC, jj] = 2*B[NC,    jj] - 5*B[NC - 1, jj] + 4*B[NC - 2, jj] - B[NC - 3, jj]
+            y2[mx, jj] = 2*B[mx,    jj] - 5*B[mx - 1, jj] + 4*B[mx - 2, jj] - B[mx - 3, jj]
         
     # Do spline interpolation: E[ii] is bracketed by B[ii], B[ii + 1]
     for jj in range(1, B.shape[1]):
-        for ii in range(NC):
+        for ii in range(mx):
             interp[ii, jj] = 0.5 * (B[ii, jj] + B[ii + 1, jj] + (1/6) * (y2[ii, jj] + y2[ii + 1, jj]))
     
     # Add B0x to interpolated array
-    for ii in range(NC):
+    for ii in range(mx):
         interp[ii, 0] = eval_B0x(E_nodes[ii])
+    return
+
+
+@nb.njit()
+def interpolate_centers_to_edge(E, interp, zero_boundaries=False):
+    '''
+    As above, but interpolating center values (E) to edge positions (B)
     
-    # This bit could be removed to allow B0x to vary in green cells naturally
-    # interp[:ND,      0] = interp[ND,    0]
-    # interp[ND+NX+1:, 0] = interp[ND+NX, 0]
+    Might need forward/backwards difference for interpolation boundary cells
+    at ii = 0, NC
+    '''
+    y2      = np.zeros(E.shape, dtype=np.float64)
+    interp *= 0.
+    mx      = E.shape[0]
+    
+    # Calculate y2 at E-field data points
+    for jj in range(E.shape[1]):
+        
+        # Interior E-nodes, Centered difference
+        for ii in range(1, mx - 1):
+            y2[ii, jj] = E[ii + 1, jj] - 2*E[ii, jj] + E[ii - 1, jj]
+                
+        # Edge E-nodes, Forwards/Backwards difference
+        if zero_boundaries == True:
+            y2[0 ,     jj] = 0.
+            y2[mx - 1, jj] = 0.
+        else:
+            y2[0,      jj] = 2*E[0     , jj] - 5*E[1     , jj] + 4*E[2     , jj] - E[3     , jj]
+            y2[mx - 1, jj] = 2*E[mx - 1, jj] - 5*E[mx - 2, jj] + 4*E[mx - 3, jj] - E[mx - 4, jj]
+
+    # Return to test y2
+    #y2 /= (dx ** 2)
+    #return y2
+    
+    # Do spline interpolation: B[ii] is bracketed by E[ii - 1], E[ii]
+    # Center points only
+    for jj in range(E.shape[1]):
+        for ii in range(1, mx):
+            interp[ii, jj] = 0.5 * (E[ii - 1, jj] + E[ii, jj] + (1/6) * (y2[ii - 1, jj] + y2[ii, jj]))
+    
+    if field_periodic == True:
+        for jj in range(E.shape[1]):
+            interp[0,  jj] = interp[mx - 1, jj]
+            interp[mx, jj] = interp[1, jj]
     return
 
 
@@ -1127,6 +1192,8 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
     after wave-particle interactions are complete and energetic particles are slower. This
     criteria is higher in order to provide a little hysteresis and prevent constantly switching
     timesteps.
+    
+    Shoji code blowing up because of Eacc_ts - what is this and does it matter?
     '''
     interpolate_edges_to_center(B, B_center)
     B_magnitude     = np.sqrt(B_center[ND:ND+NX+1, 0] ** 2 +
@@ -1136,7 +1203,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
     ion_ts          = orbit_res / gyfreq
     
     if E[:, 0].max() != 0:
-        elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / np.abs(vel).max()).max())               # Electron acceleration "frequency"
+        elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / np.abs(vel).max()).max())    # E-field acceleration "frequency"
         Eacc_ts         = freq_res / elecfreq                            
     else:
         Eacc_ts = ion_ts
@@ -1157,7 +1224,6 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
 
         velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T,temp_N,-0.5*DT)   # De-sync vel/pos 
         print('Timestep halved. Syncing particle velocity...')
-
     return qq, DT, max_inc, part_save_iter, field_save_iter, damping_array
 
 
@@ -1267,12 +1333,14 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
                      dist_type   = dist_type,
                      mass        = mass,
                      charge      = charge,
-                     drift_v     = drift_v,
+                     drift_v     = drift_v*va,
                      nsp_ppc     = nsp_ppc,
                      density     = density,
                      N_species   = N_species,
-                     Tpar        = Tpar,
-                     Tper        = Tper,
+                     Tpar        = None,
+                     Tperp       = None,
+                     vth_par     = vth_par,
+                     vth_perp    = vth_perp,
                      Bc          = Bc,
                      Te0         = Te0)
     print('Particle data saved')
@@ -1367,9 +1435,10 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     If no saves, steps_to_go = max_inc
     '''
     # Check timestep
-    qq, DT, max_inc, part_save_iter, field_save_iter, damping_array \
-    = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, Ep, Bp, v_prime, S, T,temp_N,\
-                     qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array)
+    if adaptive_timestep == True:
+        qq, DT, max_inc, part_save_iter, field_save_iter, damping_array \
+        = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De, Ep, Bp, v_prime, S, T,temp_N,\
+                         qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array)
             
     # Move particles, collect moments
     advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T,temp_N,\
@@ -1452,17 +1521,14 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     return qq, DT, max_inc, part_save_iter, field_save_iter
 
 
-def control_loop():
-    return
-
-
 
 ### ##
 ### MAIN GLOBAL CONTROL
 ### ##
 
-    
-event_inputs = False
+# A few internal flags
+event_inputs      = False      # Can be set for lists of input files for easy batch-runs
+adaptive_timestep = True       # Disable adaptive timestep if you hate when it doubles
 
 #################################
 ### FILENAMES AND DIRECTORIES ###
@@ -1494,9 +1560,9 @@ with open(run_input, 'r') as f:
 
     save_particles    = int(f.readline().split()[1])   # Save data flag    : For later analysis
     save_fields       = int(f.readline().split()[1])   # Save plot flag    : To ensure hybrid is solving correctly during run
-    seed              = int(f.readline().split()[1])   # RNG Seed          : Set to enable consistent results for parameter studies
+    seed              = f.readline().split()[1]        # RNG Seed          : Set to enable consistent results for parameter studies
     cpu_affin         = f.readline().split()[1]        # Set CPU affinity for run as list. Set as None to auto-assign. 
-
+    
     homogenous        = int(f.readline().split()[1])   # Set B0 to homogenous (as test to compare to parabolic)
     particle_periodic = int(f.readline().split()[1])   # Set particle boundary conditions to periodic
     particle_reflect  = int(f.readline().split()[1])   # Set particle boundary conditions to reflective
@@ -1541,6 +1607,11 @@ if run == '-':
 else:
     run = int(run)
 
+if seed == '-':
+    seed = None
+else:
+    seed = int(seed)
+
 # Set plasma parameter file
 if event_inputs == False:
     plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
@@ -1570,10 +1641,13 @@ with open(plasma_input, 'r') as f:
     E_e        = float(f.readline().split()[1])
     beta_flag  = int(f.readline().split()[1])
 
-    L         = float(f.readline().split()[1])         # Field line L shell
-    B_eq      = f.readline().split()[1]                # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
+    L         = float(f.readline().split()[1])           # Field line L shell
+    B_eq      = f.readline().split()[1]                  # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
+    B_xmax_ovr= f.readline().split()[1]
 
-    
+charge    *= q                                           # Cast species charge to Coulomb
+mass      *= mp                                          # Cast species mass to kg
+
 #####################################
 ### DERIVED SIMULATION PARAMETERS ###
 #####################################
@@ -1595,7 +1669,7 @@ if particle_reflect + particle_reinit + particle_periodic == 0:
     particle_open = 1
     
 if B_eq == '-':
-    B_eq      = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
+    B_eq = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
 else:
     B_eq = float(B_eq)
     
@@ -1603,31 +1677,28 @@ if rc_hwidth == '-':
     rc_hwidth = 0
     
 if beta_flag == 0:
-    # Input energies as (perpendicular) eV
+    # Input energies in eV
     beta_per   = None
-    Te0_scalar = E_e   * 11603.
-    Tpar       = E_par * 11603.
-    Tper       = E_per * 11603.
-else:    
-    # Input energies in terms of a (perpendicular) beta
-    Tpar       = E_par * B_eq ** 2 / (2 * mu0 * ne * kB)
-    Tper       = E_per * B_eq ** 2 / (2 * mu0 * ne * kB)
+    Te0_scalar = q * E_e / kB
+    vth_perp   = np.sqrt(charge *  E_per /  mass)    # Perpendicular thermal velocities
+    vth_par    = np.sqrt(charge *  E_par /  mass)    # Parallel thermal velocities
+else:
+    # Input energies in terms of beta
+    kbt_par    = E_par * B_eq ** 2 / (2 * mu0 * ne)
+    kbt_per    = E_per * B_eq ** 2 / (2 * mu0 * ne)
     Te0_scalar = E_e   * B_eq ** 2 / (2 * mu0 * ne * kB)
+    vth_perp   = np.sqrt(kbt_per /  mass)                # Perpendicular thermal velocities
+    vth_par    = np.sqrt(kbt_par /  mass)                # Parallel thermal velocities
 
+rho        = (mass*density).sum()                        # Mass density for alfven velocity calc.
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
-va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed at equator: Assuming pure proton plasma
+va         = B_eq / np.sqrt(mu0*rho)                     # Alfven speed at equator: Assuming pure proton plasma
+gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
+dx         = va / gyfreq_eq                              # Alternate method of calculating dx (better for multicomponent plasmas)
+#dx         = dxm * c / wpi                              # Spatial cadence, based on ion inertial length
 
-dx         = dxm * c / wpi                               # Spatial cadence, based on ion inertial length
 xmax       = NX // 2 * dx                                # Maximum simulation length, +/-ve on each side
 xmin       =-NX // 2 * dx
-
-charge    *= q                                           # Cast species charge to Coulomb
-mass      *= mp                                          # Cast species mass to kg
-drift_v   *= va                                          # Cast species velocity to m/s
-
-vth_perp   = np.sqrt(kB *  Tper /  mass)
-vth_par    = np.sqrt(kB *  Tpar /  mass)
-
 Nj         = len(mass)                                   # Number of species
 n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
 
@@ -1645,7 +1716,7 @@ N = N_species.sum() + spare_ppc.sum()
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
-        
+
 ############################
 ### MAGNETIC FIELD STUFF ###
 ############################
@@ -1682,12 +1753,11 @@ else:
     dlam   = 1e-5                                            # Latitude increment in radians
     fx_len = 0.0; ii = 1                                     # Arclength/increment counters
     while fx_len < xmax:
-        lam_i   = dlam * ii                                                             # Current latitude
-        d_len   = L * RE * np.cos(lam_i) * np.sqrt(4.0 - 3.0*np.cos(lam_i) ** 2) * dlam     # Length increment
-        fx_len += d_len                                                                 # Accrue arclength
-        ii     += 1                                                                     # Increment counter
+        theta_xmax = dlam * ii                                                             # Current latitude
+        d_len      = L * RE * np.cos(theta_xmax) * np.sqrt(4.0 - 3.0*np.cos(theta_xmax) ** 2) * dlam # Length increment
+        fx_len    += d_len                                                                 # Accrue arclength
+        ii        += 1                                                                     # Increment counter
 
-    theta_xmax  = lam_i                                                                 # Latitude of simulation boundary
     r_xmax      = L * RE * np.cos(theta_xmax) ** 2                                      # Radial distance of simulation boundary
     B_xmax      = B_eq*np.sqrt(4 - 3*np.cos(theta_xmax)**2)/np.cos(theta_xmax)**6       # Magnetic field intensity at boundary
     a           = (B_xmax / B_eq - 1) / xmax ** 2                                       # Parabolic scale factor: Fitted to B_eq, B_xmax
@@ -1701,7 +1771,6 @@ else:
     loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
 
 gyfreq     = q*B_xmax/ mp                                # Proton Gyrofrequency (rad/s) at boundary (highest)
-gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
 k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
 qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
 
@@ -1709,9 +1778,6 @@ if particle_open == 1:
     inject_rate = nsp_ppc * (vth_par / dx) / np.sqrt(2 * np.pi)
 else:
     inject_rate = nsp_ppc * 0.0
-    
-species_plasfreq_sq   = (density * charge ** 2) / (mass * e0)
-species_gyrofrequency = qm_ratios * B_eq
 
 # E-field nodes around boundaries (used for sources and E-fields)
 lo1 = ND - 1 ; lo2 = ND - 2             # Left outer (to boundary)
@@ -1719,7 +1785,15 @@ ro1 = ND + NX; ro2 = ND + NX + 1        # Right outer
 
 li1 = ND         ; li2 = ND + 1         # Left inner
 ri1 = ND + NX - 1; ri2 = ND + NX - 2    # Right inner
-    
+
+## DIAGNOSTICS ##
+#print(wpi / gyfreq)
+#print(c   / va)
+#print(va / gyfreq)
+#print(c / wpi)
+#sys.exit()
+#################
+
 ##############################
 ### INPUT TESTS AND CHECKS ###
 ##############################
@@ -1761,23 +1835,15 @@ else:
     print('CPU affinity not set.')
 
 if theta_xmax > lambda_L:
-    print('--------------------------------------------------')
-    print('WARNING : SIMULATION DOMAIN LONGER THAN FIELD LINE')
-    print('DO SOMETHING ABOUT IT')
-    print('--------------------------------------------------')
+    print('ABORT : SIMULATION DOMAIN LONGER THAN FIELD LINE')
     sys.exit()
 
 if particle_periodic + particle_reflect + particle_reinit > 1:
-    print('--------------------------------------------------')
-    print('WARNING : ONLY ONE PARTICLE BOUNDARY CONDITION ALLOWED')
-    print('DO SOMETHING ABOUT IT')
-    print('--------------------------------------------------')
+    print('ABORT : ONLY ONE PARTICLE BOUNDARY CONDITION ALLOWED')
+    sys.exit()
     
 if field_periodic == 1 and damping_multiplier != 0:
     damping_multiplier = 0.0
-    print('---------------------------------------------')
-    print('PERIODIC FIELDS SELECTED :: DISABLING DAMPING')
-    print('---------------------------------------------')
     
 if  os.name != 'posix':
     os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
@@ -1840,10 +1906,10 @@ if __name__ == '__main__':
             sec          = rem %  60
             
             print('Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(qq, max_inc, hrs, mins, sec))
-            
+        
         qq       += 1
         sim_time += DT
-    
+        
         if qq == 2:
             print('First loop complete.')
             
@@ -1851,4 +1917,7 @@ if __name__ == '__main__':
     
     if save_fields == 1 or save_particles == 1:
         add_runtime_to_header(runtime)
+        fin_path = '%s/%s/run_%d/run_finished.txt' % (drive, save_path, run)
+        with open(fin_path, 'w') as open_file:
+            pass
     print("Time to execute program: {0:.2f} seconds".format(runtime))

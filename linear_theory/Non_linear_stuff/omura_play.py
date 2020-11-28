@@ -807,17 +807,36 @@ def plot_optimum_amplitudes():
     return
 
 
+def just_random():
+    name    = np.array(['H'  ])
+    mass    = np.array([1.0  ]) * mp
+    charge  = np.array([1.0  ]) * qp
+    density = np.array([200.0]) * 1e6
+    ani     = np.array([0.0  ])
+    tper    = np.array([0.0  ])
+    B0      = 200e-9
+    
+    Species, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
+    
+    w = 0.3 * PP['pcyc_rad']
+    
+    k = get_k_cold(w, Species)
+    print(k)
+    return
+
 
 if __name__ == '__main__':
     '''
     Ideas to try:
         - Make frequencies constant with integration. (This won't fix threshold issues)
     '''
+    just_random()
+    
     # --- From Omura et al. (2010)
     #plot_omura2010_velocities_and_dispersion()
     #plot_omura2010_NLGrowth()
     #plot_omura2010_freqamp()
-    calculate_threshold_amplitude()
+    #calculate_threshold_amplitude()
     
     # --- Check Chen et al. (2011) equations
     #plot_check_group_velocity_chen()
