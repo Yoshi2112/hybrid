@@ -30,7 +30,12 @@ B_surf = 3.12e-5
 
 def get_k_cold(w, Species):
     '''
-    Calculate the k of a specific angular frequency w in a cold multicomponent plasma
+    Calculate the k of a specific angular frequency w in a cold
+    multicomponent plasma. Assumes a cold plasma (i.e. negates 
+    thermal effects)
+    
+    This will give the cold plasma dispersion relation for the Species array
+    specified, since the CPDR is surjective in w (i.e. only one possible k for each w)
     '''
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -49,14 +54,6 @@ def get_gamma_c(w, Species):
     for ii in range(Species.shape[0] - 1):
         cold_sum += Species[ii]['plasma_freq_sq'] / (Species[ii]['gyrofreq'] - w)
     return cold_sum
-
-def get_cold_dispersion_omura(w, Species):
-    '''
-    UNFINISHED
-    '''
-    k     = get_k_cold(w, Species)
-    gam_c = get_gamma_c(w, Species)
-    return
 
 def get_group_velocity(w, k, Species):
     gam_c = get_gamma_c(w, Species) 
@@ -535,38 +532,51 @@ def plot_omura2010_velocities_and_dispersion():
     ax.set_ylim(0, 3.5)
     
     ax.set_title('Cold Plasma Dispersion Relation')
-    ax.set_xlabel('f (Hz)', fontsize=14)
-    ax.set_ylabel(r'$\frac{1}{\lambda}$ ($m^{-1}$)', rotation=0, fontsize=14, labelpad=30)
-        
-        
-    # Resonance and Group Velocities plot (Figure 4a,b validated)
-    f_max  = 4.0
-    f_vals = np.linspace(0.0, f_max, 10000)
-    w_vals = 2 * np.pi * f_vals
+    ax.set_ylabel('f (Hz)', fontsize=14)
+    ax.set_xlabel(r'$\frac{1}{\lambda}$ ($m^{-1}$)', rotation=0, fontsize=14, labelpad=30)
     
-    Species, PP = define_omura2010_parameters()
-    V_group, V_phase, V_resonance = get_velocities(w_vals, Species, PP)
-
-    fig, ax = plt.subplots()
-    ax.plot(f_vals, V_resonance/1e3)
-    ax.set_xlabel('f (Hz)', fontsize=14)
-    ax.set_ylabel('$V_R$\nkm/s', rotation=0, fontsize=14, labelpad=30)
-    ax.set_xlim(0, f_max)
-    ax.set_ylim(-1500, 0)
-
-    fig, ax = plt.subplots()
-    ax.plot(f_vals, V_group/1e3)
-    ax.set_xlabel('f (Hz)', fontsize=14)
-    ax.set_ylabel('$V_g$\nkm/s', rotation=0, fontsize=14, labelpad=30)
-    ax.set_xlim(0, f_max)
-    ax.set_ylim(0, 250)
+    # Cold dispersion from get_k_cold():
+    cold_f = np.linspace(0.0, 3.5, 1000)
+    cold_k = get_k_cold(2*np.pi*cold_f, Species)
+    wlen   = 1e-3 * 2*np.pi / cold_k
     
     fig, ax = plt.subplots()
-    ax.plot(f_vals, V_phase/1e3)
-    ax.set_xlabel('f (Hz)', fontsize=14)
-    ax.set_ylabel('$V_p$\nkm/s', rotation=0, fontsize=14, labelpad=30)
-    ax.set_xlim(0, f_max)
-    #ax.set_ylim(0, 250)
+    ax.plot(1/wlen, cold_f, c='k')
+    ax.set_xlabel('k')
+    ax.set_ylabel('w')
+    ax.set_ylim(0, 3.5)
+    ax.set_xlim(0, 0.025)
+    
+    
+    if False:
+        # Resonance and Group Velocities plot (Figure 4a,b validated)
+        f_max  = 4.0
+        f_vals = np.linspace(0.0, f_max, 10000)
+        w_vals = 2 * np.pi * f_vals
+        
+        Species, PP = define_omura2010_parameters()
+        V_group, V_phase, V_resonance = get_velocities(w_vals, Species, PP)
+    
+        fig, ax = plt.subplots()
+        ax.plot(f_vals, V_resonance/1e3)
+        ax.set_xlabel('f (Hz)', fontsize=14)
+        ax.set_ylabel('$V_R$\nkm/s', rotation=0, fontsize=14, labelpad=30)
+        ax.set_xlim(0, f_max)
+        ax.set_ylim(-1500, 0)
+    
+        fig, ax = plt.subplots()
+        ax.plot(f_vals, V_group/1e3)
+        ax.set_xlabel('f (Hz)', fontsize=14)
+        ax.set_ylabel('$V_g$\nkm/s', rotation=0, fontsize=14, labelpad=30)
+        ax.set_xlim(0, f_max)
+        ax.set_ylim(0, 250)
+        
+        fig, ax = plt.subplots()
+        ax.plot(f_vals, V_phase/1e3)
+        ax.set_xlabel('f (Hz)', fontsize=14)
+        ax.set_ylabel('$V_p$\nkm/s', rotation=0, fontsize=14, labelpad=30)
+        ax.set_xlim(0, f_max)
+        #ax.set_ylim(0, 250)
     return
 
 
@@ -829,11 +839,9 @@ if __name__ == '__main__':
     '''
     Ideas to try:
         - Make frequencies constant with integration. (This won't fix threshold issues)
-    '''
-    just_random()
-    
+    '''    
     # --- From Omura et al. (2010)
-    #plot_omura2010_velocities_and_dispersion()
+    plot_omura2010_velocities_and_dispersion()
     #plot_omura2010_NLGrowth()
     #plot_omura2010_freqamp()
     #calculate_threshold_amplitude()

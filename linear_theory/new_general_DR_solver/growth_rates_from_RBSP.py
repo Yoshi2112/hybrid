@@ -59,7 +59,7 @@ def get_raw_data(rbsp_path):
 
 
 def extract_species_arrays(rbsp_path, time_start, time_end, probe, pad,
-                           cmp, return_raw_ne=False, HM_filter_mhz=50):
+                           cmp=[70, 20, 10], return_raw_ne=False, HM_filter_mhz=50):
     '''
     Data module only extracts the 3 component species dictionary from HOPE and RBSPICE 
     energetic measurements. This function creates the single axis arrays required to 

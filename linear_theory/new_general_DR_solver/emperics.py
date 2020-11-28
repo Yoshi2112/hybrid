@@ -8,7 +8,6 @@ Emperical quantities derived from models, such as the Sheely density models
 and the dipole magnetic field magnitude
 """
 import numpy as np
-from geopack import geopack
 import matplotlib.pyplot as plt
 
 def geomagnetic_magnitude(L_shell, MLAT=0.):
@@ -121,6 +120,7 @@ def plot_field_slice(max_L):
        
     Nah for now just plot in GSM around xy plane (z = 0) up to max_L in R_E
     '''    
+    from geopack import geopack
     ds    = 0.1
     x_gsm = np.arange(-max_L, max_L, ds)
     y_gsm = np.arange(-max_L, max_L, ds)
