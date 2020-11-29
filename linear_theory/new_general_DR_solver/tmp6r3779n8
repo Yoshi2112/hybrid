@@ -18,9 +18,6 @@ import extract_parameters_from_data   as data
 from growth_rates_from_RBSP         import extract_species_arrays
 from dispersion_solver_multispecies import create_species_array
 
-c  = 3e8
-qp = 1.602e-19
-mp = 1.673e-27
 
 def Z(arg):
     '''Return Plasma Dispersion Function : Normalized Fadeeva function'''
@@ -107,7 +104,7 @@ def linear_growth_rates(w, Species):
     return temporal_growth_rate, convective_growth_rate
 
 
-def plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad, norm=None, norm_B0=200.):
+def plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad):
     '''
     Main function that downloads the data, queries the growth rates, and 
     plots a 2D colorplot of the temporal and convective growth rates. Might
@@ -119,18 +116,11 @@ def plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad, norm=None,
     different results for when there are large perturbations in the background
     field due to the presence of HM?
     
-    Also option to normalize based on set B rather than B0 at each time (equivalent
-    to absolute measure)
-    
-    norm: None       (no normalization applied)
-          'local'    (normalized based on B0 at each time)
-          'absolute' (normalized based on B0 of norm_B0, default 200nT)
-    
     How to set growth rate min/max?
     '''
     # Frequencies over which to solve (determines frequency cadence)
     Nf    = 1000
-    f_max = 1.2
+    f_max = 5.0
     f_min = 0.0
     freqs = np.linspace(f_max, f_min, Nf)
     w     = 2 * np.pi * freqs
@@ -149,44 +139,21 @@ def plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad, norm=None,
     TGR = np.zeros((Nt, Nf), dtype=np.float64)
     CGR = np.zeros((Nt, Nf), dtype=np.float64)
     
-    # Calculate growth rate, normalize if flagged
-    try:
-        pcyc_abs = qp * norm_B0 * 1e-9 / mp
-    except:
-        print('Something up with norm_B0 flag = {}. Defaulting to 200nT'.format(norm_B0))
-        pcyc_abs = qp * 200e-9 / mp
-        
+    # Need to put this bit in a time loop
     for ii in range(times.shape[0]):
         Species, PP = create_species_array(B0[ii], name, mass, charge, density[:, ii],
                                             tper[:, ii], ani[:, ii])
         
+        # Do I want to return Vg from this as well?
         TGR[ii], CGR[ii] = linear_growth_rates(w, Species)
-        
-        # Normalize
-        if norm is not None:
-            if norm == 'local':
-                pcyc_local = qp * PP['B0'] / mp
-                TGR[ii]   /= pcyc_local
-                CGR[ii]   /= pcyc_local
-            else:
-                if norm != 'absolute': 
-                    print('Unknown normalization flag {}. Defaulting to absolute.'.format(norm))
-                TGR[ii] /= pcyc_abs
-                CGR[ii] /= pcyc_abs
-                
+    
+    
     if True:
         # Set growth rate plot limits based on results
-        TGR_min  = 0.0
-        #TGR_mean = TGR[np.isnan(TGR) == False].mean()
-        TGR_max  = TGR[np.isnan(TGR) == False].max()
-        
-        CGR_min  = 0.0
-        #CGR_mean = CGR[np.isnan(CGR) == False].mean()
-        CGR_max  = CGR[np.isnan(CGR) == False].max()
-        
-        if norm is not None:
-            TGR_max = 1.0
-            CGR_max = None
+        TGR_min = 0.0
+        TGR_max = TGR[np.isnan(TGR) == False].max()
+        CGR_min = 0.0
+        CGR_max = CGR[np.isnan(CGR) == False].max()
         
         # Plot the things
         plt.ioff()
@@ -199,8 +166,8 @@ def plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad, norm=None,
         axes[0].set_ylim(f_min, f_max)
         
         divider1= make_axes_locatable(axes[0])
-        cax1    = divider1.append_axes("right", size="2%", pad=0.5)
-        fig.colorbar(im1, cax=cax1, label='$\gamma$', orientation='vertical', extend='both')
+        cax1    = divider1.append_axes("right", size="2%", pad=0.00)
+        cbar1   = fig.colorbar(im1, cax=cax1, label='Flux', orientation='vertical')
     
         im2 = axes[1].pcolormesh(times, freqs, CGR.T, vmin=CGR_min, vmax=CGR_max)
         axes[1].set_title('Convective Growth Rate')
@@ -210,8 +177,8 @@ def plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad, norm=None,
         axes[1].set_xlabel('Times (UT)')
         
         divider2= make_axes_locatable(axes[1])
-        cax2    = divider2.append_axes("right", size="2%", pad=0.5)
-        fig.colorbar(im2, cax=cax2, label='S', orientation='vertical', extend='both')
+        cax2    = divider2.append_axes("right", size="2%", pad=0.00)
+        cbar2   = fig.colorbar(im2, cax=cax2, label='Flux', orientation='vertical')
         
         plt.show()
     
@@ -219,13 +186,13 @@ def plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad, norm=None,
 
 
 if __name__ == '__main__':
-    
+    c = 3e8
     
     rbsp_path = 'G://DATA//RBSP//'
     save_drive= 'G://'
     
-    time_start  = np.datetime64('2013-07-25T21:25:00')
-    time_end    = np.datetime64('2013-07-25T21:47:00')
+    time_start  = np.datetime64('2013-07-25T21:00:00')
+    time_end    = np.datetime64('2013-07-25T22:00:00')
     probe       = 'a'
     pad         = 0
     
@@ -233,4 +200,4 @@ if __name__ == '__main__':
     save_string = time_start.astype(object).strftime('%Y%m%d_%H%M_') + time_end.astype(object).strftime('%H%M')
     save_dir    = '{}NEW_LT//EVENT_{}//NEW_FIXED_DISPERSION_RESULTS//'.format(save_drive, date_string)
 
-    plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad, norm='absolute')
+    plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad)

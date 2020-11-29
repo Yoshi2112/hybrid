@@ -61,12 +61,14 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, nsec=1,
     '''
     Outputs as SI units: B0 in nT, densities in /m3, temperatures in eV (pseudo SI)
     
-    nsec is cadence of interpolated array in seconds
+    nsec is cadence of interpolated array in seconds. If None, defaults to using den_times
+    as interpolant.
     '''
     print('Loading and interpolating satellite data')
     
     # Cold (total?) electron plasma density
-    den_times, edens, dens_err = rfr.retrieve_RBSP_electron_density_data(rbsp_path, time_start, time_end, probe, pad=pad)
+    den_times, edens, dens_err = rfr.retrieve_RBSP_electron_density_data(rbsp_path, time_start, time_end,
+                                                                         probe, pad=pad)
 
     # Magnetic magnitude
     mag_times, raw_mags = rfl.load_magnetic_field(rbsp_path, time_start, time_end, probe, return_raw=True, pad=3600)
@@ -103,15 +105,19 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, nsec=1,
         spice_anis.append(this_anis)
     
     # Interpolation step
-    time_array  = np.arange(time_start, time_end, np.timedelta64(nsec, 's'), dtype='datetime64[us]')
-    
+    if nsec is None:
+        time_array = den_times.copy()
+        iedens     = edens.copy()
+    else:
+        time_array  = np.arange(time_start, time_end, np.timedelta64(nsec, 's'), dtype='datetime64[us]')
+        iedens = interpolate_ne(time_array, den_times, edens)
     
     ihope_dens , ihope_temp , ihope_anis  = interpolate_to_time(time_array, itime, hope_dens, hope_temp, hope_anis)
     ispice_dens, ispice_temp, ispice_anis = interpolate_to_time(time_array, spice_time, np.array(spice_dens),
                                                                  np.array(spice_temp), np.array(spice_anis))
     
     Bi     = interpolate_B(time_array, mag_times, filt_mags, nsec, LP_filter=False)
-    iedens = interpolate_ne(time_array, den_times, edens)
+    
     
     # Subtract energetic components from total electron density (assuming each is singly charged)
     cold_dens = iedens - ihope_dens.sum(axis=0) - ispice_dens.sum(axis=0)
@@ -239,18 +245,19 @@ if __name__ == '__main__':
     _pad        = 0
     
     #convert_data_to_hybrid_plasmafile(_time_start, _time_end, _probe, _pad)
-    magfold = _rbsp_path + 'EMFISIS//MAG//'
-    magname = 'rbsp-a_magnetometer_hires-gse_emfisis-L3_20130725_v1.3.4.cdf'
-    magfile = magfold + magname
-    if os.path.exists(magfile) == True:
-        print('File exists')
-    else:
-        print('File not found')
-        
-    cdf_pointer = pycdf.CDF(magfile) 
-    print(cdf_pointer.keys())
-    
     if False:
+        magfold = _rbsp_path + 'EMFISIS//MAG//'
+        magname = 'rbsp-a_magnetometer_hires-gse_emfisis-L3_20130725_v1.3.4.cdf'
+        magfile = magfold + magname
+        if os.path.exists(magfile) == True:
+            print('File exists')
+        else:
+            print('File not found')
+            
+        cdf_pointer = pycdf.CDF(magfile) 
+        print(cdf_pointer.keys())
+    
+    if True:
         _times, _B0, _cold_dens, _hope_dens, _hope_temp, _hope_anis, _spice_dens, _spice_temp, _spice_anis =\
             load_and_interpolate_plasma_params(_time_start, _time_end, _probe, _pad, HM_filter_mhz=50)
         
@@ -291,6 +298,7 @@ if __name__ == '__main__':
         st, en   = ascr.boundary_idx64(mag_times, _time_start, _time_end)
         _st, _en = ascr.boundary_idx64(_times,    _time_start, _time_end)
         
+        axes[0].set_title('Magnetic field and Cold e/HOPE/RBSPICE ion densities')
         axes[0].plot(mag_times[ st: en],  1e-9*B0[ st: en], c='k', label='raw')
         axes[0].plot(   _times[_st:_en],      _B0[_st:_en], c='r', label='Filtered + Decimated', marker='o')
         axes[0].legend()
@@ -322,6 +330,7 @@ if __name__ == '__main__':
         
         # Also temp/anis for HOPE/RBSPICE (4 plots)
         fig2, axes2 = plt.subplots(4)
+        axes2[0].set_title('HOPE/RBSPICE Temperatures/Anisotropies')
         
         # HOPE Temps
         axes2[0].plot(itime, pdict['Tperp_p_30'] , c='r')

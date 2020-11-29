@@ -58,8 +58,8 @@ def get_raw_data(rbsp_path):
     return times, B0, cold_dens, hope_dens, hope_temp, hope_anis, spice_dens, spice_temp, spice_anis
 
 
-def extract_species_arrays(rbsp_path, time_start, time_end, probe, pad,
-                           cmp=[70, 20, 10], return_raw_ne=False, HM_filter_mhz=50):
+def extract_species_arrays(time_start, time_end, probe, pad, rbsp_path='G://DATA//RBSP//',
+                           cmp=[70, 20, 10], return_raw_ne=False, HM_filter_mhz=50, nsec=None):
     '''
     Data module only extracts the 3 component species dictionary from HOPE and RBSPICE 
     energetic measurements. This function creates the single axis arrays required to 
@@ -74,7 +74,7 @@ def extract_species_arrays(rbsp_path, time_start, time_end, probe, pad,
     '''
     times, B0, cold_dens, hope_dens, hope_temp, hope_anis, spice_dens, spice_temp, spice_anis\
         = data.load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_path=rbsp_path,
-                                                  HM_filter_mhz=HM_filter_mhz)
+                                                  HM_filter_mhz=HM_filter_mhz, nsec=nsec)
 
     Nt       = times.shape[0]
     _density = np.zeros((9, Nt), dtype=float)
@@ -106,10 +106,19 @@ def extract_species_arrays(rbsp_path, time_start, time_end, probe, pad,
         return times, B0, _name, _mass, _charge, _density, _tper, _ani, cold_dens
 
 
-def get_all_DRs(time_start, time_end, probe, pad, cmp, Nk=1000):
-
+def get_all_DRs(time_start, time_end, probe, pad, cmp, Nk=1000, nsec=None, suff='',
+                HM_filter_mhz=50):
+    '''
+    Calculate dispersion relation and temporal growth rate for all times between
+    time_start and time_end. Nk is resolution in k-space for each solution
+    (more = slower for each solutions). nsec is time cadence of interpolated
+    satellite parameters.
+    
+    suff kwarg for parameters varying only by flags.
+    '''
     times, B0, _name, _mass, _charge, _density, _tper, _ani, cold_dens = \
-    extract_species_arrays(_rbsp_path, time_start, time_end, probe, pad, cmp, return_raw_ne=True)
+    extract_species_arrays(time_start, time_end, probe, pad, cmp=cmp, 
+                           return_raw_ne=True, nsec=nsec, HM_filter_mhz=HM_filter_mhz)
     
     # Do O concentrations from 1-30 percent
     # Do He concentrations from 1-30 percent
@@ -125,7 +134,7 @@ def get_all_DRs(time_start, time_end, probe, pad, cmp, Nk=1000):
             _density[2] = cold_dens * O_rat
             
             comp        = np.array([H_rat, He_rat, O_rat])
-            data_path   = save_dir + 'DR_results_coldcomp_{:03}_{:03}_{:03}_{}.npz'.format(int(100*H_rat), int(100*He_rat), int(100*O_rat), save_string)
+            data_path   = save_dir + 'DR_results_coldcomp_{:03}_{:03}_{:03}_{}{}.npz'.format(int(100*H_rat), int(100*He_rat), int(100*O_rat), save_string, suff)
 
             if os.path.exists(data_path) == False:
                 Nt         = times.shape[0]
@@ -215,9 +224,11 @@ def plot_growth_rate_with_time(times, k_vals, all_WPDR, save=False, short=False,
         ax1.set_xlim(time_start, time_end)
         figsave_path = save_dir + '_LT_timeseries_CC_{:03}_{:03}_{:03}_{}.png'.format(ccomp[0], ccomp[1], ccomp[2], save_string)
 
-    for ii in range(len(timee)):
-        mark = dayy + timee[ii]
-        ax1.axvline(np.datetime64(mark), color='k', ls=':', alpha=0.4)
+# =============================================================================
+#     for ii in range(len(timee)):
+#         mark = dayy + timee[ii]
+#         ax1.axvline(np.datetime64(mark), color='k', ls=':', alpha=0.4)
+# =============================================================================
 
     if save == True:
         print('Saving {}'.format(figsave_path))
@@ -234,12 +245,17 @@ def plot_growth_rate_with_time(times, k_vals, all_WPDR, save=False, short=False,
 
 
 def load_and_plot_timeseries(ccomp=[70,20,10]):
+    '''
+    Takes one (or a list of) DR timeseries files and plots the (max )growth
+    rate/wavenumber for each ion species.
     
+    To Do: Get composition from filename rather than in the call.
+    '''
     
     times, B0, name, mass, charge, density, tper, ani, cold_dens = \
-        extract_species_arrays(time_start, time_end, probe, pad, ccomp, return_raw_ne=True)
+        extract_species_arrays(time_start, time_end, probe, pad, cmp=ccomp, return_raw_ne=True)
     
-    this_file = 'DR_results_coldcomp_098_001_001_20130725_2100_2200.npz'
+    this_file = 'DR_results_coldcomp_070_020_010_20130725_2100_2200.npz'
     
     files = [this_file]#os.listdir(save_dir)
     for file in files:
@@ -428,7 +444,7 @@ def plot_all_DRs(ccomp=[70, 20, 10]):
     Values loaded in order of Nt, Nk, solns
     '''
     times, B0, name, mass, charge, density, tper, ani, cold_dens = \
-        extract_species_arrays(time_start, time_end, probe, pad, ccomp, return_raw_ne=True)
+        extract_species_arrays(time_start, time_end, probe, pad, cmp=ccomp, return_raw_ne=True)
             
     file = 'DR_results_coldcomp_{:03}_{:03}_{:03}_{}.npz'.format(ccomp[0], ccomp[1], ccomp[2], save_string)
     
@@ -471,9 +487,9 @@ def check_if_exists():
 
 
 if __name__ == '__main__':
-    gdrive    = 'F://Google Drive//'
+    gdrive     = 'F://Google Drive//'
     _rbsp_path = 'G://DATA//RBSP//'
-    dump_drive= 'G://'
+    dump_drive = 'G://'
     
     _Nk       = 500
     output    = 'save'
@@ -492,19 +508,26 @@ if __name__ == '__main__':
     if os.path.exists(save_dir) == False:
         os.makedirs(save_dir)
     
-    dayy  = '2013-07-25T'
-    timee = ['21:30:04.105',
-            '21:30:50.105',
-            '21:32:21.605',
-            '21:32:48.105',
-            '21:33:07.605',
-            '21:34:06.605',
-            '21:37:03.105',
-            '21:39:07.605',
-            '21:40:26.105',
-            '21:41:05.605']
+    get_all_DRs(time_start, time_end, probe, pad, cmp=[0.7, 0.2, 0.1], nsec=1, suff='_newtime_nofilt',
+                HM_filter_mhz=None)
     
-    get_all_DRs(time_start, time_end, probe, pad, cmp=[0.7, 0.2, 0.1], Nk=_Nk)
+    #load_and_plot_timeseries()
+    
+# =============================================================================
+#     dayy  = '2013-07-25T'
+#     timee = ['21:30:04.105',
+#             '21:30:50.105',
+#             '21:32:21.605',
+#             '21:32:48.105',
+#             '21:33:07.605',
+#             '21:34:06.605',
+#             '21:37:03.105',
+#             '21:39:07.605',
+#             '21:40:26.105',
+#             '21:41:05.605']
+#     
+#     
+# =============================================================================
     
     #plot_all_DRs()
     #load_and_plot_timeseries()
