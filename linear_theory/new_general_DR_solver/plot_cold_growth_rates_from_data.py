@@ -103,6 +103,55 @@ def linear_growth_rates(w, Species):
     return temporal_growth_rate, convective_growth_rate
 
 
+def plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad):
+    '''
+    Main function that downloads the data, queries the growth rates, and 
+    plots a 2D colorplot of the temporal and convective growth rates. Might
+    also include plugins to other data such as the Pc1 power to more directly
+    look at the change. Also include growth rates?
+    '''
+    # Frequencies over which to solve
+    Nf    = 1000
+    f_max = 5.0
+    f_min = 0.0
+    freqs = np.linspace(f_max, f_min, Nf)
+    w     = 2 * np.pi * freqs
+    
+    # Create species array for each time
+    times, B0, name, mass, charge, density, tper, ani, cold_dens = \
+    extract_species_arrays(rbsp_path, time_start, time_end, probe, pad,
+                           return_raw_ne=True)
+    
+    # Initialize empty arrays for GR returns
+    Nt  = times.shape[0]
+    TGR = np.zeros((Nt, Nf), dtype=np.float64)
+    CGR = np.zeros((Nt, Nf), dtype=np.float64)
+    
+    # Need to put this bit in a time loop
+    for ii in range(times.shape[0]):
+        Species, PP = create_species_array(B0[ii], name[:, ii], mass[:, ii], charge[:, ii],
+                                           density[:, ii], tper[:, ii], ani[:, ii])
+        
+        # Do I want to return Vg from this as well?
+        TGR[ii], CGR[ii] = linear_growth_rates(w, Species)
+    
+    # Plot the things
+    fig, axes = plt.subplots(nrows=2, ncols=2, gridspec_kw={'width_ratios':[1.0, 0.01]})
+    
+    axes[0].pcolormesh(times, freqs, TGR)
+    axes[0].set_ylabel('Temporal Growth Rate')
+    axes[0].set_xlim(time_start, time_end)
+    axes[0].set_ylim(f_min, f_max)
+    
+    axes[1].pcolormesh(times, freqs, CGR)
+    axes[1].set_ylabel('Convective Growth Rate')
+    axes[1].set_xlim(time_start, time_end)
+    axes[1].set_ylim(f_min, f_max)
+    axes[1].set_xlabel('Times (UT)')
+    
+    return
+
+
 if __name__ == '__main__':
     c = 3e8
     
@@ -118,16 +167,4 @@ if __name__ == '__main__':
     save_string = time_start.astype(object).strftime('%Y%m%d_%H%M_') + time_end.astype(object).strftime('%H%M')
     save_dir    = '{}NEW_LT//EVENT_{}//NEW_FIXED_DISPERSION_RESULTS//'.format(save_drive, date_string)
 
-    # NEEDS TO BE STUCK IN A FUNCTION
-    # Set frequency range to look at (from 0-5Hz)
-    Nf          = 1000
-    f_max       = 5.0
-    f_min       = 0.0
-    freqs       = np.linspace(f_max, f_min, Nf) * 2 * np.pi
     
-    # Create species array for each time
-    times, B0, name, mass, charge, density, tper, ani, cold_dens = \
-    extract_species_arrays(rbsp_path, time_start, time_end, probe, pad,
-                           return_raw_ne=True)
-    # Does this need to be in the time loop?
-    Species, PP = create_species_array(B0, name, mass, charge, density, tper, ani)

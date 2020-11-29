@@ -66,6 +66,11 @@ def extract_species_arrays(rbsp_path, time_start, time_end, probe, pad,
     go into the dispersion solver.
     
     All output values are in SI except temperature, which is in eV
+    
+    Structure of each array (instr_species, time) where
+     -- 0,1,2 are cold             H+, He+, O+
+     -- 3,4,5 are HOPE    (warm)   "
+     -- 6,7,8 are RBSPICE (warmer) "
     '''
     times, B0, cold_dens, hope_dens, hope_temp, hope_anis, spice_dens, spice_temp, spice_anis\
         = data.load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_path=rbsp_path,
