@@ -59,7 +59,7 @@ def interpolate_ne(new_time, den_time, den_array):
 def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, nsec=1, 
                                        rbsp_path='G://DATA//RBSP//', HM_filter_mhz=None):
     '''
-    Outputs as SI units: B0 in nT, densities in /m3, temperatures in eV (pseudo SI)
+    Outputs as SI units: B0 in T, densities in /m3, temperatures in eV (pseudo SI)
     
     nsec is cadence of interpolated array in seconds. If None, defaults to using den_times
     as interpolant.
@@ -69,7 +69,7 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, nsec=1,
     # Cold (total?) electron plasma density
     den_times, edens, dens_err = rfr.retrieve_RBSP_electron_density_data(rbsp_path, time_start, time_end,
                                                                          probe, pad=pad)
-
+    
     # Magnetic magnitude
     mag_times, raw_mags = rfl.load_magnetic_field(rbsp_path, time_start, time_end, probe, return_raw=True, pad=3600)
     
@@ -116,8 +116,7 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, nsec=1,
     ispice_dens, ispice_temp, ispice_anis = interpolate_to_time(time_array, spice_time, np.array(spice_dens),
                                                                  np.array(spice_temp), np.array(spice_anis))
     
-    Bi     = interpolate_B(time_array, mag_times, filt_mags, nsec, LP_filter=False)
-    
+    Bi = interpolate_B(time_array, mag_times, filt_mags, nsec, LP_filter=False)
     
     # Subtract energetic components from total electron density (assuming each is singly charged)
     cold_dens = iedens - ihope_dens.sum(axis=0) - ispice_dens.sum(axis=0)
@@ -236,8 +235,6 @@ def convert_data_to_hybrid_plasmafile(time_start, time_end, probe, pad, comp=Non
 
 
 if __name__ == '__main__':
-    from spacepy import pycdf
-    
     _rbsp_path  = 'G://DATA//RBSP//'
     _time_start = np.datetime64('2013-07-25T21:20:00')
     _time_end   = np.datetime64('2013-07-25T21:50:00')
@@ -245,21 +242,10 @@ if __name__ == '__main__':
     _pad        = 0
     
     #convert_data_to_hybrid_plasmafile(_time_start, _time_end, _probe, _pad)
-    if False:
-        magfold = _rbsp_path + 'EMFISIS//MAG//'
-        magname = 'rbsp-a_magnetometer_hires-gse_emfisis-L3_20130725_v1.3.4.cdf'
-        magfile = magfold + magname
-        if os.path.exists(magfile) == True:
-            print('File exists')
-        else:
-            print('File not found')
-            
-        cdf_pointer = pycdf.CDF(magfile) 
-        print(cdf_pointer.keys())
     
     if True:
         _times, _B0, _cold_dens, _hope_dens, _hope_temp, _hope_anis, _spice_dens, _spice_temp, _spice_anis =\
-            load_and_interpolate_plasma_params(_time_start, _time_end, _probe, _pad, HM_filter_mhz=50)
+            load_and_interpolate_plasma_params(_time_start, _time_end, _probe, _pad, HM_filter_mhz=50, nsec=None)
         
         ### LOAD RAW VALUES ###
         den_times, edens, dens_err = rfr.retrieve_RBSP_electron_density_data(_rbsp_path, _time_start, _time_end, _probe, pad=_pad)

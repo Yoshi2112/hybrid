@@ -5,8 +5,6 @@ Created on Mon Apr  8 12:29:15 2019
 @author: Yoshi
 """
 import sys
-import os
-import pdb
 sys.path.append('../')
 import numpy as np
 import matplotlib.pyplot as plt
@@ -24,15 +22,6 @@ predefined warm/cold arrays. Eventual tests:
      
 NOTE: Plotting subroutine contains hard-coded legends, etc. Would need to be modified
     to be truly general.
-    
-ISSUES: Completely different H-band solution found for Wang's Figure 1c at 60% RC
-        Also different growth rate for Wang's Figure 3c at 2.0 warm hydrogen anisotropy    
-        
-How?
- -- (DONE: SEEMS FINE)Incorrect fsolve solution? Check by back substitution to examine tolerance/absolute error
- -- (DONE) Also look at getting np.nan for bad fsolve solution
- -- Wang is wrong? Possible
- -- Something weird at high energy/density? One changes alpha_par, the other changes plasma frequency
 '''
 
 def create_band_legend(fn_ax, labels, colors):
@@ -204,7 +193,10 @@ def dispersion_relation_solver(Species, PlasmaParams, norm_k_in=True, norm_k_out
                     warm_solns[ii, jj] = np.nan
         
     if plot==True or save==True:
-        plot_dispersion(k_vals, CPDR_solns, warm_solns, PlasmaParams, norm_k=norm_k_out, norm_w=norm_w, save=save, savepath=savepath)
+        plot_dispersion(k_vals, CPDR_solns, warm_solns, PlasmaParams,
+                        norm_k=norm_k_out, norm_w=norm_w, save=save,
+                        savename=savepath, title='', growth_only=False,
+                        glims=0.05)
 
     if return_all == False:
         return k_vals, CPDR_solns, warm_solns
@@ -234,8 +226,8 @@ def plot_dispersion(k_vals, CPDR_solns, warm_solns, PlasmaParams,
         x_vals  = k_vals.copy() / PlasmaParams['pcyc_rad'] * PlasmaParams['va']
         xlab    = r'$kv_A / \Omega_p$'
     else:
-        x_vals  = k_vals
-        xlab    = r'$k (m^{-1})$'
+        x_vals  = k_vals * 1e6
+        xlab    = r'$k (\times 10^{-6} m^{-1})$'
         
     species_colors = ['r', 'b', 'g']
     
@@ -458,7 +450,7 @@ if __name__ == '__main__':
     '''
     Test quantities/direct interface
     '''                               # Number of species
-    L_shell  = 4                                # L-shell at which magnetic field and density are calculated
+    L_shell  = 7                                # L-shell at which magnetic field and density are calculated
     n0       = sheely_plasmasphere(L_shell)     # Plasma density, /m3
     _B0      = geomagnetic_magnitude(L_shell)   # Background magnetic field, T
     mp       = 1.673e-27                        # Proton mass (kg)
@@ -468,6 +460,27 @@ if __name__ == '__main__':
         '''
         Standard Wang (2016) test values DON'T CHANGE
         '''
+        # This all must add up to 1
+        RC_ab= 0.1
+        H_ab = 0.6
+        He_ab= 0.2
+        O_ab = 0.1
+        
+        if round(RC_ab + H_ab + He_ab + O_ab, 5) != 1.0:
+            sys.exit('Aborted: Densities don\'t add up')
+        
+        _name    = np.array(['Warm H'  , 'Cold H' , 'Cold He', 'Cold O'])
+        _mass    = np.array([1.0       , 1.0      , 4.0      , 16.0    ]) * mp
+        _charge  = np.array([1.0       , 1.0      , 1.0      ,  1.0    ]) * qi
+        _density = np.array([RC_ab     , H_ab     , He_ab    ,  O_ab,  ]) * n0
+        _tpar    = np.array([25e3      , 0.0      , 0.0      ,  0.0    ])
+        _ani     = np.array([1.0       , 0.0      , 0.0      ,  0.0    ])
+        _tper    = (_ani + 1) * _tpar
+    elif False:
+        '''
+        Standard Wang (2016) test values DON'T CHANGE (old values, RC calculation might be wrong)
+        '''
+        # All but RC must add up to 1
         H_ab = 0.7
         He_ab= 0.2
         O_ab = 0.1
@@ -497,5 +510,5 @@ if __name__ == '__main__':
         _tper    = (_ani + 1) * _tpar
         
     _k, CPDR, WPDR = get_dispersion_relations(_B0, _name, _mass, _charge, _density, _tper, _ani,
-                         kmin=0.0, kmax=1.0, Nk=1000, norm_k_in=True, norm_k_out=True, 
+                         kmin=0.0, kmax=1.0, Nk=5000, norm_k_in=True, norm_k_out=True, 
                          norm_w=True, plot=True)

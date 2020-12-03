@@ -8,13 +8,18 @@ Note: This script just copies the functions related to calculating the cold
 dispersion/growth rates since the 'omura play' source script isn't a final
 product
 """
-import warnings, pdb
+import warnings, pdb, sys
 import numpy as np
 import matplotlib.pyplot as plt
 from   scipy.special     import wofz
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-import extract_parameters_from_data   as data
+sys.path.append('F://Google Drive//Uni//PhD 2017//Data//Scripts//')
+import rbsp_fields_loader as rfl
+import rbsp_file_readers  as rfr 
+import analysis_scripts   as ascr
+import fast_scripts       as fscr
+
 from growth_rates_from_RBSP         import extract_species_arrays
 from dispersion_solver_multispecies import create_species_array
 
@@ -23,9 +28,21 @@ qp = 1.602e-19
 mp = 1.673e-27
 
 def Z(arg):
-    '''Return Plasma Dispersion Function : Normalized Fadeeva function'''
+    '''
+    Return Plasma Dispersion Function : Normalized Fadeeva function
+    Plasma dispersion function related to Fadeeva function
+    (Summers & Thorne, 1993) by i*sqrt(pi) factor.
+    '''
     return 1j*np.sqrt(np.pi)*wofz(arg)
 
+
+def nearest_index(items, pivot):
+    closest_val = min(items, key=lambda x: abs(x - pivot))
+    for ii in range(len(items)):
+        if items[ii] == closest_val:
+            return ii
+    sys.exit('Error: Unable to find index')
+        
 
 def get_k_cold(w, Species):
     '''
@@ -49,13 +66,45 @@ def get_k_cold(w, Species):
     return k
 
 
+def warm_plasma_dispersion_relation(wr, k, Species):
+    '''    
+    Function used in scipy.fsolve minimizer to find roots of dispersion relation.
+    Iterates over each k to find values of w that minimize to D(wr, k) = 0
+    '''
+    components = 0.0
+    for ii in range(Species.shape[0]):
+        sp = Species[ii]
+        if sp['tper'] == 0:
+            components += sp['plasma_freq_sq'] * wr / (sp['gyrofreq'] - wr)
+        else:
+            pdisp_arg   = (wr - sp['gyrofreq']) / (sp['vth_par']*k)
+            pdisp_func  = Z(pdisp_arg)*sp['gyrofreq'] / (sp['vth_par']*k)
+            brackets    = (sp['anisotropy'] + 1) * (wr - sp['gyrofreq'])/sp['gyrofreq'] + 1
+            Is          = brackets * pdisp_func + sp['anisotropy']
+            components += sp['plasma_freq_sq'] * Is
+    return (wr ** 2) - (c * k) ** 2 + components
+
+
 def linear_growth_rates(w, Species):
     '''
     Calculates the temporal and convective linear growth rates for a plasma
     composition contained in Species for each frequency w. Assumes a cold
-    dispersion relation is valid for k.
+    dispersion relation is valid for k but uses a warm approximation in the
+    solution for D(w, k).
     
     Equations adapted from Chen et al. (2011)
+    
+    To do:
+        --- Need to actually solve w for each k just like with the Wang (2016)
+            code.
+        --- Feed in k-series rather than w-series. Is this still decent as a 
+            cold approximation? Maybe worth checking against paper.
+        --- Validate against plots shown in Chen (2013)
+    
+    Input values in SI?
+     -- Frequencies in rad/s
+     -- Anisotropies dimensionless
+     -- Thermal velocity in m/s ?? 
     '''
     # Get k for each frequency to evaluate
     k  = get_k_cold(w, Species)
@@ -218,8 +267,219 @@ def plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad, norm=None,
     return
 
 
-if __name__ == '__main__':
+def plot_max_GR_timeseries(rbsp_path, time_start, time_end, probe, pad, norm=None, norm_B0=200.):
+    '''
+    Note: Because this calculates in frequency space (using cold k) the 'max/min' values
+    in the returned arrays are nan's because they are in a stop band.
+    '''
+    # Frequencies over which to solve (determines frequency cadence)
+    Nf    = 1000
+    f_max = 1.2
+    f_min = 0.0
+    freqs = np.linspace(f_max, f_min, Nf)
+    w     = 2 * np.pi * freqs
     
+    # Create species array for each time (determines time cadence)    
+    times, B0, name, mass, charge, density, tper, ani, cold_dens = \
+    extract_species_arrays(time_start, time_end, probe, pad,
+                           rbsp_path='G://DATA//RBSP//', 
+                           cmp=[70, 20, 10],
+                           return_raw_ne=True,
+                           HM_filter_mhz=50,
+                           nsec=None)
+        
+    # Initialize empty arrays for GR returns
+    Nt      = times.shape[0]
+    max_TGR = np.zeros((Nt, 3), dtype=np.float64)
+    max_CGR = np.zeros((Nt, 3), dtype=np.float64)
+        
+    for ii in range(times.shape[0]):
+        Species, PP = create_species_array(B0[ii], name, mass, charge, density[:, ii],
+                                            tper[:, ii], ani[:, ii])
+        
+        pcyc   = qp * B0[ii] / (2 * np.pi * mp)
+        H_idx  = nearest_index(freqs, pcyc)
+        He_idx = nearest_index(freqs, 0.25*pcyc)
+        O_idx  = nearest_index(freqs, 0.0625*pcyc)
+        
+        TGR, CGR = linear_growth_rates(w, Species)
+        
+        # Mask nan's
+        TGR[np.isnan(TGR) == True] = 0.0
+        CGR[np.isnan(CGR) == True] = 0.0
+        
+        try:
+            # H-band max growth
+            if TGR[H_idx:He_idx].shape[0] == 0:
+                max_TGR[ii, 0] = np.nan
+                max_CGR[ii, 0] = np.nan
+            else:
+                max_TGR[ii, 0] = TGR[H_idx:He_idx].max()
+                max_CGR[ii, 0] = CGR[H_idx:He_idx].max()
+                
+            # He-band max growth
+            if TGR[He_idx: O_idx].shape[0] == 0:
+                max_TGR[ii, 1] = np.nan
+                max_CGR[ii, 1] = np.nan
+            else:
+                max_TGR[ii, 1] = TGR[He_idx: O_idx].max()
+                max_CGR[ii, 1] = CGR[He_idx: O_idx].max()
+                
+            # O-band max growth
+            if TGR[O_idx:].shape[0] == 0:
+                max_TGR[ii, 2] = np.nan
+                max_CGR[ii, 2] = np.nan
+            else:
+                max_TGR[ii, 2] = TGR[O_idx:].max()
+                max_CGR[ii, 2] = CGR[O_idx:].max()
+        except:
+            pdb.set_trace()
+
+    # Just Temporal Growth Rates in single overlaid plot
+    if False:
+        fig, ax = plt.subplots(sharex=True)
+        ax.plot(times, max_TGR[:, 0], c='r')
+        ax.plot(times, max_TGR[:, 1], c='b')
+        ax.plot(times, max_TGR[:, 2], c='green')
+        
+    # Pc1 spectra and TGR/CGR (with log and linear) in two figures
+    if False:
+        ti, fac_mags, fac_elec, dt, e_flag, gyfreqs = rfl.load_both_fields(rbsp_path, time_start, time_end, probe, pad=3600)
+        
+        pc1_xpower, pc1_xtimes, pc1_xfreq = fscr.autopower_spectra(ti, fac_mags[:, 0], time_start, 
+                                                     time_end, dt, overlap=0.99, df=25.0)
+    
+        pc1_ypower, pc1_ytimes, pc1_yfreq = fscr.autopower_spectra(ti, fac_mags[:, 1], time_start, 
+                                                         time_end, dt, overlap=0.99, df=25.0)
+        
+        pc1_perp_power = np.log10(pc1_xpower[:, :] + pc1_ypower[:, :])
+        
+        plt.ioff()
+        # Temporal Growth Rate
+        fig1, axes1 = plt.subplots(3, figsize=(16,10), sharex=True)
+        
+        axes1[0].pcolormesh(pc1_xtimes, pc1_xfreq, pc1_perp_power.T, vmin=-7, vmax=1, cmap='jet')
+        axes1[0].set_ylabel('Frequency (Hz)')
+        axes1[0].set_ylim(f_min, f_max)
+        axes1[0].set_title('Temporal Growth Rate (s) vs. Time :: {} :: Cold-k Approximation'.format(date_string))
+        
+        axes1[1].semilogy(times, max_TGR[:, 0], c='r', label='$H^{+}$')
+        axes1[1].semilogy(times, max_TGR[:, 1], c='b', label='$He^{+}$')
+        axes1[1].semilogy(times, max_TGR[:, 2], c='green', label='$O^{+}$')
+        axes1[1].legend()
+        axes1[1].set_ylabel('$\log_{10}(\gamma)$', rotation=0)
+        
+        axes1[2].plot(times, max_TGR[:, 0], c='r', label='$H^{+}$')
+        axes1[2].plot(times, max_TGR[:, 1], c='b', label='$He^{+}$')
+        axes1[2].plot(times, max_TGR[:, 2], c='green', label='$O^{+}$')
+        axes1[2].legend()
+        axes1[2].set_ylabel('$\gamma$', rotation=0)
+        
+        axes1[2].set_xlim(time_start, time_end)
+        
+        # Convective Growth Rate
+        fig2, axes2 = plt.subplots(3, figsize=(16,10), sharex=True)
+        
+        axes2[0].pcolormesh(pc1_xtimes, pc1_xfreq, pc1_perp_power.T, vmin=-7, vmax=1, cmap='jet')
+        axes2[0].set_ylabel('Frequency (Hz)')
+        axes2[0].set_ylim(f_min, f_max)
+        axes2[0].set_title('Temporal Growth Rate (s) vs. Time :: {} :: Cold-k Approximation'.format(date_string))
+        
+        axes2[1].semilogy(times, max_CGR[:, 0], c='r', label='$H^{+}$')
+        axes2[1].semilogy(times, max_CGR[:, 1], c='b', label='$He^{+}$')
+        axes2[1].semilogy(times, max_CGR[:, 2], c='green', label='$O^{+}$')
+        axes2[1].legend()
+        axes2[1].set_ylabel('$\log_{10}(S)$', rotation=0)
+        
+        axes2[2].plot(times, max_CGR[:, 0], c='r', label='$H^{+}$')
+        axes2[2].plot(times, max_CGR[:, 1], c='b', label='$He^{+}$')
+        axes2[2].plot(times, max_CGR[:, 2], c='green', label='$O^{+}$')
+        axes2[2].legend()
+        axes2[2].set_ylabel('$S$', rotation=0)
+        
+        axes2[2].set_xlim(time_start, time_end)
+        
+        plt.show()
+        
+    
+    # Linear TGR and CGR with input parameters for calculation (looking for spikes!)
+    if True:
+        # TGR
+        # B0
+        # Cold densities 
+        # HOPE densities
+        # HOPE temperatures
+        # HOPE anisotropies
+        # RBSPICE densities
+        # RBSPICE temperatures
+        # RBSPICE anisotropies
+        plt.ioff()
+        for max_arr, title in zip([max_TGR, max_CGR], ['TGR', 'CGR']):
+            fig, axes = plt.subplots(9, figsize=(8,20), sharex=True)
+            
+            axes[0].set_title('Max. {} for {} :: Derived from Satellite Data'.format(title, date_string))
+            axes[0].plot(times, max_arr[:, 0], c='r')
+            axes[0].plot(times, max_arr[:, 1], c='b')
+            axes[0].plot(times, max_arr[:, 2], c='green')
+            
+            axes[1].plot(times, B0*1e9)
+            axes[1].set_ylabel('B0\nnT')
+            
+            axes[2].plot(times, density[0]*1e-6, c='r')
+            axes[2].plot(times, density[1]*1e-6, c='b')
+            axes[2].plot(times, density[2]*1e-6, c='green')
+            axes[2].set_ylabel('Cold $n_i$\n/cc')
+            
+            axes[3].plot(times, density[3]*1e-6, c='r')
+            axes[3].plot(times, density[4]*1e-6, c='b')
+            axes[3].plot(times, density[5]*1e-6, c='green')
+            axes[3].set_ylabel('HOPE $n_i$\n/cc')
+            
+            axes[4].plot(times, density[6]*1e-6, c='r')
+            axes[4].plot(times, density[7]*1e-6, c='b')
+            axes[4].plot(times, density[8]*1e-6, c='green')
+            axes[4].set_ylabel('RBSPICE $n_i$\n/cc')
+            
+            axes[5].plot(times, tper[3]*1e-3, c='r')
+            axes[5].plot(times, tper[4]*1e-3, c='b')
+            axes[5].plot(times, tper[5]*1e-3, c='green')
+            axes[5].set_ylabel('HOPE $T_\perp$\nkeV')
+            
+            axes[6].plot(times, tper[6]*1e-3, c='r')
+            axes[6].plot(times, tper[7]*1e-3, c='b')
+            axes[6].plot(times, tper[8]*1e-3, c='green')
+            axes[6].set_ylabel('RBSPICE $T_\perp$\nkeV')
+            
+            axes[7].plot(times, ani[3], c='r')
+            axes[7].plot(times, ani[4], c='b')
+            axes[7].plot(times, ani[5], c='green')
+            axes[7].set_ylabel('HOPE $A_i$')
+            
+            axes[8].plot(times, ani[6], c='r')
+            axes[8].plot(times, ani[7], c='b')
+            axes[8].plot(times, ani[8], c='green')
+            axes[8].set_ylabel('RBSPICE $A_i$')
+            
+            fig.subplots_adjust(hspace=0)
+            fig.align_ylabels()
+            
+            for ax in axes:
+                ax.set_xlim(time_start, time_end)
+                
+            if False:
+                plt.show()
+            else:
+                svpath = save_dir + '{}_stackplot.png'.format(title)
+                print('Plot saved as {}'.format(svpath))
+                fig.savefig(svpath)
+                plt.close('all')
+        
+    return
+
+
+if __name__ == '__main__':
+    # To Do:
+    # Peaks to line up
     
     rbsp_path = 'G://DATA//RBSP//'
     save_drive= 'G://'
@@ -231,6 +491,7 @@ if __name__ == '__main__':
     
     date_string = time_start.astype(object).strftime('%Y%m%d')
     save_string = time_start.astype(object).strftime('%Y%m%d_%H%M_') + time_end.astype(object).strftime('%H%M')
-    save_dir    = '{}NEW_LT//EVENT_{}//NEW_FIXED_DISPERSION_RESULTS//'.format(save_drive, date_string)
+    save_dir    = '{}NEW_LT//EVENT_{}//NEW_FIXED_DISPERSION_RESULTS//COLD_K_TIMESERIES//1D_MAX_GROWTH//'.format(save_drive, date_string)
 
-    plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad, norm='absolute')
+    plot_max_GR_timeseries(rbsp_path, time_start, time_end, probe, pad, norm=None, norm_B0=200.)
+    #plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad, norm='absolute')

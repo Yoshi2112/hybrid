@@ -65,7 +65,7 @@ def extract_species_arrays(time_start, time_end, probe, pad, rbsp_path='G://DATA
     energetic measurements. This function creates the single axis arrays required to 
     go into the dispersion solver.
     
-    All output values are in SI (/m3, etc.) except temperature, which is in eV
+    All output values are in SI except temperature, which is in eV
     
     Structure of each array (instr_species, time) where
      -- 0,1,2 are cold             H+, He+, O+
@@ -88,9 +88,9 @@ def extract_species_arrays(time_start, time_end, probe, pad, rbsp_path='G://DATA
     _mass    = np.array([1.0, 4.0, 16.0, 1.0, 4.0, 16.0, 1.0, 4.0, 16.0]) * mp
     _charge  = np.array([1.0, 1.0,  1.0, 1.0, 1.0,  1.0, 1.0, 1.0,  1.0]) * qi
     
-    _density[0] = cold_dens * cmp[0]/100.;  _density[3] = hope_dens[0];  _density[6] = spice_dens[0];
-    _density[1] = cold_dens * cmp[1]/100.;  _density[4] = hope_dens[1];  _density[7] = spice_dens[1];
-    _density[2] = cold_dens * cmp[2]/100.;  _density[5] = hope_dens[2];  _density[8] = spice_dens[2];
+    _density[0] = cold_dens * cmp[0];  _density[3] = hope_dens[0];  _density[6] = spice_dens[0];
+    _density[1] = cold_dens * cmp[1];  _density[4] = hope_dens[1];  _density[7] = spice_dens[1];
+    _density[2] = cold_dens * cmp[2];  _density[5] = hope_dens[2];  _density[8] = spice_dens[2];
 
     _tper[0] = 5.0; _tper[3] = hope_temp[0]; _tper[6] = spice_temp[0]
     _tper[1] = 5.0; _tper[4] = hope_temp[1]; _tper[7] = spice_temp[1]
@@ -166,7 +166,7 @@ def get_all_DRs(time_start, time_end, probe, pad, cmp, Nk=1000, nsec=None, suff=
 
 
 def plot_growth_rate_with_time(times, k_vals, all_WPDR, save=False, short=False,
-                               norm_w=False, B0=None, ccomp=[70, 20, 10], suff=''):
+                               norm_w=False, B0=None, ccomp=[70, 20, 10]):
     tick_label_size = 14
     mpl.rcParams['xtick.labelsize'] = tick_label_size 
     
@@ -219,10 +219,10 @@ def plot_growth_rate_with_time(times, k_vals, all_WPDR, save=False, short=False,
     # Set xlim to show either just pearls, or whole event
     if short == True:
         ax1.set_xlim(np.datetime64('2013-07-25T21:25:00'), np.datetime64('2013-07-25T21:45:00'))
-        figsave_path = save_dir + '_LT_timeseries_CC_{:03}_{:03}_{:03}_{}_{}_short.png'.format(ccomp[0], ccomp[1], ccomp[2], save_string, suff)
+        figsave_path = save_dir + '_LT_timeseries_CC_{:03}_{:03}_{:03}_{}_short.png'.format(ccomp[0], ccomp[1], ccomp[2], save_string)
     else:
         ax1.set_xlim(time_start, time_end)
-        figsave_path = save_dir + '_LT_timeseries_CC_{:03}_{:03}_{:03}_{}_{}.png'.format(ccomp[0], ccomp[1], ccomp[2], save_string, suff)
+        figsave_path = save_dir + '_LT_timeseries_CC_{:03}_{:03}_{:03}_{}.png'.format(ccomp[0], ccomp[1], ccomp[2], save_string)
 
 # =============================================================================
 #     for ii in range(len(timee)):
@@ -244,7 +244,7 @@ def plot_growth_rate_with_time(times, k_vals, all_WPDR, save=False, short=False,
     return max_k, max_g
 
 
-def load_and_plot_timeseries():
+def load_and_plot_timeseries(ccomp=[70,20,10]):
     '''
     Takes one (or a list of) DR timeseries files and plots the (max )growth
     rate/wavenumber for each ion species.
@@ -253,29 +253,26 @@ def load_and_plot_timeseries():
     '''
     
     times, B0, name, mass, charge, density, tper, ani, cold_dens = \
-        extract_species_arrays(time_start, time_end, probe, pad, return_raw_ne=True)
+        extract_species_arrays(time_start, time_end, probe, pad, cmp=ccomp, return_raw_ne=True)
     
-    suffixes = ['_newtime_nofilt', '_newtime_filt', '_oldtime_nofilt', '_oldtime_filt']
+    this_file = 'DR_results_coldcomp_070_020_010_20130725_2100_2200.npz'
     
-    for suff in suffixes:
-        this_file = 'DR_results_coldcomp_070_020_010_20130725_2100_2200{}.npz'.format(suff)
-        files = [this_file]#os.listdir(save_dir)
-        for file in files:
-            if file[-4:] == '.npz':
-                cstring = file[20:31].split('_')
-                cH      = int(cstring[0])
-                cHe     = int(cstring[1])
-                cO      = int(cstring[2])
-                ccomp   = [cH, cHe, cO]
-                
-                # DRs stored as (Nt, Nk, solns)
-                data_pointer = np.load(save_dir + file)
-                all_WPDR     = data_pointer['all_WPDR']
-                all_k        = data_pointer['all_k']
-                
-                plot_growth_rate_with_time(times, all_k, all_WPDR, save=True,
-                                           short=True, norm_w=False, B0=B0, ccomp=ccomp,
-                                           suff=suff)
+    files = [this_file]#os.listdir(save_dir)
+    for file in files:
+        if file[-4:] == '.npz':
+            cstring = file[20:31].split('_')
+            cH      = int(cstring[0])
+            cHe     = int(cstring[1])
+            cO      = int(cstring[2])
+            ccomp   = [cH, cHe, cO]
+            
+            # DRs stored as (Nt, Nk, solns)
+            data_pointer = np.load(save_dir + file)
+            all_WPDR     = data_pointer['all_WPDR']
+            all_k        = data_pointer['all_k']
+            
+            plot_growth_rate_with_time(times, all_k, all_WPDR, save=False,
+                                       short=True, norm_w=True, B0=B0, ccomp=ccomp)
     return
 
 
@@ -448,38 +445,32 @@ def plot_all_DRs(ccomp=[70, 20, 10]):
     '''
     times, B0, name, mass, charge, density, tper, ani, cold_dens = \
         extract_species_arrays(time_start, time_end, probe, pad, cmp=ccomp, return_raw_ne=True)
-         
-    #file = 'DR_results_coldcomp_{:03}_{:03}_{:03}_{}.npz'.format(ccomp[0], ccomp[1], ccomp[2], save_string)
-        
-    files = ['DR_results_coldcomp_070_020_010_20130725_2100_2200_newtime_nofilt.npz',
-             'DR_results_coldcomp_070_020_010_20130725_2100_2200_newtime_filt.npz',
-             'DR_results_coldcomp_070_020_010_20130725_2100_2200_oldtime_nofilt.npz',
-             'DR_results_coldcomp_070_020_010_20130725_2100_2200_oldtime_filt.npz'] 
+            
+    file = 'DR_results_coldcomp_{:03}_{:03}_{:03}_{}.npz'.format(ccomp[0], ccomp[1], ccomp[2], save_string)
     
-    for file in files:
-        data_pointer = np.load(save_dir + file)
-        all_CPDR     = data_pointer['all_CPDR']
-        all_WPDR     = data_pointer['all_WPDR']
-        all_k        = data_pointer['all_k']
-        
-        DR_save_path = save_dir + '//ALL_{:03}_{:03}_{:03}_{}//'.format(ccomp[0], ccomp[1], ccomp[2], save_string)
+    data_pointer = np.load(save_dir + file)
+    all_CPDR     = data_pointer['all_CPDR']
+    all_WPDR     = data_pointer['all_WPDR']
+    all_k        = data_pointer['all_k']
     
-        if os.path.exists(DR_save_path) == False:
-            os.makedirs(DR_save_path)
-        
-        for ii in range(times.shape[0]):
-            print('Plotting DR for {}'.format(times[ii]))
-            PlasParams = {}
-            PlasParams['va']    = B0[ii] / np.sqrt(mu0*(density[:, ii] * mass).sum())  # Alfven speed
-            PlasParams['ne']    = density.sum()                                        # Electron number density
-            PlasParams['pcyc_rad'] = qi*B0[ii] / mp                                       # Proton cyclotron frequency
-        
-            #savename = DR_save_path + 'DR_{:04}.png'.format(ii)
-            savename = DR_save_path + file[32:-4] + '_{:04}.png'.format(ii)
+    DR_save_path = save_dir + '//ALL_{:03}_{:03}_{:03}_{}//'.format(ccomp[0], ccomp[1], ccomp[2], save_string)
+
+    if os.path.exists(DR_save_path) == False:
+        os.makedirs(DR_save_path)
     
-            plot_dispersion(all_k[ii], all_CPDR[ii], all_WPDR[ii], PlasParams,
-                            norm_k=False, norm_w=False, save=True, savename=savename,
-                            title=times[ii], growth_only=False, glims=0.05)
+    for ii in range(times.shape[0]):
+        print('Plotting DR for {}'.format(times[ii]))
+        PlasParams = {}
+        PlasParams['va']    = B0[ii] / np.sqrt(mu0*(density[:, ii] * mass).sum())  # Alfven speed
+        PlasParams['ne']    = density.sum()                                        # Electron number density
+        PlasParams['p_cyc'] = qi*B0[ii] / mp                                       # Proton cyclotron frequency
+    
+        savename = DR_save_path + 'DR_{:04}.png'.format(ii)
+
+        plot_dispersion(all_k[ii], all_CPDR[ii], all_WPDR[ii], PlasParams,
+                        norm_k=True, norm_w=True, save=True, savename=savename,
+                        title=times[ii], growth_only=True, glims=0.01)
+    
     return
 
 
@@ -492,41 +483,6 @@ def check_if_exists():
             fname = 'DR_results_coldcomp_{:03}_{:03}_{:03}_20130725_2100_2200.npz'.format(H_rat, He_rat, O_rat)
             if fname not in all_files:
                 print('No file :: {:02}/{:02}/{:02}'.format(H_rat, He_rat, O_rat))
-    return
-
-
-def plot_raw_DR_file():
-    '''
-    Designed to just output raw info. k values seem fine, its the w calculation thats messed.
-    
-    Maybe just do He spectrum for ease
-    
-    How to plot with time? newtime is 1000 points, oldtime is 550.
-    -- Set time[ii] to be ii/times.shape[0] to get value between 0-1
-    '''
-    files = ['DR_results_coldcomp_070_020_010_20130725_2100_2200_oldtime_nofilt.npz',
-             'DR_results_coldcomp_070_020_010_20130725_2100_2200_oldtime_filt.npz',
-             'DR_results_coldcomp_070_020_010_20130725_2100_2200_newtime_nofilt.npz',
-             'DR_results_coldcomp_070_020_010_20130725_2100_2200_newtime_filt.npz'] 
-    
-    fig, ax = plt.subplots()
-    
-    # Extract max growth for He+ only for each file, WPDR only
-    for file in files:
-        data_pointer = np.load(save_dir + file)
-        all_WPDR     = data_pointer['all_WPDR']         # Shape (time, k, species)
-
-        Nt    = all_WPDR.shape[0]
-        time  = np.arange(Nt) / Nt
-        max_g = np.zeros(Nt, dtype=float)
-        for ii in range(Nt):
-            max_g[ii] = all_WPDR[ii, :, 1].imag.max()
-            
-        ax.plot(time, max_g, label=file[-18:-4], marker='x')
-        
-    ax.legend()
-    #ax.set_xlim(0, 1)
-
     return
 
 
@@ -549,50 +505,15 @@ if __name__ == '__main__':
     save_string = time_start.astype(object).strftime('%Y%m%d_%H%M_') + time_end.astype(object).strftime('%H%M')
     save_dir    = '{}NEW_LT//EVENT_{}//NEW_FIXED_DISPERSION_RESULTS//'.format(dump_drive, date_string)
     
-    plot_raw_DR_file()
-    
     if os.path.exists(save_dir) == False:
         os.makedirs(save_dir)
     
-    #get_all_DRs(time_start, time_end, probe, pad, cmp=[0.7, 0.2, 0.1], nsec=None, suff='_oldtime_nofilt',
+    #get_all_DRs(time_start, time_end, probe, pad, cmp=[0.7, 0.2, 0.1], nsec=1, suff='_oldtime_nofilt',
     #            HM_filter_mhz=None)
     
-# =============================================================================
-#     times1, B01, name1, mass1, charge1, density1, tper1, ani1, cold_dens1 = \
-#     extract_species_arrays(time_start, time_end, probe, pad, cmp=[0.7, 0.2, 0.1], 
-#                            return_raw_ne=True, nsec=None, HM_filter_mhz=None)
-#     
-#     times2, B02, name2, mass2, charge2, density2, tper2, ani2, cold_dens2 = \
-#     extract_species_arrays(time_start, time_end, probe, pad, cmp=[0.7, 0.2, 0.1], 
-#                            return_raw_ne=True, nsec=1, HM_filter_mhz=None)
-# =============================================================================
+    load_and_plot_timeseries()
     
 # =============================================================================
-#     #%%
-# if False:
-#     sp1 = 3; sp2 = 6
-#     
-#     fig, axes = plt.subplots(5)
-#     axes[0].scatter(times1, B01, marker='x', c='k')
-#     axes[0].plot(times2, B02, c='b')    
-#     
-#     axes[1].scatter(times1, density1[sp1:sp2].T, marker='x', c='k')
-#     axes[1].plot(times2, density2[sp1:sp2].T, c='b')
-#     
-#     axes[2].scatter(times1, tper1[sp1:sp2].T, marker='x', c='k')
-#     axes[2].plot(times2, tper2[sp1:sp2].T, c='b')
-#     
-#     axes[3].scatter(times1, ani1[sp1:sp2].T, marker='x', c='k')
-#     axes[3].plot(times2, ani2[sp1:sp2].T, c='b')
-#     
-#     axes[4].scatter(times1, cold_dens1, marker='x', c='k')
-#     axes[4].plot(times2, cold_dens2, c='b')
-# =============================================================================
-    
-    #load_and_plot_timeseries()
-    
-# =============================================================================
-#     # 10 Runs put on hybrid code
 #     dayy  = '2013-07-25T'
 #     timee = ['21:30:04.105',
 #             '21:30:50.105',
@@ -604,6 +525,8 @@ if __name__ == '__main__':
 #             '21:39:07.605',
 #             '21:40:26.105',
 #             '21:41:05.605']
+#     
+#     
 # =============================================================================
     
     #plot_all_DRs()
