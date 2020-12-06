@@ -85,6 +85,15 @@ def warm_plasma_dispersion_relation(wr, k, Species):
     return (wr ** 2) - (c * k) ** 2 + components
 
 
+def solve_w_from_k(k, Species):
+    '''
+    This function solves the warm plasma dispersion relation for real frequency
+    
+    '''
+    
+    return
+
+
 def linear_growth_rates(w, Species):
     '''
     Calculates the temporal and convective linear growth rates for a plasma
@@ -92,13 +101,17 @@ def linear_growth_rates(w, Species):
     dispersion relation is valid for k but uses a warm approximation in the
     solution for D(w, k).
     
-    Equations adapted from Chen et al. (2011)
+    Equations adapted from Chen et al. (2011) (or 2013?)
     
     To do:
         --- Need to actually solve w for each k just like with the Wang (2016)
-            code.
+            code. Actually just wr for D(wr, k) = 0 and then equations as before.
         --- Feed in k-series rather than w-series. Is this still decent as a 
             cold approximation? Maybe worth checking against paper.
+        --- What makes an approximation cold/warm/hot?
+              -- Cold negates any thermal stuff
+              -- Warm assumes gamma << wr and solves D(wr, k) to then solve for gamma
+              -- Hot solves wr + i*gamma in a 2D parameter space with no (?) assumptions
         --- Validate against plots shown in Chen (2013)
     
     Input values in SI?
@@ -107,6 +120,10 @@ def linear_growth_rates(w, Species):
      -- Thermal velocity in m/s ?? 
     '''
     # Get k for each frequency to evaluate
+    # -- Actually, this needs to be swapped around:
+    #     1) Define k-space array (not w) in function call
+    #     2) Numerically solve wr for each k
+    #     3) Use *that* wr in the calculation for Di (and hence gamma, S)
     k  = get_k_cold(w, Species)
     
     # Calculate Dr/k_para
@@ -475,6 +492,9 @@ def plot_max_GR_timeseries(rbsp_path, time_start, time_end, probe, pad, norm=Non
                 plt.close('all')
         
     return
+
+
+
 
 
 if __name__ == '__main__':
