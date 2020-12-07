@@ -47,6 +47,66 @@ def Z(arg):
     return 1j*np.sqrt(np.pi)*wofz(arg)
 
 
+def create_species_array(B0, name, mass, charge, density, tper, ani):
+    '''
+    For each ion species, total density is collated and an entry for 'electrons' added (treated as cold)
+    Also output a PlasmaParameters dict containing things like alfven speed, density, hydrogen gyrofrequency, etc.
+    
+    Inputs must be in SI units: nT, kg, C, /m3, eV, etc.
+    
+    20/09/2020 :: Used a loop to define tpar, ani since I made a mistake and tpar was 
+                    longer than ani. Will only use the first name.shape[0] values but
+                    that's better than dying altogether.
+    ''' 
+    nsp       = name.shape[0]
+    e0        = 8.854e-12
+    mu0       = 4e-7*np.pi
+    q         = 1.602e-19
+    me        = 9.101e-31
+    mp        = 1.673e-27
+    ne        = density.sum()
+    
+    t_par = np.zeros(nsp); alpha_par = np.zeros(nsp)
+    for ii in range(nsp):
+        t_par[ii] = q*tper[ii] / (ani[ii] + 1)
+        alpha_par[ii] = np.sqrt(2.0 * t_par[ii]  / mass[ii])
+        
+    # Original code but dies on broadcasting if different shapes.
+    #t_par     = q*tper / (ani + 1)            # Convert Perp temp in eV to Par evergy in Joules  
+    #alpha_par = np.sqrt(2.0 * t_par  / mass)  # Par Thermal velocity in m/s (make relativistic?)
+    
+    # Create initial fields
+    Species = np.array([], dtype=[('name', 'U20'),          # Species name
+                                  ('mass', 'f8'),           # Mass in kg
+                                  ('density', 'f8'),        # Species density in /m3
+                                  ('tper', 'f8'),           # Perpendicular temperature in eV
+                                  ('anisotropy', 'f8'),     # Anisotropy: T_perp/T_par - 1
+                                  ('plasma_freq_sq', 'f8'), # Square of the plasma frequency
+                                  ('gyrofreq', 'f8'),       # Cyclotron frequency
+                                  ('vth_par', 'f8')])       # Parallel Thermal velocity
+
+    # Insert species values into each
+    for ii in range(nsp):
+        new_species = np.array([(name[ii], mass[ii], density[ii], tper[ii], ani[ii],
+                                                density[ii] * charge[ii] ** 2 / (mass[ii] * e0),
+                                                charge[ii]  * B0 / mass[ii],
+                                                alpha_par[ii])], dtype=Species.dtype)
+        Species = np.append(Species, new_species)
+    
+    # Add cold electrons
+    Species = np.append(Species, np.array([('Electrons', me, ne, 0, 0,
+                                            ne * q ** 2 / (me * e0),
+                                            -q  * B0 / me,
+                                            0.)], dtype=Species.dtype))
+    
+    PlasParams = {}
+    PlasParams['va']       = B0 / np.sqrt(mu0*(density * mass).sum())  # Alfven speed (m/s)
+    PlasParams['n0']       = ne                                        # Electron number density (/m3)
+    PlasParams['pcyc_rad'] = q*B0 / mp                                 # Proton cyclotron frequency (rad/s)
+    PlasParams['B0']       = B0                                        # Magnetic field value (T)
+    return Species, PlasParams
+
+
 def cold_plasma_dispersion_relation(w, k, Species):
     '''
     w_ps :: Plasma frequency of whole species? Or just cold component? (Based on density)
@@ -282,66 +342,6 @@ def plot_dispersion(k_vals, CPDR_solns, warm_solns, PlasmaParams,
         figManager = plt.get_current_fig_manager()
         figManager.window.showMaximized()    
     return
-
-
-def create_species_array(B0, name, mass, charge, density, tper, ani):
-    '''
-    For each ion species, total density is collated and an entry for 'electrons' added (treated as cold)
-    Also output a PlasmaParameters dict containing things like alfven speed, density, hydrogen gyrofrequency, etc.
-    
-    Inputs must be in SI units: nT, kg, C, /m3, eV, etc.
-    
-    20/09/2020 :: Used a loop to define tpar, ani since I made a mistake and tpar was 
-                    longer than ani. Will only use the first name.shape[0] values but
-                    that's better than dying altogether.
-    ''' 
-    nsp       = name.shape[0]
-    e0        = 8.854e-12
-    mu0       = 4e-7*np.pi
-    q         = 1.602e-19
-    me        = 9.101e-31
-    mp        = 1.673e-27
-    ne        = density.sum()
-    
-    t_par = np.zeros(nsp); alpha_par = np.zeros(nsp)
-    for ii in range(nsp):
-        t_par[ii] = q*tper[ii] / (ani[ii] + 1)
-        alpha_par[ii] = np.sqrt(2.0 * t_par[ii]  / mass[ii])
-        
-    # Original code but dies on broadcasting if different shapes.
-    #t_par     = q*tper / (ani + 1)            # Convert Perp temp in eV to Par evergy in Joules  
-    #alpha_par = np.sqrt(2.0 * t_par  / mass)  # Par Thermal velocity in m/s (make relativistic?)
-    
-    # Create initial fields
-    Species = np.array([], dtype=[('name', 'U20'),          # Species name
-                                  ('mass', 'f8'),           # Mass in kg
-                                  ('density', 'f8'),        # Species density in /m3
-                                  ('tper', 'f8'),           # Perpendicular temperature in eV
-                                  ('anisotropy', 'f8'),     # Anisotropy: T_perp/T_par - 1
-                                  ('plasma_freq_sq', 'f8'), # Square of the plasma frequency
-                                  ('gyrofreq', 'f8'),       # Cyclotron frequency
-                                  ('vth_par', 'f8')])       # Parallel Thermal velocity
-
-    # Insert species values into each
-    for ii in range(nsp):
-        new_species = np.array([(name[ii], mass[ii], density[ii], tper[ii], ani[ii],
-                                                density[ii] * charge[ii] ** 2 / (mass[ii] * e0),
-                                                charge[ii]  * B0 / mass[ii],
-                                                alpha_par[ii])], dtype=Species.dtype)
-        Species = np.append(Species, new_species)
-    
-    # Add cold electrons
-    Species = np.append(Species, np.array([('Electrons', me, ne, 0, 0,
-                                            ne * q ** 2 / (me * e0),
-                                            -q  * B0 / me,
-                                            0.)], dtype=Species.dtype))
-    
-    PlasParams = {}
-    PlasParams['va']       = B0 / np.sqrt(mu0*(density * mass).sum())  # Alfven speed (m/s)
-    PlasParams['n0']       = ne                                        # Electron number density (/m3)
-    PlasParams['pcyc_rad'] = q*B0 / mp                                 # Proton cyclotron frequency (rad/s)
-    PlasParams['B0']       = B0                                        # Magnetic field value (T)
-    return Species, PlasParams
 
 
 def get_dispersion_relations(B0, name, mass, charge, density, tper, ani, kmin=0.0, kmax=1.0, Nk=1000,

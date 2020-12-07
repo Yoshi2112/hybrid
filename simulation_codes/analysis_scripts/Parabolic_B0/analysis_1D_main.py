@@ -3931,7 +3931,7 @@ if __name__ == '__main__':
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     
-    for series in ['winske_resonant_shape_test']:
+    for series in ['shoji_2013_standard_units']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -3940,7 +3940,7 @@ if __name__ == '__main__':
         clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
                 'darkorange', 'peru', 'yellow']
         
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
             runs_to_do = [2, 3]
@@ -3953,8 +3953,8 @@ if __name__ == '__main__':
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
 
                 #winske_summary_plots(save=True)
-                plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
-                winske_magnetic_density_plot()
+                #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
+                #winske_magnetic_density_plot()
                 #disp.plot_kt_winske()
                 #disp.plot_fourier_mode_timeseries(it_max=None)
                 
@@ -3964,8 +3964,8 @@ if __name__ == '__main__':
                 #plot_abs_with_boundary_parameters()
     
                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
-                #for comp in ['By', 'Bz']:        
-                #    plot_tx(component=comp, saveas='tx_plot', save=True, tmax=None, remove_ND=True, normalize=True)
+                for comp in ['By', 'Bz']:        
+                    plot_tx(component=comp, saveas='tx_plot', save=True, tmax=None, remove_ND=True, normalize=True)
                 
                 #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False, remove_ND=True)
                 

@@ -11,13 +11,13 @@ product
 import warnings, pdb, sys
 import numpy as np
 import matplotlib.pyplot as plt
+from   scipy.optimize    import fsolve
 from   scipy.special     import wofz
-from mpl_toolkits.axes_grid1 import make_axes_locatable
+from   mpl_toolkits.axes_grid1 import make_axes_locatable
+
 
 sys.path.append('F://Google Drive//Uni//PhD 2017//Data//Scripts//')
 import rbsp_fields_loader as rfl
-import rbsp_file_readers  as rfr 
-import analysis_scripts   as ascr
 import fast_scripts       as fscr
 
 from growth_rates_from_RBSP         import extract_species_arrays
@@ -27,6 +27,14 @@ c  = 3e8
 qp = 1.602e-19
 mp = 1.673e-27
 
+def nearest_index(items, pivot):
+    closest_val = min(items, key=lambda x: abs(x - pivot))
+    for ii in range(len(items)):
+        if items[ii] == closest_val:
+            return ii
+    sys.exit('Error: Unable to find index')
+    
+    
 def Z(arg):
     '''
     Return Plasma Dispersion Function : Normalized Fadeeva function
@@ -35,142 +43,266 @@ def Z(arg):
     '''
     return 1j*np.sqrt(np.pi)*wofz(arg)
 
+def Y(arg):
+    return np.real(Z(arg))
 
-def nearest_index(items, pivot):
-    closest_val = min(items, key=lambda x: abs(x - pivot))
-    for ii in range(len(items)):
-        if items[ii] == closest_val:
-            return ii
-    sys.exit('Error: Unable to find index')
-        
 
-def get_k_cold(w, Species):
+def hot_dispersion_eqn(w, k, Species):
     '''
-    Calculate the k of a specific angular frequency w in a cold
-    multicomponent plasma. Assumes a cold plasma (i.e. negates 
-    thermal effects). Hot species cast to cold by including their
-    plasma frequencies.
+    Function used in scipy.fsolve minimizer to find roots of dispersion relation
+    for hot plasma approximation.
+    Iterates over each k to find values of w that minimize to D(wr, k) = 0
     
-    This will give the cold plasma dispersion relation for the Species array
-    specified, since the CPDR is surjective in w (i.e. only one possible k for each w)
+    In this case, w is a vector [wr, wi] and fsolve is effectively doing a multivariate
+    optimization.
     
-    Omura et al. (2010)
+    type_out allows purely real or purely imaginary (coefficient only) for root
+    finding. Set as anything else for complex output.
+    
+    FSOLVE OPTIONS :: If bad solution, return np.nan?
+    
+    Eqns 1, 13 of Chen et al. (2013)
     '''
+    wc = w[0] + 1j*w[1]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        hot_sum = 0.0
+        for ii in range(Species.shape[0]):
+            sp = Species[ii]
+            if sp['tper'] == 0:
+                hot_sum += sp['plasma_freq_sq'] * wc / (sp['gyrofreq'] - wc)
+            else:
+                pdisp_arg   = (wc - sp['gyrofreq']) / (sp['vth_par']*k)
+                pdisp_func  = Z(pdisp_arg)*sp['gyrofreq'] / (sp['vth_par']*k)
+                brackets    = (sp['anisotropy'] + 1) * (wc - sp['gyrofreq'])/sp['gyrofreq'] + 1
+                Is          = brackets * pdisp_func + sp['anisotropy']
+                hot_sum    += sp['plasma_freq_sq'] * Is
+
+    solution = (wc ** 2) - (c * k) ** 2 + hot_sum
+    return np.array([solution.real, solution.imag])
+
+
+def warm_dispersion_eqn(w, k, Species):
+    '''    
+    Function used in scipy.fsolve minimizer to find roots of dispersion relation
+    for warm plasma approximation.
+    Iterates over each k to find values of w that minimize to D(wr, k) = 0
+    
+    Eqn 14 of Chen et al. (2013)
+    '''
+    wr = w[0]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        warm_sum = 0.0
+        for ii in range(Species.shape[0]):
+            sp = Species[ii]
+            if sp['tper'] == 0:
+                warm_sum   += sp['plasma_freq_sq'] * wr / (sp['gyrofreq'] - wr)
+            else:
+                pdisp_arg   = (wr - sp['gyrofreq']) / (sp['vth_par']*k)
+                numer       = ((sp['anisotropy'] + 1)*wr - sp['anisotropy']*sp['gyrofreq'])
+                Is          = sp['anisotropy'] + numer * Y(pdisp_arg) / (sp['vth_par']*k)
+                warm_sum   += sp['plasma_freq_sq'] * Is
+            
+    solution = wr ** 2 - (c * k) ** 2 + warm_sum
+    return np.array([solution, 0.0])
+
+
+def cold_dispersion_eqn(w, k, Species):
+    '''
+    Function used in scipy.fsolve minimizer to find roots of dispersion relation
+    for warm plasma approximation.
+    Iterates over each k to find values of w that minimize to D(wr, k) = 0
+    
+    Eqn 19 of Chen et al. (2013)
+    '''
+    wr = w[0]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         cold_sum = 0.0
         for ii in range(Species.shape[0]):
-            cold_sum += Species[ii]['plasma_freq_sq'] / (w * (w - Species[ii]['gyrofreq']))
-    
-        k = np.sqrt(1 - cold_sum) * w / c
-    return k
+            cold_sum += Species[ii]['plasma_freq_sq'] * wr / (Species[ii]['gyrofreq'] - wr)
+            
+    solution = wr ** 2 - (c * k) ** 2 + cold_sum
+    return np.array([solution, 0.0])
 
 
-def warm_plasma_dispersion_relation(wr, k, Species):
-    '''    
-    Function used in scipy.fsolve minimizer to find roots of dispersion relation.
-    Iterates over each k to find values of w that minimize to D(wr, k) = 0
-    '''
-    components = 0.0
-    for ii in range(Species.shape[0]):
-        sp = Species[ii]
-        if sp['tper'] == 0:
-            components += sp['plasma_freq_sq'] * wr / (sp['gyrofreq'] - wr)
-        else:
-            pdisp_arg   = (wr - sp['gyrofreq']) / (sp['vth_par']*k)
-            pdisp_func  = Z(pdisp_arg)*sp['gyrofreq'] / (sp['vth_par']*k)
-            brackets    = (sp['anisotropy'] + 1) * (wr - sp['gyrofreq'])/sp['gyrofreq'] + 1
-            Is          = brackets * pdisp_func + sp['anisotropy']
-            components += sp['plasma_freq_sq'] * Is
-    return (wr ** 2) - (c * k) ** 2 + components
-
-
-def solve_w_from_k(k, Species):
-    '''
-    This function solves the warm plasma dispersion relation for real frequency
-    
-    '''
-    
-    return
-
-
-def linear_growth_rates(w, Species):
+def get_warm_growth_rates(wr, k, Species):
     '''
     Calculates the temporal and convective linear growth rates for a plasma
     composition contained in Species for each frequency w. Assumes a cold
     dispersion relation is valid for k but uses a warm approximation in the
     solution for D(w, k).
     
-    Equations adapted from Chen et al. (2011) (or 2013?)
-    
-    To do:
-        --- Need to actually solve w for each k just like with the Wang (2016)
-            code. Actually just wr for D(wr, k) = 0 and then equations as before.
-        --- Feed in k-series rather than w-series. Is this still decent as a 
-            cold approximation? Maybe worth checking against paper.
-        --- What makes an approximation cold/warm/hot?
-              -- Cold negates any thermal stuff
-              -- Warm assumes gamma << wr and solves D(wr, k) to then solve for gamma
-              -- Hot solves wr + i*gamma in a 2D parameter space with no (?) assumptions
-        --- Validate against plots shown in Chen (2013)
-    
-    Input values in SI?
-     -- Frequencies in rad/s
-     -- Anisotropies dimensionless
-     -- Thermal velocity in m/s ?? 
-    '''
-    # Get k for each frequency to evaluate
-    # -- Actually, this needs to be swapped around:
-    #     1) Define k-space array (not w) in function call
-    #     2) Numerically solve wr for each k
-    #     3) Use *that* wr in the calculation for Di (and hence gamma, S)
-    k  = get_k_cold(w, Species)
-    
-    # Calculate Dr/k_para
+    Equations adapted from Chen et al. (2013)
+    '''    
     w_der_sum = 0.0
     k_der_sum = 0.0
     Di        = 0.0
-    for ii in range(Species.shape[0]):
-        sp = Species[ii]
+    
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
         
-        # If cold
-        if sp['tper'] == 0:
-            w_der_sum += sp['plasma_freq_sq'] * sp['gyrofreq'] / (w - sp['gyrofreq'])**2
-            k_der_sum += 0.0
-            Di        += 0.0
-        
-        # If hot
-        else:
-            zs           = (w - sp['gyrofreq']) / (sp['vth_par']*k)
-            Yz           = np.real(Z(zs))
-            dYz          = -2*(1 + zs*Yz)
-            A_bit        = (sp['anisotropy'] + 1) * w / sp['gyrofreq']
+        for ii in range(Species.shape[0]):
+            sp = Species[ii]
             
-            # Calculate frequency derivative of Dr (sums bit)
-            w_der_outsd  = sp['plasma_freq_sq']*sp['gyrofreq'] / (w*k*sp['vth_par'])
-            w_der_first  = A_bit * Yz
-            w_der_second = (A_bit - sp['anisotropy']) * w * dYz / (k * sp['vth_par']) 
-            w_der_sum   += w_der_outsd * (w_der_first + w_der_second)
-    
-            # Calculate Di (sums bit)
-            Di_bracket = 1 + (sp['anisotropy'] + 1) * (w - sp['gyrofreq']) / sp['gyrofreq']
-            Di_after   = sp['gyrofreq'] / (k * sp['vth_par']) * np.sqrt(np.pi) * np.exp(- zs ** 2)
-            Di        += sp['plasma_freq_sq'] * Di_bracket * Di_after
-    
-            # Calculate wavenumber derivative of Dr (sums bit)
-            k_der_outsd  = sp['plasma_freq_sq']*sp['gyrofreq'] / (w*k*k*sp['vth_par'])
-            k_der_first  = A_bit - sp['anisotropy']
-            k_der_second = Yz + zs * dYz
-            k_der_sum   += k_der_outsd * k_der_first * k_der_second
+            # If cold
+            if sp['tper'] == 0:
+                w_der_sum += sp['plasma_freq_sq'] * sp['gyrofreq'] / (wr - sp['gyrofreq'])**2
+                k_der_sum += 0.0
+                Di        += 0.0
+            
+            # If hot
+            else:
+                zs           = (wr - sp['gyrofreq']) / (sp['vth_par']*k)
+                Yz           = np.real(Z(zs))
+                dYz          = -2*(1 + zs*Yz)
+                A_bit        = (sp['anisotropy'] + 1) * wr / sp['gyrofreq']
+                
+                # Calculate frequency derivative of Dr (sums bit)
+                w_der_outsd  = sp['plasma_freq_sq']*sp['gyrofreq'] / (wr*k*sp['vth_par'])
+                w_der_first  = A_bit * Yz
+                w_der_second = (A_bit - sp['anisotropy']) * wr * dYz / (k * sp['vth_par']) 
+                w_der_sum   += w_der_outsd * (w_der_first + w_der_second)
+        
+                # Calculate Di (sums bit)
+                Di_bracket = 1 + (sp['anisotropy'] + 1) * (wr - sp['gyrofreq']) / sp['gyrofreq']
+                Di_after   = sp['gyrofreq'] / (k * sp['vth_par']) * np.sqrt(np.pi) * np.exp(- zs ** 2)
+                Di        += sp['plasma_freq_sq'] * Di_bracket * Di_after
+        
+                # Calculate wavenumber derivative of Dr (sums bit)
+                k_der_outsd  = sp['plasma_freq_sq']*sp['gyrofreq'] / (wr*k*k*sp['vth_par'])
+                k_der_first  = A_bit - sp['anisotropy']
+                k_der_second = Yz + zs * dYz
+                k_der_sum   += k_der_outsd * k_der_first * k_der_second
     
     # Get and return ratio
-    Dr_wder = 2*w + w_der_sum
+    Dr_wder = 2*wr + w_der_sum
     Dr_kder = -2*k*c**2 - k_der_sum
 
     temporal_growth_rate   = - Di / Dr_wder
     group_velocity         = - Dr_kder / Dr_wder
     convective_growth_rate = - temporal_growth_rate / np.abs(group_velocity)
     return temporal_growth_rate, convective_growth_rate
+
+
+def get_cold_growth_rates(wr, k, Species):
+    '''
+    Simplified version of the warm growth rate equation.
+    '''
+    w_der_sum = 0.0
+    Di        = 0.0
+    
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        
+        for ii in range(Species.shape[0]):
+            sp         = Species[ii]
+            w_der_sum += sp['plasma_freq_sq'] * sp['gyrofreq'] / (wr - sp['gyrofreq'])**2
+            
+            if sp['vth_par'] != 0.0:
+                # Calculate Di (sums bit)
+                zs         = (wr - sp['gyrofreq']) / (sp['vth_par']*k)
+                Di_bracket = 1 + (sp['anisotropy'] + 1) * (wr - sp['gyrofreq']) / sp['gyrofreq']
+                Di_after   = sp['gyrofreq'] / (k * sp['vth_par']) * np.sqrt(np.pi) * np.exp(- zs ** 2)
+                Di        += sp['plasma_freq_sq'] * Di_bracket * Di_after
+    
+    # Get and return ratio
+    Dr_wder = 2*wr + w_der_sum
+    Dr_kder = -2*k*c**2
+
+    temporal_growth_rate   = - Di / Dr_wder
+    group_velocity         = - Dr_kder / Dr_wder
+    convective_growth_rate = - temporal_growth_rate / np.abs(group_velocity)
+    return temporal_growth_rate, convective_growth_rate
+
+
+def get_dispersion_relation(Species, k, approx='warm', return_all=False):
+    '''
+    Given a range of k, returns the real and imaginary parts of the plasma dispersion
+    relation specified by the Species present.
+    
+    Type of dispersion relation controlled by 'approx' kwarg as:
+        hot  :: Full dispersion relation for complex w = wr + i*gamma
+        warm :: Small growth rate approximation that allows D(wr, k) = 0
+        cold :: Dispersion relation used for wr, growth rate calculated as per warm
+    '''
+    gyfreqs, counts = np.unique(Species['gyrofreq'], return_counts=True)
+    
+    # Remove electron count, 
+    gyfreqs = gyfreqs[1:]
+    N_solns = counts.shape[0] - 1
+    
+    # fsolve arguments
+    eps    = 0.01           # Offset used to supply initial guess (since right on w_cyc returns an error)
+    tol    = 1e-10          # Absolute solution convergence tolerance in rad/s
+    fev    = 1000000        # Maximum number of iterations
+    Nk     = k.shape[0]     # Number of wavenumbers to solve for
+    
+    # Solution and error arrays :: Two-soln array for wr, gamma.
+    # Gamma is only solved for in the DR with the hot approx
+    # The other two require calls to another function with a wr arg.
+    PDR_solns = np.ones((Nk, N_solns, 2)) * eps
+    ier       = np.zeros((Nk, N_solns), dtype=int)
+    msg       = np.zeros((Nk, N_solns), dtype='<U256')
+
+    # Initial guesses
+    for ii in range(1, N_solns):
+        PDR_solns[0, ii - 1]  = np.array([[gyfreqs[-ii - 1] * 1.05, 0.0]])
+
+    if approx == 'hot':
+        func = hot_dispersion_eqn
+    elif approx == 'warm':
+        func = warm_dispersion_eqn
+    elif approx == 'cold':
+        func = cold_dispersion_eqn
+    else:
+        sys.exit('ABORT :: kwarg approx={} invalid. Must be \'cold\', \'warm\', or \'hot\'.'.format(approx))
+    
+    
+    # Define function to solve for (all have same arguments)
+    for jj in range(N_solns):
+        for ii in range(1, Nk):
+            PDR_solns[ii, jj], infodict, ier[ii, jj], msg[ii, jj] =\
+                fsolve(func, x0=PDR_solns[ii - 1, jj], args=(k[ii], Species), xtol=tol, maxfev=fev, full_output=True)
+
+        # Solve for k[0] using initial guess of k[1]
+        PDR_solns[0, jj], infodict, ier[0, jj], msg[0, jj] =\
+            fsolve(func, x0=PDR_solns[1, jj], args=(k[0], Species), xtol=tol, maxfev=fev, full_output=True)
+
+
+    # Filter out bad solutions
+    # Why only warm approx giving me bad solutions?
+    if True:
+        N_bad = 0
+        for jj in range(N_solns):
+            for ii in range(1, Nk):
+                if ier[ii, jj] == 5:
+                    PDR_solns[ii, jj] = np.nan
+                    N_bad += 1
+        print('{} solutions filtered for {} approximation.'.format(N_bad, approx))
+
+    # Solve for growth rate/convective growth rate here 
+    # (how to do for hot? Maybe just make NoneType)
+    # (Would have to calculate Vg from dw/dk, finite difference?)
+    if approx == 'hot':
+        conv_growth = None
+    elif approx == 'warm':
+        for jj in range(N_solns):
+            PDR_solns[:, jj, 1], conv_growth = get_warm_growth_rates(PDR_solns[:, jj, 0], k, Species)
+    elif approx == 'cold':
+        for jj in range(N_solns):
+            PDR_solns[:, jj, 1], conv_growth = get_cold_growth_rates(PDR_solns[:, jj, 0], k, Species)
+    else:
+        sys.exit('ABORT :: kwarg approx={} invalid. Must be \'cold\', \'warm\', or \'hot\'.'.format(approx))
+    
+    if return_all == False:
+        return PDR_solns, conv_growth
+    else:
+        return PDR_solns, conv_growth, ier, msg
+
+
+
 
 
 def plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad, norm=None, norm_B0=200.):
@@ -226,7 +358,7 @@ def plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad, norm=None,
         Species, PP = create_species_array(B0[ii], name, mass, charge, density[:, ii],
                                             tper[:, ii], ani[:, ii])
         
-        TGR[ii], CGR[ii] = linear_growth_rates(w, Species)
+        TGR[ii], CGR[ii] = get_warm_growth_rates(w, Species)
         
         # Normalize
         if norm is not None:
@@ -319,7 +451,7 @@ def plot_max_GR_timeseries(rbsp_path, time_start, time_end, probe, pad, norm=Non
         He_idx = nearest_index(freqs, 0.25*pcyc)
         O_idx  = nearest_index(freqs, 0.0625*pcyc)
         
-        TGR, CGR = linear_growth_rates(w, Species)
+        TGR, CGR = get_warm_growth_rates(w, Species)
         
         # Mask nan's
         TGR[np.isnan(TGR) == True] = 0.0
@@ -421,15 +553,6 @@ def plot_max_GR_timeseries(rbsp_path, time_start, time_end, probe, pad, norm=Non
     
     # Linear TGR and CGR with input parameters for calculation (looking for spikes!)
     if True:
-        # TGR
-        # B0
-        # Cold densities 
-        # HOPE densities
-        # HOPE temperatures
-        # HOPE anisotropies
-        # RBSPICE densities
-        # RBSPICE temperatures
-        # RBSPICE anisotropies
         plt.ioff()
         for max_arr, title in zip([max_TGR, max_CGR], ['TGR', 'CGR']):
             fig, axes = plt.subplots(9, figsize=(8,20), sharex=True)
@@ -513,5 +636,58 @@ if __name__ == '__main__':
     save_string = time_start.astype(object).strftime('%Y%m%d_%H%M_') + time_end.astype(object).strftime('%H%M')
     save_dir    = '{}NEW_LT//EVENT_{}//NEW_FIXED_DISPERSION_RESULTS//COLD_K_TIMESERIES//1D_MAX_GROWTH//'.format(save_drive, date_string)
 
-    plot_max_GR_timeseries(rbsp_path, time_start, time_end, probe, pad, norm=None, norm_B0=200.)
+    mp       = 1.673e-27                        # Proton mass (kg)
+    qi       = 1.602e-19                        # Elementary charge (C)
+    e0       = 8.854e-12                        # Permittivity of free space
+    _n0      = 100e6                            # Electron number density in /m3                      
+    _B0      = 144e-9                           # Background magnetic field in T
+    nhh      = 0.03                             # Fraction hot hydrogen
+    nHe      = 0.20                             # Fraction warm helium
+    THe      = 100.0                              # Helium temperature (eV) -- Does this have to be altered for 'total temp'?
+    
+    _name    = np.array(['Hot H'  , 'Cold H'        , 'Cold He'])               # Species label
+    _mass    = np.array([1.0      , 1.0             , 4.0      ]) * mp          # Mass   in proton masses (kg)
+    _charge  = np.array([1.0      , 1.0             , 1.0      ]) * qi          # Change in elementary units (C)
+    _density = np.array([nhh      , 1.0 - nhh - nHe , nHe      ]) * _n0         # Density as a fraction of n0 (/m3)
+    _tpar    = np.array([25e3     , 0.0             , THe      ])               # Parallel temperature in eV
+    _ani     = np.array([1.0      , 0.0             , 0.0      ])               # Temperature anisotropy
+    _tper    = (_ani + 1) * _tpar                                               # Perpendicular temperature in eV
+    
+    _Spec, _PP = create_species_array(_B0, _name, _mass, _charge, _density, _tper, _ani)
+
+    _kh  = np.sqrt(_n0 * qi ** 2 / (mp * e0))/c
+    _Nk  = 1000
+    _k   = np.linspace(0.0, 2.0*_kh, _Nk)
+    pcyc = qi * _B0 / mp 
+
+    cold_DR, cold_CGR = get_dispersion_relation(_Spec, _k, approx='cold', return_all=False)
+    warm_DR, warm_CGR = get_dispersion_relation(_Spec, _k, approx='warm', return_all=False)
+    hot_DR ,  hot_CGR = get_dispersion_relation(_Spec, _k, approx='hot' , return_all=False)
+
+    # Plot the things
+    k_norm    = _k / _kh
+    fig, axes = plt.subplots(2, sharex=True)
+    
+    for jj in range(hot_DR.shape[1]):
+        axes[0].semilogx(k_norm,  hot_DR[:, jj, 0] / pcyc, ls='-' , c='r', lw=0.5)
+        axes[0].semilogx(k_norm, warm_DR[:, jj, 0] / pcyc, ls='--', c='b', lw=0.5)
+        axes[0].semilogx(k_norm, cold_DR[:, jj, 0] / pcyc, ls='--', c='k', lw=0.5)
+        axes[0].set_ylabel('$\omega_r/\Omega_h$', fontsize=16)
+        
+        axes[1].semilogx(k_norm,  hot_DR[:, jj, 1] / pcyc, ls='-' , c='r', label='Full', lw=0.5)
+        axes[1].semilogx(k_norm, warm_DR[:, jj, 1] / pcyc, ls='--', c='b', label='Warm', lw=0.5)
+        axes[1].semilogx(k_norm, cold_DR[:, jj, 1] / pcyc, ls='--', c='k', label='Cold', lw=0.5)
+        
+    axes[1].set_ylabel('$\gamma/\Omega_h$', fontsize=16)
+    axes[1].set_xlabel('$k_\parallel/k_h$', fontsize=16)
+    
+    axes[0].set_ylim(0.0, 0.8)
+    axes[0].set_xlim(1e-2, 2)
+    axes[1].set_ylim(-0.01, 0.06)
+    axes[1].set_xlim(1e-2, 2)
+    
+    fig.subplots_adjust(hspace=0)
+
+
+    #plot_max_GR_timeseries(rbsp_path, time_start, time_end, probe, pad, norm=None, norm_B0=200.)
     #plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad, norm='absolute')
