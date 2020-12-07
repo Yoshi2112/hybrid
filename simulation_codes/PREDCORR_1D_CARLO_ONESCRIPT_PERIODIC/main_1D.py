@@ -331,23 +331,24 @@ def set_timestep(vel, Te0):
            be initial limiting factor. This may change for inhomogenous loading
            of particles or initial fields.
     '''
-    ion_ts   = orbit_res / gyfreq               # Timestep to resolve gyromotion
+    ion_ts   = orbit_res / gyfreq                     # Timestep to resolve boundary gyromotion
     vel_ts   = 0.5 * dx / np.max(np.abs(vel[0, :]))   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
     
-    DT       = min(ion_ts, vel_ts)
-    max_time = max_rev * 2 * np.pi / gyfreq_eq     # Total runtime in seconds
-    max_inc  = int(max_time / DT) + 1                          # Total number of time steps
+    gyperiod_eq = 2 * np.pi / gyfreq_eq               # Equatorial (largest) gyroperiod
+    DT          = min(ion_ts, vel_ts)                 # Timestep as smallest of options
+    max_time    = max_rev * gyperiod_eq               # Total runtime in seconds
+    max_inc     = int(max_time / DT) + 1              # Total number of time steps
 
-    gyperiod = 2 * np.pi / gyfreq
+    
     if part_res == 0:
         part_save_iter = 1
     else:
-        part_save_iter = int(part_res*gyperiod / DT)
+        part_save_iter = int(part_res*gyperiod_eq / DT)
 
     if field_res == 0:
         field_save_iter = 1
     else:
-        field_save_iter = int(field_res*gyperiod / DT)
+        field_save_iter = int(field_res*gyperiod_eq / DT)
 
     if save_fields == 1 or save_particles == 1:
         store_run_parameters(DT, part_save_iter, field_save_iter, Te0)
@@ -1208,7 +1209,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ep, 
     else:
         Eacc_ts = ion_ts
 
-    vel_ts          = 0.60 * dx / np.abs(vel[0, :]).max()                        # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
+    vel_ts          = 0.60 * dx / np.abs(vel[0, :]).max()               # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
     DT_part         = min(Eacc_ts, vel_ts, ion_ts)                      # Smallest of the allowable timesteps
     
     if DT_part < 0.9*DT:
@@ -1515,7 +1516,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
             if num_spare < inject_rate.sum() * DT * 5.0:
                 # Change this to dynamically expand particle arrays later on (adding more particles)
                 # Can do it by cell lots (i.e. add a cell's worth each time)
-                raise Exception('WARNING :: No space particles remaining. Exiting simulation.')
+                raise Exception('WARNING :: No spare particles remaining. Exiting simulation.')
                 
     
     return qq, DT, max_inc, part_save_iter, field_save_iter
@@ -1694,7 +1695,7 @@ rho        = (mass*density).sum()                        # Mass density for alfv
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*rho)                     # Alfven speed at equator: Assuming pure proton plasma
 gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
-dx         = va / gyfreq_eq                              # Alternate method of calculating dx (better for multicomponent plasmas)
+dx         = dxm * va / gyfreq_eq                        # Alternate method of calculating dx (better for multicomponent plasmas)
 #dx         = dxm * c / wpi                              # Spatial cadence, based on ion inertial length
 
 xmax       = NX // 2 * dx                                # Maximum simulation length, +/-ve on each side
@@ -1786,14 +1787,6 @@ ro1 = ND + NX; ro2 = ND + NX + 1        # Right outer
 li1 = ND         ; li2 = ND + 1         # Left inner
 ri1 = ND + NX - 1; ri2 = ND + NX - 2    # Right inner
 
-## DIAGNOSTICS ##
-#print(wpi / gyfreq)
-#print(c   / va)
-#print(va / gyfreq)
-#print(c / wpi)
-#sys.exit()
-#################
-
 ##############################
 ### INPUT TESTS AND CHECKS ###
 ##############################
@@ -1875,7 +1868,7 @@ if __name__ == '__main__':
     if save_fields == 1:
         save_field_data(0, DT, field_save_iter, 0, Ji, E_int,\
                              B, Ve, Te, q_dens, B_damping_array, E_damping_array)
-
+    
     # Retard velocity
     print('Retarding velocity...')
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E_int, v_prime, S, T, temp_N, -0.5*DT)
