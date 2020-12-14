@@ -358,3 +358,4 @@ if __name__ == '__main__':
         axes2[3].plot(_times, _spice_anis[2], c='b', ls='--')
         axes2[3].set_ylabel('RBSPICE A')
         
+        plt.show()

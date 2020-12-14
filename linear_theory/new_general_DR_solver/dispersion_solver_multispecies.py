@@ -87,11 +87,12 @@ def create_species_array(B0, name, mass, charge, density, tper, ani):
 
     # Insert species values into each
     for ii in range(nsp):
-        new_species = np.array([(name[ii], mass[ii], density[ii], tper[ii], ani[ii],
-                                                density[ii] * charge[ii] ** 2 / (mass[ii] * e0),
-                                                charge[ii]  * B0 / mass[ii],
-                                                alpha_par[ii])], dtype=Species.dtype)
-        Species = np.append(Species, new_species)
+        if density[ii] != 0.0:
+            new_species = np.array([(name[ii], mass[ii], density[ii], tper[ii], ani[ii],
+                                                    density[ii] * charge[ii] ** 2 / (mass[ii] * e0),
+                                                    charge[ii]  * B0 / mass[ii],
+                                                    alpha_par[ii])], dtype=Species.dtype)
+            Species = np.append(Species, new_species)
     
     # Add cold electrons
     Species = np.append(Species, np.array([('Electrons', me, ne, 0, 0,
@@ -450,7 +451,7 @@ if __name__ == '__main__':
     '''
     Test quantities/direct interface
     '''                               # Number of species
-    L_shell  = 7                                # L-shell at which magnetic field and density are calculated
+    L_shell  = 4                                # L-shell at which magnetic field and density are calculated
     n0       = sheely_plasmasphere(L_shell)     # Plasma density, /m3
     _B0      = geomagnetic_magnitude(L_shell)   # Background magnetic field, T
     mp       = 1.673e-27                        # Proton mass (kg)
@@ -462,9 +463,9 @@ if __name__ == '__main__':
         '''
         # This all must add up to 1
         RC_ab= 0.1
-        H_ab = 0.6
-        He_ab= 0.2
-        O_ab = 0.1
+        H_ab = 0.1
+        He_ab= 0.5
+        O_ab = 0.3
         
         if round(RC_ab + H_ab + He_ab + O_ab, 5) != 1.0:
             sys.exit('Aborted: Densities don\'t add up')
@@ -474,24 +475,7 @@ if __name__ == '__main__':
         _charge  = np.array([1.0       , 1.0      , 1.0      ,  1.0    ]) * qi
         _density = np.array([RC_ab     , H_ab     , He_ab    ,  O_ab,  ]) * n0
         _tpar    = np.array([25e3      , 0.0      , 0.0      ,  0.0    ])
-        _ani     = np.array([1.0       , 0.0      , 0.0      ,  0.0    ])
-        _tper    = (_ani + 1) * _tpar
-    elif False:
-        '''
-        Standard Wang (2016) test values DON'T CHANGE (old values, RC calculation might be wrong)
-        '''
-        # All but RC must add up to 1
-        H_ab = 0.7
-        He_ab= 0.2
-        O_ab = 0.1
-        RC_ab= 0.1
-        
-        _name    = np.array(['Warm H'  , 'Cold H'        , 'Cold He', 'Cold O'])
-        _mass    = np.array([1.0       , 1.0             , 4.0      , 16.0    ]) * mp
-        _charge  = np.array([1.0       , 1.0             , 1.0      ,  1.0    ]) * qi
-        _density = np.array([RC_ab*H_ab, (1 - RC_ab)*H_ab, He_ab    ,  O_ab,  ]) * n0
-        _tpar    = np.array([25e3      , 0.0             , 0.0      ,  0.0    ])
-        _ani     = np.array([1.0       , 0.0             , 0.0      ,  0.0    ])
+        _ani     = np.array([2.0       , 0.0      , 0.0      ,  0.0    ])
         _tper    = (_ani + 1) * _tpar
     else:
         '''
