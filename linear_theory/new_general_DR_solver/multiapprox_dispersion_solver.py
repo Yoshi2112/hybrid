@@ -8,11 +8,14 @@ Note: This script just copies the functions related to calculating the cold
 dispersion/growth rates since the 'omura play' source script isn't a final
 product
 """
-import warnings, pdb, sys, os
+import warnings, pdb, sys, os, time
 import numpy             as np
 import matplotlib        as mpl
 import matplotlib.pyplot as plt
 import matplotlib.dates  as mdates
+import multiprocessing
+import multiprocessing.sharedctypes
+from   matplotlib.lines        import Line2D
 from   scipy.optimize          import fsolve
 from   scipy.special           import wofz
 from   mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -27,6 +30,8 @@ c  = 3e8
 qp = 1.602e-19
 mp = 1.673e-27
 
+
+#%% DATA MANAGEMENT FUNCTIONS
 def nearest_index(items, pivot):
     closest_val = min(items, key=lambda x: abs(x - pivot))
     for ii in range(len(items)):
@@ -135,7 +140,8 @@ def create_species_array(B0, name, mass, charge, density, tper, ani):
     PlasParams['B0']       = B0                                        # Magnetic field value (T)
     return Species, PlasParams
 
-    
+
+#%% CALCULATION FUNCTIONS    
 def Z(arg):
     '''
     Return Plasma Dispersion Function : Normalized Fadeeva function
@@ -318,7 +324,7 @@ def get_cold_growth_rates(wr, k, Species):
     return temporal_growth_rate, convective_growth_rate
 
 
-def get_dispersion_relation(Species, k, approx='warm', guesses=None):
+def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out=True, print_filtered=True):
     '''
     Given a range of k, returns the real and imaginary parts of the plasma dispersion
     relation specified by the Species present.
@@ -395,7 +401,8 @@ def get_dispersion_relation(Species, k, approx='warm', guesses=None):
                 if ier[ii, jj] == 5:
                     PDR_solns[ii, jj] = np.nan
                     N_bad += 1
-        print('{} solutions filtered for {} approximation.'.format(N_bad, approx))
+        if print_filtered == True:
+            print('{} solutions filtered for {} approximation.'.format(N_bad, approx))
 
     # Solve for growth rate/convective growth rate here
     if approx == 'hot':
@@ -407,18 +414,21 @@ def get_dispersion_relation(Species, k, approx='warm', guesses=None):
         for jj in range(N_solns):
             PDR_solns[:, jj, 1], conv_growth = get_cold_growth_rates(PDR_solns[:, jj, 0], k, Species)
     
-    # Convert to complex number
-    for ii in range(Nk):
-        for jj in range(N_solns):
-            OUT_solns[ii, jj] = PDR_solns[ii, jj, 0] + 1j*PDR_solns[ii, jj, 1]
+    # Convert to complex number if flagged, else return as (Nk, N_solns, 2) for real/imag components
+    if complex_out == True:
+        for ii in range(Nk):
+            for jj in range(N_solns):
+                OUT_solns[ii, jj] = PDR_solns[ii, jj, 0] + 1j*PDR_solns[ii, jj, 1]
+    else:
+        OUT_solns = PDR_solns
     
     return OUT_solns, conv_growth
 
 
 
-def get_DR_for_data_timeseries(time_start, time_end, probe, pad, cmp, 
+def get_DRs_for_data_timeseries(time_start, time_end, probe, pad, cmp, 
                                 kmin=0.0, kmax=1.0, Nk=1000, knorm=True,
-                                nsec=None, suff='', HM_filter_mhz=50):
+                                nsec=None, HM_filter_mhz=50):
     '''
     Calculate dispersion relation and temporal growth rate for all times between
     time_start and time_end. Nk is resolution in k-space for each solution
@@ -438,7 +448,10 @@ def get_DR_for_data_timeseries(time_start, time_end, probe, pad, cmp,
         
     Should probably also save things like the filter
     '''
-    DR_path = save_dir + 'DISP_{}_cc_{:03}_{:03}_{:03}{}.npz'.format(save_string, int(cmp[0]), int(cmp[1]), int(cmp[2]), suff)
+    if nsec is None:
+        DR_path = save_dir + 'DISP_{}_cc_{:03}_{:03}_{:03}.npz'.format(save_string, int(cmp[0]), int(cmp[1]), int(cmp[2]))
+    else:
+        DR_path = save_dir + 'DISP_{}_cc_{:03}_{:03}_{:03}_{}sec.npz'.format(save_string, int(cmp[0]), int(cmp[1]), int(cmp[2]), nsec)
     
     # Cast as array just in case its a list
     cmp = np.asarray(cmp)
@@ -456,25 +469,31 @@ def get_DR_for_data_timeseries(time_start, time_end, probe, pad, cmp,
         
         # Get dispersion relations for each time if possible
         for ii in range(Nt):
+            Species, PP = create_species_array(B0[ii], name, mass, charge, density[:, ii], tper[:, ii], ani[:, ii])
+
+            all_k[ii]   = np.linspace(kmin, kmax, Nk, endpoint=False)
+            # Convert k-extrema to /m if needed
+            if knorm == True:
+                all_k[ii] *= PP['pcyc_rad'] / PP['va']
+                
+            print('Calculating dispersion/growth relation for {}'.format(times[ii]))
             try:
-                print('Calculating dispersion/growth relation for {}'.format(times[ii]))
-                
-                Species, PP = create_species_array(B0[ii], name, mass, charge, density[:, ii], tper[:, ii], ani[:, ii])
-                all_k[ii]   = np.linspace(kmin, kmax, Nk, endpoint=False)
-                pdb.set_trace()
-                # Convert k-extrema to /m if needed
-                if knorm == True:
-                    all_k[ii] *= PP['pcyc_rad'] / PP['va']
-                
-                # Calculate dispersion relation 3 ways
                 all_CPDR[ii], cold_CGR = get_dispersion_relation(Species, all_k[ii], approx='cold')
+            except:
+                print('COLD ERROR: Skipping to next time...')
+                all_CPDR[ii, :, :] = np.ones((Nk, 3), dtype=np.complex128) * np.nan 
+                
+            try:                
                 all_WPDR[ii], warm_CGR = get_dispersion_relation(Species, all_k[ii], approx='warm')
+            except:
+                print('WARM ERROR: Skipping to next time...')
+                all_WPDR[ii, :, :] = np.ones((Nk, 3), dtype=np.complex128) * np.nan
+                
+            try:
                 all_HPDR[ii],  hot_CGR = get_dispersion_relation(Species, all_k[ii], approx='hot' )
             except:
-                print('ERROR: Skipping to next time...')
-                all_CPDR[ii, :, :] = np.ones((Nk, 3), dtype=np.complex128   ) * np.nan 
-                all_WPDR[ii, :, :] = np.ones((Nk, 3), dtype=np.complex128) * np.nan
-                all_k[   ii, :]    = np.ones(Nk     , dtype=np.complex128   ) * np.nan
+                print('HOT ERROR: Skipping to next time...')
+                all_HPDR[ii, :, :] = np.ones((Nk, 3), dtype=np.complex128) * np.nan
         
         # Saves data used for DR calculation as well, for future reference (and plotting)
         if os.path.exists(save_dir) == False:
@@ -483,7 +502,7 @@ def get_DR_for_data_timeseries(time_start, time_end, probe, pad, cmp,
         print('Saving dispersion history...')
         np.savez(DR_path, all_CPDR=all_CPDR, all_WPDR=all_WPDR, all_HPDR=all_HPDR, all_k=all_k, comp=cmp,
                  times=times, B0=B0, name=name, mass=mass, charge=charge, density=density, tper=tper,
-                 ani=ani, cold_dens=cold_dens)
+                 ani=ani, cold_dens=cold_dens, HM_filter_mhz=np.array([HM_filter_mhz]))
     else:
         print('Dispersion results already exist, loading from file...')
         DR_file   = np.load(DR_path)
@@ -504,6 +523,228 @@ def get_DR_for_data_timeseries(time_start, time_end, probe, pad, cmp,
         cold_dens = DR_file['cold_dens']
     return all_k, all_CPDR, all_WPDR, all_HPDR, \
            times, B0, name, mass, charge, density, tper, ani, cold_dens
+
+
+def get_DRs_chunked(Nk, kmin, kmax, knorm, times, B0, name, mass, charge, density, tper, ani,
+                      k_dict, CPDR_dict, WPDR_dict, HPDR_dict,
+                      st=0, worker=None):
+    '''
+    Function designed to be run in parallel. All dispersion inputs as previous. 
+    output_PDR arrays are shared memory
+    
+    Dispersion inputs (B0, times, density, etc.) are chunked so this function calculates
+    them all.
+    
+    st is the first time index to be computed in the main array, gives position in
+    output array to place results in
+    
+    Thus the array index in output_PDRs will be st+ii for ii in range(Nt)
+    '''
+    k_arr    = np.frombuffer(k_dict['arr']).reshape(k_dict['shape'])
+    CPDR_arr = np.frombuffer(CPDR_dict['arr']).reshape(CPDR_dict['shape'])
+    WPDR_arr = np.frombuffer(WPDR_dict['arr']).reshape(WPDR_dict['shape'])
+    HPDR_arr = np.frombuffer(HPDR_dict['arr']).reshape(HPDR_dict['shape'])
+    
+    for ii in range(times.shape[0]):
+        Species, PP = create_species_array(B0[ii], name, mass, charge, density[:, ii], tper[:, ii], ani[:, ii])
+        this_k      = np.linspace(kmin, kmax, Nk, endpoint=False)
+        
+        # Convert k-extrema to /m if needed
+        if knorm == True:
+            this_k *= PP['pcyc_rad'] / PP['va']
+        
+        # Calculate dispersion relations if possible
+        print('Worker', worker, '::', times[ii])
+        #try:
+        this_CPDR, cold_CGR = get_dispersion_relation(Species, this_k, approx='cold', complex_out=False, print_filtered=False)
+        #except:
+        #    print('COLD ERROR: Skipping', times)
+        #    this_CPDR = np.ones((Nk, 3, 2), dtype=np.complex128) * np.nan 
+            
+        #try:            
+        this_WPDR, warm_CGR = get_dispersion_relation(Species, this_k, approx='warm', complex_out=False, print_filtered=False)
+        #except:
+        #    print('WARM ERROR: Skipping', times)
+        #    this_WPDR = np.ones((Nk, 3, 2), dtype=np.complex128) * np.nan
+        
+        #try:
+        this_HPDR,  hot_CGR = get_dispersion_relation(Species, this_k, approx='hot' , complex_out=False, print_filtered=False)
+        #except:
+        #    print('HOT ERROR: Skipping', times)
+        #    this_HPDR = np.ones((Nk, 3, 2), dtype=np.complex128) * np.nan
+                 
+        k_arr[   st+ii, :]       = this_k[...]
+        CPDR_arr[st+ii, :, :, :] = this_CPDR[...]
+        WPDR_arr[st+ii, :, :, :] = this_WPDR[...]
+        HPDR_arr[st+ii, :, :, :] = this_HPDR[...]
+    return
+
+
+def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp, 
+                    kmin=0.0, kmax=1.0, Nk=1000, knorm=True,
+                    nsec=None, HM_filter_mhz=50):
+
+    if nsec is None:
+        DR_path = save_dir + 'DISP_{}_cc_{:03}_{:03}_{:03}.npz'.format(save_string, int(cmp[0]), int(cmp[1]), int(cmp[2]))
+    else:
+        DR_path = save_dir + 'DISP_{}_cc_{:03}_{:03}_{:03}_{}sec.npz'.format(save_string, int(cmp[0]), int(cmp[1]), int(cmp[2]), nsec)
+    
+    if os.path.exists(DR_path) == False:
+        # Load data
+        times, B0, name, mass, charge, density, tper, ani, cold_dens = \
+        extract_species_arrays(time_start, time_end, probe, pad, cmp=np.asarray(cmp), 
+                               return_raw_ne=True, nsec=nsec, HM_filter_mhz=HM_filter_mhz)
+    
+        Nt      = times.shape[0]
+        N_procs = 7
+        procs   = []
+        
+        # Create raw shared memory arrays with shapes. Store in dict to send with each worker
+        k_shape      = (Nt, Nk)
+        k_shm        = multiprocessing.RawArray('d', Nt * Nk)
+        k_dict       = {'arr': k_shm, 'shape': k_shape}
+        
+        CPDR_shape   = (Nt, Nk, 3, 2)
+        CPDR_shm     = multiprocessing.RawArray('d', Nt*Nk*3*2)
+        CPDR_dict    = {'arr': CPDR_shm, 'shape': CPDR_shape}
+        
+        WPDR_shape   = (Nt, Nk, 3, 2)
+        WPDR_shm     = multiprocessing.RawArray('d', Nt*Nk*3*2)
+        WPDR_dict    = {'arr': WPDR_shm, 'shape': WPDR_shape}
+        
+        HPDR_shape   = (Nt, Nk, 3, 2)
+        HPDR_shm     = multiprocessing.RawArray('d', Nt*Nk*3*2)
+        HPDR_dict    = {'arr': HPDR_shm, 'shape': HPDR_shape}
+        
+        k_np         = np.frombuffer(k_shm).reshape(k_shape)
+        CPDR_np      = np.frombuffer(CPDR_shm).reshape(CPDR_shape)
+        WPDR_np      = np.frombuffer(WPDR_shm).reshape(WPDR_shape)
+        HPDR_np      = np.frombuffer(HPDR_shm).reshape(HPDR_shape)
+        
+        # Split input data into a list of chunks
+        time_chunks    = np.array_split(times,   N_procs)
+        field_chunks   = np.array_split(B0,      N_procs)
+        density_chunks = np.array_split(density, N_procs, axis=1)
+        tper_chunks    = np.array_split(tper,    N_procs, axis=1)
+        ani_chunks     = np.array_split(ani,     N_procs, axis=1)
+    
+        # Instatiate each process with a different chunk
+        acc = 0; start = time.time()
+        for xx in range(N_procs):
+            print('Starting process', xx)
+            proc = multiprocessing.Process(target=get_DRs_chunked,
+                                        args=(Nk, kmin, kmax, knorm, time_chunks[xx],
+                                        field_chunks[xx], name, mass, charge, density_chunks[xx],
+                                        tper_chunks[xx], ani_chunks[xx],
+                                        k_dict, CPDR_dict, WPDR_dict, HPDR_dict),
+                                        kwargs={'st':acc, 'worker':xx})
+            procs.append(proc)
+            proc.start()
+            
+            acc += time_chunks[xx].shape[0]
+        
+        # Complete processes
+        for proc in procs:
+            proc.join()
+                
+        print('All processes complete')
+        end = time.time()
+        print('Total parallel time = {}s'.format(str(end-start)))
+        
+        # Make output complex
+        CPDR_out = np.zeros((Nt, Nk, 3), dtype=np.complex128)
+        WPDR_out = np.zeros((Nt, Nk, 3), dtype=np.complex128)
+        HPDR_out = np.zeros((Nt, Nk, 3), dtype=np.complex128)
+    
+        for ii in range(Nt):
+            for jj in range(Nk):
+                for kk in range(3):
+                    CPDR_out[ii, jj, kk] = CPDR_np[ii, jj, kk, 0] + 1j * CPDR_np[ii, jj, kk, 1]
+                    WPDR_out[ii, jj, kk] = WPDR_np[ii, jj, kk, 0] + 1j * WPDR_np[ii, jj, kk, 1]
+                    HPDR_out[ii, jj, kk] = HPDR_np[ii, jj, kk, 0] + 1j * HPDR_np[ii, jj, kk, 1]
+            
+        # Saves data used for DR calculation as well, for future reference (and plotting)
+        if os.path.exists(save_dir) == False:
+            os.makedirs(save_dir)
+                
+        print('Saving dispersion history...')
+        np.savez(DR_path, all_CPDR=CPDR_out, all_WPDR=WPDR_out, all_HPDR=HPDR_out, all_k=k_np, comp=np.asarray(cmp),
+                 times=times, B0=B0, name=name, mass=mass, charge=charge, density=density, tper=tper,
+                 ani=ani, cold_dens=cold_dens, HM_filter_mhz=np.array([HM_filter_mhz]))
+    else:
+        print('Dispersion results already exist, loading from file...')
+        DR_file   = np.load(DR_path)
+        
+        k_np      = DR_file['all_k']
+        CPDR_out  = DR_file['all_CPDR']
+        WPDR_out  = DR_file['all_WPDR']
+        HPDR_out  = DR_file['all_HPDR']
+                
+        times     = DR_file['times']
+        B0        = DR_file['B0']
+        name      = DR_file['name']
+        mass      = DR_file['mass']
+        charge    = DR_file['charge']
+        density   = DR_file['density']
+        tper      = DR_file['tper']
+        ani       = DR_file['ani']
+        cold_dens = DR_file['cold_dens']
+        
+    return k_np, CPDR_out, WPDR_out, HPDR_out, \
+           times, B0, name, mass, charge, density, tper, ani, cold_dens
+           
+
+#%% PLOTTING FUNCTIONS
+def create_band_legend(fn_ax, labels, colors):
+    legend_elements = []
+    for label, color in zip(labels, colors):
+        legend_elements.append(Line2D([0], [0], color=color, lw=1, label=label))
+        
+    new_legend = fn_ax.legend(handles=legend_elements, loc='upper right')
+    return new_legend
+
+
+def create_type_legend(fn_ax, labels, linestyles, type_alpha):
+    legend_elements = []
+    for label, style, alpha in zip(labels, linestyles, type_alpha):
+        legend_elements.append(Line2D([0], [0], color='k', lw=1, label=label, linestyle=style, alpha=alpha))
+        
+    new_legend = fn_ax.legend(handles=legend_elements, loc='upper left')
+    return new_legend
+
+
+def set_figure_text(ax, ii, field, name, mi, qi, ni, t_perp, A, ne):
+    '''
+    To Do:
+        -- Add 'cold composition' section with percentages
+    '''    
+    #pdb.set_trace()
+    TPER_kev = t_perp * 1e-3
+    DENS_cc  = ni * 1e-6
+    
+    font    = 'monospace'
+    fsize   = 9
+    top     = 1.0               # Top of text block
+    left    = 1.10              # Left boundary of text block
+    v_space = 0.02              # Vertical spacing between lines
+    
+    ax.text(left + 0.08, top - 0.02, 'B0  = {:5.2f} nT'.format(field*1e9),           transform=ax.transAxes, fontsize=fsize, fontname=font)
+    ax.text(left + 0.08, top - 0.04, 'n0  = {:5.2f} cm3'.format(ne*1e-6), transform=ax.transAxes, fontsize=fsize, fontname=font)
+
+    pp_top = top - 0.10         # Top of plasma params list
+    
+    # Plasma Population List
+    ax.text(left, pp_top + 0.7*v_space, r'     SPECIES      DENS     TPER       A ', transform=ax.transAxes, fontsize=fsize, fontname=font)
+    ax.text(left, pp_top          ,     r'                   CM3      KEV ', transform=ax.transAxes, fontsize=fsize, fontname=font)
+
+    for jj in range(name.shape[0]):
+        pname = name[jj].replace('$', '')
+        pname = pname.replace('{', '')
+        pname = pname.replace('}', '')
+        pname = pname.replace('^', '')
+        
+        ax.text(left, pp_top - (jj+1)*v_space, '{:>12}   {:>7.3f}   {:>7.2f}   {:>6.3f}'.format(pname, round(DENS_cc[jj], 3), round(TPER_kev[jj], 2), round(A[jj], 3)) , transform=ax.transAxes, fontsize=fsize, fontname=font)
+    return
 
 
 def solve_and_plot_one_time(time_start, time_end, probe, pad, cmp, 
@@ -587,9 +828,11 @@ def solve_and_plot_one_time(time_start, time_end, probe, pad, cmp,
 
 def plot_max_growth_rate_with_time(times, k_vals, all_HPDR, all_WPDR, all_CPDR,
                                    save=False, norm_w=False, B0=None,
-                                   ccomp=[70, 20, 10], suff=''):
+                                   ccomp=[70, 20, 10], suff='', ignore_damping=True):
     
     plot_dir = save_dir + '//MAX_GR_PLOTS//'
+    if os.path.exists(plot_dir) == False:
+        os.makedirs(plot_dir)
     
     tick_label_size = 14
     mpl.rcParams['xtick.labelsize'] = tick_label_size 
@@ -599,25 +842,28 @@ def plot_max_growth_rate_with_time(times, k_vals, all_HPDR, all_WPDR, all_CPDR,
     
     fontsize = 18
     
-    for PDR, lbl in zip([all_HPDR, all_WPDR, all_CPDR], ['hot', 'warm', 'cold']):
+    #for PDR, lbl in zip([all_HPDR, all_WPDR, all_CPDR], ['hot', 'warm', 'cold']):
+    for PDR, lbl in zip([all_HPDR], ['hot']):
         Nt    = times.shape[0]
         max_f = np.zeros((Nt, 3))
         max_k = np.zeros((Nt, 3))
         max_g = np.zeros((Nt, 3))
             
         # Extract max k and max growth rate for each time, band
+        # Must be an issue here?
         for ii in range(Nt):
             for jj in range(3):
-                    if any(np.isnan(PDR.real[ii, :, jj]) == True):
+                    if any(np.isnan(PDR.real[ii, 1:, jj]) == True):
                         max_f[ii, jj] = np.nan
                         max_k[ii, jj] = np.nan
                         max_g[ii, jj] = np.nan
                     else:
-                        max_idx       = np.where(PDR.real[ii, :, jj] == PDR.real[ii, :, jj].max())[0][0]
-                        max_f[ii, jj] = PDR.real[ii, max_idx, jj]
+                        max_idx       = np.where(PDR.real[ii, 1:, jj] == PDR.real[ii, 1:, jj].max())[0][0]
+                        max_f[ii, jj] = PDR.real[ii, max_idx, jj] / (2*np.pi)
                         max_k[ii, jj] = k_vals[ii, max_idx]
-                        max_g[ii, jj] = PDR.imag[ii, max_idx, jj]
+                        max_g[ii, jj] = PDR.imag[ii, max_idx, jj] / (2*np.pi)
     
+        pdb.set_trace()
         plt.ioff()
         fig, ax1 = plt.subplots(figsize=(13, 6))
         
@@ -635,6 +881,10 @@ def plot_max_growth_rate_with_time(times, k_vals, all_HPDR, all_WPDR, all_CPDR,
         # Set xlim to show either just pearls, or whole event
         ax1.set_xlim(time_start, time_end)
         figsave_path = plot_dir + '_LT_{:03}_{:03}_{:03}_{}{}.png'.format(ccomp[0], ccomp[1], ccomp[2], lbl, suff)
+    
+        # Set ylim to show either just positive growth rate or everything
+        if ignore_damping == True:
+            ax1.set_ylim(0, None)
     
         if save == True:
             print('Saving {}'.format(figsave_path))
@@ -760,7 +1010,7 @@ def plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad, norm=None,
     return
 
 
-def plot_max_GR_timeseries(rbsp_path, time_start, time_end, probe, pad, norm=None, norm_B0=200.):
+def plot_max_TGR_CGR_timeseries(rbsp_path, time_start, time_end, probe, pad, norm=None, norm_B0=200.):
     '''
     Note: Because this calculates in frequency space (using cold k) the 'max/min' values
     in the returned arrays are nan's because they are in a stop band.
@@ -1052,15 +1302,19 @@ def wang_2016_validation_plots():
     
     knorm_fac             = PP['pcyc_rad'] / PP['va']
     k_vals                = np.linspace(0.0, 1.0, 1000, endpoint=False) * knorm_fac
+
     CPDR_solns,  cold_CGR = get_dispersion_relation(Spec, k_vals, approx='cold' )
     HPDR_solns,   hot_CGR = get_dispersion_relation(Spec, k_vals, approx='hot' )
-        
+
+    #plot_residuals(Spec, PP, k_vals, HPDR_solns, lbl='', approx='hot')
+    
     CPDR_solns /= PP['pcyc_rad']
     HPDR_solns /= PP['pcyc_rad']   
-    k_vals     /= PP['pcyc_rad'] * PP['va']
+    k_vals     *= PP['va'] / PP['pcyc_rad']
 
     species_colors = ['r', 'b', 'g']
     
+    print('Plotting solutions...')
     plt.ioff()
     plt.figure(figsize=(15, 10))
     ax1 = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
@@ -1072,7 +1326,7 @@ def wang_2016_validation_plots():
 
     ax1.set_title('Dispersion Relation')
     ax1.set_xlabel(r'$kv_A / \Omega_p$')
-    ax1.set_ylabel(r'$\omega/\Omega_p$')
+    ax1.set_ylabel(r'$\omega_r/\Omega_p$')
     ax1.set_xlim(k_vals[0], k_vals[-1])
     
     ax1.set_ylim(0, 1.0)
@@ -1094,12 +1348,198 @@ def wang_2016_validation_plots():
     return
 
 
+def plot_dispersion_and_growth(ax_disp, ax_growth, k_vals, CPDR, WPDR, HPDR, w_cyc,
+                               norm_w=False, norm_k=False, save=False, savepath=None, alpha=1.0):
+    '''
+    Plots the CPDR and WPDR nicely as per Wang et al 2016. Can plot multiple dispersion/growth curves for varying parameters.
+    
+    INPUT:
+        k_vals     -- Wavenumber values in /m or normalized to p_cyc/v_A
+        CPDR_solns -- Cold-plasma frequencies in Hz or normalized to p_cyc
+        WPDR_solns -- Warm-plasma frequencies in Hz or normalized to p_cyc. 
+                   -- .real is dispersion relation, .imag is growth rate vs. k
+                   
+    To do: Add normalisations for w, k
+    '''
+    # Identifiers
+    species_colors = ['r', 'b', 'g']
+    band_labels    = [r'$H^+$', r'$He^+$', r'$O^+$']
+    
+    type_label = ['Cold Plasma Approx.', 'Warm Plasma Approx.', 'Hot Plasma Approx.', 'Cyclotron Frequencies']
+    type_style = [':', '--', '-', '-']
+    type_alpha = [1.0, 1.0, 1.0, 0.5]
+    
+    #######################
+    ### DISPERSION PLOT ###
+    #######################
+    for ii in range(3):
+        ax_disp.plot(k_vals[1:]*1e6, CPDR[1:, ii].real, c=species_colors[ii], linestyle='--', label='Cold')
+        ax_disp.plot(k_vals[1:]*1e6, HPDR[1:, ii].real, c=species_colors[ii], linestyle='-',  label='Warm')
+        ax_disp.axhline(w_cyc[ii] / (2 * np.pi), c='k', linestyle='-', alpha=type_alpha[-1])
+    
+    type_legend = create_type_legend(ax_disp, type_label, type_style, type_alpha)
+    ax_disp.add_artist(type_legend)
+    
+    ax_disp.set_title('Dispersion Relation')
+    ax_disp.set_xlabel(r'$k (\times 10^{-6} m^{-1})$')
+    ax_disp.set_ylabel(r'$\omega${}'.format(' (Hz)'))
+    
+    ax_disp.set_xlim(0, k_vals[-1]*1e6)
+    ax_disp.set_ylim(0, w_cyc[0] * 1.1 / (2 * np.pi))
+    
+    ########################
+    ### GROWTH RATE PLOT ###
+    ########################
+    band_legend = create_band_legend(ax_growth, band_labels, species_colors)
+    ax_growth.add_artist(band_legend)
+    
+    for ii in range(3):
+        ax_growth.plot(k_vals[1:]*1e6, HPDR[1:, ii].imag, c=species_colors[ii], linestyle='-',  label='Growth')
+    ax_growth.axhline(0, c='k', linestyle=':')
+    
+    ax_growth.set_title('Temporal Growth Rate')
+    ax_growth.set_xlabel(r'$k (\times 10^{-6}m^{-1})$')
+    ax_growth.set_ylabel(r'$\gamma (s^{-1})$')
+    ax_growth.set_xlim(0, k_vals[-1]*1e6)
+    
+    ax_growth.set_ylim(None, None)
+    
+    y_thres_min = -0.05;  y_thres_max = 0.05
+    if ax_growth.get_ylim()[0] < y_thres_min:
+        y_min = y_thres_min
+    else:
+        y_min = y_thres_min
+        
+    if ax_growth.get_ylim()[0] > y_thres_max:
+        y_max = None
+    else:
+        y_max = y_thres_max
+    
+    ax_growth.set_ylim(y_min, y_max)
+    
+    ax_disp.minorticks_on()
+    ax_growth.minorticks_on() 
+    
+    ax_growth.yaxis.set_label_position("right")
+    ax_growth.yaxis.tick_right()
+    return
+
+
+def plot_all_DRs(all_k, all_CPDR, all_WPDR, all_HPDR, times, B, name, mi, qi, ni, t_perp, A, ne,
+                 suff='', HM_filter_mhz=50, overwrite=False, save=True, figtext=True):
+    '''
+    CPDR is cold approx
+    WPDR is Chen's warm approx of 2013
+    HPDR is the fully kinetic hot approx used in both Chen 2013 and Wang 2016.
+    
+    Q: Have I been accidentally plotting warm instead of hot? Does it matter? The old
+    code would have only had hot.
+    '''
+    Nt = times.shape[0]
+    for ii in range(Nt):
+        figsave_path = save_dir + 'linear_{}_{}.png'.format(save_string, ii)
+        
+        if os.path.exists(figsave_path) == True and overwrite == False:
+            print('Plot already done, skipping...')
+            continue
+        
+        # Convert frequencies to Hz (from rad/s for calculations)
+        time   = times[ii]
+        k_vals = all_k[ii]
+        CPDR   = all_CPDR[ii] / (2*np.pi)
+        WPDR   = all_WPDR[ii] / (2*np.pi)
+        HPDR   = all_HPDR[ii] / (2*np.pi)
+
+        w_cyc  = qi * B[ii] / mi 
+        
+        plt.ioff()
+        fig, [ax1, ax2] = plt.subplots(ncols=2, figsize=(16, 10))
+
+        fig.text(0.34, 0.974, '{}'.format(time))
+
+        plot_dispersion_and_growth(ax1, ax2, k_vals, CPDR, WPDR, HPDR, w_cyc,
+                                   norm_w=False, norm_k=False, save=False, 
+                                   savepath=figsave_path)    
+
+        plt.setp(ax2.get_xticklabels()[0], visible=False)
+
+        # Change this to work with Species array
+        if figtext == True:
+            set_figure_text(ax2, ii, B[ii], name, mi, qi, ni[:, ii], t_perp[:, ii], A[:, ii], ne[ii])
+        
+        fig.tight_layout()
+        fig.subplots_adjust(wspace=0, hspace=0, right=0.75)
+        
+        if save == True:
+            figsave_path = save_dir + 'linear_{}_{}.png'.format(save_string, ii)
+            print('Saving {}'.format(figsave_path))
+            fig.savefig(figsave_path)
+            plt.close('all')
+        else:
+            # Only shows the first one
+            figManager = plt.get_current_fig_manager()
+            figManager.window.showMaximized()
+            break
+    return
+
+
+def plot_residuals(Species, PP, k, w_vals, lbl='', approx='hot'):
+    '''
+    k_vals :: Wavenumber in 1D array, indpt variable
+    w_vals :: Solutions for each k in several bands. 2D array of shape (Nk, N_solns)
+    lbl    :: Plot label
+    approx :: Hot, warm, cold
+    '''
+    print('Plotting residuals...')
+    residuals = np.zeros((w_vals.shape[0], w_vals.shape[1], 2), dtype=float)
+    
+    for jj in range(w_vals.shape[1]):
+        for ii in range(w_vals.shape[0]):
+            if approx == 'cold':
+                w_arg = w_vals[ii, jj].real
+                residuals[ii, jj, 0] = cold_dispersion_eqn(w_arg, k[ii], Species)
+            elif approx == 'warm':
+                w_arg = w_vals[ii, jj].real
+                residuals[ii, jj, 0] = warm_dispersion_eqn(w_arg, k[ii], Species)
+            elif approx == 'hot':
+                w_arg = np.array([w_vals[ii, jj].real, w_vals[ii, jj].imag])
+                residuals[ii, jj]    =  hot_dispersion_eqn(w_arg, k[ii], Species)
+        
+    species_clrs = ['r', 'b', 'g']
+        
+    residuals  /= PP['pcyc_rad']
+    k_vals      = k*PP['va'] / PP['pcyc_rad']
+    
+    # Plot here
+    plt.ioff()
+    fig, ax = plt.subplots(nrows=1, ncols=2)
+  
+    for ii in range(w_vals.shape[1]):
+        ax[0].plot(k_vals, residuals[:, ii, 0], c=species_clrs[ii])
+        ax[0].set_title('Dispersion Relation Residuals')
+        ax[0].set_ylabel(r'$\omega_r/\Omega_p$')
+        
+        ax[1].plot(k_vals, residuals[:, ii, 1], c=species_clrs[ii])
+        ax[1].set_title('Growth Rate Residuals')
+        ax[1].set_ylabel(r'$\gamma/\Omega_p$')
+        
+        for axes in ax:
+            axes.set_xlim(k_vals[0], k_vals[-1])
+            axes.minorticks_on()
+            axes.set_xlabel(r'$kv_A / \Omega_p$')
+            
+
+    figManager = plt.get_current_fig_manager()
+    figManager.window.showMaximized() 
+    return
+
+
 if __name__ == '__main__':
     # To Do:
     # Peaks to line up
     
-    wang_2016_validation_plots()
-    
+    #wang_2016_validation_plots()
+        
     rbsp_path = 'G://DATA//RBSP//'
     save_drive= 'G://'
     
@@ -1110,15 +1550,15 @@ if __name__ == '__main__':
     
     date_string = time_start.astype(object).strftime('%Y%m%d')
     save_string = time_start.astype(object).strftime('%Y%m%d_%H%M_') + time_end.astype(object).strftime('%H%M')
-    save_dir    = '{}NEW_LT//EVENT_{}//CHEN_DR_CODE//'.format(save_drive, date_string)
-
-    #solve_and_plot_one_time(time_start, time_end, probe, pad, [70, 20, 10])
-
-    #K, CPDR, WPDR, HPDR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE =\
-    #get_DR_for_data_timeseries(time_start, time_end, probe, pad, [70, 20, 10], 
-    #                 kmin=0.0, kmax=1.0, Nk=5000, knorm=True,
-    #                 nsec=None, suff='', HM_filter_mhz=50)
+    save_dir    = '{}NEW_LT//EVENT_{}//CHEN_DR_CODE_PARALLEL//'.format(save_drive, date_string)
     
-    #plot_max_growth_rate_with_time(TIMES, K, CPDR, WPDR, HPDR,
-    #                               save=False, norm_w=False, B0=None,
+    _K, _CPDR, _WPDR, _HPDR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE =\
+    get_all_DRs_parallel(time_start, time_end, probe, pad, [70, 20, 10], 
+                     kmin=0.0, kmax=1.0, Nk=5000, knorm=True,
+                     nsec=None, HM_filter_mhz=50)
+    
+    plot_all_DRs(_K, _CPDR, _WPDR, _HPDR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE)
+    
+    #plot_max_growth_rate_with_time(TIMES, _K, _HPDR, _WPDR, _CPDR,
+    #                               save=True, norm_w=False, B0=None,
     #                               ccomp=[70, 20, 10], suff='')

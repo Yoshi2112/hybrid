@@ -450,7 +450,7 @@ def back_substitute(k_vals, CPDR_solns, warm_solns, Species):
 if __name__ == '__main__':
     '''
     Test quantities/direct interface
-    '''                               # Number of species
+    '''
     L_shell  = 4                                # L-shell at which magnetic field and density are calculated
     n0       = sheely_plasmasphere(L_shell)     # Plasma density, /m3
     _B0      = geomagnetic_magnitude(L_shell)   # Background magnetic field, T
@@ -463,10 +463,10 @@ if __name__ == '__main__':
         '''
         # This all must add up to 1
         RC_ab= 0.1
-        H_ab = 0.1
-        He_ab= 0.5
-        O_ab = 0.3
-        
+        H_ab = 0.6
+        He_ab= 0.2
+        O_ab = 0.1
+                
         if round(RC_ab + H_ab + He_ab + O_ab, 5) != 1.0:
             sys.exit('Aborted: Densities don\'t add up')
         

@@ -4,12 +4,11 @@ Created on Mon Apr  8 12:29:15 2019
 
 @author: Yoshi
 """
-import pdb
+import warnings
 import numpy as np
 from   scipy.optimize    import fsolve
 from   scipy.special     import wofz
-import extract_parameters_from_data as data
-import os
+
 '''
 Equations from Wang et al. 2016. Is for cold species of warm dispersion
 relation simplify for alpha = 0 under the asymptotic expansion of the plasma
@@ -19,19 +18,23 @@ his signs. Slight differences for Fig 3c (?).
 Should double check this against the Wang code at some point. Also multi the wang code (verification is never bad)
 '''
 def get_k_CPDR(wr):
-    cold_sum = w_pe2 / (wr * (wr - e_cyc))                      # Electrons
-    for ii in range(w_cyc.shape[0]):
-        if ndens[ii] != 0:
-            if wr == w_cyc[ii]:
-                return np.inf
-            else:
-                cold_sum += w_ps2[ii] / (wr * (wr - w_cyc[ii]))     # Add each ion species
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        cold_sum = w_pe2 / (wr * (wr - e_cyc))                      # Electrons
+        for ii in range(w_cyc.shape[0]):
+            if ndens[ii] != 0:
+                if wr == w_cyc[ii]:
+                    return np.inf
+                else:
+                    cold_sum += w_ps2[ii] / (wr * (wr - w_cyc[ii]))     # Add each ion species
     return np.sqrt((wr / c) ** 2 - cold_sum * (wr / c) ** 2)
 
 def cold_plasma_dispersion_relation(w, k):
-    cold_sum = w_pe2 / (w * (w - e_cyc))                  # Electrons
-    for ii in range(w_ps2.shape[0]):
-        cold_sum += w_ps2[ii] / (w * (w - w_cyc[ii]))     # Add each ion species
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        cold_sum = w_pe2 / (w * (w - e_cyc))                  # Electrons
+        for ii in range(w_ps2.shape[0]):
+            cold_sum += w_ps2[ii] / (w * (w - w_cyc[ii]))     # Add each ion species
     return 1 - cold_sum - (c * k / w) ** 2
 
 def Z(arg):
@@ -51,36 +54,38 @@ def warm_plasma_dispersion_relation(wt, k, A, A2):
     Plasma dispersion function related to Fadeeva function (Summers & Thorne, 1993) by
     i*sqrt(pi) factor.
     '''
-    wc = wt[0] + 1j*wt[1]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        wc = wt[0] + 1j*wt[1]
+        
+        if any(np.isnan(wt) == True):
+            return np.array([np.nan, np.nan])
     
-    if any(np.isnan(wt) == True):
-        return np.array([np.nan, np.nan])
-
-    components = (w_pe2) * wc / (e_cyc - wc)    # Electrons
-
-    for ii in range(w_cyc.shape[0]):
-        if w_pc2[ii] != 0:
-            if (w_cyc[ii] - wc) == 0:
-                Isc = np.inf
-            else:
-                Isc = wc / (w_cyc[ii] - wc)
-            components += (w_pc2[ii]) * Isc
-
-        if w_pw2[ii] != 0:
-            pdisp_arg   = (wc - w_cyc[ii]) / (alpha_par[ii]*k)
-            pdisp_func  = Z(pdisp_arg)*w_cyc[ii] / (alpha_par[ii]*k)
-            brackets    = (A[ii] + 1) * (wc - w_cyc[ii])/w_cyc[ii] + 1
-            Isw         = brackets * pdisp_func + A[ii]
-            components += w_pw2[ii] * Isw
-            
-        if w_pw2b[ii] != 0:
-            pdisp_arg2  = (wc - w_cyc[ii]) / (alpha_par2[ii]*k)
-            pdisp_func2 = Z(pdisp_arg2)*w_cyc[ii] / (alpha_par2[ii]*k)
-            brackets    = (A2[ii] + 1) * (wc - w_cyc[ii])/w_cyc[ii] + 1
-            Isw2        = brackets * pdisp_func2 + A2[ii]
-            components += w_pw2b[ii] * Isw2
-
-    solution = (wc ** 2) - (c * k) ** 2 + components
+        components = (w_pe2) * wc / (e_cyc - wc)    # Electrons
+    
+        for ii in range(w_cyc.shape[0]):
+            if w_pc2[ii] != 0:
+                if (w_cyc[ii] - wc) == 0:
+                    Isc = np.inf
+                else:
+                    Isc = wc / (w_cyc[ii] - wc)
+                components += (w_pc2[ii]) * Isc
+    
+            if w_pw2[ii] != 0:
+                pdisp_arg   = (wc - w_cyc[ii]) / (alpha_par[ii]*k)
+                pdisp_func  = Z(pdisp_arg)*w_cyc[ii] / (alpha_par[ii]*k)
+                brackets    = (A[ii] + 1) * (wc - w_cyc[ii])/w_cyc[ii] + 1
+                Isw         = brackets * pdisp_func + A[ii]
+                components += w_pw2[ii] * Isw
+                
+            if w_pw2b[ii] != 0:
+                pdisp_arg2  = (wc - w_cyc[ii]) / (alpha_par2[ii]*k)
+                pdisp_func2 = Z(pdisp_arg2)*w_cyc[ii] / (alpha_par2[ii]*k)
+                brackets    = (A2[ii] + 1) * (wc - w_cyc[ii])/w_cyc[ii] + 1
+                Isw2        = brackets * pdisp_func2 + A2[ii]
+                components += w_pw2b[ii] * Isw2
+    
+        solution = (wc ** 2) - (c * k) ** 2 + components
     return np.array([solution.real, solution.imag])
     
 
@@ -143,11 +148,11 @@ def set_frequencies_and_variables(field, ndensc, ndensw, t_perp, A, ndensw2, t_p
    
     alpha_par  = np.sqrt(2.0 * q * t_par  / mi)     # Thermal velocity in m/s (make relativistic?)  
     alpha_par2 = np.sqrt(2.0 * q * t_par2 / mi)     # Thermal velocity in m/s (make relativistic?)
-    pdb.set_trace()
     return
 
 
-def get_dispersion_relation(field_, ndensc_, ndensw_, t_perp_, A_, ndensw2_, t_perp2_, A2_, Nk=5000, kmin=0.0, kmax=1.0):
+def get_dispersion_relation(field_, ndensc_, ndensw_, t_perp_, A_, ndensw2_, t_perp2_,
+                            A2_, Nk=5000, kmin=0.0, kmax=1.0, return_residuals=False):
     '''
     field  -- Background magnetic field in nT
     ndensc -- Cold plasma density (H, He, O) in /cc
@@ -160,7 +165,7 @@ def get_dispersion_relation(field_, ndensc_, ndensw_, t_perp_, A_, ndensw2_, t_p
     save   -- Flag: Save output to directory kwarg 'savepath'
     
     OUTPUT:
-        k_vals     -- Wavenumbers solved for. In /m3 or normalized to p_cyc/v_A
+        k_vals     -- Wavenumbers solved for. In /m or normalized to p_cyc/v_A
         CPDR_solns -- Cold plasma dispersion relation: w(k) for each k in k_vals. In Hz or normalized to p_cyc
         warm_solns -- Warm plasma dispersion relation: w(k) for each k in k_vals. In Hz or normalized to p_cyc
     
@@ -172,7 +177,7 @@ def get_dispersion_relation(field_, ndensc_, ndensw_, t_perp_, A_, ndensw2_, t_p
     ndensc  = ndensc_  * 1e6    # Convert from cc to /m3
     ndensw  = ndensw_  * 1e6    # Convert from cc to /m3
     ndensw2 = ndensw2_ * 1e6    # Convert from cc to /m3
-        
+       
     set_frequencies_and_variables(field, ndensc, ndensw, t_perp_, A_, ndensw2, t_perp2_, A2_)
 
     # Initialize k space: Normalized by va/pcyc
@@ -180,27 +185,57 @@ def get_dispersion_relation(field_, ndensc_, ndensw_, t_perp_, A_, ndensw2_, t_p
     k_min     = kmin  * knorm_fac
     k_max     = kmax  * knorm_fac
     k_vals    = np.linspace(k_min, k_max, Nk, endpoint=False)
-    
+
     eps    = 0.01       # 'Epsilon' value (Can't remember what this was for)
-    tol    = 1e-15      # Solution tolerance
+    tol    = 1e-10      # Solution tolerance
     fev    = 1000000    # Number of retries to get below tolerance
         
     CPDR_solns = np.ones((Nk, 3   )) * eps
     warm_solns = np.ones((Nk, 3, 2)) * eps
-
+    
     # Initial guesses
     for ii in range(1, 3):
         CPDR_solns[0, ii - 1]  = w_cyc[ii] * 1.05
         warm_solns[0, ii - 1]  = np.array([[w_cyc[ii] * 1.05, 0.0]])
 
-    # Numerical solutions: Use previous solution as starting point for new solution
-    for jj in range(3):             # For each frequency band
-        for ii in range(1, Nk):     # For each value of k
-            CPDR_solns[ii, jj] = fsolve(cold_plasma_dispersion_relation, x0=CPDR_solns[ii - 1, jj], args=(k_vals[ii]),          xtol=tol, maxfev=fev)
-            warm_solns[ii, jj] = fsolve(warm_plasma_dispersion_relation, x0=warm_solns[ii - 1, jj], args=(k_vals[ii], A_, A2_), xtol=tol, maxfev=fev)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        # Numerical solutions: Use previous solution as starting point for new solution
+        for jj in range(3):             # For each frequency band
+            for ii in range(1, Nk):     # For each value of k
+                CPDR_solns[ii, jj] = fsolve(cold_plasma_dispersion_relation, x0=CPDR_solns[ii - 1, jj], args=(k_vals[ii]),          xtol=tol, maxfev=fev)
+                warm_solns[ii, jj] = fsolve(warm_plasma_dispersion_relation, x0=warm_solns[ii - 1, jj], args=(k_vals[ii], A_, A2_), xtol=tol, maxfev=fev)
 
     warm_solns  = estimate_first_and_complexify(warm_solns)
+
+    if return_residuals == True:
+        cold_residuals = np.zeros((Nk, 3   ))
+        warm_residuals = np.zeros((Nk, 3, 2))
+        for jj in range(3):
+            for ii in range(1, Nk):
+                cold_residuals[ii, jj] = cold_plasma_dispersion_relation(CPDR_solns[ii, jj], k_vals[ii])
+                warm_residuals[ii, jj] = warm_plasma_dispersion_relation([warm_solns[ii, jj].real, warm_solns[ii, jj].imag], k_vals[ii], A_, A2_)
+        
     CPDR_solns /= (2 * np.pi)   # Units of Herz
     warm_solns /= (2 * np.pi)
+    
+    if return_residuals == True:
+        return k_vals, CPDR_solns, warm_solns, cold_residuals, warm_residuals
+    else:
+        return k_vals, CPDR_solns, warm_solns
 
-    return k_vals, CPDR_solns, warm_solns
+
+def get_residuals(k_vals, solns, field_, ndensc_, ndensw_, t_perp_, A_, ndensw2_, t_perp2_, A2_):
+    '''
+    Only works for warm dispersion right now since that's the important bit
+    '''
+    field   = field_   * 1e-9   # Convert from nT to T
+    ndensc  = ndensc_  * 1e6    # Convert from cc to /m3
+    ndensw  = ndensw_  * 1e6    # Convert from cc to /m3
+    ndensw2 = ndensw2_ * 1e6    # Convert from cc to /m3
+       
+    set_frequencies_and_variables(field, ndensc, ndensw, t_perp_, A_, ndensw2, t_perp2_, A2_)
+    
+    
+    
+    return

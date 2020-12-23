@@ -91,6 +91,8 @@ def plot_dispersion_multiple(ax_disp, ax_growth, k_vals, CPDR_solns, warm_solns,
         CPDR_solns -- Cold-plasma frequencies in Hz or normalized to p_cyc
         WPDR_solns -- Warm-plasma frequencies in Hz or normalized to p_cyc. 
                    -- .real is dispersion relation, .imag is growth rate vs. k
+                   
+    Normalization currently doesn't do anything?
     '''
     
     
@@ -288,8 +290,7 @@ def plot_all_DRs(param_dict, all_k, all_CPDR, all_WPDR):
         ax2.yaxis.set_label_position("right")
         ax2.yaxis.tick_right()
         plt.setp(ax2.get_xticklabels()[0], visible=False)
-        
-        #%%
+
         if figtext == True:
             set_figure_text(ax2, ii, param_dict)
         
@@ -363,34 +364,186 @@ def plot_growth_rate_with_time(times, k_vals, growth_rate, per_tol=70, save=Fals
     return max_k, max_g
 
 
-if __name__ == '__main__':
-    from pandas.plotting import register_matplotlib_converters
-    register_matplotlib_converters()
+def validate_wang_2016():
+    mp    = 1.673E-27      # kg
+    qi    = 1.602e-19      # C
+    mu0   = 4e-7*np.pi
+    n0    = 346.39         # /cc
+    B0    = 487.5          # nT
+    
+    # This all must add up to 1
+    RC_ab= 0.1
+    H_ab = 0.6
+    He_ab= 0.2
+    O_ab = 0.1
+    
+    ndensc     = np.array([H_ab , He_ab, O_ab]) * n0
+    ndensw     = np.array([RC_ab, 0.0  , 0.0 ]) * n0
+    temp_para  = np.array([25e3 , 0.0  , 0.0 ])
+    A          = np.array([2.0  , 0.0  , 0.0 ])
+    ndensw2    = np.array([0.0  , 0.0  , 0.0 ]) * n0
+    temp_para2 = np.array([0.0  , 0.0  , 0.0 ])
+    A2         = np.array([0.0  , 0.0  , 0.0 ])
+    
+    temp_perp  = temp_para  * (A  + 1)
+    temp_perp2 = temp_para2 * (A2 + 1)
+    
+    k, CPDR, WPDR, cold_residuals, warm_residuals = cdr.get_dispersion_relation(B0, ndensc,
+                                          ndensw , temp_perp , A,
+                                          ndensw2, temp_perp2, A2,
+                                          Nk=1000, return_residuals=True)
 
-    _Nk       = 5000
-    output    = 'save'
-    overwrite = False
-    figtext   = True
-    
-    time_start  = np.datetime64('2013-07-25T21:25:00')
-    time_end    = np.datetime64('2013-07-25T21:47:00')
-    probe       = 'a'
-    pad         = 0
-    
-    date_string = time_start.astype(object).strftime('%Y%m%d')
-    save_string = time_start.astype(object).strftime('%Y%m%d_%H%M')
+    mass  = np.array([1.0, 4.0, 16.0])  * mp
+    p_cyc = qi * B0 * 1e-9 / (2 * np.pi * mp)
+    rho   = np.sum((ndensc + ndensw + ndensw2)*1e6 * mass)
+    va    = B0 * 1e-9 / np.sqrt(mu0 * rho)
+
+    k_vals = k * va / (2 * np.pi * p_cyc)
+    CPDR  /= p_cyc
+    WPDR  /= p_cyc
     
     species_colors = ['r', 'b', 'g']
     band_labels    = [r'$H^+$', r'$He^+$', r'$O^+$']
     
-    #cmp            = np.array([60, 30, 10])
-    for cmp in [np.array([70, 20, 10])]:
-        save_dir    = 'G://NEW_LT//event_{}_old//LINEAR_THEORY_CC_{:03}_{:03}_{:03}//'.format(date_string, cmp[0], cmp[1], cmp[2])
-        data_path   = save_dir + '_chen_dispersion_{:03}_{:03}_{:03}_{}.npz'.format(cmp[0], cmp[1], cmp[2], save_string)
+    plt.ioff()
+    fig    = plt.figure(figsize=(16, 10))
+    grid   = gs.GridSpec(1, 2)
+    
+    ax1    = fig.add_subplot(grid[0, 0])
+    ax2    = fig.add_subplot(grid[0, 1])
         
-        if os.path.exists(save_dir) == False:
-            os.makedirs(save_dir)
+    # Plot dispersion #
+    for ii in range(3):
+        ax1.plot(k_vals[1:], CPDR[1:, ii],      c=species_colors[ii], linestyle='--', label='Cold')
+        ax1.plot(k_vals[1:], WPDR[1:, ii].real, c=species_colors[ii], linestyle='-',  label='Warm')
+        #ax1.axhline(w_cyc[ii], c='k', linestyle=':')
+    
+    type_label = ['Cold Plasma Approx.', 'Hot Plasma Approx.', 'Cyclotron Frequencies']
+    type_style = ['--', '-', ':']
+    type_legend = create_type_legend(ax1, type_label, type_style)
+    ax1.add_artist(type_legend)
+    
+    # Plot growth #
+    band_legend = create_band_legend(ax2, band_labels, species_colors)
+    ax2.add_artist(band_legend)
+    
+    for ii in range(3):
+        ax2.plot(k_vals[1:], WPDR[1:, ii].imag, c=species_colors[ii], linestyle='-',  label='Growth')
+    ax2.axhline(0, c='k', linestyle=':') 
+
+    ax1.set_title('Dispersion Relation')
+    ax1.set_xlabel(r'$k v_A / \Omega_p$')
+    ax1.set_ylabel(r'$\omega / \Omega_p$')
+    
+    ax1.set_xlim(0, k_vals[-1])
+    ax1.set_ylim(0, 1.0)
+    
+    ax2.set_title('Temporal Growth Rate')
+    ax2.set_xlabel(r'$k v_A / \Omega_p$')
+    ax2.set_ylabel(r'$\gamma / \Omega_p$')
+    ax2.set_xlim(0, k_vals[-1])
+    ax2.set_ylim(-0.05, 0.05)
+    
+    ax1.minorticks_on()
+    ax2.minorticks_on() 
+    
+    ax2.yaxis.set_label_position("right")
+    ax2.yaxis.tick_right()
+    plt.setp(ax2.get_xticklabels()[0], visible=False)
+    
+    fig.tight_layout()
+    fig.subplots_adjust(wspace=0, hspace=0)
+    
+    figManager = plt.get_current_fig_manager()
+    figManager.window.showMaximized()
+    plt.show()
+    return
+
+
+# =============================================================================
+# def plot_residuals(Species, PP, k_vals, w_vals, lbl='', approx='hot'):
+#     '''
+#     k_vals :: Wavenumber in 1D array, indpt variable
+#     w_vals :: Solutions for each k in several bands. 2D array of shape (Nk, N_solns)
+#     lbl    :: Plot label
+#     approx :: Hot, warm, cold
+#     '''
+#     print('Plotting residuals...')
+#     residuals = np.zeros((w_vals.shape[0], w_vals.shape[1], 2), dtype=float)
+#     
+#     for jj in range(w_vals.shape[1]):
+#         for ii in range(w_vals.shape[0]):
+#             if approx == 'cold':
+#                 w_arg = w_vals[ii, jj].real
+#                 residuals[ii, jj, 0] = cold_dispersion_eqn(w_arg, k_vals[ii], Species)
+#             elif approx == 'warm':
+#                 w_arg = w_vals[ii, jj].real
+#                 residuals[ii, jj, 0] = warm_dispersion_eqn(w_arg, k_vals[ii], Species)
+#             elif approx == 'hot':
+#                 w_arg = np.array([w_vals[ii, jj].real, w_vals[ii, jj].imag])
+#                 residuals[ii, jj]    =  hot_dispersion_eqn(w_arg, k_vals[ii], Species)
+#         
+#     species_clrs = ['r', 'b', 'g']
+#         
+#     residuals  /= PP['pcyc_rad']
+#     k_vals     *= PP['va'] / PP['pcyc_rad']
+#     
+#     # Plot here
+#     plt.ioff()
+#     fig, ax = plt.subplots(nrows=1, ncols=2)
+#   
+#     for ii in range(w_vals.shape[1]):
+#         ax[0].plot(k_vals, residuals[:, ii, 0], c=species_clrs[ii])
+#         ax[0].set_title('Dispersion Relation Residuals')
+#         ax[0].set_ylabel(r'$\omega_r/\Omega_p$')
+#         
+#         ax[1].plot(k_vals, residuals[:, ii, 1], c=species_clrs[ii])
+#         ax[1].set_title('Growth Rate Residuals')
+#         ax[1].set_ylabel(r'$\gamma/\Omega_p$')
+#         
+#         for axes in ax:
+#             axes.set_xlim(k_vals[0], k_vals[-1])
+#             axes.minorticks_on()
+#             axes.set_xlabel(r'$kv_A / \Omega_p$')
+#             
+# 
+#     figManager = plt.get_current_fig_manager()
+#     figManager.window.showMaximized() 
+#     return
+# =============================================================================
+
+
+if __name__ == '__main__':
+    from pandas.plotting import register_matplotlib_converters
+    register_matplotlib_converters()
+
+    #validate_wang_2016()
+
+    if True:
+        _Nk       = 5000
+        output    = 'save'
+        overwrite = False
+        figtext   = True
         
-        _all_CPDR, _all_WPDR, _all_k, _param_dict = get_all_DRs()
-        #plot_all_DRs(_param_dict, _all_k, _all_CPDR, _all_WPDR)
-        #_max_k, _max_g = plot_growth_rate_with_time(_param_dict['times'], _all_k, _all_WPDR.imag, save=True)
+        time_start  = np.datetime64('2013-07-25T21:25:00')
+        time_end    = np.datetime64('2013-07-25T21:47:00')
+        probe       = 'a'
+        pad         = 0
+        
+        date_string = time_start.astype(object).strftime('%Y%m%d')
+        save_string = time_start.astype(object).strftime('%Y%m%d_%H%M')
+        
+        species_colors = ['r', 'b', 'g']
+        band_labels    = [r'$H^+$', r'$He^+$', r'$O^+$']
+        
+        #cmp            = np.array([60, 30, 10])
+        for cmp in [np.array([70, 20, 10])]:
+            save_dir    = 'G://NEW_LT//event_{}_old//LINEAR_THEORY_CC_{:03}_{:03}_{:03}//'.format(date_string, cmp[0], cmp[1], cmp[2])
+            data_path   = save_dir + '_chen_dispersion_{:03}_{:03}_{:03}_{}.npz'.format(cmp[0], cmp[1], cmp[2], save_string)
+            
+            if os.path.exists(save_dir) == False:
+                os.makedirs(save_dir)
+            
+            _all_CPDR, _all_WPDR, _all_k, _param_dict = get_all_DRs()
+            plot_all_DRs(_param_dict, _all_k, _all_CPDR, _all_WPDR)
+            #_max_k, _max_g = plot_growth_rate_with_time(_param_dict['times'], _all_k, _all_WPDR.imag, save=True)
