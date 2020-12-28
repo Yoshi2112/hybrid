@@ -290,7 +290,7 @@ def get_warm_growth_rates(wr, k, Species):
     temporal_growth_rate   = - Di / Dr_wder
     group_velocity         = - Dr_kder / Dr_wder
     convective_growth_rate = - temporal_growth_rate / np.abs(group_velocity)
-    return temporal_growth_rate, convective_growth_rate
+    return temporal_growth_rate, convective_growth_rate, group_velocity
 
 
 def get_cold_growth_rates(wr, k, Species):
@@ -321,10 +321,11 @@ def get_cold_growth_rates(wr, k, Species):
     temporal_growth_rate   = - Di / Dr_wder
     group_velocity         = - Dr_kder / Dr_wder
     convective_growth_rate = - temporal_growth_rate / np.abs(group_velocity)
-    return temporal_growth_rate, convective_growth_rate
+    return temporal_growth_rate, convective_growth_rate, group_velocity
 
 
-def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out=True, print_filtered=True):
+def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out=True, print_filtered=True,
+                            magnetospheric_plasma=True):
     '''
     Given a range of k, returns the real and imaginary parts of the plasma dispersion
     relation specified by the Species present.
@@ -344,6 +345,19 @@ def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out
            Could also change to make sure solutions use previous best solution,
             if the previous solution ended up as a np.nan, and implement nan'ing
             solutions as they're solved to prevent completely losing convergence.
+            
+           Also need to put a catch in for if a species is missing (this is most
+            commonly used for H, He, O plasmas). If so, then
+              -- Detect which species are present by mass
+              -- Solve only for those that are present
+              -- Those that aren't present have their solutions nan'd
+           This can be achieved with the magnetospheric_plasma keyword, which
+           will hard-code the number of solutions to 3, and detect which of the
+           three are present using a Boolean array [Bool, Bool, Bool].
+           
+           Better way to calculate PDR for k = 0? Exceptions from a bunch of things,
+           but surely there's an analytic way of doing it with the not-CPDR (or is 
+           that valid?)
     '''
     gyfreqs, counts = np.unique(Species['gyrofreq'], return_counts=True)
     
@@ -384,9 +398,14 @@ def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out
                 PDR_solns[ii, jj], infodict, ier[ii, jj], msg[ii, jj] =\
                     fsolve(func, x0=PDR_solns[ii - 1, jj], args=(k[ii], Species), xtol=tol, maxfev=fev, full_output=True)
     
-            # Solve for k[0] using initial guess of k[1]
-            PDR_solns[0, jj], infodict, ier[0, jj], msg[0, jj] =\
-                fsolve(func, x0=PDR_solns[1, jj], args=(k[0], Species), xtol=tol, maxfev=fev, full_output=True)
+            if False:
+                # Solve for k[0] using initial guess of k[1]
+                PDR_solns[0, jj], infodict, ier[0, jj], msg[0, jj] =\
+                    fsolve(func, x0=PDR_solns[1, jj], args=(k[0], Species), xtol=tol, maxfev=fev, full_output=True)
+            else:
+                # Set k[0] as equal to k[1] (better for large Nk)
+                PDR_solns[0, jj] = PDR_solns[1, jj]
+                
     else:
         for jj in range(N_solns):
             for ii in range(1, Nk):
@@ -409,10 +428,10 @@ def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out
         conv_growth = None
     elif approx == 'warm':
         for jj in range(N_solns):
-            PDR_solns[:, jj, 1], conv_growth = get_warm_growth_rates(PDR_solns[:, jj, 0], k, Species)
+            PDR_solns[:, jj, 1], conv_growth, wVg = get_warm_growth_rates(PDR_solns[:, jj, 0], k, Species)
     elif approx == 'cold':
         for jj in range(N_solns):
-            PDR_solns[:, jj, 1], conv_growth = get_cold_growth_rates(PDR_solns[:, jj, 0], k, Species)
+            PDR_solns[:, jj, 1], conv_growth, cVg = get_cold_growth_rates(PDR_solns[:, jj, 0], k, Species)
     
     # Convert to complex number if flagged, else return as (Nk, N_solns, 2) for real/imag components
     if complex_out == True:
@@ -526,7 +545,7 @@ def get_DRs_for_data_timeseries(time_start, time_end, probe, pad, cmp,
 
 
 def get_DRs_chunked(Nk, kmin, kmax, knorm, times, B0, name, mass, charge, density, tper, ani,
-                      k_dict, CPDR_dict, WPDR_dict, HPDR_dict,
+                      k_dict, CPDR_dict, WPDR_dict, HPDR_dict, cCGR_dict, wCGR_dict, hCGR_dict,
                       st=0, worker=None):
     '''
     Function designed to be run in parallel. All dispersion inputs as previous. 
@@ -541,9 +560,14 @@ def get_DRs_chunked(Nk, kmin, kmax, knorm, times, B0, name, mass, charge, densit
     Thus the array index in output_PDRs will be st+ii for ii in range(Nt)
     '''
     k_arr    = np.frombuffer(k_dict['arr']).reshape(k_dict['shape'])
+    
     CPDR_arr = np.frombuffer(CPDR_dict['arr']).reshape(CPDR_dict['shape'])
     WPDR_arr = np.frombuffer(WPDR_dict['arr']).reshape(WPDR_dict['shape'])
     HPDR_arr = np.frombuffer(HPDR_dict['arr']).reshape(HPDR_dict['shape'])
+    
+    cCGR_arr = np.frombuffer(cCGR_dict['arr']).reshape(cCGR_dict['shape'])
+    wCGR_arr = np.frombuffer(wCGR_dict['arr']).reshape(wCGR_dict['shape'])
+    hCGR_arr = np.frombuffer(hCGR_dict['arr']).reshape(hCGR_dict['shape'])
     
     for ii in range(times.shape[0]):
         Species, PP = create_species_array(B0[ii], name, mass, charge, density[:, ii], tper[:, ii], ani[:, ii])
@@ -556,33 +580,38 @@ def get_DRs_chunked(Nk, kmin, kmax, knorm, times, B0, name, mass, charge, densit
         # Calculate dispersion relations if possible
         print('Worker', worker, '::', times[ii])
         #try:
-        this_CPDR, cold_CGR = get_dispersion_relation(Species, this_k, approx='cold', complex_out=False, print_filtered=False)
+        this_CPDR, this_cCGR = get_dispersion_relation(Species, this_k, approx='cold', complex_out=False, print_filtered=False)
         #except:
         #    print('COLD ERROR: Skipping', times)
         #    this_CPDR = np.ones((Nk, 3, 2), dtype=np.complex128) * np.nan 
             
         #try:            
-        this_WPDR, warm_CGR = get_dispersion_relation(Species, this_k, approx='warm', complex_out=False, print_filtered=False)
+        this_WPDR, this_wCGR = get_dispersion_relation(Species, this_k, approx='warm', complex_out=False, print_filtered=False)
         #except:
         #    print('WARM ERROR: Skipping', times)
         #    this_WPDR = np.ones((Nk, 3, 2), dtype=np.complex128) * np.nan
         
         #try:
-        this_HPDR,  hot_CGR = get_dispersion_relation(Species, this_k, approx='hot' , complex_out=False, print_filtered=False)
+        this_HPDR,  this_hCGR = get_dispersion_relation(Species, this_k, approx='hot' , complex_out=False, print_filtered=False)
         #except:
         #    print('HOT ERROR: Skipping', times)
         #    this_HPDR = np.ones((Nk, 3, 2), dtype=np.complex128) * np.nan
                  
         k_arr[   st+ii, :]       = this_k[...]
+        
         CPDR_arr[st+ii, :, :, :] = this_CPDR[...]
         WPDR_arr[st+ii, :, :, :] = this_WPDR[...]
         HPDR_arr[st+ii, :, :, :] = this_HPDR[...]
+        
+        cCGR_arr[st+ii, :, :]    = this_cCGR[...]
+        wCGR_arr[st+ii, :, :]    = this_wCGR[...]
+        hCGR_arr[st+ii, :, :]    = this_hCGR[...]
     return
 
 
 def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp, 
                     kmin=0.0, kmax=1.0, Nk=1000, knorm=True,
-                    nsec=None, HM_filter_mhz=50):
+                    nsec=None, HM_filter_mhz=50, N_procs=7):
 
     if nsec is None:
         DR_path = save_dir + 'DISP_{}_cc_{:03}_{:03}_{:03}.npz'.format(save_string, int(cmp[0]), int(cmp[1]), int(cmp[2]))
@@ -596,7 +625,7 @@ def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp,
                                return_raw_ne=True, nsec=nsec, HM_filter_mhz=HM_filter_mhz)
     
         Nt      = times.shape[0]
-        N_procs = 7
+        
         procs   = []
         
         # Create raw shared memory arrays with shapes. Store in dict to send with each worker
@@ -616,10 +645,28 @@ def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp,
         HPDR_shm     = multiprocessing.RawArray('d', Nt*Nk*3*2)
         HPDR_dict    = {'arr': HPDR_shm, 'shape': HPDR_shape}
         
+        # Also for convective growth rates
+        cCGR_shape   = (Nt, Nk, 3)
+        cCGR_shm     = multiprocessing.RawArray('d', Nt*Nk*3)
+        cCGR_dict    = {'arr': cCGR_shm, 'shape': cCGR_shape}
+        
+        wCGR_shape   = (Nt, Nk, 3)
+        wCGR_shm     = multiprocessing.RawArray('d', Nt*Nk*3)
+        wCGR_dict    = {'arr': wCGR_shm, 'shape': wCGR_shape}
+        
+        hCGR_shape   = (Nt, Nk, 3)
+        hCGR_shm     = multiprocessing.RawArray('d', Nt*Nk*3)
+        hCGR_dict    = {'arr': hCGR_shm, 'shape': hCGR_shape}
+        
+        # Create numpy view into shared memory
         k_np         = np.frombuffer(k_shm).reshape(k_shape)
         CPDR_np      = np.frombuffer(CPDR_shm).reshape(CPDR_shape)
         WPDR_np      = np.frombuffer(WPDR_shm).reshape(WPDR_shape)
         HPDR_np      = np.frombuffer(HPDR_shm).reshape(HPDR_shape)
+        
+        cCGR_np      = np.frombuffer(cCGR_shm).reshape(cCGR_shape)
+        wCGR_np      = np.frombuffer(wCGR_shm).reshape(wCGR_shape)
+        hCGR_np      = np.frombuffer(hCGR_shm).reshape(hCGR_shape)
         
         # Split input data into a list of chunks
         time_chunks    = np.array_split(times,   N_procs)
@@ -636,7 +683,8 @@ def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp,
                                         args=(Nk, kmin, kmax, knorm, time_chunks[xx],
                                         field_chunks[xx], name, mass, charge, density_chunks[xx],
                                         tper_chunks[xx], ani_chunks[xx],
-                                        k_dict, CPDR_dict, WPDR_dict, HPDR_dict),
+                                        k_dict, CPDR_dict, WPDR_dict, HPDR_dict,
+                                        cCGR_dict, wCGR_dict, hCGR_dict),
                                         kwargs={'st':acc, 'worker':xx})
             procs.append(proc)
             proc.start()
@@ -663,12 +711,17 @@ def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp,
                     WPDR_out[ii, jj, kk] = WPDR_np[ii, jj, kk, 0] + 1j * WPDR_np[ii, jj, kk, 1]
                     HPDR_out[ii, jj, kk] = HPDR_np[ii, jj, kk, 0] + 1j * HPDR_np[ii, jj, kk, 1]
             
+        cCGR_out = cCGR_np
+        wCGR_out = wCGR_np
+        hCGR_out = hCGR_np
+            
         # Saves data used for DR calculation as well, for future reference (and plotting)
         if os.path.exists(save_dir) == False:
             os.makedirs(save_dir)
                 
         print('Saving dispersion history...')
-        np.savez(DR_path, all_CPDR=CPDR_out, all_WPDR=WPDR_out, all_HPDR=HPDR_out, all_k=k_np, comp=np.asarray(cmp),
+        np.savez(DR_path, all_CPDR=CPDR_out, all_WPDR=WPDR_out, all_HPDR=HPDR_out, all_k=k_np,
+                 all_cCGR=cCGR_np, all_wCGR=wCGR_np, all_hCGR=hCGR_np, comp=np.asarray(cmp),
                  times=times, B0=B0, name=name, mass=mass, charge=charge, density=density, tper=tper,
                  ani=ani, cold_dens=cold_dens, HM_filter_mhz=np.array([HM_filter_mhz]))
     else:
@@ -679,7 +732,17 @@ def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp,
         CPDR_out  = DR_file['all_CPDR']
         WPDR_out  = DR_file['all_WPDR']
         HPDR_out  = DR_file['all_HPDR']
-                
+        
+        try:
+            cCGR_out  = DR_file['all_cCGR']
+            wCGR_out  = DR_file['all_wCGR']
+            hCGR_out  = DR_file['all_hCGR']
+        except:
+            print('No convective growth rates found in file.')
+            cCGR_out  = None
+            wCGR_out  = None
+            hCGR_out  = None
+        
         times     = DR_file['times']
         B0        = DR_file['B0']
         name      = DR_file['name']
@@ -690,7 +753,7 @@ def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp,
         ani       = DR_file['ani']
         cold_dens = DR_file['cold_dens']
         
-    return k_np, CPDR_out, WPDR_out, HPDR_out, \
+    return k_np, CPDR_out, WPDR_out, HPDR_out, cCGR_out, wCGR_out, hCGR_out, \
            times, B0, name, mass, charge, density, tper, ani, cold_dens
            
 
@@ -830,7 +893,7 @@ def plot_max_growth_rate_with_time(times, k_vals, all_HPDR, all_WPDR, all_CPDR,
                                    save=False, norm_w=False, B0=None,
                                    ccomp=[70, 20, 10], suff='', ignore_damping=True):
     
-    plot_dir = save_dir + '//MAX_GR_PLOTS//'
+    plot_dir = save_dir + '//MAX_GR_PLOTS{}//'.format(suff)
     if os.path.exists(plot_dir) == False:
         os.makedirs(plot_dir)
     
@@ -839,11 +902,21 @@ def plot_max_growth_rate_with_time(times, k_vals, all_HPDR, all_WPDR, all_CPDR,
     
     species_colors = ['r', 'b', 'g']
     band_labels    = [r'$H^+$', r'$He^+$', r'$O^+$']
+    fontsize       = 18
     
-    fontsize = 18
+    # Convert to mHz from rad/s
+    CPDR   = all_CPDR / (2*np.pi)
+    WPDR   = all_WPDR / (2*np.pi)
+    HPDR   = all_HPDR / (2*np.pi)
     
-    #for PDR, lbl in zip([all_HPDR, all_WPDR, all_CPDR], ['hot', 'warm', 'cold']):
-    for PDR, lbl in zip([all_HPDR], ['hot']):
+# =============================================================================
+#     # Mask nan's just to help
+#     CPDR[np.isnan(CPDR) == True] = 0.0
+#     WPDR[np.isnan(WPDR) == True] = 0.0
+#     HPDR[np.isnan(HPDR) == True] = 0.0
+# =============================================================================
+    
+    for PDR, lbl in zip([CPDR, WPDR, HPDR], ['cold', 'warm', 'hot']):
         Nt    = times.shape[0]
         max_f = np.zeros((Nt, 3))
         max_k = np.zeros((Nt, 3))
@@ -858,12 +931,12 @@ def plot_max_growth_rate_with_time(times, k_vals, all_HPDR, all_WPDR, all_CPDR,
                         max_k[ii, jj] = np.nan
                         max_g[ii, jj] = np.nan
                     else:
-                        max_idx       = np.where(PDR.real[ii, 1:, jj] == PDR.real[ii, 1:, jj].max())[0][0]
-                        max_f[ii, jj] = PDR.real[ii, max_idx, jj] / (2*np.pi)
+                        max_idx       = np.where(PDR.imag[ii, 1:, jj] == PDR.imag[ii, 1:, jj].max())[0][0]
+                        max_f[ii, jj] = PDR.real[ii, max_idx, jj]
                         max_k[ii, jj] = k_vals[ii, max_idx]
-                        max_g[ii, jj] = PDR.imag[ii, max_idx, jj] / (2*np.pi)
+                        max_g[ii, jj] = PDR.imag[ii, max_idx, jj]
     
-        pdb.set_trace()
+        #pdb.set_trace()
         plt.ioff()
         fig, ax1 = plt.subplots(figsize=(13, 6))
         
@@ -880,7 +953,7 @@ def plot_max_growth_rate_with_time(times, k_vals, all_HPDR, all_WPDR, all_CPDR,
 
         # Set xlim to show either just pearls, or whole event
         ax1.set_xlim(time_start, time_end)
-        figsave_path = plot_dir + '_LT_{:03}_{:03}_{:03}_{}{}.png'.format(ccomp[0], ccomp[1], ccomp[2], lbl, suff)
+        figsave_path = plot_dir + '_LT_{:03}_{:03}_{:03}_{}.png'.format(ccomp[0], ccomp[1], ccomp[2], lbl)
     
         # Set ylim to show either just positive growth rate or everything
         if ignore_damping == True:
@@ -952,7 +1025,7 @@ def plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad, norm=None,
         Species, PP = create_species_array(B0[ii], name, mass, charge, density[:, ii],
                                             tper[:, ii], ani[:, ii])
         
-        TGR[ii], CGR[ii] = get_warm_growth_rates(w, Species)
+        TGR[ii], CGR[ii], wVg = get_warm_growth_rates(w, Species)
         
         # Normalize
         if norm is not None:
@@ -1045,7 +1118,7 @@ def plot_max_TGR_CGR_timeseries(rbsp_path, time_start, time_end, probe, pad, nor
         He_idx = nearest_index(freqs, 0.25*pcyc)
         O_idx  = nearest_index(freqs, 0.0625*pcyc)
         
-        TGR, CGR = get_warm_growth_rates(w, Species)
+        TGR, CGR, wVg = get_warm_growth_rates(w, Species)
         
         # Mask nan's
         TGR[np.isnan(TGR) == True] = 0.0
@@ -1426,7 +1499,7 @@ def plot_dispersion_and_growth(ax_disp, ax_growth, k_vals, CPDR, WPDR, HPDR, w_c
 
 
 def plot_all_DRs(all_k, all_CPDR, all_WPDR, all_HPDR, times, B, name, mi, qi, ni, t_perp, A, ne,
-                 suff='', HM_filter_mhz=50, overwrite=False, save=True, figtext=True):
+                 suff='', HM_filter_mhz=50, overwrite=False, save=True, figtext=True, subdir='all_DRs'):
     '''
     CPDR is cold approx
     WPDR is Chen's warm approx of 2013
@@ -1436,8 +1509,13 @@ def plot_all_DRs(all_k, all_CPDR, all_WPDR, all_HPDR, times, B, name, mi, qi, ni
     code would have only had hot.
     '''
     Nt = times.shape[0]
+    
+    figsave_dir = os.path.join(save_dir, subdir)
+    if os.path.exists(figsave_dir) == False:
+        os.makedirs(figsave_dir)
+
     for ii in range(Nt):
-        figsave_path = save_dir + 'linear_{}_{}.png'.format(save_string, ii)
+        figsave_path = figsave_dir + 'linear_{}_{}.png'.format(save_string, ii)
         
         if os.path.exists(figsave_path) == True and overwrite == False:
             print('Plot already done, skipping...')
@@ -1471,7 +1549,7 @@ def plot_all_DRs(all_k, all_CPDR, all_WPDR, all_HPDR, times, B, name, mi, qi, ni
         fig.subplots_adjust(wspace=0, hspace=0, right=0.75)
         
         if save == True:
-            figsave_path = save_dir + 'linear_{}_{}.png'.format(save_string, ii)
+            figsave_path = figsave_dir + '//linear_{}_{}.png'.format(save_string, ii)
             print('Saving {}'.format(figsave_path))
             fig.savefig(figsave_path)
             plt.close('all')
@@ -1550,15 +1628,16 @@ if __name__ == '__main__':
     
     date_string = time_start.astype(object).strftime('%Y%m%d')
     save_string = time_start.astype(object).strftime('%Y%m%d_%H%M_') + time_end.astype(object).strftime('%H%M')
-    save_dir    = '{}NEW_LT//EVENT_{}//CHEN_DR_CODE_PARALLEL//'.format(save_drive, date_string)
+    save_dir    = '{}NEW_LT//EVENT_{}//CHEN_DR_CODE//'.format(save_drive, date_string)
     
-    _K, _CPDR, _WPDR, _HPDR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE =\
+    _K, _CPDR, _WPDR, _HPDR, _cCGR, _wCGR, _hCGR,                          \
+    TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE =             \
     get_all_DRs_parallel(time_start, time_end, probe, pad, [70, 20, 10], 
                      kmin=0.0, kmax=1.0, Nk=5000, knorm=True,
-                     nsec=None, HM_filter_mhz=50)
+                     nsec=3, HM_filter_mhz=50)
     
-    plot_all_DRs(_K, _CPDR, _WPDR, _HPDR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE)
+    plot_all_DRs(_K, _CPDR, _WPDR, _HPDR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE, subdir='all_DRs_3sec')
     
-    #plot_max_growth_rate_with_time(TIMES, _K, _HPDR, _WPDR, _CPDR,
-    #                               save=True, norm_w=False, B0=None,
-    #                               ccomp=[70, 20, 10], suff='')
+    plot_max_growth_rate_with_time(TIMES, _K, _HPDR, _WPDR, _CPDR,
+                                   save=True, norm_w=False, B0=None,
+                                   ccomp=[70, 20, 10], suff='_3sec')
