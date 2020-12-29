@@ -374,7 +374,7 @@ def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out
     # Solution and error arrays :: Two-soln array for wr, gamma. 
     # PDR_solns init'd as ones because 0.0 returns spurious root
     PDR_solns = np.ones( (Nk, N_solns, 2), dtype=np.float64)*0.01
-    OUT_solns = np.zeros((Nk, N_solns   ), dtype=np.complex128)
+    CGR_solns = np.zeros((Nk, N_solns   ), dtype=np.float64)
     ier       = np.zeros((Nk, N_solns   ), dtype=int)
     msg       = np.zeros((Nk, N_solns   ), dtype='<U256')
 
@@ -425,23 +425,24 @@ def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out
 
     # Solve for growth rate/convective growth rate here
     if approx == 'hot':
-        conv_growth = None
+        CGR_solns *= np.nan
     elif approx == 'warm':
         for jj in range(N_solns):
-            PDR_solns[:, jj, 1], conv_growth, wVg = get_warm_growth_rates(PDR_solns[:, jj, 0], k, Species)
+            PDR_solns[:, jj, 1], CGR_solns[:, jj], wVg = get_warm_growth_rates(PDR_solns[:, jj, 0], k, Species)
     elif approx == 'cold':
         for jj in range(N_solns):
-            PDR_solns[:, jj, 1], conv_growth, cVg = get_cold_growth_rates(PDR_solns[:, jj, 0], k, Species)
+            PDR_solns[:, jj, 1], CGR_solns[:, jj], cVg = get_cold_growth_rates(PDR_solns[:, jj, 0], k, Species)
     
     # Convert to complex number if flagged, else return as (Nk, N_solns, 2) for real/imag components
     if complex_out == True:
+        OUT_solns = np.zeros((Nk, N_solns   ), dtype=np.complex128)
         for ii in range(Nk):
             for jj in range(N_solns):
                 OUT_solns[ii, jj] = PDR_solns[ii, jj, 0] + 1j*PDR_solns[ii, jj, 1]
     else:
         OUT_solns = PDR_solns
     
-    return OUT_solns, conv_growth
+    return OUT_solns, CGR_solns
 
 
 
@@ -1613,18 +1614,20 @@ def plot_residuals(Species, PP, k, w_vals, lbl='', approx='hot'):
 
 
 if __name__ == '__main__':
-    # To Do:
-    # Peaks to line up
-    
-    #wang_2016_validation_plots()
-        
     rbsp_path = 'G://DATA//RBSP//'
     save_drive= 'G://'
     
-    time_start  = np.datetime64('2013-07-25T21:25:00')
-    time_end    = np.datetime64('2013-07-25T21:47:00')
+    time_start  = np.datetime64('2015-01-16T04:05:00')
+    time_end    = np.datetime64('2015-01-16T05:15:00')
     probe       = 'a'
     pad         = 0
+    
+    # Test/Check output from files
+    if True:
+        TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_DENS = \
+        extract_species_arrays(time_start, time_end, probe, pad, cmp=np.asarray([70, 20, 10]), 
+                               return_raw_ne=True, nsec=None, HM_filter_mhz=50)
+        sys.exit()
     
     date_string = time_start.astype(object).strftime('%Y%m%d')
     save_string = time_start.astype(object).strftime('%Y%m%d_%H%M_') + time_end.astype(object).strftime('%H%M')
@@ -1634,10 +1637,11 @@ if __name__ == '__main__':
     TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE =             \
     get_all_DRs_parallel(time_start, time_end, probe, pad, [70, 20, 10], 
                      kmin=0.0, kmax=1.0, Nk=5000, knorm=True,
-                     nsec=3, HM_filter_mhz=50)
+                     nsec=None, HM_filter_mhz=50)
     
-    plot_all_DRs(_K, _CPDR, _WPDR, _HPDR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE, subdir='all_DRs_3sec')
-    
-    plot_max_growth_rate_with_time(TIMES, _K, _HPDR, _WPDR, _CPDR,
-                                   save=True, norm_w=False, B0=None,
-                                   ccomp=[70, 20, 10], suff='_3sec')
+    if True:
+        plot_all_DRs(_K, _CPDR, _WPDR, _HPDR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE, subdir='')
+        
+        plot_max_growth_rate_with_time(TIMES, _K, _HPDR, _WPDR, _CPDR,
+                                       save=True, norm_w=False, B0=None,
+                                       ccomp=[70, 20, 10], suff='')
