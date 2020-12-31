@@ -177,13 +177,13 @@ def convert_data_to_hybrid_plasmafile(time_start, time_end, probe, pad, comp=Non
     The biggest uncertainty is the cold composition.
     '''
     run_dir  = 'C:/Users/iarey/Documents/GitHub/hybrid/simulation_codes//run_inputs/from_data/'
-    run_ext  = 'H_ONLY'           
+    run_ext  = 'ALL_SPECIES'           
     run_dir +=  run_ext + '/'        
                    
     if os.path.exists(run_dir) == False: os.makedirs(run_dir)
     
     if comp is None:
-        comp = [100, 0, 0]
+        comp = [70, 20, 10]
     
     times, B0, cold_dens, hope_dens, hope_temp, hope_anis, spice_dens, spice_temp, spice_anis =\
         load_and_interpolate_plasma_params(time_start, time_end, probe, pad)
@@ -195,7 +195,7 @@ def convert_data_to_hybrid_plasmafile(time_start, time_end, probe, pad, comp=Non
     dens  = np.zeros((9, Nt), dtype=float)
     Tperp = np.zeros((9, Nt), dtype=float)
     A     = np.zeros((9, Nt), dtype=float)
-
+    
     names    = np.array(['cold $H^{+}$', 'cold $He^{+}$', 'cold $O^{+}$',
                          'warm $H^{+}$', 'warm $He^{+}$', 'warm $O^{+}$',
                          'hot $H^{+}$' , 'hot $He^{+}$' , 'hot $O^{+}$'])
@@ -264,9 +264,11 @@ def convert_data_to_hybrid_plasmafile(time_start, time_end, probe, pad, comp=Non
                 print('', file=f)
             # Single print specific stuff
             print('ELECTRON_EV    {}'.format(electron_ev), file=f)
-            print('BETA_FLAG      {}'.format(beta_flag), file=f)
-            print('L              {}'.format(L), file=f)
-            print('B_EQ           {}'.format(b_eq), file=f)        
+            print('BETA_FLAG      {}'.format(beta_flag)  , file=f)
+            print('L              {}'.format(L)          , file=f)
+            print('B_EQ           {}'.format(b_eq)       , file=f)  
+            print('B_XMAX         -'                     , file=f) 
+    print('Plasmafiles created.')
     return
 
 
@@ -300,14 +302,14 @@ def get_pc1_spectra(rbsp_path, time_start, time_end, probe, pc1_res=25.0, overla
 #%% MAIN FUNCTION :: JUST CHECKING THINGS
 if __name__ == '__main__':
     _rbsp_path  = 'G://DATA//RBSP//'
-    _time_start = np.datetime64('2013-07-25T21:20:00')
-    _time_end   = np.datetime64('2013-07-25T21:50:00')
+    _time_start = np.datetime64('2013-07-25T21:00:00')
+    _time_end   = np.datetime64('2013-07-25T22:00:00')
     _probe      = 'a'
     _pad        = 0
     
-    #convert_data_to_hybrid_plasmafile(_time_start, _time_end, _probe, _pad)
+    convert_data_to_hybrid_plasmafile(_time_start, _time_end, _probe, _pad)
     
-    if True:
+    if False:
         _times, _B0, _cold_dens, _hope_dens, _hope_temp, _hope_anis, _spice_dens, _spice_temp, _spice_anis =\
             load_and_interpolate_plasma_params(_time_start, _time_end, _probe, _pad, HM_filter_mhz=50, nsec=None)
         

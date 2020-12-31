@@ -1528,22 +1528,25 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
 ### ##
 
 # A few internal flags
-event_inputs      = False      # Can be set for lists of input files for easy batch-runs
+event_inputs      = True       # Can be set for lists of input files for easy batch-runs
 adaptive_timestep = True       # Disable adaptive timestep if you hate when it doubles
 
 #################################
 ### FILENAMES AND DIRECTORIES ###
 #################################
-plasma_list = ['/run_inputs/from_data/H_ONLY/plasma_params_20130725_213004105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213050105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213221605000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213248105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213307605000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213406605000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213703105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_213907605000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214026105000_H_ONLY.txt',
-               '/run_inputs/from_data/H_ONLY/plasma_params_20130725_214105605000_H_ONLY.txt']
+
+# Event batch runfiles, used if event_inputs == True
+ext         = 'ALL_SPECIES'
+plasma_list = ['/run_inputs/from_data/{}/plasma_params_20130725_213004105000_{}.txt'.format(ext, ext),
+               '/run_inputs/from_data/{}/plasma_params_20130725_213050105000_{}.txt'.format(ext, ext),
+               '/run_inputs/from_data/{}/plasma_params_20130725_213221605000_{}.txt'.format(ext, ext),
+               '/run_inputs/from_data/{}/plasma_params_20130725_213248105000_{}.txt'.format(ext, ext),
+               '/run_inputs/from_data/{}/plasma_params_20130725_213307605000_{}.txt'.format(ext, ext),
+               '/run_inputs/from_data/{}/plasma_params_20130725_213406605000_{}.txt'.format(ext, ext),
+               '/run_inputs/from_data/{}/plasma_params_20130725_213703105000_{}.txt'.format(ext, ext),
+               '/run_inputs/from_data/{}/plasma_params_20130725_213907605000_{}.txt'.format(ext, ext),
+               '/run_inputs/from_data/{}/plasma_params_20130725_214026105000_{}.txt'.format(ext, ext),
+               '/run_inputs/from_data/{}/plasma_params_20130725_214105605000_{}.txt'.format(ext, ext)]
 
 if os.name == 'posix':
     root_dir     = os.path.dirname(sys.path[0])
