@@ -14,7 +14,7 @@ from   scipy.special     import wofz
 
 sys.path.append('..//new_general_DR_solver//')
 
-from dispersion_solver_multispecies import create_species_array, dispersion_relation_solver
+from multiapprox_dispersion_solver import create_species_array, get_dispersion_relation
 
 # Constants
 qp     = 1.602e-19
@@ -199,7 +199,9 @@ def linear_growth_rates_chen(w, Species):
 
     temporal_growth_rate   = - Di / Dr_wder
     group_velocity         = - Dr_kder / Dr_wder
-    convective_growth_rate = - temporal_growth_rate / np.abs(group_velocity)
+    
+    # There is a minus sign in the paper here that I don't think should be there
+    convective_growth_rate = temporal_growth_rate / np.abs(group_velocity)
     return temporal_growth_rate, convective_growth_rate, group_velocity, k
 
 
@@ -518,7 +520,7 @@ def plot_omura2010_velocities_and_dispersion():
     wlength = 4e4
     kmax    = 2 * np.pi / wlength
 
-    k_vals, CPDR_solns, warm_solns = dispersion_relation_solver(Species, PP, norm_k_in=False, norm_k_out=False, \
+    k_vals, CPDR_solns, warm_solns = get_dispersion_relation(Species, PP, norm_k_in=False, norm_k_out=False, \
                                      norm_w=False, plot=False, kmin=0.0, kmax=kmax, Nk=1000)
     
     # Cast to linear frequency
@@ -697,7 +699,7 @@ def plot_check_temporal_growth_rate_chen():
     
     temporal_GR, convective_GR, V_group_chen, k_cold = linear_growth_rates_chen(w_vals, Species) 
     
-    k_warm, CPDR_solns, WPDR_solns = dispersion_relation_solver(Species, PP, norm_k_in=False, norm_k_out=False, \
+    k_warm, CPDR_solns, WPDR_solns = get_dispersion_relation(Species, PP, norm_k_in=False, norm_k_out=False, \
                                      norm_w=False, plot=False, kmin=0.0, kmax=kmax, Nk=Nf)
     
     fig, ax = plt.subplots(2)
@@ -721,6 +723,9 @@ def plot_check_temporal_growth_rate_chen():
 
 
 def plot_convective_growth_rate_chen():
+    '''
+    TODO: Check this with Fraser (1989) parameters
+    '''
     f_max  = 4.0
     f_vals = np.linspace(0.0, f_max, 10000)
     w_vals = 2 * np.pi * f_vals
@@ -751,6 +756,49 @@ def plot_convective_growth_rate_chen():
     for AX in ax:
         for st, en in zip(sb0, sb1):
             AX.axvspan(f_vals[st], f_vals[en], color='k', alpha=0.5, lw=0)
+    return
+
+
+def plot_convective_growth_rate_fraser():
+    '''
+    TODO: Check this with Fraser (1989) parameters
+    '''
+    f_max  = 3.5
+    f_vals = np.linspace(0.0, f_max, 5000)
+    w_vals = 2 * np.pi * f_vals
+
+    mp         = 1.673e-27                        # Proton mass (kg)
+    qi         = 1.602e-19                        # Elementary charge (C)
+    _B0        = 300e-9                           # Background magnetic field in T
+    #A_style    = [':', '-', '--']                 # Line style for each anisotropy
+    Ah         = 1.5                              # Anisotropy values
+    
+    _name      = np.array(['Cold H', 'Cold He', 'Cold O', 'Warm H', 'Warm He', 'Warm O'])         # Species label
+    _mass      = np.array([1.0     , 4.0      , 16.0    , 1.0     , 4.0      , 16.0    ]) * mp    # Mass   in proton masses (kg)
+    _charge    = np.array([1.0     , 1.0      , 1.0     , 1.0     , 1.0      , 1.0     ]) * qi    # Change in elementary units (C)
+    _density   = np.array([196.0   , 22.0     , 2.0     , 5.1     , 0.05     , 0.13    ]) * 1e6   # Density in cm3 (/m3)
+    _tper      = np.array([0.0     , 0.0      , 0.0     , 30.0    , 10.0     , 10.0    ]) * 1e3   # Parallel temperature in keV (eV)
+    _ani       = np.array([0.0     , 0.0      , 0.0     , Ah      , 1.0      , 1.0     ])         # Temperature anisotropy
+    
+    Species, PP = create_species_array(_B0, _name, _mass, _charge, _density, _tper, _ani)
+    
+    temporal_GR, convective_GR, V_group, k_cold = linear_growth_rates_chen(w_vals, Species) 
+    
+    fig, ax = plt.subplots(figsize=(16, 10))
+    ax.set_title('Convective Growth Rate :: Fraser (1989) Comparison')
+    
+    ax.plot(f_vals, convective_GR*1e7)
+    ax.set_ylim(0, None)
+    ax.set_ylabel('$S$\n$(m^{-1})$', rotation=0, fontsize=14, labelpad=30)
+    
+    ax.set_xlabel('f (Hz)', fontsize=14)
+    ax.set_xlim(0, f_max)
+    
+    sb0, sb1 = get_stop_bands(k_cold)
+    for st, en in zip(sb0, sb1):
+        ax.axvspan(f_vals[st], f_vals[en], color='k', alpha=0.5, lw=0)
+        
+    plt.show()
     return
 
 
@@ -840,8 +888,10 @@ if __name__ == '__main__':
     Ideas to try:
         - Make frequencies constant with integration. (This won't fix threshold issues)
     '''    
+    plot_convective_growth_rate_fraser()
+    
     # --- From Omura et al. (2010)
-    plot_omura2010_velocities_and_dispersion()
+    #plot_omura2010_velocities_and_dispersion()
     #plot_omura2010_NLGrowth()
     #plot_omura2010_freqamp()
     #calculate_threshold_amplitude()

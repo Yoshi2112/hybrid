@@ -20,8 +20,9 @@ from   scipy.optimize          import fsolve
 from   scipy.special           import wofz
 from   mpl_toolkits.axes_grid1 import make_axes_locatable
 
-sys.path.append('F://Google Drive//Uni//PhD 2017//Data//Scripts//')
+sys.path.append(os.environ['GOOGLE_DRIVE'] + '//Uni//PhD 2017//Data//Scripts//')
 import rbsp_fields_loader as rfl
+import rbsp_file_readers  as rfr
 import fast_scripts       as fscr
 import extract_parameters_from_data   as data
 from   emperics          import geomagnetic_magnitude, sheely_plasmasphere
@@ -289,7 +290,7 @@ def get_warm_growth_rates(wr, k, Species):
 
     temporal_growth_rate   = - Di / Dr_wder
     group_velocity         = - Dr_kder / Dr_wder
-    convective_growth_rate = - temporal_growth_rate / np.abs(group_velocity)
+    convective_growth_rate =   temporal_growth_rate / np.abs(group_velocity)
     return temporal_growth_rate, convective_growth_rate, group_velocity
 
 
@@ -320,12 +321,12 @@ def get_cold_growth_rates(wr, k, Species):
 
     temporal_growth_rate   = - Di / Dr_wder
     group_velocity         = - Dr_kder / Dr_wder
-    convective_growth_rate = - temporal_growth_rate / np.abs(group_velocity)
+    convective_growth_rate =   temporal_growth_rate / np.abs(group_velocity)
     return temporal_growth_rate, convective_growth_rate, group_velocity
 
 
 def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out=True, print_filtered=True,
-                            magnetospheric_plasma=True):
+                            magnetospheric_plasma=True, return_vg=False):
     '''
     Given a range of k, returns the real and imaginary parts of the plasma dispersion
     relation specified by the Species present.
@@ -375,6 +376,7 @@ def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out
     # PDR_solns init'd as ones because 0.0 returns spurious root
     PDR_solns = np.ones( (Nk, N_solns, 2), dtype=np.float64)*0.01
     CGR_solns = np.zeros((Nk, N_solns   ), dtype=np.float64)
+    VEL_solns = np.zeros((Nk, N_solns   ), dtype=np.float64)
     ier       = np.zeros((Nk, N_solns   ), dtype=int)
     msg       = np.zeros((Nk, N_solns   ), dtype='<U256')
 
@@ -428,11 +430,11 @@ def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out
         CGR_solns *= np.nan
     elif approx == 'warm':
         for jj in range(N_solns):
-            PDR_solns[:, jj, 1], CGR_solns[:, jj], wVg = get_warm_growth_rates(PDR_solns[:, jj, 0], k, Species)
+            PDR_solns[:, jj, 1], CGR_solns[:, jj], VEL_solns[:, jj] = get_warm_growth_rates(PDR_solns[:, jj, 0], k, Species)
     elif approx == 'cold':
         for jj in range(N_solns):
-            PDR_solns[:, jj, 1], CGR_solns[:, jj], cVg = get_cold_growth_rates(PDR_solns[:, jj, 0], k, Species)
-    
+            PDR_solns[:, jj, 1], CGR_solns[:, jj], VEL_solns[:, jj] = get_cold_growth_rates(PDR_solns[:, jj, 0], k, Species)
+
     # Convert to complex number if flagged, else return as (Nk, N_solns, 2) for real/imag components
     if complex_out == True:
         OUT_solns = np.zeros((Nk, N_solns   ), dtype=np.complex128)
@@ -442,7 +444,10 @@ def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out
     else:
         OUT_solns = PDR_solns
     
-    return OUT_solns, CGR_solns
+    if return_vg == True:
+        return OUT_solns, CGR_solns, VEL_solns
+    else:
+        return OUT_solns, CGR_solns
 
 
 
@@ -612,7 +617,8 @@ def get_DRs_chunked(Nk, kmin, kmax, knorm, times, B0, name, mass, charge, densit
 
 def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp, 
                     kmin=0.0, kmax=1.0, Nk=1000, knorm=True,
-                    nsec=None, HM_filter_mhz=50, N_procs=7):
+                    nsec=None, HM_filter_mhz=50, N_procs=7,
+                    suff=''):
 
     if nsec is None:
         DR_path = save_dir + 'DISP_{}_cc_{:03}_{:03}_{:03}.npz'.format(save_string, int(cmp[0]), int(cmp[1]), int(cmp[2]))
@@ -756,7 +762,334 @@ def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp,
         
     return k_np, CPDR_out, WPDR_out, HPDR_out, cCGR_out, wCGR_out, hCGR_out, \
            times, B0, name, mass, charge, density, tper, ani, cold_dens
-           
+     
+     
+#%% VALIDATION PLOTS (FOR DIAGNOSTICS)
+def validation_plots_chen_2013():
+    '''
+    Routine to easily compare output from dispersion solver to plots from
+    Chen et al. (2013) by varying helium density and temperature.
+    
+    R-mode solution not incorporated into this version of the code (since
+    we don't really care about R-waves).
+    '''
+    mp       = 1.673e-27                        # Proton mass (kg)
+    qi       = 1.602e-19                        # Elementary charge (C)
+    e0       = 8.854e-12                        # Permittivity of free space
+    _n0      = 100e6                            # Electron number density in /m3                      
+    _B0      = 144e-9                           # Background magnetic field in T
+    nhh      = 0.03                             # Fraction hot hydrogen
+    nHe      = 0.05                             # Fraction warm helium
+    THe      = 100.0                             # Helium temperature (eV) -- Does this have to be altered for 'total temp'?
+    
+    _name    = np.array(['Hot H'  , 'Cold H'        , 'Cold He'])               # Species label
+    _mass    = np.array([1.0      , 1.0             , 4.0      ]) * mp          # Mass   in proton masses (kg)
+    _charge  = np.array([1.0      , 1.0             , 1.0      ]) * qi          # Change in elementary units (C)
+    _density = np.array([nhh      , 1.0 - nhh - nHe , nHe      ]) * _n0         # Density as a fraction of n0 (/m3)
+    _tpar    = np.array([25e3     , 0.0             , THe      ])               # Parallel temperature in eV
+    _ani     = np.array([1.0      , 0.0             , 0.0      ])               # Temperature anisotropy
+    _tper    = (_ani + 1) * _tpar                                               # Perpendicular temperature in eV
+    
+    _Spec, _PP = create_species_array(_B0, _name, _mass, _charge, _density, _tper, _ani)
+
+    _kh  = np.sqrt(_n0 * qi ** 2 / (mp * e0))/c
+    _Nk  = 1000
+    _k   = np.linspace(0.0, 2.0*_kh, _Nk)
+    pcyc = qi * _B0 / mp 
+
+    cold_DR, cold_CGR = get_dispersion_relation(_Spec, _k, approx='cold')
+    warm_DR, warm_CGR = get_dispersion_relation(_Spec, _k, approx='warm')
+    hot_DR ,  hot_CGR = get_dispersion_relation(_Spec, _k, approx='hot' )
+
+    # Plot the things
+    k_norm    = _k / _kh
+    fig, axes = plt.subplots(2, sharex=True)
+    
+    for jj in range(hot_DR.shape[1]):
+        axes[0].semilogx(k_norm,  hot_DR[:, jj].real / pcyc, ls='-' , c='r', lw=0.75)
+        axes[0].semilogx(k_norm, warm_DR[:, jj].real / pcyc, ls='--', c='b', lw=0.75)
+        axes[0].semilogx(k_norm, cold_DR[:, jj].real / pcyc, ls='--', c='k', lw=0.75)
+        axes[0].set_ylabel('$\omega_r/\Omega_h$', fontsize=16)
+        
+        axes[1].semilogx(k_norm,  hot_DR[:, jj].imag / pcyc, ls='-' , c='r', label='Full', lw=0.75)
+        axes[1].semilogx(k_norm, warm_DR[:, jj].imag / pcyc, ls='--', c='b', label='Warm', lw=0.75)
+        axes[1].semilogx(k_norm, cold_DR[:, jj].imag / pcyc, ls='--', c='k', label='Cold', lw=0.75)
+        
+    axes[1].set_ylabel('$\gamma/\Omega_h$', fontsize=16)
+    axes[1].set_xlabel('$k_\parallel/k_h$', fontsize=16)
+    
+    axes[0].set_ylim(0.0, 1.0)
+    axes[0].set_xlim(1e-2, 2)
+    axes[1].set_ylim(-0.01, 0.06)
+    axes[1].set_xlim(1e-2, 2)
+    
+    fig.subplots_adjust(hspace=0.01)
+    return
+
+
+def validation_plots_wang_2016():
+    '''
+    Routine to easily compare output from dispersion solver to plots from
+    Wang et al. (2016) by varying many parameters. Solver is derived from
+    Chen et al. (2013) but plasma is plasma.
+    '''
+    L_shell  = 4                                # L-shell at which magnetic field and density are calculated
+    n0       = sheely_plasmasphere(L_shell)     # Plasma density, /m3
+    B0       = geomagnetic_magnitude(L_shell)   # Background magnetic field, T
+    mp       = 1.673e-27                        # Proton mass (kg)
+    qi       = 1.602e-19                        # Elementary charge (C)
+    
+    # This all must add up to 1
+    RC_ab= 0.1
+    H_ab = 0.6
+    He_ab= 0.2
+    O_ab = 0.1
+    
+    name    = np.array(['Warm H'  , 'Cold H' , 'Cold He', 'Cold O'])
+    mass    = np.array([1.0       , 1.0      , 4.0      , 16.0    ]) * mp
+    charge  = np.array([1.0       , 1.0      , 1.0      ,  1.0    ]) * qi
+    density = np.array([RC_ab     , H_ab     , He_ab    ,  O_ab,  ]) * n0
+    tpar    = np.array([25e3      , 0.0      , 0.0      ,  0.0    ])
+    ani     = np.array([2.0       , 0.0      , 0.0      ,  0.0    ])
+    tper    = (ani + 1) * tpar
+    
+    Spec, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
+    
+    knorm_fac             = PP['pcyc_rad'] / PP['va']
+    k_vals                = np.linspace(0.0, 1.0, 1000, endpoint=False) * knorm_fac
+
+    CPDR_solns,  cold_CGR = get_dispersion_relation(Spec, k_vals, approx='cold' )
+    HPDR_solns,   hot_CGR = get_dispersion_relation(Spec, k_vals, approx='hot' )
+
+    CPDR_solns /= PP['pcyc_rad']
+    HPDR_solns /= PP['pcyc_rad']   
+    k_vals     *= PP['va'] / PP['pcyc_rad']
+
+    species_colors = ['r', 'b', 'g']
+    
+    print('Plotting solutions...')
+    plt.ioff()
+    plt.figure(figsize=(15, 10))
+    ax1 = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
+    ax2 = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
+    
+    for ii in range(CPDR_solns.shape[1]):
+        ax1.plot(k_vals[1:], CPDR_solns[1:, ii].real,      c=species_colors[ii], linestyle='--', label='Cold')
+        ax1.plot(k_vals[1:], HPDR_solns[1:, ii].real, c=species_colors[ii], linestyle='-',  label='Hot')
+
+    ax1.set_title('Dispersion Relation')
+    ax1.set_xlabel(r'$kv_A / \Omega_p$')
+    ax1.set_ylabel(r'$\omega_r/\Omega_p$')
+    ax1.set_xlim(k_vals[0], k_vals[-1])
+    
+    ax1.set_ylim(0, 1.0)
+    ax1.minorticks_on()
+    
+    for ii in range(CPDR_solns.shape[1]):
+        ax2.plot(k_vals[1:], HPDR_solns[1:, ii].imag, c=species_colors[ii], linestyle='-')
+
+    ax2.set_title('Temporal Growth Rate')
+    ax2.set_xlabel(r'$kv_A / \Omega_p$')
+    ax2.set_ylabel(r'$\gamma/\Omega_p$')
+    ax2.set_xlim(k_vals[0], k_vals[-1])
+    ax2.set_ylim(-0.05, 0.05)
+    
+    ax2.minorticks_on()
+
+    figManager = plt.get_current_fig_manager()
+    figManager.window.showMaximized() 
+    return
+
+
+def validation_plots_fraser_1996():
+    '''
+    Checking CGR solutions against solutions calculated by Fraser et al. (1996)
+    using the Kozyra code and equations.
+        
+    Verdict: Shape is correct, but amplitudes are not. Off by approximately 3.4-6.0
+    Factor is not consistent with changing anisotropy (I think?)
+    
+    Lowest anisotropy (0.5) is also missing highest band? Looks like it's been 
+    damped out to below 0.0. Need more literature to compare (convective) growth
+    rates with. Run with it on a trial basis, maybe integrate the Samson code
+    into this later on.
+    '''
+    mp         = 1.673e-27                        # Proton mass (kg)
+    qi         = 1.602e-19                        # Elementary charge (C)
+    _B0        = 300e-9                           # Background magnetic field in T
+    A_style    = [':', '-', '--']                 # Line style for each anisotropy
+    Ah         = [0.5]                  # Anisotropy values
+    
+    _name      = np.array(['Cold H', 'Cold He', 'Cold O', 'Warm H', 'Warm He', 'Warm O'])         # Species label
+    _mass      = np.array([1.0     , 4.0      , 16.0    , 1.0     , 4.0      , 16.0    ]) * mp    # Mass   in proton masses (kg)
+    _charge    = np.array([1.0     , 1.0      , 1.0     , 1.0     , 1.0      , 1.0     ]) * qi    # Change in elementary units (C)
+    _density   = np.array([196.0   , 22.0     , 2.0     , 5.1     , 0.05     , 0.13    ]) * 1e6   # Density in cm3 (/m3)
+    _tper      = np.array([0.0     , 0.0      , 0.0     , 30.0    , 10.0     , 10.0    ]) * 1e3   # Parallel temperature in keV (eV)
+    
+    plt.ioff()
+    fig, axes = plt.subplots(ncols=2, nrows=1, figsize=(16, 10))
+    
+    for ii in range(len(Ah)):
+        _ani       = np.array([0.0     , 0.0      , 0.0     , Ah[ii], 1.0      , 1.0     ])         # Temperature anisotropy
+        _Spec, _PP = create_species_array(_B0, _name, _mass, _charge, _density, _tper, _ani)
+    
+        knorm_fac  = _PP['pcyc_rad'] / _PP['va']
+        k_vals     = np.linspace(0.0, 2.0, 5000, endpoint=False) * knorm_fac
+    
+        # Ouputs are (k_vals, N_solns)
+        cold_DR, cold_CGR = get_dispersion_relation(_Spec, k_vals, approx='warm')
+        cold_DR /= 2*np.pi
+    
+        # Plot each solution
+        for jj in range(cold_DR.shape[1]):
+            axes[0].plot(k_vals             , cold_DR[:, jj].real, ls=A_style[ii] , c='k', lw=0.75)
+            axes[1].plot(cold_DR[:, jj].real, cold_CGR[:, jj]*1e7, ls=A_style[ii] , c='k', lw=0.75)
+        
+    fsize = 12; lpad = 10
+    axes[0].set_xlabel(r'$k_\parallel$', fontsize=fsize)
+    axes[0].set_ylabel(r'$\omega_r$'   , fontsize=fsize, rotation=0, labelpad=lpad)
+    
+    axes[1].set_ylabel('$S$ \n $\\times 10^7 m^{-1}$', fontsize=fsize, rotation=0, labelpad=lpad)
+    axes[1].set_xlabel(r'$\omega_r$', fontsize=fsize)
+    
+    axes[0].set_xlim(0.0, k_vals[-1])
+    #axes[0].set_ylim(0.0, None)
+    
+    axes[1].set_xlim(0.0, None)
+    #axes[1].set_ylim(0.0, None)
+    plt.show()
+    return
+
+
+def validation_plots_omura2010():
+    '''
+    Using Omura parameters to test against his group velocities, just to see if
+    the minus signs from Chen (2013) are ok or not.
+    
+    Original Omura functions in here for comparison (since we know they work).
+    
+    Group velocities equal to within around 0.02%
+    '''
+    def get_gamma_c(w, Species):
+        # Electron bit (gyfreq is signed, so this is a minus)
+        cold_sum = Species[-1]['plasma_freq_sq'] / Species[-1]['gyrofreq']
+        
+        # Sum over ion species
+        for ii in range(Species.shape[0] - 1):
+            cold_sum += Species[ii]['plasma_freq_sq'] / (Species[ii]['gyrofreq'] - w)
+        return cold_sum
+
+    def get_group_velocity(w, k, Species):
+        gam_c = get_gamma_c(w, Species) 
+        
+        # Ions only?
+        ion_sum = 0.0
+        for ii in range(Species.shape[0] - 1):
+            ion_sum += Species[ii]['plasma_freq_sq'] / (Species[ii]['gyrofreq'] - w) ** 2
+            
+        denom = gam_c + w*ion_sum
+        
+        Vg = np.zeros(w.shape)
+        for mm in range(w.shape[1]):
+            Vg[:, mm] = 2 * c * c * k / denom[:, mm]
+        return Vg
+
+    def get_resonance_velocity(w, k, PP):
+        Vr = np.zeros(w.shape)
+        for mm in range(w.shape[1]):
+            Vr[:, mm] = (w[:, mm] - PP['pcyc_rad']) / k
+        return Vr
+    
+    def get_phase_velocity(w, k):
+        Vp = np.zeros(w.shape)
+        for mm in range(w.shape[1]):
+            Vp[:, mm] = w[:, mm] / k
+        return Vp
+    
+    def get_velocities(w, k, Species, PP):
+        Vg = get_group_velocity(w, k, Species)
+        Vr = get_resonance_velocity(w, k, PP)
+        Vp = get_phase_velocity(w, k)
+        return Vg, Vp, Vr
+
+    
+    # Parameters in SI units (Note: Added the hot bit here. Is it going to break anything?) nh = 7.2
+    kB    = 1.380649e-23
+    pcyc  = 3.7 # Hz
+    B0    = 2 * np.pi * mp * pcyc / qp
+    
+    Th_para  = (mp * (6e5)**2 / kB) / 11603.
+    Th_perp  = (mp * (8e5)**2 / kB) / 11603.
+    Ah       = Th_perp / Th_para - 1
+
+    name    = np.array(['H'    , 'He'  , 'O'  , 'Hot H'])
+    mass    = np.array([1.0    , 4.0   , 16.0 , 1.0    ]) * mp
+    charge  = np.array([1.0    , 1.0   , 1.0  , 1.0    ]) * qp
+    density = np.array([136.8  , 17.0  , 17.0 , 7.2    ]) * 1e6
+    ani     = np.array([0.0    , 0.0   , 0.0  , Ah])
+    tpar    = np.array([0.0    , 0.0   , 0.0  , Th_para])
+    tper    = (ani + 1) * tpar
+    
+    _Spec, _PP = create_species_array(B0, name, mass, charge, density, tper, ani)
+    
+    wlength                     = 4e4
+    kmax                        = 2 * np.pi / wlength
+    k_vals                      = np.linspace(0.0, kmax*1.5, 5000, endpoint=False)
+    cold_DR, cold_CGR, cold_Vg  = get_dispersion_relation(_Spec, k_vals, approx='cold', return_vg=True) 
+    
+    plt.ioff()
+    
+# =============================================================================
+#     # Plot CPDR
+#     fig, ax = plt.subplots()
+#     for ss in range(cold_DR.shape[1]):
+#         ax.plot(1e3*k_vals / (2*np.pi), cold_DR.real[:, ss] / (2 * np.pi), c='k')
+#         
+#     ax.set_xlim(0, 0.025)
+#     ax.set_ylim(0, 3.5)
+#     
+#     ax.set_title('Cold Plasma Dispersion Relation')
+#     ax.set_ylabel('f (Hz)', fontsize=14)
+#     ax.set_xlabel(r'$\frac{1}{\lambda}$ ($km^{-1}$)', rotation=0, fontsize=14, labelpad=30)
+# =============================================================================
+    
+
+    # Resonance and Group Velocities plot (Figure 4a,b validated)
+    f_max  = 4.0
+    w_vals = cold_DR.real
+    f_vals = cold_DR.real / (2*np.pi)
+    
+    V_group, V_phase, V_resonance = get_velocities(w_vals, k_vals, _Spec, _PP)
+
+# =============================================================================
+#     fig, ax = plt.subplots()
+#     ax.plot(f_vals, V_resonance/1e3)
+#     ax.set_xlabel('f (Hz)', fontsize=14)
+#     ax.set_ylabel('$V_R$\nkm/s', rotation=0, fontsize=14, labelpad=30)
+#     ax.set_xlim(0, f_max)
+#     ax.set_ylim(-1500, 0)
+# =============================================================================
+
+    fig, ax = plt.subplots()
+    ax.plot(f_vals, V_group/1e3, c='k', label='Omura')
+    ax.plot(f_vals, cold_Vg/1e3, c='r', label='Chen')
+    ax.set_xlabel('f (Hz)', fontsize=14)
+    ax.set_ylabel('$V_g$\nkm/s', rotation=0, fontsize=14, labelpad=30)
+    ax.set_xlim(0, f_max)
+    ax.set_ylim(0, 250)
+    
+# =============================================================================
+#     fig, ax = plt.subplots()
+#     ax.plot(f_vals, V_phase/1e3)
+#     ax.set_xlabel('f (Hz)', fontsize=14)
+#     ax.set_ylabel('$V_p$\nkm/s', rotation=0, fontsize=14, labelpad=30)
+#     ax.set_xlim(0, f_max)
+#     #ax.set_ylim(0, 250)
+# =============================================================================
+
+    plt.show()
+    return
+     
 
 #%% PLOTTING FUNCTIONS
 def create_band_legend(fn_ax, labels, colors):
@@ -890,9 +1223,10 @@ def solve_and_plot_one_time(time_start, time_end, probe, pad, cmp,
     return
 
 
-def plot_max_growth_rate_with_time(times, k_vals, all_HPDR, all_WPDR, all_CPDR,
+def plot_max_growth_rate_with_time(times, k_vals, all_CPDR, all_WPDR, all_HPDR,
                                    save=False, norm_w=False, B0=None,
-                                   ccomp=[70, 20, 10], suff='', ignore_damping=True):
+                                   ccomp=[70, 20, 10], suff='', ignore_damping=True,
+                                   plot_pc1=False, plot_pearls=False):
     
     plot_dir = save_dir + '//MAX_GR_PLOTS{}//'.format(suff)
     if os.path.exists(plot_dir) == False:
@@ -910,12 +1244,17 @@ def plot_max_growth_rate_with_time(times, k_vals, all_HPDR, all_WPDR, all_CPDR,
     WPDR   = all_WPDR / (2*np.pi)
     HPDR   = all_HPDR / (2*np.pi)
     
-# =============================================================================
-#     # Mask nan's just to help
-#     CPDR[np.isnan(CPDR) == True] = 0.0
-#     WPDR[np.isnan(WPDR) == True] = 0.0
-#     HPDR[np.isnan(HPDR) == True] = 0.0
-# =============================================================================
+    if plot_pc1 == True:
+        fft_times, fft_freqs, pc1_power = \
+                data.get_pc1_spectra(rbsp_path, time_start, time_end, probe,
+                                     pc1_res=25.0, overlap=0.99)
+    else:
+        fft_times, fft_freqs, pc1_power = None, None, None
+        
+    if plot_pearls == True:
+        print('Plotting pearls...')
+        pidx, pearl_times, NULL = rfr.get_pearl_times(time=time_start, crres=False, custom_txtname=None)
+
     
     for PDR, lbl in zip([CPDR, WPDR, HPDR], ['cold', 'warm', 'hot']):
         Nt    = times.shape[0]
@@ -937,28 +1276,148 @@ def plot_max_growth_rate_with_time(times, k_vals, all_HPDR, all_WPDR, all_CPDR,
                         max_k[ii, jj] = k_vals[ii, max_idx]
                         max_g[ii, jj] = PDR.imag[ii, max_idx, jj]
     
-        #pdb.set_trace()
         plt.ioff()
-        fig, ax1 = plt.subplots(figsize=(13, 6))
+
+        if plot_pc1 == True:
+            fig, [ax2, ax1] = plt.subplots(2, figsize=(13, 6), sharex=True,
+                                           gridspec_kw={'height_ratios': [1, 2]})
+        
+            ax2.pcolormesh(fft_times, fft_freqs, pc1_power.T, vmin=-7, vmax=1, cmap='jet',
+                           shading='flat')
+        
+            ax2.set_xlim(plot_start, plot_end)
+            ax2.set_ylim(0, fmax)
+            
+            if plot_pearls == True:
+                for this_time in pearl_times:
+                    ax2.axvline(this_time, c='k', ls='--', alpha=0.50)
+            
+        else:
+            fig, ax1 = plt.subplots(figsize=(13, 6))
         
         for ii in range(3):
             ax1.plot(times, 1e3*max_g[:, ii], color=species_colors[ii], label=band_labels[ii], marker='o')
         
+        fig.suptitle('EMIC Temporal Growth Rate :: RBSP-A :: {}/{}/{} :: {} Approx.'.format(*ccomp, lbl), fontsize=fontsize+4)
         ax1.set_xlabel('Time (UT)', fontsize=fontsize)
         ax1.set_ylabel(r'$\gamma$ ($\times 10^{-3} s^{-1}$)', fontsize=fontsize)
-        ax1.set_title('EMIC Temporal Growth Rate :: RBSP-A :: {}/{}/{} :: {} Approx.'.format(*ccomp, lbl), fontsize=fontsize+4)
         ax1.legend(loc='upper left', prop={'size': fontsize}) 
         
         ax1.xaxis.set_major_locator(mdates.MinuteLocator(interval=5))
         ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
 
         # Set xlim to show either just pearls, or whole event
-        ax1.set_xlim(time_start, time_end)
-        figsave_path = plot_dir + '_LT_{:03}_{:03}_{:03}_{}.png'.format(ccomp[0], ccomp[1], ccomp[2], lbl)
+        ax1.set_xlim(plot_start, plot_end)
+        figsave_path = plot_dir + 'LT_' + save_string + '_{:03}_{:03}_{:03}_{}.png'.format(ccomp[0], ccomp[1], ccomp[2], lbl)
     
         # Set ylim to show either just positive growth rate or everything
         if ignore_damping == True:
             ax1.set_ylim(0, None)
+    
+        if plot_pearls == True:
+            for this_time in pearl_times:
+                ax1.axvline(this_time, c='k', ls='--', alpha=0.50)
+    
+        if save == True:
+            print('Saving {}'.format(figsave_path))
+            fig.savefig(figsave_path, bbox_inches='tight')
+            plt.close('all')
+        else:
+            ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S.%f'))
+            fig.autofmt_xdate()
+            figManager = plt.get_current_fig_manager()
+            figManager.window.showMaximized()
+            plt.show()
+    return max_k, max_g
+
+
+def plot_max_CGR_with_time(times, k_vals, all_cCGR, all_wCGR, all_hCGR,
+                            save=False, norm_w=False, B0=None,
+                            ccomp=[70, 20, 10], suff='', ignore_damping=True,
+                            plot_pc1=False, plot_pearls=False):
+    '''
+    UNFINISHED...
+    '''
+    plot_dir = save_dir + '//MAX_GR_PLOTS{}//'.format(suff)
+    if os.path.exists(plot_dir) == False:
+        os.makedirs(plot_dir)
+    
+    tick_label_size = 14
+    mpl.rcParams['xtick.labelsize'] = tick_label_size 
+    
+    species_colors = ['r', 'b', 'g']
+    band_labels    = [r'$H^+$', r'$He^+$', r'$O^+$']
+    fontsize       = 18
+        
+    if plot_pc1 == True:
+        fft_times, fft_freqs, pc1_power = \
+                data.get_pc1_spectra(rbsp_path, time_start, time_end, probe,
+                                     pc1_res=25.0, overlap=0.99)
+    else:
+        fft_times, fft_freqs, pc1_power = None, None, None
+        
+    if plot_pearls == True:
+        print('Plotting pearls...')
+        pidx, pearl_times, NULL = rfr.get_pearl_times(time=time_start, crres=False, custom_txtname=None)
+
+    
+    for CGR, lbl in zip([all_cCGR, all_wCGR, all_hCGR], ['cold', 'warm', 'hot']):
+        Nt    = times.shape[0]
+        max_k = np.zeros((Nt, 3))
+        max_g = np.zeros((Nt, 3))
+            
+        # Do CGR bands die? Assume yes
+        for ii in range(Nt):
+            for jj in range(3):
+                    if any(np.isnan(CGR.real[ii, 1:, jj]) == True):
+                        max_k[ii, jj] = np.nan
+                        max_g[ii, jj] = np.nan
+                    else:
+                        max_idx       = np.where(CGR.imag[ii, 1:, jj] == CGR.imag[ii, 1:, jj].max())[0][0]
+                        max_k[ii, jj] = k_vals[ii, max_idx]
+                        max_g[ii, jj] = CGR[ii, max_idx, jj]
+    
+        plt.ioff()
+
+        if plot_pc1 == True:
+            fig, [ax2, ax1] = plt.subplots(2, figsize=(13, 6), sharex=True,
+                                           gridspec_kw={'height_ratios': [1, 2]})
+        
+            ax2.pcolormesh(fft_times, fft_freqs, pc1_power.T, vmin=-7, vmax=1, cmap='jet',
+                           shading='flat')
+        
+            ax2.set_xlim(plot_start, plot_end)
+            ax2.set_ylim(0, fmax)
+            
+            if plot_pearls == True:
+                for this_time in pearl_times:
+                    ax2.axvline(this_time, c='k', ls='--', alpha=0.50)
+            
+        else:
+            fig, ax1 = plt.subplots(figsize=(13, 6))
+        
+        for ii in range(3):
+            ax1.plot(times, max_g[:, ii], color=species_colors[ii], label=band_labels[ii], marker='o')
+        
+        fig.suptitle('EMIC Temporal Growth Rate :: RBSP-A :: {}/{}/{} :: {} Approx.'.format(*ccomp, lbl), fontsize=fontsize+4)
+        ax1.set_xlabel('Time (UT)', fontsize=fontsize)
+        ax1.set_ylabel(r'$\gamma/V_g$ m^{-1}$)', fontsize=fontsize)
+        ax1.legend(loc='upper left', prop={'size': fontsize}) 
+        
+        ax1.xaxis.set_major_locator(mdates.MinuteLocator(interval=5))
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+
+        # Set xlim to show either just pearls, or whole event
+        ax1.set_xlim(plot_start, plot_end)
+        figsave_path = plot_dir + 'LT_' + save_string + '_{:03}_{:03}_{:03}_{}.png'.format(ccomp[0], ccomp[1], ccomp[2], lbl)
+    
+        # Set ylim to show either just positive growth rate or everything
+        if ignore_damping == True:
+            ax1.set_ylim(0, None)
+    
+        if plot_pearls == True:
+            for this_time in pearl_times:
+                ax1.axvline(this_time, c='k', ls='--', alpha=0.50)
     
         if save == True:
             print('Saving {}'.format(figsave_path))
@@ -1284,148 +1743,12 @@ def plot_max_TGR_CGR_timeseries(rbsp_path, time_start, time_end, probe, pad, nor
     return
 
 
-def chen_2013_validation_plots():
-    '''
-    Routine to easily compare output from dispersion solver to plots from
-    Chen et al. (2013) by varying helium density and temperature.
-    
-    R-mode solution not incorporated into this version of the code (since
-    we don't really care about R-waves).
-    '''
-    mp       = 1.673e-27                        # Proton mass (kg)
-    qi       = 1.602e-19                        # Elementary charge (C)
-    e0       = 8.854e-12                        # Permittivity of free space
-    _n0      = 100e6                            # Electron number density in /m3                      
-    _B0      = 144e-9                           # Background magnetic field in T
-    nhh      = 0.03                             # Fraction hot hydrogen
-    nHe      = 0.05                             # Fraction warm helium
-    THe      = 100.0                             # Helium temperature (eV) -- Does this have to be altered for 'total temp'?
-    
-    _name    = np.array(['Hot H'  , 'Cold H'        , 'Cold He'])               # Species label
-    _mass    = np.array([1.0      , 1.0             , 4.0      ]) * mp          # Mass   in proton masses (kg)
-    _charge  = np.array([1.0      , 1.0             , 1.0      ]) * qi          # Change in elementary units (C)
-    _density = np.array([nhh      , 1.0 - nhh - nHe , nHe      ]) * _n0         # Density as a fraction of n0 (/m3)
-    _tpar    = np.array([25e3     , 0.0             , THe      ])               # Parallel temperature in eV
-    _ani     = np.array([1.0      , 0.0             , 0.0      ])               # Temperature anisotropy
-    _tper    = (_ani + 1) * _tpar                                               # Perpendicular temperature in eV
-    
-    _Spec, _PP = create_species_array(_B0, _name, _mass, _charge, _density, _tper, _ani)
-
-    _kh  = np.sqrt(_n0 * qi ** 2 / (mp * e0))/c
-    _Nk  = 1000
-    _k   = np.linspace(0.0, 2.0*_kh, _Nk)
-    pcyc = qi * _B0 / mp 
-
-    cold_DR, cold_CGR = get_dispersion_relation(_Spec, _k, approx='cold')
-    warm_DR, warm_CGR = get_dispersion_relation(_Spec, _k, approx='warm')
-    hot_DR ,  hot_CGR = get_dispersion_relation(_Spec, _k, approx='hot' )
-
-    # Plot the things
-    k_norm    = _k / _kh
-    fig, axes = plt.subplots(2, sharex=True)
-    
-    for jj in range(hot_DR.shape[1]):
-        axes[0].semilogx(k_norm,  hot_DR[:, jj].real / pcyc, ls='-' , c='r', lw=0.75)
-        axes[0].semilogx(k_norm, warm_DR[:, jj].real / pcyc, ls='--', c='b', lw=0.75)
-        axes[0].semilogx(k_norm, cold_DR[:, jj].real / pcyc, ls='--', c='k', lw=0.75)
-        axes[0].set_ylabel('$\omega_r/\Omega_h$', fontsize=16)
-        
-        axes[1].semilogx(k_norm,  hot_DR[:, jj].imag / pcyc, ls='-' , c='r', label='Full', lw=0.75)
-        axes[1].semilogx(k_norm, warm_DR[:, jj].imag / pcyc, ls='--', c='b', label='Warm', lw=0.75)
-        axes[1].semilogx(k_norm, cold_DR[:, jj].imag / pcyc, ls='--', c='k', label='Cold', lw=0.75)
-        
-    axes[1].set_ylabel('$\gamma/\Omega_h$', fontsize=16)
-    axes[1].set_xlabel('$k_\parallel/k_h$', fontsize=16)
-    
-    axes[0].set_ylim(0.0, 1.0)
-    axes[0].set_xlim(1e-2, 2)
-    axes[1].set_ylim(-0.01, 0.06)
-    axes[1].set_xlim(1e-2, 2)
-    
-    fig.subplots_adjust(hspace=0.01)
-    return
-
-
-def wang_2016_validation_plots():
-    '''
-    Routine to easily compare output from dispersion solver to plots from
-    Wang et al. (2016) by varying many parameters. Solver is derived from
-    Chen et al. (2013) but plasma is plasma.
-    '''
-    L_shell  = 4                                # L-shell at which magnetic field and density are calculated
-    n0       = sheely_plasmasphere(L_shell)     # Plasma density, /m3
-    B0       = geomagnetic_magnitude(L_shell)   # Background magnetic field, T
-    mp       = 1.673e-27                        # Proton mass (kg)
-    qi       = 1.602e-19                        # Elementary charge (C)
-    
-    # This all must add up to 1
-    RC_ab= 0.1
-    H_ab = 0.6
-    He_ab= 0.2
-    O_ab = 0.1
-    
-    name    = np.array(['Warm H'  , 'Cold H' , 'Cold He', 'Cold O'])
-    mass    = np.array([1.0       , 1.0      , 4.0      , 16.0    ]) * mp
-    charge  = np.array([1.0       , 1.0      , 1.0      ,  1.0    ]) * qi
-    density = np.array([RC_ab     , H_ab     , He_ab    ,  O_ab,  ]) * n0
-    tpar    = np.array([25e3      , 0.0      , 0.0      ,  0.0    ])
-    ani     = np.array([2.0       , 0.0      , 0.0      ,  0.0    ])
-    tper    = (ani + 1) * tpar
-    
-    Spec, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
-    
-    knorm_fac             = PP['pcyc_rad'] / PP['va']
-    k_vals                = np.linspace(0.0, 1.0, 1000, endpoint=False) * knorm_fac
-
-    CPDR_solns,  cold_CGR = get_dispersion_relation(Spec, k_vals, approx='cold' )
-    HPDR_solns,   hot_CGR = get_dispersion_relation(Spec, k_vals, approx='hot' )
-
-    #plot_residuals(Spec, PP, k_vals, HPDR_solns, lbl='', approx='hot')
-    
-    CPDR_solns /= PP['pcyc_rad']
-    HPDR_solns /= PP['pcyc_rad']   
-    k_vals     *= PP['va'] / PP['pcyc_rad']
-
-    species_colors = ['r', 'b', 'g']
-    
-    print('Plotting solutions...')
-    plt.ioff()
-    plt.figure(figsize=(15, 10))
-    ax1 = plt.subplot2grid((2, 2), (0, 0), rowspan=2)
-    ax2 = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
-    
-    for ii in range(CPDR_solns.shape[1]):
-        ax1.plot(k_vals[1:], CPDR_solns[1:, ii].real,      c=species_colors[ii], linestyle='--', label='Cold')
-        ax1.plot(k_vals[1:], HPDR_solns[1:, ii].real, c=species_colors[ii], linestyle='-',  label='Hot')
-
-    ax1.set_title('Dispersion Relation')
-    ax1.set_xlabel(r'$kv_A / \Omega_p$')
-    ax1.set_ylabel(r'$\omega_r/\Omega_p$')
-    ax1.set_xlim(k_vals[0], k_vals[-1])
-    
-    ax1.set_ylim(0, 1.0)
-    ax1.minorticks_on()
-    
-    for ii in range(CPDR_solns.shape[1]):
-        ax2.plot(k_vals[1:], HPDR_solns[1:, ii].imag, c=species_colors[ii], linestyle='-')
-
-    ax2.set_title('Temporal Growth Rate')
-    ax2.set_xlabel(r'$kv_A / \Omega_p$')
-    ax2.set_ylabel(r'$\gamma/\Omega_p$')
-    ax2.set_xlim(k_vals[0], k_vals[-1])
-    ax2.set_ylim(-0.05, 0.05)
-    
-    ax2.minorticks_on()
-
-    figManager = plt.get_current_fig_manager()
-    figManager.window.showMaximized() 
-    return
-
-
 def plot_dispersion_and_growth(ax_disp, ax_growth, k_vals, CPDR, WPDR, HPDR, w_cyc,
                                norm_w=False, norm_k=False, save=False, savepath=None, alpha=1.0):
     '''
-    Plots the CPDR and WPDR nicely as per Wang et al 2016. Can plot multiple dispersion/growth curves for varying parameters.
+    Plots the CPDR and WPDR nicely as per Wang et al 2016. Can plot multiple
+    dispersion/growth curves for varying parameters.
+    This is mainly just a function to be called by plot_all_DRs.
     
     INPUT:
         k_vals     -- Wavenumber values in /m or normalized to p_cyc/v_A
@@ -1505,9 +1828,6 @@ def plot_all_DRs(all_k, all_CPDR, all_WPDR, all_HPDR, times, B, name, mi, qi, ni
     CPDR is cold approx
     WPDR is Chen's warm approx of 2013
     HPDR is the fully kinetic hot approx used in both Chen 2013 and Wang 2016.
-    
-    Q: Have I been accidentally plotting warm instead of hot? Does it matter? The old
-    code would have only had hot.
     '''
     Nt = times.shape[0]
     
@@ -1562,12 +1882,102 @@ def plot_all_DRs(all_k, all_CPDR, all_WPDR, all_HPDR, times, B, name, mi, qi, ni
     return
 
 
+def plot_all_CGRs(all_k, all_cCGR, all_wCGR, all_hCGR, times, B, name, mi, qi, ni, t_perp, A, ne,
+                 suff='', HM_filter_mhz=50, overwrite=False, save=True, figtext=True, subdir='all_CGRs',
+                 ylim=None):
+    '''
+    Cold, warm, hot approximations to the convective growth rate. None for hCGR because I
+    haven't worked out how to calculate that yet.
+    
+    Just a simple timeseries for each time, since there's no dispersion function to go
+    along with it.
+    
+    But perhaps could include Vg later on? And maybe even do a triple plot of group velocity, 
+    temporal growth rate, and convective growth rate, for comparison. Would require outputting
+    and saving the group velocity, and re-calculating for each event.
+    
+    all_CGR :: (times, k, N_solns)
+    '''
+    Nt = times.shape[0]
+    
+    figsave_dir = os.path.join(save_dir, subdir)
+    if os.path.exists(figsave_dir) == False:
+        os.makedirs(figsave_dir)
+        
+    # Legend properties
+    species_colors = ['r', 'b', 'g']
+    band_labels    = [r'$H^+$', r'$He^+$', r'$O^+$']
+    
+    type_label = ['Cold Plasma Approx.', 'Warm Plasma Approx.']
+    type_style = ['--', '-']
+    type_alpha = [1.0, 1.0]
+
+
+    for tt in range(Nt):
+        figsave_path = figsave_dir + 'linear_{}_{}.png'.format(save_string, tt)
+        
+        if os.path.exists(figsave_path) == True and overwrite == False:
+            print('Plot already done, skipping...')
+            continue
+        
+        # Pick specific time just to be easier
+        time   = times[tt]
+        k_vals = all_k[tt]
+        cCGR   = all_cCGR[tt] * 1e9
+        wCGR   = all_wCGR[tt] * 1e9
+
+        plt.ioff()
+        fig, ax = plt.subplots(figsize=(16, 10))
+
+        # TODO : Check if this works fine with CGR
+        if figtext == True:
+            set_figure_text(ax, tt, B[tt], name, mi, qi, ni[:, tt],
+                            t_perp[:, tt], A[:, tt], ne[tt])
+        
+        # Plot the actual CGRs
+        for ii in range(3):
+            ax.plot(k_vals[1:]*1e6, cCGR[1:, ii], c=species_colors[ii], linestyle='--', label='Cold')
+            ax.plot(k_vals[1:]*1e6, wCGR[1:, ii], c=species_colors[ii], linestyle='-',  label='Warm')
+    
+        # Add legends to show species type and approximations
+        type_legend = create_type_legend(ax, type_label, type_style, type_alpha)
+        ax.add_artist(type_legend)
+        
+        band_legend = create_band_legend(ax, band_labels, species_colors)
+        ax.add_artist(band_legend)
+        
+        ax.set_title('Convective Growth Rate :: {}'.format(time))
+        ax.set_xlabel(r'$k (\times 10^{-6} m^{-1})$')
+        ax.set_ylabel(r'$S (\times 10^{9} m^{-1})$')
+        
+        ax.set_xlim(0, k_vals[-1]*1e6)
+        ax.set_ylim(0, ylim)
+        
+        fig.tight_layout()
+        fig.subplots_adjust(wspace=0, hspace=0, right=0.75)
+        
+        if save == True:
+            figsave_path = figsave_dir + '//CGR_{}_{}.png'.format(save_string, tt)
+            print('Saving {}'.format(figsave_path))
+            fig.savefig(figsave_path)
+            plt.close('all')
+        else:
+            # Only shows the first one
+            figManager = plt.get_current_fig_manager()
+            figManager.window.showMaximized()
+            break
+    return
+
+
 def plot_residuals(Species, PP, k, w_vals, lbl='', approx='hot'):
     '''
     k_vals :: Wavenumber in 1D array, indpt variable
     w_vals :: Solutions for each k in several bands. 2D array of shape (Nk, N_solns)
     lbl    :: Plot label
     approx :: Hot, warm, cold
+    
+    Function to back-substitude calculated solutions into respective equations in order
+    to test their accuracy.
     '''
     print('Plotting residuals...')
     residuals = np.zeros((w_vals.shape[0], w_vals.shape[1], 2), dtype=float)
@@ -1614,16 +2024,24 @@ def plot_residuals(Species, PP, k, w_vals, lbl='', approx='hot'):
 
 
 if __name__ == '__main__':
+    #validation_plots_fraser_1996()
+    #validation_plots_omura2010()
+    #sys.exit()
+    
     rbsp_path = 'G://DATA//RBSP//'
     save_drive= 'G://'
     
-    time_start  = np.datetime64('2015-01-16T04:05:00')
-    time_end    = np.datetime64('2015-01-16T05:15:00')
+    time_start  = np.datetime64('2013-07-25T21:25:00')
+    time_end    = np.datetime64('2013-07-25T21:47:00')
     probe       = 'a'
     pad         = 0
+    fmax        = 1.2
     
-    # Test/Check output from files
-    if True:
+    plot_start  = time_start#np.datetime64('2013-04-23T22:50:00')
+    plot_end    = time_end#np.datetime64('2013-04-23T23:15:00')
+    
+    # Test/Check plasma params from files
+    if False:
         TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_DENS = \
         extract_species_arrays(time_start, time_end, probe, pad, cmp=np.asarray([70, 20, 10]), 
                                return_raw_ne=True, nsec=None, HM_filter_mhz=50)
@@ -1637,11 +2055,22 @@ if __name__ == '__main__':
     TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE =             \
     get_all_DRs_parallel(time_start, time_end, probe, pad, [70, 20, 10], 
                      kmin=0.0, kmax=1.0, Nk=5000, knorm=True,
-                     nsec=None, HM_filter_mhz=50)
+                     nsec=None, HM_filter_mhz=50, N_procs=8)
     
     if True:
-        plot_all_DRs(_K, _CPDR, _WPDR, _HPDR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE, subdir='')
+        _cCGR *= -1.0; _wCGR *= -1.0; _hCGR *= -1.0
+    
+    #plot_all_CGRs(_K, _cCGR, _wCGR, _hCGR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE,
+    #             suff='', HM_filter_mhz=50, overwrite=False, save=True, figtext=True)
+    
+    
+    if True:
+        #plot_all_DRs(_K, _CPDR, _WPDR, _HPDR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE, subdir='')
         
-        plot_max_growth_rate_with_time(TIMES, _K, _HPDR, _WPDR, _CPDR,
-                                       save=True, norm_w=False, B0=None,
-                                       ccomp=[70, 20, 10], suff='')
+        #plot_max_growth_rate_with_time(TIMES, _K, _CPDR, _WPDR, _HPDR,
+        #                               save=True, norm_w=False, B0=None, plot_pc1=True,
+        #                               ccomp=[70, 20, 10], suff='', plot_pearls=True)
+        
+        plot_max_CGR_with_time(TIMES, _K, _cCGR, _wCGR, _hCGR,  
+                                save=True, norm_w=False, B0=None, plot_pc1=True,
+                                ccomp=[70, 20, 10], suff='_withPc1', plot_pearls=True)

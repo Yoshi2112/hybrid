@@ -157,7 +157,7 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, nsec=No
     
     # Subtract energetic components from total electron density (assuming each is singly charged)
     cold_dens = iedens - ihope_dens.sum(axis=0) - ispice_dens.sum(axis=0)
-
+    pdb.set_trace()
     return time_array, Bi*1e-9, cold_dens*1e6, ihope_dens*1e6, ihope_temp, ihope_anis, ispice_dens*1e6, ispice_temp, ispice_anis
 
 
@@ -271,6 +271,34 @@ def convert_data_to_hybrid_plasmafile(time_start, time_end, probe, pad, comp=Non
     return
 
 
+def get_pc1_spectra(rbsp_path, time_start, time_end, probe, pc1_res=25.0, overlap=0.99):
+    '''
+    Helper function to load magnetic field and calculate dynamic spectrum for
+    overlaying on plots
+    '''
+    import rbsp_fields_loader as rfl
+    import fast_scripts       as fscr
+    
+    print('Generating magnetic dynamic spectra...')
+    
+    times, mags, dt, gyfreqs = \
+        rfl.load_magnetic_field(rbsp_path, time_start, time_end, probe,
+                                pad=3600, LP_B0=1.0, get_gyfreqs=False,
+                                return_raw=False, wave_HP=None, wave_LP=None)
+        
+    pc1_xpower, pc1_xtimes, pc1_xfreq = fscr.autopower_spectra(times, mags[:, 0], time_start, 
+                                                     time_end, dt, overlap=overlap, df=pc1_res)
+    
+    pc1_ypower, pc1_ytimes, pc1_yfreq = fscr.autopower_spectra(times, mags[:, 1], time_start, 
+                                                     time_end, dt, overlap=overlap, df=pc1_res)
+    
+    pc1_perp_power = np.log10(pc1_xpower[:, :] + pc1_ypower[:, :])
+    
+    return pc1_xtimes, pc1_xfreq, pc1_perp_power
+
+
+
+#%% MAIN FUNCTION :: JUST CHECKING THINGS
 if __name__ == '__main__':
     _rbsp_path  = 'G://DATA//RBSP//'
     _time_start = np.datetime64('2013-07-25T21:20:00')
@@ -309,7 +337,7 @@ if __name__ == '__main__':
             spice_temp.append(this_temp)
             spice_anis.append(this_anis)
         
-        #%%
+
         ### COMPARISON PLOTS FOR CHECKING ###
         import matplotlib.pyplot as plt
         
