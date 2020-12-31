@@ -157,7 +157,6 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, nsec=No
     
     # Subtract energetic components from total electron density (assuming each is singly charged)
     cold_dens = iedens - ihope_dens.sum(axis=0) - ispice_dens.sum(axis=0)
-    pdb.set_trace()
     return time_array, Bi*1e-9, cold_dens*1e6, ihope_dens*1e6, ihope_temp, ihope_anis, ispice_dens*1e6, ispice_temp, ispice_anis
 
 

@@ -552,7 +552,7 @@ def get_DRs_for_data_timeseries(time_start, time_end, probe, pad, cmp,
 
 def get_DRs_chunked(Nk, kmin, kmax, knorm, times, B0, name, mass, charge, density, tper, ani,
                       k_dict, CPDR_dict, WPDR_dict, HPDR_dict, cCGR_dict, wCGR_dict, hCGR_dict,
-                      st=0, worker=None):
+                      cVg_dict, wVg_dict, hVg_dict, st=0, worker=None):
     '''
     Function designed to be run in parallel. All dispersion inputs as previous. 
     output_PDR arrays are shared memory
@@ -575,6 +575,10 @@ def get_DRs_chunked(Nk, kmin, kmax, knorm, times, B0, name, mass, charge, densit
     wCGR_arr = np.frombuffer(wCGR_dict['arr']).reshape(wCGR_dict['shape'])
     hCGR_arr = np.frombuffer(hCGR_dict['arr']).reshape(hCGR_dict['shape'])
     
+    cVg_arr  = np.frombuffer(cVg_dict['arr']).reshape(cVg_dict['shape'])
+    wVg_arr  = np.frombuffer(wVg_dict['arr']).reshape(wVg_dict['shape'])
+    hVg_arr  = np.frombuffer(hVg_dict['arr']).reshape(hVg_dict['shape'])
+    
     for ii in range(times.shape[0]):
         Species, PP = create_species_array(B0[ii], name, mass, charge, density[:, ii], tper[:, ii], ani[:, ii])
         this_k      = np.linspace(kmin, kmax, Nk, endpoint=False)
@@ -586,23 +590,27 @@ def get_DRs_chunked(Nk, kmin, kmax, knorm, times, B0, name, mass, charge, densit
         # Calculate dispersion relations if possible
         print('Worker', worker, '::', times[ii])
         #try:
-        this_CPDR, this_cCGR = get_dispersion_relation(Species, this_k, approx='cold', complex_out=False, print_filtered=False)
+        this_CPDR, this_cCGR, this_cVg = get_dispersion_relation(Species, this_k, approx='cold', complex_out=False,
+                                                       print_filtered=False, return_vg=True)
         #except:
         #    print('COLD ERROR: Skipping', times)
         #    this_CPDR = np.ones((Nk, 3, 2), dtype=np.complex128) * np.nan 
             
         #try:            
-        this_WPDR, this_wCGR = get_dispersion_relation(Species, this_k, approx='warm', complex_out=False, print_filtered=False)
+        this_WPDR, this_wCGR, this_wVg = get_dispersion_relation(Species, this_k, approx='warm', complex_out=False,
+                                                       print_filtered=False, return_vg=True)
         #except:
         #    print('WARM ERROR: Skipping', times)
         #    this_WPDR = np.ones((Nk, 3, 2), dtype=np.complex128) * np.nan
         
         #try:
-        this_HPDR,  this_hCGR = get_dispersion_relation(Species, this_k, approx='hot' , complex_out=False, print_filtered=False)
+        this_HPDR,  this_hCGR, this_hVg = get_dispersion_relation(Species, this_k, approx='hot' , complex_out=False,
+                                                        print_filtered=False, return_vg=True)
         #except:
         #    print('HOT ERROR: Skipping', times)
         #    this_HPDR = np.ones((Nk, 3, 2), dtype=np.complex128) * np.nan
-                 
+               
+        # Dump to shared memory
         k_arr[   st+ii, :]       = this_k[...]
         
         CPDR_arr[st+ii, :, :, :] = this_CPDR[...]
@@ -612,6 +620,10 @@ def get_DRs_chunked(Nk, kmin, kmax, knorm, times, B0, name, mass, charge, densit
         cCGR_arr[st+ii, :, :]    = this_cCGR[...]
         wCGR_arr[st+ii, :, :]    = this_wCGR[...]
         hCGR_arr[st+ii, :, :]    = this_hCGR[...]
+        
+        cVg_arr[st+ii, :, :]    = this_cVg[...]
+        wVg_arr[st+ii, :, :]    = this_wVg[...]
+        hVg_arr[st+ii, :, :]    = this_hVg[...]
     return
 
 
@@ -665,6 +677,20 @@ def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp,
         hCGR_shm     = multiprocessing.RawArray('d', Nt*Nk*3)
         hCGR_dict    = {'arr': hCGR_shm, 'shape': hCGR_shape}
         
+        # And for group velocities
+        cVg_shape   = (Nt, Nk, 3)
+        cVg_shm     = multiprocessing.RawArray('d', Nt*Nk*3)
+        cVg_dict    = {'arr': cVg_shm, 'shape': cVg_shape}
+        
+        wVg_shape   = (Nt, Nk, 3)
+        wVg_shm     = multiprocessing.RawArray('d', Nt*Nk*3)
+        wVg_dict    = {'arr': wVg_shm, 'shape': wVg_shape}
+        
+        hVg_shape   = (Nt, Nk, 3)
+        hVg_shm     = multiprocessing.RawArray('d', Nt*Nk*3)
+        hVg_dict    = {'arr': hVg_shm, 'shape': hVg_shape}
+        
+        
         # Create numpy view into shared memory
         k_np         = np.frombuffer(k_shm).reshape(k_shape)
         CPDR_np      = np.frombuffer(CPDR_shm).reshape(CPDR_shape)
@@ -674,6 +700,11 @@ def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp,
         cCGR_np      = np.frombuffer(cCGR_shm).reshape(cCGR_shape)
         wCGR_np      = np.frombuffer(wCGR_shm).reshape(wCGR_shape)
         hCGR_np      = np.frombuffer(hCGR_shm).reshape(hCGR_shape)
+        
+        cVg_np       = np.frombuffer(cVg_shm).reshape(cVg_shape)
+        wVg_np       = np.frombuffer(wVg_shm).reshape(wVg_shape)
+        hVg_np       = np.frombuffer(hVg_shm).reshape(hVg_shape)
+        
         
         # Split input data into a list of chunks
         time_chunks    = np.array_split(times,   N_procs)
@@ -691,7 +722,8 @@ def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp,
                                         field_chunks[xx], name, mass, charge, density_chunks[xx],
                                         tper_chunks[xx], ani_chunks[xx],
                                         k_dict, CPDR_dict, WPDR_dict, HPDR_dict,
-                                        cCGR_dict, wCGR_dict, hCGR_dict),
+                                        cCGR_dict, wCGR_dict, hCGR_dict,
+                                        cVg_dict, wVg_dict, hVg_dict),
                                         kwargs={'st':acc, 'worker':xx})
             procs.append(proc)
             proc.start()
@@ -718,17 +750,18 @@ def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp,
                     WPDR_out[ii, jj, kk] = WPDR_np[ii, jj, kk, 0] + 1j * WPDR_np[ii, jj, kk, 1]
                     HPDR_out[ii, jj, kk] = HPDR_np[ii, jj, kk, 0] + 1j * HPDR_np[ii, jj, kk, 1]
             
-        cCGR_out = cCGR_np
-        wCGR_out = wCGR_np
-        hCGR_out = hCGR_np
+        cCGR_out = cCGR_np;     cVg_out = hVg_np
+        wCGR_out = wCGR_np;     wVg_out = hVg_np
+        hCGR_out = hCGR_np;     hVg_out = hVg_np
             
         # Saves data used for DR calculation as well, for future reference (and plotting)
         if os.path.exists(save_dir) == False:
             os.makedirs(save_dir)
                 
         print('Saving dispersion history...')
-        np.savez(DR_path, all_CPDR=CPDR_out, all_WPDR=WPDR_out, all_HPDR=HPDR_out, all_k=k_np,
-                 all_cCGR=cCGR_np, all_wCGR=wCGR_np, all_hCGR=hCGR_np, comp=np.asarray(cmp),
+        np.savez(DR_path, all_CPDR=CPDR_out, all_WPDR=WPDR_out, all_HPDR=HPDR_out,
+                 all_k=k_np, all_cCGR=cCGR_np, all_wCGR=wCGR_np, all_hCGR=hCGR_np,
+                 all_cVg=cVg_np, all_wVg=wVg_np, all_hVg=hVg_np, comp=np.asarray(cmp),
                  times=times, B0=B0, name=name, mass=mass, charge=charge, density=density, tper=tper,
                  ani=ani, cold_dens=cold_dens, HM_filter_mhz=np.array([HM_filter_mhz]))
     else:
@@ -749,6 +782,16 @@ def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp,
             cCGR_out  = None
             wCGR_out  = None
             hCGR_out  = None
+            
+        try:
+            cVg_out  = DR_file['all_cVg']
+            wVg_out  = DR_file['all_wVg']
+            hVg_out  = DR_file['all_hVg']
+        except:
+            print('No group velocities found in file.')
+            cVg_out  = None
+            wVg_out  = None
+            hVg_out  = None
         
         times     = DR_file['times']
         B0        = DR_file['B0']
@@ -761,6 +804,7 @@ def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp,
         cold_dens = DR_file['cold_dens']
         
     return k_np, CPDR_out, WPDR_out, HPDR_out, cCGR_out, wCGR_out, hCGR_out, \
+           cVg_out, wVg_out, hVg_out,                                        \
            times, B0, name, mass, charge, density, tper, ani, cold_dens
      
      
@@ -1823,7 +1867,7 @@ def plot_dispersion_and_growth(ax_disp, ax_growth, k_vals, CPDR, WPDR, HPDR, w_c
 
 
 def plot_all_DRs(all_k, all_CPDR, all_WPDR, all_HPDR, times, B, name, mi, qi, ni, t_perp, A, ne,
-                 suff='', HM_filter_mhz=50, overwrite=False, save=True, figtext=True, subdir='all_DRs'):
+                 suff='', HM_filter_mhz=50, overwrite=False, save=True, figtext=True):
     '''
     CPDR is cold approx
     WPDR is Chen's warm approx of 2013
@@ -1831,7 +1875,7 @@ def plot_all_DRs(all_k, all_CPDR, all_WPDR, all_HPDR, times, B, name, mi, qi, ni
     '''
     Nt = times.shape[0]
     
-    figsave_dir = os.path.join(save_dir, subdir)
+    figsave_dir = os.path.join(save_dir, 'all_DRs' + suff)
     if os.path.exists(figsave_dir) == False:
         os.makedirs(figsave_dir)
 
@@ -1883,7 +1927,7 @@ def plot_all_DRs(all_k, all_CPDR, all_WPDR, all_HPDR, times, B, name, mi, qi, ni
 
 
 def plot_all_CGRs(all_k, all_cCGR, all_wCGR, all_hCGR, times, B, name, mi, qi, ni, t_perp, A, ne,
-                 suff='', HM_filter_mhz=50, overwrite=False, save=True, figtext=True, subdir='all_CGRs',
+                 suff='', HM_filter_mhz=50, overwrite=False, save=True, figtext=True,
                  ylim=None):
     '''
     Cold, warm, hot approximations to the convective growth rate. None for hCGR because I
@@ -1900,7 +1944,7 @@ def plot_all_CGRs(all_k, all_cCGR, all_wCGR, all_hCGR, times, B, name, mi, qi, n
     '''
     Nt = times.shape[0]
     
-    figsave_dir = os.path.join(save_dir, subdir)
+    figsave_dir = os.path.join(save_dir, 'all_CGRs' + suff)
     if os.path.exists(figsave_dir) == False:
         os.makedirs(figsave_dir)
         
@@ -2051,26 +2095,29 @@ if __name__ == '__main__':
     save_string = time_start.astype(object).strftime('%Y%m%d_%H%M_') + time_end.astype(object).strftime('%H%M')
     save_dir    = '{}NEW_LT//EVENT_{}//CHEN_DR_CODE//'.format(save_drive, date_string)
     
-    _K, _CPDR, _WPDR, _HPDR, _cCGR, _wCGR, _hCGR,                          \
+    _K, _CPDR, _WPDR, _HPDR, _cCGR, _wCGR, _hCGR, _cVG, _wVG, _hVG,        \
     TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE =             \
     get_all_DRs_parallel(time_start, time_end, probe, pad, [70, 20, 10], 
                      kmin=0.0, kmax=1.0, Nk=5000, knorm=True,
-                     nsec=None, HM_filter_mhz=50, N_procs=8)
+                     nsec=None, HM_filter_mhz=50, N_procs=6)
     
-    if True:
+    
+    if False:
+        # Shouldn't be needed anymore.
         _cCGR *= -1.0; _wCGR *= -1.0; _hCGR *= -1.0
     
-    #plot_all_CGRs(_K, _cCGR, _wCGR, _hCGR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE,
-    #             suff='', HM_filter_mhz=50, overwrite=False, save=True, figtext=True)
-    
     
     if True:
-        #plot_all_DRs(_K, _CPDR, _WPDR, _HPDR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE, subdir='')
+        plot_all_DRs(_K, _CPDR, _WPDR, _HPDR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE,
+                     suff='_triplecheck_newVgcode')
         
-        #plot_max_growth_rate_with_time(TIMES, _K, _CPDR, _WPDR, _HPDR,
-        #                               save=True, norm_w=False, B0=None, plot_pc1=True,
-        #                               ccomp=[70, 20, 10], suff='', plot_pearls=True)
+        plot_all_CGRs(_K, _cCGR, _wCGR, _hCGR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE,
+                      HM_filter_mhz=50, overwrite=False, save=True, figtext=True, suff='')
         
-        plot_max_CGR_with_time(TIMES, _K, _cCGR, _wCGR, _hCGR,  
-                                save=True, norm_w=False, B0=None, plot_pc1=True,
-                                ccomp=[70, 20, 10], suff='_withPc1', plot_pearls=True)
+        plot_max_growth_rate_with_time(TIMES, _K, _CPDR, _WPDR, _HPDR,
+                                       save=True, norm_w=False, B0=None, plot_pc1=True,
+                                       ccomp=[70, 20, 10], suff='_withPc1', plot_pearls=True)
+        
+        #plot_max_CGR_with_time(TIMES, _K, _cCGR, _wCGR, _hCGR,  
+        #                        save=True, norm_w=False, B0=None, plot_pc1=True,
+        #                        ccomp=[70, 20, 10], suff='_withPc1', plot_pearls=True)
