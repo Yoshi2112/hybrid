@@ -10,6 +10,7 @@ import numpy as np
 import rbsp_file_readers   as rfr
 import rbsp_fields_loader  as rfl
 import analysis_scripts    as ascr
+import crres_file_readers  as cfr
 
 
 def HOPE_interpolate_to_time(new_time, HOPE_time, HOPE_dens, HOPE_temp, HOPE_anis):
@@ -272,7 +273,8 @@ def convert_data_to_hybrid_plasmafile(time_start, time_end, probe, pad, comp=Non
     return
 
 
-def get_pc1_spectra(rbsp_path, time_start, time_end, probe, pc1_res=25.0, overlap=0.99):
+def get_pc1_spectra(rbsp_path, time_start, time_end, probe, pc1_res=25.0,
+                    overlap=0.99, high_pass_mHz=None):
     '''
     Helper function to load magnetic field and calculate dynamic spectrum for
     overlaying on plots
@@ -286,7 +288,10 @@ def get_pc1_spectra(rbsp_path, time_start, time_end, probe, pc1_res=25.0, overla
         rfl.load_magnetic_field(rbsp_path, time_start, time_end, probe,
                                 pad=3600, LP_B0=1.0, get_gyfreqs=False,
                                 return_raw=False, wave_HP=None, wave_LP=None)
-        
+    
+    if high_pass_mHz is not None:
+        mags = ascr.clw_high_pass(mags, high_pass_mHz, dt, filt_order=4)
+    
     pc1_xpower, pc1_xtimes, pc1_xfreq = fscr.autopower_spectra(times, mags[:, 0], time_start, 
                                                      time_end, dt, overlap=overlap, df=pc1_res)
     
@@ -298,16 +303,83 @@ def get_pc1_spectra(rbsp_path, time_start, time_end, probe, pc1_res=25.0, overla
     return pc1_xtimes, pc1_xfreq, pc1_perp_power
 
 
+def load_CRRES_data(time_start, time_end, crres_path='G://DATA//CRRES//', nsec=None):
+    '''
+    Since no moment data exists for CRRES, this loads only the cold electron density and
+    magnetic field (with option to low-pass filter) and interpolates them to
+    the same timebase (linear or cubic? Just do linear for now).
+    
+    If nsec is none, interpolates B to ne. Else, interpolates both to nsec. 
+    CRRES density cadence bounces between 8-9 seconds (terrible for FFT, alright for interp)
+    
+    den_dict params: ['VTCW', 'YRDOY', 'TIMESTRING', 'FCE_KHZ', 'FUHR_KHZ', 'FPE_KHZ', 'NE_CM3', 'ID', 'M']
+    
+    TODO: Fix this. B_arr shape and nyq in mHz
+    '''
+    # Load data
+    times, B0, HM, dB, E0, HMe, dE, S, B, E = cfr.get_crres_fields(crres_path,
+                  time_start, time_end, pad=1800, E_ratio=5.0, rotation_method='vector', 
+                  output_raw_B=True, interpolate_nan=None, B0_LP=1.0,
+                  Pc1_LP=5000, Pc1_HP=100, Pc5_LP=30, Pc5_HP=None, dEx_LP=None)
+    
+    den_times, den_dict = cfr.get_crres_density(crres_path, time_start, time_end, pad=600)
+    
+    edens = den_dict['NE_CM3']
+    
+    # Interpolate B only
+    if nsec is None:
+        
+        # Low-pass total field to avoid aliasing (Assume 8.5 second cadence)
+        B_dt  = 1.0 / 32.0
+        nyq   = 1.0 / (2.0 * 8.5) 
+        for ii in range(3):
+            B[:, ii] = ascr.clw_low_pass(B[:, ii].copy(), nyq, B_dt, filt_order=4)
+            
+        # Take magnitude and interpolate            
+        B_mag    = np.sqrt(B[0] ** 2 + B[1] ** 2 + B[2] ** 2)
+        B_interp = np.interp(den_times.astype(np.int64), times.astype(np.int64), B_mag) 
+        
+        return den_times, B_interp, edens
+
+
+    else:
+        # Define new time array
+        ntime = np.arange(time_start, time_end, np.timedelta64(nsec, 's'), dtype='datetime64[us]')
+        
+        # Low-pass total field to avoid aliasing (Assume 8.5 second cadence)
+        B_dt  = 1.0 / 32.0
+        nyq   = 1.0 / (2.0 * nsec) 
+        for ii in range(3):
+            B[ii] = ascr.clw_low_pass(B[ii].copy(), nyq, B_dt, filt_order=4)
+            
+        # Take magnitude and interpolate            
+        B_mag    = np.sqrt(B[0] ** 2 + B[1] ** 2 + B[2] ** 2)
+        B_interp = np.interp(ntime.astype(np.int64), times.astype(np.int64), B_mag) 
+        
+        # Also interpolate density
+        ne_interp = np.interp(ntime.astype(np.int64), den_times.astype(np.int64), edens) 
+        
+        return ntime, B_interp, ne_interp
+        
+
 
 #%% MAIN FUNCTION :: JUST CHECKING THINGS
 if __name__ == '__main__':
     _rbsp_path  = 'G://DATA//RBSP//'
-    _time_start = np.datetime64('2013-07-25T21:00:00')
-    _time_end   = np.datetime64('2013-07-25T22:00:00')
+    _crres_path = 'G://DATA//CRRES//'
+    _time_start = np.datetime64('1991-07-17T20:15:00')
+    _time_end   = np.datetime64('1991-07-17T21:00:00')
     _probe      = 'a'
     _pad        = 0
     
-    convert_data_to_hybrid_plasmafile(_time_start, _time_end, _probe, _pad)
+    _times, _B, _ne = load_CRRES_data(_time_start, _time_end, crres_path=_crres_path, nsec=None)
+    
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(2)
+    ax[0].plot(_times, _B)
+    ax[1].plot(_times, _ne)
+    
+    #convert_data_to_hybrid_plasmafile(_time_start, _time_end, _probe, _pad)
     
     if False:
         _times, _B0, _cold_dens, _hope_dens, _hope_temp, _hope_anis, _spice_dens, _spice_temp, _spice_anis =\

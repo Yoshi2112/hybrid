@@ -27,6 +27,7 @@ import fast_scripts       as fscr
 import extract_parameters_from_data   as data
 from   emperics          import geomagnetic_magnitude, sheely_plasmasphere
 
+
 c  = 3e8
 qp = 1.602e-19
 mp = 1.673e-27
@@ -806,7 +807,217 @@ def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp,
     return k_np, CPDR_out, WPDR_out, HPDR_out, cCGR_out, wCGR_out, hCGR_out, \
            cVg_out, wVg_out, hVg_out,                                        \
            times, B0, name, mass, charge, density, tper, ani, cold_dens
+ 
+
+#%% KOZYRA FUNCTIONS
+def convective_growth_rate_kozyra(field, ndensc, ndensw, ANI, temperp,
+                                  norm_ampl=0, norm_freq=0, NPTS=1000, maxfreq=1.0):
+    '''
+    Calculates the convective growth rate S as per eqn. 6 of Kozyra (1984). Plasma parameters passed as 
+    length 3 numpy.ndarrays, one for each H+, He+, O+
+    
+    INPUT:
+        field  -- Magnetic field intensity, nT
+        ndensc -- Cold plasma densities, /cm3
+        ndensw -- Warm plasma densities, /cm3
+        ANI    -- Temperature anisotropy of each species
+        
+    OPTIONAL:
+        temperp   -- Perpendicular temperature of species warm component, eV
+        beta      -- Parallel plasma beta of species warm component
+        norm_ampl -- Flag to normalize growth rate to max value (0: No, 1: Yes). Default 0
+        norm_ampl -- Flag to normalize frequency to proton cyclotron units. Default 0
+        NPTS      -- Number of sample points up to maxfreq. Default 500
+        maxfreq   -- Maximum frequency to calculate for in proton cyclotron units. Default 1.0
+        
+    NOTE: At least one of temperp or beta must be defined. 
+    '''
+    # Perform input checks 
+    N = ndensc.shape[0]
+        
+    # CONSTANTS
+    PMASS   = 1.673E-27
+    MUNOT   = 1.25660E-6
+    EVJOULE = 6.242E18
+    CHARGE  = 1.602E-19
+    
+    # OUTPUT PARAMS
+    growth = np.zeros(NPTS)                         # Output growth rate variable
+    x      = np.zeros(NPTS)                         # Input normalized frequency
+    stop   = np.zeros(NPTS)                         # Stop band flag (0, 1)
+    
+    # Set here since these are constant. Thought these were wrong because Z is
+    # usually atomic number, not charge state (+1 for all ions here)
+    M    = np.zeros(N)
+    M[0] = 1.0
+    M[1] = 4.0
+    M[2] = 16.0
+    
+    # LOOP PARAMS
+    step  = maxfreq / float(NPTS)
+    FIELD = field*1.0E-9                 # convert to Tesla
+        
+    NCOLD   = ndensc * 1.0E6
+    NHOT    = ndensw * 1.0E6
+    etac    = NCOLD / NHOT[0]            # Needs a factor of Z ** 2?
+    etaw    = NHOT  / NHOT[0]            # Here too
+    numer   = M * (etac+etaw)
+    
+    # Calculate either beta or tpar/tperp depending on inputs
+    TPERP   = temperp / EVJOULE
+    TPAR    = TPERP / (1.0 + ANI)
+    bet     = NHOT*TPAR / (FIELD*FIELD/(2.0*MUNOT))        
+    alpha   = np.sqrt(2.0 * TPAR / PMASS)
+    
+    # Loop for calculation of CGR
+    for k in range(1, NPTS):
+          x[k]   = k*step
+          denom  = 1.0 - M*x[k]
+          
+          sum1  = 0.0
+          prod2 = 1.0
+          
+          for i in range(N):
+               prod2   *= denom[i]
+               prod     = 1.0
+               temp     = denom[i]
+               denom[i] = numer[i]
+               
+               for j in range(N):
+                   prod *= denom[j]
+               
+               sum1    += prod
+               denom[i] = temp
+          
+          sum2 = 0.0
+          arg4 = prod2 / sum1
+    
+          # Check for stop band.
+          if (arg4 < 0.0) and (x[k] > 1.0/M[N-1]):
+              growth[k] = 0.0
+              stop[k]   = 1
+          else:
+             arg3 = arg4 / (x[k] ** 2)
+             
+             for i in range(N):
+                if (NHOT[i] > 1.0E-3):
+                     arg1  = np.sqrt(np.pi) * etaw[i] / ((M[i]) ** 2 * alpha[i])       # Outside term
+                     arg1 *= ((ANI[i] + 1.0) * (1.0 - M[i]*x[k]) - 1.0)                # Inside square brackets (multiply by outside)
+                     arg2  = (-etaw[i] / M[i]) * (M[i]*x[k] - 1.0) ** 2 / bet[i]*arg3
+                     
+                     sum2 += arg1*np.exp(arg2)
+             
+             growth[k] = sum2*arg3/2.0
+    
+    ###########################
+    ### NORMALIZE AND CLEAN ###
+    ###########################    
+    for ii in range(NPTS):
+        if (growth[ii] < 0.0):
+            growth[ii] = 0.0
+          
+    if (norm_freq == 0):
+        cyclotron  = CHARGE*FIELD/(2.0*np.pi*PMASS)
+        x         *= cyclotron
+          
+    if (norm_ampl == 1):
+        growth /= growth.max()
+    else:
+        growth *= 1e9
+    return x, growth, stop
+
      
+def get_all_CGRs_kozyra(time_start, time_end, probe, pad, cmp=np.array([70, 20, 10]), 
+                        fmax_pcyc=1.0, Nf=1000, nsec=None, HM_filter_mhz=50, instr='HOPE'):
+    '''
+    Plugs satellite values into Kozyra growth rate equation (not mine, the validated old one)
+    for each time in the moment timeseries. Do one at a time (HOPE, RBSPICE) and then add them
+    together to see if they linearly work together. Could do a 3-plot of this in time, or some
+    sort of 3-plot pcolormesh timeseries.
+    
+    Input params from data (needed units for CGR calc):
+        field    -- Magnetic field intensity, nT
+        ndensc   -- Cold plasma densities, /cm3
+        ndensw   -- Warm plasma densities, /cm3
+        ANI      -- Temperature anisotropy of each species
+        temperp  -- Perpendicular temperature of species warm component, eV
+        
+    'instr' set to be HOPE or RBSPICE depending on which hot population is desired.
+    '''
+    if nsec is None:
+        DR_path = save_dir + 'KCGR_{}_cc_{:03}_{:03}_{:03}.npz'.format(save_string, int(cmp[0]), int(cmp[1]), int(cmp[2]))
+    else:
+        DR_path = save_dir + 'KCGR_{}_cc_{:03}_{:03}_{:03}_{}sec.npz'.format(save_string, int(cmp[0]), int(cmp[1]), int(cmp[2]), nsec)
+    
+    # Density.shape = 9, 201
+    
+    if os.path.exists(DR_path) == False:
+        times, B0, name, mass, charge, density, tper, anisotropy, cold_dens = \
+        extract_species_arrays(time_start, time_end, probe, pad, cmp=np.asarray(cmp), 
+                               return_raw_ne=True, nsec=nsec, HM_filter_mhz=HM_filter_mhz)
+
+        field  = B0*1e9
+        ndensc = density[:3, :]*1e-6
+        
+        hope_ndensw   = density[3:6, :]*1e-6
+        hope_tempperp = tper[3:6, :]
+        hope_ANI      = anisotropy[3:6, :]
+
+        spice_ndensw   = density[6:, :]*1e-6
+        spice_tempperp = tper[6:, :]
+        spice_ANI      = anisotropy[6:, :]
+
+
+        # Still need to define frequency array since PCYC changes with B0 (which changes bins)
+        Nt            = times.shape[0]
+        all_CGR_HOPE  = np.zeros((Nt, Nf), dtype=np.float64)
+        all_stop_HOPE = np.zeros((Nt, Nf), dtype=np.float64)
+        all_CGR_SPICE = np.zeros((Nt, Nf), dtype=np.float64)
+        all_stop_SPICE= np.zeros((Nt, Nf), dtype=np.float64)
+        all_f         = np.zeros((Nt, Nf), dtype=np.float64)
+        
+        # Get dispersion relations for each time if possible
+        for ii in range(Nt):
+            print('Calculating Kozyra CGR relation for {}'.format(times[ii]))
+            all_f[ii], all_CGR_HOPE[ii], all_stop_HOPE[ii] = convective_growth_rate_kozyra(field[ii], ndensc[:, ii],
+                                                 hope_ndensw[:, ii], hope_ANI[:, ii], temperp=hope_tempperp[:, ii],
+                                                 norm_ampl=0, NPTS=Nf, maxfreq=1.0)
+            
+            all_f[ii], all_CGR_SPICE[ii], all_stop_SPICE[ii] = convective_growth_rate_kozyra(field[ii], ndensc[:, ii],
+                                                 spice_ndensw[:, ii], spice_ANI[:, ii], temperp=spice_tempperp[:, ii],
+                                                 norm_ampl=0, NPTS=Nf, maxfreq=1.0)
+
+        # Saves data used for DR calculation as well, for future reference (and plotting)
+        if os.path.exists(save_dir) == False:
+            os.makedirs(save_dir)
+                
+        print('Saving dispersion history...')
+        np.savez(DR_path, all_f=all_f, all_stop_HOPE=all_stop_HOPE, all_CGR_HOPE=all_CGR_HOPE,
+                 all_stop_SPICE=all_stop_SPICE,  all_CGR_SPICE=all_CGR_SPICE, comp=cmp,
+                 times=times, B0=B0, name=name, mass=mass, charge=charge, density=density, tper=tper,
+                 ani=anisotropy, cold_dens=cold_dens, HM_filter_mhz=np.array([HM_filter_mhz]))
+    else:
+        print('Dispersion results already exist, loading from file...')
+        DR_file   = np.load(DR_path)
+        
+        all_f          = DR_file['all_f']
+        all_stop_HOPE   = DR_file['all_stop_HOPE']
+        all_CGR_HOPE   = DR_file['all_CGR_HOPE']
+        all_stop_SPICE = DR_file['all_stop_SPICE']
+        all_CGR_SPICE  = DR_file['all_CGR_SPICE']
+                
+        times     = DR_file['times']
+        B0        = DR_file['B0']
+        name      = DR_file['name']
+        mass      = DR_file['mass']
+        charge    = DR_file['charge']
+        density   = DR_file['density']
+        tper      = DR_file['tper']
+        anisotropy= DR_file['ani']
+        cold_dens = DR_file['cold_dens']
+    return all_f, all_CGR_HOPE, all_stop_HOPE, all_CGR_SPICE, all_stop_SPICE, \
+           times, B0, name, mass, charge, density, tper, anisotropy, cold_dens
+
      
 #%% VALIDATION PLOTS (FOR DIAGNOSTICS)
 def validation_plots_chen_2013():
@@ -1271,7 +1482,6 @@ def plot_max_growth_rate_with_time(times, k_vals, all_CPDR, all_WPDR, all_HPDR,
                                    save=False, norm_w=False, B0=None,
                                    ccomp=[70, 20, 10], suff='', ignore_damping=True,
                                    plot_pc1=False, plot_pearls=False):
-    
     plot_dir = save_dir + '//MAX_GR_PLOTS{}//'.format(suff)
     if os.path.exists(plot_dir) == False:
         os.makedirs(plot_dir)
@@ -1291,7 +1501,7 @@ def plot_max_growth_rate_with_time(times, k_vals, all_CPDR, all_WPDR, all_HPDR,
     if plot_pc1 == True:
         fft_times, fft_freqs, pc1_power = \
                 data.get_pc1_spectra(rbsp_path, time_start, time_end, probe,
-                                     pc1_res=25.0, overlap=0.99)
+                                     pc1_res=10.0, overlap=0.99, high_pass_mHz=50.0)
     else:
         fft_times, fft_freqs, pc1_power = None, None, None
         
@@ -1300,7 +1510,8 @@ def plot_max_growth_rate_with_time(times, k_vals, all_CPDR, all_WPDR, all_HPDR,
         pidx, pearl_times, NULL = rfr.get_pearl_times(time=time_start, crres=False, custom_txtname=None)
 
     
-    for PDR, lbl in zip([CPDR, WPDR, HPDR], ['cold', 'warm', 'hot']):
+    #for PDR, lbl in zip([CPDR, WPDR, HPDR], ['cold', 'warm', 'hot']):
+    for PDR, lbl in zip([WPDR], ['warm']):
         Nt    = times.shape[0]
         max_f = np.zeros((Nt, 3))
         max_k = np.zeros((Nt, 3))
@@ -1326,7 +1537,7 @@ def plot_max_growth_rate_with_time(times, k_vals, all_CPDR, all_WPDR, all_HPDR,
             fig, [ax2, ax1] = plt.subplots(2, figsize=(13, 6), sharex=True,
                                            gridspec_kw={'height_ratios': [1, 2]})
         
-            ax2.pcolormesh(fft_times, fft_freqs, pc1_power.T, vmin=-7, vmax=1, cmap='jet',
+            ax2.pcolormesh(fft_times, fft_freqs, pc1_power.T, vmin=-5, vmax=0, cmap='nipy_spectral',
                            shading='flat')
         
             ax2.set_xlim(plot_start, plot_end)
@@ -1360,14 +1571,23 @@ def plot_max_growth_rate_with_time(times, k_vals, all_CPDR, all_WPDR, all_HPDR,
     
         if plot_pearls == True:
             for this_time in pearl_times:
-                ax1.axvline(this_time, c='k', ls='--', alpha=0.50)
+                for ax in [ax1, ax2]:
+                    ax.axvline(this_time, c='k', ls='--', alpha=0.50)
+                
+        #for this_time in vlines:
+        #    for ax in [ax1, ax2]:
+        #        ax.axvline(np.datetime64(this_time), c='k', ls='--', alpha=0.50)
+    
+        for this_span in vspan:
+            for ax in [ax1, ax2]:
+                ax.axvspan(this_span[0], this_span[1], color='green', alpha=0.2)
     
         if save == True:
             print('Saving {}'.format(figsave_path))
             fig.savefig(figsave_path, bbox_inches='tight')
             plt.close('all')
         else:
-            ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S.%f'))
+            ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
             fig.autofmt_xdate()
             figManager = plt.get_current_fig_manager()
             figManager.window.showMaximized()
@@ -2067,6 +2287,14 @@ def plot_residuals(Species, PP, k, w_vals, lbl='', approx='hot'):
     return
 
 
+def plot_all_CGRs_kozyra():
+    return
+
+
+def plot_all_CGRs_kozyra_2D():
+    return
+
+
 if __name__ == '__main__':
     #validation_plots_fraser_1996()
     #validation_plots_omura2010()
@@ -2075,14 +2303,14 @@ if __name__ == '__main__':
     rbsp_path = 'G://DATA//RBSP//'
     save_drive= 'G://'
     
-    time_start  = np.datetime64('2013-07-25T21:25:00')
-    time_end    = np.datetime64('2013-07-25T21:47:00')
+    time_start  = np.datetime64('2015-01-16T04:05:00')
+    time_end    = np.datetime64('2015-01-16T05:15:00')
     probe       = 'a'
     pad         = 0
-    fmax        = 1.2
+    fmax        = 0.5
     
-    plot_start  = time_start#np.datetime64('2013-04-23T22:50:00')
-    plot_end    = time_end#np.datetime64('2013-04-23T23:15:00')
+    plot_start  = np.datetime64('2015-01-16T04:25:00')
+    plot_end    = np.datetime64('2015-01-16T05:10:00')
     
     # Test/Check plasma params from files
     if False:
@@ -2095,28 +2323,86 @@ if __name__ == '__main__':
     save_string = time_start.astype(object).strftime('%Y%m%d_%H%M_') + time_end.astype(object).strftime('%H%M')
     save_dir    = '{}NEW_LT//EVENT_{}//CHEN_DR_CODE//'.format(save_drive, date_string)
     
-    _K, _CPDR, _WPDR, _HPDR, _cCGR, _wCGR, _hCGR, _cVG, _wVG, _hVG,        \
-    TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE =             \
-    get_all_DRs_parallel(time_start, time_end, probe, pad, [70, 20, 10], 
-                     kmin=0.0, kmax=1.0, Nk=5000, knorm=True,
-                     nsec=None, HM_filter_mhz=50, N_procs=6)
+# =============================================================================
+#     all_f, all_CGR_HOPE, all_stop_HOPE, all_CGR_SPICE, all_stop_SPICE,          \
+#            times, B0, name, mass, charge, density, tper, anisotropy, cold_dens =\
+#     get_all_CGRs_kozyra(time_start, time_end, probe, pad, cmp=np.array([70, 20, 10]), 
+#                         fmax_pcyc=1.0, Nf=1000, nsec=None, HM_filter_mhz=50, instr='RBSPICE')
+# =============================================================================
     
-    
-    if False:
-        # Shouldn't be needed anymore.
-        _cCGR *= -1.0; _wCGR *= -1.0; _hCGR *= -1.0
-    
-    
+
     if True:
-        plot_all_DRs(_K, _CPDR, _WPDR, _HPDR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE,
-                     suff='_triplecheck_newVgcode')
+        vlines = [  '2015-01-16T04:32:53.574540',
+                    '2015-01-16T04:35:36.689700',
+                    '2015-01-16T04:44:53.200200',
+                    '2015-01-16T04:47:48.309120',
+                    '2015-01-16T04:48:31.486660',
+                    '2015-01-16T04:49:17.062940',
+                    '2015-01-16T04:49:59.041120',
+                    '2015-01-16T04:51:11.003680',
+                    '2015-01-16T04:52:03.776220',
+                    '2015-01-16T04:53:38.526940',
+                    '2015-01-16T04:55:24.072040',
+                    '2015-01-16T04:36:27.063500',
+                    '2015-01-16T04:28:50.101200',
+                    '2015-01-16T04:29:30.879980',
+                    '2015-01-16T04:38:23.402980',
+                    '2015-01-16T04:39:11.378020',
+                    '2015-01-16T04:42:07.686300',
+                    '2015-01-16T04:56:19.461080',
+                    '2015-01-16T04:57:08.028780',
+                    '2015-01-16T04:59:38.756120',
+                    '2015-01-16T05:00:42.954780',
+                    '2015-01-16T05:02:08.925200',
+                    '2015-01-16T05:03:24.847120',
+                    '2015-01-16T05:03:58.342080',
+                    '2015-01-16T05:05:06.448500',
+                    '2015-01-16T05:07:41.083580',
+                    '2015-01-16T05:05:53.341440',
+                    '2015-01-16T04:40:01.703620',
+                    '2015-01-16T05:10:37.874220',
+                    '2015-01-16T05:34:50.015900',
+                    '2015-01-16T05:37:30.425800',
+                    '2015-01-16T05:40:04.314980',
+                    '2015-01-16T05:40:30.397900',
+                    '2015-01-16T05:44:50.574940',
+                    '2015-01-16T05:44:23.839960',
+                    '2015-01-16T04:58:06.574340',
+                    '2015-01-16T04:58:43.263980',
+                    '2015-01-16T04:54:14.206560',
+                    '2015-01-16T04:40:54.027960',
+                    '2015-01-16T04:33:50.763680']
         
-        plot_all_CGRs(_K, _cCGR, _wCGR, _hCGR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE,
-                      HM_filter_mhz=50, overwrite=False, save=True, figtext=True, suff='')
+        vspan = [
+                ['2015-01-16T04:47:19.000000', '2015-01-16T04:48:53.000000'],
+                ['2015-01-16T04:50:35.000000', '2015-01-16T04:52:47.000000'],
+                ['2015-01-16T04:44:04.000000', '2015-01-16T04:45:39.000000'],
+                ['2015-01-16T04:34:42.000000', '2015-01-16T04:36:00.000000'],
+                ['2015-01-16T04:32:00.000000', '2015-01-16T04:33:00.000000'],
+                
+                ['2015-01-16T04:55:30.000000', '2015-01-16T04:57:37.000000'],
+                
+                ['2015-01-16T04:59:04.000000', '2015-01-16T05:01:22.000000'],
+                ['2015-01-16T05:04:07.000000', '2015-01-16T05:06:04.000000'],
+                ['2015-01-16T05:07:07.000000', '2015-01-16T05:08:43.000000'],
+                ]
+        
+        
+        _K, _CPDR, _WPDR, _HPDR, _cCGR, _wCGR, _hCGR, _cVG, _wVG, _hVG,        \
+        TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE =             \
+        get_all_DRs_parallel(time_start, time_end, probe, pad, [70, 20, 10], 
+                         kmin=0.0, kmax=1.0, Nk=5000, knorm=True,
+                         nsec=None, HM_filter_mhz=50, N_procs=6)
+        
+        #plot_all_DRs(_K, _CPDR, _WPDR, _HPDR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE,
+        #             suff='')
+        
+        #plot_all_CGRs(_K, _cCGR, _wCGR, _hCGR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE,
+        #              HM_filter_mhz=50, overwrite=False, save=True, figtext=True, suff='')
         
         plot_max_growth_rate_with_time(TIMES, _K, _CPDR, _WPDR, _HPDR,
                                        save=True, norm_w=False, B0=None, plot_pc1=True,
-                                       ccomp=[70, 20, 10], suff='_withPc1', plot_pearls=True)
+                                       ccomp=[70, 20, 10], suff='_withPc1', plot_pearls=False)
         
         #plot_max_CGR_with_time(TIMES, _K, _cCGR, _wCGR, _hCGR,  
         #                        save=True, norm_w=False, B0=None, plot_pc1=True,
