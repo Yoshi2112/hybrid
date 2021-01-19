@@ -141,11 +141,11 @@ def plot_series(save=False):
         Easy way to distinguish between solutions. Maybe just put the cyclotron frequencies in and use all black?
     '''
     gitdir    = 'C://Users//iarey//Documents//GitHub'
-    folder    = '//hybrid//simulation_codes//run_inputs//from_data//LGRT_tested_modified//Changing_Cold_He//'
+    folder    = '//hybrid//simulation_codes//run_inputs//from_data//event_25Jul_quiet//Changing_Cold_He//'
     file_list = os.listdir(gitdir + folder)
     num_files = len(file_list)
     
-    alpha = np.linspace(0.1, 1.0, num_files)
+    alpha     = np.linspace(0.1, 1.0, num_files)
     
     # Generate plot space
     plt.ioff()
@@ -208,6 +208,6 @@ def plot_series(save=False):
 
 if __name__ == '__main__':
     plot_series(save=False)
-
+    
     # Load parameters (for species) from hybrid files
     # Plot it similar to existing plotting routines, maybe send axes to get new line each time

@@ -89,9 +89,8 @@ def get_velocities(w, Species, PP, normalize=False):
 def get_inhomogeneity_terms(w, Species, PP, Vth_perp):
     '''
     Validated about as much as possible. Results are dimensionless since 
-    velocities and frequencies cancel out. Hence, normalizations also shouldn't
-    matter but this function assumes no normalization (could be set based on 
-    whether Vth_perp was, but it doesn't matter.
+    velocities and frequencies cancel out. Only input frequency matters
+    as dimensional or not, since it involves the pcyc term (whether value or 1)
     '''
     # Third term in bracks: - Vr**2/(2*Vp**2)
     Vg, Vp, Vr = get_velocities(w, Species, PP)     # Each length w
@@ -516,69 +515,45 @@ def plot_omura2010_velocities_and_dispersion():
     '''
     Species, PP = define_omura2010_parameters()
     
-    # Cold Plasma Dispersion Plot (Figure 3, validated)
-    wlength = 4e4
-    kmax    = 2 * np.pi / wlength
+    # Cold dispersion from get_k_cold() (Fig. 3, validated):
+    f_max  = 4.0
+    Nf     = 10000
+    f_vals = np.linspace(0.0, f_max, Nf)
+    w_vals = 2*np.pi*f_vals
+    k_vals = get_k_cold(w_vals, Species)
+    wlen   = 1e-3 * 2*np.pi / k_vals
+    
+    fig, ax = plt.subplots()
+    ax.plot(1/wlen, f_vals, c='k')
+    ax.set_xlabel('$1/\lambda$ (/km)')
+    ax.set_ylabel('f', rotation=0)
+    ax.set_ylim(0, 3.5)
+    ax.set_xlim(0, 0.025)
+    
+    # Resonance and Group Velocities plot (Figure 4a,b validated)
+    Species, PP = define_omura2010_parameters()
+    V_group, V_phase, V_resonance = get_velocities(w_vals, Species, PP)
 
-    k_vals, CPDR_solns, warm_solns = get_dispersion_relation(Species, PP, norm_k_in=False, norm_k_out=False, \
-                                     norm_w=False, plot=False, kmin=0.0, kmax=kmax, Nk=1000)
-    
-    # Cast to linear frequency
-    CPDR_solns /= 2 * np.pi
+    fig, ax = plt.subplots()
+    ax.plot(f_vals, V_resonance/1e3)
+    ax.set_xlabel('f (Hz)', fontsize=14)
+    ax.set_ylabel('$V_R$\nkm/s', rotation=0, fontsize=14, labelpad=30)
+    ax.set_xlim(0, f_max)
+    ax.set_ylim(-1500, 0)
+
+    fig, ax = plt.subplots()
+    ax.plot(f_vals, V_group/1e3)
+    ax.set_xlabel('f (Hz)', fontsize=14)
+    ax.set_ylabel('$V_g$\nkm/s', rotation=0, fontsize=14, labelpad=30)
+    ax.set_xlim(0, f_max)
+    ax.set_ylim(0, 250)
     
     fig, ax = plt.subplots()
-    for ss in range(CPDR_solns.shape[1]):
-        ax.plot(1e3*k_vals / (2*np.pi), CPDR_solns[:, ss], c='k')
-        
-    ax.set_xlim(0, 0.025)
-    ax.set_ylim(0, 3.5)
-    
-    ax.set_title('Cold Plasma Dispersion Relation')
-    ax.set_ylabel('f (Hz)', fontsize=14)
-    ax.set_xlabel(r'$\frac{1}{\lambda}$ ($m^{-1}$)', rotation=0, fontsize=14, labelpad=30)
-    
-    # Cold dispersion from get_k_cold():
-    cold_f = np.linspace(0.0, 3.5, 1000)
-    cold_k = get_k_cold(2*np.pi*cold_f, Species)
-    wlen   = 1e-3 * 2*np.pi / cold_k
-    
-    fig, ax = plt.subplots()
-    ax.plot(1/wlen, cold_f, c='k')
-    ax.set_xlabel('k')
-    ax.set_ylabel('w')
-    ax.set_ylim(0, 3.5)
-    ax.set_xlim(0, 0.025)
-    
-    
-    if False:
-        # Resonance and Group Velocities plot (Figure 4a,b validated)
-        f_max  = 4.0
-        f_vals = np.linspace(0.0, f_max, 10000)
-        w_vals = 2 * np.pi * f_vals
-        
-        Species, PP = define_omura2010_parameters()
-        V_group, V_phase, V_resonance = get_velocities(w_vals, Species, PP)
-    
-        fig, ax = plt.subplots()
-        ax.plot(f_vals, V_resonance/1e3)
-        ax.set_xlabel('f (Hz)', fontsize=14)
-        ax.set_ylabel('$V_R$\nkm/s', rotation=0, fontsize=14, labelpad=30)
-        ax.set_xlim(0, f_max)
-        ax.set_ylim(-1500, 0)
-    
-        fig, ax = plt.subplots()
-        ax.plot(f_vals, V_group/1e3)
-        ax.set_xlabel('f (Hz)', fontsize=14)
-        ax.set_ylabel('$V_g$\nkm/s', rotation=0, fontsize=14, labelpad=30)
-        ax.set_xlim(0, f_max)
-        ax.set_ylim(0, 250)
-        
-        fig, ax = plt.subplots()
-        ax.plot(f_vals, V_phase/1e3)
-        ax.set_xlabel('f (Hz)', fontsize=14)
-        ax.set_ylabel('$V_p$\nkm/s', rotation=0, fontsize=14, labelpad=30)
-        ax.set_xlim(0, f_max)
-        #ax.set_ylim(0, 250)
+    ax.plot(f_vals, V_phase/1e3)
+    ax.set_xlabel('f (Hz)', fontsize=14)
+    ax.set_ylabel('$V_p$\nkm/s', rotation=0, fontsize=14, labelpad=30)
+    ax.set_xlim(0, f_max)
+    #ax.set_ylim(0, 250)
     return
 
 
@@ -724,7 +699,7 @@ def plot_check_temporal_growth_rate_chen():
 
 def plot_convective_growth_rate_chen():
     '''
-    TODO: Check this with Fraser (1989) parameters
+    Check this with Fraser (1989) parameters
     '''
     f_max  = 4.0
     f_vals = np.linspace(0.0, f_max, 10000)
@@ -761,7 +736,7 @@ def plot_convective_growth_rate_chen():
 
 def plot_convective_growth_rate_fraser():
     '''
-    TODO: Check this with Fraser (1989) parameters
+    Check this with Fraser (1989) parameters
     '''
     f_max  = 3.5
     f_vals = np.linspace(0.0, f_max, 5000)
@@ -888,7 +863,9 @@ if __name__ == '__main__':
     Ideas to try:
         - Make frequencies constant with integration. (This won't fix threshold issues)
     '''    
-    plot_convective_growth_rate_fraser()
+    just_random()
+    
+    #plot_convective_growth_rate_fraser()
     
     # --- From Omura et al. (2010)
     #plot_omura2010_velocities_and_dispersion()

@@ -3926,12 +3926,12 @@ def multiplot_mag_energy(save=False):
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'F:'
+    drive       = 'G:'
     
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     
-    for series in ['shoji_2013_standard_units']:
+    for series in ['event_25Jul_quiet']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -3951,6 +3951,8 @@ if __name__ == '__main__':
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
+
+                #check_fields(save=True)
 
                 #winske_summary_plots(save=True)
                 #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
