@@ -1388,30 +1388,32 @@ def add_runtime_to_header(runtime):
     return
 
 
-def dump_to_file(pos, vel, E, Ve, Te, B, Ji, rho, qq, suff='', print_particles=False):
+def dump_to_file(pos, vel, E, Ve, Te, B, Ji, rho, qq, folder='standard', print_particles=False):
     import os
     np.set_printoptions(threshold=sys.maxsize)
     
-    dirpath = drive + save_path + '/run_{}/ts_{:05}/'.format(run, qq, suff) 
+    dirpath = drive + save_path + '/{}/timestep_{:05}/'.format(folder, qq) 
     if os.path.exists(dirpath) == False:
         os.makedirs(dirpath)
         
     print('Dumping arrays to file')
     if print_particles == True:
-        with open(dirpath + 'pos{}.txt'.format(suff), 'w') as f:
+        with open(dirpath + 'pos.txt', 'w') as f:
             print(pos, file=f)
-        with open(dirpath + 'vel{}.txt'.format(suff), 'w') as f:
+        with open(dirpath + 'vel.txt', 'w') as f:
             print(vel, file=f)
-    with open(dirpath + 'E{}.txt'.format(suff), 'w') as f:
+    with open(dirpath + 'E.txt', 'w') as f:
         print(E, file=f)
-    with open(dirpath + 'Ve{}.txt'.format(suff), 'w') as f:
+    with open(dirpath + 'Ve.txt', 'w') as f:
         print(Ve, file=f)
-    with open(dirpath + 'Te{}.txt'.format(suff), 'w') as f:
+    with open(dirpath + 'Te.txt', 'w') as f:
         print(Te, file=f)
-    with open(dirpath + 'B{}.txt'.format(suff), 'w') as f:
+    with open(dirpath + 'B.txt', 'w') as f:
         print(B, file=f)
-    with open(dirpath + 'J{}.txt'.format(suff), 'w') as f:
+    with open(dirpath + 'Ji.txt', 'w') as f:
         print(Ji, file=f)
+    with open(dirpath + 'rho.txt', 'w') as f:
+        print(rho, file=f)
 
     np.set_printoptions(threshold=1000)
     return
@@ -1464,8 +1466,8 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T,temp_N
     old_particles[0  , :] = pos
     old_particles[1:4, :] = vel
     old_particles[4  , :] = Ie
-    old_particles[5:8, :]    = W_elec
-    old_particles[8  , :]  = idx
+    old_particles[5:8, :] = W_elec
+    old_particles[8  , :] = idx
     
     old_fields[:,   0:3]  = B
     old_fields[:NC, 3:6]  = Ji
@@ -1876,9 +1878,10 @@ if __name__ == '__main__':
     print('Retarding velocity...')
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E_int, v_prime, S, T, temp_N, -0.5*DT)
 
-    qq       = 1;    sim_time = DT; max_inc = 100
+    qq       = 1;    sim_time = DT; max_inc = 1000
     print('Starting main loop...')
     while qq < max_inc:
+        
         qq, DT, max_inc, part_save_iter, field_save_iter =                                \
         main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag, Ep, Bp, v_prime, S, T, temp_N,\
               B, E_int, E_half, q_dens, q_dens_adv, Ji, ni, nu, mp_flux,                  \

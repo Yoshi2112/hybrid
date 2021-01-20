@@ -206,6 +206,7 @@ def initialize_particles():
     W_mag      = np.zeros((3, N), dtype=np.float64)
     
     assign_weighting_TSC(pos, Ie, W_elec)
+    assign_weighting_TSC(pos, Ib, W_mag)
     return pos, vel, Ie, W_elec, Ib, W_mag, idx
 
 
@@ -303,8 +304,8 @@ def initialize_tertiary_arrays():
     temp1D        = np.zeros( NC    ,      dtype=nb.float64) 
     old_fields    = np.zeros((NC + 1, 10), dtype=nb.float64)
  
-    old_particles = np.zeros((9, N),      dtype=nb.float64)
-    mp_flux       = np.zeros((2, Nj),     dtype=nb.float64)
+    old_particles = np.zeros((13, N),      dtype=nb.float64)
+    mp_flux       = np.zeros((2 , Nj),     dtype=nb.float64)
         
     return old_particles, old_fields, temp3De, temp3Db, temp1D, mp_flux
 
@@ -365,7 +366,7 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     # Particle injector goes here
     
     assign_weighting_TSC(pos, Ie, W_elec)
-    assign_weighting_TSC(pos, Ie, W_elec, E_nodes=False)
+    assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
     collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji)
     return
 
@@ -1355,30 +1356,32 @@ def add_runtime_to_header(runtime):
     return
 
 
-def dump_to_file(pos, vel, E, Ve, Te, B, Ji, rho, qq, suff='', print_particles=False):
+def dump_to_file(pos, vel, E, Ve, Te, B, Ji, rho, qq, folder='standard', print_particles=False):
     import os
     np.set_printoptions(threshold=sys.maxsize)
     
-    dirpath = drive + save_path + '/run_{}/ts_{:05}{}/'.format(run, qq, suff) 
+    dirpath = drive + save_path + '/{}/timestep_{:05}/'.format(folder, qq) 
     if os.path.exists(dirpath) == False:
         os.makedirs(dirpath)
         
     print('Dumping arrays to file')
     if print_particles == True:
-        with open(dirpath + 'pos{}.txt'.format(suff), 'w') as f:
+        with open(dirpath + 'pos.txt', 'w') as f:
             print(pos, file=f)
-        with open(dirpath + 'vel{}.txt'.format(suff), 'w') as f:
+        with open(dirpath + 'vel.txt', 'w') as f:
             print(vel, file=f)
-    with open(dirpath + 'E{}.txt'.format(suff), 'w') as f:
+    with open(dirpath + 'E.txt', 'w') as f:
         print(E, file=f)
-    with open(dirpath + 'Ve{}.txt'.format(suff), 'w') as f:
+    with open(dirpath + 'Ve.txt', 'w') as f:
         print(Ve, file=f)
-    with open(dirpath + 'Te{}.txt'.format(suff), 'w') as f:
+    with open(dirpath + 'Te.txt', 'w') as f:
         print(Te, file=f)
-    with open(dirpath + 'B{}.txt'.format(suff), 'w') as f:
+    with open(dirpath + 'B.txt', 'w') as f:
         print(B, file=f)
-    with open(dirpath + 'J{}.txt'.format(suff), 'w') as f:
+    with open(dirpath + 'Ji.txt', 'w') as f:
         print(Ji, file=f)
+    with open(dirpath + 'rho.txt', 'w') as f:
+        print(rho, file=f)
 
     np.set_printoptions(threshold=1000)
     return
@@ -1386,7 +1389,7 @@ def dump_to_file(pos, vel, E, Ve, Te, B, Ji, rho, qq, suff='', print_particles=F
 ### ##
 ### MAIN LOOP
 ### ##
-@nb.njit()
+#@nb.njit()
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, mp_flux,               \
               Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields,\
@@ -1421,18 +1424,20 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
     
     # Calculate E at N + 1/2
     calculate_E(B, Ji, q_dens, E_half, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
-
+    
     ###################################
     ### PREDICTOR CORRECTOR SECTION ###
     ###################################
 
     # Store old values
-    mp_flux_old           = mp_flux.copy()
-    old_particles[0  , :] = pos
-    old_particles[1:4, :] = vel
-    old_particles[4  , :] = Ie
-    old_particles[5:8, :]    = W_elec
-    old_particles[8  , :]  = idx
+    mp_flux_old            = mp_flux.copy()
+    old_particles[0   , :] = pos
+    old_particles[1:4 , :] = vel
+    old_particles[4   , :] = Ie
+    old_particles[5:8 , :] = W_elec
+    old_particles[8   , :] = Ib
+    old_particles[9:12, :] = W_mag
+    old_particles[12  , :] = idx
     
     old_fields[:,   0:3]  = B
     old_fields[:NC, 3:6]  = Ji
@@ -1447,7 +1452,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
 
     # Advance particles to obtain source terms at N + 3/2
     advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
-                                  B, E_int, DT, q_dens_adv, Ji, mp_flux, pc=0)
+                                  B, E_int, DT, q_dens, Ji, mp_flux, pc=1)
     
     q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
     
@@ -1459,11 +1464,13 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
     E_int *= 0.5;    E_int += 0.5 * E_half
 
     # Restore old values: [:] allows reference to same memory (instead of creating new, local instance)
-    pos[:]    = old_particles[0  , :]
-    vel[:]    = old_particles[1:4, :]
-    Ie[:]     = old_particles[4  , :]
-    W_elec[:] = old_particles[5:8, :]
-    idx[:]    = old_particles[8  , :]
+    pos[:]    = old_particles[0   , :]
+    vel[:]    = old_particles[1:4 , :]
+    Ie[:]     = old_particles[4   , :]
+    W_elec[:] = old_particles[5:8 , :]
+    Ib[:]     = old_particles[8   , :]
+    W_mag[:]  = old_particles[9:12, :]
+    idx[:]    = old_particles[12  , :]
     
     B[:]      = old_fields[:,   0:3]
     Ji[:]     = old_fields[:NC, 3:6]
@@ -1843,9 +1850,10 @@ if __name__ == '__main__':
     print('Retarding velocity...')
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT, vel_only=True)
 
-    qq       = 1;    sim_time = DT; max_inc = 100
+    qq       = 1;    sim_time = DT; max_inc = 1000
     print('Starting main loop...')
     while qq < max_inc:
+        
         qq, DT, max_inc, part_save_iter, field_save_iter =                                \
         main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                                   \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, mp_flux,                          \
