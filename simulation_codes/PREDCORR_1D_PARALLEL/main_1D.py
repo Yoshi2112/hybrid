@@ -17,7 +17,13 @@ mu0    = (4e-7) * np.pi                     # Magnetic Permeability of Free Spac
 RE     = 6.371e6                            # Earth radius in metres
 B_surf = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
-do_parallel=False
+# A few internal flags
+event_inputs      = False      # Can be set for lists of input files for easy batch-runs
+adaptive_timestep = True       # Disable adaptive timestep if you hate when it doubles
+print_runtime     = True       # Whether or not to output runtime every 50 iterations 
+do_parallel       = True       # Whether or not to use available threads to parallelize specified functions
+#nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
+
 
 ### ##
 ### INITIALIZATION
@@ -356,18 +362,34 @@ def set_timestep(vel, Te0):
 ### ##
 ### PARTICLES
 ### ##
-@nb.njit()
+#@nb.njit()
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                   B, E, DT, q_dens_adv, Ji, mp_flux, pc=0):
     '''
     Helper function to group the particle advance and moment collection functions
     '''
+    parmov_start = timer()
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False)
+    parmov_time = round(timer() - parmov_start, 2)
+    print('PMOVE {} time: {}s'.format(qq, parmov_time))
+
     # Particle injector goes here
+    if particle_open == 1:
+        inject_start = timer()
+        inject_particles(pos, vel, idx, mp_flux, DT)
+        inject_time = round(timer() - inject_start, 2)
+        print('INJCT {} time: {}s'.format(qq, inject_time))
     
+    weight_start = timer()
     assign_weighting_TSC(pos, Ie, W_elec)
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
+    weight_time = round(timer() - weight_start, 2)
+    print('WEGHT {} time: {}s'.format(qq, weight_time))
+    
+    moment_start = timer()
     collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji)
+    moment_time = round(timer() - moment_start, 2)
+    print('MOMNT {} time: {}s'.format(qq, moment_time))
     return
 
 
@@ -419,7 +441,7 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
     else:
         grid_offset   = 0.0
     
-    particle_transform = xmax + (ND - grid_offset)*dx  + epsil  # Offset to account for E/B grid and damping nodes
+    particle_transform = xmax + (ND - grid_offset)*dx  + epsil      # Offset to account for E/B grid and damping nodes
     
     if field_periodic == 0:
         for ii in nb.prange(Np):
@@ -469,10 +491,8 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False):
     OUTPUT:
         None -- vel array is mutable (I/O array)
         
-    Notes: Still not sure how to parallelise this: There are a lot of array operations
-    Probably need to do it more algebraically? Find some way to not create those temp arrays.
-    Removed the "cross product" and "field interpolation" functions because I'm
-    not convinced they helped.
+    Note: Particle boundary conditions arranged in order of probability of use.
+    "Periodic" and "Open" boundaries most useful, others kept for legacy purposes.
     '''
     for ii in nb.prange(pos.shape[0]):
         # Calculate wave fields at particle position
@@ -485,18 +505,16 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False):
                 Bp[kk] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]                   
 
         # Calculate background field at particle position
-        Bp[0] += B_eq * (1.0 + a * pos[ii] * pos[ii])
-        
+        Bp[0]   += B_eq * (1.0 + a * pos[ii] * pos[ii])
         constant = a * B_eq
         l_cyc    = qm_ratios[idx[ii]] * Bp[0]
-        
-        Bp[1] += constant * pos[ii] * vel[2, ii] / l_cyc
-        Bp[2] -= constant * pos[ii] * vel[1, ii] / l_cyc
+        Bp[1]   += constant * pos[ii] * vel[2, ii] / l_cyc
+        Bp[2]   -= constant * pos[ii] * vel[1, ii] / l_cyc
 
         # Start Boris Method
         qmi = 0.5 * DT * qm_ratios[idx[ii]]                             # q/m variable including dt
         T   = qmi * Bp 
-        S   = 2.*T / (1. + T[0] ** 2 + T[1] ** 2 + T[2] ** 2)
+        S   = 2.*T / (1. + T[0]*T[0] + T[1]*T[1] + T[2]*T[2])
 
         # vel -> v_minus
         vel[0, ii] += qmi * Ep[0]
@@ -523,127 +541,122 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False):
             # Update position
             pos[ii] += vel[0, ii] * DT
         
-            # Check boundary conditions (This isn't the final version :: Hardcoded for periodic)
-            if pos[ii] > xmax:
-                pos[ii] += xmin - xmax
-            elif pos[ii] < xmin:
-                pos[ii] += xmax - xmin 
-    
-# =============================================================================
-#         # Check boundary conditions
-#         if (pos[ii] < xmin or pos[ii] > xmax):
-#             if particle_reinit == 1: 
-#                 
-#                 # Reinitialize vx based on flux distribution
-#                 vel[0, ii]  = generate_vx(vth_par[idx[ii]])
-#                 vel[0, ii] *= -np.sign(pos[ii])
-#                 
-#                 # Re-initialize v_perp and check pitch angle
-#                 if temp_type[idx[ii]] == 0:
-#                     vel[1, ii] = np.random.normal(0, vth_perp[idx[ii]])
-#                     vel[2, ii] = np.random.normal(0, vth_perp[idx[ii]])
-#                 else:
-#                     particle_PA = 0.0
-#                     while np.abs(particle_PA) < loss_cone_xmax:
-#                         vel[1, ii]  = np.random.normal(0, vth_perp[idx[ii]])
-#                         vel[2, ii]  = np.random.normal(0, vth_perp[idx[ii]])
-#                         v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
-#                         
-#                         particle_PA = np.arctan(v_perp / vel[0, ii])
-#             
-#                 # Place back inside simulation domain
-#                 if pos[ii] < xmin:
-#                     pos[ii] = xmin + np.random.uniform(0, 1) * vel[0, ii] * DT
-#                 elif pos[ii] > xmax:
-#                     pos[ii] = xmax + np.random.uniform(0, 1) * vel[0, ii] * DT
-#                 
-#             elif particle_periodic == 1:  
-#                 # Mario (Periodic)
-#                 if pos[ii] > xmax:
-#                     pos[ii] += xmin - xmax
-#                 elif pos[ii] < xmin:
-#                     pos[ii] += xmax - xmin 
-#                    
-#             elif particle_reflect == 1:
-#                 # Reflect
-#                 if pos[ii] > xmax:
-#                     pos[ii] = 2*xmax - pos[ii]
-#                 elif pos[ii] < xmin:
-#                     pos[ii] = 2*xmin - pos[ii]
-#                     
-#                 vel[0, ii] *= -1.0
-#                     
-#             else:                
-#                 # Disable loop: Remove particles that leave the simulation space (open boundary only)
-#                 n_deleted = 0
-#                 for ii in nb.prange(pos.shape[0]):
-#                     if (pos[ii] < xmin or pos[ii] > xmax):
-#                         pos[ii]    *= 0.0
-#                         vel[:, ii] *= 0.0
-#                         idx[ii]     = -1
-#                         n_deleted  += 1
-# =============================================================================
-        
-# =============================================================================
-#     # Put this into its own function later? Don't bother for now.
-#     if particle_open == 1:
-#         acc = 0; n_created = 0
-#         for ii in range(2):
-#             for jj in range(Nj):
-#                 while mp_flux[ii, jj] >= 2.0:
-#                     
-#                     # Find two empty particles (Yes clumsy coding but it works)
-#                     for kk in nb.prange(acc, pos.shape[0]):
-#                         if idx[kk] < 0:
-#                             kk1 = kk
-#                             acc = kk + 1
-#                             break
-#                     for kk in nb.prange(acc, pos.shape[0]):
-#                         if idx[kk] < 0:
-#                             kk2 = kk
-#                             acc = kk + 1
-#                             break
-# 
-#                     # Reinitialize vx based on flux distribution
-#                     vel[0, kk1] = generate_vx(vth_par[jj])
-#                     idx[kk1]    = jj
-#                     
-#                     # Re-initialize v_perp and check pitch angle
-#                     if temp_type[jj] == 0 or homogenous == True:
-#                         vel[1, kk1] = np.random.normal(0, vth_perp[jj])
-#                         vel[2, kk1] = np.random.normal(0, vth_perp[jj])
-#                     else:
-#                         particle_PA = 0.0
-#                         while np.abs(particle_PA) <= loss_cone_xmax:
-#                             vel[1, kk1] = np.random.normal(0, vth_perp[jj])
-#                             vel[2, kk1] = np.random.normal(0, vth_perp[jj])
-#                             v_perp      = np.sqrt(vel[1, kk1] ** 2 + vel[2, kk1] ** 2)
-#                             particle_PA = np.arctan(v_perp / vel[0, kk1])
-#                     
-#                     # Amount travelled (vel always +ve at first)
-#                     dpos = np.random.uniform(0, 1) * vel[0, kk1] * DT
-#                     
-#                     # Left boundary injection
-#                     if ii == 0:
-#                         pos[kk1]    = xmin + dpos
-#                         vel[0, kk1] = np.abs(vel[0, kk1])
-#                         
-#                     # Right boundary injection
-#                     else:
-#                         pos[kk1]    = xmax - dpos
-#                         vel[0, kk1] = -np.abs(vel[0, kk1])
-#                     
-#                     # Copy values to second particle (Same position, xvel. Opposite v_perp) 
-#                     idx[kk2]    = idx[kk1]
-#                     pos[kk2]    = pos[kk1]
-#                     vel[0, kk2] = vel[0, kk1]
-#                     vel[1, kk2] = vel[1, kk1] * -1.0
-#                     vel[2, kk2] = vel[2, kk1] * -1.0
-#                     
-#                     # Subtract new macroparticles from accrued flux
-#                     mp_flux[ii, jj] -= 2.0
-#                     n_created       += 2
-# =============================================================================
+            # Check if particle has left simulation and apply boundary conditions
+            if (pos[ii] < xmin or pos[ii] > xmax):
+                
+                if particle_periodic == 1:  
+                    # Mario (Periodic)
+                    if pos[ii] > xmax:
+                        pos[ii] += xmin - xmax
+                    elif pos[ii] < xmin:
+                        pos[ii] += xmax - xmin 
+                        
+                elif particle_open == 1:                
+                    # Open: Deactivate particles that leave the simulation space
+                    n_deleted = 0
+                    for ii in nb.prange(pos.shape[0]):
+                        if (pos[ii] < xmin or pos[ii] > xmax):
+                            pos[ii]    *= 0.0
+                            vel[:, ii] *= 0.0
+                            idx[ii]     = -1
+                            n_deleted  += 1
+                        
+                elif particle_reinit == 1: 
+                    
+                    # Reinitialize vx based on flux distribution
+                    vel[0, ii]  = generate_vx(vth_par[idx[ii]])
+                    vel[0, ii] *= -np.sign(pos[ii])
+                    
+                    # Re-initialize v_perp and check pitch angle
+                    if temp_type[idx[ii]] == 0:
+                        vel[1, ii] = np.random.normal(0, vth_perp[idx[ii]])
+                        vel[2, ii] = np.random.normal(0, vth_perp[idx[ii]])
+                    else:
+                        particle_PA = 0.0
+                        while np.abs(particle_PA) < loss_cone_xmax:
+                            vel[1, ii]  = np.random.normal(0, vth_perp[idx[ii]])
+                            vel[2, ii]  = np.random.normal(0, vth_perp[idx[ii]])
+                            v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
+                            
+                            particle_PA = np.arctan(v_perp / vel[0, ii])
+                
+                    # Place back inside simulation domain
+                    if pos[ii] < xmin:
+                        pos[ii] = xmin + np.random.uniform(0, 1) * vel[0, ii] * DT
+                    elif pos[ii] > xmax:
+                        pos[ii] = xmax + np.random.uniform(0, 1) * vel[0, ii] * DT
+                       
+                else:
+                    # Reflect
+                    if pos[ii] > xmax:
+                        pos[ii] = 2*xmax - pos[ii]
+                    elif pos[ii] < xmin:
+                        pos[ii] = 2*xmin - pos[ii]
+                        
+                    vel[0, ii] *= -1.0
+    return
+
+
+@nb.njit(parallel=do_parallel)
+def inject_particles(pos, vel, idx, mp_flux, DT):        
+    acc = 0; n_created = 0
+    for ii in nb.prange(2):
+        for jj in nb.prange(Nj):
+            N_inject = int(mp_flux[ii, jj] // 2)
+            
+            for xx in nb.prange(N_inject):
+                
+                # Find two empty particles (Yes clumsy coding but it works)
+                for kk in nb.prange(acc, pos.shape[0]):
+                    if idx[kk] < 0:
+                        kk1 = kk
+                        acc = kk + 1
+                        break
+                for kk in nb.prange(acc, pos.shape[0]):
+                    if idx[kk] < 0:
+                        kk2 = kk
+                        acc = kk + 1
+                        break
+
+                # Reinitialize vx based on flux distribution
+                vel[0, kk1] = generate_vx(vth_par[jj])
+                idx[kk1]    = jj
+                
+                # Re-initialize v_perp and check pitch angle
+                if temp_type[jj] == 0 or homogenous == True:
+                    vel[1, kk1] = np.random.normal(0, vth_perp[jj])
+                    vel[2, kk1] = np.random.normal(0, vth_perp[jj])
+                else:
+                    particle_PA = 0.0
+                    while np.abs(particle_PA) <= loss_cone_xmax:
+                        vel[1, kk1] = np.random.normal(0, vth_perp[jj])
+                        vel[2, kk1] = np.random.normal(0, vth_perp[jj])
+                        v_perp      = np.sqrt(vel[1, kk1] ** 2 + vel[2, kk1] ** 2)
+                        particle_PA = np.arctan(v_perp / vel[0, kk1])
+                
+                # Amount travelled (vel always +ve at first)
+                dpos = np.random.uniform(0, 1) * vel[0, kk1] * DT
+                
+                # Left boundary injection
+                if ii == 0:
+                    pos[kk1]    = xmin + dpos
+                    vel[0, kk1] = np.abs(vel[0, kk1])
+                    
+                # Right boundary injection
+                else:
+                    pos[kk1]    = xmax - dpos
+                    vel[0, kk1] = -np.abs(vel[0, kk1])
+                
+                # Copy values to second particle (Same position, xvel. Opposite v_perp) 
+                idx[kk2]    = idx[kk1]
+                pos[kk2]    = pos[kk1]
+                vel[0, kk2] = vel[0, kk1]
+                vel[1, kk2] = vel[1, kk1] * -1.0
+                vel[2, kk2] = vel[2, kk1] * -1.0
+                
+                # Subtract new macroparticles from accrued flux
+                mp_flux[ii, jj] -= 2.0
+                n_created       += 2
     return
 
 
@@ -656,6 +669,13 @@ def vfx(vx, vth):
 
 @nb.njit()
 def generate_vx(vth):
+    '''
+    Maybe could try batch approach? If we need X number of solutions and we do
+    batches of 100 or something and just pick the first x number. Then again,
+    it depends on how long this has to loop until a valid value is found... if
+    it only takes a few iterations, it's not worth it. But if it takes a few
+    thousand to get sufficient numbers, then maybe it'll be worth it?
+    '''
     while True:
         y_uni = np.random.uniform(0, 4*vth)
         Py    = vfx(y_uni, vth)
@@ -666,7 +686,7 @@ def generate_vx(vth):
 ### ##
 ### SOURCES
 ### ##
-@nb.njit()
+@nb.njit(parallel=do_parallel)
 def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
     '''
     Collect number and velocity moments in each cell, weighted by their distance
@@ -685,6 +705,9 @@ def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
     NOTES: This needs manual work to better parallelize due to multiple threads
     wanting to access the same array. Probably need n_thread copies worth and 
     add them all at the end.
+    
+    Also, enabling parallel seems to introduce slight numerical noise in the last
+    few bits. Not sure why, but I'm sure its fine. Need macroscale testing.
     '''
     for ii in nb.prange(vel.shape[1]):
         if idx[ii] >= 0:
@@ -725,8 +748,8 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji):
     '''
     q_dens *= 0.
     Ji     *= 0.
-    ni      = np.zeros((NC, Nj),    dtype=nb.float64)
-    nu      = np.zeros((NC, Nj, 3), dtype=nb.float64)
+    ni      = np.zeros((NC, Nj),    dtype=np.float64)
+    nu      = np.zeros((NC, Nj, 3), dtype=np.float64)
     
     deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu)
 
@@ -1140,6 +1163,11 @@ def interpolate_centers_to_edge(E, interp, zero_boundaries=False):
     return
 
 
+@nb.njit(parallel=do_parallel)
+def get_max_vx(vel):
+    return np.abs(vel[0]).max()
+
+
 @nb.njit()
 def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center,\
                      qq, DT, max_inc, part_save_iter, field_save_iter, idx, damping_array):
@@ -1170,15 +1198,16 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center,\
                               B_center[ND:ND+NX+1, 2] ** 2)
     gyfreq          = qm_ratios.max() * B_magnitude.max()     
     ion_ts          = orbit_res / gyfreq
+    max_V           = get_max_vx(vel)
     
     if E[:, 0].max() != 0:
-        elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / np.abs(vel).max()).max())    # E-field acceleration "frequency"
+        elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / max_V).max())    # E-field acceleration "frequency"
         Eacc_ts         = freq_res / elecfreq                            
     else:
         Eacc_ts = ion_ts
-
-    vel_ts          = 0.60 * dx / np.abs(vel[0, :]).max()               # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
-    DT_part         = min(Eacc_ts, vel_ts, ion_ts)                      # Smallest of the allowable timesteps
+    
+    vel_ts          = 0.60 * dx / max_V                                      # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
+    DT_part         = min(Eacc_ts, vel_ts, ion_ts)                           # Smallest of the allowable timesteps
     
     if DT_part < 0.9*DT:
 
@@ -1284,7 +1313,8 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
                    ('disable_waves', disable_waves),
                    ('source_smoothing', source_smoothing),
                    ('E_damping', E_damping),
-                   ('quiet_start', quiet_start)
+                   ('quiet_start', quiet_start),
+                   ('num_threads', nb.get_num_threads())
                    ])
 
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:
@@ -1356,7 +1386,7 @@ def add_runtime_to_header(runtime):
     return
 
 
-def dump_to_file(pos, vel, E, Ve, Te, B, Ji, rho, qq, folder='standard', print_particles=False):
+def dump_to_file(pos, vel, E_int, Ve, Te, B, Ji, q_dens, qq, folder='parallel', print_particles=False):
     import os
     np.set_printoptions(threshold=sys.maxsize)
     
@@ -1371,7 +1401,7 @@ def dump_to_file(pos, vel, E, Ve, Te, B, Ji, rho, qq, folder='standard', print_p
         with open(dirpath + 'vel.txt', 'w') as f:
             print(vel, file=f)
     with open(dirpath + 'E.txt', 'w') as f:
-        print(E, file=f)
+        print(E_int, file=f)
     with open(dirpath + 'Ve.txt', 'w') as f:
         print(Ve, file=f)
     with open(dirpath + 'Te.txt', 'w') as f:
@@ -1381,7 +1411,7 @@ def dump_to_file(pos, vel, E, Ve, Te, B, Ji, rho, qq, folder='standard', print_p
     with open(dirpath + 'Ji.txt', 'w') as f:
         print(Ji, file=f)
     with open(dirpath + 'rho.txt', 'w') as f:
-        print(rho, file=f)
+        print(q_dens, file=f)
 
     np.set_printoptions(threshold=1000)
     return
@@ -1389,98 +1419,169 @@ def dump_to_file(pos, vel, E, Ve, Te, B, Ji, rho, qq, folder='standard', print_p
 ### ##
 ### MAIN LOOP
 ### ##
-#@nb.njit()
+@nb.njit(parallel=do_parallel)
+def store_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields): 
+    '''
+    Stores current values in arrays in old_arrays for P/C method
+    '''
+    for ii in nb.prange(pos.shape[0]):
+        old_particles[0   , ii] = pos[ii]
+    for ii in nb.prange(pos.shape[0]):    
+        old_particles[1   , ii] = vel[0, ii]
+    for ii in nb.prange(pos.shape[0]):
+        old_particles[2   , ii] = vel[1, ii]
+    for ii in nb.prange(pos.shape[0]):
+        old_particles[3   , ii] = vel[2, ii]
+    for ii in nb.prange(pos.shape[0]):
+        old_particles[4   , ii] = Ie[ii]
+    for ii in nb.prange(pos.shape[0]):
+        old_particles[5   , ii] = W_elec[0, ii]
+    for ii in nb.prange(pos.shape[0]):
+        old_particles[6   , ii] = W_elec[1, ii]
+    for ii in nb.prange(pos.shape[0]):
+        old_particles[7   , ii] = W_elec[2, ii]
+    for ii in nb.prange(pos.shape[0]):
+        old_particles[8   , ii] = Ib[ii]
+    for ii in nb.prange(pos.shape[0]):
+        old_particles[9   , ii] = W_mag[0, ii]
+    for ii in nb.prange(pos.shape[0]):
+        old_particles[10  , ii] = W_mag[1, ii]
+    for ii in nb.prange(pos.shape[0]):
+        old_particles[11  , ii] = W_mag[2, ii]
+    for ii in nb.prange(pos.shape[0]):
+        old_particles[12  , ii] = idx[ii]
+    
+    old_fields[:,   0:3]  = B
+    old_fields[:NC, 3:6]  = Ji
+    old_fields[:NC, 6:9]  = Ve
+    old_fields[:NC,   9]  = Te
+    return
+
+@nb.njit(parallel=do_parallel)
+def restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields):  
+    '''
+    Restores old values from old_arrays at conclusion of P/C method
+    '''
+    for ii in nb.prange(pos.shape[0]):
+        pos[ii]       = old_particles[0 , ii]
+    for ii in nb.prange(pos.shape[0]):
+        vel[0, ii]    = old_particles[1 , ii]
+    for ii in nb.prange(pos.shape[0]):
+        vel[1, ii]    = old_particles[2 , ii]
+    for ii in nb.prange(pos.shape[0]):
+        vel[2, ii]    = old_particles[3 , ii]
+    for ii in nb.prange(pos.shape[0]):
+        Ie[ii]        = old_particles[4 , ii]
+    for ii in nb.prange(pos.shape[0]):
+        W_elec[0, ii] = old_particles[5 , ii]
+    for ii in nb.prange(pos.shape[0]):
+        W_elec[1, ii] = old_particles[6 , ii]
+    for ii in nb.prange(pos.shape[0]):
+        W_elec[2, ii] = old_particles[7 , ii]
+    for ii in nb.prange(pos.shape[0]):
+        Ib[ii]        = old_particles[8 , ii]
+    for ii in nb.prange(pos.shape[0]):
+        W_mag[0, ii]  = old_particles[9 , ii]
+    for ii in nb.prange(pos.shape[0]):
+        W_mag[1, ii]  = old_particles[10, ii]
+    for ii in nb.prange(pos.shape[0]):
+        W_mag[2, ii]  = old_particles[11, ii]
+    for ii in nb.prange(pos.shape[0]):
+        idx[ii]       = old_particles[12, ii]
+    
+    B[:]  = old_fields[:,   0:3]
+    Ji[:] = old_fields[:NC, 3:6]
+    Ve[:] = old_fields[:NC, 6:9]
+    Te[:] = old_fields[:NC,   9]
+    return
+
+
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, mp_flux,               \
               Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields,\
               B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter, field_save_iter):
     '''
     Main loop separated from __main__ function, since this is the actual computation bit.
-    Could probably be optimized further, but I wanted to njit() it.
-    The only reason everything's not njit() is because of the output functions.
-    
-    Future: Come up with some way to loop until next save point
-    
-    Thoughts: declare a variable steps_to_go. Output all time variables at return
-    to resync everything, and calculate steps to next stop.
-    If no saves, steps_to_go = max_inc
     '''
-    # Check timestep
-    if adaptive_timestep == True:
+    # Check timestep (Maybe only check every few. Set in main body)
+    #check_start = timer()
+    if adaptive_timestep == True and qq%1 == 0:
         qq, DT, max_inc, part_save_iter, field_save_iter, damping_array \
         = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De,\
                          qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array)
-            
-    # Move particles, collect moments
+    #check_time = round(timer() - check_start, 2)
+    #print('CHECK {} time: {}s'.format(qq, check_time))
+      
+    # Move particles, collect moments, deal with particle boundaries
+    #part1_start = timer()
     advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                   B, E_int, DT, q_dens_adv, Ji, mp_flux, pc=0)
+    #part1_time = round(timer() - part1_start, 2)
+    #print('PART1 {} time: {}s'.format(qq, part1_time))
     
+    #field_start = timer()
     # Average N, N + 1 densities (q_dens at N + 1/2)
     q_dens *= 0.5
     q_dens += 0.5 * q_dens_adv
     
-    # Push B from N to N + 1/2
+    # Push B from N to N + 1/2 and calculate E(N + 1/2)
     push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
-    
-    # Calculate E at N + 1/2
     calculate_E(B, Ji, q_dens, E_half, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
+    #field_time = round(timer() - field_start, 2)
+    #print('FIELD {} time: {}s'.format(qq, field_time))
+
     
     ###################################
     ### PREDICTOR CORRECTOR SECTION ###
     ###################################
-
     # Store old values
+    #store_start = timer()
     mp_flux_old            = mp_flux.copy()
-    old_particles[0   , :] = pos
-    old_particles[1:4 , :] = vel
-    old_particles[4   , :] = Ie
-    old_particles[5:8 , :] = W_elec
-    old_particles[8   , :] = Ib
-    old_particles[9:12, :] = W_mag
-    old_particles[12  , :] = idx
-    
-    old_fields[:,   0:3]  = B
-    old_fields[:NC, 3:6]  = Ji
-    old_fields[:NC, 6:9]  = Ve
-    old_fields[:NC,   9]  = Te
-    
+    store_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)
+    #store_time = round(timer() - store_start, 2)
+    #print('STORE {} time: {}s'.format(qq, store_time))
+
     # Predict fields
+    #predict_start = timer()
     E_int *= -1.0
     E_int +=  2.0 * E_half
     
     push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
+    #predict_time = round(timer() - predict_start, 2)
+    #print('PRDCT {} time: {}s'.format(qq, predict_time))
 
     # Advance particles to obtain source terms at N + 3/2
+    #part2_start = timer()
     advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                   B, E_int, DT, q_dens, Ji, mp_flux, pc=1)
+    #part2_time = round(timer() - part2_start, 2)
+    #print('PART2 {} time: {}s'.format(qq, part2_time))
     
+    #correct_start = timer()
     q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
-    
+
     # Compute predicted fields at N + 3/2
     push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
     calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
     
     # Determine corrected fields at N + 1 
     E_int *= 0.5;    E_int += 0.5 * E_half
+    #correct_time = round(timer() - correct_start, 2)
+    #print('CRRCT {} time: {}s'.format(qq, correct_time))
 
-    # Restore old values: [:] allows reference to same memory (instead of creating new, local instance)
-    pos[:]    = old_particles[0   , :]
-    vel[:]    = old_particles[1:4 , :]
-    Ie[:]     = old_particles[4   , :]
-    W_elec[:] = old_particles[5:8 , :]
-    Ib[:]     = old_particles[8   , :]
-    W_mag[:]  = old_particles[9:12, :]
-    idx[:]    = old_particles[12  , :]
-    
-    B[:]      = old_fields[:,   0:3]
-    Ji[:]     = old_fields[:NC, 3:6]
-    Ve[:]     = old_fields[:NC, 6:9]
-    Te[:]     = old_fields[:NC,   9]
-    
+    # Restore old values and push B-field final time
+    #restore_start = timer()
+    restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)
+    #restore_time = round(timer() - restore_start, 2)
+    #print('RSTRE {} time: {}s'.format(qq, restore_time))
+
+    #final_start = timer()
     push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
 
     q_dens[:] = q_dens_adv
     mp_flux   = mp_flux_old.copy()
+    #final_time = round(timer() - final_start, 2)
+    #print('FINAL {} time: {}s'.format(qq, final_time))
     
     # Check number of spare particles every 25 steps
     if qq%25 == 0 and particle_open == 1:
@@ -1491,7 +1592,6 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
                 # Change this to dynamically expand particle arrays later on (adding more particles)
                 # Can do it by cell lots (i.e. add a cell's worth each time)
                 raise Exception('WARNING :: No spare particles remaining. Exiting simulation.')
-                
     
     return qq, DT, max_inc, part_save_iter, field_save_iter
 
@@ -1500,10 +1600,6 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
 ### ##
 ### MAIN GLOBAL CONTROL
 ### ##
-
-# A few internal flags
-event_inputs      = False      # Can be set for lists of input files for easy batch-runs
-adaptive_timestep = True       # Disable adaptive timestep if you hate when it doubles
 
 #################################
 ### FILENAMES AND DIRECTORIES ###
@@ -1850,16 +1946,17 @@ if __name__ == '__main__':
     print('Retarding velocity...')
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT, vel_only=True)
 
-    qq       = 1;    sim_time = DT; max_inc = 1000
+    qq       = 1;    sim_time = DT; max_inc = 200#; loop_times = np.zeros(max_inc-1, dtype=float)
     print('Starting main loop...')
     while qq < max_inc:
         
+        #loop_start = timer()
         qq, DT, max_inc, part_save_iter, field_save_iter =                                \
         main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                                   \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, mp_flux,                          \
               Ve, Te, Te0, temp3De, temp3Db, temp1D, old_particles, old_fields,           \
               B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter, field_save_iter)
-
+            
         if qq%part_save_iter == 0 and save_particles == 1:
             save_particle_data(sim_time, DT, part_save_iter, qq, pos,
                                     vel, idx)
@@ -1868,7 +1965,7 @@ if __name__ == '__main__':
             save_field_data(sim_time, DT, field_save_iter, qq, Ji, E_int,
                                  B, Ve, Te, q_dens, B_damping_array, E_damping_array)
         
-        if qq%1 == 0:            
+        if qq%100 == 0:            
             running_time = int(timer() - start_time)
             hrs          = running_time // 3600
             rem          = running_time %  3600
@@ -1878,11 +1975,15 @@ if __name__ == '__main__':
             
             print('Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(qq, max_inc, hrs, mins, sec))
         
+        if qq == 1:
+            print('First loop complete.')
+            
+        #loop_time = round(timer() - loop_start, 2)
+        #print('Loop {}  time: {}s\n'.format(qq, loop_time))
+        #loop_times[qq-1] = loop_time
+        
         qq       += 1
         sim_time += DT
-        
-        if qq == 2:
-            print('First loop complete.')
             
     runtime = round(timer() - start_time,2)
     
@@ -1892,3 +1993,4 @@ if __name__ == '__main__':
         with open(fin_path, 'w') as open_file:
             pass
     print("Time to execute program: {0:.2f} seconds".format(runtime))
+    #print('Average loop time: {0:.2f} seconds'.format(loop_times[1:].mean()))

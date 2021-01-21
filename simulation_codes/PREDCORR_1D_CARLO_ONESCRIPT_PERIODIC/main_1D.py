@@ -363,7 +363,7 @@ def set_timestep(vel, Te0):
 ### ##
 ### PARTICLES
 ### ##
-@nb.njit()
+#@nb.njit()
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, v_prime, S, T, temp_N,\
                                   B, E, DT, q_dens_adv, Ji, ni, nu, mp_flux, pc=0):
     '''
@@ -730,8 +730,8 @@ def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
             ni[I + 2, sp] += W_elec[2, ii]
     return
 
-
-@nb.njit()
+import pdb
+#@nb.njit()
 def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
     '''
     Moment (charge/current) collection function.
@@ -761,7 +761,7 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu):
     nu     *= 0.
     
     deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu)
-
+    pdb.set_trace()
     # Sum contributions across species
     for jj in range(Nj):
         q_dens  += ni[:, jj] * n_contr[jj] * charge[jj]
@@ -1388,7 +1388,7 @@ def add_runtime_to_header(runtime):
     return
 
 
-def dump_to_file(pos, vel, E, Ve, Te, B, Ji, rho, qq, folder='standard', print_particles=False):
+def dump_to_file(pos, vel, E_int, Ve, Te, B, Ji, q_dens, qq, folder='standard', print_particles=False):
     import os
     np.set_printoptions(threshold=sys.maxsize)
     
@@ -1403,7 +1403,7 @@ def dump_to_file(pos, vel, E, Ve, Te, B, Ji, rho, qq, folder='standard', print_p
         with open(dirpath + 'vel.txt', 'w') as f:
             print(vel, file=f)
     with open(dirpath + 'E.txt', 'w') as f:
-        print(E, file=f)
+        print(E_int, file=f)
     with open(dirpath + 'Ve.txt', 'w') as f:
         print(Ve, file=f)
     with open(dirpath + 'Te.txt', 'w') as f:
@@ -1413,7 +1413,7 @@ def dump_to_file(pos, vel, E, Ve, Te, B, Ji, rho, qq, folder='standard', print_p
     with open(dirpath + 'Ji.txt', 'w') as f:
         print(Ji, file=f)
     with open(dirpath + 'rho.txt', 'w') as f:
-        print(rho, file=f)
+        print(q_dens, file=f)
 
     np.set_printoptions(threshold=1000)
     return
@@ -1861,7 +1861,7 @@ if __name__ == '__main__':
     
     # Collect initial moments and save initial state
     collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, ni, nu) 
-
+    sys.exit()
     DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array\
         = set_timestep(vel, Te0)
         
@@ -1878,7 +1878,7 @@ if __name__ == '__main__':
     print('Retarding velocity...')
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E_int, v_prime, S, T, temp_N, -0.5*DT)
 
-    qq       = 1;    sim_time = DT; max_inc = 1000
+    qq       = 1;    sim_time = DT
     print('Starting main loop...')
     while qq < max_inc:
         
