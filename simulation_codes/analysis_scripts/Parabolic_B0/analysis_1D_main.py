@@ -3741,6 +3741,35 @@ def field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None):
     return t, mag_energy
 
 
+def plot_max_velocity():
+    
+    num_particle_steps = len(os.listdir(cf.particle_dir))
+    
+    # Load up species index and particle position, velocity for samples
+    ptime  = np.zeros(num_particle_steps)
+    max_vx = np.zeros(num_particle_steps)
+    max_vy = np.zeros(num_particle_steps)
+    max_vz = np.zeros(num_particle_steps)
+    for ii in range(num_particle_steps):
+        print('Loading sample particle data for particle file {}'.format(ii))
+        pos, vel, idx, ptime[ii], id1, id2 = cf.load_particles(ii)
+        
+        max_vx[ii] = np.abs(vel[0]).max()
+        max_vy[ii] = np.abs(vel[1]).max()
+        max_vz[ii] = np.abs(vel[2]).max()
+        
+    plt.ioff()
+    fig, ax = plt.subplots()
+    ax.set_title('Maximum particle velocity in simulation')
+    ax.plot(ptime, max_vx, label='$v_x$', c='k')
+    ax.plot(ptime, max_vy, label='$v_y$', c='r', alpha=0.5, lw=0.5)
+    ax.plot(ptime, max_vz, label='$v_z$', c='b', alpha=0.5, lw=0.5)
+    ax.axhline(max_vx[0], color='k', ls='--', alpha=0.5)
+    ax.legend()
+    plt.show()
+    return
+
+
 def plot_abs_with_boundary_parameters(tmax=None, saveas='tx_boundaries_plot', save=True, B0_lim=None):
     '''
     B0_lim is in multiples of B0
@@ -3922,16 +3951,60 @@ def multiplot_mag_energy(save=False):
     return
 
 
+def multiplot_parallel_scaling():
+    # Only specific for this run, because nb.get_num_threads() didn't work
+    
+    series  = 'parallel_time_test'
+    series_dir  = '{}/runs//{}//'.format(drive, series)
+    num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+    print('{} runs in series {}'.format(num_runs, series))
+    
+    n_threads   = np.zeros(num_runs)
+    loop_times  = np.zeros(num_runs)
+    total_times = np.zeros(num_runs)
+    
+    runs_to_do = range(num_runs)                
+    for ii in runs_to_do:
+        print('\nRun {}'.format(ii))
+        cf.load_run(drive, series, ii, extract_arrays=True)
+        n_particles = cf.N / 1e6
+        num_inc     = int(round(cf.max_rev * cf.gyperiod / cf.dt_sim))               # Total runtime in seconds
+        
+        n_threads[ii]   = 2 ** ii         
+        loop_times[ii]  = cf.loop_time
+        total_times[ii] = cf.run_time
+        
+    plt.ioff()
+    # Plot 1: threads vs. total time
+    plt.figure()
+    plt.plot(n_threads, total_times, c='k')
+    plt.xlabel('Threads')
+    plt.ylabel('Total Runtime (s)')
+    plt.title('Parallel Scaling Test :: {} mil. particles :: {} iterations'.format(n_particles, num_inc))
+    
+        
+    # Plot 2: threads vs. loop time
+    plt.figure()
+    plt.plot(n_threads, loop_times, c='k')
+    plt.xlabel('Threads')
+    plt.ylabel('Average Loop Time (s)')
+    plt.title('Parallel Scaling Test :: {} mil. particles :: {} iterations'.format(n_particles, num_inc))
+    plt.show()
+    return
+
+
+
 
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'G:'
+    drive       = 'F:'
     
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
+    multiplot_parallel_scaling()
     
-    for series in ['Shoji and Winske Test Runs//shoji_2013_reinit//']:
+    for series in ['//parallel_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -3940,18 +4013,18 @@ if __name__ == '__main__':
         clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
                 'darkorange', 'peru', 'yellow']
         
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
             runs_to_do = [5, 6, 7]
         
         # Extract all summary files and plot field stuff (quick)
-        if True:
+        if False:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
-
+                plot_max_velocity()
                 #check_fields(save=True)
 
                 #winske_summary_plots(save=True)
@@ -3965,14 +4038,14 @@ if __name__ == '__main__':
 
                 #plot_abs_with_boundary_parameters()
     
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=0.15, remove_ND=False)
-                for comp in ['By', 'Bz']:        
-                    plot_tx(component=comp, saveas='tx_plot', save=True, tmax=None, remove_ND=True, normalize=True)
+                #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
+                #for comp in ['By', 'Bz']:        
+                #    plot_tx(component=comp, saveas='tx_plot', save=True, tmax=None, remove_ND=True, normalize=True)
                 
-                try:
-                    standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False, remove_ND=False)
-                except:
-                    pass
+                #try:
+                #    standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False, remove_ND=False)
+                #except:
+                #    pass
                 
                 #get_reflection_coefficient()
             

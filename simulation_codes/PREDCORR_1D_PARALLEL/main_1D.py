@@ -20,7 +20,7 @@ B_surf = 3.12e-5                            # Magnetic field strength at Earth s
 # A few internal flags
 event_inputs      = False      # Can be set for lists of input files for easy batch-runs
 adaptive_timestep = True       # Disable adaptive timestep if you hate when it doubles
-print_runtime     = False      # Whether or not to output runtime every 50 iterations 
+print_runtime     = True       # Whether or not to output runtime every 50 iterations 
 do_parallel       = True       # Whether or not to use available threads to parallelize specified functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
 #nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
@@ -351,8 +351,8 @@ def set_timestep(vel, Te0):
         field_save_iter = int(field_res*gyperiod_eq / DT)
 
     if save_fields == 1 or save_particles == 1:
-        store_run_parameters(DT, part_save_iter, field_save_iter, Te0)
-
+        store_run_parameters(DT, part_save_iter, field_save_iter, Te0, max_inc, max_time)
+    
     B_damping_array = np.ones(NC + 1, dtype=float)
     E_damping_array = np.ones(NC    , dtype=float)
     set_damping_array(B_damping_array, E_damping_array, DT)
@@ -1260,7 +1260,7 @@ def manage_directories():
     return
 
 
-def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
+def store_run_parameters(dt, part_save_iter, field_save_iter, Te0, max_inc, max_time):
     d_path = ('%s/%s/run_%d/data/' % (drive, save_path, run))    # Set path for data
     f_path = d_path + '/fields/'
     p_path = d_path + '/particles/'
@@ -1278,6 +1278,8 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
     params = dict([('seed', seed),
                    ('Nj', Nj),
                    ('dt', dt),
+                   ('max_inc', max_inc),
+                   ('max_time', max_time),
                    ('NX', NX),
                    ('ND', ND),
                    ('NC', NC),
@@ -1992,11 +1994,17 @@ if __name__ == '__main__':
         if qq == 1:
             print('First loop complete.')
             
-        loop_time = round(timer() - loop_start, 2)
-        loop_times[qq-1] = loop_time
-        
-        if print_timings == True:
-            print('Loop {}  time: {}s\n'.format(qq, loop_time))
+# =============================================================================
+#         # Fix by introducing a 'loop_save_iter' variable to account for timestep changes
+#         loop_time = round(timer() - loop_start, 2)
+#         try:
+#             loop_times[qq-1] = loop_time
+#         except:
+#             pass
+#         
+#         if print_timings == True:
+#             print('Loop {}  time: {}s\n'.format(qq, loop_time))
+# =============================================================================
         
         qq       += 1
         sim_time += DT

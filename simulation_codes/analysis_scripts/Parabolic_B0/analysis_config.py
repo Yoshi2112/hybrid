@@ -116,7 +116,7 @@ def load_simulation_params():
            particle_reinit, particle_open, disable_waves, source_smoothing, \
            E_damping, quiet_start, homogenous, field_periodic, damping_multiplier, \
            driven_freq, driven_ampl, pulse_offset, pulse_offset, pulse_width, driven_k,\
-           driver_status
+           driver_status, num_threads, loop_time
 
     h_name = os.path.join(data_dir, 'simulation_parameters.pckl')       # Load header file
     f      = open(h_name, 'rb')                                         # Open header file
@@ -237,6 +237,13 @@ def load_simulation_params():
         pulse_width   = None
         driven_k      = None
         driver_status = None
+        
+    try:
+        num_threads = obj['num_threads']
+        loop_time   = obj['loop_time']
+    except:
+        num_threads = None
+        loop_time   = None
     
     return 
 
