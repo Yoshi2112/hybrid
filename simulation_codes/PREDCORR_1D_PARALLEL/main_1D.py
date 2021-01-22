@@ -20,8 +20,9 @@ B_surf = 3.12e-5                            # Magnetic field strength at Earth s
 # A few internal flags
 event_inputs      = False      # Can be set for lists of input files for easy batch-runs
 adaptive_timestep = True       # Disable adaptive timestep if you hate when it doubles
-print_runtime     = True       # Whether or not to output runtime every 50 iterations 
+print_runtime     = False      # Whether or not to output runtime every 50 iterations 
 do_parallel       = True       # Whether or not to use available threads to parallelize specified functions
+print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
 #nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
 
 
@@ -362,34 +363,38 @@ def set_timestep(vel, Te0):
 ### ##
 ### PARTICLES
 ### ##
-#@nb.njit()
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                   B, E, DT, q_dens_adv, Ji, mp_flux, pc=0):
     '''
     Helper function to group the particle advance and moment collection functions
     '''
-    parmov_start = timer()
+    #parmov_start = timer()
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False)
-    parmov_time = round(timer() - parmov_start, 2)
-    print('PMOVE {} time: {}s'.format(qq, parmov_time))
-
+    #parmov_time = round(timer() - parmov_start, 2)
+    
     # Particle injector goes here
     if particle_open == 1:
-        inject_start = timer()
+        #inject_start = timer()
         inject_particles(pos, vel, idx, mp_flux, DT)
-        inject_time = round(timer() - inject_start, 2)
-        print('INJCT {} time: {}s'.format(qq, inject_time))
+        #inject_time = round(timer() - inject_start, 2)
+        #if print_timings == True:
+        #    print('INJCT {} time: {}s'.format(qq, inject_time))
     
-    weight_start = timer()
+    #weight_start = timer()
     assign_weighting_TSC(pos, Ie, W_elec)
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
-    weight_time = round(timer() - weight_start, 2)
-    print('WEGHT {} time: {}s'.format(qq, weight_time))
+    #weight_time = round(timer() - weight_start, 2)
     
-    moment_start = timer()
+    #moment_start = timer()
     collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji)
-    moment_time = round(timer() - moment_start, 2)
-    print('MOMNT {} time: {}s'.format(qq, moment_time))
+    #moment_time = round(timer() - moment_start, 2)
+    
+# =============================================================================
+#     if print_timings == True:
+#         print('PMOVE {} time: {}s'.format(qq, parmov_time))
+#         print('WEGHT {} time: {}s'.format(qq, weight_time))
+#         print('MOMNT {} time: {}s'.format(qq, moment_time))
+# =============================================================================
     return
 
 
@@ -1306,6 +1311,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0):
                    ('particle_shape', 'TSC'),
                    ('field_periodic', field_periodic),
                    ('run_time', None),
+                   ('loop_time', None),
                    ('homogeneous', homogenous),
                    ('particle_periodic', particle_periodic),
                    ('particle_reflect', particle_reflect),
@@ -1368,7 +1374,7 @@ def save_particle_data(sim_time, dt, part_save_iter, qq, pos, vel, idx):
     print('Particle data saved')
     
     
-def add_runtime_to_header(runtime):
+def add_runtime_to_header(runtime, loop_time):
     d_path = ('%s/%s/run_%d/data/' % (drive, save_path, run))     # Data path
     
     h_name = os.path.join(d_path, 'simulation_parameters.pckl')         # Header file path
@@ -1377,6 +1383,7 @@ def add_runtime_to_header(runtime):
     f.close()  
     
     params['run_time'] = runtime
+    params['loop_time'] = loop_time
     
     # Re-save
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:
@@ -1510,17 +1517,16 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
         = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De,\
                          qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array)
     #check_time = round(timer() - check_start, 2)
-    #print('CHECK {} time: {}s'.format(qq, check_time))
+    
       
     # Move particles, collect moments, deal with particle boundaries
     #part1_start = timer()
     advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                   B, E_int, DT, q_dens_adv, Ji, mp_flux, pc=0)
     #part1_time = round(timer() - part1_start, 2)
-    #print('PART1 {} time: {}s'.format(qq, part1_time))
     
-    #field_start = timer()
     # Average N, N + 1 densities (q_dens at N + 1/2)
+    #field_start = timer()
     q_dens *= 0.5
     q_dens += 0.5 * q_dens_adv
     
@@ -1528,8 +1534,6 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
     push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
     calculate_E(B, Ji, q_dens, E_half, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
     #field_time = round(timer() - field_start, 2)
-    #print('FIELD {} time: {}s'.format(qq, field_time))
-
     
     ###################################
     ### PREDICTOR CORRECTOR SECTION ###
@@ -1539,8 +1543,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
     mp_flux_old            = mp_flux.copy()
     store_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)
     #store_time = round(timer() - store_start, 2)
-    #print('STORE {} time: {}s'.format(qq, store_time))
-
+    
     # Predict fields
     #predict_start = timer()
     E_int *= -1.0
@@ -1548,14 +1551,12 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
     
     push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
     #predict_time = round(timer() - predict_start, 2)
-    #print('PRDCT {} time: {}s'.format(qq, predict_time))
 
     # Advance particles to obtain source terms at N + 3/2
     #part2_start = timer()
     advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                   B, E_int, DT, q_dens, Ji, mp_flux, pc=1)
     #part2_time = round(timer() - part2_start, 2)
-    #print('PART2 {} time: {}s'.format(qq, part2_time))
     
     #correct_start = timer()
     q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
@@ -1567,13 +1568,13 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
     # Determine corrected fields at N + 1 
     E_int *= 0.5;    E_int += 0.5 * E_half
     #correct_time = round(timer() - correct_start, 2)
-    #print('CRRCT {} time: {}s'.format(qq, correct_time))
+    
 
     # Restore old values and push B-field final time
     #restore_start = timer()
     restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)
     #restore_time = round(timer() - restore_start, 2)
-    #print('RSTRE {} time: {}s'.format(qq, restore_time))
+    
 
     #final_start = timer()
     push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
@@ -1581,7 +1582,6 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
     q_dens[:] = q_dens_adv
     mp_flux   = mp_flux_old.copy()
     #final_time = round(timer() - final_start, 2)
-    #print('FINAL {} time: {}s'.format(qq, final_time))
     
     # Check number of spare particles every 25 steps
     if qq%25 == 0 and particle_open == 1:
@@ -1593,6 +1593,20 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
                 # Can do it by cell lots (i.e. add a cell's worth each time)
                 raise Exception('WARNING :: No spare particles remaining. Exiting simulation.')
     
+# =============================================================================
+#     # Diagnostic output to time each segment
+#     if print_timings == True:
+#         print('CHECK {} time: {}s'.format(qq, check_time))
+#         print('PART1 {} time: {}s'.format(qq, part1_time))
+#         print('FIELD {} time: {}s'.format(qq, field_time))
+#         print('STORE {} time: {}s'.format(qq, store_time))
+#         print('PRDCT {} time: {}s'.format(qq, predict_time))
+#         print('PART2 {} time: {}s'.format(qq, part2_time))
+#         print('CRRCT {} time: {}s'.format(qq, correct_time))
+#         print('RSTRE {} time: {}s'.format(qq, restore_time))
+#         print('FINAL {} time: {}s'.format(qq, final_time))
+# =============================================================================
+        
     return qq, DT, max_inc, part_save_iter, field_save_iter
 
 
@@ -1946,11 +1960,11 @@ if __name__ == '__main__':
     print('Retarding velocity...')
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT, vel_only=True)
 
-    qq       = 1;    sim_time = DT; max_inc = 200#; loop_times = np.zeros(max_inc-1, dtype=float)
+    qq       = 1;    sim_time = DT; loop_times = np.zeros(max_inc-1, dtype=float)
     print('Starting main loop...')
     while qq < max_inc:
         
-        #loop_start = timer()
+        loop_start = timer()
         qq, DT, max_inc, part_save_iter, field_save_iter =                                \
         main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                                   \
               B, E_int, E_half, q_dens, q_dens_adv, Ji, mp_flux,                          \
@@ -1965,7 +1979,7 @@ if __name__ == '__main__':
             save_field_data(sim_time, DT, field_save_iter, qq, Ji, E_int,
                                  B, Ve, Te, q_dens, B_damping_array, E_damping_array)
         
-        if qq%100 == 0:            
+        if qq%50 == 0 and print_runtime == True:            
             running_time = int(timer() - start_time)
             hrs          = running_time // 3600
             rem          = running_time %  3600
@@ -1978,9 +1992,11 @@ if __name__ == '__main__':
         if qq == 1:
             print('First loop complete.')
             
-        #loop_time = round(timer() - loop_start, 2)
-        #print('Loop {}  time: {}s\n'.format(qq, loop_time))
-        #loop_times[qq-1] = loop_time
+        loop_time = round(timer() - loop_start, 2)
+        loop_times[qq-1] = loop_time
+        
+        if print_timings == True:
+            print('Loop {}  time: {}s\n'.format(qq, loop_time))
         
         qq       += 1
         sim_time += DT
@@ -1988,9 +2004,9 @@ if __name__ == '__main__':
     runtime = round(timer() - start_time,2)
     
     if save_fields == 1 or save_particles == 1:
-        add_runtime_to_header(runtime)
+        add_runtime_to_header(runtime, loop_times[1:].mean())
         fin_path = '%s/%s/run_%d/run_finished.txt' % (drive, save_path, run)
         with open(fin_path, 'w') as open_file:
             pass
     print("Time to execute program: {0:.2f} seconds".format(runtime))
-    #print('Average loop time: {0:.2f} seconds'.format(loop_times[1:].mean()))
+    print('Average loop time: {0:.2f} seconds'.format(loop_times[1:].mean()))

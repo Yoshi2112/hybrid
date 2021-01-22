@@ -3931,7 +3931,7 @@ if __name__ == '__main__':
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     
-    for series in ['event_25Jul_quiet']:
+    for series in ['Shoji and Winske Test Runs//shoji_2013_reinit//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -3940,10 +3940,10 @@ if __name__ == '__main__':
         clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
                 'darkorange', 'peru', 'yellow']
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [2, 3]
+            runs_to_do = [5, 6, 7]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -3965,11 +3965,14 @@ if __name__ == '__main__':
 
                 #plot_abs_with_boundary_parameters()
     
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=0.15, remove_ND=False)
                 for comp in ['By', 'Bz']:        
                     plot_tx(component=comp, saveas='tx_plot', save=True, tmax=None, remove_ND=True, normalize=True)
                 
-                #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False, remove_ND=True)
+                try:
+                    standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False, remove_ND=False)
+                except:
+                    pass
                 
                 #get_reflection_coefficient()
             
