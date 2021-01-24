@@ -547,6 +547,7 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False):
             pos[ii] += vel[0, ii] * DT
         
             # Check if particle has left simulation and apply boundary conditions
+            n_deleted = 0
             if (pos[ii] < xmin or pos[ii] > xmax):
                 
                 if particle_periodic == 1:  
@@ -558,13 +559,10 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False):
                         
                 elif particle_open == 1:                
                     # Open: Deactivate particles that leave the simulation space
-                    n_deleted = 0
-                    for ii in nb.prange(pos.shape[0]):
-                        if (pos[ii] < xmin or pos[ii] > xmax):
-                            pos[ii]    *= 0.0
-                            vel[:, ii] *= 0.0
-                            idx[ii]     = -1
-                            n_deleted  += 1
+                    pos[ii]    *= 0.0
+                    vel[:, ii] *= 0.0
+                    idx[ii]     = -1
+                    n_deleted  += 1
                         
                 elif particle_reinit == 1: 
                     
