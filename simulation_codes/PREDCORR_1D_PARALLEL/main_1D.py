@@ -375,6 +375,7 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     # Particle injector goes here
     if particle_open == 1:
         #inject_start = timer()
+        
         inject_particles(pos, vel, idx, mp_flux, DT)
         #inject_time = round(timer() - inject_start, 2)
         #if print_timings == True:
@@ -600,8 +601,13 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False):
     return
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit()
 def inject_particles(pos, vel, idx, mp_flux, DT):        
+    '''
+    How to create new particles in parallel? Just test serial for now, but this
+    might become my most expensive function for large N.
+    '''
+    # acc used only as placeholder to mark place in array. How to do efficiently? 
     acc = 0; n_created = 0
     for ii in nb.prange(2):
         for jj in nb.prange(Nj):
