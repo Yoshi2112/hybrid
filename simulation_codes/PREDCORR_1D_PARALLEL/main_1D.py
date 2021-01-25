@@ -606,7 +606,14 @@ def inject_particles(pos, vel, idx, mp_flux, DT):
     '''
     How to create new particles in parallel? Just test serial for now, but this
     might become my most expensive function for large N.
+    
+    Also need to work out how to add flux in serial (might just have to put it
+    in calling function: advance_particles_and_moments())
     '''
+    # Add flux at each boundary 
+    for kk in range(2):
+        mp_flux[kk, :] += inject_rate*DT
+        
     # acc used only as placeholder to mark place in array. How to do efficiently? 
     acc = 0; n_created = 0
     for ii in nb.prange(2):
@@ -1966,7 +1973,7 @@ if __name__ == '__main__':
     # Retard velocity
     print('Retarding velocity...')
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT, vel_only=True)
-
+    exit()
     qq       = 1;    sim_time = DT; loop_times = np.zeros(max_inc-1, dtype=float)
     print('Starting main loop...')
     while qq < max_inc:
@@ -1986,7 +1993,7 @@ if __name__ == '__main__':
             save_field_data(sim_time, DT, field_save_iter, qq, Ji, E_int,
                                  B, Ve, Te, q_dens, B_damping_array, E_damping_array)
         
-        if qq%50 == 0 and print_runtime == True:            
+        if qq%100 == 0 and print_runtime == True:            
             running_time = int(timer() - start_time)
             hrs          = running_time // 3600
             rem          = running_time %  3600
