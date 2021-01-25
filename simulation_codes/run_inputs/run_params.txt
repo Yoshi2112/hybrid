@@ -1,11 +1,11 @@
-DRIVE					D:/
+DRIVE					E:/
 SAVE_PATH			    /runs/winske_anisotropy_particles_only/
-RUN						-
+RUN						1
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
 SEED					98327
 CPU_AFFINITY			-
-HOMOGENOUS_B0_FLAG		1
+HOMOGENOUS_B0_FLAG		0
 PERIODIC_FLAG			0
 REFLECT_FLAG			0
 REINIT_FLAG				0

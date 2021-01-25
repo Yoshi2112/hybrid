@@ -3293,8 +3293,11 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False):
     print('Calculating distribution f(v) vs. x for species {},...'.format(jj))
     if it_max is None:
         it_max = len(os.listdir(cf.particle_dir))
-              
-    vth = np.sqrt(kB * cf.Tperp[jj] / cf.mass[jj]) / cf.va
+    
+    if cf.Tperp.max() is not None:
+        vth = np.sqrt(kB * cf.Tperp[jj] / cf.mass[jj]) / cf.va
+    else:
+        vth = cf.vth_perp[jj] / cf.va
         
     cfac = 10    if cf.temp_type[jj] == 1 else 5
     vlim = 5*vth
@@ -3328,7 +3331,7 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False):
         
         st = idx_start[jj]
         en = idx_end[jj]
-        
+
         for kk in range(3):
             counts, xedges, yedges, im1 = axes[kk].hist2d(pos[st:en]/cf.dx, vel[kk, st:en]/cf.va, 
                                                     bins=[xbins, vbins],
@@ -3998,13 +4001,13 @@ def multiplot_parallel_scaling():
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'F:'
+    drive       = 'E:'
     
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
-    multiplot_parallel_scaling()
+    #multiplot_parallel_scaling()
     
-    for series in ['//parallel_test//']:
+    for series in ['//winske_anisotropy_particles_only//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4013,10 +4016,10 @@ if __name__ == '__main__':
         clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
                 'darkorange', 'peru', 'yellow']
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [5, 6, 7]
+            runs_to_do = [1]
         
         # Extract all summary files and plot field stuff (quick)
         if False:
@@ -4024,7 +4027,7 @@ if __name__ == '__main__':
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
-                plot_max_velocity()
+                #plot_max_velocity()
                 #check_fields(save=True)
 
                 #winske_summary_plots(save=True)
@@ -4050,24 +4053,22 @@ if __name__ == '__main__':
                 #get_reflection_coefficient()
             
         
-        if False:
+        if True:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 cf.load_run(drive, series, run_num, extract_arrays=True)
                 
-                check_fields()
+                #check_fields()
                 #plot_E_components(save=True)
                 
                 #plot_spatial_poynting(save=True, log=True)
                 #plot_spatial_poynting_helical(save=True, log=True)
                 
                 #find_the_particles(it_max=None)
-# =============================================================================
-#                 summary_plots(save=True, histogram=True)
-#                 for sp in range(2):
-#                     plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
-# =============================================================================
+                #summary_plots(save=True, histogram=True)
+                for sp in range(cf.Nj):
+                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
                 #scatterplot_velocities()
             
         #plot_phase_space_with_time()
