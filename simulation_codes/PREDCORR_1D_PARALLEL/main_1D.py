@@ -1531,64 +1531,65 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
                                   B, E_int, DT, q_dens_adv, Ji, mp_flux, pc=0)
     #part1_time = round(timer() - part1_start, 2)
     
-    # Average N, N + 1 densities (q_dens at N + 1/2)
-    #field_start = timer()
-    q_dens *= 0.5
-    q_dens += 0.5 * q_dens_adv
+    if disable_waves == 0:    
+        # Average N, N + 1 densities (q_dens at N + 1/2)
+        #field_start = timer()
+        q_dens *= 0.5
+        q_dens += 0.5 * q_dens_adv
+        
+        # Push B from N to N + 1/2 and calculate E(N + 1/2)
+        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
+        calculate_E(B, Ji, q_dens, E_half, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
+        #field_time = round(timer() - field_start, 2)
+        
+        ###################################
+        ### PREDICTOR CORRECTOR SECTION ###
+        ###################################
+        # Store old values
+        #store_start = timer()
+        mp_flux_old            = mp_flux.copy()
+        store_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)
+        #store_time = round(timer() - store_start, 2)
+        
+        # Predict fields
+        #predict_start = timer()
+        E_int *= -1.0
+        E_int +=  2.0 * E_half
+        
+        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
+        #predict_time = round(timer() - predict_start, 2)
     
-    # Push B from N to N + 1/2 and calculate E(N + 1/2)
-    push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
-    calculate_E(B, Ji, q_dens, E_half, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
-    #field_time = round(timer() - field_start, 2)
+        # Advance particles to obtain source terms at N + 3/2
+        #part2_start = timer()
+        advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
+                                      B, E_int, DT, q_dens, Ji, mp_flux, pc=1)
+        #part2_time = round(timer() - part2_start, 2)
+        
+        #correct_start = timer()
+        q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
     
-    ###################################
-    ### PREDICTOR CORRECTOR SECTION ###
-    ###################################
-    # Store old values
-    #store_start = timer()
-    mp_flux_old            = mp_flux.copy()
-    store_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)
-    #store_time = round(timer() - store_start, 2)
+        # Compute predicted fields at N + 3/2
+        push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
+        calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
+        
+        # Determine corrected fields at N + 1 
+        E_int *= 0.5;    E_int += 0.5 * E_half
+        #correct_time = round(timer() - correct_start, 2)
+        
     
-    # Predict fields
-    #predict_start = timer()
-    E_int *= -1.0
-    E_int +=  2.0 * E_half
+        # Restore old values and push B-field final time
+        #restore_start = timer()
+        restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)
+        #restore_time = round(timer() - restore_start, 2)
+        
     
-    push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
-    #predict_time = round(timer() - predict_start, 2)
-
-    # Advance particles to obtain source terms at N + 3/2
-    #part2_start = timer()
-    advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
-                                  B, E_int, DT, q_dens, Ji, mp_flux, pc=1)
-    #part2_time = round(timer() - part2_start, 2)
+        #final_start = timer()
+        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
     
-    #correct_start = timer()
-    q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
-
-    # Compute predicted fields at N + 3/2
-    push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
-    calculate_E(B, Ji, q_dens, E_int, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
-    
-    # Determine corrected fields at N + 1 
-    E_int *= 0.5;    E_int += 0.5 * E_half
-    #correct_time = round(timer() - correct_start, 2)
-    
-
-    # Restore old values and push B-field final time
-    #restore_start = timer()
-    restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)
-    #restore_time = round(timer() - restore_start, 2)
-    
-
-    #final_start = timer()
-    push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
-
-    q_dens[:] = q_dens_adv
-    mp_flux   = mp_flux_old.copy()
-    #final_time = round(timer() - final_start, 2)
-    
+        q_dens[:] = q_dens_adv
+        mp_flux   = mp_flux_old.copy()
+        #final_time = round(timer() - final_start, 2)
+        
     # Check number of spare particles every 25 steps
     if qq%25 == 0 and particle_open == 1:
         num_spare = (idx < 0).sum()
@@ -1598,7 +1599,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
                 # Change this to dynamically expand particle arrays later on (adding more particles)
                 # Can do it by cell lots (i.e. add a cell's worth each time)
                 raise Exception('WARNING :: No spare particles remaining. Exiting simulation.')
-    
+        
 # =============================================================================
 #     # Diagnostic output to time each segment
 #     if print_timings == True:

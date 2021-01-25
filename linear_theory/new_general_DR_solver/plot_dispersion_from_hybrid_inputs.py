@@ -138,7 +138,8 @@ def plot_series(save=False):
     '''
     To do:
         Easy way to put legend/title in for each different series
-        Easy way to distinguish between solutions. Maybe just put the cyclotron frequencies in and use all black?
+        Easy way to distinguish between solutions. Maybe just put the cyclotron
+            frequencies in and use all black?
     '''
     gitdir    = 'C://Users//iarey//Documents//GitHub'
     folder    = '//hybrid//simulation_codes//run_inputs//from_data//event_25Jul_quiet//Changing_Cold_He//'

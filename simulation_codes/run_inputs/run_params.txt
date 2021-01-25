@@ -1,5 +1,5 @@
-DRIVE					F:/
-SAVE_PATH			    /runs/winske_anisotropy_parallel_open_test/
+DRIVE					D:/
+SAVE_PATH			    /runs/winske_anisotropy_particles_only/
 RUN						-
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
@@ -10,7 +10,7 @@ PERIODIC_FLAG			0
 REFLECT_FLAG			0
 REINIT_FLAG				0
 FIELD_PERIODIC			0
-NOWAVES_FLAG			0
+NOWAVES_FLAG			1
 TE0_EQUAL_FLAG			0
 SOURCE_SMOOTHING_FLAG	0
 E_DAMPING_FLAG			0
@@ -19,7 +19,7 @@ RADIX_LOADING			0
 DAMPING_MULTIPLIER_RD   0.05
 NX 						1024
 ND 						4
-MAX_REV					100
+MAX_REV					200
 DXM						1.0
 R_A						120e3
 IE						1
