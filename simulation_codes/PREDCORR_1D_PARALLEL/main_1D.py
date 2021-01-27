@@ -18,7 +18,6 @@ RE     = 6.371e6                            # Earth radius in metres
 B_surf = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
-event_inputs      = False      # Can be set for lists of input files for easy batch-runs
 adaptive_timestep = True       # Disable adaptive timestep if you hate when it doubles
 print_runtime     = True       # Whether or not to output runtime every 50 iterations 
 do_parallel       = True       # Whether or not to use available threads to parallelize specified functions
@@ -1633,24 +1632,18 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
 ### FILENAMES AND DIRECTORIES ###
 #################################
 
-# Event batch runfiles, used if event_inputs == True
-ext         = 'ALL_SPECIES'
-plasma_list = ['/run_inputs/from_data/{}/plasma_params_20130725_213004105000_{}.txt'.format(ext, ext),
-               '/run_inputs/from_data/{}/plasma_params_20130725_213050105000_{}.txt'.format(ext, ext),
-               '/run_inputs/from_data/{}/plasma_params_20130725_213221605000_{}.txt'.format(ext, ext),
-               '/run_inputs/from_data/{}/plasma_params_20130725_213248105000_{}.txt'.format(ext, ext),
-               '/run_inputs/from_data/{}/plasma_params_20130725_213307605000_{}.txt'.format(ext, ext),
-               '/run_inputs/from_data/{}/plasma_params_20130725_213406605000_{}.txt'.format(ext, ext),
-               '/run_inputs/from_data/{}/plasma_params_20130725_213703105000_{}.txt'.format(ext, ext),
-               '/run_inputs/from_data/{}/plasma_params_20130725_213907605000_{}.txt'.format(ext, ext),
-               '/run_inputs/from_data/{}/plasma_params_20130725_214026105000_{}.txt'.format(ext, ext),
-               '/run_inputs/from_data/{}/plasma_params_20130725_214105605000_{}.txt'.format(ext, ext)]
+#### Read in command-line arguments
+#import argparser
 
+# Set root direction (because I keep forgetting to change it on the grid)
 if os.name == 'posix':
     root_dir     = os.path.dirname(sys.path[0])
 else:
     root_dir     = '..'
-run_input = root_dir +  '/run_inputs/run_params.txt'
+    
+# Set input .run and .plasma files
+run_input    = root_dir +  '/run_inputs/run_params.run'
+plasma_input = root_dir +  '/run_inputs/plasma_params.plasma'
 
 ###########################
 ### LOAD RUN PARAMETERS ###
@@ -1714,16 +1707,11 @@ if seed == '-':
 else:
     seed = int(seed)
 
-# Set plasma parameter file
-if event_inputs == False:
-    plasma_input = root_dir +  '/run_inputs/plasma_params.txt'
-else:
-    plasma_input = root_dir +  plasma_list[run]
-print('LOADING PLASMA: {}'.format(plasma_input))
-    
+
 #######################################
 ### LOAD PARTICLE/PLASMA PARAMETERS ###
 #######################################
+print('LOADING PLASMA: {}'.format(plasma_input))
 with open(plasma_input, 'r') as f:
     species_lbl = np.array(f.readline().split()[1:])
     
