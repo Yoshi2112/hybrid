@@ -3850,6 +3850,56 @@ def plot_abs_with_boundary_parameters(tmax=None, saveas='tx_boundaries_plot', sa
     return
 
 
+def plot_total_density_with_time(save=True):
+    '''
+    Plot total number of particles per species (from particle files)
+    AND total charge density.
+    '''
+    # Count active particles
+    num_particle_steps = len(os.listdir(cf.particle_dir))
+    ptime              = np.zeros(num_particle_steps)
+    num_idx            = np.zeros((num_particle_steps, cf.Nj))
+    
+    for ii in range(num_particle_steps):
+        print('Loading sample particle data for particle file {}'.format(ii))
+        pos, vel, idx, ptime[ii], id1, id2 = cf.load_particles(ii)
+        
+        spidx, counts = np.unique(idx, return_counts=True)
+        
+        # +1 accounts for idx starting at -1 when sorted
+        for jj in range(cf.Nj):
+            num_idx[ii, jj] = counts[jj + 1]
+          
+    # Get max density (real)
+    ftime, qdens = cf.get_array('qdens')    
+    max_dens = np.zeros(ftime.shape[0])
+    for ii in range(ftime.shape[0]):
+        max_dens[ii] = qdens[ii].sum()
+        
+    # Plot
+    plt.ioff()
+    fig, axes = plt.subplots(2, sharex=True, figsize=(16, 10))
+    for jj in range(cf.Nj):
+        axes[0].plot(ptime, num_idx[:, jj]/num_idx[0, jj], label=cf.species_lbl[jj], c=cf.temp_color[jj])
+    axes[0].set_ylabel('Normalized Particle count')
+    axes[0].legend()
+    
+    axes[1].plot(ftime, max_dens, c='k')
+    axes[1].set_xlabel('Time (s)')
+    axes[1].set_ylabel('Total Density')
+    
+    axes[0].set_xlim(0, ptime[-1])
+    
+    if save == True:
+        fullpath = cf.anal_dir + 'Particle_Density_Count' + '.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+        print('t-x Plot saved')
+        plt.close('all')
+    else:
+        plt.show()
+    return
+
+
 def multiplot_fluxes(series, save=True):
     '''
     Load outside loop: Fluxes and charge density of all runs in a series
@@ -4019,14 +4069,15 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [0]
+            runs_to_do = [2]
         
         # Extract all summary files and plot field stuff (quick)
-        if False:
+        if True:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
+                plot_total_density_with_time()
                 #plot_max_velocity()
                 #check_fields(save=True)
 
@@ -4053,7 +4104,7 @@ if __name__ == '__main__':
                 #get_reflection_coefficient()
             
         
-        if True:
+        if False:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))

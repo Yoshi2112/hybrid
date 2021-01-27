@@ -334,7 +334,7 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
             if damping_multiplier is not None:
                 print('Damping Multipl.:: {:.2f}'.format(damping_multiplier), file=f)
             else:
-                print('Damping Multipl.::'.format(damping_multiplier), file=f)
+                print('Damping Multipl.::', file=f)
             print('', file=f)
             print('Equatorial B0       :: {:.2f} nT'.format(B_eq*1e9), file=f)
             print('Boundary   B0       :: {:.2f} nT'.format(B_xmax*1e9), file=f)
@@ -666,96 +666,3 @@ def interpolate_fields_to_particle_time(num_particle_steps, timebase=None):
         pqdens[:, ii] = np.interp(ptime_sec, ftime, qdens[:, ii])
 
     return ptime_sec, pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens
-
-
-@nb.njit()
-def create_idx():
-    idx    = np.zeros(N, dtype=nb.int32)
-    
-    for jj in range(Nj):
-        idx[idx_start[jj]: idx_end[jj]] = jj
-    return idx
-
-
-@nb.njit()
-def manage_ghost_cells(arr):
-    '''Deals with ghost cells: Moves their contributions and mirrors their counterparts.
-       Works like a charm if spatial dimensions always come first in an array.'''
-
-    arr[NX]     += arr[0]                 # Move contribution: Start to end
-    arr[1]      += arr[NX + 1]            # Move contribution: End to start
-
-    arr[NX + 1]  = arr[1]                 # Fill ghost cell: End
-    arr[0]       = arr[NX]                # Fill ghost cell: Start
-    
-    arr[NX + 2]  = arr[2]                 # This one doesn't get used, but prevents nasty nan's from being in array.
-    return arr
-
-
-@nb.njit()
-def assign_weighting_TSC(pos, E_nodes=True):
-    '''Triangular-Shaped Cloud (TSC) weighting scheme used to distribute particle densities to
-    nodes and interpolate field values to particle positions.
-
-    INPUT:
-        pos  -- particle positions (x)
-        BE   -- Flag: Weighting factor for Magnetic (0) or Electric (1) field node
-        
-    OUTPUT:
-        weights -- 3xN array consisting of leftmost (to the nearest) node, and weights for -1, 0 TSC nodes
-    '''
-    Np         = pos.shape[0]
-    
-    left_node  = np.zeros(Np,      dtype=np.uint16)
-    weights    = np.zeros((3, Np), dtype=np.float64)
-    
-    if E_nodes == True:
-        grid_offset   = 0.5
-    else:
-        grid_offset   = 1.0
-    
-    for ii in nb.prange(Np):
-        left_node[ii]  = int(round(pos[ii] / dx + grid_offset) - 1.0)
-        delta_left     = left_node[ii] - pos[ii] / dx - grid_offset
-    
-        weights[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))
-        weights[1, ii] = 0.75 - np.square(delta_left + 1.)
-        weights[2, ii] = 1.0  - weights[0, ii] - weights[1, ii]
-    return left_node, weights
-
-
-@nb.njit()
-def collect_moments(Ie, W_elec, idx):
-    n_contr   = density / nsp_ppc
-    size      = NX + 3
-    n_i       = np.zeros((size, Nj))
-    
-    for ii in nb.prange(Ie.shape[0]):
-        I   = Ie[ ii]
-        sp  = idx[ii]
-        
-        n_i[I,     sp] += W_elec[0, ii]
-        n_i[I + 1, sp] += W_elec[1, ii]
-        n_i[I + 2, sp] += W_elec[2, ii]
-        
-    for jj in range(Nj):
-        n_i[:, jj] *= n_contr[jj]
-
-    n_i   = manage_ghost_cells(n_i)
-    return n_i
-    
-
-@nb.njit()
-def collect_number_density(pos):
-    '''Collect number and velocity density in each cell at each timestep, weighted by their distance
-    from cell nodes.
-
-    INPUT:
-        pos    -- position of each particle
-    '''
-    left_node, weights  = assign_weighting_TSC(pos, E_nodes=True) 
-    idx                 = create_idx()
-    den                 = collect_moments(left_node, weights, idx)   
-    return den
-
-

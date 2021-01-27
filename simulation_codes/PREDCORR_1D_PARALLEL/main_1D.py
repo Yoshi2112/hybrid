@@ -504,7 +504,7 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False):
         # Calculate wave fields at particle position
         Ep = np.zeros(3, dtype=np.float64)  
         Bp = np.zeros(3, dtype=np.float64)
-
+        
         for jj in nb.prange(3):
             for kk in nb.prange(3):
                 Ep[kk] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]   
@@ -1531,19 +1531,19 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
                          qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array)
     #check_time = round(timer() - check_start, 2)
     
-      
+    
     # Move particles, collect moments, deal with particle boundaries
     #part1_start = timer()
     advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                   B, E_int, DT, q_dens_adv, Ji, mp_flux, pc=0)
     #part1_time = round(timer() - part1_start, 2)
     
+    q_dens *= 0.5
+    q_dens += 0.5 * q_dens_adv
+    
     if disable_waves == 0:    
         # Average N, N + 1 densities (q_dens at N + 1/2)
         #field_start = timer()
-        q_dens *= 0.5
-        q_dens += 0.5 * q_dens_adv
-        
         # Push B from N to N + 1/2 and calculate E(N + 1/2)
         push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
         calculate_E(B, Ji, q_dens, E_half, Ve, Te, Te0, temp3De, temp3Db, temp1D, E_damping_array)
@@ -1811,7 +1811,7 @@ if field_periodic == 0:
 
 # Add number of spare particles proportional to # cells worth
 if particle_open == 1:
-    spare_ppc  = 5*nsp_ppc.copy()
+    spare_ppc  = 4*NX*nsp_ppc.copy()
 else:
     spare_ppc  = np.zeros(Nj, dtype=int)
 N = N_species.sum() + spare_ppc.sum()
@@ -1850,7 +1850,7 @@ else:
     
     if xmax > f_len / 2:
         sys.exit('Simulation length longer than field line. Aboring...')
-        
+    
     print('Finding simulation boundary MLAT...')
     dlam   = 1e-5                                            # Latitude increment in radians
     fx_len = 0.0; ii = 1                                     # Arclength/increment counters
@@ -1973,7 +1973,7 @@ if __name__ == '__main__':
     # Retard velocity
     print('Retarding velocity...')
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT, vel_only=True)
-    exit()
+
     qq       = 1;    sim_time = DT; loop_times = np.zeros(max_inc-1, dtype=float)
     print('Starting main loop...')
     while qq < max_inc:

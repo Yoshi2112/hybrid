@@ -1,11 +1,11 @@
 DRIVE					F:/
 SAVE_PATH			    /runs/winske_anisotropy_particles_only_small/
 RUN						-
-SAVE_PARTICLE_FLAG		0
-SAVE_FIELD_FLAG			0
+SAVE_PARTICLE_FLAG		1
+SAVE_FIELD_FLAG			1
 SEED					98327
 CPU_AFFINITY			-
-HOMOGENOUS_B0_FLAG		1
+HOMOGENOUS_B0_FLAG		0
 PERIODIC_FLAG			0
 REFLECT_FLAG			0
 REINIT_FLAG				0
@@ -17,9 +17,9 @@ E_DAMPING_FLAG			0
 QUIET_START_FLAG		1
 RADIX_LOADING			0
 DAMPING_MULTIPLIER_RD   0.05
-NX 						128
+NX 						1024
 ND 						4
-MAX_REV					100
+MAX_REV					500
 DXM						1.0
 R_A						120e3
 IE						1
@@ -27,6 +27,6 @@ MIN_DENS				0.05
 RC_HWIDTH				-
 GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02	
-PARTICLE_DUMP_FREQ		0.25
-FIELD_DUMP_FREQ			0.05
-Using anisotropy parameters to test open boundaries with new code.
+PARTICLE_DUMP_FREQ		1.0
+FIELD_DUMP_FREQ			1.0
+Testing the injection of particles with parabolic B0, lots of spare particles to see if it events out after a while.
