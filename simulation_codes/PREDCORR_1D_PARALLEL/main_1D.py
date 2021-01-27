@@ -1633,17 +1633,22 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
 #################################
 
 #### Read in command-line arguments
-#import argparser
+import argparse as ap
+parser = ap.ArgumentParser()
+parser.add_argument('-r', '--runfile'   , default='run_params.run', type=str)
+parser.add_argument('-p', '--plasmafile', default='plasma_params.plasma', type=str)
+args = vars(parser.parse_args())
 
-# Set root direction (because I keep forgetting to change it on the grid)
+# Check root directory (change if on RCG)
 if os.name == 'posix':
-    root_dir     = os.path.dirname(sys.path[0])
+    root_dir = os.path.dirname(sys.path[0])
 else:
-    root_dir     = '..'
+    root_dir = '..'
     
 # Set input .run and .plasma files
-run_input    = root_dir +  '/run_inputs/run_params.run'
-plasma_input = root_dir +  '/run_inputs/plasma_params.plasma'
+run_input    = root_dir +  '/run_inputs/' + args['runfile']
+plasma_input = root_dir +  '/run_inputs/' + args['plasmafile']
+
 
 ###########################
 ### LOAD RUN PARAMETERS ###
@@ -1929,7 +1934,7 @@ if field_periodic == 1 and damping_multiplier != 0:
     
 if  os.name != 'posix':
     os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
-
+sys.exit()
 ########################
 ### START SIMULATION ###
 ########################
