@@ -1635,6 +1635,7 @@ import argparse as ap
 parser = ap.ArgumentParser()
 parser.add_argument('-r', '--runfile'   , default='_run_params.run', type=str)
 parser.add_argument('-p', '--plasmafile', default='_plasma_params.plasma', type=str)
+parser.add_argument('-n', '--run_num'   , default=-1, type=int)
 args = vars(parser.parse_args())
 
 # Check root directory (change if on RCG)
@@ -1690,15 +1691,18 @@ with open(run_input, 'r') as f:
 if os.name == 'posix':
     drive = '/home/c3134027/'
 
-# Load run num from file, autoset if necessary
-if run == '-':
+# Set run number
+if args['run_num'] != -1:                              # Check CLI, or
+    run = args['run_num']
+elif run != '-':                                       # Check input file, else
+    run = int(run)
+else:                                                  # Autoset
     if os.path.exists(drive + save_path) == False:
         run = 0
     else:
         run = len(os.listdir(drive + save_path))
     print('Run number AUTOSET to ', run)
-else:
-    run = int(run)
+    
 
 if seed == '-':
     seed = None
