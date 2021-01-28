@@ -330,8 +330,8 @@ def set_timestep(vel, Te0):
            be initial limiting factor. This may change for inhomogenous loading
            of particles or initial fields.
     '''
-    ion_ts   = orbit_res / gyfreq                     # Timestep to resolve boundary gyromotion
-    vel_ts   = 0.5 * dx / np.max(np.abs(vel[0, :]))   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step 
+    ion_ts   = orbit_res / gyfreq                     # Timestep to resolve gyromotion
+    vel_ts   = 0.5 * dx / np.max(np.abs(vel[0, :]))   # Timestep to satisfy particle CFL: <0.5dx per timestep
     
     gyperiod_eq = 2 * np.pi / gyfreq_eq               # Equatorial (largest) gyroperiod
     DT          = min(ion_ts, vel_ts)                 # Timestep as smallest of options
@@ -1275,8 +1275,6 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, Te0, max_inc, max_
     f_path = d_path + '/fields/'
     p_path = d_path + '/particles/'
     
-    manage_directories()
-
     for folder in [d_path, f_path, p_path]:
         if os.path.exists(folder) == False:                               # Create data directories
             os.makedirs(folder)
@@ -1632,11 +1630,11 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
 ### FILENAMES AND DIRECTORIES ###
 #################################
 
-#### Read in command-line arguments
+#### Read in command-line arguments, if present
 import argparse as ap
 parser = ap.ArgumentParser()
-parser.add_argument('-r', '--runfile'   , default='run_params.run', type=str)
-parser.add_argument('-p', '--plasmafile', default='plasma_params.plasma', type=str)
+parser.add_argument('-r', '--runfile'   , default='_run_params.run', type=str)
+parser.add_argument('-p', '--plasmafile', default='_plasma_params.plasma', type=str)
 args = vars(parser.parse_args())
 
 # Check root directory (change if on RCG)
@@ -1712,6 +1710,7 @@ if seed == '-':
 else:
     seed = int(seed)
 
+manage_directories()
 
 #######################################
 ### LOAD PARTICLE/PLASMA PARAMETERS ###
@@ -1934,7 +1933,7 @@ if field_periodic == 1 and damping_multiplier != 0:
     
 if  os.name != 'posix':
     os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
-sys.exit()
+
 ########################
 ### START SIMULATION ###
 ########################
