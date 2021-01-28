@@ -1659,7 +1659,6 @@ with open(run_input, 'r') as f:
     save_particles    = int(f.readline().split()[1])   # Save data flag    : For later analysis
     save_fields       = int(f.readline().split()[1])   # Save plot flag    : To ensure hybrid is solving correctly during run
     seed              = f.readline().split()[1]        # RNG Seed          : Set to enable consistent results for parameter studies
-    cpu_affin         = f.readline().split()[1]        # Set CPU affinity for run as list. Set as None to auto-assign. 
     
     homogenous        = int(f.readline().split()[1])   # Set B0 to homogenous (as test to compare to parabolic)
     particle_periodic = int(f.readline().split()[1])   # Set particle boundary conditions to periodic
@@ -1667,21 +1666,17 @@ with open(run_input, 'r') as f:
     particle_reinit   = int(f.readline().split()[1])   # Set particle boundary conditions to reinitialize
     field_periodic    = int(f.readline().split()[1])   # Set field boundary to periodic (False: Absorbtive Boundary Conditions)
     disable_waves     = int(f.readline().split()[1])   # Zeroes electric field solution at each timestep
-    te0_equil         = int(f.readline().split()[1])   # Initialize te0 to be in equilibrium with density
     source_smoothing  = int(f.readline().split()[1])   # Smooth source terms with 3-point Gaussian filter
     E_damping         = int(f.readline().split()[1])   # Damp E in a manner similar to B for ABCs
     quiet_start       = int(f.readline().split()[1])   # Flag to use quiet start (False :: semi-quiet start)
-    radix_loading     = int(f.readline().split()[1])   # Load particles with reverse-radix scrambling sets (not implemented in this version)
     damping_multiplier= float(f.readline().split()[1]) # Multiplies the r-factor to increase/decrease damping rate.
 
     NX        = int(f.readline().split()[1])           # Number of cells - doesn't include ghost cells
     ND        = int(f.readline().split()[1])           # Damping region length: Multiple of NX (on each side of simulation domain)
     max_rev   = float(f.readline().split()[1])         # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
     dxm       = float(f.readline().split()[1])         # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
-    r_A       = float(f.readline().split()[1])         # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
     
     ie        = int(f.readline().split()[1])           # Adiabatic electrons. 0: off (constant), 1: on.
-    min_dens  = float(f.readline().split()[1])         # Allowable minimum charge density in a cell, as a fraction of ne*q
     rc_hwidth = f.readline().split()[1]                # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
       
     orbit_res = float(f.readline().split()[1])         # Orbit resolution
@@ -1777,10 +1772,10 @@ if beta_flag == 0:
     vth_perp   = np.sqrt(charge *  E_per /  mass)    # Perpendicular thermal velocities
     vth_par    = np.sqrt(charge *  E_par /  mass)    # Parallel thermal velocities
 else:
-    # Input energies in terms of beta
-    kbt_par    = E_par * B_eq ** 2 / (2 * mu0 * ne)
-    kbt_per    = E_per * B_eq ** 2 / (2 * mu0 * ne)
-    Te0_scalar = E_e   * B_eq ** 2 / (2 * mu0 * ne * kB)
+    # Input energies in terms of beta (Generally only used for Winske/Gary stuff... invalid in general?)
+    kbt_par    = E_par * (B_eq ** 2) / (2 * mu0 * ne)
+    kbt_per    = E_per * (B_eq ** 2) / (2 * mu0 * ne)
+    Te0_scalar = E_e   * (B_eq ** 2) / (2 * mu0 * ne * kB)
     vth_perp   = np.sqrt(kbt_per /  mass)                # Perpendicular thermal velocities
     vth_par    = np.sqrt(kbt_par /  mass)                # Parallel thermal velocities
 
@@ -1795,6 +1790,7 @@ xmax       = NX // 2 * dx                                # Maximum simulation le
 xmin       =-NX // 2 * dx
 Nj         = len(mass)                                   # Number of species
 n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
+min_dens   = 0.05
 
 # Number of sim particles for each species, total
 N_species = nsp_ppc * NX
@@ -1830,6 +1826,7 @@ if homogenous == 1:
     lat_A          = 0.0
 else:
     print('Calculating length of field line...')
+    r_A    = 120e3                                                              # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
     N_fl   = 1e5                                                                # Number of points to calculate field line length (higher is more accurate)
     lat0   = np.arccos(np.sqrt((RE + r_A)/(RE*L)))                              # Latitude for this L value (at ionosphere height)
     h      = 2.0*lat0/float(N_fl)                                               # Step size of lambda (latitude)
@@ -1871,7 +1868,7 @@ qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each sp
 if particle_open == 1:
     inject_rate = nsp_ppc * (vth_par / dx) / np.sqrt(2 * np.pi)
 else:
-    inject_rate = nsp_ppc * 0.0
+    inject_rate = 0.0
 
 # E-field nodes around boundaries (used for sources and E-fields)
 lo1 = ND - 1 ; lo2 = ND - 2             # Left outer (to boundary)
@@ -1906,19 +1903,6 @@ print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_rev * 2. * 
 print('{} spatial cells, 2x{} damped cells'.format(NX, ND))
 print('{} cells total'.format(NC))
 print('{} particles total\n'.format(N))
-
-if cpu_affin != '-':
-    if len(cpu_affin) == 1:
-        cpu_affin = [int(cpu_affin)]        
-    else:
-        cpu_affin = list(map(int, cpu_affin.split(',')))
-    
-    import psutil
-    run_proc = psutil.Process()
-    run_proc.cpu_affinity(cpu_affin)
-    print('CPU affinity for run (PID {}) set to :: {}'.format(run_proc.pid, ', '.join(map(str, run_proc.cpu_affinity()))))
-else:
-    print('CPU affinity not set.')
 
 if theta_xmax > lambda_L:
     print('ABORT : SIMULATION DOMAIN LONGER THAN FIELD LINE')

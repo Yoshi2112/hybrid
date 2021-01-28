@@ -170,7 +170,7 @@ def hot_dispersion_eqn(w, k, Species):
     
     FSOLVE OPTIONS :: If bad solution, return np.nan?
     
-    Eqns 1, 13 of Chen et al. (2013)
+    Eqns 1, 13 of Chen et al. (2013) equivalent to those of Wang et al. (2016)
     '''
     wc = w[0] + 1j*w[1]
     with warnings.catch_warnings():
@@ -298,6 +298,8 @@ def get_warm_growth_rates(wr, k, Species):
 def get_cold_growth_rates(wr, k, Species):
     '''
     Simplified version of the warm growth rate equation.
+    
+    From Chen et al. (2013)
     '''
     w_der_sum = 0.0
     Di        = 0.0
@@ -2298,116 +2300,114 @@ def plot_all_CGRs_kozyra_2D():
 if __name__ == '__main__':
     #validation_plots_fraser_1996()
     #validation_plots_omura2010()
-    validation_plots_wang_2016()
+    #validation_plots_wang_2016()
     #sys.exit()
     
+    rbsp_path = 'G://DATA//RBSP//'
+    save_drive= 'G://'
+    
+    time_start  = np.datetime64('2015-01-16T04:05:00')
+    time_end    = np.datetime64('2015-01-16T05:15:00')
+    probe       = 'a'
+    pad         = 0
+    fmax        = 0.5
+    
+    plot_start  = np.datetime64('2015-01-16T04:25:00')
+    plot_end    = np.datetime64('2015-01-16T05:10:00')
+    
+    # Test/Check plasma params from files
+    if False:
+        TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_DENS = \
+        extract_species_arrays(time_start, time_end, probe, pad, cmp=np.asarray([70, 20, 10]), 
+                               return_raw_ne=True, nsec=None, HM_filter_mhz=50)
+        sys.exit()
+    
+    date_string = time_start.astype(object).strftime('%Y%m%d')
+    save_string = time_start.astype(object).strftime('%Y%m%d_%H%M_') + time_end.astype(object).strftime('%H%M')
+    save_dir    = '{}NEW_LT//EVENT_{}//CHEN_DR_CODE//'.format(save_drive, date_string)
+    
 # =============================================================================
-#     rbsp_path = 'G://DATA//RBSP//'
-#     save_drive= 'G://'
-#     
-#     time_start  = np.datetime64('2015-01-16T04:05:00')
-#     time_end    = np.datetime64('2015-01-16T05:15:00')
-#     probe       = 'a'
-#     pad         = 0
-#     fmax        = 0.5
-#     
-#     plot_start  = np.datetime64('2015-01-16T04:25:00')
-#     plot_end    = np.datetime64('2015-01-16T05:10:00')
-#     
-#     # Test/Check plasma params from files
-#     if False:
-#         TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_DENS = \
-#         extract_species_arrays(time_start, time_end, probe, pad, cmp=np.asarray([70, 20, 10]), 
-#                                return_raw_ne=True, nsec=None, HM_filter_mhz=50)
-#         sys.exit()
-#     
-#     date_string = time_start.astype(object).strftime('%Y%m%d')
-#     save_string = time_start.astype(object).strftime('%Y%m%d_%H%M_') + time_end.astype(object).strftime('%H%M')
-#     save_dir    = '{}NEW_LT//EVENT_{}//CHEN_DR_CODE//'.format(save_drive, date_string)
-#     
-# # =============================================================================
-# #     all_f, all_CGR_HOPE, all_stop_HOPE, all_CGR_SPICE, all_stop_SPICE,          \
-# #            times, B0, name, mass, charge, density, tper, anisotropy, cold_dens =\
-# #     get_all_CGRs_kozyra(time_start, time_end, probe, pad, cmp=np.array([70, 20, 10]), 
-# #                         fmax_pcyc=1.0, Nf=1000, nsec=None, HM_filter_mhz=50, instr='RBSPICE')
-# # =============================================================================
-#     
-# 
-#     if True:
-#         vlines = [  '2015-01-16T04:32:53.574540',
-#                     '2015-01-16T04:35:36.689700',
-#                     '2015-01-16T04:44:53.200200',
-#                     '2015-01-16T04:47:48.309120',
-#                     '2015-01-16T04:48:31.486660',
-#                     '2015-01-16T04:49:17.062940',
-#                     '2015-01-16T04:49:59.041120',
-#                     '2015-01-16T04:51:11.003680',
-#                     '2015-01-16T04:52:03.776220',
-#                     '2015-01-16T04:53:38.526940',
-#                     '2015-01-16T04:55:24.072040',
-#                     '2015-01-16T04:36:27.063500',
-#                     '2015-01-16T04:28:50.101200',
-#                     '2015-01-16T04:29:30.879980',
-#                     '2015-01-16T04:38:23.402980',
-#                     '2015-01-16T04:39:11.378020',
-#                     '2015-01-16T04:42:07.686300',
-#                     '2015-01-16T04:56:19.461080',
-#                     '2015-01-16T04:57:08.028780',
-#                     '2015-01-16T04:59:38.756120',
-#                     '2015-01-16T05:00:42.954780',
-#                     '2015-01-16T05:02:08.925200',
-#                     '2015-01-16T05:03:24.847120',
-#                     '2015-01-16T05:03:58.342080',
-#                     '2015-01-16T05:05:06.448500',
-#                     '2015-01-16T05:07:41.083580',
-#                     '2015-01-16T05:05:53.341440',
-#                     '2015-01-16T04:40:01.703620',
-#                     '2015-01-16T05:10:37.874220',
-#                     '2015-01-16T05:34:50.015900',
-#                     '2015-01-16T05:37:30.425800',
-#                     '2015-01-16T05:40:04.314980',
-#                     '2015-01-16T05:40:30.397900',
-#                     '2015-01-16T05:44:50.574940',
-#                     '2015-01-16T05:44:23.839960',
-#                     '2015-01-16T04:58:06.574340',
-#                     '2015-01-16T04:58:43.263980',
-#                     '2015-01-16T04:54:14.206560',
-#                     '2015-01-16T04:40:54.027960',
-#                     '2015-01-16T04:33:50.763680']
-#         
-#         vspan = [
-#                 ['2015-01-16T04:47:19.000000', '2015-01-16T04:48:53.000000'],
-#                 ['2015-01-16T04:50:35.000000', '2015-01-16T04:52:47.000000'],
-#                 ['2015-01-16T04:44:04.000000', '2015-01-16T04:45:39.000000'],
-#                 ['2015-01-16T04:34:42.000000', '2015-01-16T04:36:00.000000'],
-#                 ['2015-01-16T04:32:00.000000', '2015-01-16T04:33:00.000000'],
-#                 
-#                 ['2015-01-16T04:55:30.000000', '2015-01-16T04:57:37.000000'],
-#                 
-#                 ['2015-01-16T04:59:04.000000', '2015-01-16T05:01:22.000000'],
-#                 ['2015-01-16T05:04:07.000000', '2015-01-16T05:06:04.000000'],
-#                 ['2015-01-16T05:07:07.000000', '2015-01-16T05:08:43.000000'],
-#                 ]
-#         
-#         
-#         _K, _CPDR, _WPDR, _HPDR, _cCGR, _wCGR, _hCGR, _cVG, _wVG, _hVG,        \
-#         TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE =             \
-#         get_all_DRs_parallel(time_start, time_end, probe, pad, [70, 20, 10], 
-#                          kmin=0.0, kmax=1.0, Nk=5000, knorm=True,
-#                          nsec=None, HM_filter_mhz=50, N_procs=6)
-#         
-#         #plot_all_DRs(_K, _CPDR, _WPDR, _HPDR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE,
-#         #             suff='')
-#         
-#         #plot_all_CGRs(_K, _cCGR, _wCGR, _hCGR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE,
-#         #              HM_filter_mhz=50, overwrite=False, save=True, figtext=True, suff='')
-#         
-#         plot_max_growth_rate_with_time(TIMES, _K, _CPDR, _WPDR, _HPDR,
-#                                        save=True, norm_w=False, B0=None, plot_pc1=True,
-#                                        ccomp=[70, 20, 10], suff='_withPc1', plot_pearls=False)
-#         
-#         #plot_max_CGR_with_time(TIMES, _K, _cCGR, _wCGR, _hCGR,  
-#         #                        save=True, norm_w=False, B0=None, plot_pc1=True,
-#         #                        ccomp=[70, 20, 10], suff='_withPc1', plot_pearls=True)
-# 
+#     all_f, all_CGR_HOPE, all_stop_HOPE, all_CGR_SPICE, all_stop_SPICE,          \
+#            times, B0, name, mass, charge, density, tper, anisotropy, cold_dens =\
+#     get_all_CGRs_kozyra(time_start, time_end, probe, pad, cmp=np.array([70, 20, 10]), 
+#                         fmax_pcyc=1.0, Nf=1000, nsec=None, HM_filter_mhz=50, instr='RBSPICE')
 # =============================================================================
+    
+
+    if True:
+        vlines = [  '2015-01-16T04:32:53.574540',
+                    '2015-01-16T04:35:36.689700',
+                    '2015-01-16T04:44:53.200200',
+                    '2015-01-16T04:47:48.309120',
+                    '2015-01-16T04:48:31.486660',
+                    '2015-01-16T04:49:17.062940',
+                    '2015-01-16T04:49:59.041120',
+                    '2015-01-16T04:51:11.003680',
+                    '2015-01-16T04:52:03.776220',
+                    '2015-01-16T04:53:38.526940',
+                    '2015-01-16T04:55:24.072040',
+                    '2015-01-16T04:36:27.063500',
+                    '2015-01-16T04:28:50.101200',
+                    '2015-01-16T04:29:30.879980',
+                    '2015-01-16T04:38:23.402980',
+                    '2015-01-16T04:39:11.378020',
+                    '2015-01-16T04:42:07.686300',
+                    '2015-01-16T04:56:19.461080',
+                    '2015-01-16T04:57:08.028780',
+                    '2015-01-16T04:59:38.756120',
+                    '2015-01-16T05:00:42.954780',
+                    '2015-01-16T05:02:08.925200',
+                    '2015-01-16T05:03:24.847120',
+                    '2015-01-16T05:03:58.342080',
+                    '2015-01-16T05:05:06.448500',
+                    '2015-01-16T05:07:41.083580',
+                    '2015-01-16T05:05:53.341440',
+                    '2015-01-16T04:40:01.703620',
+                    '2015-01-16T05:10:37.874220',
+                    '2015-01-16T05:34:50.015900',
+                    '2015-01-16T05:37:30.425800',
+                    '2015-01-16T05:40:04.314980',
+                    '2015-01-16T05:40:30.397900',
+                    '2015-01-16T05:44:50.574940',
+                    '2015-01-16T05:44:23.839960',
+                    '2015-01-16T04:58:06.574340',
+                    '2015-01-16T04:58:43.263980',
+                    '2015-01-16T04:54:14.206560',
+                    '2015-01-16T04:40:54.027960',
+                    '2015-01-16T04:33:50.763680']
+        
+        vspan = [
+                ['2015-01-16T04:47:19.000000', '2015-01-16T04:48:53.000000'],
+                ['2015-01-16T04:50:35.000000', '2015-01-16T04:52:47.000000'],
+                ['2015-01-16T04:44:04.000000', '2015-01-16T04:45:39.000000'],
+                ['2015-01-16T04:34:42.000000', '2015-01-16T04:36:00.000000'],
+                ['2015-01-16T04:32:00.000000', '2015-01-16T04:33:00.000000'],
+                
+                ['2015-01-16T04:55:30.000000', '2015-01-16T04:57:37.000000'],
+                
+                ['2015-01-16T04:59:04.000000', '2015-01-16T05:01:22.000000'],
+                ['2015-01-16T05:04:07.000000', '2015-01-16T05:06:04.000000'],
+                ['2015-01-16T05:07:07.000000', '2015-01-16T05:08:43.000000'],
+                ]
+        
+        
+        _K, _CPDR, _WPDR, _HPDR, _cCGR, _wCGR, _hCGR, _cVG, _wVG, _hVG,        \
+        TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE =             \
+        get_all_DRs_parallel(time_start, time_end, probe, pad, [70, 20, 10], 
+                         kmin=0.0, kmax=1.0, Nk=5000, knorm=True,
+                         nsec=None, HM_filter_mhz=50, N_procs=6)
+        
+        #plot_all_DRs(_K, _CPDR, _WPDR, _HPDR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE,
+        #             suff='')
+        
+        #plot_all_CGRs(_K, _cCGR, _wCGR, _hCGR, TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_NE,
+        #              HM_filter_mhz=50, overwrite=False, save=True, figtext=True, suff='')
+        
+        plot_max_growth_rate_with_time(TIMES, _K, _CPDR, _WPDR, _HPDR,
+                                       save=True, norm_w=False, B0=None, plot_pc1=True,
+                                       ccomp=[70, 20, 10], suff='_withPc1', plot_pearls=False)
+        
+        #plot_max_CGR_with_time(TIMES, _K, _cCGR, _wCGR, _hCGR,  
+        #                        save=True, norm_w=False, B0=None, plot_pc1=True,
+        #                        ccomp=[70, 20, 10], suff='_withPc1', plot_pearls=True)
+
