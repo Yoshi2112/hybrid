@@ -1824,6 +1824,7 @@ if homogenous == 1:
     theta_xmax     = 0.0
     lambda_L       = 0.0
     lat_A          = 0.0
+    r_A            = 0.0
 else:
     print('Calculating length of field line...')
     r_A    = 120e3                                                              # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
