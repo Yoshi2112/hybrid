@@ -1369,19 +1369,14 @@ def winske_summary_plots(save=True):
     return
 
 
-def winske_magnetic_density_plot():
+def winske_magnetic_density_plot(save=True):
     np.set_printoptions(suppress=True)
-
-    path = cf.anal_dir
 
     ftime, by = cf.get_array('By')
     ftime, bz = cf.get_array('Bz')
     b_squared = (by ** 2 + bz ** 2).mean(axis=1) / cf.B_eq ** 2
 
     radperiods = ftime * cf.gyfreq
-    
-    filename = 'winske_magnetic_timeseries.png'
-    fullpath = path + filename
 
     fig, ax = plt.subplots(figsize=(20,10), sharex=True)                  # Initialize Figure Space
 
@@ -1390,9 +1385,14 @@ def winske_magnetic_density_plot():
     ax.set_xlim(0, 100)
     ax.set_ylim(0, 0.48)
     ax.set_xlabel('T')
-            
-    plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-    plt.close('all')
+    
+    if save == True:
+        fullpath = cf.anal_dir + 'winske_magnetic_timeseries' + '.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+        print('t-x Plot saved')
+        plt.close('all')
+    else:
+        plt.show()
     return
 
 
@@ -3744,7 +3744,7 @@ def field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None):
     return t, mag_energy
 
 
-def plot_max_velocity():
+def plot_max_velocity(save=True):
     
     num_particle_steps = len(os.listdir(cf.particle_dir))
     
@@ -3769,7 +3769,14 @@ def plot_max_velocity():
     ax.plot(ptime, max_vz, label='$v_z$', c='b', alpha=0.5, lw=0.5)
     ax.axhline(max_vx[0], color='k', ls='--', alpha=0.5)
     ax.legend()
-    plt.show()
+    
+    if save == True:
+        fullpath = cf.anal_dir + 'max_velocity_check' + '.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+        print('t-x Plot saved')
+        plt.close('all')
+    else:
+        plt.show()
     return
 
 
@@ -4052,21 +4059,17 @@ def multiplot_parallel_scaling():
 #%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
-    
+        
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//winske_anisotropy_particles_only_small//']:
+    for series in ['//STANDARD_TEST_winanis_PU//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        # Sample colour list just to draw from
-        clrs = ['k', 'b', 'g', 'r', 'c', 'm', 'y',
-                'darkorange', 'peru', 'yellow']
-        
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
             runs_to_do = [2]
@@ -4077,32 +4080,24 @@ if __name__ == '__main__':
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
-                plot_total_density_with_time()
+                #plot_total_density_with_time()
                 #plot_max_velocity()
                 #check_fields(save=True)
 
                 #winske_summary_plots(save=True)
                 #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
-                #winske_magnetic_density_plot()
+                winske_magnetic_density_plot()
                 #disp.plot_kt_winske()
                 #disp.plot_fourier_mode_timeseries(it_max=None)
                 
-                #plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=1.0)
-                #ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7)
+                plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=1.0)
+                ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7)
 
-                #plot_abs_with_boundary_parameters()
-    
-                #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
-                #for comp in ['By', 'Bz']:        
-                #    plot_tx(component=comp, saveas='tx_plot', save=True, tmax=None, remove_ND=True, normalize=True)
-                
-                #try:
-                #    standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False, remove_ND=False)
-                #except:
-                #    pass
-                
-                #get_reflection_coefficient()
-            
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
+                try:
+                    standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False, remove_ND=False)
+                except:
+                    pass            
         
         if False:
             # Do particle analyses for each run (slow)

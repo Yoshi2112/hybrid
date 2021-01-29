@@ -1801,12 +1801,12 @@ N_species = nsp_ppc * NX
 if field_periodic == 0:
     N_species += 2   
 
-# Add number of spare particles proportional to # cells worth
+# Add number of spare particles proportional to percentage of total (50% standard, high but safe)
 if particle_open == 1:
-    spare_ppc  = 4*NX*nsp_ppc.copy()
+    spare_ppc  = N_species.sum() * 0.5
 else:
-    spare_ppc  = np.zeros(Nj, dtype=int)
-N = N_species.sum() + spare_ppc.sum()
+    spare_ppc  = 0
+N = N_species.sum() + int(spare_ppc)
 
 idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
 idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
