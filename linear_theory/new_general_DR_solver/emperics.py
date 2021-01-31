@@ -152,16 +152,20 @@ def plot_field_slice(max_L):
 
     
 if __name__ == '__main__':
-    _L = 5.0; _MLAT = 40.0; _MLON = 0.0
-    
-    _X, _Y, _B = plot_field_slice(_L)
-
-    #plot_dipole_field_line(_L, _MLAT)
-    
-    if False:
-        _B0  = geomagnetic_magnitude(    _L, MLAT=_MLAT)
-        _B02 = CLW_geomagnetic_magnitude(_L, MLAT=_MLAT)
-        
-        print('Values at L = {}'.format(_L))
-        print('Field       = {:.2f} nT'.format(_B0*1e9))
-        print('Field CLW   = {:.2f} nT'.format(_B02))
+    B_eq = geomagnetic_magnitude(4.27, MLAT=0.)
+    print(B_eq*1e9)
+# =============================================================================
+#     _L = 5.0; _MLAT = 40.0; _MLON = 0.0
+#     
+#     _X, _Y, _B = plot_field_slice(_L)
+# 
+#     #plot_dipole_field_line(_L, _MLAT)
+#     
+#     if False:
+#         _B0  = geomagnetic_magnitude(    _L, MLAT=_MLAT)
+#         _B02 = CLW_geomagnetic_magnitude(_L, MLAT=_MLAT)
+#         
+#         print('Values at L = {}'.format(_L))
+#         print('Field       = {:.2f} nT'.format(_B0*1e9))
+#         print('Field CLW   = {:.2f} nT'.format(_B02))
+# =============================================================================
