@@ -8,5 +8,5 @@
 source /etc/profile.d/modules.sh
 module load numba/0.49.1-python.3.6
 cd $PBS_O_WORKDIR
-python /home/c3134027/hybrid/simulation_codes/PREDCORR_1D_PARALLEL/main_1D.py -r /batch_runs/winske_periodic_uniform/run_params_PU1024.run -p /batch_runs/multispecies_SI_test/plasma_params_H_He_O.plasma -n 3
+python /home/c3134027/hybrid/simulation_codes/PREDCORR_1D_PARALLEL/main_1D.py -r /batch_runs/multispecies_SI_test/run_params_PU1024.run -p /batch_runs/multispecies_SI_test/plasma_params_H_He_O.plasma -n 3
 exit 0
