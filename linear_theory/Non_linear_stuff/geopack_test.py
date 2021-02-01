@@ -90,21 +90,19 @@ if __name__ == '__main__':
     FPATH = 'G://DATA//QIN_DENTON//2020//QinDenton_20200101_1min.txt'
     read_QIN_file(FPATH)
 
-# =============================================================================
-# L_value = 6          # GSM: (L, 0, 0) would be the equatorial point
-# 
-# xf, yf, zf, xn, yn, zn=gp.geopack.trace(L_value, 0.0, 0.0, -1)
-# xf, yf, zf, xs, ys, zs=gp.geopack.trace(L_value, 0.0, 0.0, 1)
-# 
-# # Check radius:
-# r = np.sqrt(xf ** 2 + yf ** 2 + zf ** 2)
-# 
-# earth = plt.Circle((0, 0), 1.0, color='k', fill=False)
-# # Plot field
-# fig, ax = plt.subplots()
-# 
-# ax.scatter(xn, zn)
-# ax.scatter(xs, zs)
-# ax.add_patch(earth)
-# ax.axis('equal')
-# =============================================================================
+L_value = 6          # GSM: (L, 0, 0) would be the equatorial point
+
+xf, yf, zf, xn, yn, zn=gp.geopack.trace(L_value, 0.0, 0.0, -1)
+xf, yf, zf, xs, ys, zs=gp.geopack.trace(L_value, 0.0, 0.0, 1)
+
+# Check radius:
+r = np.sqrt(xf ** 2 + yf ** 2 + zf ** 2)
+
+earth = plt.Circle((0, 0), 1.0, color='k', fill=False)
+# Plot field
+fig, ax = plt.subplots()
+
+ax.scatter(xn, zn)
+ax.scatter(xs, zs)
+ax.add_patch(earth)
+ax.axis('equal')

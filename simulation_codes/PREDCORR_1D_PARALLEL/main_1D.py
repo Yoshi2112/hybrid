@@ -1648,6 +1648,8 @@ else:
 run_input    = root_dir +  '/run_inputs/' + args['runfile']
 plasma_input = root_dir +  '/run_inputs/' + args['plasmafile']
 
+#run_input    = root_dir +  '/run_inputs/batch_runs/shoji_shortened/run_params_shoji2013.run'
+#plasma_input = root_dir +  '/run_inputs/batch_runs/shoji_shortened/plasma_params_0.plasma'
 
 ###########################
 ### LOAD RUN PARAMETERS ###
