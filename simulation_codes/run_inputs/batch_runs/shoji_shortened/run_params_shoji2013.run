@@ -1,7 +1,7 @@
 DRIVE					F:/
 SAVE_PATH			    /runs/shoji_2013_short/
 RUN						-
-SAVE_PARTICLE_FLAG		-
+SAVE_PARTICLE_FLAG		0
 SAVE_FIELD_FLAG			1
 SEED					98327
 CPU_AFFINITY			-
