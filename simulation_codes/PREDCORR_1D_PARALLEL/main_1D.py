@@ -561,40 +561,45 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False):
                     pos[ii]    *= 0.0
                     vel[:, ii] *= 0.0
                     idx[ii]     = -1
-                        
-                elif particle_reinit == 1: 
                     
-                    # Reinitialize vx based on flux distribution
-                    vel[0, ii]  = generate_vx(vth_par[idx[ii]])
-                    vel[0, ii] *= -np.sign(pos[ii])
-                    
-                    # Re-initialize v_perp and check pitch angle
-                    if temp_type[idx[ii]] == 0:
-                        vel[1, ii] = np.random.normal(0, vth_perp[idx[ii]])
-                        vel[2, ii] = np.random.normal(0, vth_perp[idx[ii]])
-                    else:
-                        particle_PA = 0.0
-                        while np.abs(particle_PA) < loss_cone_xmax:
-                            vel[1, ii]  = np.random.normal(0, vth_perp[idx[ii]])
-                            vel[2, ii]  = np.random.normal(0, vth_perp[idx[ii]])
-                            v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
-                            
-                            particle_PA = np.arctan(v_perp / vel[0, ii])
-                
-                    # Place back inside simulation domain
-                    if pos[ii] < xmin:
-                        pos[ii] = xmin + np.random.uniform(0, 1) * vel[0, ii] * DT
-                    elif pos[ii] > xmax:
-                        pos[ii] = xmax + np.random.uniform(0, 1) * vel[0, ii] * DT
-                       
                 else:
-                    # Reflect
-                    if pos[ii] > xmax:
-                        pos[ii] = 2*xmax - pos[ii]
-                    elif pos[ii] < xmin:
-                        pos[ii] = 2*xmin - pos[ii]
+                    pass
                         
-                    vel[0, ii] *= -1.0
+# =============================================================================
+#                 elif particle_reinit == 1: 
+#                     
+#                     # Reinitialize vx based on flux distribution
+#                     vel[0, ii]  = generate_vx(vth_par[idx[ii]])
+#                     vel[0, ii] *= -np.sign(pos[ii])
+#                     
+#                     # Re-initialize v_perp and check pitch angle
+#                     if temp_type[idx[ii]] == 0:
+#                         vel[1, ii] = np.random.normal(0, vth_perp[idx[ii]])
+#                         vel[2, ii] = np.random.normal(0, vth_perp[idx[ii]])
+#                     else:
+#                         particle_PA = 0.0
+#                         while np.abs(particle_PA) < loss_cone_xmax:
+#                             vel[1, ii]  = np.random.normal(0, vth_perp[idx[ii]])
+#                             vel[2, ii]  = np.random.normal(0, vth_perp[idx[ii]])
+#                             v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
+#                             
+#                             particle_PA = np.arctan(v_perp / vel[0, ii])
+#                 
+#                     # Place back inside simulation domain
+#                     if pos[ii] < xmin:
+#                         pos[ii] = xmin + np.random.uniform(0, 1) * vel[0, ii] * DT
+#                     elif pos[ii] > xmax:
+#                         pos[ii] = xmax + np.random.uniform(0, 1) * vel[0, ii] * DT
+#                        
+#                 else:
+#                     # Reflect
+#                     if pos[ii] > xmax:
+#                         pos[ii] = 2*xmax - pos[ii]
+#                     elif pos[ii] < xmin:
+#                         pos[ii] = 2*xmin - pos[ii]
+#                         
+#                     vel[0, ii] *= -1.0
+# =============================================================================
     return
 
 
