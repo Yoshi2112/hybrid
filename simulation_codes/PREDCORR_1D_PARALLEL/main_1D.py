@@ -548,15 +548,16 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False):
         
             # Check if particle has left simulation and apply boundary conditions
             if (pos[ii] < xmin or pos[ii] > xmax):
-                pass
+
+                if particle_periodic == 1:  
+                    # Mario (Periodic)
+                    if pos[ii] > xmax:
+                        pos[ii] += xmin - xmax
+                    elif pos[ii] < xmin:
+                        pos[ii] += xmax - xmin 
+                else:
+                    pass
 # =============================================================================
-#                 if particle_periodic == 1:  
-#                     # Mario (Periodic)
-#                     if pos[ii] > xmax:
-#                         pos[ii] += xmin - xmax
-#                     elif pos[ii] < xmin:
-#                         pos[ii] += xmax - xmin 
-#                         
 #                 elif particle_open == 1:                
 #                     # Open: Deactivate particles that leave the simulation space
 #                     pos[ii]    *= 0.0
