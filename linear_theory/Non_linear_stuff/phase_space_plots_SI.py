@@ -8,6 +8,7 @@ Created on Thu Jan 14 21:56:57 2021
 import warnings, sys, pdb, os
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as colors
 
 ### CONSTANTS
 qp     = 1.602e-19
@@ -43,6 +44,7 @@ def new_trace_fieldline(L, Npts=1e5):
     but we normally think of traces from the northern.
         
     Validated: Ionospheric B0 goes to surface B0 for rA = 0.
+    B outputted in nT
     '''
     BE     = 0.31*1e5   # Equatorial field strength in nT
     r_A    = 120e3 
@@ -91,6 +93,25 @@ def get_B_gradient(B, s):
     grad[0]  = (-3 * B[0] + 4 * B[1] - B[2]) / (s[2] - s[0])
     grad[-1] = (B[-1] - 4*B[-2] + 3*B[-3]) / (s[-3] - s[-1])
     return grad
+
+def get_S_lims(S_arr, yarr, lim=1.0):
+    '''
+    Scans through 2D array of time vs position with cvals of S. Find indices
+    closest to +/- 1 (or other value
+    '''
+    pos_lim = np.zeros(S_arr.shape[0])
+    neg_lim = np.zeros(S_arr.shape[0])
+    for xx in range(S_arr.shape[0]):
+        # Filter out nan's, replace with zeros
+        Sarr_filt = S_arr[xx].copy()
+        Sarr_filt[np.isnan(Sarr_filt) == True] = 1e10
+        
+        pos_idx   = np.where(abs(Sarr_filt - lim) == abs(Sarr_filt - lim).min())
+        neg_idx   = np.where(abs(Sarr_filt + lim) == abs(Sarr_filt + lim).min())
+        
+        pos_lim[xx] = yarr[pos_idx]
+        neg_lim[xx] = yarr[neg_idx]
+    return pos_lim, neg_lim
 
 def create_species_array(B0, name, mass, charge, density, tper, ani):
     '''
@@ -154,14 +175,16 @@ def define_omura2010_parameters(B0):
     Species, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
     return Species, PP
 
-def get_k_cold(w, Species):
+def get_k_cold(w, Species, mm):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         cold_sum = 0.0
         for ii in range(Species.shape[0]):
-            cold_sum += Species[ii]['plasma_freq_sq'] / (w * (w - Species[ii]['gyrofreq']))
+            sum_contr = Species[ii]['plasma_freq_sq'] / (w * (w - Species[ii]['gyrofreq']))
+            cold_sum += sum_contr
     
         k = np.sqrt(1 - cold_sum) * w / c
+        
     return k
 
 def get_gamma_c(w, Species):
@@ -198,46 +221,31 @@ def get_velocities(w, k, Species, PP):
     Vp = get_phase_velocity(w, k, Species)
     return Vg, Vp, Vr
 
-def get_S_dipole(L_shell):
+def get_S_dipole(L_shell, dB=0.0, Bw=0.5e-9, f=1.5, N_field=1e5):
     '''
     Define a Bw and w in a specified plasma regime.
-    
-    Frequency sweep rate seems to add massive offset if not zero.
-    
-    Perhaps try using parabolic field. Calculate 'a' factor by
-    tracing parabola up to MLAT=10 degrees or something, or just steal some
-    standard value from the model.
-    
+        
     Stanard hc range around 320km with only low amplitude triggering wave
     3700km by the time the non-linear growth has maximized and the wave has grown
     
-    START EASY :: Just calculate S along the field, calculate phase space for each
-    point, then see what the effect of raising or lowering it will be.
-    
-    Might actually be easier to plot s vs S and then vary B - see what happens.
-    But do the phase spaces first because it's cool, and then maybe we can 
-    un-normalize some of those variables as well.
-    
     Note: Currently not changing density or cold composition along field line,
     could do!
+    
+    Because plasma doesn't '
     '''
     # Main inputs
-    f        = 3.0                         # Hz
     dwdt     = 0*2 * np.pi * (1.2/48)      # Frequency sweep rate (rad/s2) 1.2Hz in 48sec
-    Bw       = 2.5e-9                      # Initial EMIC (triggering?) amplitude
-    vth_perp = 8e5                         #  m/s
-    #vth_para = 6e5                        # m/s
-    #nh       = 7.2e6                      # /m3
-    #Q_value  = 0.5                        # Depth of proton hole
-    
-    w    = 2*np.pi*f                   # rad/s
-    omw  = qp * Bw / mp                # 'Gyrofrequency' effect of wave field
+    vth_perp = 8e5                         #  m/s    
+    w        = 2*np.pi*f                   # rad/s
+    omw      = qp * Bw / mp                # 'Gyrofrequency' effect of wave field
     
     # Field parameters
-    s, Bs, mlat = new_trace_fieldline(L_shell)
+    s, Bs, mlat = new_trace_fieldline(L_shell, Npts=N_field)
+    Bs         += dB
     B_grad      = get_B_gradient(Bs, s)
     Om_grad     = qp / mp * B_grad
     
+    # Output arrays
     Vr_array    = np.zeros(s.shape[0])
     wtr_array   = np.zeros(s.shape[0])
     Vtr_array   = np.zeros(s.shape[0])
@@ -249,7 +257,7 @@ def get_S_dipole(L_shell):
         Species, PP = define_omura2010_parameters(Bs[ii])
         
         # Wave parameters
-        k_array[ii]   = get_k_cold(w, Species)            # /m ??
+        k_array[ii]   = get_k_cold(w, Species, ii)            # /m ??
         pcyc          = PP['pcyc_rad']                    # Proton cyclotron frequency
         wtr_array[ii] = np.sqrt(k_array[ii]*vth_perp*omw) # Trapping frequency
         Vtr_array[ii] = 2 * wtr_array[ii] / k_array[ii]   # Trapping velocity
@@ -263,6 +271,9 @@ def get_S_dipole(L_shell):
         
         S_ratio[ii] = 1 / (s0 * w * omw) * (s1*dwdt + Vp*s2*Om_grad[ii])
         
+        #if np.isnan(S_ratio[ii]) == True and abs(mlat[ii]) < 10.0:
+#            pdb.set_trace()
+        
     return s, mlat, S_ratio, Vr_array, wtr_array, Vtr_array, k_array
 
 
@@ -270,9 +281,13 @@ if __name__ == '__main__':
     main_folder = 'F://NONLINEAR//'
     
     L = 4.27
-    S, MLAT, S_RAT, VR, WTR, VTR, K = get_S_dipole(L)
-    
+
+    # Check 
     if True:
+        S, MLAT, S_RAT, VR, WTR, VTR, K = get_S_dipole(L, dB=-20e-9,
+                                                       Bw=0.5e-9, f=1.5,
+                                                       N_field=1e3)
+        
         plt.figure()
         plt.plot(S/1e3, S_RAT)
         plt.ylabel('S ratio')
@@ -286,6 +301,58 @@ if __name__ == '__main__':
         plt.ylim(-1, 1)
 
     if False:
+        # Number of points along field line
+        nB = 1e3
+        
+        # Wave params
+        pc5_ampl = 20.0e-9  # nT
+        pc5_freq = 5.0      # mHz
+        
+        # Just do one period
+        t_max    = 1000./pc5_freq                 # Max time (s)
+        Nt       = 100                            # Time cadence (s)
+        t        = np.linspace(0.0, t_max, Nt)    # Time array
+        
+        pc5_wave = pc5_ampl * np.sin(2 * np.pi * pc5_freq/1000. * t)
+        
+        S_RAT_ALL = np.zeros((t.shape[0], int(nB+1)), dtype=float)
+        VR_ALL    = np.zeros((t.shape[0], int(nB+1)), dtype=float)
+        
+        # Not super accurate: Compression would shorten field line?
+        # This assumes same "L/MLAT" in space and just heightens B-field
+        for mm in range(t.shape[0]):
+            print('Doing t = {}s'.format(t[mm]))
+            S, MLAT, S_RAT_ALL[mm], VR_ALL[mm], WTR, VTR, K = \
+                get_S_dipole(L, dB=pc5_wave[mm], Bw=0.5e-9, f=1.5, N_field=nB)
+        
+        pos_lim, neg_lim = get_S_lims(S_RAT_ALL, MLAT, lim=1.0)
+        
+        VR_ALL[VR_ALL > 3e8] = np.nan
+        
+        fig, ax = plt.subplots(3, sharex=True)
+        
+        im1 = ax[0].pcolormesh(t, MLAT, S_RAT_ALL.T,
+                      norm=colors.SymLogNorm(linthresh=1.0,
+                      vmin=-1e3, vmax=1e3, base=10), cmap='bwr',
+                      shading='auto')
+        
+        ax[0].plot(t, pos_lim, c='k')
+        ax[0].plot(t, neg_lim, c='k')
+    
+        ax[0].set_title('S along field line :: L = {} :: Pc5 {}nT at {}mHz'.format(L, pc5_ampl*1e9, pc5_freq))
+        ax[1].set_xlabel('Time (s)')
+        ax[0].set_ylabel('MLAT\n(deg)', rotation=0)
+        #cbar = plt.colorbar(im1, orientation='vertical', extend='both')
+        #cbar.set_label('S', rotation=0)
+        
+        ax[1].plot(t, pc5_wave*1e9)
+        ax[1].set_ylabel('$\delta B_{HM}$\n(nT)', rotation=0)
+        
+        im1 = ax[2].pcolormesh(t, MLAT, VR_ALL.T, cmap='jet',
+                      shading='auto')
+        ax[2].set_ylabel('$V_r$', rotation=0)
+        
+    if False:
         # Plot phase space for each position along the field (only for S < 1.5)
         run_folder = 'standard_dipole//'
         save_dir   = main_folder + run_folder
@@ -296,7 +363,7 @@ if __name__ == '__main__':
         S_lim  = 1.5
         st_idx = np.where(np.abs(S_lim - S_RAT) == np.abs(S_lim - S_RAT).min())[0][0]
         en_idx = np.where(np.abs(S_lim + S_RAT) == np.abs(S_lim + S_RAT).min())[0][0]
-
+        
         # Don't un-normalize the const calculation yet, probably won't change anything
         skip = 5;   counter = 0
         for mm in range(st_idx, en_idx):
@@ -311,7 +378,7 @@ if __name__ == '__main__':
                 for ii in range(th.shape[0]):
                     for jj in range(th.shape[1]):
                         const[ii, jj] = th[ii, jj]**2 + 0.5 * (np.cos(ze[ii, jj]) - S_RAT[mm] * ze[ii, jj])
-                        
+                
                 # Work out const of separatrix
                 ze0         =   np.pi + np.arcsin(np.abs(S_RAT[mm]))
                 ze1         = 2*np.pi - np.arcsin(np.abs(S_RAT[mm]))    
