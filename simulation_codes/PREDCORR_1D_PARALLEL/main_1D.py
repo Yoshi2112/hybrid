@@ -555,18 +555,15 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False):
                         pos[ii] += xmin - xmax
                     elif pos[ii] < xmin:
                         pos[ii] += xmax - xmin 
+                elif particle_open == 1:                
+                    # Open: Deactivate particles that leave the simulation space
+                    pos[ii]     = 0.0
+                    vel[0, ii]  = 0.0
+                    vel[1, ii]  = 0.0
+                    vel[2, ii]  = 0.0
+                    idx[ii]     = -1
                 else:
                     pass
-# =============================================================================
-#                 elif particle_open == 1:                
-#                     # Open: Deactivate particles that leave the simulation space
-#                     pos[ii]    *= 0.0
-#                     vel[:, ii] *= 0.0
-#                     idx[ii]     = -1
-#                     
-#                 else:
-#                     pass
-# =============================================================================
                         
 # =============================================================================
 #                 elif particle_reinit == 1: 
