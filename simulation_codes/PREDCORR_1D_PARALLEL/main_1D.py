@@ -103,7 +103,6 @@ def quiet_start_bimaxwellian():
     pos = np.zeros(N, dtype=np.float64)
     vel = np.zeros((3, N), dtype=np.float64)
     idx = np.ones(N,       dtype=np.int8) * -1
-    np.random.seed(seed)
 
     for jj in range(Nj):
         idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle idx        
@@ -1707,11 +1706,12 @@ else:                                                  # Autoset
         run = len(os.listdir(drive + save_path))
     print('Run number AUTOSET to ', run)
     
-
+# Set and initialize seed
 if seed == '-':
     seed = None
 else:
     seed = int(seed)
+np.random.seed(seed)
 
 manage_directories()
 
@@ -1792,7 +1792,6 @@ wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequ
 va         = B_eq / np.sqrt(mu0*rho)                     # Alfven speed at equator: Assuming pure proton plasma
 gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
 dx         = dxm * va / gyfreq_eq                        # Alternate method of calculating dx (better for multicomponent plasmas)
-#dx         = dxm * c / wpi                              # Spatial cadence, based on ion inertial length
 
 xmax       = NX // 2 * dx                                # Maximum simulation length, +/-ve on each side
 xmin       =-NX // 2 * dx
