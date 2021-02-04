@@ -1660,7 +1660,7 @@ def summary_plots(save=True, histogram=True):
     return
 
 
-def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, tx_only=False, tmax=30, remove_ND=False):
+def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, tx_only=False, tmax=None, remove_ND=False):
     '''
     Need a high-pass option for the wk? Or will it do all of it?
     It should do all of it (show the Pc4 branch and the Pc1 branch)
@@ -1682,13 +1682,12 @@ def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, t
         for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
             print('2D summary for {}'.format(comp))
 
-            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None, remove_ND=remove_ND)
-            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=tmax, remove_ND=remove_ND)
-
+            #plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None, remove_ND=remove_ND)
+            
             if tx_only == False:
-                plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', remove_ND=remove_ND, save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
-                plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , remove_ND=remove_ND, save=True, linear_overlay=False, pcyc_mult=None)
-                plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
+                #plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', remove_ND=remove_ND, save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
+                #plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , remove_ND=remove_ND, save=True, linear_overlay=False, pcyc_mult=None)
+                #plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
                 plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
     
                 if False:
@@ -3167,13 +3166,15 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
     else:
         ax.set_ylim(0, None)
     
-    alpha=0.5
+    alpha=0.1
     if dispersion_overlay == True:
-        k_vals, CPDR_solns, warm_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=zero_cold)
+        k_vals, CPDR_solns, WPDR_solns, HPDR_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=zero_cold)
+        
         for ii in range(CPDR_solns.shape[1]):
-            ax.plot(xfac*k_vals, CPDR_solns[:, ii],      c='k', linestyle='--', label='CPDR' if ii == 0 else '', alpha=alpha)
-            ax.plot(xfac*k_vals, warm_solns[:, ii].real, c='k', linestyle='-',  label='WPDR' if ii == 0 else '', alpha=alpha)
-      
+            ax.plot(xfac*k_vals, CPDR_solns[:, ii].real, c='k', linestyle='-' , label='CPDR' if ii == 0 else '', alpha=alpha)
+            ax.plot(xfac*k_vals, WPDR_solns[:, ii].real, c='k', linestyle='--', label='WPDR' if ii == 0 else '', alpha=alpha)
+            ax.plot(xfac*k_vals, HPDR_solns[:, ii].real, c='k', linestyle=':' , label='HPDR' if ii == 0 else '', alpha=alpha)
+        
     if plot_alfven == True:
         # Plot Alfven velocity on here just to see
         alfven_line = k * cf.va
@@ -4064,7 +4065,7 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//STANDARD_TEST_winanis_PU//']:
+    for series in ['//STANDARD_TEST_winmulti_PUSI_cold//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4072,7 +4073,7 @@ if __name__ == '__main__':
         if True:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [2]
+            runs_to_do = [2, 3]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -4086,16 +4087,16 @@ if __name__ == '__main__':
 
                 #winske_summary_plots(save=True)
                 #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
-                winske_magnetic_density_plot()
+                #winske_magnetic_density_plot()
                 #disp.plot_kt_winske()
                 #disp.plot_fourier_mode_timeseries(it_max=None)
                 
-                plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=1.0)
-                ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7)
+                #plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=1.0)
+                #ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7)
 
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
+                #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
                 try:
-                    standard_analysis_package(thesis=False, tx_only=False, disp_overlay=False, remove_ND=False)
+                    standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)
                 except:
                     pass            
         

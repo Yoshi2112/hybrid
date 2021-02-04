@@ -8,7 +8,7 @@ CHARGE_ELEM  1.           1.
 DRIFT_VA     0.           0.
 DENSITY_CM3  180.         20.
 ANISOTROPY   0.0          1.0
-ENERGY_PERP  1.0          40.
+ENERGY_PERP  1.0          40e3
 ELECTRON_EN  1.0    
 BETA_FLAG    0
 L            5.35

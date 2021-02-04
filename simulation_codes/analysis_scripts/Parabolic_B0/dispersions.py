@@ -57,7 +57,7 @@ def get_cgr_from_sim(norm_flag=0):
     return freqs, cgr, stop
 
 
-def get_linear_dispersion_from_sim(k, plot=False, save=False, zero_cold=True):
+def get_linear_dispersion_from_sim(k, plot=False, save=False, zero_cold=True, Nk=1000):
     '''
     Still not sure how this will work for a H+, O+ mix, but H+-He+ should be fine
     
@@ -66,31 +66,42 @@ def get_linear_dispersion_from_sim(k, plot=False, save=False, zero_cold=True):
         Anisotropy -- Number
         Tper       -- eV
     '''
-    from dispersion_solver_multispecies import get_dispersion_relations
-    from analysis_config                import Tperp, Tpar, B_eq
-        
-    anisotropy = Tperp / Tpar - 1
-    t_perp     = cf.Tperp.copy() / 11603.  
+    print('Calculating linear dispersion relations...')
+    from multiapprox_dispersion_solver  import get_dispersion_relation, create_species_array
+    from analysis_config                import vth_perp, vth_par, B_eq
+    kB = 1.38065e-23     # Boltzmann's Constant (J/K)
+    
+    # Extract species parameters from run, create Species array (Could simplify T calculation when I'm less lazy)
+    t_par      = (cf.mass * vth_par  ** 2 / kB) / 11603.
+    t_perp     = (cf.mass * vth_perp ** 2 / kB) / 11603.
+    anisotropy = t_perp / t_par - 1
     
     if zero_cold == True:
         for ii in range(t_perp.shape[0]):
             if cf.temp_type[ii] == 0:
-                t_perp[ii] = 0.0
+                t_perp[ii]     = 0.0
+                anisotropy[ii] = 0.0
+    
+    Species, PP = create_species_array(B_eq, cf.species_lbl, cf.mass, cf.charge,
+                                       cf.density, t_perp, anisotropy)
     
     # Convert from linear units to angular units for k range to solve over
-    kmin = 2*np.pi*k[0]
-    kmax = 2*np.pi*k[-1]
+    kmin   = 2*np.pi*k[0]
+    kmax   = 2*np.pi*k[-1]
+    k_vals = np.linspace(kmin, kmax, Nk) 
     
-    k_vals, CPDR_solns, WPDR_solns = get_dispersion_relations(B_eq, cf.species_lbl, cf.mass, cf.charge, \
-                                           cf.density, t_perp, anisotropy, norm_k_in=False, norm_w=False,
-                                           kmin=kmin, kmax=kmax)
-    
+    # Calculate dispersion relations (3 approximations)
+    CPDR_solns,  cold_CGR = get_dispersion_relation(Species, k_vals, approx='cold')
+    WPDR_solns,  warm_CGR = get_dispersion_relation(Species, k_vals, approx='warm')
+    HPDR_solns,  hot_CGR  = get_dispersion_relation(Species, k_vals, approx='hot')
+
     # Convert back from angular units to linear units
     k_vals     /= 2*np.pi
     CPDR_solns /= 2*np.pi
     WPDR_solns /= 2*np.pi
+    HPDR_solns /= 2*np.pi
 
-    return k_vals, CPDR_solns, WPDR_solns
+    return k_vals, CPDR_solns, WPDR_solns, HPDR_solns
 
 
 def get_wx(component):

@@ -284,9 +284,9 @@ if __name__ == '__main__':
 
     # Check 
     if True:
-        S, MLAT, S_RAT, VR, WTR, VTR, K = get_S_dipole(L, dB=-20e-9,
+        S, MLAT, S_RAT, VR, WTR, VTR, K = get_S_dipole(L, dB=0.0e-9,
                                                        Bw=0.5e-9, f=1.5,
-                                                       N_field=1e3)
+                                                       N_field=1e4)
         
         plt.figure()
         plt.plot(S/1e3, S_RAT)
@@ -307,6 +307,7 @@ if __name__ == '__main__':
         # Wave params
         pc5_ampl = 20.0e-9  # nT
         pc5_freq = 5.0      # mHz
+        mlat_lim = 10
         
         # Just do one period
         t_max    = 1000./pc5_freq                 # Max time (s)
@@ -329,6 +330,7 @@ if __name__ == '__main__':
         
         VR_ALL[VR_ALL > 3e8] = np.nan
         
+        plt.ioff()
         fig, ax = plt.subplots(3, sharex=True)
         
         im1 = ax[0].pcolormesh(t, MLAT, S_RAT_ALL.T,
@@ -351,6 +353,11 @@ if __name__ == '__main__':
         im1 = ax[2].pcolormesh(t, MLAT, VR_ALL.T, cmap='jet',
                       shading='auto')
         ax[2].set_ylabel('$V_r$', rotation=0)
+        
+        for pp in [0, 2]:
+            ax[pp].set_ylim(-mlat_lim, mlat_lim)
+        
+        plt.show()
         
     if False:
         # Plot phase space for each position along the field (only for S < 1.5)
