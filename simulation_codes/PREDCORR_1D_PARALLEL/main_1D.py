@@ -1859,7 +1859,13 @@ else:
         ii        += 1                                                                     # Increment counter
 
     r_xmax      = L * RE * np.cos(theta_xmax) ** 2                                      # Radial distance of simulation boundary
-    B_xmax      = B_eq*np.sqrt(4 - 3*np.cos(theta_xmax)**2)/np.cos(theta_xmax)**6       # Magnetic field intensity at boundary
+    
+    # Magnetic field intensity at boundary : Calculate or manually set
+    if B_xmax_ovr == '-':
+        B_xmax = B_eq*np.sqrt(4 - 3*np.cos(theta_xmax)**2)/np.cos(theta_xmax)**6       
+    else:
+        B_xmax = float(B_xmax_ovr)
+        
     a           = (B_xmax / B_eq - 1) / xmax ** 2                                       # Parabolic scale factor: Fitted to B_eq, B_xmax
     lambda_L    = np.arccos(np.sqrt(1.0 / L))                                           # Lattitude of Earth's surface at this L
 
