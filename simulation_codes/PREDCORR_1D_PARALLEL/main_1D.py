@@ -331,8 +331,8 @@ def set_timestep(vel):
            be initial limiting factor. This may change for inhomogenous loading
            of particles or initial fields.
     '''
-    ion_ts   = orbit_res / gyfreq                     # Timestep to resolve gyromotion
-    vel_ts   = 0.5 * dx / np.max(np.abs(vel[0, :]))   # Timestep to satisfy particle CFL: <0.5dx per timestep
+    ion_ts = dxm * orbit_res / gyfreq                 # Timestep to resolve gyromotion
+    vel_ts = 0.5 * dx / np.max(np.abs(vel[0, :]))     # Timestep to satisfy particle CFL: <0.5dx per timestep
     
     gyperiod_eq = 2 * np.pi / gyfreq_eq               # Equatorial (largest) gyroperiod
     DT          = min(ion_ts, vel_ts)                 # Timestep as smallest of options
@@ -426,6 +426,84 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
            
     Could vectorize this with the temp_N array, then check for particles on the boundaries (for
     manual setting)
+    
+    QUESTION :: Why do particles on the boundary only give 0.5 weighting? 
+    ANSWER   :: It seems legit and prevents double counting of a particle on the boundary. Since it
+                is a B-field node, there should be 0.5 weighted to both nearby E-nodes. In this case,
+                reflection doesn't make sense because there cannot be another particle there - there is 
+                only one midpoint position (c.f. mirroring contributions of all other particles due to 
+                pretending there's another identical particle on the other side of the simulation boundary).
+    
+    UPDATE :: Periodic fields don't require weightings of 0.5 on the boundaries. Loop was copied without
+               this option below because it prevents needing to evaluating field_periodic for every
+               particle.
+    '''
+    Np         = pos.shape[0]
+    epsil      = 1e-15
+    
+    if E_nodes == True:
+        grid_offset   = 0.5
+    else:
+        grid_offset   = 0.0
+    
+    particle_transform = xmax + (ND - grid_offset)*dx  + epsil      # Offset to account for E/B grid and damping nodes
+    
+    if field_periodic == 0:
+        for ii in nb.prange(Np):
+            xp          = (pos[ii] + particle_transform) / dx       # Shift particle position >= 0
+            I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node (Vectorize?)
+            delta_left  = I[ii] - xp                                # Distance from left node in grid units
+            
+            if abs(pos[ii] - xmin) < 1e-10:
+                I[ii]    = ND - 1
+                W[0, ii] = 0.0
+                W[1, ii] = 0.5
+                W[2, ii] = 0.0
+            elif abs(pos[ii] - xmax) < 1e-10:
+                I[ii]    = ND + NX - 1
+                W[0, ii] = 0.5
+                W[1, ii] = 0.0
+                W[2, ii] = 0.0
+            else:
+                W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))  # Get weighting factors
+                W[1, ii] = 0.75 - np.square(delta_left + 1.)
+                W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
+    else:
+        for ii in nb.prange(Np):
+            xp          = (pos[ii] + particle_transform) / dx       # Shift particle position >= 0
+            I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node (Vectorize?)
+            delta_left  = I[ii] - xp                                # Distance from left node in grid units
+
+            W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))  # Get weighting factors
+            W[1, ii] = 0.75 - np.square(delta_left + 1.)
+            W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
+    return
+
+
+@nb.njit(parallel=do_parallel)
+def assign_weighting_CIC(pos, I, W, E_nodes=True):
+    '''Assigns weighting function based on 1st order Cloud-in-Cell type particle shape
+    
+    INPUT:
+        pos     -- particle positions (x)
+        I       -- Leftmost (to nearest) nodes. Output array
+        W       -- TSC weights, 3xN array starting at respective I
+        E_nodes -- True/False flag for calculating values at electric field
+                   nodes (grid centres) or not (magnetic field, edges)
+    
+    The maths effectively converts a particle position into multiples of dx (i.e. nodes),
+    rounded (to get nearest node) and then offset to account for E/B grid staggering and 
+    to get the leftmost node. This is then offset by the damping number of nodes, ND. The
+    calculation for weighting (dependent on delta_left).
+    
+    NOTE: The addition of `epsilon' prevents banker's rounding due to precision limits. This
+          is the easiest way to get around it.
+          
+    NOTE2: If statements in weighting prevent double counting of particles on simulation
+           boundaries. abs() with threshold used due to machine accuracy not recognising the
+           upper boundary sometimes. Note sure how big I can make this and still have it
+           be valid/not cause issues, but considering the scale of normal particle runs (speeds
+           on the order of va) it should be plenty fine.
     
     QUESTION :: Why do particles on the boundary only give 0.5 weighting? 
     ANSWER   :: It seems legit and prevents double counting of a particle on the boundary. Since it
@@ -1214,10 +1292,10 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center,\
                               B_center[ND:ND+NX+1, 1] ** 2 +
                               B_center[ND:ND+NX+1, 2] ** 2)
     gyfreq          = qm_ratios.max() * B_magnitude.max()     
-    ion_ts          = orbit_res / gyfreq
+    ion_ts          = dxm * orbit_res / gyfreq
     max_V           = get_max_vx(vel)
     
-    if E[:, 0].max() != 0:
+    if False:#E[:, 0].max() != 0:
         elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / max_V).max())    # E-field acceleration "frequency"
         Eacc_ts         = freq_res / elecfreq                            
     else:
@@ -2033,7 +2111,7 @@ if __name__ == '__main__':
     
         DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array\
             = set_timestep(vel)
-    
+
         calculate_E(B, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array)
         
         if save_particles == 1:
@@ -2049,12 +2127,14 @@ if __name__ == '__main__':
         
         qq       = 1;    sim_time = DT; loop_times = np.zeros(max_inc-1, dtype=float)
         print('Starting main loop...')
-        part_save_iter = 1; field_save_iter = 1
+        #part_save_iter = 1; field_save_iter = 1
         while qq < max_inc:
             
             ### DIAGNOSTICS :: MAYBE PUT UNDER A FLAG AT SOME POINT
-            #diagnostic_field_plot(B, E_half, q_dens, Ji, Ve, Te, 
-            #                  B_damping_array, qq, DT, sim_time)
+# =============================================================================
+#             diagnostic_field_plot(B, E_half, q_dens, Ji, Ve, Te, 
+#                               B_damping_array, qq, DT, sim_time)
+# =============================================================================
             
             loop_start = timer()
             qq, DT, max_inc, part_save_iter, field_save_iter =                                \

@@ -1597,8 +1597,9 @@ def summary_plots(save=True, histogram=True):
         ###################
         ### FIGURE TEXT ###
         ###################
-        anisotropy = (cf.Tperp / cf.Tpar - 1).round(1)
-        beta_per   = (2*(4e-7*np.pi)*(1.381e-23)*cf.Tperp*cf.ne / (cf.B_eq**2)).round(1)
+        Tperp = cf.mass * cf.vth_perp ** 2 / kB
+        anisotropy = (cf.vth_perp ** 2 / cf.vth_par ** 2 - 1).round(1)
+        beta_per   = (2*(4e-7*np.pi)*(1.381e-23)*Tperp*cf.ne / (cf.B_eq**2)).round(1)
         #beta_e     = np.round((2*(4e-7*np.pi)*(1.381e-23)*cf.Te0*cf.ne  / (cf.B_eq**2)), 2)
         rdens      = (cf.density / cf.ne).round(2)
 
@@ -4073,7 +4074,7 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [5]
+            runs_to_do = [0]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -4102,7 +4103,7 @@ if __name__ == '__main__':
 #                     pass            
 #         
 # =============================================================================
-        if False:
+        if True:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
@@ -4114,8 +4115,7 @@ if __name__ == '__main__':
                 #plot_spatial_poynting(save=True, log=True)
                 #plot_spatial_poynting_helical(save=True, log=True)
                 
-                #find_the_particles(it_max=None)
-                #summary_plots(save=True, histogram=True)
+                summary_plots(save=True, histogram=True)
                 for sp in range(cf.Nj):
                     plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
                 #scatterplot_velocities()
