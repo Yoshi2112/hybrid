@@ -14,14 +14,14 @@ SOURCE_SMOOTHING_FLAG	0
 E_DAMPING_FLAG			0
 QUIET_START_FLAG		1
 DAMPING_MULTIPLIER_RD   0.05
-NX 						2048
-ND 						768
+NX 						2560
+ND 						4
 MAX_REV					300
-DXM						0.2
-IE						1
+DXM						0.1
+IE						0
 RC_HWIDTH				-
 GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02	
 PARTICLE_DUMP_FREQ		0.5
 FIELD_DUMP_FREQ			0.05
-Small dx is exploding. Check second run (see if seeding is working)
+Dump every timestep.
