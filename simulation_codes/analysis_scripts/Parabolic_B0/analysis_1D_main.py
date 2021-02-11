@@ -1683,12 +1683,12 @@ def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, t
         for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
             print('2D summary for {}'.format(comp))
 
-            #plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None, remove_ND=remove_ND)
+            plot_tx(component=comp, saveas=disp_folder + 'tx_plot', save=True, tmax=None, remove_ND=remove_ND)
             
             if tx_only == False:
-                #plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', remove_ND=remove_ND, save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
-                #plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , remove_ND=remove_ND, save=True, linear_overlay=False, pcyc_mult=None)
-                #plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
+                plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', remove_ND=remove_ND, save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
+                plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , remove_ND=remove_ND, save=True, linear_overlay=False, pcyc_mult=None)
+                plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
                 plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
     
                 if False:
@@ -4066,12 +4066,12 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//shoji_2013_test//']:
+    for series in ['//STANDARD_TEST_winmulti_PUSI//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
             runs_to_do = [0]
@@ -4084,7 +4084,7 @@ if __name__ == '__main__':
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
                 #plot_total_density_with_time()
                 #plot_max_velocity()
-                check_fields(save=True)
+                #check_fields(save=True)
 
                 #winske_summary_plots(save=True)
                 #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
@@ -4095,15 +4095,13 @@ if __name__ == '__main__':
                 #plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=1.0)
                 #ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7)
 
-# =============================================================================
-#                 #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
-#                 try:
-#                     standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)
-#                 except:
-#                     pass            
-#         
-# =============================================================================
-        if True:
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
+                try:
+                    standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)
+                except:
+                    pass            
+        
+        if False:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))

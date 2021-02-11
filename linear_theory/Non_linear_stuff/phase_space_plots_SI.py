@@ -36,6 +36,13 @@ Test:
     
 For a given frequency, there is unique k, and velocities under the cold approximation
 '''
+def get_density_powerlaw(L, mlat, n_eq, power):
+    r0 = L * RE
+    r  = r0 * np.cos(mlat*np.pi/180.)**2
+    nr = n_eq * (r0 / r) ** power
+    return r, nr
+
+
 def new_trace_fieldline(L, Npts=1e5):
     '''
     Traces field line position and B-intensity for given L. 
@@ -43,6 +50,10 @@ def new_trace_fieldline(L, Npts=1e5):
     reverses sign of s since the integration is done from the southern hemisphere
     but we normally think of traces from the northern.
         
+    Also gets density along field line based on power law
+    Eq. 3.60 of Menk and Waters, 2016 for density power law and
+    Eq. 3.22 of Roderer and Zhang, 2016
+    
     Validated: Ionospheric B0 goes to surface B0 for rA = 0.
     B outputted in nT
     '''
@@ -55,7 +66,7 @@ def new_trace_fieldline(L, Npts=1e5):
         Np = int(Npts+1)
     else:
         Np = int(Npts)
-        
+    
     iono_lat = np.arccos(np.sqrt((RE + r_A)/(RE*L))) 
     mlat     = np.linspace(-iono_lat, iono_lat, Np, endpoint=True)
     dlat     = mlat[1] - mlat[0]
@@ -71,7 +82,7 @@ def new_trace_fieldline(L, Npts=1e5):
         s[ii]  = current_s
         Bs[ii] = (BE/L**3)*np.sqrt(4-3*np.cos(mlat[ii])**2) / np.cos(mlat[ii])**6
         current_s += ds
-        
+                
     # Flip around equator for 1st half
     s[ :mid_idx] = -1.0*np.flip( s[mid_idx + 1:])
     Bs[:mid_idx] =      np.flip(Bs[mid_idx + 1:])
@@ -160,14 +171,19 @@ def create_species_array(B0, name, mass, charge, density, tper, ani):
     PlasParams['B0']       = B0                                        # Magnetic field value (T)
     return Species, PlasParams
 
-def define_omura2010_parameters(B0):
+def define_omura2010_parameters(B0, n0=178e6):
     '''
     Ambient plasma parameters from Omura et al. (2010) to recreate plots
     '''
+    # Concentrations used in the paper, just assume its the same
+    cH  = 144. / 178.
+    cHe = 17.  / 178.
+    cO  = 17.  / 178.
+    
     name    = np.array(['H'    , 'He'  , 'O' ])
     mass    = np.array([1.0    , 4.0   , 16.0]) * mp
     charge  = np.array([1.0    , 1.0   , 1.0 ]) * qp
-    density = np.array([144.0  , 17.0  , 17.0]) * 1e6
+    density = np.array([cH     , cHe   , cO  ]) * n0
     ani     = np.array([0.0    , 0.0   , 0.0 ])
     tpar    = np.array([0.0    , 0.0   , 0.0 ])
     tper    = (ani + 1) * tpar
@@ -221,7 +237,7 @@ def get_velocities(w, k, Species, PP):
     Vp = get_phase_velocity(w, k, Species)
     return Vg, Vp, Vr
 
-def get_S_dipole(L_shell, dB=0.0, Bw=0.5e-9, f=1.5, N_field=1e5):
+def get_S_dipole(L_shell, dB=0.0, n_eq=178e6, Bw=0.5e-9, f=1.5, N_field=1e5):
     '''
     Define a Bw and w in a specified plasma regime.
         
@@ -239,11 +255,12 @@ def get_S_dipole(L_shell, dB=0.0, Bw=0.5e-9, f=1.5, N_field=1e5):
     w        = 2*np.pi*f                   # rad/s
     omw      = qp * Bw / mp                # 'Gyrofrequency' effect of wave field
     
-    # Field parameters
+    # Field and density parameters
     s, Bs, mlat = new_trace_fieldline(L_shell, Npts=N_field)
     Bs         += dB
     B_grad      = get_B_gradient(Bs, s)
     Om_grad     = qp / mp * B_grad
+    r, ns       = get_density_powerlaw(L_shell, mlat, n_eq, 3)
     
     # Output arrays
     Vr_array    = np.zeros(s.shape[0])
@@ -254,7 +271,7 @@ def get_S_dipole(L_shell, dB=0.0, Bw=0.5e-9, f=1.5, N_field=1e5):
     
     # Calculate inhomogeneity ratio at each point along field
     for ii in range(s.shape[0]):
-        Species, PP = define_omura2010_parameters(Bs[ii])
+        Species, PP = define_omura2010_parameters(Bs[ii], n0=ns[ii])
         
         # Wave parameters
         k_array[ii]   = get_k_cold(w, Species, ii)            # /m ??
@@ -271,34 +288,50 @@ def get_S_dipole(L_shell, dB=0.0, Bw=0.5e-9, f=1.5, N_field=1e5):
         
         S_ratio[ii] = 1 / (s0 * w * omw) * (s1*dwdt + Vp*s2*Om_grad[ii])
         
-        #if np.isnan(S_ratio[ii]) == True and abs(mlat[ii]) < 10.0:
-#            pdb.set_trace()
-        
     return s, mlat, S_ratio, Vr_array, wtr_array, Vtr_array, k_array
 
 
 if __name__ == '__main__':    
     main_folder = 'F://NONLINEAR//'
     
-    L = 4.27
+    L_VAL = 4.27
+    NEQ   = 200e6
+
+    # Get magnetic field intensity and plasma density along field line
+    if False:
+        S, BS, MLAT = new_trace_fieldline(L_VAL, Npts=1e5)
+        R, NR       = get_density_powerlaw(L_VAL, MLAT, NEQ, 3)
+        
+        fig, ax = plt.subplots(2)
+        
+        ax[0].plot(S/RE, BS)
+        ax[0].set_ylabel('B\n(nT)')
+        
+        ax[1].plot(S/RE, NR/1e6)
+        ax[1].set_ylabel('n_e\n(/m3)')
+        #ax[1].set_xlabel('Distance along field (RE)')
+        
+        for axes in ax:
+            axes.set_xlim(S[0]/RE, S[-1]/RE)
 
     # Check 
     if True:
-        S, MLAT, S_RAT, VR, WTR, VTR, K = get_S_dipole(L, dB=0.0e-9,
+        S, MLAT, S_RAT, VR, WTR, VTR, K = get_S_dipole(L_VAL, dB=0.0e-9,
                                                        Bw=0.5e-9, f=1.5,
-                                                       N_field=1e4)
+                                                       N_field=1e4, n_eq=NEQ)
         
         plt.figure()
         plt.plot(S/1e3, S_RAT)
         plt.ylabel('S ratio')
         plt.xlabel('s (km)')
-        plt.ylim(-1, 1)
+        #plt.ylim(-1, 1)
         
         plt.figure()
         plt.plot(MLAT, S_RAT)
         plt.ylabel('S ratio')
         plt.xlabel('MLAT')
-        plt.ylim(-1, 1)
+        #plt.ylim(-1, 1)
+
 
     if False:
         # Number of points along field line
@@ -324,7 +357,8 @@ if __name__ == '__main__':
         for mm in range(t.shape[0]):
             print('Doing t = {}s'.format(t[mm]))
             S, MLAT, S_RAT_ALL[mm], VR_ALL[mm], WTR, VTR, K = \
-                get_S_dipole(L, dB=pc5_wave[mm], Bw=0.5e-9, f=1.5, N_field=nB)
+                get_S_dipole(L_VAL, dB=pc5_wave[mm], Bw=0.5e-9, f=1.5,
+                             N_field=nB, n_eq=NEQ)
         
         pos_lim, neg_lim = get_S_lims(S_RAT_ALL, MLAT, lim=1.0)
         
@@ -341,7 +375,7 @@ if __name__ == '__main__':
         ax[0].plot(t, pos_lim, c='k')
         ax[0].plot(t, neg_lim, c='k')
     
-        ax[0].set_title('S along field line :: L = {} :: Pc5 {}nT at {}mHz'.format(L, pc5_ampl*1e9, pc5_freq))
+        ax[0].set_title('S along field line :: L = {} :: Pc5 {}nT at {}mHz'.format(L_VAL, pc5_ampl*1e9, pc5_freq))
         ax[1].set_xlabel('Time (s)')
         ax[0].set_ylabel('MLAT\n(deg)', rotation=0)
         #cbar = plt.colorbar(im1, orientation='vertical', extend='both')
@@ -403,7 +437,7 @@ if __name__ == '__main__':
                 ax.set_xlabel('$\zeta$', fontsize=20)
                 ax.set_ylabel('$\\frac{\\theta}{2 \omega_{tr}}$', rotation=0, labelpad=20, fontsize=20)
                 ax.set_title('Dipole Resonant Proton Phase Space :: S = %.2f :: L = %.2f :: MLAT = %.2f$^{\circ}$ :: s = %.0f km'
-                             % (S_RAT[mm], L, MLAT[mm], S[mm]/1e3), fontsize=14)
+                             % (S_RAT[mm], L_VAL, MLAT[mm], S[mm]/1e3), fontsize=14)
                 
                 fig.savefig(save_dir + 'phase_space_{:06}.png'.format(mm))
                 plt.close('all')
