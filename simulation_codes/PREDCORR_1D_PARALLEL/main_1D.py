@@ -333,14 +333,16 @@ def set_timestep(vel):
            
     To do : Actually put a Courant condition check in here
     '''
+    gyperiod_eq   = 2 * np.pi / gyfreq_eq             # Equatorial (largest) gyroperiod (s)
+    gyperiod_xmax = 2 * np.pi / gyfreq_eq             # Boundary  (smallest) gyroperiod (s)
+    
     if disable_waves == 0:
-        ion_ts = dxm * orbit_res / gyfreq                 # Timestep to resolve gyromotion
+        ion_ts = dxm * orbit_res / gyfreq             # Timestep to resolve gyromotion
     else:
-        ion_ts = 0.05 / gyfreq
+        ion_ts = 0.05*gyperiod_xmax                   # If no waves, just do 20 points per revolution
         
     vel_ts = 0.5 * dx / np.max(np.abs(vel[0, :]))     # Timestep to satisfy particle CFL: <0.5dx per timestep
     
-    gyperiod_eq = 2 * np.pi / gyfreq_eq               # Equatorial (largest) gyroperiod
     DT          = min(ion_ts, vel_ts)                 # Timestep as smallest of options
     max_time    = max_rev * gyperiod_eq               # Total runtime in seconds
     max_inc     = int(max_time / DT) + 1              # Total number of time steps
