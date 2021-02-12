@@ -330,8 +330,14 @@ def set_timestep(vel):
     Note : Assumes no dispersion effects or electric field acceleration to
            be initial limiting factor. This may change for inhomogenous loading
            of particles or initial fields.
+           
+    To do : Actually put a Courant condition check in here
     '''
-    ion_ts = dxm * orbit_res / gyfreq                 # Timestep to resolve gyromotion
+    if disable_waves == 0:
+        ion_ts = dxm * orbit_res / gyfreq                 # Timestep to resolve gyromotion
+    else:
+        ion_ts = 0.05 / gyfreq
+        
     vel_ts = 0.5 * dx / np.max(np.abs(vel[0, :]))     # Timestep to satisfy particle CFL: <0.5dx per timestep
     
     gyperiod_eq = 2 * np.pi / gyfreq_eq               # Equatorial (largest) gyroperiod
@@ -1682,7 +1688,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
     '''
     # Check timestep (Maybe only check every few. Set in main body)
     #check_start = timer()
-    if adaptive_timestep == True and qq%1 == 0:
+    if adaptive_timestep == True and qq%1 == 0 and disable_waves == 0:
         qq, DT, max_inc, part_save_iter, field_save_iter, damping_array \
         = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De,\
                          qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array)

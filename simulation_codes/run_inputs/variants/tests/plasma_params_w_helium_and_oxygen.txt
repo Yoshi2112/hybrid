@@ -12,4 +12,4 @@ ENERGY_PERP  25.        0.1        0.1          0.1
 ELECTRON_EV  0.1
 BETA_FLAG    1
 L            5.35
-B_EQ         200.
+B_EQ         200e-9
