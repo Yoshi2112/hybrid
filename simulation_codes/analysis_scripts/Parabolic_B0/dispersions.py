@@ -57,10 +57,8 @@ def get_cgr_from_sim(norm_flag=0):
     return freqs, cgr, stop
 
 
-def get_linear_dispersion_from_sim(k, plot=False, save=False, zero_cold=True, Nk=1000):
+def get_linear_dispersion_from_sim(k, zero_cold=True, Nk=1000):
     '''
-    Still not sure how this will work for a H+, O+ mix, but H+-He+ should be fine
-    
     Extracted values units :: 
         Density    -- /m3       (Cold, warm densities)
         Anisotropy -- Number
@@ -68,12 +66,12 @@ def get_linear_dispersion_from_sim(k, plot=False, save=False, zero_cold=True, Nk
     '''
     print('Calculating linear dispersion relations...')
     from multiapprox_dispersion_solver  import get_dispersion_relation, create_species_array
-    from analysis_config                import vth_perp, vth_par, B_eq
+
     kB = 1.38065e-23     # Boltzmann's Constant (J/K)
     
     # Extract species parameters from run, create Species array (Could simplify T calculation when I'm less lazy)
-    t_par      = (cf.mass * vth_par  ** 2 / kB) / 11603.
-    t_perp     = (cf.mass * vth_perp ** 2 / kB) / 11603.
+    t_par      = (cf.mass * cf.vth_par  ** 2 / kB) / 11603.
+    t_perp     = (cf.mass * cf.vth_perp ** 2 / kB) / 11603.
     anisotropy = t_perp / t_par - 1
     
     if zero_cold == True:
@@ -82,7 +80,7 @@ def get_linear_dispersion_from_sim(k, plot=False, save=False, zero_cold=True, Nk
                 t_perp[ii]     = 0.0
                 anisotropy[ii] = 0.0
     
-    Species, PP = create_species_array(B_eq, cf.species_lbl, cf.mass, cf.charge,
+    Species, PP = create_species_array(cf.B_eq, cf.species_lbl, cf.mass, cf.charge,
                                        cf.density, t_perp, anisotropy)
     
     # Convert from linear units to angular units for k range to solve over
@@ -277,18 +275,33 @@ def plot_fourier_mode_timeseries(it_max=None):
     return
 
 
-def get_wk(component):
+def get_wk(component, linear_only=True):
     '''
     Spatial boundaries start at index
     '''
     ftime, arr = cf.get_array(component)
     
+    t0 = 0
+    if linear_only == True:
+        # Find the point where magnetic energy peaks, FFT only up to 120% of that index
+        yftime, by = cf.get_array('By')
+        zftime, bz = cf.get_array('Bz')
+        bt         = np.sqrt(by ** 2 + bz ** 2)
+        mu0        = (4e-7) * np.pi
+        U_B        = 0.5 / mu0 * np.square(bt[:, :]).sum(axis=1) * cf.dx
+        max_idx    = np.argmax(U_B)
+        t1         = int(1.2*max_idx)
+        tf         = ftime[t1]
+    else:
+        t1 = ftime.shape[0]
+        tf = ftime[t1-1]
+        
     if component.upper()[0] == 'B':
         st = cf.ND; en = cf.ND + cf.NX + 1
     else:
         st = cf.ND; en = cf.ND + cf.NX
     
-    num_times = arr.shape[0]
+    num_times = t1-t0
 
     df = 1. / (num_times * cf.dt_field)
     dk = 1. / (cf.NX     * cf.dx)
@@ -296,19 +309,19 @@ def get_wk(component):
     f  = np.arange(0, 1. / (2*cf.dt_field), df)
     k  = np.arange(0, 1. / (2*cf.dx), dk)
     
-    fft_matrix  = np.zeros(arr[:, st:en].shape, dtype='complex128')
-    fft_matrix2 = np.zeros(arr[:, st:en].shape, dtype='complex128')
+    fft_matrix  = np.zeros(arr[t0:t1, st:en].shape, dtype='complex128')
+    fft_matrix2 = np.zeros(arr[t0:t1, st:en].shape, dtype='complex128')
 
     # Take spatial FFT at each time
-    for ii in range(arr.shape[0]): 
-        fft_matrix[ii, :] = np.fft.fft(arr[ii, st:en] - arr[ii, st:en].mean())
+    for ii in range(fft_matrix.shape[0]): 
+        fft_matrix[ii, :] = np.fft.fft(arr[t0 + ii, st:en] - arr[t0 + ii, st:en].mean())
 
     # Take temporal FFT at each position (now k)
     for ii in range(fft_matrix.shape[1]):
         fft_matrix2[:, ii] = np.fft.fft(fft_matrix[:, ii] - fft_matrix[:, ii].mean())
 
     wk = fft_matrix2[:f.shape[0], :k.shape[0]] * np.conj(fft_matrix2[:f.shape[0], :k.shape[0]])
-    return k, f, wk
+    return k, f, wk, tf
 
     
 def do_stft(dat, win_len, slide, num_slides):

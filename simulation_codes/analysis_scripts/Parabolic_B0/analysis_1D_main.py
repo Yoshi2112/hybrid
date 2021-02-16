@@ -1689,7 +1689,8 @@ def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, t
                 plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', remove_ND=remove_ND, save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
                 plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , remove_ND=remove_ND, save=True, linear_overlay=False, pcyc_mult=None)
                 plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
-                plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot', save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
+                plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot_zc', zero_cold=True , save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
+                plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot'   , zero_cold=False, save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
     
                 if False:
                     plot_spatial_poynting(save=True, log=True)
@@ -3108,8 +3109,12 @@ def compare_B0_to_dipole():
 
 
 def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False, save=False,
-                     pcyc_mult=None, xmax=None, plot_alfven=False, zero_cold=False, overwrite=True):
-    
+                     pcyc_mult=None, xmax=None, plot_alfven=False, zero_cold=True, overwrite=True,
+                     linear_only=True):
+    '''
+    linear_only keyword used to take FFT of only a small portion of the timeseries, up to the 
+    point of maximum growth (or perhaps 20% of the way beyond that?)
+    '''
     plt.ioff()
     
     fontsize = 18
@@ -3119,10 +3124,7 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
     mpl.rcParams['xtick.labelsize'] = tick_label_size 
     mpl.rcParams['ytick.labelsize'] = tick_label_size 
     
-    k, f, wk = disp.get_wk(component)
-    if wk.mean() == 0:
-        print('No_waves flag enabled, no plot generated')
-        return
+    k, f, wk, tf = disp.get_wk(component, linear_only=linear_only)
     
     xfac = 1e6
     xlab = '$\mathtt{k (\\times 10^{-6}m^{-1})}$'
@@ -3141,12 +3143,12 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
                                             vmax=wk[1:, 1:].real.max()))      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
     
     fig.colorbar(im1, extend='both', fraction=0.05).set_label(clab, rotation=0, fontsize=fontsize, family=font, labelpad=30)
-    ax.set_title(r'$\omega/k$ Plot :: {} Component :: Linear Theory Overlay'.format(component.upper()),
+    ax.set_title(r'$\omega/k$ Plot :: {} Component :: Linear Theory up to {:.3f}s'.format(component.upper(), tf),
                  fontsize=fontsize, family=font)
     ax.set_ylabel(ylab, fontsize=fontsize, family=font, rotation=0, labelpad=30)
     ax.set_xlabel(xlab, fontsize=fontsize, family=font)
     
-    clr  = ['black', 'green', 'red'] 
+    #clr  = ['black', 'green', 'red'] 
     lbl  = [r'$f_{eq, H^+}$', r'$f_{eq, He^+}$', r'$f_{eq, O^+}$']
     M    = np.array([1., 4., 16.])
     cyc  = qi * cf.B_eq / (2 * np.pi * mp * M)
@@ -3902,7 +3904,7 @@ def plot_total_density_with_time(save=True):
     if save == True:
         fullpath = cf.anal_dir + 'Particle_Density_Count' + '.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-        print('t-x Plot saved')
+        print('pc-t Plot saved')
         plt.close('all')
     else:
         plt.show()
@@ -4066,15 +4068,15 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//STANDARD_TEST_winmulti_PUSI//']:
+    for series in ['//shoji_2013_short//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [0]
+            runs_to_do = [5, 6, 7]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -4095,11 +4097,13 @@ if __name__ == '__main__':
                 #plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=1.0)
                 #ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7)
 
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=True)
-                try:
-                    standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)
-                except:
-                    pass            
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=1.0, remove_ND=False)
+# =============================================================================
+#                 try:
+#                     standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)
+#                 except:
+#                     pass            
+# =============================================================================
         
         if False:
             # Do particle analyses for each run (slow)
@@ -4113,9 +4117,11 @@ if __name__ == '__main__':
                 #plot_spatial_poynting(save=True, log=True)
                 #plot_spatial_poynting_helical(save=True, log=True)
                 
-                summary_plots(save=True, histogram=True)
-                for sp in range(cf.Nj):
-                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
+                plot_total_density_with_time(save=True)
+                
+                #summary_plots(save=True, histogram=True)
+                #for sp in range(cf.Nj):
+                #    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
                 #scatterplot_velocities()
             
         #plot_phase_space_with_time()
