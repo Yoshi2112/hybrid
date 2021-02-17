@@ -3911,6 +3911,11 @@ def plot_total_density_with_time(save=True):
     return
 
 
+def plot_logB_vs_linear():
+    
+    return
+
+
 def multiplot_fluxes(series, save=True):
     '''
     Load outside loop: Fluxes and charge density of all runs in a series
