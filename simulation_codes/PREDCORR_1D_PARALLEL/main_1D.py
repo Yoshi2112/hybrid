@@ -1456,7 +1456,7 @@ def save_field_data(sim_time, dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, da
 
     d_fullpath = d_path + 'data%05d' % r
     
-    np.savez(d_fullpath, E = E[:, 0:3], B = B[:, 0:3],   J = Ji[:, 0:3],
+    np.savez(d_fullpath, E = E[:, 0:3], B = B[:, 0:3],   Ji = Ji[:, 0:3],
                        dns = dns,      Ve = Ve[:, 0:3], Te = Te, sim_time = sim_time,
                        damping_array = damping_array, E_damping_array=E_damping_array)
     print('Field data saved')
