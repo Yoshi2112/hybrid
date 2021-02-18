@@ -1440,10 +1440,10 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                      nsp_ppc     = nsp_ppc,
                      density     = density,
                      N_species   = N_species,
-                     Tpar        = None,
-                     Tperp       = None,
                      vth_par     = vth_par,
                      vth_perp    = vth_perp,
+                     Tpar        = T_par,
+                     Tperp       = T_perp,
                      Bc          = Bc,
                      Te0         = None)
     print('Particle data saved')
@@ -1902,7 +1902,7 @@ if __name__ == '__main__':
         anisotropy = np.array(f.readline().split()[1:], dtype=float)
         
         # Particle energy: If beta == 1, energies are in beta. If not, they are in eV                                    
-        E_per      = np.array(f.readline().split()[1:], dtype=float)
+        E_perp     = np.array(f.readline().split()[1:], dtype=float)
         E_e        = float(f.readline().split()[1])
         beta_flag  = int(f.readline().split()[1])
     
@@ -1921,7 +1921,7 @@ if __name__ == '__main__':
     
     NC          = NX + 2*ND                     # Total number of cells
     ne          = density.sum()                 # Electron number density
-    E_par       = E_per / (anisotropy + 1)      # Parallel species energy
+    E_par       = E_perp / (anisotropy + 1)     # Parallel species energy
     
     if field_periodic == 1:
         if particle_periodic == 0:
@@ -1945,15 +1945,19 @@ if __name__ == '__main__':
         # Input energies in eV
         beta_per   = None
         Te0_scalar = q * E_e / kB
-        vth_perp   = np.sqrt(charge *  E_per /  mass)    # Perpendicular thermal velocities
-        vth_par    = np.sqrt(charge *  E_par /  mass)    # Parallel thermal velocities
+        vth_perp   = np.sqrt(charge *  E_perp /  mass)    # Perpendicular thermal velocities
+        vth_par    = np.sqrt(charge *  E_par  /  mass)    # Parallel thermal velocities
+        T_par      = E_par  * 11603.
+        T_perp     = E_perp * 11603.
     else:
         # Input energies in terms of beta (Generally only used for Winske/Gary stuff... invalid in general?)
-        kbt_par    = E_par * (B_eq ** 2) / (2 * mu0 * ne)
-        kbt_per    = E_per * (B_eq ** 2) / (2 * mu0 * ne)
-        Te0_scalar = E_e   * (B_eq ** 2) / (2 * mu0 * ne * kB)
+        kbt_par    = E_par  * (B_eq ** 2) / (2 * mu0 * ne)
+        kbt_per    = E_perp * (B_eq ** 2) / (2 * mu0 * ne)
+        Te0_scalar = E_e    * (B_eq ** 2) / (2 * mu0 * ne * kB)
         vth_perp   = np.sqrt(kbt_per /  mass)                # Perpendicular thermal velocities
         vth_par    = np.sqrt(kbt_par /  mass)                # Parallel thermal velocities
+        T_par      = kbt_par / kB
+        T_perp     = kbt_per / kB
     
     rho        = (mass*density).sum()                        # Mass density for alfven velocity calc.
     wpi        = np.sqrt((density * charge ** 2 / (mass * e0)).sum())            # Proton   Plasma Frequency, wpi (rad/s)

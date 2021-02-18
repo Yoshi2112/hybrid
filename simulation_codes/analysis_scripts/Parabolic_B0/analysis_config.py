@@ -16,7 +16,8 @@ The global calls allow variables to be accessed in the main script without
 clogging up its namespace - i.e. run-specific parameters are called by
 using e.g. cf.B0
 '''
-def load_run(drive, series, run_num, extract_arrays=True, print_summary=True, overwrite_summary=False):
+def load_run(drive, series, run_num, extract_arrays=True, print_summary=True, overwrite_summary=False,
+             CAM_CL=True):
     manage_dirs(drive, series, run_num)
     load_simulation_params()
     load_species_params()
@@ -74,7 +75,7 @@ def load_species_params():
     N_species  = p_data['N_species']
     nsp_ppc    = p_data['nsp_ppc']
     
-    Bc         = p_data['Bc']
+    #Bc         = p_data['Bc']
     
     idx_start0 = p_data['idx_start']
     idx_end0   = p_data['idx_end']
@@ -85,8 +86,12 @@ def load_species_params():
     except:
         Tperp      = p_data['Tper']
     
-    vth_par     = p_data['vth_par']
-    vth_perp    = p_data['vth_perp']
+    try:
+        vth_par     = p_data['vth_par']
+        vth_perp    = p_data['vth_perp']
+    except:
+        vth_par     = None
+        vth_perp    = None
     
     try:
         Te0_arr = p_data['Te0']
@@ -116,7 +121,8 @@ def load_simulation_params():
            particle_reinit, particle_open, disable_waves, source_smoothing, \
            E_damping, quiet_start, homogenous, field_periodic, damping_multiplier, \
            driven_freq, driven_ampl, pulse_offset, pulse_offset, pulse_width, driven_k,\
-           driver_status, num_threads, loop_time
+           driver_status, num_threads, loop_time,\
+           x0B, x1B, x0E, x1E
 
     h_name = os.path.join(data_dir, 'simulation_parameters.pckl')       # Load header file
     f      = open(h_name, 'rb')                                         # Open header file
@@ -161,9 +167,7 @@ def load_simulation_params():
     dt_field          = dt_sim * field_save_iter                        # Time between data slices (seconds)
     dt_particle       = dt_sim * part_save_iter
     
-    B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx                 # B grid points position in space
-    E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx                 # E grid points position in space
-
+    
     try:
         particle_periodic = obj['particle_periodic']
         particle_reflect  = obj['particle_reflect']
@@ -207,10 +211,6 @@ def load_simulation_params():
     else:
         run_time_str = '-'
 
-    grid_min = B_nodes[0]
-    grid_max = B_nodes[-1]
-    grid_mid = 0
-    
     if rc_hwidth == 0: 
         rc_hwidth = NX//2
     
@@ -244,6 +244,23 @@ def load_simulation_params():
     except:
         num_threads = None
         loop_time   = None
+    
+    # Set spatial boundaries as gridpoints (E vs. B, PREDCORR vs. CAM_CL)
+    if 'PREDCORR' in method_type:
+        x0B, x1B = ND, ND + NX + 1
+        x0E, x1E = ND, ND + NX
+        
+        B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx                 # B grid points position in space
+        E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx                 # E grid points position in space
+
+    elif 'CAM_CL' in method_type:
+        x0B, x1B = 1,NX+2
+        x0E, x1E = 1,NX+2
+        
+        B_nodes  = (np.arange(NX + 3 + 1))  * dx
+        E_nodes  = (np.arange(NX + 3)+ 0.5) * dx
+    else:
+        raise ValueError('method_type %s not recognised' % method_type)
     
     return 
 
@@ -360,8 +377,12 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
             print('Ion Composition', file=f)
             
             ccdens   = density*1e-6
-            va_para  = vth_par  / va
-            va_perp  = vth_perp / va
+            if vth_par is not None:
+                va_para = vth_par  / va
+                va_perp = vth_perp / va
+            else:
+                va_para = np.zeros(echarge.shape)
+                va_perp = np.zeros(echarge.shape)
             
             species_str = temp_str = cdens_str = charge_str = va_perp_str = \
             va_para_str = mass_str = drift_str = contr_str = ''
@@ -419,10 +440,14 @@ def load_fields(ii):
     tE               = data['E']
     tVe              = data['Ve']
     tTe              = data['Te']
-    tJ               = data['J']
+    tJ               = data['Ji']
     tdns             = data['dns']
     tsim_time        = data['sim_time']
-    tdamping_array   = data['damping_array']
+    
+    try:
+        tdamping_array = data['damping_array']
+    except:
+        tdamping_array = None
 
     return tB, tE, tVe, tTe, tJ, tdns, tsim_time, tdamping_array
 
@@ -498,15 +523,6 @@ def extract_all_arrays():
     access. Note that magnetic field arrays exclude the last value due to periodic
     boundary conditions. This may be changed later.
     '''
-    num_field_steps    = len(os.listdir(field_dir)) 
-    
-    bx_arr, by_arr, bz_arr, damping_array = [np.zeros((num_field_steps, NC + 1)) for _ in range(4)]
-    
-    ex_arr,ey_arr,ez_arr,vex_arr,jx_arr,vey_arr,jy_arr,vez_arr,jz_arr,te_arr,qdns_arr\
-    = [np.zeros((num_field_steps, NC)) for _ in range(11)]
-
-    field_sim_time = np.zeros(num_field_steps)
-    
     # Check that all components are extracted
     comps_missing = 0
     for component in ['bx', 'by', 'bz', 'ex', 'ey', 'ez']:
@@ -518,6 +534,18 @@ def extract_all_arrays():
         print('Field components already extracted.')
         return
     else:
+        num_field_steps    = len(os.listdir(field_dir)) 
+        
+        # Load to specify arrays
+        zB, zE, zVe, zTe, zJ, zq_dns, zsim_time, zdamp = load_fields(0)
+
+        bx_arr, by_arr, bz_arr, damping_array = [np.zeros((num_field_steps, zB.shape[0])) for _ in range(4)]
+        
+        ex_arr,ey_arr,ez_arr,vex_arr,jx_arr,vey_arr,jy_arr,vez_arr,jz_arr,te_arr,qdns_arr\
+        = [np.zeros((num_field_steps, zE.shape[0])) for _ in range(11)]
+    
+        field_sim_time = np.zeros(num_field_steps)
+    
         print('Extracting fields...')
         for ii in range(num_field_steps):
             sys.stdout.write('\rExtracting field timestep {}'.format(ii))

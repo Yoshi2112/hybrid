@@ -387,6 +387,103 @@ def plot_kt(component='By', saveas='kt_plot', save=False, normalize_x=False, xli
     return
 
 
+def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False, save=False,
+                     pcyc_mult=None, xmax=None, plot_alfven=False, zero_cold=True, overwrite=True,
+                     linear_only=True):
+    '''
+    linear_only keyword used to take FFT of only a small portion of the timeseries, up to the 
+    point of maximum growth (or perhaps 20% of the way beyond that?)
+    '''
+    plt.ioff()
+    
+    fontsize = 18
+    font     = 'monospace'
+    
+    tick_label_size = 14
+    mpl.rcParams['xtick.labelsize'] = tick_label_size 
+    mpl.rcParams['ytick.labelsize'] = tick_label_size 
+    
+    k, f, wk, tf = disp.get_wk(component, linear_only=linear_only)
+    
+    xfac = 1e6
+    xlab = '$\mathtt{k (\\times 10^{-6}m^{-1})}$'
+    ylab = 'f\n(Hz)'
+    
+    if component[0].upper() == 'B':
+        clab = 'Pwr\n$\left(\\frac{nT^2}{Hz}\\right)$'
+    else:
+        clab = 'Pwr\n$\left(\\frac{mV^2}{m^2Hz}\\right)$'
+
+    fig = plt.figure(1, figsize=(15, 10))
+    ax  = fig.add_subplot(111)
+    
+    im1 = ax.pcolormesh(xfac*k[1:], f[1:], wk[1:, 1:].real, cmap='jet',
+                        norm=colors.LogNorm(vmin=wk[1:, 1:].real.min(),
+                                            vmax=wk[1:, 1:].real.max()))      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
+    
+    fig.colorbar(im1, extend='both', fraction=0.05).set_label(clab, rotation=0, fontsize=fontsize, family=font, labelpad=30)
+    ax.set_title(r'$\omega/k$ Plot :: {} Component :: Linear Theory up to {:.3f}s'.format(component.upper(), tf),
+                 fontsize=fontsize, family=font)
+    ax.set_ylabel(ylab, fontsize=fontsize, family=font, rotation=0, labelpad=30)
+    ax.set_xlabel(xlab, fontsize=fontsize, family=font)
+    
+    #clr  = ['black', 'green', 'red'] 
+    lbl  = [r'$f_{eq, H^+}$', r'$f_{eq, He^+}$', r'$f_{eq, O^+}$']
+    M    = np.array([1., 4., 16.])
+    cyc  = qi * cf.B_eq / (2 * np.pi * mp * M)
+    
+    from matplotlib.transforms import blended_transform_factory
+    trans = blended_transform_factory(ax.transAxes, ax.transData) # the x coords of this transformation are axes, and the
+            # y coord are data
+    
+    for ii in range(3):
+        if cf.species_present[ii] == True:
+            ax.axhline(cyc[ii], linestyle=':', c='k')
+            ax.text(1.025, cyc[ii], lbl[ii], transform=trans, ha='center', 
+                    va='center', color='k', fontsize=fontsize, family=font)
+    
+    ax.set_xlim(0, xmax)
+    if pcyc_mult is not None:
+        ax.set_ylim(0, pcyc_mult*cyc[0])
+    else:
+        ax.set_ylim(0, None)
+    
+    alpha=0.1
+    if dispersion_overlay == True:
+        k_vals, CPDR_solns, WPDR_solns, HPDR_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=zero_cold)
+        
+        for ii in range(CPDR_solns.shape[1]):
+            ax.plot(xfac*k_vals, CPDR_solns[:, ii].real, c='k', linestyle='-' , label='CPDR' if ii == 0 else '', alpha=alpha)
+            ax.plot(xfac*k_vals, WPDR_solns[:, ii].real, c='k', linestyle='--', label='WPDR' if ii == 0 else '', alpha=alpha)
+            ax.plot(xfac*k_vals, HPDR_solns[:, ii].real, c='k', linestyle=':' , label='HPDR' if ii == 0 else '', alpha=alpha)
+        
+    if plot_alfven == True:
+        # Plot Alfven velocity on here just to see
+        alfven_line = k * cf.va
+        ax.plot(xfac*k, alfven_line, c='blue', linestyle=':', label='$v_A$')
+        
+    ax.legend(loc='upper right', facecolor='white', prop={'size': fontsize-2, 'family':font})
+        
+    if save == True:
+        zero_suff = '' if zero_cold is False else 'zero'
+        fullpath  = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '_{}'.format(zero_suff)
+        save_path = fullpath + '.png'
+        
+        if overwrite == False:
+            count = 1
+            while os.path.exists(save_path) == True:
+                print('Save file exists, incrementing...')
+                save_path = fullpath + '_{}.png'.format(count)
+                count += 1
+            
+        plt.savefig(save_path, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        print('w-k for component {} saved'.format(component.lower()))
+        plt.close('all')
+    else:
+        plt.show()
+    return
+
+
 def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=False):
     '''
     Plot pcolormesh of tranverse magnetic field in space (x) and time (y).
@@ -463,7 +560,7 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
     
     ax.axvline(cf.xmin     / cf.dx, c='w', ls=':', alpha=1.0)
     ax.axvline(cf.xmax     / cf.dx, c='w', ls=':', alpha=1.0)
-    ax.axvline(cf.grid_mid / cf.dx, c='w', ls=':', alpha=0.75)   
+    ax.axvline(0.0                , c='w', ls=':', alpha=0.75)   
     ax.set_xlim(xlim[0], xlim[1])    
     
     if save == True:
@@ -3108,101 +3205,7 @@ def compare_B0_to_dipole():
     return
 
 
-def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False, save=False,
-                     pcyc_mult=None, xmax=None, plot_alfven=False, zero_cold=True, overwrite=True,
-                     linear_only=True):
-    '''
-    linear_only keyword used to take FFT of only a small portion of the timeseries, up to the 
-    point of maximum growth (or perhaps 20% of the way beyond that?)
-    '''
-    plt.ioff()
-    
-    fontsize = 18
-    font     = 'monospace'
-    
-    tick_label_size = 14
-    mpl.rcParams['xtick.labelsize'] = tick_label_size 
-    mpl.rcParams['ytick.labelsize'] = tick_label_size 
-    
-    k, f, wk, tf = disp.get_wk(component, linear_only=linear_only)
-    
-    xfac = 1e6
-    xlab = '$\mathtt{k (\\times 10^{-6}m^{-1})}$'
-    ylab = 'f\n(Hz)'
-    
-    if component[0].upper() == 'B':
-        clab = 'Pwr\n$\left(\\frac{nT^2}{Hz}\\right)$'
-    else:
-        clab = 'Pwr\n$\left(\\frac{mV^2}{m^2Hz}\\right)$'
 
-    fig = plt.figure(1, figsize=(15, 10))
-    ax  = fig.add_subplot(111)
-    
-    im1 = ax.pcolormesh(xfac*k[1:], f[1:], wk[1:, 1:].real, cmap='jet',
-                        norm=colors.LogNorm(vmin=wk[1:, 1:].real.min(),
-                                            vmax=wk[1:, 1:].real.max()))      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
-    
-    fig.colorbar(im1, extend='both', fraction=0.05).set_label(clab, rotation=0, fontsize=fontsize, family=font, labelpad=30)
-    ax.set_title(r'$\omega/k$ Plot :: {} Component :: Linear Theory up to {:.3f}s'.format(component.upper(), tf),
-                 fontsize=fontsize, family=font)
-    ax.set_ylabel(ylab, fontsize=fontsize, family=font, rotation=0, labelpad=30)
-    ax.set_xlabel(xlab, fontsize=fontsize, family=font)
-    
-    #clr  = ['black', 'green', 'red'] 
-    lbl  = [r'$f_{eq, H^+}$', r'$f_{eq, He^+}$', r'$f_{eq, O^+}$']
-    M    = np.array([1., 4., 16.])
-    cyc  = qi * cf.B_eq / (2 * np.pi * mp * M)
-    
-    from matplotlib.transforms import blended_transform_factory
-    trans = blended_transform_factory(ax.transAxes, ax.transData) # the x coords of this transformation are axes, and the
-            # y coord are data
-    
-    for ii in range(3):
-        if cf.species_present[ii] == True:
-            ax.axhline(cyc[ii], linestyle=':', c='k')
-            ax.text(1.025, cyc[ii], lbl[ii], transform=trans, ha='center', 
-                    va='center', color='k', fontsize=fontsize, family=font)
-    
-    ax.set_xlim(0, xmax)
-    if pcyc_mult is not None:
-        ax.set_ylim(0, pcyc_mult*cyc[0])
-    else:
-        ax.set_ylim(0, None)
-    
-    alpha=0.1
-    if dispersion_overlay == True:
-        k_vals, CPDR_solns, WPDR_solns, HPDR_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=zero_cold)
-        
-        for ii in range(CPDR_solns.shape[1]):
-            ax.plot(xfac*k_vals, CPDR_solns[:, ii].real, c='k', linestyle='-' , label='CPDR' if ii == 0 else '', alpha=alpha)
-            ax.plot(xfac*k_vals, WPDR_solns[:, ii].real, c='k', linestyle='--', label='WPDR' if ii == 0 else '', alpha=alpha)
-            ax.plot(xfac*k_vals, HPDR_solns[:, ii].real, c='k', linestyle=':' , label='HPDR' if ii == 0 else '', alpha=alpha)
-        
-    if plot_alfven == True:
-        # Plot Alfven velocity on here just to see
-        alfven_line = k * cf.va
-        ax.plot(xfac*k, alfven_line, c='blue', linestyle=':', label='$v_A$')
-        
-    ax.legend(loc='upper right', facecolor='white', prop={'size': fontsize-2, 'family':font})
-        
-    if save == True:
-        zero_suff = '' if zero_cold is False else 'zero'
-        fullpath  = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '_{}'.format(zero_suff)
-        save_path = fullpath + '.png'
-        
-        if overwrite == False:
-            count = 1
-            while os.path.exists(save_path) == True:
-                print('Save file exists, incrementing...')
-                save_path = fullpath + '_{}.png'.format(count)
-                count += 1
-            
-        plt.savefig(save_path, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-        print('w-k for component {} saved'.format(component.lower()))
-        plt.close('all')
-    else:
-        plt.show()
-    return
 
 
 def plot_vi_vs_t_for_cell(cell=None, comp=0, it_max=None, jj=1, save=True, hexbin=False):
@@ -4073,12 +4076,12 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//shoji_2013_short//']:
+    for series in ['//CAM_CL_parallel_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
             runs_to_do = [5, 6, 7]
@@ -4088,7 +4091,8 @@ if __name__ == '__main__':
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
-                cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
+                cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True,
+                            CAM_CL=True)
                 #plot_total_density_with_time()
                 #plot_max_velocity()
                 #check_fields(save=True)
@@ -4103,6 +4107,13 @@ if __name__ == '__main__':
                 #ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7)
 
                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=1.0, remove_ND=False)
+                plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=True, save=True,
+                     pcyc_mult=None, xmax=None, plot_alfven=False, zero_cold=True, overwrite=True,
+                     linear_only=False)
+                plot_wk_polished(component='Ey', saveas='wk_plot', dispersion_overlay=True, save=True,
+                     pcyc_mult=None, xmax=None, plot_alfven=False, zero_cold=True, overwrite=True,
+                     linear_only=False)
+                
 # =============================================================================
 #                 try:
 #                     standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)

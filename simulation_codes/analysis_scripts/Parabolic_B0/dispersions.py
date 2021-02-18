@@ -126,12 +126,12 @@ def get_kt(component):
     ftime, arr = cf.get_array(component)
     
     # Get first/last indices for FFT range and k-space array
-    st = cf.ND
+    
     if component[0].upper() == 'B':
-        en = cf.ND + cf.NX + 1
+        st = cf.x0B; en = cf.x1B
         k  = np.fft.fftfreq(cf.NX + 1, cf.dx)
     else:
-        en = cf.ND + cf.NX
+        st = cf.x0E; en = cf.x1E
         k  = np.fft.fftfreq(cf.NX, cf.dx)
                   
     k   = k[k>=0]
@@ -161,12 +161,11 @@ def plot_kt_winske(component='by'):
         os.makedirs(ts_folder)
     
     # Get first/last indices for FFT range and k-space array
-    st = cf.ND
     if component[0].upper() == 'B':
-        en = cf.ND + cf.NX
+        st = cf.x0B; en = cf.x1B
         k  = np.fft.fftfreq(cf.NX, cf.dx)
     else:
-        en = cf.ND + cf.NX
+        st = cf.x0E; en = cf.x1E
         k  = np.fft.fftfreq(cf.NX, cf.dx)
     
     # Normalize to c/wpi
@@ -297,9 +296,9 @@ def get_wk(component, linear_only=True):
         tf = ftime[t1-1]
         
     if component.upper()[0] == 'B':
-        st = cf.ND; en = cf.ND + cf.NX + 1
+        st = cf.x0B; en = cf.x1B
     else:
-        st = cf.ND; en = cf.ND + cf.NX
+        st = cf.x0E; en = cf.x1E
     
     num_times = t1-t0
 

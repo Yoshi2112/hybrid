@@ -51,9 +51,9 @@ def gaussian_distribution():
         acc = 0                  # Species accumulator
         for ii in range(NX):
             n_particles = nsp_ppc[jj]
-            dist[0, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tpar[jj]) /  mass[jj]), n_particles) +  drift_v[jj]
-            dist[1, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tper[jj]) /  mass[jj]), n_particles)
-            dist[2, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tper[jj]) /  mass[jj]), n_particles)
+            dist[0, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tpar[ jj]) /  mass[jj]), n_particles) +  drift_v[jj]
+            dist[1, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tperp[jj]) /  mass[jj]), n_particles)
+            dist[2, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tperp[jj]) /  mass[jj]), n_particles)
             acc += n_particles
     
     # Rotate if theta != 0
@@ -81,8 +81,8 @@ def init_quiet_start():
     for jj in range(Nj):
         idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle idx
         
-        sf_par = np.sqrt(kB *  Tpar[jj] /  mass[jj])  # Scale factors for velocity initialization
-        sf_per = np.sqrt(kB *  Tper[jj] /  mass[jj])
+        sf_par = np.sqrt(kB *  Tpar[ jj] /  mass[jj])  # Scale factors for velocity initialization
+        sf_per = np.sqrt(kB *  Tperp[jj] /  mass[jj])
         
         half_n = nsp_ppc[jj] // 2                     # Half particles per cell - doubled later
 
@@ -968,7 +968,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('max_time', max_time),
                    ('NX', NX),
                    ('ND', 0),
-                   ('NC', NX),
+                   ('NC', NX+3),
                    ('N' , N),
                    ('dxm', dxm),
                    ('dx', dx),
@@ -985,7 +985,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('orbit_res', orbit_res),
                    ('freq_res', freq_res),
                    ('run_desc', run_description),
-                   ('method_type', 'CAM_CL_NEW'),
+                   ('method_type', 'CAM_CL_PARALLEL'),
                    ('particle_shape', 'TSC'),
                    ('L', 0.0), 
                    ('B_eq', B0),
@@ -1001,17 +1001,6 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('lat_A', 0.0),
                    ('B_A', 0.0),
                    ('rc_hwidth', 0.0),
-                   ('ne', ne),
-                   ('Te0', Te0),
-                   ('ie', ie),
-                   ('part_save_iter', part_save_iter),
-                   ('field_save_iter', field_save_iter),
-                   ('max_rev', max_rev),
-                   ('freq_res', freq_res),
-                   ('orbit_res', orbit_res),
-                   ('run_desc', run_description),
-                   ('method_type', 'PREDCORR_PARABOLIC_PARALLEL'),
-                   ('particle_shape', 'TSC'),
                    ('field_periodic', 1),
                    ('run_time', None),
                    ('loop_time', None),
@@ -1046,8 +1035,10 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                      nsp_ppc     = nsp_ppc,
                      N_species   = N_species,
                      density     = density,
+                     vth_par     = vth_par,
+                     vth_perp    = vth_perp,
                      Tpar        = Tpar,
-                     Tper        = Tper)
+                     Tperp       = Tperp)
     
     print('Particle parameters saved')
     return
@@ -1078,14 +1069,14 @@ def save_particle_data(dt, part_save_iter, qq, pos, vel, idx, sim_time):
 #%% --- MAIN ---
 if __name__ == '__main__':
     ### RUN DESCRIPTION ###
-    run_description = '''Testing and modernizing CAM-CL with parallel etc. Cold test, no parallel (testing overall functions)'''
+    run_description = '''Testing and modernizing CAM-CL with parallel etc. Cold test, parallelized'''
     
     ### RUN PARAMETERS ###
     drive           = 'F:/'
     save_path       = 'runs/CAM_CL_parallel_test/' # Series save dir   : Folder containing all runs of a series 
-    run_num         = 0                            # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-    save_particles  = 0                            # Save data flag    : For later analysis
-    save_fields     = 0                            # Save plot flag    : To ensure hybrid is solving correctly during run
+    run_num         = 2                            # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+    save_particles  = 1                            # Save data flag    : For later analysis
+    save_fields     = 1                            # Save plot flag    : To ensure hybrid is solving correctly during run
     seed            = 98327                        # RNG Seed          : Set to enable consistent results for parameter studies
     quiet_start     = 1
     
@@ -1128,7 +1119,7 @@ if __name__ == '__main__':
     density    = np.array([20.0, 180.0])*1e6  	    # Species charge density as normalized fraction (add to 1.0)
     drift_v    = np.array([0.000, 0.000])     	    # Species parallel bulk velocity (alfven velocity units)
     nsp_ppc    = np.array([256  , 1024])            # Species number of particles per cell
-    E_per      = np.array([40.0, 1.0])            	# Ion species perpendicular energy
+    E_perp     = np.array([40.0, 1.0])            	# Ion species perpendicular energy
     anisotropy = np.array([1.0, 0.0])               # Species temperature anisotropy
     
     beta       = 0                                  # Flag: Specify temperatures by beta (True) or energy in eV (False)
@@ -1144,17 +1135,28 @@ if __name__ == '__main__':
 
 
 #%%### DERIVED SIMULATION PARAMETERS
-    E_par     = E_per / (anisotropy + 1) 
+    E_par     = E_perp / (anisotropy + 1) 
     ne        = (density * charge).sum()                     # Electron density (in /m3, same as total ion density (for singly charged ions))
 
     if beta == 1:
-        Te0    = B0 ** 2 * E_e   / (2 * mu0 * ne * kB)       # Temperatures of each species in Kelvin
-        Tpar   = B0 ** 2 * E_par / (2 * mu0 * ne * kB)
-        Tper   = B0 ** 2 * E_per / (2 * mu0 * ne * kB)
+        Te0    = B0 ** 2 * E_e    / (2 * mu0 * ne * kB)      # Temperatures of each species in Kelvin
+        Tpar   = B0 ** 2 * E_par  / (2 * mu0 * ne * kB)
+        Tperp  = B0 ** 2 * E_perp / (2 * mu0 * ne * kB)
+        
+        kbt_par    = E_par  * (B0 ** 2) / (2 * mu0 * ne)
+        kbt_per    = E_perp * (B0 ** 2) / (2 * mu0 * ne)
+        vth_perp   = np.sqrt(kbt_per /  mass)                # Perpendicular thermal velocities
+        vth_par    = np.sqrt(kbt_par /  mass)                # Parallel thermal velocities
     else:
-        Te0    = E_e   * 11603.
-        Tpar   = E_par * 11603.
-        Tper   = E_per * 11603.
+        Te0        = E_e    * 11603.
+        Tpar       = E_par  * 11603.
+        Tperp      = E_perp * 11603.
+        
+        vth_perp   = np.sqrt(charge *  E_perp /  mass)    # Perpendicular thermal velocities
+        vth_par    = np.sqrt(charge *  E_par  /  mass)    # Parallel thermal velocities
+    
+    vth_perp   = np.sqrt(charge *  E_perp /  mass)    # Perpendicular thermal velocities
+    vth_par    = np.sqrt(charge *  E_par  /  mass)    # Parallel thermal velocities
     
     wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
     wpe        = np.sqrt(ne * q ** 2 / (me * e0))            # Proton   Plasma Frequency, wpi (rad/s)
