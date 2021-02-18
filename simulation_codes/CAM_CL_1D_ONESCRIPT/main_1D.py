@@ -117,13 +117,14 @@ def init_quiet_start():
 
 
 def set_timestep(vel):
-    gyperiod = (2*np.pi) / gyfreq               # Gyroperiod within uniform field (s)         
-    ion_ts   = orbit_res * gyperiod             # Timestep to resolve gyromotion
-    vel_ts   = dx / (2 * np.max(vel[0, :]))     # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
+    # NOTE: Can probably ease off on the ion_ts once I validate this
+    gyperiod = (2*np.pi) / gyfreq                 # Gyroperiod within uniform field (s)         
+    ion_ts   = dxm * orbit_res / gyfreq           # Timestep to resolve gyromotion
+    vel_ts   = 0.5*dx / np.max(np.abs(vel[0, :])) # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
 
     DT       = min(ion_ts, vel_ts)
-    max_time = max_rev * gyperiod               # Total runtime in seconds
-    max_inc  = int(max_time / DT) + 1                 # Total number of time steps
+    max_time = max_rev * gyperiod                 # Total runtime in seconds
+    max_inc  = int(max_time / DT) + 1             # Total number of time steps
 
     if part_res == 0:
         part_save_iter = 1
@@ -134,14 +135,14 @@ def set_timestep(vel):
         field_save_iter = 1
     else:
         field_save_iter = int(field_res*gyperiod / DT)
-    
+
     print('Timestep: %.4fs, %d iterations total' % (DT, max_inc))
     
     if adaptive_subcycling == True:
-        k_max           = np.pi / dx
-        dispfreq        = (k_max ** 2) * B0 / (mu0 * ne * q)            # Dispersion frequency
-        dt_sc           = freq_res * 1./dispfreq
-        subcycles       = int(DT / dt_sc + 1)
+        k_max      = np.pi / dx
+        dispfreq   = (k_max ** 2) * B0 / (mu0 * ne * q)            # Dispersion frequency (units of k?)
+        dt_sc      = freq_res * 1./dispfreq
+        subcycles  = int(DT / dt_sc + 1)
         print('Number of subcycles required: {}'.format(subcycles))
     else:
         subcycles = subcycles
@@ -1069,12 +1070,12 @@ def save_particle_data(dt, part_save_iter, qq, pos, vel, idx, sim_time):
 #%% --- MAIN ---
 if __name__ == '__main__':
     ### RUN DESCRIPTION ###
-    run_description = '''Testing and modernizing CAM-CL with parallel etc. Cold test, parallelized'''
+    run_description = '''This is the CAM_CL code. Testing against linear theory.'''
     
     ### RUN PARAMETERS ###
     drive           = 'F:/'
-    save_path       = 'runs/CAM_CL_parallel_test/' # Series save dir   : Folder containing all runs of a series 
-    run_num         = 2                            # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+    save_path       = 'runs/CAM_CL_comparison/'    # Series save dir   : Folder containing all runs of a series 
+    run_num         = 1                            # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
     save_particles  = 1                            # Save data flag    : For later analysis
     save_fields     = 1                            # Save plot flag    : To ensure hybrid is solving correctly during run
     seed            = 98327                        # RNG Seed          : Set to enable consistent results for parameter studies
@@ -1105,11 +1106,11 @@ if __name__ == '__main__':
     orbit_res = 0.02                            # Particle orbit resolution: Fraction of gyroperiod in seconds
     freq_res  = 0.02                            # Frequency resolution: Fraction of inverse radian frequencies
     part_res  = 1.0                             # Data capture resolution in gyroperiod fraction: Particle information
-    field_res = 0.05                            # Data capture resolution in gyroperiod fraction: Field information
+    field_res = 0.1                             # Data capture resolution in gyroperiod fraction: Field information
     
     
     ### PARTICLE PARAMETERS ###
-    species_lbl= [r'$H^+$ hot', r'$H^+$ cold']      # Species name/labels        : Used for plotting
+    species_lbl= [r'$H^+$ warm', r'$H^+$ cold']     # Species name/labels        : Used for plotting
     temp_color = ['r', 'b']
     temp_type  = np.array([1, 0])                   # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
     dist_type  = np.array([0, 0])                   # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
@@ -1118,12 +1119,12 @@ if __name__ == '__main__':
     charge     = np.array([1.000, 1.000])       	# Species ion charge (elementary charge units)
     density    = np.array([20.0, 180.0])*1e6  	    # Species charge density as normalized fraction (add to 1.0)
     drift_v    = np.array([0.000, 0.000])     	    # Species parallel bulk velocity (alfven velocity units)
-    nsp_ppc    = np.array([256  , 1024])            # Species number of particles per cell
-    E_perp     = np.array([40.0, 1.0])            	# Ion species perpendicular energy
+    nsp_ppc    = np.array([1024, 256])              # Species number of particles per cell
+    E_perp     = np.array([40.0, 0.1])            	# Ion species perpendicular energy
     anisotropy = np.array([1.0, 0.0])               # Species temperature anisotropy
     
     beta       = 0                                  # Flag: Specify temperatures by beta (True) or energy in eV (False)
-    E_e        = 1.0                                # Electron energy (beta/eV)
+    E_e        = 0.1                                # Electron energy (beta/eV)
 
     smooth_sources = 0                                          # Flag for source smoothing: Gaussian
     min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
@@ -1137,6 +1138,8 @@ if __name__ == '__main__':
 #%%### DERIVED SIMULATION PARAMETERS
     E_par     = E_perp / (anisotropy + 1) 
     ne        = (density * charge).sum()                     # Electron density (in /m3, same as total ion density (for singly charged ions))
+    charge    *= q                                           # Cast species charge to Coulomb
+    mass      *= mp                                          # Cast species mass to kg
 
     if beta == 1:
         Te0    = B0 ** 2 * E_e    / (2 * mu0 * ne * kB)      # Temperatures of each species in Kelvin
@@ -1162,16 +1165,17 @@ if __name__ == '__main__':
     wpe        = np.sqrt(ne * q ** 2 / (me * e0))            # Proton   Plasma Frequency, wpi (rad/s)
     va         = B0 / np.sqrt(mu0*ne*mp)                     # Alfven speed: Assuming pure proton plasma
     
-    dx         = dxm * c / wpi                               # Spatial cadence, based on ion inertial length
+    qm_ratios  = np.divide(charge, mass)
+    gyfreq     = q*B0/mp                                     # Proton   Gyrofrequency (rad/s) (since this will be the highest of all ion species)
+    e_gyfreq   = q*B0/me                                     # Electron Gyrofrequency (rad/s)
+
+    dx         = dxm * va / gyfreq                           # Alternate method of calculating dx (better for multicomponent plasmas)
+    dx2        = dxm * c / wpi                               # Spatial cadence, based on ion inertial length
     xmin       = 0.0                                         # Minimum simulation dimension
     xmax       = NX * dx                                     # Maximum simulation dimension
     size       = NX + 3                                      # Field array size
+    N          = nsp_ppc.sum()*NX                            # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
     
-    cellpart   = nsp_ppc.sum()
-    N          = cellpart*NX                                 # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
-    
-    charge    *= q                                           # Cast species charge to Coulomb
-    mass      *= mp                                          # Cast species mass to kg
     drift_v   *= va                                          # Cast species velocity to m/s
     
     Nj         = len(mass)                                   # Number of species
@@ -1181,9 +1185,6 @@ if __name__ == '__main__':
     idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
     idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
     
-    qm_ratios  = np.divide(charge, mass)
-    gyfreq     = q*B0/mp                                     # Proton   Gyrofrequency (rad/s) (since this will be the highest of all ion species)
-    e_gyfreq   = q*B0/me                                     # Electron Gyrofrequency (rad/s)
     k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
     
     LH_frac    = 0.0                                         # Fraction of Lower Hybrid resonance: 

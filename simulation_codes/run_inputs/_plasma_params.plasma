@@ -6,11 +6,11 @@ NSP_PPC      1024        256
 MASS_PROTON  1.          1.
 CHARGE_ELEM  1.          1.
 DRIFT_VA     0.          0.
-DENSITY_CM3  7.2         137.
-ANISOTROPY   1.5         0.0
-ENERGY_PERP  8e3         0.1
+DENSITY_CM3  20.         180.
+ANISOTROPY   1.          0.
+ENERGY_PERP  40.         0.1
 ELECTRON_EV  0.1
 BETA_FLAG    0
 L            5.35
-B_EQ         243e-9
-B_XMAX       300e-9
+B_EQ         200e-9
+B_XMAX       200e-9

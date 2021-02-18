@@ -4081,10 +4081,10 @@ if __name__ == '__main__':
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [5, 6, 7]
+            runs_to_do = [1]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
