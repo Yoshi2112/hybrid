@@ -2,9 +2,10 @@
 from timeit import default_timer as timer
 import numpy as np
 import numba as nb
-import pdb, sys, os
+import sys, os
 
-do_parallel=False
+do_parallel=True
+#nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
 
 #%% --- FUNCTIONS ---
 #%% INITIALIZATION
@@ -117,24 +118,23 @@ def init_quiet_start():
 
 
 def set_timestep(vel):
-    # NOTE: Can probably ease off on the ion_ts once I validate this
-    gyperiod = (2*np.pi) / gyfreq                 # Gyroperiod within uniform field (s)         
+    # NOTE: Can probably ease off on the ion_ts once I validate this 
     ion_ts   = dxm * orbit_res / gyfreq           # Timestep to resolve gyromotion
     vel_ts   = 0.5*dx / np.max(np.abs(vel[0, :])) # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
 
     DT       = min(ion_ts, vel_ts)
-    max_time = max_rev * gyperiod                 # Total runtime in seconds
+    max_time = max_wcinv / gyfreq               # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1             # Total number of time steps
 
     if part_res == 0:
         part_save_iter = 1
     else:
-        part_save_iter = int(part_res*gyperiod / DT)
+        part_save_iter = int(part_res / (DT*gyfreq))
 
     if field_res == 0:
         field_save_iter = 1
     else:
-        field_save_iter = int(field_res*gyperiod / DT)
+        field_save_iter = int(field_res / (DT*gyfreq))
 
     print('Timestep: %.4fs, %d iterations total' % (DT, max_inc))
     
@@ -857,14 +857,14 @@ def interpolate_to_center_linear_1D(val):
 
 #@nb.njit()
 def check_timestep(qq, DT, pos, vel, Ie, W_elec, B, E, dns, max_inc, part_save_iter, field_save_iter, subcycles):
-    max_Vx          = vel[0, :].max()
-    max_V           = vel.max()
+    max_Vx          = np.abs(vel[0, :]).max()
+    max_V           = np.abs(vel      ).max()
     
     B_cent          = interpolate_to_center_cspline3D(B)
     B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
     high_rat        = qm_ratios.max()
     
-    gyfreq          = high_rat  * np.abs(B_tot).max() / (2 * np.pi)      
+    gyfreq          = high_rat  * np.abs(B_tot).max()      
     ion_ts          = orbit_res * 1./gyfreq
     
     if E.max() != 0:
@@ -981,7 +981,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('theta', theta),
                    ('part_save_iter', part_save_iter),
                    ('field_save_iter', field_save_iter),
-                   ('max_rev', max_rev),
+                   ('max_wcinv', max_wcinv),
                    ('LH_frac', LH_frac),
                    ('orbit_res', orbit_res),
                    ('freq_res', freq_res),
@@ -1039,7 +1039,8 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                      vth_par     = vth_par,
                      vth_perp    = vth_perp,
                      Tpar        = Tpar,
-                     Tperp       = Tperp)
+                     Tperp       = Tperp,
+                     Bc          = Bc)
     
     print('Particle parameters saved')
     return
@@ -1067,18 +1068,37 @@ def save_particle_data(dt, part_save_iter, qq, pos, vel, idx, sim_time):
     return
 
 
+def add_runtime_to_header(runtime):
+    import pickle
+    d_path = ('%s/%s/run_%d/data/' % (drive, save_path, run_num))     # Data path
+    
+    h_name = os.path.join(d_path, 'simulation_parameters.pckl')         # Header file path
+    f      = open(h_name, 'rb')                                         # Open header file
+    params = pickle.load(f)                                             # Load variables from header file into dict
+    f.close()  
+    
+    params['run_time'] = runtime
+    
+    # Re-save
+    with open(d_path + 'simulation_parameters.pckl', 'wb') as f:
+        pickle.dump(params, f)
+        f.close()
+        print('Run time appended to simulation header file')
+    return
+
+
 #%% --- MAIN ---
 if __name__ == '__main__':
     ### RUN DESCRIPTION ###
-    run_description = '''This is the CAM_CL code. Testing against linear theory.'''
+    run_description = '''Testing Fu fig. 4 run. More frequency dumps.'''
     
     ### RUN PARAMETERS ###
     drive           = 'F:/'
-    save_path       = 'runs/CAM_CL_comparison/'    # Series save dir   : Folder containing all runs of a series 
-    run_num         = 1                            # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-    save_particles  = 1                            # Save data flag    : For later analysis
-    save_fields     = 1                            # Save plot flag    : To ensure hybrid is solving correctly during run
-    seed            = 98327                        # RNG Seed          : Set to enable consistent results for parameter studies
+    save_path       = 'runs/Fu_CAM_CL_test/' # Series save dir   : Folder containing all runs of a series 
+    run_num         = 0                              # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+    save_particles  = 1                              # Save data flag    : For later analysis
+    save_fields     = 1                              # Save plot flag    : To ensure hybrid is solving correctly during run
+    seed            = 98327                          # RNG Seed          : Set to enable consistent results for parameter studies
     quiet_start     = 1
     
     
@@ -1094,36 +1114,41 @@ if __name__ == '__main__':
     
     
     ### SIMULATION PARAMETERS ###
-    NX        = 1024                            # Number of cells - doesn't include ghost cells
-    max_rev   = 300                             # Simulation runtime, in multiples of the gyroperiod
-    
+    NX        = 256                             # Number of cells - doesn't include ghost cells
     dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
-    subcycles = 12                              # Number of field subcycling steps for Cyclic Leapfrog
     ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
     theta     = 0                               # Angle of B0 to x axis (in xy plane in units of degrees)
     B0        = 200e-9                          # Unform initial magnetic field value (in T)
-    
-    orbit_res = 0.02                            # Particle orbit resolution: Fraction of gyroperiod in seconds
-    freq_res  = 0.02                            # Frequency resolution: Fraction of inverse radian frequencies
-    part_res  = 1.0                             # Data capture resolution in gyroperiod fraction: Particle information
-    field_res = 0.1                             # Data capture resolution in gyroperiod fraction: Field information
+
+    # Time parameters : All in units of 1/wci
+    max_wcinv = 1200                            # Simulation runtime, in multiples of the gyroperiod    
+    orbit_res = 0.5                             # Particle orbit resolution: Fraction of gyroperiod in seconds
+    freq_res  = 0.05                            # Frequency resolution: Fraction of inverse radian frequencies
+    part_res  = 5.0                             # Data capture resolution in gyroperiod fraction: Particle information
+    field_res = 0.25                            # Data capture resolution in gyroperiod fraction: Field information
+    subcycles = 12                              # Number of field subcycling steps for Cyclic Leapfrog
     
     
     ### PARTICLE PARAMETERS ###
-    species_lbl= [r'$H^+$ warm', r'$H^+$ cold']     # Species name/labels        : Used for plotting
-    temp_color = ['r', 'b']
-    temp_type  = np.array([1, 0])                   # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-    dist_type  = np.array([0, 0])                   # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+    species_lbl= [r'$H^+$ warm', r'$H^+$ cold', r'$He^+$ cold']     # Species name/labels        : Used for plotting
+    temp_color = ['r', 'b', 'purple']
+    temp_type  = np.array([1, 0, 0])                   # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+    dist_type  = np.array([0, 0, 0])                   # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
     
-    mass       = np.array([1.000, 1.000])    	    # Species ion mass (proton mass units)
-    charge     = np.array([1.000, 1.000])       	# Species ion charge (elementary charge units)
-    density    = np.array([20.0, 180.0])*1e6  	    # Species charge density as normalized fraction (add to 1.0)
-    drift_v    = np.array([0.000, 0.000])     	    # Species parallel bulk velocity (alfven velocity units)
-    nsp_ppc    = np.array([1024, 256])              # Species number of particles per cell
-    E_perp     = np.array([40.0, 0.1])            	# Ion species perpendicular energy
-    anisotropy = np.array([1.0, 0.0])               # Species temperature anisotropy
+    # Normalization override (e.g. Fu, Winkse)
+    rat        = 5
+    ne         = (rat*B0)**2 * e0 / me # REMOVE
+    density    = np.array([0.05, 0.94, 0.01])*ne  # REMOVE
+
+    mass       = np.array([1., 1., 4.])    	           # Species ion mass (proton mass units)
+    charge     = np.array([1., 1., 1.])       	       # Species ion charge (elementary charge units)
+    #density    = np.array([20., 120., 40.])*1e6  	   # Species charge density as normalized fraction (add to 1.0)
+    drift_v    = np.array([0., 0., 0.])     	    # Species parallel bulk velocity (alfven velocity units)
+    nsp_ppc    = np.array([24000, 1000, 1000])              # Species number of particles per cell
+    E_perp     = np.array([3.0, 0.1, 0.1])            	# Ion species perpendicular energy
+    anisotropy = np.array([2., 0., 0.])               # Species temperature anisotropy
     
-    beta       = 0                                  # Flag: Specify temperatures by beta (True) or energy in eV (False)
+    beta       = 1                                  # Flag: Specify temperatures by beta (True) or energy in eV (False)
     E_e        = 0.1                                # Electron energy (beta/eV)
 
     smooth_sources = 0                                          # Flag for source smoothing: Gaussian
@@ -1137,7 +1162,7 @@ if __name__ == '__main__':
 
 #%%### DERIVED SIMULATION PARAMETERS
     E_par     = E_perp / (anisotropy + 1) 
-    ne        = (density * charge).sum()                     # Electron density (in /m3, same as total ion density (for singly charged ions))
+    #ne        = (density * charge).sum()                     # Electron density (in /m3, same as total ion density (for singly charged ions))
     charge    *= q                                           # Cast species charge to Coulomb
     mass      *= mp                                          # Cast species mass to kg
 
@@ -1196,6 +1221,11 @@ if __name__ == '__main__':
     e_resis     = (LH_frac * LH_res)  / (e0 * wpe ** 2)      # Electron resistivity (using intial conditions for wpi/wpe)
     speed_ratio = c / va
     
+    Bc       = np.zeros((size, 3), dtype=np.float64)
+    Bc[:, 0] = B0 * np.cos(theta * np.pi / 180.)      # Set Bx initial
+    Bc[:, 1] = 0.                                     # Set By initial
+    Bc[:, 2] = B0 * np.sin(theta * np.pi / 180.)      # Set Bz initial
+    
     print('Run Started')
     print('Run Series         : {}'.format(save_path.split('//')[-1]))
     print('Run Number         : {}'.format(run_num))
@@ -1208,11 +1238,12 @@ if __name__ == '__main__':
 
     print('Equat. Gyroperiod: : {}s'.format(round(2. * np.pi / gyfreq, 3)))
     print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 3)))
-    print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_rev * 2. * np.pi / gyfreq, 2), max_rev))
+    print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_wcinv /  gyfreq, 2), 
+                                                               round(max_wcinv/(2*np.pi), 2)))
     
     print('{} cells'.format(NX))
     print('{} particles total\n'.format(N))
-        
+
     
     #%% BEGIN HYBRID
     start_time = timer()
@@ -1262,9 +1293,9 @@ if __name__ == '__main__':
     else:
         pos, vel, idx = init_quiet_start()
 
-    B[:, 0]  = B0 * np.cos(theta * np.pi / 180.)      # Set Bx initial
-    B[:, 1]  = 0.                                     # Set By initial
-    B[:, 2]  = B0 * np.sin(theta * np.pi / 180.)      # Set Bz initial
+    B[:, 0]  = Bc[:, 0].copy()      # Set Bx initial
+    B[:, 1]  = Bc[:, 1].copy()      # Set By initial
+    B[:, 2]  = Bc[:, 2].copy()      # Set Bz initial
     
     assign_weighting_TSC(pos, Ie, W_elec)
 
@@ -1274,7 +1305,7 @@ if __name__ == '__main__':
     init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plus, 
                          rho_int, rho_half, J, J_plus, L, G, 0.5*DT)
 
-
+    
     # Put init into qq = 0 and save as usual, qq = 1 will be at t = dt
     qq      = 0; sim_time = 0.0
     print('Starting loop...')
@@ -1343,11 +1374,10 @@ if __name__ == '__main__':
         qq        += 1
         sim_time  += DT
         
-    # Resync particle positions for end step? Not really necessary.
-    end_time = int(timer() - start_time)
-    hrs          = running_time // 3600
-    rem          = running_time %  3600
-    
-    mins         = rem // 60
-    sec          = rem %  60
-    print('Time to execute program :: {:02}:{:02}:{:02}'.format(hrs, mins, sec))
+    runtime = round(timer() - start_time,2) 
+    print('Run complete : {} s'.format(runtime))
+    if save_fields == 1 or save_particles == 1:
+        add_runtime_to_header(runtime)
+        fin_path = '%s/%s/run_%d/run_finished.txt' % (drive, save_path, run_num)
+        with open(fin_path, 'w') as open_file:
+            pass

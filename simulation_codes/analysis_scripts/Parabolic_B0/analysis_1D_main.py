@@ -274,7 +274,7 @@ def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None, 
     
     ax.axvline(cf.xmin     / cf.dx, c='w', ls=':', alpha=1.0)
     ax.axvline(cf.xmax     / cf.dx, c='w', ls=':', alpha=1.0)
-    ax.axvline(cf.grid_mid / cf.dx, c='w', ls=':', alpha=0.75)   
+    ax.axvline(0.0 / cf.dx, c='w', ls=':', alpha=0.75)   
     ax.set_xlim(x_lim[0], x_lim[1])
         
     if save == True:
@@ -310,11 +310,18 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
     clr  = ['white', 'yellow', 'red']    
     M    = np.array([1., 4., 16.])
     
-    pcyc = qi * cf.Bc[:, 0] / (2 * np.pi * mp)
+    try:
+        pcyc = qi * cf.Bc[:, 0] / (2 * np.pi * mp)
+    except:
+        pcyc = qi * cf.B_eq * np.ones(cf.B_nodes.shape[0]) / (2 * np.pi * mp)
     
     for ii in range(3):
         if cf.species_present[ii] == True:
-            cyc    = qi * cf.Bc[:, 0] / (2 * np.pi * mp * M[ii])
+            try:
+                cyc = qi * cf.Bc[:, 0] / (2 * np.pi * mp * M[ii])
+            except:
+                cyc = qi * cf.B_eq * np.ones(cf.B_nodes.shape[0]) / (2 * np.pi * mp * M[ii])
+                
             ax.plot(cf.B_nodes, cyc, linestyle='--', c=clr[ii], label=lbl[ii])
     
 # =============================================================================
@@ -339,7 +346,7 @@ def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, 
 
     ax.axvline(cf.xmin, c='w', ls=':', alpha=1.0)
     ax.axvline(cf.xmax, c='w', ls=':', alpha=1.0)
-    ax.axvline(cf.grid_mid, c='w', ls=':', alpha=0.75)   
+    ax.axvline(0.0, c='w', ls=':', alpha=0.75)   
     ax.set_xlim(x_lim[0], x_lim[1])
 
     if save == True:
@@ -388,8 +395,8 @@ def plot_kt(component='By', saveas='kt_plot', save=False, normalize_x=False, xli
 
 
 def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False, save=False,
-                     pcyc_mult=None, xmax=None, plot_alfven=False, zero_cold=True, overwrite=True,
-                     linear_only=True):
+                     pcyc_mult=None, xmax=None, zero_cold=True, overwrite=True,
+                     linear_only=True, normalize_axes=False):
     '''
     linear_only keyword used to take FFT of only a small portion of the timeseries, up to the 
     point of maximum growth (or perhaps 20% of the way beyond that?)
@@ -398,16 +405,23 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
     
     fontsize = 18
     font     = 'monospace'
-    
-    tick_label_size = 14
-    mpl.rcParams['xtick.labelsize'] = tick_label_size 
-    mpl.rcParams['ytick.labelsize'] = tick_label_size 
+    mpl.rcParams['xtick.labelsize'] = 14 
+    mpl.rcParams['ytick.labelsize'] = 14 
     
     k, f, wk, tf = disp.get_wk(component, linear_only=linear_only)
     
-    xfac = 1e6
-    xlab = '$\mathtt{k (\\times 10^{-6}m^{-1})}$'
-    ylab = 'f\n(Hz)'
+    if normalize_axes == True:
+        xfac = c / cf.wpi
+        yfac = 1. / cf.gyfreq
+        xlab = '$\mathtt{kc/\omega_{pi}}$'
+        ylab = 'f\n$(\omega / \Omega_H)$'
+        cyc  = 1.0 / np.array([1., 4., 16.])
+    else:
+        xfac = 1e6
+        yfac = 1.0
+        xlab = '$\mathtt{k (\\times 10^{-6}m^{-1})}$'
+        ylab = 'f\n(Hz)'
+        cyc  = qi * cf.B_eq / (2 * np.pi * mp * np.array([1., 4., 16.]))
     
     if component[0].upper() == 'B':
         clab = 'Pwr\n$\left(\\frac{nT^2}{Hz}\\right)$'
@@ -417,7 +431,7 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
     fig = plt.figure(1, figsize=(15, 10))
     ax  = fig.add_subplot(111)
     
-    im1 = ax.pcolormesh(xfac*k[1:], f[1:], wk[1:, 1:].real, cmap='jet',
+    im1 = ax.pcolormesh(xfac*k[1:], yfac*f[1:], wk[1:, 1:].real, cmap='jet',
                         norm=colors.LogNorm(vmin=wk[1:, 1:].real.min(),
                                             vmax=wk[1:, 1:].real.max()))      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
     
@@ -427,15 +441,12 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
     ax.set_ylabel(ylab, fontsize=fontsize, family=font, rotation=0, labelpad=30)
     ax.set_xlabel(xlab, fontsize=fontsize, family=font)
     
-    #clr  = ['black', 'green', 'red'] 
+    ## -- EXTRAS
     lbl  = [r'$f_{eq, H^+}$', r'$f_{eq, He^+}$', r'$f_{eq, O^+}$']
-    M    = np.array([1., 4., 16.])
-    cyc  = qi * cf.B_eq / (2 * np.pi * mp * M)
     
+    # Add labelled cyclotron frequencies
     from matplotlib.transforms import blended_transform_factory
-    trans = blended_transform_factory(ax.transAxes, ax.transData) # the x coords of this transformation are axes, and the
-            # y coord are data
-    
+    trans = blended_transform_factory(ax.transAxes, ax.transData)
     for ii in range(3):
         if cf.species_present[ii] == True:
             ax.axhline(cyc[ii], linestyle=':', c='k')
@@ -448,21 +459,14 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
     else:
         ax.set_ylim(0, None)
     
-    alpha=0.1
+    alpha=0.2
     if dispersion_overlay == True:
         k_vals, CPDR_solns, WPDR_solns, HPDR_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=zero_cold)
-        
         for ii in range(CPDR_solns.shape[1]):
-            ax.plot(xfac*k_vals, CPDR_solns[:, ii].real, c='k', linestyle='-' , label='CPDR' if ii == 0 else '', alpha=alpha)
-            ax.plot(xfac*k_vals, WPDR_solns[:, ii].real, c='k', linestyle='--', label='WPDR' if ii == 0 else '', alpha=alpha)
-            ax.plot(xfac*k_vals, HPDR_solns[:, ii].real, c='k', linestyle=':' , label='HPDR' if ii == 0 else '', alpha=alpha)
-        
-    if plot_alfven == True:
-        # Plot Alfven velocity on here just to see
-        alfven_line = k * cf.va
-        ax.plot(xfac*k, alfven_line, c='blue', linestyle=':', label='$v_A$')
-        
-    ax.legend(loc='upper right', facecolor='white', prop={'size': fontsize-2, 'family':font})
+            ax.plot(xfac*k_vals, yfac*CPDR_solns[:, ii].real, c='k', linestyle='-' , label='CPDR' if ii == 0 else '', alpha=alpha)
+            ax.plot(xfac*k_vals, yfac*WPDR_solns[:, ii].real, c='k', linestyle='--', label='WPDR' if ii == 0 else '', alpha=alpha)
+            ax.plot(xfac*k_vals, yfac*HPDR_solns[:, ii].real, c='k', linestyle=':' , label='HPDR' if ii == 0 else '', alpha=alpha)
+        ax.legend(loc='upper right', facecolor='white', prop={'size': fontsize-2, 'family':font})
         
     if save == True:
         zero_suff = '' if zero_cold is False else 'zero'
@@ -4076,23 +4080,22 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//CAM_CL_parallel_test//']:
+    for series in ['//Fu_CAM_CL_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [1]
+            runs_to_do = [3]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
-                cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True,
-                            CAM_CL=True)
+                cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
                 #plot_total_density_with_time()
                 #plot_max_velocity()
                 #check_fields(save=True)
@@ -4106,17 +4109,17 @@ if __name__ == '__main__':
                 #plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=1.0)
                 #ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7)
 
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=1.0, remove_ND=False)
-                plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=True, save=True,
-                     pcyc_mult=None, xmax=None, plot_alfven=False, zero_cold=True, overwrite=True,
-                     linear_only=False)
-                plot_wk_polished(component='Ey', saveas='wk_plot', dispersion_overlay=True, save=True,
-                     pcyc_mult=None, xmax=None, plot_alfven=False, zero_cold=True, overwrite=True,
-                     linear_only=False)
-                
 # =============================================================================
-#                 try:
-#                     standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)
+#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=False)
+#                 for _comp in ['By', 'Bz', 'Ey', 'Ez']:
+#                     plot_wk_polished(component=_comp, saveas='wk_plot_norm', dispersion_overlay=True, save=True,
+#                          pcyc_mult=1.1, xmax=None, zero_cold=False, overwrite=True,
+#                          linear_only=False, normalize_axes=True)
+# =============================================================================
+
+                #try:
+                standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)
+# =============================================================================
 #                 except:
 #                     pass            
 # =============================================================================

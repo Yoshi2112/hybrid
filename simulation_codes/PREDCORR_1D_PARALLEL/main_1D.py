@@ -1,7 +1,7 @@
 ## PYTHON MODULES ##
 import numpy as np
 import numba as nb
-import os, sys, pdb
+import os, sys
 import pickle
 from shutil import rmtree
 from timeit import default_timer as timer
@@ -333,29 +333,26 @@ def set_timestep(vel):
            
     To do : Actually put a Courant condition check in here
     '''
-    gyperiod_eq   = 2 * np.pi / gyfreq_eq             # Equatorial (largest) gyroperiod (s)
-    gyperiod_xmax = 2 * np.pi / gyfreq_eq             # Boundary  (smallest) gyroperiod (s)
-    
     if disable_waves == 0:
-        ion_ts = dxm * orbit_res / gyfreq             # Timestep to resolve gyromotion
+        ion_ts = dxm * orbit_res / gyfreq_xmax        # Timestep to highest resolve gyromotion
     else:
-        ion_ts = 0.05*gyperiod_xmax                   # If no waves, just do 20 points per revolution
+        ion_ts = 0.25 / gyfreq_xmax                   # If no waves, 20 points per revolution (~4 per wcinv)
         
     vel_ts = 0.5 * dx / np.max(np.abs(vel[0, :]))     # Timestep to satisfy particle CFL: <0.5dx per timestep
     
     DT          = min(ion_ts, vel_ts)                 # Timestep as smallest of options
-    max_time    = max_rev * gyperiod_eq               # Total runtime in seconds
+    max_time    = max_wcinv / gyfreq_eq               # Total runtime in seconds
     max_inc     = int(max_time / DT) + 1              # Total number of time steps
     
     if part_res == 0:
         part_save_iter = 1
     else:
-        part_save_iter = int(part_res*gyperiod_eq / DT)
+        part_save_iter = int(part_res / (DT*gyfreq_eq))
 
     if field_res == 0:
         field_save_iter = 1
     else:
-        field_save_iter = int(field_res*gyperiod_eq / DT)
+        field_save_iter = int(field_res / (DT*gyfreq_eq))
 
     if save_fields == 1 or save_particles == 1:
         store_run_parameters(DT, part_save_iter, field_save_iter, max_inc, max_time)
@@ -1401,7 +1398,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('ie', ie),
                    ('part_save_iter', part_save_iter),
                    ('field_save_iter', field_save_iter),
-                   ('max_rev', max_rev),
+                   ('max_wcinv', max_wcinv),
                    ('freq_res', freq_res),
                    ('orbit_res', orbit_res),
                    ('run_desc', run_description),
@@ -1847,7 +1844,7 @@ if __name__ == '__main__':
     
         NX        = int(f.readline().split()[1])           # Number of cells - doesn't include ghost cells
         ND        = int(f.readline().split()[1])           # Damping region length: Multiple of NX (on each side of simulation domain)
-        max_rev   = float(f.readline().split()[1])         # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+        max_wcinv = float(f.readline().split()[1])         # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
         dxm       = float(f.readline().split()[1])         # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
         
         ie        = int(f.readline().split()[1])           # Adiabatic electrons. 0: off (constant), 1: on.
@@ -2048,7 +2045,7 @@ if __name__ == '__main__':
         loss_cone_eq   = np.arcsin(np.sqrt(B_eq   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
         loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
     
-    gyfreq     = q*B_xmax/ mp                                # Proton Gyrofrequency (rad/s) at boundary (highest)
+    gyfreq_xmax= q*B_xmax/ mp                                # Proton Gyrofrequency (rad/s) at boundary (highest)
     k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
     qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
     
@@ -2083,10 +2080,10 @@ if __name__ == '__main__':
     print('Maximum MLAT (+/-) : {:<5.2f} degrees  '.format(theta_xmax * 180. / np.pi))
     print('Iono.   MLAT (+/-) : {:<5.2f} degrees\n'.format(lambda_L * 180. / np.pi))
     
-    print('Equat. Gyroperiod: : {}s'.format(round(2. * np.pi / gyfreq, 3)))
-    print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 3)))
-    print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_rev * 2. * np.pi / gyfreq_eq, 2), max_rev))
-    
+    print('Equat. Gyroperiod: : {}s'.format(round(2. * np.pi / gyfreq_eq, 3)))
+    print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq_eq, 3)))
+    print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_wcinv / gyfreq_eq, 2), 
+                                                               round(max_wcinv/(2*np.pi), 2)))    
     print('{} spatial cells, 2x{} damped cells'.format(NX, ND))
     print('{} cells total'.format(NC))
     print('{} particles total\n'.format(N))

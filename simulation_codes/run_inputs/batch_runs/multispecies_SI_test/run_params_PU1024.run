@@ -16,12 +16,12 @@ QUIET_START_FLAG		1
 DAMPING_MULTIPLIER_RD   0.05
 NX 						1024
 ND 						4
-MAX_REV					300
+MAX_WCINV				1200
 DXM						1.0
 IE						1
 RC_HWIDTH				-
 GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02	
-PARTICLE_DUMP_FREQ		1.0
-FIELD_DUMP_FREQ			0.05
+PARTICLE_DUMP_FREQ		5.0
+FIELD_DUMP_FREQ			0.25
 Systematic test of code against winske anisotropy paramters from the 1993 book. Multispecies to see the different bands, calculated in SI starting from linear theory, so may not be comparable to Winske results - but that's the point.

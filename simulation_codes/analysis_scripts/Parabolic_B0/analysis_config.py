@@ -1,10 +1,5 @@
-import os
-import sys
+import os, sys, pickle, shutil
 import numpy as np
-import numba as nb
-import pickle
-import shutil
-import pdb
 '''
 Used to initialise values for a run
 e.g. directories, simulation/particle parameters, derived quantities, etc.
@@ -16,8 +11,7 @@ The global calls allow variables to be accessed in the main script without
 clogging up its namespace - i.e. run-specific parameters are called by
 using e.g. cf.B0
 '''
-def load_run(drive, series, run_num, extract_arrays=True, print_summary=True, overwrite_summary=False,
-             CAM_CL=True):
+def load_run(drive, series, run_num, extract_arrays=True, print_summary=True, overwrite_summary=False):
     manage_dirs(drive, series, run_num)
     load_simulation_params()
     load_species_params()
@@ -268,7 +262,7 @@ def load_simulation_params():
 def initialize_simulation_variables():
     global wpi, gyfreq, gyperiod, va
     q   = 1.602e-19               # Elementary charge (C)
-    mp  = 1.67e-27                # Mass of proton (kg)
+    mp  = 1.673e-27               # Mass of proton (kg)
     e0  = 8.854e-12               # Epsilon naught - permittivity of free space
     mu0 = (4e-7) * np.pi          # Magnetic Permeability of Free Space (SI units)
     

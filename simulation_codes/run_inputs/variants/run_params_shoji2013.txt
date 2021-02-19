@@ -19,7 +19,7 @@ RADIX_LOADING			0
 DAMPING_MULTIPLIER_RD   0.05
 NX 						4096
 ND 						1536
-MAX_REV					300
+MAX_REV					2000
 DXM						0.1
 R_A						120e3
 IE						1
@@ -27,6 +27,6 @@ MIN_DENS				0.05
 RC_HWIDTH				-
 GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02	
-PARTICLE_DUMP_FREQ		0.5
-FIELD_DUMP_FREQ			0.10
+PARTICLE_DUMP_FREQ		5.0
+FIELD_DUMP_FREQ			0.25
 Comparison run against Shoji et al. (2013) with open particle and field boundaries and parabolic background magnetic field. dxm and nsp_ppc(hot) varying to see if wave growth still observed with less particles and/or less spatial resolution. Standard units means B_max and dx are calculated from self-consistent physical inputs from paper (this gives a dx far too big and an alfven speed too slow).
