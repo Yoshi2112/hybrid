@@ -2130,7 +2130,6 @@ if __name__ == '__main__':
     ########################
     ### START SIMULATION ###
     ########################
-    sys.exit()
     if __name__ == '__main__':
         start_time = timer()
         
