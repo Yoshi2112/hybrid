@@ -1,5 +1,5 @@
 DRIVE					F:/
-SAVE_PATH			    /runs/CAM_CL_comparison/
+SAVE_PATH			    /runs/CAM_CL_Fu/
 RUN						-
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
@@ -14,14 +14,14 @@ SOURCE_SMOOTHING_FLAG	0
 E_DAMPING_FLAG			0
 QUIET_START_FLAG		1
 DAMPING_MULTIPLIER_RD   0.05
-NX 						1024
+NX 						256
 ND 						4
-MAX_REV					300
+MAX_REV					1200
 DXM						1.0
 IE						1
 RC_HWIDTH				-
 GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02	
-PARTICLE_DUMP_FREQ		1.0
-FIELD_DUMP_FREQ			0.1
-This is the PREDCORR code. Testing against linear theory.
+PARTICLE_DUMP_FREQ		5.0
+FIELD_DUMP_FREQ			0.25
+Trying to recreate Fu stuff and confirm linear theory comparisons

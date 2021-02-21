@@ -7,6 +7,16 @@ import sys, os
 do_parallel=True
 #nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
 
+### PHYSICAL CONSTANTS ###
+q   = 1.602177e-19                          # Elementary charge (C)
+c   = 2.998925e+08                          # Speed of light (m/s)
+mp  = 1.672622e-27                          # Mass of proton (kg)
+me  = 9.109384e-31                          # Mass of electron (kg)
+kB  = 1.380649e-23                          # Boltzmann's Constant (J/K)
+e0  = 8.854188e-12                          # Epsilon naught - permittivity of free space
+mu0 = (4e-7) * np.pi                        # Magnetic Permeability of Free Space (SI units)
+RE  = 6.371e6                               # Earth radius in metres
+
 #%% --- FUNCTIONS ---
 #%% INITIALIZATION
 def uniform_distribution():
@@ -141,7 +151,7 @@ def set_timestep(vel):
     if adaptive_subcycling == True:
         k_max      = np.pi / dx
         dispfreq   = (k_max ** 2) * B0 / (mu0 * ne * q)            # Dispersion frequency (units of k?)
-        dt_sc      = freq_res * 1./dispfreq
+        dt_sc      = freq_res / dispfreq
         subcycles  = int(DT / dt_sc + 1)
         print('Number of subcycles required: {}'.format(subcycles))
     else:
@@ -414,7 +424,7 @@ def init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plu
     position_update(pos, vel, Ie, W_elec, dt)
     deposit_both_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus)
 
-    if smooth_sources == 1:
+    if source_smoothing == 1:
         for jj in range(Nj):
             ni[:, jj]  = smooth(ni[:, jj])
         
@@ -478,7 +488,7 @@ def collect_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus, nu_minus,
     position_update(pos, vel, Ie, W_elec, dt)
     deposit_both_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus)
     
-    if smooth_sources == 1:
+    if source_smoothing == 1:
         for jj in range(Nj):
             ni[:, jj]  = smooth(ni[:, jj])
         
@@ -864,8 +874,8 @@ def check_timestep(qq, DT, pos, vel, Ie, W_elec, B, E, dns, max_inc, part_save_i
     B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
     high_rat        = qm_ratios.max()
     
-    gyfreq          = high_rat  * np.abs(B_tot).max()      
-    ion_ts          = orbit_res * 1./gyfreq
+    local_gyfreq    = high_rat  * np.abs(B_tot).max()      
+    ion_ts          = orbit_res / local_gyfreq
     
     if E.max() != 0:
         elecfreq    = high_rat * (np.abs(E[:, 0] / max_V)).max()
@@ -916,9 +926,9 @@ def check_timestep(qq, DT, pos, vel, Ie, W_elec, B, E, dns, max_inc, part_save_i
             subcycles //= 2
             print('Number of subcycles per timestep halved to', subcycles)
             
-        if subcycles >= 1000:
-            subcycles = 1000
-            print('Maxmimum number of subcycles reached - she gon\' blow')
+        if subcycles >= 2000:
+            subcycles = 2000
+            sys.exit('Maximum number of subcycles reached :: Simulation aborted')
 
     return qq, DT, max_inc, part_save_iter, field_save_iter, change_flag, subcycles
 
@@ -1010,7 +1020,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('particle_reflect', 0),
                    ('particle_reinit', 0),
                    ('disable_waves', 0),
-                   ('source_smoothing', smooth_sources),
+                   ('source_smoothing', source_smoothing),
                    ('E_damping', 0),
                    ('quiet_start', quiet_start),
                    ('num_threads', nb.get_num_threads())
@@ -1087,86 +1097,153 @@ def add_runtime_to_header(runtime):
     return
 
 
+
+
+
 #%% --- MAIN ---
 if __name__ == '__main__':
-    ### RUN DESCRIPTION ###
-    run_description = '''Testing Fu fig. 4 run. More frequency dumps.'''
     
-    ### RUN PARAMETERS ###
-    drive           = 'F:/'
-    save_path       = 'runs/Fu_CAM_CL_test/' # Series save dir   : Folder containing all runs of a series 
-    run_num         = 0                              # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-    save_particles  = 1                              # Save data flag    : For later analysis
-    save_fields     = 1                              # Save plot flag    : To ensure hybrid is solving correctly during run
-    seed            = 98327                          # RNG Seed          : Set to enable consistent results for parameter studies
-    quiet_start     = 1
+    #################################
+    ### FILENAMES AND DIRECTORIES ###
+    #################################
+    
+    #### Read in command-line arguments, if present
+    import argparse as ap
+    parser = ap.ArgumentParser()
+    parser.add_argument('-r', '--runfile'   , default='_run_params.run', type=str)
+    parser.add_argument('-p', '--plasmafile', default='_plasma_params.plasma', type=str)
+    parser.add_argument('-n', '--run_num'   , default=-1, type=int)
+    args = vars(parser.parse_args())
+    
+    # Check root directory (change if on RCG)
+    if os.name == 'posix':
+        root_dir = os.path.dirname(sys.path[0])
+    else:
+        root_dir = '..'
+        
+    # Set input .run and .plasma files
+    run_input    = root_dir +  '/run_inputs/' + args['runfile']
+    plasma_input = root_dir +  '/run_inputs/' + args['plasmafile']
     
     
-    ### PHYSICAL CONSTANTS ###
-    q   = 1.602177e-19                          # Elementary charge (C)
-    c   = 2.998925e+08                          # Speed of light (m/s)
-    mp  = 1.672622e-27                          # Mass of proton (kg)
-    me  = 9.109384e-31                          # Mass of electron (kg)
-    kB  = 1.380649e-23                          # Boltzmann's Constant (J/K)
-    e0  = 8.854188e-12                          # Epsilon naught - permittivity of free space
-    mu0 = (4e-7) * np.pi                        # Magnetic Permeability of Free Space (SI units)
-    RE  = 6.371e6                               # Earth radius in metres
     
+    ###########################
+    ### LOAD RUN PARAMETERS ###
+    ###########################
+    with open(run_input, 'r') as f:
+        drive             = f.readline().split()[1]        # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
+        save_path         = f.readline().split()[1]        # Series save dir   : Folder containing all runs of a series
+        run_num           = f.readline().split()[1]        # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
     
-    ### SIMULATION PARAMETERS ###
-    NX        = 256                             # Number of cells - doesn't include ghost cells
-    dxm       = 1.0                             # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code)
-    ie        = 1                               # Adiabatic electrons. 0: off (constant), 1: on.
-    theta     = 0                               # Angle of B0 to x axis (in xy plane in units of degrees)
-    B0        = 200e-9                          # Unform initial magnetic field value (in T)
+        save_particles    = int(f.readline().split()[1])   # Save data flag    : For later analysis
+        save_fields       = int(f.readline().split()[1])   # Save plot flag    : To ensure hybrid is solving correctly during run
+        seed              = f.readline().split()[1]        # RNG Seed          : Set to enable consistent results for parameter studies
+        
+        homogenous        = int(f.readline().split()[1])   # Set B0 to homogenous (as test to compare to parabolic)
+        particle_periodic = int(f.readline().split()[1])   # Set particle boundary conditions to periodic
+        particle_reflect  = int(f.readline().split()[1])   # Set particle boundary conditions to reflective
+        particle_reinit   = int(f.readline().split()[1])   # Set particle boundary conditions to reinitialize
+        field_periodic    = int(f.readline().split()[1])   # Set field boundary to periodic (False: Absorbtive Boundary Conditions)
+        disable_waves     = int(f.readline().split()[1])   # Zeroes electric field solution at each timestep
+        source_smoothing  = int(f.readline().split()[1])   # Smooth source terms with 3-point Gaussian filter
+        E_damping         = int(f.readline().split()[1])   # Damp E in a manner similar to B for ABCs
+        quiet_start       = int(f.readline().split()[1])   # Flag to use quiet start (False :: semi-quiet start)
+        damping_multiplier= float(f.readline().split()[1]) # Multiplies the r-factor to increase/decrease damping rate.
+    
+        NX        = int(f.readline().split()[1])           # Number of cells - doesn't include ghost cells
+        ND        = int(f.readline().split()[1])           # Damping region length: Multiple of NX (on each side of simulation domain)
+        max_wcinv = float(f.readline().split()[1])         # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+        dxm       = float(f.readline().split()[1])         # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
+        
+        ie        = int(f.readline().split()[1])           # Adiabatic electrons. 0: off (constant), 1: on.
+        rc_hwidth = f.readline().split()[1]                # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
+          
+        orbit_res = float(f.readline().split()[1])         # Orbit resolution
+        freq_res  = float(f.readline().split()[1])         # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
+        part_res  = float(f.readline().split()[1])         # Data capture resolution in gyroperiod fraction: Particle information
+        field_res = float(f.readline().split()[1])         # Data capture resolution in gyroperiod fraction: Field information
+    
+        run_description = f.readline()                     # Commentary to attach to runs, helpful to have a quick description
 
-    # Time parameters : All in units of 1/wci
-    max_wcinv = 1200                            # Simulation runtime, in multiples of the gyroperiod    
-    orbit_res = 0.5                             # Particle orbit resolution: Fraction of gyroperiod in seconds
-    freq_res  = 0.05                            # Frequency resolution: Fraction of inverse radian frequencies
-    part_res  = 5.0                             # Data capture resolution in gyroperiod fraction: Particle information
-    field_res = 0.25                            # Data capture resolution in gyroperiod fraction: Field information
-    subcycles = 12                              # Number of field subcycling steps for Cyclic Leapfrog
+    # Override because I keep forgetting to change this
+    if os.name == 'posix':
+        drive = '/home/c3134027/'
+
+    # Set run number
+    if args['run_num'] != -1:                              # Check CLI, or
+        run_num = args['run_num']
+    elif run_num != '-':                                       # Check input file, else
+        run_num = int(run_num)
+    else:                                                  # Autoset
+        if os.path.exists(drive + save_path) == False:
+            run_num = 0
+        else:
+            run_num = len(os.listdir(drive + save_path))
+        print('Run number AUTOSET to ', run_num)
+    
+    if seed == '-':
+        seed = None
+    else:
+        seed = int(seed)
+    
+    manage_directories()
+    
+    #######################################
+    ### LOAD PARTICLE/PLASMA PARAMETERS ###
+    #######################################
+    with open(plasma_input, 'r') as f:
+        species_lbl = np.array(f.readline().split()[1:])
+        
+        temp_color = np.array(f.readline().split()[1:])
+        temp_type  = np.array(f.readline().split()[1:], dtype=int)
+        dist_type  = np.array(f.readline().split()[1:], dtype=int)
+        nsp_ppc    = np.array(f.readline().split()[1:], dtype=int)
+        
+        mass       = np.array(f.readline().split()[1:], dtype=float)
+        charge     = np.array(f.readline().split()[1:], dtype=float)
+        drift_v    = np.array(f.readline().split()[1:], dtype=float)
+        density    = np.array(f.readline().split()[1:], dtype=float)*1e6
+        anisotropy = np.array(f.readline().split()[1:], dtype=float)
+                                           
+        E_perp     = np.array(f.readline().split()[1:], dtype=float)
+        E_e        = float(f.readline().split()[1])
+        beta_flag  = int(f.readline().split()[1])
+    
+        L         = float(f.readline().split()[1])           # Field line L shell
+        B_eq      = f.readline().split()[1]                  # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
+        B_xmax_ovr= f.readline().split()[1]
+    
+    charge    *= q                                           # Cast species charge to Coulomb
+    mass      *= mp                                          # Cast species mass to kg
     
     
-    ### PARTICLE PARAMETERS ###
-    species_lbl= [r'$H^+$ warm', r'$H^+$ cold', r'$He^+$ cold']     # Species name/labels        : Used for plotting
-    temp_color = ['r', 'b', 'purple']
-    temp_type  = np.array([1, 0, 0])                   # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-    dist_type  = np.array([0, 0, 0])                   # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+    # Misc softish-coded stuff    
+    min_dens            = 0.05                               # Allowable minimum charge density in a cell, as a fraction of ne*q
+    adaptive_timestep   = 1                                  # Flag (True/False) for adaptive timestep based on particle and field parameters
+    adaptive_subcycling = 1                                  # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
+    subcycles           = 12                                 # Number of field subcycling steps for Cyclic Leapfrog
+
+    B0        = float(B_eq)                                  # Unform initial magnetic field value (in T)
+    ne        = (density * charge).sum()                     # Electron density (in /m3, same as total ion density (for singly charged ions))
+    theta     = 0.0
     
-    # Normalization override (e.g. Fu, Winkse)
+    
+    
+    ### -- Normalization of density override (e.g. Fu, Winkse)
     rat        = 5
     ne         = (rat*B0)**2 * e0 / me # REMOVE
     density    = np.array([0.05, 0.94, 0.01])*ne  # REMOVE
-
-    mass       = np.array([1., 1., 4.])    	           # Species ion mass (proton mass units)
-    charge     = np.array([1., 1., 1.])       	       # Species ion charge (elementary charge units)
-    #density    = np.array([20., 120., 40.])*1e6  	   # Species charge density as normalized fraction (add to 1.0)
-    drift_v    = np.array([0., 0., 0.])     	    # Species parallel bulk velocity (alfven velocity units)
-    nsp_ppc    = np.array([24000, 1000, 1000])              # Species number of particles per cell
-    E_perp     = np.array([3.0, 0.1, 0.1])            	# Ion species perpendicular energy
-    anisotropy = np.array([2., 0., 0.])               # Species temperature anisotropy
+    ### --- DELETE LATER
     
-    beta       = 1                                  # Flag: Specify temperatures by beta (True) or energy in eV (False)
-    E_e        = 0.1                                # Electron energy (beta/eV)
-
-    smooth_sources = 0                                          # Flag for source smoothing: Gaussian
-    min_dens       = 0.05                                       # Allowable minimum charge density in a cell, as a fraction of ne*q
     
-    adaptive_timestep   = 1                                     # Flag (True/False) for adaptive timestep based on particle and field parameters
-    adaptive_subcycling = 1                                     # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
-
-
-
 
 #%%### DERIVED SIMULATION PARAMETERS
     E_par     = E_perp / (anisotropy + 1) 
-    #ne        = (density * charge).sum()                     # Electron density (in /m3, same as total ion density (for singly charged ions))
     charge    *= q                                           # Cast species charge to Coulomb
     mass      *= mp                                          # Cast species mass to kg
 
-    if beta == 1:
+    # Particle energy: If beta == 1, energies are in beta. If not, they are in eV 
+    if beta_flag == 1:
         Te0    = B0 ** 2 * E_e    / (2 * mu0 * ne * kB)      # Temperatures of each species in Kelvin
         Tpar   = B0 ** 2 * E_par  / (2 * mu0 * ne * kB)
         Tperp  = B0 ** 2 * E_perp / (2 * mu0 * ne * kB)
@@ -1243,7 +1320,7 @@ if __name__ == '__main__':
     
     print('{} cells'.format(NX))
     print('{} particles total\n'.format(N))
-
+    sys.exit()
     
     #%% BEGIN HYBRID
     start_time = timer()

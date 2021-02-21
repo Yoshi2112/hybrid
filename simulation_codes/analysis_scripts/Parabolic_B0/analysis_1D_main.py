@@ -1856,12 +1856,15 @@ def plot_damping_array(save=True):
     return
 
 
-def check_fields(save=True):
+def check_fields(save=True, ylim=True):
     '''
     Plot summary plot of raw values for each particle timestep
     Field values are interpolated to this point
     '''    
-    path = cf.anal_dir + '/field_plots_all/'
+    if ylim == True:
+        path = cf.anal_dir + '/field_plots_all_ylim/'
+    else:
+        path = cf.anal_dir + '/field_plots_all/'
         
     if os.path.exists(path) == False:                                   # Create data directory
         os.makedirs(path)
@@ -1887,11 +1890,12 @@ def check_fields(save=True):
     axes[3, 0].set_ylabel('$E_y$\n(mV/m)', rotation=0, labelpad=lpad, fontsize=fsize)
     axes[4, 0].set_ylabel('$E_z$\n(mV/m)', rotation=0, labelpad=lpad, fontsize=fsize)
         
-    axes[0, 0].set_ylim(rD.min(), rD.max())
-    axes[1, 0].set_ylim(by.min(), by.max())
-    axes[2, 0].set_ylim(bz.min(), bz.max())
-    axes[3, 0].set_ylim(ey.min(), ey.max())
-    axes[4, 0].set_ylim(ez.min(), ez.max())
+    if ylim == True:
+        axes[0, 0].set_ylim(rD.min(), rD.max())
+        axes[1, 0].set_ylim(by.min(), by.max())
+        axes[2, 0].set_ylim(bz.min(), bz.max())
+        axes[3, 0].set_ylim(ey.min(), ey.max())
+        axes[4, 0].set_ylim(ez.min(), ez.max())
     
     axes[0, 1].set_ylabel('$n_e$\n$(cm^{-1})$', fontsize=fsize, rotation=0, labelpad=lpad)
     axes[1, 1].set_ylabel('$V_{ey}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
@@ -1899,11 +1903,12 @@ def check_fields(save=True):
     axes[3, 1].set_ylabel('$J_{iy}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
     axes[4, 1].set_ylabel('$J_{iz}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
     
-    axes[0, 1].set_ylim(qdens.min(), qdens.max())
-    axes[1, 1].set_ylim(vey.min(), vey.max())
-    axes[2, 1].set_ylim(vez.min(), vez.max())
-    axes[3, 1].set_ylim(jy.min() , jy.max())
-    axes[4, 1].set_ylim(jz.min() , jz.max())
+    if ylim == True:
+        axes[0, 1].set_ylim(qdens.min(), qdens.max())
+        axes[1, 1].set_ylim(vey.min(), vey.max())
+        axes[2, 1].set_ylim(vez.min(), vez.max())
+        axes[3, 1].set_ylim(jy.min() , jy.max())
+        axes[4, 1].set_ylim(jz.min() , jz.max())
     
     axes[0, 2].set_ylabel('$T_e$\n(eV)'     , fontsize=fsize, rotation=0, labelpad=lpad)
     axes[1, 2].set_ylabel('$V_{ex}$\n(m/s)' , fontsize=fsize, rotation=0, labelpad=lpad)
@@ -1911,10 +1916,11 @@ def check_fields(save=True):
     axes[3, 2].set_ylabel('$E_x$\n(mV/m)'   , fontsize=fsize, rotation=0, labelpad=lpad)
     axes[4, 2].set_ylabel('$B_x$\n(nT)'     , fontsize=fsize, rotation=0, labelpad=lpad)
 
-    axes[0, 2].set_ylim(te.min(), te.max())
-    axes[1, 2].set_ylim(vex.min(), vex.max())
-    axes[2, 2].set_ylim(jx.min(), jx.max())
-    axes[3, 2].set_ylim(ex.min(), ex.max())
+    if ylim == True:
+        axes[0, 2].set_ylim(te.min(), te.max())
+        axes[1, 2].set_ylim(vex.min(), vex.max())
+        axes[2, 2].set_ylim(jx.min(), jx.max())
+        axes[3, 2].set_ylim(ex.min(), ex.max())
     
     fig.align_labels()
             
@@ -3884,9 +3890,14 @@ def plot_total_density_with_time(save=True):
         
         spidx, counts = np.unique(idx, return_counts=True)
         
-        # +1 accounts for idx starting at -1 when sorted
-        for jj in range(cf.Nj):
-            num_idx[ii, jj] = counts[jj + 1]
+        if cf.particle_open == 1:
+            # +1 accounts for idx starting at -1 when sorted
+            for jj in range(cf.Nj):
+                num_idx[ii, jj] = counts[jj + 1]
+        else:
+            # +1 accounts for idx starting at -1 when sorted
+            for jj in range(cf.Nj):
+                num_idx[ii, jj] = counts[jj]
           
     # Get max density (real)
     ftime, qdens = cf.get_array('qdens')    
@@ -4074,13 +4085,13 @@ def multiplot_parallel_scaling():
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'F:'
+    drive       = 'G:'
         
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//Fu_CAM_CL_test//']:
+    for series in ['//shoji_2013_short//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4098,7 +4109,8 @@ if __name__ == '__main__':
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
                 #plot_total_density_with_time()
                 #plot_max_velocity()
-                #check_fields(save=True)
+                check_fields(save=True, ylim=True)
+                check_fields(save=True, ylim=False)
 
                 #winske_summary_plots(save=True)
                 #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
@@ -4118,7 +4130,7 @@ if __name__ == '__main__':
 # =============================================================================
 
                 #try:
-                standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)
+                #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)
 # =============================================================================
 #                 except:
 #                     pass            

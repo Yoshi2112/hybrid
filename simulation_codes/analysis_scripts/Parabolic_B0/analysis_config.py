@@ -434,7 +434,10 @@ def load_fields(ii):
     tE               = data['E']
     tVe              = data['Ve']
     tTe              = data['Te']
-    tJ               = data['Ji']
+    try:
+        tJ               = data['Ji']
+    except:
+        tJ               = data['J']
     tdns             = data['dns']
     tsim_time        = data['sim_time']
     
