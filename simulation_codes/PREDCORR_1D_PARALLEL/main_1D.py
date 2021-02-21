@@ -1396,7 +1396,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('ne', ne),
                    ('Te0', Te0_scalar),
                    ('ie', ie),
-                   ('theta', 0.0)
+                   ('theta', 0.0),
                    ('part_save_iter', part_save_iter),
                    ('field_save_iter', field_save_iter),
                    ('max_wcinv', max_wcinv),
@@ -1417,8 +1417,8 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('source_smoothing', source_smoothing),
                    ('E_damping', E_damping),
                    ('quiet_start', quiet_start),
-                   ('num_threads', nb.get_num_threads())
-                   ('subcycles', 1),
+                   ('num_threads', nb.get_num_threads()),
+                   ('subcycles', 1)
                    ])
 
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:
@@ -1919,6 +1919,17 @@ if __name__ == '__main__':
     #####################################
     if ND < 2:
         ND = 2                                  # Set minimum (used for array addresses)
+        
+    if B_eq == '-':
+        B_eq = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
+    else:
+        B_eq = float(B_eq)
+        
+    ### -- Normalization of density override (e.g. Fu, Winkse)
+    rat        = 5
+    ne         = (rat*B_eq)**2 * e0 / me
+    density    = np.array([0.05, 0.94, 0.01])*ne
+    ### --- DELETE LATER
     
     NC          = NX + 2*ND                     # Total number of cells
     ne          = density.sum()                 # Electron number density
@@ -1934,10 +1945,7 @@ if __name__ == '__main__':
     if particle_reflect + particle_reinit + particle_periodic == 0:
         particle_open = 1
         
-    if B_eq == '-':
-        B_eq = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
-    else:
-        B_eq = float(B_eq)
+    
         
     if rc_hwidth == '-':
         rc_hwidth = 0

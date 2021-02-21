@@ -2,7 +2,7 @@
 from timeit import default_timer as timer
 import numpy as np
 import numba as nb
-import sys, os
+import sys, os, pdb
 
 do_parallel=True
 #nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
@@ -133,7 +133,7 @@ def set_timestep(vel):
     vel_ts   = 0.5*dx / np.max(np.abs(vel[0, :])) # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
 
     DT       = min(ion_ts, vel_ts)
-    max_time = max_wcinv / gyfreq               # Total runtime in seconds
+    max_time = max_wcinv / gyfreq                 # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1             # Total number of time steps
 
     if part_res == 0:
@@ -931,7 +931,6 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
     d_path = '%s/%s/run_%d/data/' % (drive, save_path, run_num)     # Set main dir for data
     f_path = d_path + '/fields/'
     p_path = d_path + '/particles/'
-    manage_directories()
 
     for folder in [d_path, f_path, p_path]:
         if os.path.exists(folder) == False:                               # Create data directories
@@ -949,7 +948,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('N' , N),
                    ('dxm', dxm),
                    ('dx', dx),
-                   ('L', 0.0)
+                   ('L', 0.0),
                    ('B_eq', B0),
                    ('xmax', xmax),
                    ('xmin', xmin),
@@ -988,7 +987,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('E_damping', 0),
                    ('quiet_start', quiet_start),
                    ('num_threads', nb.get_num_threads()),
-                   ('subcycles', subcycles),
+                   ('subcycles', subcycles)
                    ])
 
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:
@@ -1180,11 +1179,7 @@ if __name__ == '__main__':
         L         = float(f.readline().split()[1])           # Field line L shell
         B_eq      = f.readline().split()[1]                  # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
         B_xmax_ovr= f.readline().split()[1]
-    
-    charge    *= q                                           # Cast species charge to Coulomb
-    mass      *= mp                                          # Cast species mass to kg
-    
-    
+
     # Misc softish-coded stuff    
     min_dens            = 0.05                               # Allowable minimum charge density in a cell, as a fraction of ne*q
     adaptive_timestep   = 1                                  # Flag (True/False) for adaptive timestep based on particle and field parameters
@@ -1194,7 +1189,6 @@ if __name__ == '__main__':
     B0        = float(B_eq)                                  # Unform initial magnetic field value (in T)
     ne        = (density * charge).sum()                     # Electron density (in /m3, same as total ion density (for singly charged ions))
     theta     = 0.0
-    
     
     
     ### -- Normalization of density override (e.g. Fu, Winkse)
@@ -1288,7 +1282,6 @@ if __name__ == '__main__':
     
     print('{} cells'.format(NX))
     print('{} particles total\n'.format(N))
-    sys.exit()
     
     #%% BEGIN HYBRID
     start_time = timer()
@@ -1298,15 +1291,6 @@ if __name__ == '__main__':
     Ib       = np.zeros(N,      dtype=np.uint16)
     W_elec   = np.zeros((3, N), dtype=np.float64)
     W_mag    = np.zeros((3, N), dtype=np.float64)
-    
-    ### These could all be deleted if the parallel code works
-    Bp       = np.zeros((3, N), dtype=np.float64)
-    Ep       = np.zeros((3, N), dtype=np.float64)
-    v_prime  = np.zeros((3, N), dtype=np.float64)
-    S        = np.zeros((3, N), dtype=np.float64)
-    T        = np.zeros((3, N), dtype=np.float64)
-    temp_N   = np.zeros((    N), dtype=np.float64)
-    ################
     
     ni       = np.zeros((size, Nj), dtype=np.float64)
     ni_init  = np.zeros((size, Nj), dtype=np.float64)
