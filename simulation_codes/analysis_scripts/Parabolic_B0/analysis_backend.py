@@ -366,10 +366,7 @@ def get_energies():
 
 
 def get_helical_components(overwrite=False, field='B'):
-    temp_dir = cf.temp_dir
-    
-    # Note: Are these definitions valid for ABC's? Or should I just be using the spatial section?
-    # Would rely on cutting off the end bits of the field as well (i.e. must be same length as Fy, Fz)    
+    temp_dir = cf.temp_dir  
     print('Getting helical components for {} field'.format(field))
     if os.path.exists(temp_dir + '{}_positive_helicity.npy'.format(field)) == False or overwrite == True:
         ftime, Fy = cf.get_array('{}y'.format(field))
@@ -433,6 +430,55 @@ def calculate_helicity(Fy, Fz):
         Ft_pos += Fk_pos[ii] * np.exp(-2j*np.pi*k_modes[ii]*x)
         Ft_neg += Fk_neg[ii] * np.exp( 2j*np.pi*k_modes[ii]*x)
     return Ft_pos, Ft_neg
+
+
+def get_FB_waves(overwrite=False, field='B'):
+    '''
+    Use method of Shoji et al. (2011) to separate magnetic wave field into
+    backwards and forwards components
+     -- Should be equivalent to helicity thing
+     -- Doesn't generalise well, can't tell between propagation direction and polarisation
+     -- Only works for this because EMICs are generated in the L-mode and have single polarisation
+     -- Don't cut off damping regions, she'll be right
+    Fields are (time, space)
+    
+    FFT Positions
+    # [0]     - Zero frequency term
+    # [1:n/2] - Positive k terms
+    # [n/2+1:] - Negative k terms
+    # n/2 either both pos/neg nyquist (even) or 
+    #             (odd) largest positive/negative frequency is on either side
+    
+    -- Do I have to account for that?
+    -- Zeroing the A[0] term will probably just demean the resulting timeseries
+    
+    STILL NEEDS VALIDATION
+     - Conservation: If I add the results, do I get the original waveform back?
+     - Compare against existing helicity code, are they equivalent?
+    '''
+    ftime, Fy = cf.get_array('{}y'.format(field))
+    ftime, Fz = cf.get_array('{}z'.format(field))
+    F_perp    = Fy + 1j*Fz      # Should this be a +ve or -ve? Defines polarisation 
+    Nk        = F_perp.shape[1]
+    
+    F_fwd = np.zeros(F_perp.shape)
+    F_bwd = np.zeros(F_perp.shape)    
+    for ii in range(F_perp.shape[0]):
+        Fk = (1 / Nk) * np.fft.rfft(F_perp[ii])
+        
+        # Remove A[0] term (necessary? Or will this break it?)
+        Fk[0] *= 0.0
+        
+        # Separate out forward wave
+        F_fwd[ii] = Fk.copy()               # Copy coefficients
+        F_fwd[ii, Nk/2+1:]*= 0.0            # Zero negative wavenumbers
+        F_fwd[ii] = np.fft.ifft(F_fwd[ii])  # Transform back into data space
+        
+        # Separate out backward wave
+        F_bwd[ii] = Fk.copy()               # Copy coefficients
+        F_bwd[ii, 1:Nk/2] *= 0.0            # Zero positive wavenumbers
+        F_bwd[ii] = np.fft.ifft(F_bwd[ii])  # Transform back into data space
+    return ftime, F_fwd, F_bwd
 
 
 

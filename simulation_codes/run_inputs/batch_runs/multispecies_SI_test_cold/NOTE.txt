@@ -1,0 +1,1 @@
+These parameters not really designed around Winske parameters, mostly just a shot in the dark. Verified to give wave growth for all combinations of 70/20/10 cold with 10% RC. Should be a solid test using SI quantities from the start.

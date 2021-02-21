@@ -1388,7 +1388,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('theta_xmax', theta_xmax),
                    ('theta_L', lambda_L),
                    ('loss_cone', loss_cone_eq),
-                   ('loss_cone_xmax', loss_cone_xmax),
+                   ('loss_cone_xmax', loss_cone_xmax*180./np.pi),
                    ('r_A', r_A),
                    ('lat_A', lat_A),
                    ('B_A', B_A),
@@ -2003,60 +2003,74 @@ if __name__ == '__main__':
     E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
     
     if homogenous == 1:
-        a      = 0
-        B_xmax = B_eq
-        
-        # Also need to set any numeric values
-        B_A            = 0.0
-        loss_cone_eq   = 0.0
-        loss_cone_xmax = 0.0
-        theta_xmax     = 0.0
-        lambda_L       = 0.0
-        lat_A          = 0.0
-        r_A            = 0.0
+        pass
+# =============================================================================
+#         a      = 0
+#         B_xmax = B_eq
+#         
+#         # Also need to set any numeric values
+#         B_A            = 0.0
+#         loss_cone_eq   = 0.0
+#         loss_cone_xmax = 0.0
+#         theta_xmax     = 0.0
+#         lambda_L       = 0.0
+#         lat_A          = 0.0
+#         r_A            = 0.0
+# =============================================================================
     else:
-        print('Calculating length of field line...')
-        r_A    = 120e3                                                              # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
-        N_fl   = 1e5                                                                # Number of points to calculate field line length (higher is more accurate)
-        lat0   = np.arccos(np.sqrt((RE + r_A)/(RE*L)))                              # Latitude for this L value (at ionosphere height)
-        h      = 2.0*lat0/float(N_fl)                                               # Step size of lambda (latitude)
-        f_len  = 0.0
-        for ii in range(int(N_fl)):
-            lda        = ii*h - lat0                                                # Lattitude for this step
-            f_len     += L*RE*np.cos(lda)*np.sqrt(4.0 - 3.0*np.cos(lda) ** 2) * h   # Field line length accruance
-        print('Field line length = {:.2f} RE'.format(f_len/RE))
-        print('Simulation length = {:.2f} RE'.format(2*xmax/RE))
-        
-        if xmax > f_len / 2:
-            sys.exit('Simulation length longer than field line. Aboring...')
-        
-        print('Finding simulation boundary MLAT...')
-        dlam   = 1e-5                                            # Latitude increment in radians
-        fx_len = 0.0; ii = 1                                     # Arclength/increment counters
-        while fx_len < xmax:
-            theta_xmax = dlam * ii                                                             # Current latitude
-            d_len      = L * RE * np.cos(theta_xmax) * np.sqrt(4.0 - 3.0*np.cos(theta_xmax) ** 2) * dlam # Length increment
-            fx_len    += d_len                                                                 # Accrue arclength
-            ii        += 1                                                                     # Increment counter
-    
-        r_xmax      = L * RE * np.cos(theta_xmax) ** 2                                      # Radial distance of simulation boundary
-        
-        # Magnetic field intensity at boundary : Calculate or manually set
-        if B_xmax_ovr == '-':
-            B_xmax = B_eq*np.sqrt(4 - 3*np.cos(theta_xmax)**2)/np.cos(theta_xmax)**6       
-        else:
-            B_xmax = float(B_xmax_ovr)
-            
-        a           = (B_xmax / B_eq - 1) / xmax ** 2                                       # Parabolic scale factor: Fitted to B_eq, B_xmax
-        lambda_L    = np.arccos(np.sqrt(1.0 / L))                                           # Lattitude of Earth's surface at this L
-    
+        # DIPOLE STUFF THAT I MADE
+# =============================================================================
+#         print('Calculating length of field line...')
+#                                                                       # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
+#         N_fl   = 1e5                                                                # Number of points to calculate field line length (higher is more accurate)
+#         lat0   = np.arccos(np.sqrt((RE + r_A)/(RE*L)))                              # Latitude for this L value (at ionosphere height)
+#         h      = 2.0*lat0/float(N_fl)                                               # Step size of lambda (latitude)
+#         f_len  = 0.0
+#         for ii in range(int(N_fl)):
+#             lda        = ii*h - lat0                                                # Lattitude for this step
+#             f_len     += L*RE*np.cos(lda)*np.sqrt(4.0 - 3.0*np.cos(lda) ** 2) * h   # Field line length accruance
+#         print('Field line length = {:.2f} RE'.format(f_len/RE))
+#         print('Simulation length = {:.2f} RE'.format(2*xmax/RE))
+#         
+#         if xmax > f_len / 2:
+#             sys.exit('Simulation length longer than field line. Aboring...')
+#         
+#         print('Finding simulation boundary MLAT...')
+#         dlam   = 1e-5                                            # Latitude increment in radians
+#         fx_len = 0.0; ii = 1                                     # Arclength/increment counters
+#         while fx_len < xmax:
+#             theta_xmax = dlam * ii                                                             # Current latitude
+#             d_len      = L * RE * np.cos(theta_xmax) * np.sqrt(4.0 - 3.0*np.cos(theta_xmax) ** 2) * dlam # Length increment
+#             fx_len    += d_len                                                                 # Accrue arclength
+#             ii        += 1                                                                     # Increment counter
+#     
+#         r_xmax      = L * RE * np.cos(theta_xmax) ** 2                                      # Radial distance of simulation boundary
+#         
+#         # Magnetic field intensity at boundary : Calculate or manually set
+#         if B_xmax_ovr == '-':
+#             B_xmax = B_eq*np.sqrt(4 - 3*np.cos(theta_xmax)**2)/np.cos(theta_xmax)**6       
+#         else:
+#             B_xmax = float(B_xmax_ovr)
+#             
+#         a           = (B_xmax / B_eq - 1) / xmax ** 2                                       # Parabolic scale factor: Fitted to B_eq, B_xmax
+#                                                   # Lattitude of Earth's surface at this L
+#     
+# =============================================================================
+        # BASICS THAT I SHOULD HAVE STARTED WITH
+        a          = 4.5 / (L*RE)**2
+        r_A        = 120e3
         lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L)))       # Anchor latitude in radians
         B_A        = B_eq * np.sqrt(4 - 3*np.cos(lat_A) ** 2)\
-                   / (np.cos(lat_A) ** 6)                        # Magnetic field at anchor point
+                    / (np.cos(lat_A) ** 6)                        # Magnetic field at anchor point
+        B_xmax     = B_eq * (1 + a*xmax**2)
+        lambda_L   = np.arccos(np.sqrt(1.0 / L)) 
         
         loss_cone_eq   = np.arcsin(np.sqrt(B_eq   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
         loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
-    
+
+        # NOT REALLY ANY WAY TO TELL MLAT WITH THIS METHOD
+        theta_xmax = 0.0
+
     gyfreq_xmax= q*B_xmax/ mp                                # Proton Gyrofrequency (rad/s) at boundary (highest)
     k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
     qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
@@ -2117,6 +2131,7 @@ if __name__ == '__main__':
     ########################
     ### START SIMULATION ###
     ########################
+    sys.exit()
     if __name__ == '__main__':
         start_time = timer()
         
