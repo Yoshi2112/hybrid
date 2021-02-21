@@ -2005,20 +2005,17 @@ if __name__ == '__main__':
     E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
     
     if homogenous == 1:
-        pass
-# =============================================================================
-#         a      = 0
-#         B_xmax = B_eq
-#         
-#         # Also need to set any numeric values
-#         B_A            = 0.0
-#         loss_cone_eq   = 0.0
-#         loss_cone_xmax = 0.0
-#         theta_xmax     = 0.0
-#         lambda_L       = 0.0
-#         lat_A          = 0.0
-#         r_A            = 0.0
-# =============================================================================
+        a      = 0
+        B_xmax = B_eq
+        
+        # Also need to set any numeric values
+        B_A            = 0.0
+        loss_cone_eq   = 0.0
+        loss_cone_xmax = 0.0
+        theta_xmax     = 0.0
+        lambda_L       = 0.0
+        lat_A          = 0.0
+        r_A            = 0.0
     else:
         # DIPOLE STUFF THAT I MADE
 # =============================================================================
