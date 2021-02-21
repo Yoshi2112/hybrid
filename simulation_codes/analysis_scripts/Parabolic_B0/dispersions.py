@@ -93,8 +93,9 @@ def get_linear_dispersion_from_sim(k, zero_cold=True, Nk=1000):
     WPDR_solns,  warm_CGR = get_dispersion_relation(Species, k_vals, approx='warm')
     HPDR_solns,  hot_CGR  = get_dispersion_relation(Species, k_vals, approx='hot')
 
-    # Convert back from angular units to linear units
-    k_vals     /= 2*np.pi
+    # Convert back from angular units to linear units 
+    # (Except we *don't* want k in linear) units otherwise it's beta = k / 2pi
+    #k_vals     /= 2*np.pi
     CPDR_solns /= 2*np.pi
     WPDR_solns /= 2*np.pi
     HPDR_solns /= 2*np.pi
@@ -276,7 +277,9 @@ def plot_fourier_mode_timeseries(it_max=None):
 
 def get_wk(component, linear_only=True):
     '''
-    Spatial boundaries start at index
+    Spatial boundaries start at index.
+    linear_only is kwarg to either take Boolean type or a number specifying up to
+    what time to FFT up to (in units of wcinv)
     '''
     ftime, arr = cf.get_array(component)
     
@@ -291,19 +294,26 @@ def get_wk(component, linear_only=True):
         max_idx    = np.argmax(U_B)
         t1         = int(1.2*max_idx)
         tf         = ftime[t1]
-    else:
+    elif linear_only == False:
         t1 = ftime.shape[0]
         tf = ftime[t1-1]
+    else:
+        # Assume linear_only is a number
+        end_sec  = linear_only * 1./cf.gyfreq
+        diff_sec = np.abs(end_sec - ftime)
+        t1       = np.where(diff_sec == diff_sec.min())[0][0]
+        tf       = ftime[t1]
+        pdb.set_trace()
         
     if component.upper()[0] == 'B':
         st = cf.x0B; en = cf.x1B
     else:
         st = cf.x0E; en = cf.x1E
-    
+
     num_times = t1-t0
 
     df = 1. / (num_times * cf.dt_field)
-    dk = 1. / (cf.NX     * cf.dx)
+    dk = 1. / (cf.NX * cf.dx)
 
     f  = np.arange(0, 1. / (2*cf.dt_field), df)
     k  = np.arange(0, 1. / (2*cf.dx), dk)
@@ -320,6 +330,9 @@ def get_wk(component, linear_only=True):
         fft_matrix2[:, ii] = np.fft.fft(fft_matrix[:, ii] - fft_matrix[:, ii].mean())
 
     wk = fft_matrix2[:f.shape[0], :k.shape[0]] * np.conj(fft_matrix2[:f.shape[0], :k.shape[0]])
+    
+    # Transform linear k (beta) into angular actual k
+    k *= 2*np.pi
     return k, f, wk, tf
 
     

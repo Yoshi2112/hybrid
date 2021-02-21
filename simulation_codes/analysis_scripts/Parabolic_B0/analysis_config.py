@@ -106,7 +106,7 @@ def load_species_params():
 
 
 def load_simulation_params():
-    global Nj, ne, NX, dxm, seed, dx, Te0, dt_sim, max_rev,   \
+    global Nj, ne, NX, dxm, seed, dx, Te0, dt_sim, max_wcinv,   \
            ie, run_desc, orbit_res, freq_res, method_type,    \
            particle_shape, part_save_iter, field_save_iter, dt_field, dt_particle,  \
            ND, NC, N, loss_cone, xmax, B_xmax, B_eq, theta_xmax, a, boundary_type,     \
@@ -143,7 +143,7 @@ def load_simulation_params():
     loss_cone         = obj['loss_cone']
     rc_hwidth         = obj['rc_hwidth']
     theta_xmax        = obj['theta_xmax']
-    max_rev           = obj['max_rev']
+    max_wcinv         = obj['max_wcinv']
     orbit_res         = obj['orbit_res']
     freq_res          = obj['freq_res']
     run_desc          = obj['run_desc']
@@ -154,22 +154,17 @@ def load_simulation_params():
         damping_multiplier = obj['damping_multiplier']
     except:
         damping_multiplier = None
-    
+
     part_save_iter    = obj['part_save_iter']
     field_save_iter   = obj['field_save_iter']
     
     dt_field          = dt_sim * field_save_iter                        # Time between data slices (seconds)
     dt_particle       = dt_sim * part_save_iter
     
-    
-    try:
-        particle_periodic = obj['particle_periodic']
-        particle_reflect  = obj['particle_reflect']
-        particle_reinit   = obj['particle_reinit']
-    except:
-        particle_periodic = None
-        particle_reflect  = None
-        particle_reinit   = None
+    particle_periodic = obj['particle_periodic']
+    particle_reflect  = obj['particle_reflect']
+    particle_reinit   = obj['particle_reinit']
+
         
     if particle_reinit is None and particle_reflect is None and particle_periodic is None:
         particle_open = None
@@ -178,22 +173,13 @@ def load_simulation_params():
     else:
         particle_open = 0
         
-    try:
-        disable_waves    = obj['disable_waves']
-        source_smoothing = obj['source_smoothing']
-        E_damping        = obj['E_damping']
-        quiet_start      = obj['quiet_start']
-        homogenous       = obj['homogeneous']
-        field_periodic   = obj['field_periodic']
-    except:
-        disable_waves    = None
-        source_smoothing = None
-        E_damping        = None
-        quiet_start      = None
-        homogenous       = None
-        field_periodic   = None
-       
-    run_time = obj['run_time']
+    disable_waves    = obj['disable_waves']
+    source_smoothing = obj['source_smoothing']
+    E_damping        = obj['E_damping']
+    quiet_start      = obj['quiet_start']
+    homogenous       = obj['homogeneous']
+    field_periodic   = obj['field_periodic']
+    run_time         = obj['run_time']
     
     if run_time is not None:
         hrs      = int(run_time // 3600)
@@ -327,7 +313,7 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
             print('Field Periodic BCs :: {}'.format(field_periodic), file=f)
             print('', file=f)
             print('Temporal Parameters', file=f)
-            print('Maximum Sim. Time  :: {}   gyroperiods'.format(max_rev), file=f)
+            print('Maximum Sim. Time  :: {}   wcinv'.format(max_wcinv), file=f)
             print('Simulation cadence :: {:.5f} seconds'.format(dt_sim), file=f)
             print('Particle Dump Time :: {:.5f} seconds'.format(dt_particle), file=f)
             print('Field Dump Time    :: {:.5f} seconds'.format(dt_field), file=f)

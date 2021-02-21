@@ -394,9 +394,9 @@ def plot_kt(component='By', saveas='kt_plot', save=False, normalize_x=False, xli
     return
 
 
-def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False, save=False,
+def plot_wk_polished(field='B', saveas='wk_plot', dispersion_overlay=False, save=False,
                      pcyc_mult=None, xmax=None, zero_cold=True, overwrite=True,
-                     linear_only=True, normalize_axes=False):
+                     linear_only=True, normalize_axes=False, para=1):
     '''
     linear_only keyword used to take FFT of only a small portion of the timeseries, up to the 
     point of maximum growth (or perhaps 20% of the way beyond that?)
@@ -408,11 +408,11 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
     mpl.rcParams['xtick.labelsize'] = 14 
     mpl.rcParams['ytick.labelsize'] = 14 
     
-    k, f, wk, tf = disp.get_wk(component, linear_only=linear_only)
+    k, f, wk, tf = disp.get_wk(field, linear_only=linear_only)
     
     if normalize_axes == True:
         xfac = c / cf.wpi
-        yfac = 1. / cf.gyfreq
+        yfac = 2*np.pi / cf.gyfreq
         xlab = '$\mathtt{kc/\omega_{pi}}$'
         ylab = 'f\n$(\omega / \Omega_H)$'
         cyc  = 1.0 / np.array([1., 4., 16.])
@@ -423,7 +423,7 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
         ylab = 'f\n(Hz)'
         cyc  = qi * cf.B_eq / (2 * np.pi * mp * np.array([1., 4., 16.]))
     
-    if component[0].upper() == 'B':
+    if field == 'B':
         clab = 'Pwr\n$\left(\\frac{nT^2}{Hz}\\right)$'
     else:
         clab = 'Pwr\n$\left(\\frac{mV^2}{m^2Hz}\\right)$'
@@ -436,7 +436,7 @@ def plot_wk_polished(component='By', saveas='wk_plot', dispersion_overlay=False,
                                             vmax=wk[1:, 1:].real.max()))      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
     
     fig.colorbar(im1, extend='both', fraction=0.05).set_label(clab, rotation=0, fontsize=fontsize, family=font, labelpad=30)
-    ax.set_title(r'$\omega/k$ Plot :: {} Component :: Linear Theory up to {:.3f}s'.format(component.upper(), tf),
+    ax.set_title(r'$\omega/k$ Plot :: {}_\perp Field :: Linear Theory up to {:.3f}s'.format(component.upper(), tf),
                  fontsize=fontsize, family=font)
     ax.set_ylabel(ylab, fontsize=fontsize, family=font, rotation=0, labelpad=30)
     ax.set_xlabel(xlab, fontsize=fontsize, family=font)
@@ -4085,13 +4085,13 @@ def multiplot_parallel_scaling():
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'G:'
+    drive       = 'F:'
         
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//shoji_2013_short//']:
+    for series in ['//Fu_CAM_CL_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4109,8 +4109,8 @@ if __name__ == '__main__':
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
                 #plot_total_density_with_time()
                 #plot_max_velocity()
-                check_fields(save=True, ylim=True)
-                check_fields(save=True, ylim=False)
+                #check_fields(save=True, ylim=True)
+                #check_fields(save=True, ylim=False)
 
                 #winske_summary_plots(save=True)
                 #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
@@ -4121,13 +4121,11 @@ if __name__ == '__main__':
                 #plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=1.0)
                 #ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7)
 
-# =============================================================================
-#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=False)
-#                 for _comp in ['By', 'Bz', 'Ey', 'Ez']:
-#                     plot_wk_polished(component=_comp, saveas='wk_plot_norm', dispersion_overlay=True, save=True,
-#                          pcyc_mult=1.1, xmax=None, zero_cold=False, overwrite=True,
-#                          linear_only=False, normalize_axes=True)
-# =============================================================================
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=False)
+                for _comp in ['By', 'Bz', 'Ey', 'Ez']:
+                    plot_wk_polished(component=_comp, saveas='wk_plot_norm', dispersion_overlay=True, save=True,
+                         pcyc_mult=1.5, xmax=1.5, zero_cold=False, overwrite=True,
+                         linear_only=409, normalize_axes=True)
 
                 #try:
                 #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)
