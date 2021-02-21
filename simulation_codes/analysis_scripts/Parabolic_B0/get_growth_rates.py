@@ -9,6 +9,7 @@ import numpy as np
 
 import analysis_config  as cf
 import analysis_backend as bk
+import dispersions      as disp
 
 import lmfit as lmf
 from scipy.optimize         import curve_fit
@@ -350,7 +351,8 @@ def get_linear_growth(plot=False):
     return
 
 
-def straight_line_fit(save=True, normalized_output=True, normfit_min=0.2, normfit_max=0.6):
+def straight_line_fit(save=True, normalize_output=True, normalize_time=False,
+                      normfit_min=0.2, normfit_max=0.6):
     '''
     To do: Check units. Get growth rate from amplitude only? How to do across space
     -- Is wave power averaged/summed across space analogous to a single point? Or do I have to do single point?
@@ -358,6 +360,14 @@ def straight_line_fit(save=True, normalized_output=True, normfit_min=0.2, normfi
     -- Start with the simple and go from there. Saturation amplitudes have to match too?
     -- How do the Winske saturation amplitudes look? It might just be the Fu thing being fucky.
     '''
+    if normalize_time == True:
+        tfac = cf.gyfreq
+        tlab = '$t \Omega_H$'
+    else:
+        tfac = 1.0
+        tlab = 'Time (s)'
+    
+    
     print('Calculating growth rate...')
     ftime, by  = cf.get_array('By')
     ftime, bz  = cf.get_array('Bz')
@@ -365,7 +375,8 @@ def straight_line_fit(save=True, normalized_output=True, normfit_min=0.2, normfi
     btn        = np.square(bt[:, :]).sum(axis=1) / cf.B_eq ** 2
     mu0        = (4e-7) * np.pi
     U_B        = 0.5 / mu0 * np.square(bt[:, :]).sum(axis=1) * cf.dx
-            
+    ftime     *= tfac
+    
     max_idx = np.argmax(U_B)
     st = int(normfit_min * max_idx)
     en = int(normfit_max * max_idx)
@@ -377,29 +388,46 @@ def straight_line_fit(save=True, normalized_output=True, normfit_min=0.2, normfi
     gradient, y_intercept = np.polyfit(linear_xvals, linear_yvals, 1)
 
     # Calculate growth rate and normalize H to cyclotron frequency
-    gamma         = 0.5*gradient
+    gamma         = 0.5*gradient*tfac
     normalized_gr = gamma / cf.gyfreq
     
     # Create line data to plot what we fitted
     linear_yfit = gradient * linear_xvals + y_intercept         # Returns y-values on log sscale
     log_yfit    = np.exp(linear_yfit)                           # Convert to linear values to use with semilogy()
     
-    # Plot to check
+    
+    # Calculate linear growth rates from simulation to compare
+    # This could go into calculating gamma(k) later
+    dk = 1. / (cf.NX * cf.dx)
+    k  = np.arange(0, 1. / (2*cf.dx), dk) * 2*np.pi
+    k_vals, CPDR_solns, WPDR_solns, HPDR_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=False)
+    k_vals *= 3e8 / cf.wpi
+    
+    # Comparison of growth rate to linear theory
     plt.ioff()
+    fig0, axes = plt.subplots(3, figsize=(15, 10))
+    for ii in range(CPDR_solns.shape[1]):
+        axes[0].plot(k, CPDR_solns[:, ii].imag/cf.gyfreq, label='Cold')
+        axes[1].plot(k, WPDR_solns[:, ii].imag/cf.gyfreq, label='Warm')
+        axes[2].plot(k, HPDR_solns[:, ii].imag/cf.gyfreq, label='Hot')
+    for ax in axes:
+        ax.axhline(normalized_gr, ls='--', c='k', alpha=0.5)
+    
+    # Plot showing magnetic field and energy with growth rate line superposed    
     fig, ax = plt.subplots(nrows=2, figsize=(15, 10), sharex=True)
       
     ax[0].set_title('Growth Rate :: $\gamma / \Omega_H$ = %.4f' % normalized_gr, fontsize=20)
-    ax[0].plot(ftime, btn)
+    ax[0].semilogy(ftime, btn)
     ax[0].set_ylabel(r'$\frac{B^2}{B_0^2}$', rotation=0, labelpad=30, fontsize=18)
     ax[0].set_xlim(0, ftime[-1])
-    ax[0].set_ylim(0, None)
+    ax[0].set_ylim(1e-6, 1e-0)
     
     # Plot energy log scale
     ax[1].semilogy(ftime, U_B)
-    ax[1].set_xlabel('Time (s)', fontsize=18)
+    ax[1].set_xlabel(tlab, fontsize=18)
     ax[1].set_ylabel('$U_B$', rotation=0, labelpad=30, fontsize=18)
     ax[1].set_xlim(0, ftime[-1])
-    ax[1].set_ylim(None, None)
+    ax[1].set_ylim(1e-14, 1e5)
     
     # Mark growth rate indicators
     ax[1].scatter(ftime[max_idx], U_B[max_idx], c='r', s=20, marker='x')
@@ -413,7 +441,7 @@ def straight_line_fit(save=True, normalized_output=True, normfit_min=0.2, normfi
     else:
         plt.show()
         
-    if normalized_output == True:
+    if normalize_output == True:
         return normalized_gr
     else:
         return gamma

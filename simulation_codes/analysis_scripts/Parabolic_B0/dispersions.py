@@ -275,13 +275,18 @@ def plot_fourier_mode_timeseries(it_max=None):
     return
 
 
-def get_wk(component, linear_only=True):
+def get_wk(component, linear_only=True, norm_z=False):
     '''
     Spatial boundaries start at index.
     linear_only is kwarg to either take Boolean type or a number specifying up to
     what time to FFT up to (in units of wcinv)
+    
+    norm_z normalizes the field to the background magnetic field, if the input component
+    is magnetic.
     '''
     ftime, arr = cf.get_array(component)
+    if norm_z == True and component.upper()[0] == 'B':
+        arr /= cf.B_eq
     
     t0 = 0
     if linear_only == True:
@@ -303,7 +308,6 @@ def get_wk(component, linear_only=True):
         diff_sec = np.abs(end_sec - ftime)
         t1       = np.where(diff_sec == diff_sec.min())[0][0]
         tf       = ftime[t1]
-        pdb.set_trace()
         
     if component.upper()[0] == 'B':
         st = cf.x0B; en = cf.x1B
@@ -316,7 +320,7 @@ def get_wk(component, linear_only=True):
     dk = 1. / (cf.NX * cf.dx)
 
     f  = np.arange(0, 1. / (2*cf.dt_field), df)
-    k  = np.arange(0, 1. / (2*cf.dx), dk)
+    k  = np.arange(0, 1. / (2*cf.dx), dk) * 2*np.pi
     
     fft_matrix  = np.zeros(arr[t0:t1, st:en].shape, dtype='complex128')
     fft_matrix2 = np.zeros(arr[t0:t1, st:en].shape, dtype='complex128')
@@ -330,9 +334,6 @@ def get_wk(component, linear_only=True):
         fft_matrix2[:, ii] = np.fft.fft(fft_matrix[:, ii] - fft_matrix[:, ii].mean())
 
     wk = fft_matrix2[:f.shape[0], :k.shape[0]] * np.conj(fft_matrix2[:f.shape[0], :k.shape[0]])
-    
-    # Transform linear k (beta) into angular actual k
-    k *= 2*np.pi
     return k, f, wk, tf
 
     

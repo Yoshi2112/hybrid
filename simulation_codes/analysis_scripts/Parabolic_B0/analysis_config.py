@@ -313,7 +313,8 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
             print('Field Periodic BCs :: {}'.format(field_periodic), file=f)
             print('', file=f)
             print('Temporal Parameters', file=f)
-            print('Maximum Sim. Time  :: {}   wcinv'.format(max_wcinv), file=f)
+            print('Maximum Sim. Time  :: {}     wcinv'.format(max_wcinv), file=f)
+            print('Maximum Sim. Time  :: {}     seconds'.format(round(max_wcinv/gyfreq, 1)), file=f)
             print('Simulation cadence :: {:.5f} seconds'.format(dt_sim), file=f)
             print('Particle Dump Time :: {:.5f} seconds'.format(dt_particle), file=f)
             print('Field Dump Time    :: {:.5f} seconds'.format(dt_field), file=f)
@@ -329,9 +330,9 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
             print('Simulation Min     :: {:.1f} km'.format(xmin*1e-3), file=f)
             print('Simulation Max     :: {:.1f} km'.format(xmax*1e-3), file=f)
             if damping_multiplier is not None:
-                print('Damping Multipl.:: {:.2f}'.format(damping_multiplier), file=f)
+                print('Damping Multipl.   :: {:.2f}'.format(damping_multiplier), file=f)
             else:
-                print('Damping Multipl.::', file=f)
+                print('Damping Multipl.   ::', file=f)
             print('', file=f)
             print('Equatorial B0       :: {:.2f} nT'.format(B_eq*1e9), file=f)
             print('Boundary   B0       :: {:.2f} nT'.format(B_xmax*1e9), file=f)
@@ -367,25 +368,25 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
             species_str = temp_str = cdens_str = charge_str = va_perp_str = \
             va_para_str = mass_str = drift_str = contr_str = ''
             for ii in range(Nj):
-                species_str += '{:>12}'.format(species_lbl[ii])
-                temp_str    += '{:>12d}'.format(temp_type[ii])
-                cdens_str   += '{:>12.3f}'.format(ccdens[ii])
-                charge_str  += '{:>12.1f}'.format(echarge[ii])
-                mass_str    += '{:>12.1f}'.format(pmass[ii])
-                drift_str   += '{:>12.1f}'.format(va_drift[ii])
-                va_perp_str += '{:>12.2f}'.format(va_perp[ii])
-                va_para_str += '{:>12.2f}'.format(va_para[ii])
-                contr_str   += '{:>12.1f}'.format(n_contr[ii])
+                species_str += '{:>13}'.format(species_lbl[ii])
+                temp_str    += '{:>13d}'.format(temp_type[ii])
+                cdens_str   += '{:>13.3f}'.format(ccdens[ii])
+                charge_str  += '{:>13.1f}'.format(echarge[ii])
+                mass_str    += '{:>13.1f}'.format(pmass[ii])
+                drift_str   += '{:>13.1f}'.format(va_drift[ii])
+                va_perp_str += '{:>13.2f}'.format(va_perp[ii])
+                va_para_str += '{:>13.2f}'.format(va_para[ii])
+                contr_str   += '{:>13.1f}'.format(n_contr[ii])
     
             print('Species Name    :: {}'.format(species_str), file=f)
             print('Species Type    :: {}'.format(temp_str), file=f)
-            print('Species Dens    :: {} /cc'.format(cdens_str), file=f)
-            print('Species Charge  :: {} elementary units'.format(charge_str), file=f)
-            print('Species Mass    :: {} proton masses'.format(mass_str), file=f)
-            print('Drift Velocity  :: {} vA'.format(drift_str), file=f)
-            print('V_thermal Perp  :: {} vA'.format(va_perp_str), file=f)
-            print('V_thermal Para  :: {} vA'.format(va_para_str), file=f)
-            print('MParticle s.f   :: {} real particles/macroparticle'.format(contr_str), file=f)
+            print('Species Dens    :: {}  /cc'.format(cdens_str), file=f)
+            print('Species Charge  :: {}  elementary units'.format(charge_str), file=f)
+            print('Species Mass    :: {}  proton masses'.format(mass_str), file=f)
+            print('Drift Velocity  :: {}  vA'.format(drift_str), file=f)
+            print('V_thermal Perp  :: {}  vA'.format(va_perp_str), file=f)
+            print('V_thermal Para  :: {}  vA'.format(va_para_str), file=f)
+            print('MParticle s.f   :: {}  real particles/macroparticle'.format(contr_str), file=f)
     return
 
 

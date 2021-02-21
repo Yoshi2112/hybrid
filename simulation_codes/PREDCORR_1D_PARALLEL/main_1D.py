@@ -1396,9 +1396,11 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('ne', ne),
                    ('Te0', Te0_scalar),
                    ('ie', ie),
+                   ('theta', 0.0)
                    ('part_save_iter', part_save_iter),
                    ('field_save_iter', field_save_iter),
                    ('max_wcinv', max_wcinv),
+                   ('LH_frac', 0.0),
                    ('freq_res', freq_res),
                    ('orbit_res', orbit_res),
                    ('run_desc', run_description),
@@ -1416,6 +1418,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('E_damping', E_damping),
                    ('quiet_start', quiet_start),
                    ('num_threads', nb.get_num_threads())
+                   ('subcycles', 1),
                    ])
 
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:
@@ -1454,7 +1457,8 @@ def save_field_data(sim_time, dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, da
     d_fullpath = d_path + 'data%05d' % r
     
     np.savez(d_fullpath, E = E[:, 0:3], B = B[:, 0:3],   Ji = Ji[:, 0:3],
-                       dns = dns,      Ve = Ve[:, 0:3], Te = Te, sim_time = sim_time,
+                       dns = dns,      Ve = Ve[:, 0:3], Te = Te,
+                       sim_time = sim_time,
                        damping_array = damping_array, E_damping_array=E_damping_array)
     print('Field data saved')
     

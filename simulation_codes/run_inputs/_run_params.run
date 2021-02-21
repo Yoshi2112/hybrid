@@ -1,5 +1,5 @@
 DRIVE					F:/
-SAVE_PATH			    /runs/CAM_CL_Fu/
+SAVE_PATH			    /runs/Fu_comparisons/
 RUN						-
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1

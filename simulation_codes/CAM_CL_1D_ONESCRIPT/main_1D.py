@@ -191,43 +191,8 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
     return
 
 
-@nb.njit()
-def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, qmi, dt):
-    '''
-    Interpolates the fields to the particle positions using TSC weighting, then
-    updates velocities using a Boris particle pusher.
-    Based on Birdsall & Langdon (1985), pp. 59-63.
-    '''
-    assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
-    
-    Ep *= 0.0;  Bp *= 0.0
-    for ii in range(vel.shape[1]):
-        if idx[ii] >= 0:
-            qmi[ii] = 0.5 * dt * qm_ratios[idx[ii]]                           # q/m for ion of species idx[ii]
-            for jj in range(3):                                               # Nodes
-                for kk in range(3):                                           # Components
-                    Ep[kk, ii] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]         # Vector E-field  at particle location
-                    Bp[kk, ii] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]         # Vector b1-field at particle location
-
-    vel[:, :] += qmi[:] * Ep[:, :]                                            # First E-field half-push IS NOW V_MINUS
-
-    T[:, :] = qmi[:] * Bp[:, :]                                               # Vector Boris variable
-    S[:, :] = 2.*T[:, :] / (1. + T[0, :] ** 2 + T[1, :] ** 2 + T[2, :] ** 2)  # Vector Boris variable
-    
-    v_prime[0, :] = vel[0, :] + vel[1, :] * T[2, :] - vel[2, :] * T[1, :]     # Magnetic field rotation
-    v_prime[1, :] = vel[1, :] + vel[2, :] * T[0, :] - vel[0, :] * T[2, :]
-    v_prime[2, :] = vel[2, :] + vel[0, :] * T[1, :] - vel[1, :] * T[0, :]
-            
-    vel[0, :] += v_prime[1, :] * S[2, :] - v_prime[2, :] * S[1, :]
-    vel[1, :] += v_prime[2, :] * S[0, :] - v_prime[0, :] * S[2, :]
-    vel[2, :] += v_prime[0, :] * S[1, :] - v_prime[1, :] * S[0, :]
-    
-    vel[:, :] += qmi[:] * Ep[:, :]                                            # Second E-field half-push
-    return
-
-
 @nb.njit(parallel=do_parallel)
-def velocity_update_parallel(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
+def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
     
     for ii in nb.prange(pos.shape[0]):
@@ -238,7 +203,14 @@ def velocity_update_parallel(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
         for jj in nb.prange(3):
             for kk in nb.prange(3):
                 _Ep[kk] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]   
-                _Bp[kk] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]                   
+                _Bp[kk] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]   
+# =============================================================================
+#         Jp = J[Ie    , 0:3] * W_elec[0]                 \
+#            + J[Ie + 1, 0:3] * W_elec[1]                 \
+#            + J[Ie + 2, 0:3] * W_elec[2]                 # Current at particle location
+#            
+#         Ep -= (charge[idx] / q) * e_resis * Jp          # "Effective" E-field accounting for electron resistance
+# =============================================================================                
 
         # Start Boris Method
         qmi = 0.5 * DT * qm_ratios[idx[ii]]                             # q/m variable including dt
@@ -285,13 +257,7 @@ def position_update(pos, vel, Ie, W_elec, dt):
     return
 
 
-# =============================================================================
-#         Jp = J[Ie    , 0:3] * W_elec[0]                 \
-#            + J[Ie + 1, 0:3] * W_elec[1]                 \
-#            + J[Ie + 2, 0:3] * W_elec[2]                 # Current at particle location
-#            
-#         Ep -= (charge[idx] / q) * e_resis * Jp          # "Effective" E-field accounting for electron resistance
-# =============================================================================
+
 
 #%% SOURCES
 @nb.njit()
@@ -983,22 +949,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('N' , N),
                    ('dxm', dxm),
                    ('dx', dx),
-                   ('subcycles', subcycles),
-                   ('B0', B0),
-                   ('ne', ne),
-                   ('Te0', Te0),
-                   ('ie', ie),
-                   ('theta', theta),
-                   ('part_save_iter', part_save_iter),
-                   ('field_save_iter', field_save_iter),
-                   ('max_wcinv', max_wcinv),
-                   ('LH_frac', LH_frac),
-                   ('orbit_res', orbit_res),
-                   ('freq_res', freq_res),
-                   ('run_desc', run_description),
-                   ('method_type', 'CAM_CL_PARALLEL'),
-                   ('particle_shape', 'TSC'),
-                   ('L', 0.0), 
+                   ('L', 0.0)
                    ('B_eq', B0),
                    ('xmax', xmax),
                    ('xmin', xmin),
@@ -1012,6 +963,19 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('lat_A', 0.0),
                    ('B_A', 0.0),
                    ('rc_hwidth', 0.0),
+                   ('ne', ne),
+                   ('Te0', Te0),
+                   ('ie', ie),
+                   ('theta', theta),
+                   ('part_save_iter', part_save_iter),
+                   ('field_save_iter', field_save_iter),
+                   ('max_wcinv', max_wcinv),
+                   ('LH_frac', LH_frac),
+                   ('freq_res', freq_res),
+                   ('orbit_res', orbit_res),
+                   ('run_desc', run_description),
+                   ('method_type', 'CAM_CL_PARALLEL'),
+                   ('particle_shape', 'TSC'),
                    ('field_periodic', 1),
                    ('run_time', None),
                    ('loop_time', None),
@@ -1023,7 +987,8 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('source_smoothing', source_smoothing),
                    ('E_damping', 0),
                    ('quiet_start', quiet_start),
-                   ('num_threads', nb.get_num_threads())
+                   ('num_threads', nb.get_num_threads()),
+                   ('subcycles', subcycles),
                    ])
 
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:
@@ -1050,7 +1015,8 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                      vth_perp    = vth_perp,
                      Tpar        = Tpar,
                      Tperp       = Tperp,
-                     Bc          = Bc)
+                     Bc          = Bc,
+                     Te0         = None)
     
     print('Particle parameters saved')
     return
@@ -1064,7 +1030,9 @@ def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, sim_time):
     
     np.savez(d_fullpath, E = E[:, 0:3], B = B[:, 0:3], Ji = Ji,
                          dns = dns, Ve = Ve[:, 0:3], Te = Te,
-                         sim_time = sim_time)
+                         sim_time = sim_time,
+                         damping_array  =np.zeros(B.shape[0]),
+                         E_damping_array=np.zeros(E.shape[0]))
     return
     
     
@@ -1074,7 +1042,7 @@ def save_particle_data(dt, part_save_iter, qq, pos, vel, idx, sim_time):
 
     d_filename = 'data%05d' % r
     d_fullpath = os.path.join(d_path, d_filename)
-    np.savez(d_fullpath, pos=pos, vel=vel, idx=idx)
+    np.savez(d_fullpath, pos=pos, vel=vel, idx=idx, sim_time = sim_time)
     return
 
 
@@ -1409,13 +1377,8 @@ if __name__ == '__main__':
         push_current(J_plus, J, E, B, L, G, DT)
         E, Ve, Te = calculate_E(B, J, rho_half)
         
-        
-        if do_parallel == True:
-            assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
-            velocity_update_parallel(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT)
-        else:
-            velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, Ep, Bp, B, E, v_prime, S, T, temp_N, DT)
-
+        assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
+        velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT)
 
         # Store pc(1/2) here while pc(3/2) is collected
         rho_int[:]  = rho_half[:] 

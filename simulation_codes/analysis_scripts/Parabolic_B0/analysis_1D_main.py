@@ -394,22 +394,13 @@ def plot_kt(component='By', saveas='kt_plot', save=False, normalize_x=False, xli
     return
 
 
-def plot_wk_polished(field='B', saveas='wk_plot', dispersion_overlay=False, save=False,
-                     pcyc_mult=None, xmax=None, zero_cold=True, overwrite=True,
-                     linear_only=True, normalize_axes=False, para=1):
+def plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
+                     pcyc_mult=None, xmax=None, zero_cold=True,
+                     linear_only=False, normalize_axes=False):
     '''
-    linear_only keyword used to take FFT of only a small portion of the timeseries, up to the 
-    point of maximum growth (or perhaps 20% of the way beyond that?)
+    21/02/2021 rewriting this to just take the w/k of the perp/parallel fields
+    and do all fields in the one call.
     '''
-    plt.ioff()
-    
-    fontsize = 18
-    font     = 'monospace'
-    mpl.rcParams['xtick.labelsize'] = 14 
-    mpl.rcParams['ytick.labelsize'] = 14 
-    
-    k, f, wk, tf = disp.get_wk(field, linear_only=linear_only)
-    
     if normalize_axes == True:
         xfac = c / cf.wpi
         yfac = 2*np.pi / cf.gyfreq
@@ -422,69 +413,94 @@ def plot_wk_polished(field='B', saveas='wk_plot', dispersion_overlay=False, save
         xlab = '$\mathtt{k (\\times 10^{-6}m^{-1})}$'
         ylab = 'f\n(Hz)'
         cyc  = qi * cf.B_eq / (2 * np.pi * mp * np.array([1., 4., 16.]))
+        
+        
+    for field in ['B', 'E']:
     
-    if field == 'B':
-        clab = 'Pwr\n$\left(\\frac{nT^2}{Hz}\\right)$'
-    else:
-        clab = 'Pwr\n$\left(\\frac{mV^2}{m^2Hz}\\right)$'
+        # Calculate dispersion relations from model data
+        k, f, wk_para, tf = disp.get_wk(field+'x', linear_only=linear_only, norm_z=normalize_axes)
+        k, f, wky,     tf = disp.get_wk(field+'y', linear_only=linear_only, norm_z=normalize_axes)
+        k, f, wkz,     tf = disp.get_wk(field+'z', linear_only=linear_only, norm_z=normalize_axes)
+        
+        wk_perp = wky + wkz
+        
+        if field == 'B':
+            clab = 'Pwr\n$\left(\\frac{nT^2}{Hz}\\right)$'
+        else:
+            clab = 'Pwr\n$\left(\\frac{mV^2}{m^2Hz}\\right)$'
+    
+        plt.ioff()
+        
+        fontsize = 18
+        font     = 'monospace'
+        mpl.rcParams['xtick.labelsize'] = 14 
+        mpl.rcParams['ytick.labelsize'] = 14 
+        
+        fig1, ax1 = plt.subplots(1, figsize=(15, 10))
+        
+        im1 = ax1.pcolormesh(xfac*k[1:], yfac*f[1:], wk_perp[1:, 1:].real, cmap='jet',
+                            norm=colors.LogNorm(vmin=wk_perp[1:, 1:].real.min(),
+                                                vmax=wk_perp[1:, 1:].real.max()))
+    
+        fig1.colorbar(im1, extend='both', fraction=0.05).set_label(clab, rotation=0, fontsize=fontsize, family=font, labelpad=30)
+        ax1.set_title(r'$\omega/k$ Plot :: {}_\perp :: Linear Theory up to {:.3f}s'.format(field, tf),
+                     fontsize=fontsize, family=font)
+        
+# =============================================================================
+#         fig2, ax2 = plt.subplots(1, figsize=(15, 10))
+#         im2 = ax1.pcolormesh(xfac*k[1:], yfac*f[1:], wk_para[1:, 1:].real, cmap='jet',
+#                             norm=colors.LogNorm(vmin=wk_para[1:, 1:].real.min(),
+#                                                 vmax=wk_para[1:, 1:].real.max()))
+# 
+#         fig2.colorbar(im2, extend='both', fraction=0.05).set_label(clab, rotation=0, fontsize=fontsize, family=font, labelpad=30)
+#         ax2.set_title(r'$\omega/k$ Plot :: {}_\parallel :: Linear Theory up to {:.3f}s'.format(field, tf),
+#                      fontsize=fontsize, family=font)
+# =============================================================================
 
-    fig = plt.figure(1, figsize=(15, 10))
-    ax  = fig.add_subplot(111)
-    
-    im1 = ax.pcolormesh(xfac*k[1:], yfac*f[1:], wk[1:, 1:].real, cmap='jet',
-                        norm=colors.LogNorm(vmin=wk[1:, 1:].real.min(),
-                                            vmax=wk[1:, 1:].real.max()))      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k]
-    
-    fig.colorbar(im1, extend='both', fraction=0.05).set_label(clab, rotation=0, fontsize=fontsize, family=font, labelpad=30)
-    ax.set_title(r'$\omega/k$ Plot :: {}_\perp Field :: Linear Theory up to {:.3f}s'.format(component.upper(), tf),
-                 fontsize=fontsize, family=font)
-    ax.set_ylabel(ylab, fontsize=fontsize, family=font, rotation=0, labelpad=30)
-    ax.set_xlabel(xlab, fontsize=fontsize, family=font)
-    
-    ## -- EXTRAS
-    lbl  = [r'$f_{eq, H^+}$', r'$f_{eq, He^+}$', r'$f_{eq, O^+}$']
-    
-    # Add labelled cyclotron frequencies
-    from matplotlib.transforms import blended_transform_factory
-    trans = blended_transform_factory(ax.transAxes, ax.transData)
-    for ii in range(3):
-        if cf.species_present[ii] == True:
-            ax.axhline(cyc[ii], linestyle=':', c='k')
-            ax.text(1.025, cyc[ii], lbl[ii], transform=trans, ha='center', 
-                    va='center', color='k', fontsize=fontsize, family=font)
-    
-    ax.set_xlim(0, xmax)
-    if pcyc_mult is not None:
-        ax.set_ylim(0, pcyc_mult*cyc[0])
-    else:
-        ax.set_ylim(0, None)
-    
-    alpha=0.2
-    if dispersion_overlay == True:
-        k_vals, CPDR_solns, WPDR_solns, HPDR_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=zero_cold)
-        for ii in range(CPDR_solns.shape[1]):
-            ax.plot(xfac*k_vals, yfac*CPDR_solns[:, ii].real, c='k', linestyle='-' , label='CPDR' if ii == 0 else '', alpha=alpha)
-            ax.plot(xfac*k_vals, yfac*WPDR_solns[:, ii].real, c='k', linestyle='--', label='WPDR' if ii == 0 else '', alpha=alpha)
-            ax.plot(xfac*k_vals, yfac*HPDR_solns[:, ii].real, c='k', linestyle=':' , label='HPDR' if ii == 0 else '', alpha=alpha)
-        ax.legend(loc='upper right', facecolor='white', prop={'size': fontsize-2, 'family':font})
-        
-    if save == True:
-        zero_suff = '' if zero_cold is False else 'zero'
-        fullpath  = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '_{}'.format(zero_suff)
-        save_path = fullpath + '.png'
-        
-        if overwrite == False:
-            count = 1
-            while os.path.exists(save_path) == True:
-                print('Save file exists, incrementing...')
-                save_path = fullpath + '_{}.png'.format(count)
-                count += 1
             
-        plt.savefig(save_path, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-        print('w-k for component {} saved'.format(component.lower()))
-        plt.close('all')
-    else:
-        plt.show()
+        for ax in [ax1]:
+            ax.set_ylabel(ylab, fontsize=fontsize, family=font, rotation=0, labelpad=30)
+            ax.set_xlabel(xlab, fontsize=fontsize, family=font)
+        
+            ## -- EXTRAS to add to both plots
+            lbl  = [r'$f_{eq, H^+}$', r'$f_{eq, He^+}$', r'$f_{eq, O^+}$']
+            
+            # Add labelled cyclotron frequencies
+            from matplotlib.transforms import blended_transform_factory
+            trans = blended_transform_factory(ax.transAxes, ax.transData)
+            for ii in range(3):
+                if cf.species_present[ii] == True:
+                    ax.axhline(cyc[ii], linestyle=':', c='k')
+                    ax.text(1.025, cyc[ii], lbl[ii], transform=trans, ha='center', 
+                            va='center', color='k', fontsize=fontsize, family=font)
+            
+            ax.set_xlim(0, xmax)
+            if pcyc_mult is not None:
+                ax.set_ylim(0, pcyc_mult*cyc[0])
+            else:
+                ax.set_ylim(0, None)
+            
+            alpha=0.2
+            if dispersion_overlay == True:
+                k_vals, CPDR_solns, WPDR_solns, HPDR_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=zero_cold)
+                for ii in range(CPDR_solns.shape[1]):
+                    ax.plot(xfac*k_vals, yfac*CPDR_solns[:, ii].real, c='k', linestyle='-' , label='CPDR' if ii == 0 else '', alpha=alpha)
+                    ax.plot(xfac*k_vals, yfac*WPDR_solns[:, ii].real, c='k', linestyle='--', label='WPDR' if ii == 0 else '', alpha=alpha)
+                    ax.plot(xfac*k_vals, yfac*HPDR_solns[:, ii].real, c='k', linestyle=':' , label='HPDR' if ii == 0 else '', alpha=alpha)
+                ax.legend(loc='upper right', facecolor='white', prop={'size': fontsize-2, 'family':font})
+            
+        if save == True:
+            zero_suff = '' if zero_cold is False else 'zero'
+            fullpath1  = cf.anal_dir + saveas + '_{}perp'.format(field.upper()) + '_{}'.format(zero_suff)
+            #fullpath2  = cf.anal_dir + saveas + '_{}para'.format(field.upper()) + '_{}'.format(zero_suff)
+                
+            fig1.savefig(fullpath1, facecolor=fig1.get_facecolor(), edgecolor='none', bbox_inches='tight')
+            #fig2.savefig(fullpath2, facecolor=fig1.get_facecolor(), edgecolor='none', bbox_inches='tight')
+
+            print('w-k for {} field saved'.format(field.upper()))
+            plt.close('all')
+        else:
+            plt.show()
     return
 
 
@@ -1780,6 +1796,14 @@ def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, t
     
     #plot_wk_polished(component='by', saveas=disp_folder + 'wk_plot', save=False, dispersion_overlay=True, pcyc_mult=1.25)
 
+    plot_wk(saveas='wk_plot_zc', dispersion_overlay=disp_overlay, save=True,
+                     pcyc_mult=pcyc_mult, xmax=None, zero_cold=True,
+                     linear_only=True, normalize_axes=False)
+                
+    plot_wk(saveas='wk_plot', dispersion_overlay=disp_overlay, save=True,
+         pcyc_mult=pcyc_mult, xmax=None, zero_cold=False,
+         linear_only=True, normalize_axes=False)
+
     if True:    
         for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
             print('2D summary for {}'.format(comp))
@@ -1790,9 +1814,9 @@ def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, t
                 plot_wx(component=comp, saveas=disp_folder + 'wx_plot_pcyc', remove_ND=remove_ND, save=True, linear_overlay=False, pcyc_mult=pcyc_mult)
                 plot_wx(component=comp, saveas=disp_folder + 'wx_plot'     , remove_ND=remove_ND, save=True, linear_overlay=False, pcyc_mult=None)
                 plot_kt(component=comp, saveas=disp_folder + 'kt_plot', save=True)
-                plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot_zc', zero_cold=True , save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
-                plot_wk_polished(component=comp, saveas=disp_folder + 'wk_plot'   , zero_cold=False, save=True, dispersion_overlay=disp_overlay, pcyc_mult=pcyc_mult)
-    
+                
+                
+                
                 if False:
                     plot_spatial_poynting(save=True, log=True)
                     plot_spatial_poynting_helical(save=True, log=True)
@@ -4119,14 +4143,18 @@ if __name__ == '__main__':
                 #disp.plot_fourier_mode_timeseries(it_max=None)
                 
                 #plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=1.0)
-                #ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7)
+                
 
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=False)
-                for _comp in ['By', 'Bz', 'Ey', 'Ez']:
-                    plot_wk_polished(component=_comp, saveas='wk_plot_norm', dispersion_overlay=True, save=True,
-                         pcyc_mult=1.5, xmax=1.5, zero_cold=False, overwrite=True,
-                         linear_only=409, normalize_axes=True)
+# =============================================================================
+#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=False)
+#                 
+#                 plot_wk(saveas='wk_plot', dispersion_overlay=True, save=True,
+#                      pcyc_mult=1.5, xmax=1.5, zero_cold=False,
+#                      linear_only=409, normalize_axes=True)
+# =============================================================================
 
+                ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=True)
+                
                 #try:
                 #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)
 # =============================================================================
