@@ -25,6 +25,7 @@ do_parallel       = True       # Whether or not to use available threads to para
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
 #nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
 
+Fu_override=False              # Override to allow density to be calculated as a ratio of frequencies
 
 ### ##
 ### INITIALIZATION
@@ -1926,9 +1927,10 @@ if __name__ == '__main__':
         B_eq = float(B_eq)
         
     ### -- Normalization of density override (e.g. Fu, Winkse)
-    rat        = 5
-    ne         = (rat*B_eq)**2 * e0 / me
-    density    = np.array([0.05, 0.94, 0.01])*ne
+    if Fu_override == True:
+        rat        = 5
+        ne         = (rat*B_eq)**2 * e0 / me
+        density    = np.array([0.05, 0.94, 0.01])*ne
     ### --- DELETE LATER
     
     NC          = NX + 2*ND                     # Total number of cells

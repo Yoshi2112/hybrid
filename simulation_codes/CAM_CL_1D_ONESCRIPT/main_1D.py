@@ -4,6 +4,7 @@ import numpy as np
 import numba as nb
 import sys, os, pdb
 
+Fu_override=False              # Override to allow density to be calculated as a ratio of frequencies
 do_parallel=True
 #nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
 
@@ -1192,9 +1193,10 @@ if __name__ == '__main__':
     
     
     ### -- Normalization of density override (e.g. Fu, Winkse)
-    rat        = 5
-    ne         = (rat*B0)**2 * e0 / me # REMOVE
-    density    = np.array([0.05, 0.94, 0.01])*ne  # REMOVE
+    if Fu_override == True:
+        rat        = 5
+        ne         = (rat*B0)**2 * e0 / me # REMOVE
+        density    = np.array([0.05, 0.94, 0.01])*ne  # REMOVE
     ### --- DELETE LATER
     
     
