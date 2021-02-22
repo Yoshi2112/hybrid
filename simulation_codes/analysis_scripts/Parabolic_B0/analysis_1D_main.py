@@ -4220,7 +4220,7 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//Fu_comparisons//']:
+    for series in ['//Fu_CAM_CL_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4228,7 +4228,7 @@ if __name__ == '__main__':
         if True:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [0, 1, 2, 3, 4]
+            runs_to_do = [1, 2]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -4236,7 +4236,7 @@ if __name__ == '__main__':
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
-                sys.exit()
+
                 #plot_total_density_with_time()
                 #plot_max_velocity()
                 #check_fields(save=True, ylim=True)
@@ -4263,7 +4263,8 @@ if __name__ == '__main__':
 #                 ggg.SWSP_timeseries(nx=x1000, save=True, log=True, normalize=True, tmax=35)
 # =============================================================================
 
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=False)
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
+                           normalize=False, B0_lim=None, remove_ND=False)
                 
                 plot_wk(saveas='wk_plot', dispersion_overlay=True, save=True,
                      pcyc_mult=1.5, xmax=1.5, zero_cold=False,

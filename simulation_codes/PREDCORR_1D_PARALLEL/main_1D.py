@@ -136,7 +136,7 @@ def quiet_start_bimaxwellian():
                 pos[st + kk] = dx*(float(kk) / (half_n - offset) + ii)
             
             # Turn [0, NC] distro into +/- NC/2 distro
-            pos[st: en]-= NC_load*dx/2              
+            pos[st: en] -= 0.5*NC_load*dx              
             
             # Set velocity for half: Randomly Maxwellian
             vel[0, st: en] = np.random.normal(0, vth_par[ jj], half_n)  
@@ -184,7 +184,7 @@ def uniform_bimaxwellian():
                         
             acc += n_particles
     
-    pos    -= 0.5*NX*dx
+    pos -= 0.5*NX*dx
     return pos, vel, idx
 
 
@@ -1958,12 +1958,10 @@ if __name__ == '__main__':
     particle_open = 0
     if particle_reflect + particle_reinit + particle_periodic == 0:
         particle_open = 1
-        
     
-        
     if rc_hwidth == '-':
         rc_hwidth = 0
-        
+    
     if beta_flag == 0:
         # Input energies in eV
         beta_per   = None

@@ -1,7 +1,7 @@
 DRIVE					F:/
-SAVE_PATH			    /runs/Fu_CAM_CL_test/
+SAVE_PATH			    /runs/Parabolic_CAM_CL_test/
 RUN						-
-SAVE_PARTICLE_FLAG		0
+SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
 SEED					983274
 HOMOGENOUS_B0_FLAG		1
@@ -14,14 +14,14 @@ SOURCE_SMOOTHING_FLAG	0
 E_DAMPING_FLAG			0
 QUIET_START_FLAG		1
 DAMPING_MULTIPLIER_RD   0.05
-NX 						256
+NX 						512
 ND 						4
 MAX_REV					1200
-DXM						1.0
+DXM						0.8
 IE						1
 RC_HWIDTH				-
 GYROPERIOD_RESOLUTION	0.2
 FREQUENCY_RESOLUTION	0.05	
 PARTICLE_DUMP_FREQ		5.0
 FIELD_DUMP_FREQ			0.25
-Testing CAM_CL again with Fu values because it didn't work? Sanity check. Beta turned off.
+Initial tests with parabolic CAM_CL code, testing gentle wave growth parameters to see if results are expected.

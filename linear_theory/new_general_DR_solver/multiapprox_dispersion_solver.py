@@ -1360,9 +1360,9 @@ def hybrid_test_plot():
     mass    = np.array([1.0       , 1.0      , 4.0      , 16.0    ]) * mp
     charge  = np.array([1.0       , 1.0      , 1.0      ,  1.0    ]) * qi
     density = np.array([20.0      , 180.0    , 0.0      ,  0.0    ]) * 1e6
-    tpar    = np.array([10        , 0.0      , 0.0      ,  0.0    ])
+    tper    = np.array([10e3      , 0.0      , 0.0      ,  0.0    ])
     ani     = np.array([1.0       , 0.0      , 0.0      ,  0.0    ])
-    tper    = (ani + 1) * tpar
+    tpar    = tper / (ani + 1)
 
     Spec, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
     

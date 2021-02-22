@@ -747,7 +747,7 @@ def calculate_E(B, J, qn):
 
 #%% AUXILLIARY FUNCTIONS
 @nb.njit()
-def cross_product_single(A, B):
+def cross_product_single(_A, _B):
     '''
     Vector (cross) product between 3-vectors, A and B of same dimensions.
 
@@ -757,16 +757,16 @@ def cross_product_single(A, B):
     OUTPUT:
         output -- The resultant cross product as a 3-vector
     '''
-    output = np.zeros(A.shape)
+    output = np.zeros(_A.shape)
 
-    output[0] = A[1] * B[2] - A[2] * B[1]
-    output[1] = A[2] * B[0] - A[0] * B[2]
-    output[2] = A[0] * B[1] - A[1] * B[0]
+    output[0] = _A[1] * _B[2] - _A[2] * _B[1]
+    output[1] = _A[2] * _B[0] - _A[0] * _B[2]
+    output[2] = _A[0] * _B[1] - _A[1] * _B[0]
     return output
 
 
 @nb.njit()
-def cross_product(A, B):
+def cross_product(_A, _B):
     '''
     Vector (cross) product between two vectors, A and B of same dimensions.
 
@@ -776,12 +776,12 @@ def cross_product(A, B):
     OUTPUT:
         output -- The resultant cross product with same dimensions as input vectors
     '''
-    output = np.zeros(A.shape)
+    output = np.zeros(_A.shape)
 
-    for ii in np.arange(A.shape[0]):
-        output[ii, 0] = A[ii, 1] * B[ii, 2] - A[ii, 2] * B[ii, 1]
-        output[ii, 1] = A[ii, 2] * B[ii, 0] - A[ii, 0] * B[ii, 2]
-        output[ii, 2] = A[ii, 0] * B[ii, 1] - A[ii, 1] * B[ii, 0]
+    for ii in np.arange(_A.shape[0]):
+        output[ii, 0] = _A[ii, 1] * _B[ii, 2] - _A[ii, 2] * _B[ii, 1]
+        output[ii, 1] = _A[ii, 2] * _B[ii, 0] - _A[ii, 0] * _B[ii, 2]
+        output[ii, 2] = _A[ii, 0] * _B[ii, 1] - _A[ii, 1] * _B[ii, 0]
     return output
 
 
