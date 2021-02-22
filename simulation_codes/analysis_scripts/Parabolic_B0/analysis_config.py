@@ -143,12 +143,16 @@ def load_simulation_params():
     loss_cone         = obj['loss_cone']
     rc_hwidth         = obj['rc_hwidth']
     theta_xmax        = obj['theta_xmax']
-    max_wcinv         = obj['max_wcinv']
     orbit_res         = obj['orbit_res']
     freq_res          = obj['freq_res']
     run_desc          = obj['run_desc']
     method_type       = obj['method_type'] 
     particle_shape    = obj['particle_shape']
+    
+    try:
+        max_wcinv     = obj['max_wcinv']
+    except:
+        max_wcinv     = obj['max_rev'] / (2*np.pi)
     
     try:
         damping_multiplier = obj['damping_multiplier']
@@ -234,10 +238,11 @@ def load_simulation_params():
         E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx                 # E grid points position in space
 
     elif 'CAM_CL' in method_type:
+        ND = 1
         x0B, x1B = 1,NX+2
         x0E, x1E = 1,NX+2
         
-        B_nodes  = (np.arange(NX + 3 + 1))  * dx
+        B_nodes  = (np.arange(NX + 3))      * dx
         E_nodes  = (np.arange(NX + 3)+ 0.5) * dx
     else:
         raise ValueError('method_type %s not recognised' % method_type)

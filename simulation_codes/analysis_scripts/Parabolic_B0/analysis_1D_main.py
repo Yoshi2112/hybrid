@@ -4104,8 +4104,113 @@ def multiplot_parallel_scaling():
     return
 
 
+def plot_FB_waves_winske(save=True):
+    '''
+    Routine that splits B-field up into its backwards/forwards propagating
+    components and plots each one. Check is done by adding these two waves
+    together and checking it against the original field. They should be
+    the same.
+    
+    # Once that's proven, do a tx plot to look at the propagation of the waves
+    '''
+    skip  = 50
+    
+    # Winske version
+    ftime, By_raw  = cf.get_array('By')
+    ftime, Bz_raw  = cf.get_array('Bz')
+    ftime, Bt_pos, Bt_neg = bk.get_helical_components(False)
+    
+    B_raw = By_raw[:, 1:-2] + 1j*Bz_raw[:, 1:-2]
+    B_max = np.abs(B_raw).max()
+    B_sum = Bt_pos + Bt_neg
+    
+    By_pos = Bt_pos.real
+    By_neg = Bt_neg.real
+    Bz_pos = Bt_pos.imag
+    Bz_neg = Bt_neg.imag
 
+    xarr = np.arange(By_pos.shape[1])
 
+    plt.ioff()
+    for ii in range(ftime.shape[0]):
+        if ii%skip == 0:
+            print('Plotting FB waves {} of {}'.format(ii, ftime.shape[0]))
+            fig, axes = plt.subplots(2, sharex=True, figsize=(16,10))
+            
+            axes[0].set_title('+/- Waves :: t = {:.2f}'.format(ftime[ii]))
+            
+            axes[0].plot(xarr, By_pos[ii], c='b', label='Fwd')
+            axes[0].plot(xarr, Bz_pos[ii], c='b', alpha=0.5)
+            axes[0].plot(xarr, By_neg[ii], c='r', label='Bwd')
+            axes[0].plot(xarr, Bz_neg[ii], c='r', alpha=0.5)
+            axes[0].set_ylim(-B_max/2, B_max/2)
+            axes[0].legend()
+            
+            axes[1].plot(xarr, np.abs(B_sum[ii]), c='r', label='Sum')
+            axes[1].plot(xarr, np.abs(B_raw[ii]), c='k', label='Raw')
+            axes[1].set_ylim(0, B_max)
+            
+            for ax in axes:
+                ax.set_xlim(xarr[0], xarr[-1])
+                ax.set_ylabel('nT' , rotation=0, labelpad=20)
+                ax.legend()
+                
+            if save==True:  
+                save_folder = cf.anal_dir + '/FB_waves_check/'
+                if os.path.exists(save_folder) == False:
+                    os.makedirs(save_folder)
+            
+                fig.savefig(save_folder + 'FB_wave_check_{:05}.png'.format(ii), edgecolor='none')
+                plt.close('all')
+                
+
+    return
+
+def plot_FB_waves_timeseries(save=True):
+    '''
+    Validated by plotting B_sum and B_raw on same plot, they were identical.
+    '''
+    ftime, B_fwd, B_bwd, B_raw = bk.get_FB_waves(overwrite=False, field='B', st=1, en=-2)
+    B_fwd *= 1e9; B_bwd *= 1e9; B_raw *= 1e9
+
+    xarr   = cf.B_nodes[1:-2]
+    skip   = 50
+    
+    B_sum = B_fwd + B_bwd
+    B_max = np.abs(B_raw).max()
+    
+    plt.ioff()
+    for ii in range(ftime.shape[0]):
+        if ii%skip == 0:
+            print('Plotting FB waves {} of {}'.format(ii, ftime.shape[0]))
+            fig, axes = plt.subplots(2, sharex=True, figsize=(16,10))
+            
+            axes[0].set_title('Fwd/Bwd Waves :: t = {:.2f}'.format(ftime[ii]))
+            
+            axes[0].plot(xarr, B_fwd[ii].real, c='b', label='Fwd')
+            axes[0].plot(xarr, B_fwd[ii].imag, c='b', alpha=0.5)
+            axes[0].plot(xarr, B_bwd[ii].real, c='r', label='Bwd')
+            axes[0].plot(xarr, B_bwd[ii].imag, c='r', alpha=0.5)
+            axes[0].set_ylim(-B_max/2, B_max/2)
+            axes[0].legend()
+            
+            axes[1].plot(xarr, np.abs(B_sum[ii]), c='r', label='Sum')
+            axes[1].plot(xarr, np.abs(B_raw[ii]), c='k', label='Raw')
+            axes[1].set_ylim(0, B_max)
+            
+            for ax in axes:
+                ax.set_xlim(xarr[0], xarr[-1])
+                ax.set_ylabel('nT' , rotation=0, labelpad=20)
+                ax.legend()
+                
+            if save==True:  
+                save_folder = cf.anal_dir + '/FB_waves_check_shoji/'
+                if os.path.exists(save_folder) == False:
+                    os.makedirs(save_folder)
+            
+                fig.savefig(save_folder + 'FB_wave_check_{:05}.png'.format(ii), edgecolor='none')
+                plt.close('all')
+    return
 
 #%% MAIN
 if __name__ == '__main__':
@@ -4115,7 +4220,7 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//Fu_CAM_CL_test//']:
+    for series in ['//Fu_comparisons//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4123,7 +4228,7 @@ if __name__ == '__main__':
         if True:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [3]
+            runs_to_do = [0, 1, 2, 3, 4]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -4131,6 +4236,7 @@ if __name__ == '__main__':
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
+                sys.exit()
                 #plot_total_density_with_time()
                 #plot_max_velocity()
                 #check_fields(save=True, ylim=True)
@@ -4144,16 +4250,26 @@ if __name__ == '__main__':
                 
                 #plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=1.0)
                 
-
+                
 # =============================================================================
-#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=False)
+#                 # Find cell at x = 0, 1000km
+#                 diff0 = abs(cf.B_nodes); 
+#                 x0 = np.where(diff0 == diff0.min())[0][0]
 #                 
-#                 plot_wk(saveas='wk_plot', dispersion_overlay=True, save=True,
-#                      pcyc_mult=1.5, xmax=1.5, zero_cold=False,
-#                      linear_only=409, normalize_axes=True)
+#                 diff1000 = abs(cf.B_nodes - 1e6)
+#                 x1000 = np.where(diff1000 == diff1000.min())[0][0]
+# 
+#                 ggg.SWSP_timeseries(nx=x0   , save=True, log=True, normalize=True, tmax=35)
+#                 ggg.SWSP_timeseries(nx=x1000, save=True, log=True, normalize=True, tmax=35)
 # =============================================================================
 
-                ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=True)
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=False)
+                
+                plot_wk(saveas='wk_plot', dispersion_overlay=True, save=True,
+                     pcyc_mult=1.5, xmax=1.5, zero_cold=False,
+                     linear_only=False, normalize_axes=True)
+
+                #ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=False)
                 
                 #try:
                 #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)

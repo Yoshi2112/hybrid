@@ -7,8 +7,8 @@ MASS_PROTON  1.          1.          4.
 CHARGE_ELEM  1.          1.          1.
 DRIFT_VA     0.          0.          0.
 DENSITY_CM3  20.         180.        20.
-ANISOTROPY   1.          0.          0.
-ENERGY_PERP  40.         0.1         0.1
+ANISOTROPY   2.          0.          0.
+ENERGY_PERP  3.          0.1         0.1
 ELECTRON_EV  0.1
 BETA_FLAG    0
 L            4.3

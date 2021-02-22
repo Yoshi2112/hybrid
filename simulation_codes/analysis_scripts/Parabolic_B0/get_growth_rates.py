@@ -6,6 +6,7 @@ Created on Tue Apr 30 13:03:47 2019
 """
 import matplotlib.pyplot as plt
 import numpy as np
+import pdb
 
 import analysis_config  as cf
 import analysis_backend as bk
@@ -352,7 +353,7 @@ def get_linear_growth(plot=False):
 
 
 def straight_line_fit(save=True, normalize_output=True, normalize_time=False,
-                      normfit_min=0.2, normfit_max=0.6):
+                      normfit_min=0.2, normfit_max=0.6, plot_growth=True):
     '''
     To do: Check units. Get growth rate from amplitude only? How to do across space
     -- Is wave power averaged/summed across space analogous to a single point? Or do I have to do single point?
@@ -367,7 +368,6 @@ def straight_line_fit(save=True, normalize_output=True, normalize_time=False,
         tfac = 1.0
         tlab = 'Time (s)'
     
-    
     print('Calculating growth rate...')
     ftime, by  = cf.get_array('By')
     ftime, bz  = cf.get_array('Bz')
@@ -377,41 +377,47 @@ def straight_line_fit(save=True, normalize_output=True, normalize_time=False,
     U_B        = 0.5 / mu0 * np.square(bt[:, :]).sum(axis=1) * cf.dx
     ftime     *= tfac
     
-    max_idx = np.argmax(U_B)
-    st = int(normfit_min * max_idx)
-    en = int(normfit_max * max_idx)
+    if plot_growth == True:
+        max_idx = np.argmax(U_B)
+        st = int(normfit_min * max_idx)
+        en = int(normfit_max * max_idx)
+        
+        # Data to fit straight line to 
+        linear_xvals = ftime[st:en]
+        linear_yvals = np.log(U_B[st:en])
+        
+        gradient, y_intercept = np.polyfit(linear_xvals, linear_yvals, 1)
     
-    # Data to fit straight line to 
-    linear_xvals = ftime[st:en]
-    linear_yvals = np.log(U_B[st:en])
+        # Calculate growth rate and normalize H to cyclotron frequency
+        gamma         = 0.5*gradient*tfac
+        normalized_gr = gamma / cf.gyfreq
+        
+        # Create line data to plot what we fitted
+        linear_yfit = gradient * linear_xvals + y_intercept         # Returns y-values on log sscale
+        log_yfit    = np.exp(linear_yfit)                           # Convert to linear values to use with semilogy()
+    else:
+        gamma         = np.nan
+        normalized_gr = np.nan
     
-    gradient, y_intercept = np.polyfit(linear_xvals, linear_yvals, 1)
-
-    # Calculate growth rate and normalize H to cyclotron frequency
-    gamma         = 0.5*gradient*tfac
-    normalized_gr = gamma / cf.gyfreq
-    
-    # Create line data to plot what we fitted
-    linear_yfit = gradient * linear_xvals + y_intercept         # Returns y-values on log sscale
-    log_yfit    = np.exp(linear_yfit)                           # Convert to linear values to use with semilogy()
-    
-    
-    # Calculate linear growth rates from simulation to compare
-    # This could go into calculating gamma(k) later
-    dk = 1. / (cf.NX * cf.dx)
-    k  = np.arange(0, 1. / (2*cf.dx), dk) * 2*np.pi
-    k_vals, CPDR_solns, WPDR_solns, HPDR_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=False)
-    k_vals *= 3e8 / cf.wpi
-    
-    # Comparison of growth rate to linear theory
     plt.ioff()
-    fig0, axes = plt.subplots(3, figsize=(15, 10))
-    for ii in range(CPDR_solns.shape[1]):
-        axes[0].plot(k, CPDR_solns[:, ii].imag/cf.gyfreq, label='Cold')
-        axes[1].plot(k, WPDR_solns[:, ii].imag/cf.gyfreq, label='Warm')
-        axes[2].plot(k, HPDR_solns[:, ii].imag/cf.gyfreq, label='Hot')
-    for ax in axes:
-        ax.axhline(normalized_gr, ls='--', c='k', alpha=0.5)
+    if False:
+        # Calculate linear growth rates from simulation to compare
+        # This could go into calculating gamma(k) later
+        dk = 1. / (cf.NX * cf.dx)
+        k  = np.arange(0, 1. / (2*cf.dx), dk) * 2*np.pi
+        k_vals, CPDR_solns, WPDR_solns, HPDR_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=False)
+        k_vals *= 3e8 / cf.wpi
+        
+        # Comparison of growth rate to linear theory
+        
+        clr = ['r', 'g', 'b']
+        fig0, axes = plt.subplots(3, figsize=(15, 10))
+        for ii in range(CPDR_solns.shape[1]):
+            axes[0].plot(k, CPDR_solns[:, ii].imag/cf.gyfreq, label='Cold', c=clr[ii])
+            axes[1].plot(k, WPDR_solns[:, ii].imag/cf.gyfreq, label='Warm', c=clr[ii])
+            axes[2].plot(k, HPDR_solns[:, ii].imag/cf.gyfreq, label='Hot', c=clr[ii])
+        for ax in axes:
+            ax.axhline(normalized_gr, ls='--', c='k', alpha=0.5)
     
     # Plot showing magnetic field and energy with growth rate line superposed    
     fig, ax = plt.subplots(nrows=2, figsize=(15, 10), sharex=True)
@@ -420,28 +426,81 @@ def straight_line_fit(save=True, normalize_output=True, normalize_time=False,
     ax[0].semilogy(ftime, btn)
     ax[0].set_ylabel(r'$\frac{B^2}{B_0^2}$', rotation=0, labelpad=30, fontsize=18)
     ax[0].set_xlim(0, ftime[-1])
-    ax[0].set_ylim(1e-6, 1e-0)
+    #ax[0].set_ylim(1e-6, 1e-0)
     
     # Plot energy log scale
     ax[1].semilogy(ftime, U_B)
     ax[1].set_xlabel(tlab, fontsize=18)
     ax[1].set_ylabel('$U_B$', rotation=0, labelpad=30, fontsize=18)
     ax[1].set_xlim(0, ftime[-1])
-    ax[1].set_ylim(1e-14, 1e5)
+    #ax[1].set_ylim(1e-14, 1e5)
     
-    # Mark growth rate indicators
-    ax[1].scatter(ftime[max_idx], U_B[max_idx], c='r', s=20, marker='x')
-    ax[1].scatter(ftime[st]     , U_B[st], c='r', s=20, marker='o')
-    ax[1].scatter(ftime[en]     , U_B[en], c='r', s=20, marker='o')
-    ax[1].semilogy(linear_xvals, log_yfit, c='r', ls='--', lw=2.0)
+    if plot_growth == True:
+        # Mark growth rate indicators
+        ax[1].scatter(ftime[max_idx], U_B[max_idx], c='r', s=20, marker='x')
+        ax[1].scatter(ftime[st]     , U_B[st], c='r', s=20, marker='o')
+        ax[1].scatter(ftime[en]     , U_B[en], c='r', s=20, marker='o')
+        ax[1].semilogy(linear_xvals, log_yfit, c='r', ls='--', lw=2.0)
     
     if save == True:
         fig.savefig(cf.anal_dir + 'growth_rate_energy.png')
         plt.close('all')
     else:
         plt.show()
+    return
+
+
+def SWSP_timeseries(nx, tmax=None, save=True, log=False, normalize=False):
+    '''
+    Single wave, single point timeseries. Splits magnetic field into forwards
+    and backwards waves, and tracks their evolution at a single gridpoint.
+    '''
+    ftime, B_fwd, B_bwd, B_raw = bk.get_FB_waves(overwrite=False, field='B', st=1, en=-2)
+    
+    if tmax is None:
+        tmax = ftime[-1]
         
-    if normalize_output == True:
-        return normalized_gr
+    if normalize == True:
+        B_fwd /= cf.B_eq
+        B_bwd /= cf.B_eq
+        ylbl   = '/$B_0$'
     else:
-        return gamma
+        B_fwd *= 1e9
+        B_bwd *= 1e9
+        ylbl   = '\nnT'
+    B_max = max(np.abs(B_fwd).max(), np.abs(B_bwd).max())
+    
+    plt.ioff()
+    fig, axes = plt.subplots(2, sharex=True, figsize=(15, 10))
+    
+    axes[0].set_title('Backwards/Forwards Wave Fields at x = {}km'.format(cf.B_nodes[nx]*1e-3))
+    
+    if log == False:
+        axes[0].plot(ftime, np.abs(B_fwd[:, nx]))
+        axes[1].plot(ftime, np.abs(B_bwd[:, nx]))
+        axes[0].set_ylim(-B_max, B_max)
+        axes[1].set_ylim(-B_max, B_max)
+    else:
+        axes[0].semilogy(ftime, np.abs(B_fwd[:, nx]))
+        axes[1].semilogy(ftime, np.abs(B_bwd[:, nx]))
+        
+        if normalize == True:
+            axes[0].set_ylim(1e-4/(cf.B_eq*1e9), None)
+            axes[1].set_ylim(1e-4/(cf.B_eq*1e9), None)
+        else:
+            axes[0].set_ylim(1e-4, None)
+            axes[1].set_ylim(1e-4, None)
+    
+    axes[0].set_ylabel('$B_{fwd}$%s' % ylbl, rotation=0, labelpad=20)
+    axes[1].set_ylabel('$B_{bwd}$%s' % ylbl, rotation=0, labelpad=20)
+    axes[1].set_xlabel('Time (s)', rotation=0)
+    
+    for ax in axes:
+        ax.set_xlim(0, tmax)
+        
+    if save == True:
+        fig.savefig(cf.anal_dir + 'SWSP_{:04}.jpg'.format(nx))
+        plt.close('all')
+    else:
+        plt.show()
+    return

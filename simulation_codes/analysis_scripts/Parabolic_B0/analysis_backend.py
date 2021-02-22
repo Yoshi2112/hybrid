@@ -11,7 +11,7 @@ Created on Tue Apr 30 11:24:46 2019
 
 import numpy as np
 import numba as nb
-import os
+import os, pdb
 import analysis_config as cf
 #import pdb
 '''
@@ -376,6 +376,7 @@ def get_helical_components(overwrite=False, field='B'):
         Ft_neg = np.zeros((ftime.shape[0], cf.NX), dtype=np.complex128)
         
         for ii in range(Fy.shape[0]):
+            print('Calculating helicity for field file', ii)
             Ft_pos[ii, :], Ft_neg[ii, :] = calculate_helicity(Fy[ii], Fz[ii])
         
         print('Saving {}-helicities to file'.format(field))
@@ -409,7 +410,7 @@ def calculate_helicity(Fy, Fz):
     k_modes = np.fft.rfftfreq(x.shape[0], d=cf.dx)
     Fy_fft  = (1 / k_modes.shape[0]) * np.fft.rfft(Fy[st:en])
     Fz_fft  = (1 / k_modes.shape[0]) * np.fft.rfft(Fz[st:en])
-    
+
     # Four fourier coefficients from FFT (since real inputs give symmetric outputs)
     # If there are any sign issues, it'll be with the sin components, here
     Fy_cos = Fy_fft.real
@@ -432,7 +433,7 @@ def calculate_helicity(Fy, Fz):
     return Ft_pos, Ft_neg
 
 
-def get_FB_waves(overwrite=False, field='B'):
+def get_FB_waves(overwrite=False, field='B', st=None, en=None):
     '''
     Use method of Shoji et al. (2011) to separate magnetic wave field into
     backwards and forwards components
@@ -455,30 +456,34 @@ def get_FB_waves(overwrite=False, field='B'):
     STILL NEEDS VALIDATION
      - Conservation: If I add the results, do I get the original waveform back?
      - Compare against existing helicity code, are they equivalent?
+     
+    The sign in F_perp (I think) just determines which is the +/- wave
     '''
     ftime, Fy = cf.get_array('{}y'.format(field))
     ftime, Fz = cf.get_array('{}z'.format(field))
-    F_perp    = Fy + 1j*Fz      # Should this be a +ve or -ve? Defines polarisation 
+
+    F_perp    = Fy[:, st:en] + 1j*Fz[:, st:en]      # Should this be a +ve or -ve? Defines polarisation 
     Nk        = F_perp.shape[1]
     
-    F_fwd = np.zeros(F_perp.shape)
-    F_bwd = np.zeros(F_perp.shape)    
+    F_fwd = np.zeros(F_perp.shape, dtype=np.complex128)
+    F_bwd = np.zeros(F_perp.shape, dtype=np.complex128)    
     for ii in range(F_perp.shape[0]):
-        Fk = (1 / Nk) * np.fft.rfft(F_perp[ii])
+        Fk      = np.fft.fft(F_perp[ii])
+        Fk0     = 0.5*Fk[0]
         
-        # Remove A[0] term (necessary? Or will this break it?)
-        Fk[0] *= 0.0
-        
-        # Separate out forward wave
-        F_fwd[ii] = Fk.copy()               # Copy coefficients
-        F_fwd[ii, Nk/2+1:]*= 0.0            # Zero negative wavenumbers
-        F_fwd[ii] = np.fft.ifft(F_fwd[ii])  # Transform back into data space
-        
-        # Separate out backward wave
-        F_bwd[ii] = Fk.copy()               # Copy coefficients
-        F_bwd[ii, 1:Nk/2] *= 0.0            # Zero positive wavenumbers
-        F_bwd[ii] = np.fft.ifft(F_bwd[ii])  # Transform back into data space
-    return ftime, F_fwd, F_bwd
+        fwd_fft = Fk.copy()                 # Copy coefficients
+        bwd_fft = Fk.copy()
+
+        fwd_fft[Nk//2+1:] *= 0.0            # Zero positive/negative wavenumbers
+        bwd_fft[1:Nk//2]  *= 0.0
+
+        fwd_fft[0] = Fk0                    # Not sure what to do with the zero term. Split evenly?
+        bwd_fft[0] = Fk0
+
+        F_fwd[ii] = np.fft.ifft(fwd_fft)    # Transform back into spatial-domain data
+        F_bwd[ii] = np.fft.ifft(bwd_fft)
+
+    return ftime, F_fwd, F_bwd, F_perp
 
 
 

@@ -4,7 +4,7 @@ import numpy as np
 import numba as nb
 import sys, os, pdb
 
-Fu_override=False              # Override to allow density to be calculated as a ratio of frequencies
+Fu_override=True              # Override to allow density to be calculated as a ratio of frequencies
 do_parallel=True
 #nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
 
@@ -944,7 +944,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('max_inc', max_inc),
                    ('max_time', max_time),
                    ('NX', NX),
-                   ('ND', 0),
+                   ('ND', 1),
                    ('NC', NX+3),
                    ('N' , N),
                    ('dxm', dxm),
@@ -988,7 +988,8 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('E_damping', 0),
                    ('quiet_start', quiet_start),
                    ('num_threads', nb.get_num_threads()),
-                   ('subcycles', subcycles)
+                   ('subcycles', subcycles),
+                   ('beta_flag', beta_flag)
                    ])
 
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:
@@ -1015,6 +1016,8 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                      vth_perp    = vth_perp,
                      Tpar        = Tpar,
                      Tperp       = Tperp,
+                     E_par       = E_par,
+                     E_perp      = E_perp,
                      Bc          = Bc,
                      Te0         = None)
     
@@ -1191,16 +1194,13 @@ if __name__ == '__main__':
     ne        = (density * charge).sum()                     # Electron density (in /m3, same as total ion density (for singly charged ions))
     theta     = 0.0
     
-    
     ### -- Normalization of density override (e.g. Fu, Winkse)
     if Fu_override == True:
         rat        = 5
-        ne         = (rat*B0)**2 * e0 / me # REMOVE
-        density    = np.array([0.05, 0.94, 0.01])*ne  # REMOVE
+        ne         = (rat*B0)**2 * e0 / me
+        density    = np.array([0.05, 0.94, 0.01])*ne
     ### --- DELETE LATER
     
-    
-
 #%%### DERIVED SIMULATION PARAMETERS
     E_par     = E_perp / (anisotropy + 1) 
     charge    *= q                                           # Cast species charge to Coulomb
