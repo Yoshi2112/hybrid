@@ -488,6 +488,8 @@ def plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
                     ax.plot(xfac*k_vals, yfac*WPDR_solns[:, ii].real, c='k', linestyle='--', label='WPDR' if ii == 0 else '', alpha=alpha)
                     ax.plot(xfac*k_vals, yfac*HPDR_solns[:, ii].real, c='k', linestyle=':' , label='HPDR' if ii == 0 else '', alpha=alpha)
                 ax.legend(loc='upper right', facecolor='white', prop={'size': fontsize-2, 'family':font})
+
+
             
         if save == True:
             zero_suff = '' if zero_cold is False else 'zero'
@@ -4225,10 +4227,10 @@ if __name__ == '__main__':
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [1, 2]
+            runs_to_do = [1]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -4263,14 +4265,17 @@ if __name__ == '__main__':
 #                 ggg.SWSP_timeseries(nx=x1000, save=True, log=True, normalize=True, tmax=35)
 # =============================================================================
 
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
-                           normalize=False, B0_lim=None, remove_ND=False)
+# =============================================================================
+#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
+#                            normalize=False, B0_lim=None, remove_ND=False)
+# =============================================================================
                 
-                plot_wk(saveas='wk_plot', dispersion_overlay=True, save=True,
-                     pcyc_mult=1.5, xmax=1.5, zero_cold=False,
-                     linear_only=False, normalize_axes=True)
+                #plot_wk(saveas='wk_plot', dispersion_overlay=True, save=True,
+                #     pcyc_mult=1.5, xmax=1.5, zero_cold=False,
+                #     linear_only=False, normalize_axes=True)
 
-                #ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=False)
+                ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=False,
+                                      plot_LT=True, plot_growth=True, klim=1.5)
                 
                 #try:
                 #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)

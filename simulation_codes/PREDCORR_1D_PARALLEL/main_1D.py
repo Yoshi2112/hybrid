@@ -25,7 +25,7 @@ do_parallel       = True       # Whether or not to use available threads to para
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
 #nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
 
-Fu_override=False              # Override to allow density to be calculated as a ratio of frequencies
+Fu_override=True              # Override to allow density to be calculated as a ratio of frequencies
 
 ### ##
 ### INITIALIZATION
@@ -1457,6 +1457,9 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                      vth_perp    = vth_perp,
                      Tpar        = T_par,
                      Tperp       = T_perp,
+                     E_par       = E_par,
+                     E_perp      = E_perp,
+                     anisotropy  = anisotropy,
                      Bc          = Bc,
                      Te0         = None)
     print('Particle data saved')
@@ -1964,7 +1967,6 @@ if __name__ == '__main__':
     
     if beta_flag == 0:
         # Input energies in eV
-        beta_per   = None
         Te0_scalar = q * E_e / kB
         vth_perp   = np.sqrt(charge *  E_perp /  mass)    # Perpendicular thermal velocities
         vth_par    = np.sqrt(charge *  E_par  /  mass)    # Parallel thermal velocities
@@ -2136,7 +2138,7 @@ if __name__ == '__main__':
         
     if  os.name != 'posix':
         os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
-    
+
     ########################
     ### START SIMULATION ###
     ########################

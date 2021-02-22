@@ -66,14 +66,11 @@ def get_linear_dispersion_from_sim(k, zero_cold=True, Nk=1000):
     '''
     print('Calculating linear dispersion relations...')
     from multiapprox_dispersion_solver  import get_dispersion_relation, create_species_array
-
-    kB = 1.38065e-23     # Boltzmann's Constant (J/K)
     
     # Extract species parameters from run, create Species array (Could simplify T calculation when I'm less lazy)
-    t_par      = (cf.mass * cf.vth_par  ** 2 / kB) / 11603.
-    t_perp     = (cf.mass * cf.vth_perp ** 2 / kB) / 11603.
-    anisotropy = t_perp / t_par - 1
+    anisotropy = cf.Tperp / cf.Tpar - 1
     
+    t_perp = cf.Tperp.copy() / 11603.
     if zero_cold == True:
         for ii in range(t_perp.shape[0]):
             if cf.temp_type[ii] == 0:

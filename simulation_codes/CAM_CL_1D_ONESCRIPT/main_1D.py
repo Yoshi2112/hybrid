@@ -1018,6 +1018,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                      Tperp       = Tperp,
                      E_par       = E_par,
                      E_perp      = E_perp,
+                     anisotropy  = anisotropy,
                      Bc          = Bc,
                      Te0         = None)
     
@@ -1224,9 +1225,6 @@ if __name__ == '__main__':
         vth_perp   = np.sqrt(charge *  E_perp /  mass)    # Perpendicular thermal velocities
         vth_par    = np.sqrt(charge *  E_par  /  mass)    # Parallel thermal velocities
     
-    vth_perp   = np.sqrt(charge *  E_perp /  mass)    # Perpendicular thermal velocities
-    vth_par    = np.sqrt(charge *  E_par  /  mass)    # Parallel thermal velocities
-    
     wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
     wpe        = np.sqrt(ne * q ** 2 / (me * e0))            # Proton   Plasma Frequency, wpi (rad/s)
     va         = B0 / np.sqrt(mu0*ne*mp)                     # Alfven speed: Assuming pure proton plasma
@@ -1284,6 +1282,7 @@ if __name__ == '__main__':
     
     print('{} cells'.format(NX))
     print('{} particles total\n'.format(N))
+
     
     #%% BEGIN HYBRID
     start_time = timer()

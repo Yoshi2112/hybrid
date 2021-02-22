@@ -1198,6 +1198,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                      Tperp       = Tperp,
                      E_par       = E_par,
                      E_perp      = E_perp,
+                     anisotropy  = anisotropy,
                      Bc          = Bc,
                      Te0         = None)
     
