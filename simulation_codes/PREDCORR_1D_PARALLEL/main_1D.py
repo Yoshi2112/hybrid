@@ -1109,6 +1109,8 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P, E_damping_ar
     Check :: Does it dereference anything?
     
     12/06/2020 -- Added E-field damping option as per Hu & Denton (2010), Ve x B term only
+    
+    22/02/2021 -- Removed cross product because surely that B term is fucking with things.
     '''
     curl_B_term(B, temp3De)                                   # temp3De is now curl B term
 
@@ -1121,7 +1123,17 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P, E_damping_ar
     get_grad_P(q_dens, Te, grad_P, temp3Db[:, 0])             # temp1D is now del_p term, temp3D2 slice used for computation
     interpolate_edges_to_center(B, temp3Db)                   # temp3db is now B_center
 
-    cross_product(Ve, temp3Db[:temp3Db.shape[0]-1, :], temp3De)                  # temp3De is now Ve x B term
+    #cross_product(Ve, temp3Db[:temp3Db.shape[0]-1, :], temp3De) 
+    # temp3De is now Ve x B term                 
+    temp3De[:, 0] += Ve[:, 1] * B[:temp3Db.shape[0]-1, 2]
+    temp3De[:, 1] += Ve[:, 2] * B[:temp3Db.shape[0]-1, 0]
+    temp3De[:, 2] += Ve[:, 0] * B[:temp3Db.shape[0]-1, 1]
+    
+    temp3De[:, 0] -= Ve[:, 2] * B[:temp3Db.shape[0]-1, 1]
+    temp3De[:, 1] -= Ve[:, 0] * B[:temp3Db.shape[0]-1, 2]
+    temp3De[:, 2] -= Ve[:, 1] * B[:temp3Db.shape[0]-1, 0]
+    
+    
     if E_damping == 1 and field_periodic == 0:
         temp3De *= E_damping_array
     
@@ -1977,8 +1989,8 @@ if __name__ == '__main__':
     dx         = dxm * va / gyfreq_eq                        # Alternate method of calculating dx (better for multicomponent plasmas)
     dx2        = dxm * c / wpi
     
-    xmax       = NX // 2 * dx                                # Maximum simulation length, +/-ve on each side
-    xmin       =-NX // 2 * dx
+    xmax       = NX / 2 * dx                                 # Maximum simulation length, +/-ve on each side
+    xmin       =-NX / 2 * dx
     Nj         = len(mass)                                   # Number of species
     n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
     min_dens   = 0.05

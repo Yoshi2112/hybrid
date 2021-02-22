@@ -230,7 +230,7 @@ def load_simulation_params():
         loop_time   = None
     
     # Set spatial boundaries as gridpoints (E vs. B, PREDCORR vs. CAM_CL)
-    if 'PREDCORR' in method_type:
+    if ('PREDCORR' in method_type) or method_type == 'CAM_CL_PARABOLIC_PARALLEL':
         x0B, x1B = ND, ND + NX + 1
         x0E, x1E = ND, ND + NX
         
