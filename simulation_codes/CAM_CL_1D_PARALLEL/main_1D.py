@@ -343,7 +343,7 @@ def position_update(pos, vel, idx, Ie, W_elec, DT):
                     pos[ii] += xmin - xmax
                 elif pos[ii] < xmin:
                     pos[ii] += xmax - xmin 
-                    
+                  
             elif particle_open == 1:                
                 # Open: Deactivate particles that leave the simulation space
                 pos[ii]     = 0.0
@@ -351,7 +351,7 @@ def position_update(pos, vel, idx, Ie, W_elec, DT):
                 vel[1, ii]  = 0.0
                 vel[2, ii]  = 0.0
                 idx[ii]     = -1
-                    
+            
             elif particle_reinit == 1: 
                 # Reinitialize vx based on flux distribution
                 vel[0, ii]  = generate_vx(vth_par[idx[ii]])
@@ -375,7 +375,7 @@ def position_update(pos, vel, idx, Ie, W_elec, DT):
                     pos[ii] = xmin + np.random.uniform(0, 1) * vel[0, ii] * DT
                 elif pos[ii] > xmax:
                     pos[ii] = xmax + np.random.uniform(0, 1) * vel[0, ii] * DT
-                   
+            
             else:
                 # Reflect
                 if pos[ii] > xmax:
@@ -735,7 +735,7 @@ def get_curl_B(B):
 
 
 @nb.njit()
-def get_curl_E(field, curl):
+def get_curl_E(field, dE):
     ''' Returns a vector quantity for the curl of a field valid at the positions 
     between its gridpoints (i.e. curl(E) -> B-grid, etc.)
     
@@ -751,12 +751,26 @@ def get_curl_E(field, curl):
           E and B fields having the same number of nodes (due to TSC weighting) and
          the lack of derivatives in y, z
     '''   
-    curl *= 0.
+    dE *= 0.
     for ii in np.arange(1, field.shape[0]):
-        curl[ii, 1] = - (field[ii, 2] - field[ii - 1, 2])
-        curl[ii, 2] =    field[ii, 1] - field[ii - 1, 1]
+        dE[ii, 1] = - (field[ii, 2] - field[ii - 1, 2])
+        dE[ii, 2] =    field[ii, 1] - field[ii - 1, 1]
+        
+    # Curl at E[0] : Forward/Backward difference (stored in B[0]/B[NC])
+    dE[0, 1] = -(-3*E[0, 2] + 4*E[1, 2] - E[2, 2]) / 2
+    dE[0, 2] =  (-3*E[0, 1] + 4*E[1, 1] - E[2, 1]) / 2
+    
+    dE[NC, 1] = -(3*E[NC - 1, 2] - 4*E[NC - 2, 2] + E[NC - 3, 2]) / 2
+    dE[NC, 2] =  (3*E[NC - 1, 1] - 4*E[NC - 2, 1] + E[NC - 3, 1]) / 2
+    
+    # Linearly extrapolate to endpoints
+    dE[0, 1]      -= 2*(dE[1, 1] - dE[0, 1])
+    dE[0, 2]      -= 2*(dE[1, 2] - dE[0, 2])
+    
+    dE[NC, 1]     += 2*(dE[NC, 1] - dE[NC - 1, 1])
+    dE[NC, 2]     += 2*(dE[NC, 2] - dE[NC - 1, 2])
 
-    curl /= dx
+    dE /= dx
     return
 
 

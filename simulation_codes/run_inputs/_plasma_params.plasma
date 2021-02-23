@@ -1,4 +1,4 @@
-LABEL        $H^+$_warm
+LABEL        $H^+$_cold
 COLOUR       red       
 TEMP_FLAG    1         
 DIST_FLAG    0          
