@@ -1,16 +1,16 @@
-LABEL        $H^+$_warm  $H^+$_cold  $He^+$_cold
-COLOUR       red         blue        black
-TEMP_FLAG    1           0           0
-DIST_FLAG    0           0           0
-NSP_PPC      24000       1000        1000
-MASS_PROTON  1.          1.          4.
-CHARGE_ELEM  1.          1.          1.
-DRIFT_VA     0.          0.          0.
-DENSITY_CM3  20.         180.        20.
-ANISOTROPY   2.          0.          0.
-ENERGY_PERP  3.          0.01        0.01
-ELECTRON_EV  0.01
-BETA_FLAG    1
+LABEL        $H^+$_warm
+COLOUR       red       
+TEMP_FLAG    1         
+DIST_FLAG    0          
+NSP_PPC      1000       
+MASS_PROTON  1.         
+CHARGE_ELEM  1.         
+DRIFT_VA     10.         
+DENSITY_CM3  100.        
+ANISOTROPY   0.         
+ENERGY_PERP  0.0
+ELECTRON_EV  0.0
+BETA_FLAG    0
 L            4.3
 B_EQ         200e-9
 B_XMAX       -

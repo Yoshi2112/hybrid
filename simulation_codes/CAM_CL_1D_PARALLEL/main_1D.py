@@ -155,7 +155,7 @@ def set_timestep(vel):
     DT       = min(ion_ts, vel_ts)
     max_time = max_wcinv / gyfreq                 # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1             # Total number of time steps
-
+    #pdb.set_trace()
     if part_res == 0:
         part_save_iter = 1
     else:
@@ -175,11 +175,11 @@ def set_timestep(vel):
         subcycles  = int(DT / dt_sc + 1)
         print('Number of subcycles required: {}'.format(subcycles))
     else:
-        subcycles = subcycles
+        subcycles = default_subcycles
         print('Number of subcycles set at default: {}'.format(subcycles))
     
     if save_fields == 1 or save_particles == 1:
-        store_run_parameters(DT, part_save_iter, field_save_iter, max_inc, max_time)
+        store_run_parameters(DT, part_save_iter, field_save_iter, max_inc, max_time, subcycles)
     
     B_damping_array = np.ones(NC + 1, dtype=float)
     set_damping_array(B_damping_array, DT)
@@ -450,7 +450,7 @@ def push_current(J_in, J_out, E, B, L, G, dt):
     return
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit(parallel=False)
 def deposit_both_moments(pos, vel, Ie, W_elec, idx, n_i, nu_i):
     '''Collect number and velocity moments in each cell, weighted by their distance
     from cell nodes.
@@ -465,6 +465,10 @@ def deposit_both_moments(pos, vel, Ie, W_elec, idx, n_i, nu_i):
     OUTPUT:
         n_i    -- Species number moment array(size, Nj)
         nu_i   -- Species velocity moment array (size, Nj)
+        
+    Note: Parallel disabled for this and related functions because numba (as of
+      23/02/2021) doesn't support parallel array reduction if the target is an
+      array.
     '''    
     for ii in nb.prange(pos.shape[0]):
         I   = Ie[ ii]
@@ -481,7 +485,7 @@ def deposit_both_moments(pos, vel, Ie, W_elec, idx, n_i, nu_i):
     return
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit(parallel=False)
 def deposit_velocity_moments(vel, Ie, W_elec, idx, nu_i):
     '''Collect velocity moment in each cell, weighted by their distance
     from cell nodes.
@@ -1107,7 +1111,7 @@ def manage_directories():
     return
 
 
-def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time):
+def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time, subcycles):
     import pickle
     d_path = '%s/%s/run_%d/data/' % (drive, save_path, run_num)     # Set main dir for data
     f_path = d_path + '/fields/'
@@ -1207,6 +1211,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
 
 
 def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, sim_time):
+    print('Saving field data')
     d_path = '%s/%s/run_%d/data/fields/' % (drive, save_path, run_num)
     r      = qq / field_save_iter
 
@@ -1221,6 +1226,7 @@ def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, sim_time):
     
     
 def save_particle_data(dt, part_save_iter, qq, pos, vel, idx, sim_time):
+    print('Saving particle data')
     d_path = '%s/%s/run_%d/data/particles/' % (drive, save_path, run_num)
     r      = qq / part_save_iter
 
@@ -1326,6 +1332,36 @@ def diagnostic_field_plot(B, E, q_dens, Ji, Ve, Te,
     plt.savefig(diagnostic_path + 'diag_field_{:07}'.format(qq), 
                 facecolor=fig.get_facecolor(), edgecolor='none')
     plt.close('all')
+    return
+
+def dump_to_file(pos, vel, E_int, Ve, Te, B, Ji, q_dens, qq, folder='parallel', print_particles=False):
+    import os
+    np.set_printoptions(threshold=sys.maxsize)
+    
+    dirpath = drive + save_path + '/{}/timestep_{:05}/'.format(folder, qq) 
+    if os.path.exists(dirpath) == False:
+        os.makedirs(dirpath)
+        
+    print('Dumping arrays to file')
+    if print_particles == True:
+        with open(dirpath + 'pos.txt', 'w') as f:
+            print(pos, file=f)
+        with open(dirpath + 'vel.txt', 'w') as f:
+            print(vel, file=f)
+    with open(dirpath + 'E.txt', 'w') as f:
+        print(E_int, file=f)
+    with open(dirpath + 'Ve.txt', 'w') as f:
+        print(Ve, file=f)
+    with open(dirpath + 'Te.txt', 'w') as f:
+        print(Te, file=f)
+    with open(dirpath + 'B.txt', 'w') as f:
+        print(B, file=f)
+    with open(dirpath + 'Ji.txt', 'w') as f:
+        print(Ji, file=f)
+    with open(dirpath + 'rho.txt', 'w') as f:
+        print(q_dens, file=f)
+
+    np.set_printoptions(threshold=1000)
     return
 
 
@@ -1446,7 +1482,12 @@ if __name__ == '__main__':
     min_dens            = 0.05                               # Allowable minimum charge density in a cell, as a fraction of ne*q
     adaptive_timestep   = 1                                  # Flag (True/False) for adaptive timestep based on particle and field parameters
     adaptive_subcycling = 1                                  # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
-    subcycles           = 12                                 # Number of field subcycling steps for Cyclic Leapfrog
+    default_subcycles   = 12                                 # Number of field subcycling steps for Cyclic Leapfrog
+
+    if disable_waves == True:
+        print('-- Wave solutions disabled, removing subcycles --')
+        adaptive_timestep = adaptive_subcycling = 0
+        default_subcycles = 1
 
     B_eq      = float(B_eq)                                  # Unform initial magnetic field value (in T)
     ne        = (density * charge).sum()                     # Electron density (in /m3, same as total ion density (for singly charged ions))
@@ -1637,9 +1678,11 @@ if __name__ == '__main__':
 
     
     # Put init into qq = 0 and save as usual, qq = 1 will be at t = dt
+    # Need to change this so the initial state gets saved?
     qq      = 0; sim_time = 0.0
     print('Starting loop...')
     while qq < max_inc:
+        #dump_to_file(pos, vel, E, Ve, Te, B, J, rho_int, qq, folder='CAM_CL_srctest_srcparalleloff', print_particles=False)
         #diagnostic_field_plot(B, E, rho_int, J, Ve, Te, B_damping_array, qq, DT, sim_time)
         
         ############################
@@ -1688,7 +1731,7 @@ if __name__ == '__main__':
         if qq%field_save_iter == 0 and save_fields == 1:
             save_field_data(DT, field_save_iter, qq, J, E, B, Ve, Te, rho_int, sim_time)
         
-        if qq%50 == 0:
+        if qq%100 == 0:
             running_time = int(timer() - start_time)
             hrs          = running_time // 3600
             rem          = running_time %  3600

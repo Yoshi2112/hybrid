@@ -787,7 +787,7 @@ def generate_vx(vth):
 ### ##
 ### SOURCES
 ### ##
-@nb.njit(parallel=do_parallel)
+@nb.njit(parallel=False)
 def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
     '''
     Collect number and velocity moments in each cell, weighted by their distance

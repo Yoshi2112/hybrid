@@ -290,7 +290,7 @@ def push_current(J_in, J_out, E, B, L, G, dt):
     return
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit(parallel=False)
 def deposit_both_moments(pos, vel, Ie, W_elec, idx, n_i, nu_i):
     '''Collect number and velocity moments in each cell, weighted by their distance
     from cell nodes.
@@ -324,7 +324,7 @@ def deposit_both_moments(pos, vel, Ie, W_elec, idx, n_i, nu_i):
     return
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit(parallel=False)
 def deposit_velocity_moments(vel, Ie, W_elec, idx, nu_i):
     '''Collect velocity moment in each cell, weighted by their distance
     from cell nodes.

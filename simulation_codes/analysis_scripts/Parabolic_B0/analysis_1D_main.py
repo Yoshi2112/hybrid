@@ -1882,7 +1882,7 @@ def plot_damping_array(save=True):
     return
 
 
-def check_fields(save=True, ylim=True):
+def check_fields(save=True, ylim=True, skip=1):
     '''
     Plot summary plot of raw values for each particle timestep
     Field values are interpolated to this point
@@ -1987,27 +1987,28 @@ def check_fields(save=True, ylim=True):
     
     ## Do actual plotting and saving of data
     for ii in range(bx.shape[0]):
-        axes[0, 1].set_title('Time :: {:<7.4f}s'.format(ftime[ii]), fontsize=fontsize+4, family='monospace')
-
-        filename = 'summ%05d.png' % ii
-        fullpath = path + filename
-        
-        if os.path.exists(fullpath):
-            continue
-        sys.stdout.write('\rCreating summary field plots [{}]{}'.format(run_num, ii))
-        sys.stdout.flush()
-        
-        # Set y datas for this timestep
-        line_rd.set_ydata(rD[ii]); line_pc.set_ydata(qdens[ii]); line_te.set_ydata(te[ii])
-        line_by.set_ydata(by[ii]); line_vy.set_ydata(vey[ii]);   line_vx.set_ydata(vex[ii])
-        line_bz.set_ydata(bz[ii]); line_vz.set_ydata(vez[ii]);   line_jx.set_ydata(jx[ii])
-        line_ey.set_ydata(ey[ii]); line_jy.set_ydata(jy[ii]);    line_ex.set_ydata(ex[ii])
-        line_ez.set_ydata(ez[ii]); line_jz.set_ydata(jz[ii]);    line_bx.set_ydata(bx[ii])
-        
-        fig.canvas.draw()
-        
-        if save == True:
-            plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+        if ii%skip == 0:
+            axes[0, 1].set_title('Time :: {:<7.4f}s'.format(ftime[ii]), fontsize=fontsize+4, family='monospace')
+    
+            filename = 'summ%05d.png' % ii
+            fullpath = path + filename
+            
+            if os.path.exists(fullpath):
+                continue
+            sys.stdout.write('\rCreating summary field plots [{}]{}'.format(run_num, ii))
+            sys.stdout.flush()
+            
+            # Set y datas for this timestep
+            line_rd.set_ydata(rD[ii]); line_pc.set_ydata(qdens[ii]); line_te.set_ydata(te[ii])
+            line_by.set_ydata(by[ii]); line_vy.set_ydata(vey[ii]);   line_vx.set_ydata(vex[ii])
+            line_bz.set_ydata(bz[ii]); line_vz.set_ydata(vez[ii]);   line_jx.set_ydata(jx[ii])
+            line_ey.set_ydata(ey[ii]); line_jy.set_ydata(jy[ii]);    line_ex.set_ydata(ex[ii])
+            line_ez.set_ydata(ez[ii]); line_jz.set_ydata(jz[ii]);    line_bx.set_ydata(bx[ii])
+            
+            fig.canvas.draw()
+            
+            if save == True:
+                plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
     print('\n')
     return
 
@@ -3319,7 +3320,7 @@ def plot_vi_vs_t_for_cell(cell=None, comp=0, it_max=None, jj=1, save=True, hexbi
     return
 
 
-def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False):
+def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False, skip=1):
     '''
     For each point in time
      - Collect particle information for particles near cell, plus time component
@@ -3351,48 +3352,49 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False):
         
 
     for ii in range(it_max):
-        save_dir = cf.anal_dir + '//Particle Spatial Distribution Histograms//Species {}//'.format(jj)
-        filename = 'fv_vs_x_species_{}_{:05}'.format(jj, ii)
-        
-        if os.path.exists(save_dir) == False:
-            os.makedirs(save_dir)
+        if ii%skip == 0:
+            save_dir = cf.anal_dir + '//Particle Spatial Distribution Histograms//Species {}//'.format(jj)
+            filename = 'fv_vs_x_species_{}_{:05}'.format(jj, ii)
             
-        if os.path.exists(save_dir + filename + '.png') == True:
-            print('Particle data plot from p-file {} already exists.'.format(ii))
-            continue
-        else:
-            sys.stdout.write('\rPlotting particle data from p-file {}'.format(ii))
-            sys.stdout.flush()
-
-        pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii, shuffled_idx=shuffled_idx)
-        
-        # Do the plotting
-        plt.ioff()
-        
-        fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
-        axes[0].set_title('f(v) vs. x :: {} :: t = {:.3f}s'.format(cf.species_lbl[jj], ptime))
-        
-        st = idx_start[jj]
-        en = idx_end[jj]
-
-        for kk in range(3):
-            counts, xedges, yedges, im1 = axes[kk].hist2d(pos[st:en]/cf.dx, vel[kk, st:en]/cf.va, 
-                                                    bins=[xbins, vbins],
-                                                    vmin=0, vmax=cf.nsp_ppc[jj] / cfac)
-
-            cb = fig.colorbar(im1, ax=axes[kk], pad=0.015)
-            cb.set_label('Counts')
+            if os.path.exists(save_dir) == False:
+                os.makedirs(save_dir)
+                
+            if os.path.exists(save_dir + filename + '.png') == True:
+                print('Particle data plot from p-file {} already exists.'.format(ii))
+                continue
+            else:
+                sys.stdout.write('\rPlotting particle data from p-file {}'.format(ii))
+                sys.stdout.flush()
+    
+            pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii, shuffled_idx=shuffled_idx)
             
-            axes[kk].set_ylim(-vlim, vlim)
-            axes[kk].set_ylabel('v{}\n($v_A$)'.format(lt[kk]), rotation=0)
+            # Do the plotting
+            plt.ioff()
             
-        axes[kk].set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
-        axes[kk].set_xlabel('Position (cell)')
-
-        fig.subplots_adjust(hspace=0.065)
-        
-        plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-        plt.close('all')
+            fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
+            axes[0].set_title('f(v) vs. x :: {} :: t = {:.3f}s'.format(cf.species_lbl[jj], ptime))
+            
+            st = idx_start[jj]
+            en = idx_end[jj]
+    
+            for kk in range(3):
+                counts, xedges, yedges, im1 = axes[kk].hist2d(pos[st:en]/cf.dx, vel[kk, st:en]/cf.va, 
+                                                        bins=[xbins, vbins],
+                                                        vmin=0, vmax=cf.nsp_ppc[jj] / cfac)
+    
+                cb = fig.colorbar(im1, ax=axes[kk], pad=0.015)
+                cb.set_label('Counts')
+                
+                axes[kk].set_ylim(-vlim, vlim)
+                axes[kk].set_ylabel('v{}\n($v_A$)'.format(lt[kk]), rotation=0)
+                
+            axes[kk].set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
+            axes[kk].set_xlabel('Position (cell)')
+    
+            fig.subplots_adjust(hspace=0.065)
+            
+            plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+            plt.close('all')
     print('\n')
     return
 
@@ -3508,7 +3510,7 @@ def plot_sample(it_max=None, N_sample=1000):
     return
 
 
-def scatterplot_velocities(it_max=None):
+def scatterplot_velocities(it_max=None, skip=1):
     print('Plotting scatterplot of all particle velocities...')
     if it_max is None:
         it_max = len(os.listdir(cf.particle_dir))
@@ -3522,46 +3524,47 @@ def scatterplot_velocities(it_max=None):
     pvez, pte, pjx, pjy, pjz, pqdens = cf.interpolate_fields_to_particle_time(it_max)
     
     for ii in range(it_max):
-        sys.stdout.write('\rPlotting particle data from p-file {}'.format(ii))
-        sys.stdout.flush()
-
-        filename = 'velocity_scatterplot_{:05}.png'.format(ii)
-        if os.path.exists(save_dir + filename):
-            print('Plot already exists, skipping...')
-            continue
-
-        pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii)
-        v_perp = np.sqrt(vel[1, :] ** 2 + vel[2, :] ** 2) * np.sign(vel[2, :])
-        # Do the plotting
-        plt.ioff()
-        
-        fig, axes = plt.subplots(4, figsize=(15, 10), sharex=True)
-        axes[0].set_title('All particles :: t = {:.3f}s :: x vs. vx'.format(ptime))
-        
-        axes[0].scatter(pos/cf.dx, vel[0, :]/cf.va, c='k', s=1)
-        axes[0].set_ylabel('$v_\parallel$')
-        
-        axes[1].scatter(pos/cf.dx, v_perp/cf.va, c='k', s=1)
-        axes[1].set_ylabel('$v_\perp$')
-        
-        axes[0].set_ylim(-15, 15)
-        axes[1].set_ylim(-15, 15) 
-        
-        axes[-1].set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
-        axes[-1].set_xlabel('x (dx)')
-        
-        axes[2].plot(cf.E_nodes/cf.dx, pjx[ii])
-        axes[2].set_ylabel('$J_x$', rotation=0)
-        axes[2].set_ylim(pjx.min(), pjx.max())
-        
-        axes[3].plot(cf.E_nodes/cf.dx, pqdens[ii])
-        axes[3].set_ylabel('dens')
-        axes[3].set_ylim(pqdens.min(), pqdens.max())
-
-        fig.subplots_adjust(hspace=0)
-        
-        plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-        plt.close('all')
+        if ii%skip == 0:
+            sys.stdout.write('\rPlotting particle data from p-file {}'.format(ii))
+            sys.stdout.flush()
+    
+            filename = 'velocity_scatterplot_{:05}.png'.format(ii)
+            if os.path.exists(save_dir + filename):
+                print('Plot already exists, skipping...')
+                continue
+    
+            pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii)
+            v_perp = np.sqrt(vel[1, :] ** 2 + vel[2, :] ** 2) * np.sign(vel[2, :])
+            # Do the plotting
+            plt.ioff()
+            
+            fig, axes = plt.subplots(4, figsize=(15, 10), sharex=True)
+            axes[0].set_title('All particles :: t = {:.3f}s :: x vs. vx'.format(ptime))
+            
+            axes[0].scatter(pos/cf.dx, vel[0, :]/cf.va, c='k', s=1)
+            axes[0].set_ylabel('$v_\parallel$')
+            
+            axes[1].scatter(pos/cf.dx, v_perp/cf.va, c='k', s=1)
+            axes[1].set_ylabel('$v_\perp$')
+            
+            axes[0].set_ylim(-15, 15)
+            axes[1].set_ylim(-15, 15) 
+            
+            axes[-1].set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
+            axes[-1].set_xlabel('x (dx)')
+            
+            axes[2].plot(cf.E_nodes/cf.dx, pjx[ii])
+            axes[2].set_ylabel('$J_x$', rotation=0)
+            axes[2].set_ylim(pjx.min(), pjx.max())
+            
+            axes[3].plot(cf.E_nodes/cf.dx, pqdens[ii])
+            axes[3].set_ylabel('dens')
+            axes[3].set_ylim(pqdens.min(), pqdens.max())
+    
+            fig.subplots_adjust(hspace=0)
+            
+            plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+            plt.close('all')
     print('\n')
     return
 
@@ -4214,6 +4217,8 @@ def plot_FB_waves_timeseries(save=True):
                 plt.close('all')
     return
 
+
+
 #%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
@@ -4222,7 +4227,7 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//Fu_CAM_CL_test//']:
+    for series in ['//CAM_CL_particle_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4230,10 +4235,10 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [1]
+            runs_to_do = [2]
         
         # Extract all summary files and plot field stuff (quick)
-        if True:
+        if False:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
@@ -4284,24 +4289,24 @@ if __name__ == '__main__':
 #                     pass            
 # =============================================================================
         
-        if False:
+        if True:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 cf.load_run(drive, series, run_num, extract_arrays=True)
-                
-                #check_fields()
+
                 #plot_E_components(save=True)
                 
                 #plot_spatial_poynting(save=True, log=True)
                 #plot_spatial_poynting_helical(save=True, log=True)
                 
-                plot_total_density_with_time(save=True)
+                #plot_total_density_with_time(save=True)
                 
                 #summary_plots(save=True, histogram=True)
                 #for sp in range(cf.Nj):
-                #    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True)
-                #scatterplot_velocities()
+                #    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=10)
+                #scatterplot_velocities(skip=10)
+                check_fields(skip=1)
             
         #plot_phase_space_with_time()
             
