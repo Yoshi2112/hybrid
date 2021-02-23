@@ -5,11 +5,11 @@ DIST_FLAG    0
 NSP_PPC      1000       
 MASS_PROTON  1.         
 CHARGE_ELEM  1.         
-DRIFT_VA     10.         
+DRIFT_VA     2.         
 DENSITY_CM3  100.        
-ANISOTROPY   0.         
-ENERGY_PERP  0.0
-ELECTRON_EV  0.0
+ANISOTROPY   5.         
+ENERGY_PERP  12e3
+ELECTRON_EV  0.1
 BETA_FLAG    0
 L            4.3
 B_EQ         200e-9

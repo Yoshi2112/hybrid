@@ -330,60 +330,41 @@ def plot_temperature_extremes():
     return
 
 
-def test_particle_orbit():
-    def position_update(pos, vel, DT):
-        for ii in range(3):
-            pos[ii] += vel[ii, 0] * dt
-        return pos
-    
-    NX    = 64
-    B0    = 0.01
+def test_particle_orbit():       
     v0    = 1e5
-    mi    = 1.672622e-27                          # Mass of proton (kg)
-    qi    = 1.602177e-19                          # Elementary charge (C)
-    
-    resolution = 10
-    num_rev    = 5000
+
+    resolution = 100
+    num_rev    = 5
     maxtime    = int(resolution*num_rev)
-    gyperiod   = (2 * np.pi * mi) / (qi * B0) 
+    gyperiod   = (2 * np.pi * main_1D.mp) / (main_1D.q * main_1D.B_eq) 
     dt         = gyperiod / resolution 
     
-    B     = np.zeros((NX + 3, 3), dtype=np.float64)
-    E     = np.zeros((NX + 3, 3), dtype=np.float64)
-    B[:, 0] +=  B0
+    B     = np.zeros((main_1D.NC + 1, 3), dtype=np.float64)
+    E     = np.zeros((main_1D.NC    , 3), dtype=np.float64)
     
-    Ie    = np.array([NX // 2])   ; Ib    = np.array([NX // 2])
+    Ie    = np.array([main_1D.NC // 2])   ; Ib    = np.array([main_1D.NC // 2])
     We    = np.array([0., 1., 0.]).reshape((3, 1))
     Wb    = np.array([0., 1., 0.]).reshape((3, 1))
     idx   = np.array([0])
     
-    vp    = np.array([[0.], [v0], [0.]])
-    rL    = (mi * vp[1][0]) / (qi * B0)
-    
-    xp    = np.array([-rL, 0., 0.]) 
-    
-    print('\nNumber of revolutions: {}'.format(num_rev))
-    print('Points per revolution: {}'.format(resolution))
-    print('Total number of points: {}'.format(maxtime))
-    
-    print('\nGyroradius: {}m'.format(rL))
-    print('Gyroperiod: {}s'.format(round(gyperiod, 2)))
-    print('Timestep: {}s'.format(round(dt, 3)))
-    
-    main_1D.velocity_update(vp, Ie, We, Ib, Wb, idx, B, E, -0.5*dt)
-    
-    xy    = np.zeros((maxtime+1, 2))
-    
-    for ii in range(maxtime+1):
-        xy[ii, 0] = xp[1]
-        xy[ii, 1] = xp[2]
+    vp    = np.array([[v0], [v0], [0.]])
+    xp    = np.array([0.95*main_1D.xmax]) 
 
-        position_update(xp, vp, dt)
-        main_1D.velocity_update(vp, Ie, We, Ib, Wb, idx, B, E, dt)
-    print(xp)
-    print(vp)  
-    #plt.plot(xy[:, 0], xy[:, 1])
-    #plt.axis('equal')
+    main_1D.velocity_update(xp, vp, Ie, We, Ib, Wb, idx, B, E, -0.5*dt)
+    
+    xtime = np.zeros((maxtime+1))
+    vtime = np.zeros((maxtime+1, 3))
+    for ii in range(maxtime+1):
+        xtime[ii]    = xp[0]
+        vtime[ii, 0] = vp[0]
+        vtime[ii, 1] = vp[1]
+        vtime[ii, 2] = vp[2]
+
+        main_1D.position_update(xp, vp, idx, Ie, We, dt)
+        main_1D.velocity_update(xp, vp, Ie, We, Ib, Wb, idx, B, E, dt)
+ 
+    plt.scatter(xtime, vtime[:, 1], s=5, c='k')
+    plt.xlim(main_1D.xmin, main_1D.xmax)
     return
 
 
@@ -413,7 +394,7 @@ def test_weight_conservation():
 def test_weight_shape_and_alignment():
     plt.ion()
     
-    positions  = np.array([-1.5]) * main_1D.dx
+    positions  = np.array([-1.0]) * main_1D.dx
     
     XMIN       = main_1D.xmin
     XMAX       = main_1D.xmax
@@ -437,7 +418,7 @@ def test_weight_shape_and_alignment():
     plt.figure(figsize=(16,10))
     for ii in range(positions.shape[0]):
         
-        plt.scatter(positions[ii], 1.0, c='k')
+        plt.scatter(positions[ii], 0.8, c='k')
         
         for jj in range(3):
             xx = left_nodes[ii] + jj
@@ -2271,7 +2252,7 @@ def test_current_push():
 
 
 if __name__ == '__main__':
-    #test_particle_orbit()
+    test_particle_orbit()
     #animate_moving_weight()
     #test_curl_E()
     #test_grad_P_varying_qn()
@@ -2284,5 +2265,5 @@ if __name__ == '__main__':
     #test_current_push()
     #test_E_convective_exelectron()
     
-    test_weight_shape_and_alignment()
+    #test_weight_shape_and_alignment()
     

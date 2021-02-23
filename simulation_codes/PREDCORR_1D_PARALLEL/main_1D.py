@@ -655,7 +655,7 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False):
                     vel[0, ii] *= -np.sign(pos[ii])
                     
                     # Re-initialize v_perp and check pitch angle
-                    if temp_type[idx[ii]] == 0:
+                    if temp_type[idx[ii]] == 0 or homogenous == 1:
                         vel[1, ii] = np.random.normal(0, vth_perp[idx[ii]])
                         vel[2, ii] = np.random.normal(0, vth_perp[idx[ii]])
                     else:
