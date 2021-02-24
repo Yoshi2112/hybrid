@@ -1096,27 +1096,45 @@ def test_E2C_interpolation():
     '''
     Tests Edge-to-Center (B to E) cubic spline interpolation. 
     Only tests y component, since x is constant offset and z should be identical.
+    
+    Problem found: 24/02/2021
+    
+    Doesn't match the scipy interpolation
     '''
     marker_size = 20
     LENGTH      = main_1D.xmax - main_1D.xmin
-    k           = 1.0 / LENGTH
+    k0          = 1   * 2*np.pi / LENGTH
+    k1          = 4   * 2*np.pi / LENGTH
+    k2          = 6   * 2*np.pi / LENGTH
 
     # Interpolation
     B_input       = np.zeros((main_1D.NC + 1, 3))
-    B_input[:, 1] = np.cos(2*np.pi*k*main_1D.B_nodes)    
+    B_input[:, 0] = np.cos(k0*main_1D.B_nodes)
+    B_input[:, 1] = np.cos(k1*main_1D.B_nodes)
+    B_input[:, 2] = np.cos(k2*main_1D.B_nodes)    
     
     # Analytic solution
     B_anal        = np.zeros((main_1D.NC, 3))
-    B_anal[:, 1]  = np.cos(2*np.pi*k*main_1D.E_nodes)
+    B_anal[:, 0]  = np.cos(k0*main_1D.E_nodes)
+    B_anal[:, 1]  = np.cos(k1*main_1D.E_nodes)
+    B_anal[:, 2]  = np.cos(k2*main_1D.E_nodes)
+    
+    # Scipy solution
+    B_scipy       = np.zeros((main_1D.NC, 3))
+    main_1D.get_B_cent(B_input, B_scipy)
+   
     
     ## TEST INTERPOLATION ##
     B_cent        = np.zeros((main_1D.NC, 3))
-    main_1D.interpolate_edges_to_center(B_input, B_cent)
+    #B_cent[:, 1] = main_1D.interpolate_edges_to_center_1D(B_input[:, 1])
+    B_cent = main_1D.get_B_at_center(B_input)
 
     fig, ax = plt.subplots()
-    ax.scatter(main_1D.B_nodes, B_input[:, 1], s=marker_size, c='k', marker='o', label='Input')
-    ax.scatter(main_1D.E_nodes, B_anal[ :, 1], s=marker_size, c='b', marker='x', label='Analytic Soln')
-    ax.scatter(main_1D.E_nodes, B_cent[ :, 1], s=marker_size, c='r', marker='x', label='Numerical Soln')
+    for jj in range(2, 3):
+        ax.scatter(main_1D.B_nodes, B_input[:, jj], s=marker_size, c='k', marker='o', label='Input {}'.format(jj))
+        ax.scatter(main_1D.E_nodes, B_anal[ :, jj], s=marker_size, c='b', marker='x', label='A. Soln {}'.format(jj))
+        ax.scatter(main_1D.E_nodes, B_cent[ :, jj], s=marker_size, c='r', marker='x', label='N. Soln {}'.format(jj))
+        ax.scatter(main_1D.E_nodes, B_scipy[:, jj], s=marker_size, c='g', marker='^', label='Scipy   {}'.format(jj))
     
     for kk in range(main_1D.NC):
         ax.axvline(main_1D.E_nodes[kk], linestyle='--', c='r', alpha=0.2)
@@ -1140,19 +1158,18 @@ def test_C2E_interpolation():
     how '4th order' the cubic spline is (derivative uses 2nd order finite difference)
     '''
     marker_size = 20
-    k           = 1.0 / (main_1D.xmax - main_1D.xmin)
+    k           = 2*np.pi / (main_1D.xmax - main_1D.xmin)
 
     # Input value
     E_input       = np.zeros((main_1D.NC, 3))
-    E_input[:, 1] = np.cos(2*np.pi*k*main_1D.E_nodes)    
+    E_input[:, 1] = np.cos(k*main_1D.E_nodes)    
     
     # Analytic solution
     E_anal        = np.zeros((main_1D.NC + 1, 3))
-    E_anal[:, 1]  = np.cos(2*np.pi*k*main_1D.B_nodes)
+    E_anal[:, 1]  = np.cos(k*main_1D.B_nodes)
         
     ## TEST INTERPOLATION ##
-    E_edge        = np.zeros((main_1D.NC + 1, 3))
-    main_1D.interpolate_centers_to_edge(E_input, E_edge)
+    E_edge = main_1D.interpolate_edges_to_center_1D(E_input[:, 1], zero_boundaries=True)
 
     fig, ax = plt.subplots()
     ax.scatter(main_1D.E_nodes, E_input[:, 1], s=marker_size, c='k', marker='o', label='Input')
@@ -1839,5 +1856,5 @@ if __name__ == '__main__':
     #test_curl_E()
     #test_curl_B()
     #test_grad_P()
-    test_C2E_interpolation()
+    test_E2C_interpolation()
     

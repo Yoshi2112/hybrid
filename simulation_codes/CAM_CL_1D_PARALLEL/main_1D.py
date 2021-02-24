@@ -1,5 +1,6 @@
 ## PYTHON MODULES ##
 from timeit import default_timer as timer
+from scipy.interpolate import splrep, splev
 import numpy as np
 import numba as nb
 import sys, os, pdb
@@ -416,7 +417,7 @@ def generate_vx(vth):
 
 #%% SOURCES
 @nb.njit()
-def push_current(J_in, J_out, E, B, L, G, dt):
+def push_current(J_in, J_out, E, B, B_center, L, G, dt):
     '''Uses an MHD-like equation to advance the current with a moment method as 
     per Matthews (1994) CAM-CL method. Fills in ghost cells at edges (excluding very last one)
     
@@ -432,7 +433,6 @@ def push_current(J_in, J_out, E, B, L, G, dt):
         J_plus in main() becomes J_half (same memory space)
     '''
     J_out    *= 0
-    B_center  = interpolate_edges_to_center(B)
     
     G_cross_B = np.zeros(E.shape, dtype=np.float64)
     for ii in np.arange(NC):
@@ -885,7 +885,40 @@ def get_grad_P_alt2(qn, te):
     return Pe, grad_P
 
 
-@nb.njit()
+#@nb.njit()
+def get_grad_P_alt3(qn, te):
+    '''
+    Returns the electron pressure gradient (in 1D) on the E-field grid using P = nkT and 
+    finite difference.
+    
+    INPUT:
+        qn -- Grid charge density
+        te -- Grid electron temperature
+        DX -- Grid separation, used for diagnostic purposes. Defaults to simulation dx.
+        inter_type -- Linear (0) or cubic spline (1) interpolation.
+        
+    NOTE: Interpolation is needed because the finite differencing causes the result to be deposited on the 
+    B-grid. Moving it back to the E-grid requires an interpolation. Cubic spline is desired due to its smooth
+    derivatives and its higher order weighting (without the polynomial craziness)
+    '''
+    grad_pe_B     = np.zeros(NC + 1, dtype=np.float64)
+    Pe            = qn * kB * te / q
+
+    # Center points
+    for ii in np.arange(1, qn.shape[0]):
+        grad_pe_B[ii] = (Pe[ii] - Pe[ii - 1])/dx
+            
+    # Set endpoints (there should be no gradients here anyway, but just to be safe)
+    grad_pe_B[0]  = grad_pe_B[1]
+    grad_pe_B[NC] = grad_pe_B[NC - 1]
+        
+    # Re-interpolate to E-grid
+    coeffs = splrep(B_nodes, grad_pe_B)
+    grad_P = splev( E_nodes, coeffs)
+    return Pe, grad_P
+
+
+#@nb.njit()
 def interpolate_edges_to_center_1D(grad_P, zero_boundaries=True):
     ''' 
     Same as 3D version just rejigged because its used for the grad_P calculation
@@ -999,7 +1032,7 @@ def cyclic_leapfrog(B1, B2, rho, J, curl, DT, subcycles, B_damping_array):
 
 
 @nb.njit()
-def calculate_E(B, J, qn):
+def calculate_E(B, B_center, J, qn):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
     and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
@@ -1020,7 +1053,6 @@ def calculate_E(B, J, qn):
     Te       = get_electron_temp(qn)
     del_p    = get_grad_P(qn, Te)
     
-    B_center = interpolate_edges_to_center(B)
     VexB     = np.zeros((NC, 3), dtype=np.float64)  
     for ii in np.arange(NC):
         VexB[ii, 0] = Ve[ii, 1] * B_center[ii, 2] - Ve[ii, 2] * B_center[ii, 1]
@@ -1055,60 +1087,75 @@ def calculate_E(B, J, qn):
 
 
 #%% AUXILLIARY FUNCTIONS
-@nb.njit()
-def interpolate_edges_to_center(B, zero_boundaries=True):
-    ''' 
-    Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
-    with a 3D array (e.g. B). Second derivative y2 is calculated on the B-grid, with
-    forwards/backwards difference used for endpoints. (i.e. y2 at data points)
-    
-    interp has one more gridpoint than required just because of the array used. interp[-1]
-    should remain zero.
-    
-    This might be able to be done without the intermediate y2 array since the interpolated
-    points don't require previous point values.
-    
-    As long as B-grid is filled properly in the push_B() routine, this shouldn't have to
-    vary for homogenous boundary conditions
-    
-    ADDS B0 TO X-AXIS ON TOP OF INTERPOLATION
+# =============================================================================
+# @nb.njit()
+# def get_B_at_center(B, zero_boundaries=True):
+#     ''' 
+#     Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
+#     with a 3D array (e.g. B). Second derivative y2 is calculated on the B-grid, with
+#     forwards/backwards difference used for endpoints. (i.e. y2 at data points)
+#     
+#     interp has one more gridpoint than required just because of the array used. interp[-1]
+#     should remain zero.
+#     
+#     This might be able to be done without the intermediate y2 array since the interpolated
+#     points don't require previous point values.
+#     
+#     As long as B-grid is filled properly in the push_B() routine, this shouldn't have to
+#     vary for homogenous boundary conditions
+#     
+#     ADDS B0 TO X-AXIS ON TOP OF INTERPOLATION
+#     '''
+#     y2      = np.zeros((NC + 1, 3), dtype=np.float64)
+#     interp  = np.zeros((NC    , 3), dtype=np.float64)
+#     
+#     # Calculate second derivative
+#     for jj in range(1, B.shape[1]):
+#         
+#         # Interior B-nodes, Centered difference
+#         for ii in range(1, NC):
+#             y2[ii, jj] = B[ii + 1, jj] - 2*B[ii, jj] + B[ii - 1, jj]
+#                 
+#         # Edge B-nodes, Forwards/Backwards difference
+#         if zero_boundaries == True:
+#             y2[0 , jj] = 0.
+#             y2[NC, jj] = 0.
+#         else:
+#             y2[0,  jj] = 2*B[0 ,    jj] - 5*B[1     , jj] + 4*B[2     , jj] - B[3     , jj]
+#             y2[NC, jj] = 2*B[NC,    jj] - 5*B[NC - 1, jj] + 4*B[NC - 2, jj] - B[NC - 3, jj]
+#         
+#     # Do spline interpolation: E[ii] is bracketed by B[ii], B[ii + 1]
+#     for jj in range(1, B.shape[1]):
+#         for ii in range(NC):
+#             interp[ii, jj] = 0.5 * (B[ii, jj] + B[ii + 1, jj] + (1/6) * (y2[ii, jj] + y2[ii + 1, jj]))
+#     
+#     # Add B0x to interpolated array
+#     for ii in range(NC):
+#         interp[ii, 0] = eval_B0x(E_nodes[ii])
+#     return interp
+# =============================================================================
+
+
+def get_B_cent(_B, _B_cent):
     '''
-    y2      = np.zeros((NC + 1, 3), dtype=np.float64)
-    interp  = np.zeros((NC    , 3), dtype=np.float64)
-    
-    # Calculate second derivative
-    for jj in range(1, B.shape[1]):
-        
-        # Interior B-nodes, Centered difference
-        for ii in range(1, NC):
-            y2[ii, jj] = B[ii + 1, jj] - 2*B[ii, jj] + B[ii - 1, jj]
-                
-        # Edge B-nodes, Forwards/Backwards difference
-        if zero_boundaries == True:
-            y2[0 , jj] = 0.
-            y2[NC, jj] = 0.
-        else:
-            y2[0,  jj] = 2*B[0 ,    jj] - 5*B[1     , jj] + 4*B[2     , jj] - B[3     , jj]
-            y2[NC, jj] = 2*B[NC,    jj] - 5*B[NC - 1, jj] + 4*B[NC - 2, jj] - B[NC - 3, jj]
-        
-    # Do spline interpolation: E[ii] is bracketed by B[ii], B[ii + 1]
-    for jj in range(1, B.shape[1]):
-        for ii in range(NC):
-            interp[ii, jj] = 0.5 * (B[ii, jj] + B[ii + 1, jj] + (1/6) * (y2[ii, jj] + y2[ii + 1, jj]))
-    
-    # Add B0x to interpolated array
-    for ii in range(NC):
-        interp[ii, 0] = eval_B0x(E_nodes[ii])
-    return interp
+    Quick and easy function to calculate B on the E-grid using scipy's cubic
+    spline interpolation (mine seems to be broken). Could probably make this 
+    myself and more efficient later, but need to eliminate problems!
+    '''
+    for jj in range(1, 3):
+        coeffs         = splrep(B_nodes, _B[:, jj])
+        _B_cent[:, jj] = splev( E_nodes, coeffs)
+    _B_cent[:, 0] = eval_B0x(E_nodes)
+    return
 
 
 #@nb.njit()
-def check_timestep(qq, DT, pos, vel, Ie, W_elec, B, E, dns, max_inc, part_save_iter, field_save_iter, subcycles):
+def check_timestep(qq, DT, pos, vel, Ie, W_elec, B, B_center, E, dns, 
+                   max_inc, part_save_iter, field_save_iter, subcycles):
     max_Vx          = np.abs(vel[0, :]).max()
     max_V           = np.abs(vel      ).max()
-    
-    B_cent          = interpolate_edges_to_center(B)
-    B_tot           = np.sqrt(B_cent[:, 0] ** 2 + B_cent[:, 1] ** 2 + B_cent[:, 2] ** 2)
+
+    B_tot           = np.sqrt(B_center[:, 0] ** 2 + B_center[:, 1] ** 2 + B_center[:, 2] ** 2)
     high_rat        = qm_ratios.max()
     
     local_gyfreq    = high_rat  * np.abs(B_tot).max()      
@@ -1742,6 +1789,7 @@ if __name__ == '__main__':
     
     B        = np.zeros((NC + 1, 3), dtype=np.float64)
     B2       = np.zeros((NC + 1, 3), dtype=np.float64)
+    B_cent   = np.zeros((NC       ), dtype=np.float64)
     E        = np.zeros((NC    , 3), dtype=np.float64)
     Ve       = np.zeros((NC    , 3), dtype=np.float64)
     Te       = np.zeros((NC       ), dtype=np.float64)
@@ -1776,7 +1824,8 @@ if __name__ == '__main__':
         ############################
         if adaptive_timestep == 1:
             qq, _DT, max_inc, part_save_iter, field_save_iter, change_flag, subcycles =\
-                check_timestep(qq, _DT, pos, vel, Ie, W_elec, B, E, rho_int, max_inc, part_save_iter, field_save_iter, subcycles)
+                check_timestep(qq, _DT, pos, vel, Ie, W_elec, B, B_cent, E, rho_int, 
+                               max_inc, part_save_iter, field_save_iter, subcycles)
     
             # Collect new moments and desync position and velocity
             if change_flag == 1:
@@ -1788,10 +1837,11 @@ if __name__ == '__main__':
         ###### MAIN LOOP ######
         #######################
         cyclic_leapfrog(B, B2, rho_int, J, temp3d, _DT, subcycles, B_damping_array)
-        E, Ve, Te = calculate_E(B, J, rho_half)
+        get_B_cent(B, B_cent)
+        E, Ve, Te = calculate_E(B, B_cent, J, rho_half)
 
-        push_current(J_plus, J, E, B, L, G, _DT)
-        E, Ve, Te = calculate_E(B, J, rho_half)
+        push_current(J_plus, J, E, B, B_cent, L, G, _DT)
+        E, Ve, Te = calculate_E(B, B_cent, J, rho_half)
         
         assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
         velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, _DT)
@@ -1806,7 +1856,8 @@ if __name__ == '__main__':
         J        = 0.5 * (J_plus  +  J_minus)
 
         cyclic_leapfrog(B, B2, rho_int, J, temp3d, _DT, subcycles, B_damping_array)
-        E, Ve, Te   = calculate_E(B, J, rho_int)
+        get_B_cent(B, B_cent)
+        E, Ve, Te   = calculate_E(B, B_cent, J, rho_int)
 
         ########################
         ##### OUTPUT DATA  #####

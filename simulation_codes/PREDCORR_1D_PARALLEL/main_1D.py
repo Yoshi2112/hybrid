@@ -5,6 +5,7 @@ import os, sys
 import pickle
 from shutil import rmtree
 from timeit import default_timer as timer
+from scipy.interpolate import splrep, splev
 import matplotlib.pyplot as plt
 
 ## PHYSICAL CONSTANTS ##
@@ -262,12 +263,13 @@ def initialize_fields():
         Te     -- Electron temperature          : Calculated as part of E-field update equation          
     '''
     B       = np.zeros((NC + 1, 3), dtype=nb.float64)
+    B_cent  = np.zeros((NC    , 3), dtype=nb.float64)
     E_int   = np.zeros((NC    , 3), dtype=nb.float64)
     E_half  = np.zeros((NC    , 3), dtype=nb.float64)
     
     Ve      = np.zeros((NC, 3), dtype=nb.float64)
     Te      = np.ones(  NC,     dtype=nb.float64) * Te0_scalar
-    return B, E_int, E_half, Ve, Te
+    return B, B_cent, E_int, E_half, Ve, Te
 
 
 @nb.njit()
@@ -958,6 +960,19 @@ def eval_B0x(x):
     return B_eq * (1. + a * x**2)
 
 
+def get_B_cent(_B, _B_cent):
+    '''
+    Quick and easy function to calculate B on the E-grid using scipy's cubic
+    spline interpolation (mine seems to be broken). Could probably make this 
+    myself and more efficient later, but need to eliminate problems!
+    '''
+    for jj in range(1, 3):
+        coeffs         = splrep(B_nodes, _B[:, jj])
+        _B_cent[:, jj] = splev( E_nodes, coeffs)
+    _B_cent[:, 0] = eval_B0x(E_nodes)
+    return
+
+
 @nb.njit()
 def get_curl_E(E, dE):
     ''' Returns a vector quantity for the curl of a field valid at the
@@ -1104,7 +1119,7 @@ def get_grad_P(qn, te, grad_P, temp):
 
 
 @nb.njit()
-def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P, E_damping_array):
+def calculate_E(B, B_center, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P, E_damping_array):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
     and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
@@ -1137,17 +1152,16 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P, E_damping_ar
     get_electron_temp(q_dens, Te)
 
     get_grad_P(q_dens, Te, grad_P, temp3Db[:, 0])             # temp1D is now del_p term, temp3D2 slice used for computation
-    interpolate_edges_to_center(B, temp3Db)                   # temp3db is now B_center
 
     #cross_product(Ve, temp3Db[:temp3Db.shape[0]-1, :], temp3De) 
     # temp3De is now Ve x B term                 
-    temp3De[:, 0] += Ve[:, 1] * B[:temp3Db.shape[0]-1, 2]
-    temp3De[:, 1] += Ve[:, 2] * B[:temp3Db.shape[0]-1, 0]
-    temp3De[:, 2] += Ve[:, 0] * B[:temp3Db.shape[0]-1, 1]
+    temp3De[:, 0] += Ve[:, 1] * B_center[:, 2]
+    temp3De[:, 1] += Ve[:, 2] * B_center[:, 0]
+    temp3De[:, 2] += Ve[:, 0] * B_center[:temp3Db.shape[0]-1, 1]
     
-    temp3De[:, 0] -= Ve[:, 2] * B[:temp3Db.shape[0]-1, 1]
-    temp3De[:, 1] -= Ve[:, 0] * B[:temp3Db.shape[0]-1, 2]
-    temp3De[:, 2] -= Ve[:, 1] * B[:temp3Db.shape[0]-1, 0]
+    temp3De[:, 0] -= Ve[:, 2] * B_center[:, 1]
+    temp3De[:, 1] -= Ve[:, 0] * B_center[:, 2]
+    temp3De[:, 2] -= Ve[:, 1] * B_center[:, 0]
     
     
     if E_damping == 1 and field_periodic == 0:
@@ -1179,117 +1193,101 @@ def calculate_E(B, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P, E_damping_ar
 ### ##
 ### AUXILLIARY FUNCTIONS 
 ### ##
-@nb.njit()
-def cross_product(A, B, C):
-    '''
-    Vector (cross) product between two vectors, A and B of same dimensions.
 
-    INPUT:
-        A, B -- 3D vectors (ndarrays)
-
-    OUTPUT:
-        C -- The resultant cross product with same dimensions as input vectors
-    '''
-    C[:, 0] += A[:, 1] * B[:, 2]
-    C[:, 1] += A[:, 2] * B[:, 0]
-    C[:, 2] += A[:, 0] * B[:, 1]
-    
-    C[:, 0] -= A[:, 2] * B[:, 1]
-    C[:, 1] -= A[:, 0] * B[:, 2]
-    C[:, 2] -= A[:, 1] * B[:, 0]
-    return
-
-
-@nb.njit()
-def interpolate_edges_to_center(B, interp, zero_boundaries=True):
-    ''' 
-    Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
-    with a 3D array (e.g. B). Second derivative y2 is calculated on the B-grid, with
-    forwards/backwards difference used for endpoints. (i.e. y2 at data points)
-    
-    interp has one more gridpoint than required just because of the array used. interp[-1]
-    should remain zero.
-    
-    This might be able to be done without the intermediate y2 array since the interpolated
-    points don't require previous point values.
-    
-    As long as B-grid is filled properly in the push_B() routine, this shouldn't have to
-    vary for homogenous boundary conditions
-    
-    ADDS B0 TO X-AXIS ON TOP OF INTERPOLATION
-    '''
-    y2      = np.zeros(B.shape, dtype=nb.float64)
-    interp *= 0.
-    mx      = B.shape[0] - 1
-    
-    # Calculate second derivative
-    for jj in range(1, B.shape[1]):
-        
-        # Interior B-nodes, Centered difference
-        for ii in range(1, mx):
-            y2[ii, jj] = B[ii + 1, jj] - 2*B[ii, jj] + B[ii - 1, jj]
-                
-        # Edge B-nodes, Forwards/Backwards difference
-        if zero_boundaries == True:
-            y2[0 , jj] = 0.
-            y2[mx, jj] = 0.
-        else:
-            y2[0,  jj] = 2*B[0 ,    jj] - 5*B[1     , jj] + 4*B[2     , jj] - B[3     , jj]
-            y2[mx, jj] = 2*B[mx,    jj] - 5*B[mx - 1, jj] + 4*B[mx - 2, jj] - B[mx - 3, jj]
-        
-    # Do spline interpolation: E[ii] is bracketed by B[ii], B[ii + 1]
-    for jj in range(1, B.shape[1]):
-        for ii in range(mx):
-            interp[ii, jj] = 0.5 * (B[ii, jj] + B[ii + 1, jj] + (1/6) * (y2[ii, jj] + y2[ii + 1, jj]))
-    
-    # Add B0x to interpolated array
-    for ii in range(mx):
-        interp[ii, 0] = eval_B0x(E_nodes[ii])
-    return
+# =============================================================================
+# @nb.njit()
+# def interpolate_edges_to_center(B, interp, zero_boundaries=True):
+#     ''' 
+#     Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
+#     with a 3D array (e.g. B). Second derivative y2 is calculated on the B-grid, with
+#     forwards/backwards difference used for endpoints. (i.e. y2 at data points)
+#     
+#     interp has one more gridpoint than required just because of the array used. interp[-1]
+#     should remain zero.
+#     
+#     This might be able to be done without the intermediate y2 array since the interpolated
+#     points don't require previous point values.
+#     
+#     As long as B-grid is filled properly in the push_B() routine, this shouldn't have to
+#     vary for homogenous boundary conditions
+#     
+#     ADDS B0 TO X-AXIS ON TOP OF INTERPOLATION
+#     '''
+#     y2      = np.zeros(B.shape, dtype=nb.float64)
+#     interp *= 0.
+#     mx      = B.shape[0] - 1
+#     
+#     # Calculate second derivative
+#     for jj in range(1, B.shape[1]):
+#         
+#         # Interior B-nodes, Centered difference
+#         for ii in range(1, mx):
+#             y2[ii, jj] = B[ii + 1, jj] - 2*B[ii, jj] + B[ii - 1, jj]
+#                 
+#         # Edge B-nodes, Forwards/Backwards difference
+#         if zero_boundaries == True:
+#             y2[0 , jj] = 0.
+#             y2[mx, jj] = 0.
+#         else:
+#             y2[0,  jj] = 2*B[0 ,    jj] - 5*B[1     , jj] + 4*B[2     , jj] - B[3     , jj]
+#             y2[mx, jj] = 2*B[mx,    jj] - 5*B[mx - 1, jj] + 4*B[mx - 2, jj] - B[mx - 3, jj]
+#         
+#     # Do spline interpolation: E[ii] is bracketed by B[ii], B[ii + 1]
+#     for jj in range(1, B.shape[1]):
+#         for ii in range(mx):
+#             interp[ii, jj] = 0.5 * (B[ii, jj] + B[ii + 1, jj] + (1/6) * (y2[ii, jj] + y2[ii + 1, jj]))
+#     
+#     # Add B0x to interpolated array
+#     for ii in range(mx):
+#         interp[ii, 0] = eval_B0x(E_nodes[ii])
+#     return
+# =============================================================================
 
 
-@nb.njit()
-def interpolate_centers_to_edge(E, interp, zero_boundaries=False):
-    '''
-    As above, but interpolating center values (E) to edge positions (B)
-    
-    Might need forward/backwards difference for interpolation boundary cells
-    at ii = 0, NC
-    '''
-    y2      = np.zeros(E.shape, dtype=np.float64)
-    interp *= 0.
-    mx      = E.shape[0]
-    
-    # Calculate y2 at E-field data points
-    for jj in range(E.shape[1]):
-        
-        # Interior E-nodes, Centered difference
-        for ii in range(1, mx - 1):
-            y2[ii, jj] = E[ii + 1, jj] - 2*E[ii, jj] + E[ii - 1, jj]
-                
-        # Edge E-nodes, Forwards/Backwards difference
-        if zero_boundaries == True:
-            y2[0 ,     jj] = 0.
-            y2[mx - 1, jj] = 0.
-        else:
-            y2[0,      jj] = 2*E[0     , jj] - 5*E[1     , jj] + 4*E[2     , jj] - E[3     , jj]
-            y2[mx - 1, jj] = 2*E[mx - 1, jj] - 5*E[mx - 2, jj] + 4*E[mx - 3, jj] - E[mx - 4, jj]
-
-    # Return to test y2
-    #y2 /= (dx ** 2)
-    #return y2
-    
-    # Do spline interpolation: B[ii] is bracketed by E[ii - 1], E[ii]
-    # Center points only
-    for jj in range(E.shape[1]):
-        for ii in range(1, mx):
-            interp[ii, jj] = 0.5 * (E[ii - 1, jj] + E[ii, jj] + (1/6) * (y2[ii - 1, jj] + y2[ii, jj]))
-    
-    if field_periodic == True:
-        for jj in range(E.shape[1]):
-            interp[0,  jj] = interp[mx - 1, jj]
-            interp[mx, jj] = interp[1, jj]
-    return
+# =============================================================================
+# @nb.njit()
+# def interpolate_centers_to_edge(E, interp, zero_boundaries=False):
+#     '''
+#     As above, but interpolating center values (E) to edge positions (B)
+#     
+#     Might need forward/backwards difference for interpolation boundary cells
+#     at ii = 0, NC
+#     '''
+#     y2      = np.zeros(E.shape, dtype=np.float64)
+#     interp *= 0.
+#     mx      = E.shape[0]
+#     
+#     # Calculate y2 at E-field data points
+#     for jj in range(E.shape[1]):
+#         
+#         # Interior E-nodes, Centered difference
+#         for ii in range(1, mx - 1):
+#             y2[ii, jj] = E[ii + 1, jj] - 2*E[ii, jj] + E[ii - 1, jj]
+#                 
+#         # Edge E-nodes, Forwards/Backwards difference
+#         if zero_boundaries == True:
+#             y2[0 ,     jj] = 0.
+#             y2[mx - 1, jj] = 0.
+#         else:
+#             y2[0,      jj] = 2*E[0     , jj] - 5*E[1     , jj] + 4*E[2     , jj] - E[3     , jj]
+#             y2[mx - 1, jj] = 2*E[mx - 1, jj] - 5*E[mx - 2, jj] + 4*E[mx - 3, jj] - E[mx - 4, jj]
+# 
+#     # Return to test y2
+#     #y2 /= (dx ** 2)
+#     #return y2
+#     
+#     # Do spline interpolation: B[ii] is bracketed by E[ii - 1], E[ii]
+#     # Center points only
+#     for jj in range(E.shape[1]):
+#         for ii in range(1, mx):
+#             interp[ii, jj] = 0.5 * (E[ii - 1, jj] + E[ii, jj] + (1/6) * (y2[ii - 1, jj] + y2[ii, jj]))
+#     
+#     if field_periodic == True:
+#         for jj in range(E.shape[1]):
+#             interp[0,  jj] = interp[mx - 1, jj]
+#             interp[mx, jj] = interp[1, jj]
+#     return
+# =============================================================================
 
 
 @nb.njit(parallel=do_parallel)
@@ -1321,7 +1319,6 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center,\
     
     Shoji code blowing up because of Eacc_ts - what is this and does it matter?
     '''
-    interpolate_edges_to_center(B, B_center)
     B_magnitude     = np.sqrt(B_center[ND:ND+NX+1, 0] ** 2 +
                               B_center[ND:ND+NX+1, 1] ** 2 +
                               B_center[ND:ND+NX+1, 2] ** 2)
@@ -1715,7 +1712,7 @@ def restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particl
 
 
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
-              B, E_int, E_half, q_dens, q_dens_adv, Ji, mp_flux,               \
+              B, B_cent, E_int, E_half, q_dens, q_dens_adv, Ji, mp_flux,               \
               Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,\
               B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter, field_save_iter):
     '''
@@ -1725,7 +1722,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
     #check_start = timer()
     if adaptive_timestep == True and qq%1 == 0 and disable_waves == 0:
         qq, DT, max_inc, part_save_iter, field_save_iter, damping_array \
-        = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, temp3De,\
+        = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, B_cent,\
                          qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array)
     #check_time = round(timer() - check_start, 2)
     
@@ -1744,7 +1741,8 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
         #field_start = timer()
         # Push B from N to N + 1/2 and calculate E(N + 1/2)
         push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
-        calculate_E(B, Ji, q_dens, E_half, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array)
+        get_B_cent(B, B_cent)
+        calculate_E(B, B_cent, Ji, q_dens, E_half, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array)
         #field_time = round(timer() - field_start, 2)
         
         ###################################
@@ -1775,7 +1773,8 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
     
         # Compute predicted fields at N + 3/2
         push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
-        calculate_E(B, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array)
+        get_B_cent(B, B_cent)
+        calculate_E(B, B_cent, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array)
         
         # Determine corrected fields at N + 1 
         E_int *= 0.5;    E_int += 0.5 * E_half
@@ -1790,7 +1789,8 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
     
         #final_start = timer()
         push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
-    
+        get_B_cent(B, B_cent)
+        
         q_dens[:] = q_dens_adv
         mp_flux   = mp_flux_old.copy()
         #final_time = round(timer() - final_start, 2)
@@ -2163,7 +2163,7 @@ if __name__ == '__main__':
         
         # Initialize simulation: Allocate memory and set time parameters
         pos, vel, Ie, W_elec, Ib, W_mag, idx                = initialize_particles()
-        B, E_int, E_half, Ve, Te                            = initialize_fields()
+        B, B_cent, E_int, E_half, Ve, Te                    = initialize_fields()
         q_dens, q_dens_adv, Ji                              = initialize_source_arrays()
         old_particles, old_fields, temp3De, temp3Db, temp1D,\
                                                    mp_flux  = initialize_tertiary_arrays()
@@ -2174,7 +2174,7 @@ if __name__ == '__main__':
         DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array\
             = set_timestep(vel)
 
-        calculate_E(B, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array)
+        calculate_E(B, B_cent, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array)
         
         if save_particles == 1:
             save_particle_data(0, DT, part_save_iter, 0, pos, vel, idx)
@@ -2201,7 +2201,7 @@ if __name__ == '__main__':
             loop_start = timer()
             qq, DT, max_inc, part_save_iter, field_save_iter =                                \
             main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                                   \
-                  B, E_int, E_half, q_dens, q_dens_adv, Ji, mp_flux,                          \
+                  B, B_cent, E_int, E_half, q_dens, q_dens_adv, Ji, mp_flux,                          \
                   Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,           \
                   B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter, field_save_iter)
                 
