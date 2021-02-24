@@ -1,5 +1,5 @@
 DRIVE					F:/
-SAVE_PATH			    /runs/CAM_CL_nosubcycle_test/
+SAVE_PATH			    /runs/CAM_CL_Fu_fixed/
 RUN						-
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
@@ -23,5 +23,5 @@ RC_HWIDTH				-
 GYROPERIOD_RESOLUTION	0.2
 FREQUENCY_RESOLUTION	0.05	
 PARTICLE_DUMP_FREQ		2.5
-FIELD_DUMP_FREQ			0.2
-Testing steady state with cold proton plasma just to test compilation and stability
+FIELD_DUMP_FREQ			0.4
+Doing a test just to make sure I didn't break this good code that's been working. Also trying with slightly tweaked Fu parameters since I worked out his beta was beta parallel.

@@ -1105,6 +1105,7 @@ if __name__ == '__main__':
     ###########################
     ### LOAD RUN PARAMETERS ###
     ###########################
+    print('Loading:', args['runfile'])
     with open(run_input, 'r') as f:
         drive             = f.readline().split()[1]        # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
         save_path         = f.readline().split()[1]        # Series save dir   : Folder containing all runs of a series
@@ -1166,6 +1167,7 @@ if __name__ == '__main__':
     #######################################
     ### LOAD PARTICLE/PLASMA PARAMETERS ###
     #######################################
+    print('Loading:', args['plasmafile'])
     with open(plasma_input, 'r') as f:
         species_lbl = np.array(f.readline().split()[1:])
         

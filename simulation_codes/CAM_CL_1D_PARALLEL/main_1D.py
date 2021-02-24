@@ -20,6 +20,72 @@ RE  = 6.371e6                               # Earth radius in metres
 
 #%% --- FUNCTIONS ---
 #%% INITIALIZATION
+@nb.njit()
+def calc_losses(v_para, v_perp, B0x, st=0):
+    '''
+    For arrays of parallel and perpendicular velocities, finds the number and 
+    indices of particles outside the loss cone.
+    '''
+    alpha        = np.arctan(v_perp / v_para)                   # Calculate particle PA's
+    loss_cone    = np.arcsin(np.sqrt(B0x / B_A))                # Loss cone per particle (based on B0 at particle)
+    
+    in_loss_cone = np.zeros(v_para.shape[0], dtype=nb.int32)
+    for ii in range(v_para.shape[0]):
+        if np.abs(alpha[ii]) < loss_cone[ii]:                   # Determine if particle in loss cone
+            in_loss_cone[ii] = 1
+    
+    N_loss       = in_loss_cone.sum()                           # Count number that are
+    
+    # Collect the indices of those in the loss cone
+    loss_idx     = np.zeros(N_loss, dtype=nb.int32)
+    lc           = 0
+    for ii in range(v_para.shape[0]):
+        if in_loss_cone[ii] == True:
+            loss_idx[lc] = ii
+            lc          += 1
+        
+    loss_idx    += st                                           # Offset indices to account for position in master array
+    return N_loss, loss_idx
+
+
+@nb.njit()
+def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
+    '''
+    Takes in a Maxwellian or pseudo-maxwellian distribution. Removes any particles
+    inside the loss cone and reinitializes them using the given scale factors 
+    sf_par, sf_per (the thermal velocities).
+    
+    Is there a better way to do this with a Monte Carlo perhaps?
+    '''
+    B0x    = eval_B0x(pos[st: en])
+    N_loss = 1
+
+    while N_loss > 0:
+        v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
+        
+        N_loss, loss_idx = calc_losses(vel[0, st: en], v_perp, B0x, st=st)
+
+        # Catch for a particle on the boundary : Set 90 degree pitch angle (gyrophase shouldn't overly matter)
+        if N_loss == 1:
+            if abs(pos[loss_idx[0]]) == xmax:
+                ww = loss_idx[0]
+                vel[0, loss_idx[0]] = 0.
+                vel[1, loss_idx[0]] = np.sqrt(vel[0, ww] ** 2 + vel[1, ww] ** 2 + vel[2, ww] ** 2)
+                vel[2, loss_idx[0]] = 0.
+                N_loss = 0
+
+        if N_loss != 0:   
+            new_vx = np.random.normal(0., sf_par, N_loss)             
+            new_vy = np.random.normal(0., sf_per, N_loss)
+            new_vz = np.random.normal(0., sf_per, N_loss)
+            
+            for ii in range(N_loss):
+                vel[0, loss_idx[ii]] = new_vx[ii]
+                vel[1, loss_idx[ii]] = new_vy[ii]
+                vel[2, loss_idx[ii]] = new_vz[ii]
+    return
+
+
 def uniform_distribution():
     '''Creates an analytically uniform distribution of N numbers within each cell boundary
 
@@ -63,7 +129,7 @@ def gaussian_distribution():
         acc = 0                  # Species accumulator
         for ii in range(NX):
             n_particles = nsp_ppc[jj]
-            dist[0, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tpar[ jj]) /  mass[jj]), n_particles) +  drift_v[jj]
+            dist[0, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tpar[ jj]) /  mass[jj]), n_particles) +  drift_v[jj]*va
             dist[1, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tperp[jj]) /  mass[jj]), n_particles)
             dist[2, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, np.sqrt((kB *  Tperp[jj]) /  mass[jj]), n_particles)
             acc += n_particles
@@ -115,14 +181,20 @@ def init_quiet_start():
             pos[st: en]-= 0.5*NX*dx
            
             # Set velocity for half: Randomly Maxwellian
-            vel[0, st: en] = np.random.normal(0, sf_par, half_n) +  drift_v[jj]
+            vel[0, st: en] = np.random.normal(0, sf_par, half_n)
             vel[1, st: en] = np.random.normal(0, sf_per, half_n)
             vel[2, st: en] = np.random.normal(0, sf_per, half_n)
-                                
+            
+            if homogenous == 0 and temp_type[jj] == 1:
+                LCD_by_rejection(pos, vel, vth_par[jj], vth_perp[jj], st, en, jj)
+               
+            # Quiet start : Initialize other half
             pos[en: en + half_n] = pos[st: en]                      # Other half, same position
             vel[0, en: en + half_n] = vel[0, st: en] *  1.0         # Set parallel
             vel[1, en: en + half_n] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
             vel[2, en: en + half_n] = vel[2, st: en] * -1.0
+            
+            vel[0, st: en + half_n] += drift_v[jj] * va             # Add drift offset
             
             acc                    += half_n * 2
 
@@ -352,7 +424,7 @@ def position_update(pos, vel, idx, Ie, W_elec, DT):
                 vel[1, ii]  = 0.0
                 vel[2, ii]  = 0.0
                 idx[ii]     = -1
-            
+                            
             elif particle_reinit == 1: 
                 # Reinitialize vx based on flux distribution
                 vel[0, ii]  = generate_vx(vth_par[idx[ii]])
@@ -387,6 +459,83 @@ def position_update(pos, vel, idx, Ie, W_elec, DT):
                 vel[0, ii] *= -1.0
             
     assign_weighting_TSC(pos, Ie, W_elec)
+    return
+
+
+@nb.njit()
+def inject_particles(pos, vel, idx, mp_flux, DT):        
+    '''
+    How to create new particles in parallel? Just test serial for now, but this
+    might become my most expensive function for large N.
+    
+    Also need to work out how to add flux in serial (might just have to put it
+    in calling function: advance_particles_and_moments())
+    
+    NOTE: How does this work for -0.5*DT ?? Might have to double check
+    '''
+    # Add flux at each boundary 
+    for kk in range(2):
+        mp_flux[kk, :] += inject_rate*DT
+        
+    # acc used only as placeholder to mark place in array. How to do efficiently? 
+    acc = 0; n_created = 0
+    for ii in nb.prange(2):
+        for jj in nb.prange(Nj):
+            N_inject = int(mp_flux[ii, jj] // 2)
+            
+            for xx in nb.prange(N_inject):
+                
+                # Find two empty particles (Yes clumsy coding but it works)
+                for kk in nb.prange(acc, pos.shape[0]):
+                    if idx[kk] < 0:
+                        kk1 = kk
+                        acc = kk + 1
+                        break
+                for kk in nb.prange(acc, pos.shape[0]):
+                    if idx[kk] < 0:
+                        kk2 = kk
+                        acc = kk + 1
+                        break
+
+                # Reinitialize vx based on flux distribution
+                vel[0, kk1] = generate_vx(vth_par[jj])
+                idx[kk1]    = jj
+                
+                # Re-initialize v_perp and check pitch angle
+                if temp_type[jj] == 0 or homogenous == True:
+                    vel[1, kk1] = np.random.normal(0, vth_perp[jj])
+                    vel[2, kk1] = np.random.normal(0, vth_perp[jj])
+                else:
+                    particle_PA = 0.0
+                    while np.abs(particle_PA) <= loss_cone_xmax:
+                        vel[1, kk1] = np.random.normal(0, vth_perp[jj])
+                        vel[2, kk1] = np.random.normal(0, vth_perp[jj])
+                        v_perp      = np.sqrt(vel[1, kk1] ** 2 + vel[2, kk1] ** 2)
+                        particle_PA = np.arctan(v_perp / vel[0, kk1])
+                
+                # Amount travelled (vel always +ve at first)
+                dpos = np.random.uniform(0, 1) * vel[0, kk1] * DT
+                
+                # Left boundary injection
+                if ii == 0:
+                    pos[kk1]    = xmin + dpos
+                    vel[0, kk1] = np.abs(vel[0, kk1])
+                    
+                # Right boundary injection
+                else:
+                    pos[kk1]    = xmax - dpos
+                    vel[0, kk1] = -np.abs(vel[0, kk1])
+                
+                # Copy values to second particle (Same position, xvel. Opposite v_perp) 
+                idx[kk2]    = idx[kk1]
+                pos[kk2]    = pos[kk1]
+                vel[0, kk2] = vel[0, kk1]
+                vel[1, kk2] = vel[1, kk1] * -1.0
+                vel[2, kk2] = vel[2, kk1] * -1.0
+                
+                # Subtract new macroparticles from accrued flux
+                mp_flux[ii, jj] -= 2.0
+                n_created       += 2
     return
 
 
@@ -576,6 +725,7 @@ def init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plu
                          
     deposit_both_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init)      # Collects sim_particles/cell/species
     position_update(pos, vel, idx, Ie, W_elec, dt)
+    inject_particles(pos, vel, idx, mp_flux, dt)
     deposit_both_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus)
 
     if source_smoothing == 1:
@@ -649,6 +799,7 @@ def collect_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus, nu_minus,
     
     deposit_velocity_moments(vel, Ie, W_elec, idx, nu_minus)
     position_update(pos, vel, idx, Ie, W_elec, dt)
+    inject_particles(pos, vel, idx, mp_flux, dt)
     deposit_both_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus)
     
     if source_smoothing == 1:
@@ -1189,8 +1340,9 @@ def check_timestep(qq, DT, pos, vel, Ie, W_elec, B, B_center, E, dns,
         field_save_iter *= 2
         print('Timestep halved. Syncing particle velocity/position with DT =', DT)
     
-    # Increase timestep (only if previously decreased, or everything's even - saves wonky cuts)
-    elif DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0:
+    # Increase timestep
+    # DISABLED until I work out how to do the injection for half a timestep when this changes
+    elif False and DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0:
         position_update(pos, vel, idx, Ie, W_elec, -0.5*DT)
         
         change_flag       = 1
@@ -1331,7 +1483,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time,
                      dist_type   = dist_type,
                      mass        = mass,
                      charge      = charge,
-                     drift_v     = drift_v,
+                     drift_v     = drift_v*va,
                      nsp_ppc     = nsp_ppc,
                      N_species   = N_species,
                      density     = density,
@@ -1674,8 +1826,6 @@ xmax       =  NX * dx/2                                  # Maximum simulation di
 NC         = NX + 2*ND                                   # Field array size (B: NC + 1, E: NC)
 N          = nsp_ppc.sum()*NX                            # Number of Particles to simulate: # cells x # particles per cell, excluding ghost cells
 
-drift_v   *= va                                          # Cast species velocity to m/s
-
 Nj         = len(mass)                                   # Number of species
 n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
 
@@ -1735,6 +1885,11 @@ else:
     # NOT REALLY ANY WAY TO TELL MLAT WITH THIS METHOD
     theta_xmax = 0.0
     
+if particle_open == 1:
+    inject_rate = nsp_ppc * (vth_par / dx) / np.sqrt(2 * np.pi)
+else:
+    inject_rate = 0.0
+    
 B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx      # B grid points position in space
 E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
     
@@ -1774,10 +1929,11 @@ if __name__ == '__main__':
     start_time = timer()
     
     # Initialize arrays and initial conditions
-    Ie       = np.zeros(N,      dtype=np.uint16)
-    Ib       = np.zeros(N,      dtype=np.uint16)
-    W_elec   = np.zeros((3, N), dtype=np.float64)
-    W_mag    = np.zeros((3, N), dtype=np.float64)
+    Ie       = np.zeros(N,       dtype=np.uint16)
+    Ib       = np.zeros(N,       dtype=np.uint16)
+    W_elec   = np.zeros((3, N),  dtype=np.float64)
+    W_mag    = np.zeros((3, N),  dtype=np.float64)
+    mp_flux  = np.zeros((2, Nj), dtype=np.float64)
     
     ni       = np.zeros((NC, Nj), dtype=np.float64)
     ni_init  = np.zeros((NC, Nj), dtype=np.float64)
@@ -1837,6 +1993,8 @@ if __name__ == '__main__':
     
             # Collect new moments and desync position and velocity
             if change_flag == 1:
+                # If timestep was doubled, do I need to consider 0.5dt's worth of
+                # new particles? Maybe just disable the doubling until I work this out
                 init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plus, 
                          rho_int, rho_half, J, J_plus, L, G, 0.5*_DT)
 

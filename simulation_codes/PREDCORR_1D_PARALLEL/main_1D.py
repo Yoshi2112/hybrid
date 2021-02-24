@@ -62,8 +62,11 @@ def calc_losses(v_para, v_perp, B0x, st=0):
 @nb.njit()
 def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
     '''
-    Takes in a Maxwellian or pseudo-maxwellian distribution. Outputs the number
-    and indexes of any particle inside the loss cone
+    Takes in a Maxwellian or pseudo-maxwellian distribution. Removes any particles
+    inside the loss cone and reinitializes them using the given scale factors 
+    sf_par, sf_per (the thermal velocities).
+    
+    Is there a better way to do this with a Monte Carlo perhaps?
     '''
     B0x    = eval_B0x(pos[st: en])
     N_loss = 1
