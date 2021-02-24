@@ -6,7 +6,7 @@ import sys, os, pdb
 
 Fu_override=True              # Override to allow density to be calculated as a ratio of frequencies
 do_parallel=True
-#nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
 
 ### PHYSICAL CONSTANTS ###
 q   = 1.602177e-19                          # Elementary charge (C)

@@ -5,8 +5,9 @@ import numpy as np
 import numba as nb
 import sys, os, pdb
 
-do_parallel=False
-#nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
+Fu_override=True
+do_parallel=True
+nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
 
 ### PHYSICAL CONSTANTS ###
 q   = 1.602177e-19                          # Elementary charge (C)
@@ -345,7 +346,6 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
 
 @nb.njit(parallel=do_parallel)
 def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
-    assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
     
     for ii in nb.prange(pos.shape[0]):
         # Calculate wave fields at particle position
@@ -591,10 +591,19 @@ def push_current(J_in, J_out, E, B, B_center, L, G, dt):
     
     for ii in range(3):
         J_out[:, ii] = J_in[:, ii] + 0.5*dt * (L * E[:, ii] + G_cross_B[:, ii]) 
-
-    J_out[0]                    = J_out[J_out.shape[0] - 3]
-    J_out[J_out.shape[0] - 2]   = J_out[1]
-    J_out[J_out.shape[0] - 1]   = J_out[2]
+    
+    # Copy periodic values
+    if field_periodic == 1:
+        for ii in range(3):
+            # Copy edge cells
+            J_out[ro1, ii] = J_out[li1, ii]
+            J_out[ro2, ii] = J_out[li2, ii]
+            J_out[lo1, ii] = J_out[ri1, ii]
+            J_out[lo2, ii] = J_out[ri2, ii]
+            
+            # Fill remaining ghost cells
+            J_out[:lo2, ii] = J_out[lo2, ii]
+            J_out[ro2:, ii] = J_out[ro2, ii]
     return
 
 
@@ -664,6 +673,8 @@ def manage_source_term_boundaries(arr):
     If numba doesn't like the different possible shapes of arr
     just use a loop in the calling function to work each component 
     and this becomes for 1D arrays only
+    
+    DOUBLE CHECK THIS AT SOME POINT
     '''
     if field_periodic == 0:
         arr[ND]          += arr[ND - 1]
@@ -1280,7 +1291,7 @@ def calculate_E(B, B_center, J, qn):
     Ve[:, 2] = (J[:, 2] - curlB[:, 2]) / qn
     
     Te       = get_electron_temp(qn)
-    Pe, del_p= get_grad_P_alt(qn, Te)
+    Pe, del_p= get_grad_P_alt3(qn, Te)
     
     VexB     = np.zeros((NC, 3), dtype=np.float64)  
     for ii in np.arange(NC):
@@ -1857,6 +1868,12 @@ if disable_waves == True:
 B_eq      = float(B_eq)                                  # Unform initial magnetic field value (in T)
 ne        = (density * charge).sum()                     # Electron density (in /m3, same as total ion density (for singly charged ions))
 
+### -- Normalization of density override (e.g. Fu, Winkse)
+if Fu_override == True:
+    rat        = 5
+    ne         = (rat*B_eq)**2 * e0 / me
+    density    = np.array([0.05, 0.94, 0.01])*ne
+### --- DELETE LATER
 
 #%%### DERIVED SIMULATION PARAMETERS
 E_par     = E_perp / (anisotropy + 1) 
@@ -1880,9 +1897,6 @@ else:
     
     vth_perp   = np.sqrt(charge *  E_perp /  mass)       # Perpendicular thermal velocities
     vth_par    = np.sqrt(charge *  E_par  /  mass)       # Parallel thermal velocities
-
-vth_perp   = np.sqrt(charge *  E_perp /  mass)           # Perpendicular thermal velocities
-vth_par    = np.sqrt(charge *  E_par  /  mass)           # Parallel thermal velocities
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 wpe        = np.sqrt(ne * q ** 2 / (me * e0))            # Proton   Plasma Frequency, wpi (rad/s)

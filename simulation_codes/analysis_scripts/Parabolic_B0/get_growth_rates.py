@@ -396,7 +396,7 @@ def straight_line_fit(save=True, normalize_output=True, normalize_time=False,
         normalized_gr = gamma / cf.gyfreq
         
         # Create line data to plot what we fitted
-        linear_yfit = gradient * linear_xvals + y_intercept         # Returns y-values on log sscale
+        linear_yfit = gradient * linear_xvals * tfac + y_intercept  # Returns y-values on log sscale
         log_yfit    = np.exp(linear_yfit)                           # Convert to linear values to use with semilogy()
     else:
         gamma         = np.nan
@@ -415,9 +415,9 @@ def straight_line_fit(save=True, normalize_output=True, normalize_time=False,
     ax[0].set_ylim(btn[ofs], None)
     
     # Plot energy log scale
-    ax[1].semilogy(ftime*tfac, U_B)
+    ax[1].semilogy(ftime*tfac, btn)
     ax[1].set_xlabel(tlab, fontsize=18)
-    ax[1].set_ylabel('$U_B$', rotation=0, labelpad=30, fontsize=18)
+    ax[1].set_ylabel(r'$\log_{10} \left(\frac{B^2}{B_0^2}\right)$', rotation=0, labelpad=30, fontsize=18)
     ax[1].set_xlim(0, tfac*ftime[-1])
     ax[1].set_ylim(U_B[ofs], None)
     
