@@ -1187,6 +1187,72 @@ def cyclic_leapfrog(B1, B2, B_center, rho, J, curl, DT, subcycles, B_damping_arr
     return
 
 
+@nb.njit()
+def add_J_ext(sim_time):
+    '''
+    Driven J designed as energy input into simulation. All parameters specified
+    in the simulation_parameters script/file
+    
+    Designed as a Gaussian pulse so that things don't freak out by rising too 
+    quickly. Just test with one source point at first
+    
+    NEED TO ADJUST SIM_TIME TO ACCOUNT FOR SUBCYCLING -- NOT YET DONE
+    PROBABLY JUST NEED TO PASS A TIME ARGUMENT AROUND THE FIELD FUNCTIONS
+    TO KEEP TRACK OF WHAT POINT IN TIME IT IS
+    '''
+    # Soft source wave (What t corresponds to this?)
+    # Should put some sort of ramp on it?
+    # Also needs to be polarised. By or Bz lagging/leading?
+    J_ext = np.zeros((NC, 3), dtype=np.float64)
+    phase = -90
+    N_eq  = ND + NX//2
+    time  = sim_time
+    
+    gaussian = np.exp(- ((time - pulse_offset)/ pulse_width) ** 2 )
+
+    # Set new field values in array as soft source
+    J_ext[N_eq, 1] = driven_ampl * gaussian*np.sin(2 * np.pi * driven_freq * time)
+    J_ext[N_eq, 2] = driven_ampl * gaussian*np.sin(2 * np.pi * driven_freq * time + phase * np.pi / 180.)    
+    return J_ext
+
+
+@nb.njit()
+def add_J_ext_pol(sim_time):
+    '''
+    Driven J designed as energy input into simulation. All parameters specified
+    in the simulation_parameters script/file
+    
+    Designed as a Gaussian pulse so that things don't freak out by rising too 
+    quickly. Just test with one source point at first
+    
+    Polarised with a LH mode only, uses five points with both w, k specified
+    -- Not quite sure how to code this... do you just add a time delay (td, i.e. phase)
+        to both the envelope and sin values at each point? 
+        
+    -- Source node as td=0, other nodes have td depending on distance from source, 
+        (ii*dx) and the wave phase velocity v_ph = w/k (which are both known)
+    
+    P.S. A bunch of these values could be put in the simulation_parameters script.
+    Optimize later (after testing shows that it actually works!)
+    '''
+    # Soft source wave (What t corresponds to this?)
+    # Should put some sort of ramp on it?
+    # Also needs to be polarised. By or Bz lagging/leading?
+    J_ext = np.zeros((NC, 3), dtype=np.float64)
+    phase = -np.pi / 2
+    N_eq  = ND + NX//2
+    time  = sim_time
+    v_ph  = driven_freq / driven_k
+    
+    for off in np.arange(-2, 3):
+        delay = off*dx / v_ph
+        gauss = driven_ampl * np.exp(- ((time - pulse_offset - delay)/ pulse_width) ** 2 )
+        
+        J_ext[N_eq + off, 1] += gauss * np.sin(2 * np.pi * driven_freq * (time - delay))
+        J_ext[N_eq + off, 2] += gauss * np.sin(2 * np.pi * driven_freq * (time - delay) + phase)    
+    return J_ext
+
+
 #@nb.njit()
 def calculate_E(B, B_center, J, qn):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
@@ -1200,6 +1266,13 @@ def calculate_E(B, B_center, J, qn):
         E_out -- Updated electric field array
     '''
     curlB    = get_curl_B(B)
+    
+    if pol_wave == 0:
+        pass
+    elif pol_wave == 1:
+        add_J_ext()
+    elif pol_wave == 2:
+        add_J_ext_pol()
        
     Ve       = np.zeros((J.shape[0], 3), dtype=np.float64) 
     Ve[:, 0] = (J[:, 0] - curlB[:, 0]) / qn
@@ -1905,6 +1978,27 @@ ro1 = ND + NX; ro2 = ND + NX + 1        # Right outer
 li1 = ND         ; li2 = ND + 1         # Left inner
 ri1 = ND + NX - 1; ri2 = ND + NX - 2    # Right inner
     
+#%% DRIVEN WAVE STUFF (NOT YET IMPLEMENTED)
+pol_wave    = 0         # 0: No wave, 1: Single point source, 2: Multi point source
+
+# DRIVEN B PARAMS: Sine part
+driven_freq = 2.2       # Driven wave frequency in Hz standard 2.2
+driven_ampl = 50e-7     # Driven wave amplitude in A/m (I think?) Standard 50e-7
+
+# Gaussian part
+pulse_offset = 5.0      # Pulse center time (s)
+pulse_width  = 1.0      # Pulse width (proportional to 2*std. 3*width decayed to 0.0123%) 
+
+species_plasfreq_sq   = (density * charge ** 2) / (mass * e0)
+species_gyrofrequency = qm_ratios * B_eq
+
+# Looks right!
+driven_rad = driven_freq * 2 * np.pi
+driven_k   = (driven_rad / c) ** 2
+driven_k  *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyrofrequency))).sum()
+driven_k   = np.sqrt(driven_k)
+
+
 print('Run Started')
 print('Run Series         : {}'.format(save_path.split('//')[-1]))
 print('Run Number         : {}'.format(run_num))
