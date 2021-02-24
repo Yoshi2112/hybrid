@@ -1515,7 +1515,7 @@ def winske_magnetic_density_plot(save=True):
     return
 
 
-def summary_plots(save=True, histogram=True):
+def summary_plots(save=True, histogram=True, skip=1, ylim=True):
     '''
     Plot summary plot of raw values for each particle timestep
     Field values are interpolated to this point
@@ -1559,223 +1559,228 @@ def summary_plots(save=True, histogram=True):
     E_lim = np.ceil(E_lim)
     
     for ii in range(num_particle_steps):
-        filename = 'summ%05d.png' % ii
-        fullpath = path + filename
-        
-        if os.path.exists(fullpath):
-            sys.stdout.write('\rSummary plot already present for timestep [{}]{}'.format(run_num, ii))
+        if ii%skip == 0:
+            filename = 'summ%05d.png' % ii
+            fullpath = path + filename
+            
+            if os.path.exists(fullpath):
+                sys.stdout.write('\rSummary plot already present for timestep [{}]{}'.format(run_num, ii))
+                sys.stdout.flush()
+                continue
+            
+            sys.stdout.write('\rCreating summary plot for particle timestep [{}]{}'.format(run_num, ii))
             sys.stdout.flush()
-            continue
-        
-        sys.stdout.write('\rCreating summary plot for particle timestep [{}]{}'.format(run_num, ii))
-        sys.stdout.flush()
-
-        fig_size = 4, 7                                                             # Set figure grid dimensions
-        fig = plt.figure(figsize=(20,10))                                           # Initialize Figure Space
-        fig.patch.set_facecolor('w')   
-        xp, vp, idx, psim_time, idx_start, idx_end = cf.load_particles(ii)
-        
-        pos       = xp  
-        vel       = vp / cf.va 
-
-        # Count particles lost to the simulation
-        N_lost = np.zeros(cf.Nj, dtype=int)
-        if idx is not None:
-            Nl_idx  = idx[idx < 0]  # Collect indices of those < 0
-            Nl_idx += 128           # Cast from negative to positive indexes ("reactivate" particles)
-            for jj in range(cf.Nj):
-                N_lost[jj] = Nl_idx[Nl_idx == jj].shape[0]
-        else:
-            N_lost = None
-        ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
-        ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
-        
-        if histogram == True:
+    
+            fig_size = 4, 7                                                             # Set figure grid dimensions
+            fig = plt.figure(figsize=(20,10))                                           # Initialize Figure Space
+            fig.patch.set_facecolor('w')   
+            xp, vp, idx, psim_time, idx_start, idx_end = cf.load_particles(ii)
             
-            vel_tr = np.sqrt(vel[1] ** 2 + vel[2] ** 2)
+            pos       = xp  
+            vel       = vp / cf.va 
+    
+            # Count particles lost to the simulation
+            N_lost = np.zeros(cf.Nj, dtype=int)
+            if idx is not None:
+                Nl_idx  = idx[idx < 0]  # Collect indices of those < 0
+                Nl_idx += 128           # Cast from negative to positive indexes ("reactivate" particles)
+                for jj in range(cf.Nj):
+                    N_lost[jj] = Nl_idx[Nl_idx == jj].shape[0]
+            else:
+                N_lost = None
+            ax_vx   = plt.subplot2grid(fig_size, (0, 0), rowspan=2, colspan=3)
+            ax_vy   = plt.subplot2grid(fig_size, (2, 0), rowspan=2, colspan=3)
             
-            for jj in range(cf.Nj):
+            if histogram == True:
+                
+                vel_tr = np.sqrt(vel[1] ** 2 + vel[2] ** 2)
+                
+                for jj in range(cf.Nj):
+                    try:
+                        num_bins = cf.nsp_ppc[jj] // 5
+                        
+                        xs, BinEdgesx = np.histogram(vel[0, idx_start[jj]: idx_end[jj]], bins=num_bins)
+                        bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
+                        ax_vx.plot(bx, xs, '-', c=cf.temp_color[jj], drawstyle='steps', label=cf.species_lbl[jj])
+                        
+                        ys, BinEdgesy = np.histogram(vel_tr[idx_start[jj]: idx_end[jj]], bins=num_bins)
+                        by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
+                        ax_vy.plot(by, ys, '-', c=cf.temp_color[jj], drawstyle='steps', label=cf.species_lbl[jj])
+                    except: 
+                        pass
+                    
+                    ax_vx.set_ylabel(r'$n_{v_\parallel}$')
+                    ax_vx.set_ylabel(r'$n_{v_\perp}$')
+                    
+                    ax_vx.set_title('Velocity distribution of each species in simulation domain')
+                    ax_vy.set_xlabel(r'$v / v_A$')
+                    
+                    ax_vx.set_xlim(-vel_lim, vel_lim)
+                    ax_vy.set_xlim(0, np.sqrt(2)*vel_lim)
+                    
+                    for ax, comp in zip([ax_vx, ax_vy], ['v_\parallel', 'v_\perp']):
+                        ax.legend(loc='upper right')
+                        ax.set_ylabel('$n_{%s}$'%comp)
+                        if ylim == True:
+                            ax.set_ylim(0, int(cf.N / cf.NX) * 10.0)
+            else:
+            
+                for jj in reversed(range(cf.Nj)):
+                    ax_vx.scatter(pos[idx_start[jj]: idx_end[jj]], vel[0, idx_start[jj]: idx_end[jj]], s=1, c=cf.temp_color[jj], lw=0, label=cf.species_lbl[jj])
+                    ax_vy.scatter(pos[idx_start[jj]: idx_end[jj]], vel[1, idx_start[jj]: idx_end[jj]], s=1, c=cf.temp_color[jj], lw=0)
+            
+                ax_vx.legend(loc='upper right')
+                ax_vx.set_title(r'Particle velocities (in $v_A$) vs. Position (x)')
+                ax_vy.set_xlabel(r'Cell', labelpad=10)
+                ax_vx.set_ylabel(r'$v_x$', rotation=0)
+                ax_vy.set_ylabel(r'$v_y$', rotation=0)
+                
+                plt.setp(ax_vx.get_xticklabels(), visible=False)
+                ax_vx.set_yticks(ax_vx.get_yticks()[1:])
+            
+                for ax in [ax_vy, ax_vx]:
+                    ax.set_xlim(-cf.xmax, cf.xmax)
+                    if ylim == True:
+                        ax.set_ylim(-vel_lim, vel_lim)
+        
+            
+            ## DENSITY ##
+            B_nodes  = (np.arange(cf.NC + 1) - cf.NC // 2)            # B grid points position in space
+            E_nodes  = (np.arange(cf.NC)     - cf.NC // 2 + 0.5)      # E grid points position in space
+    
+            ax_den  = plt.subplot2grid(fig_size, (0, 3), colspan=3)
+            ax_den.plot(E_nodes, qdens_norm[ii], color='green')
+                    
+            ax_den.set_title('Charge Density and Fields')
+            ax_den.set_ylabel(r'$\frac{\rho_c}{\rho_{c0}}$', fontsize=14, rotation=0, labelpad=20)
+            
+    
+            ax_Ex   = plt.subplot2grid(fig_size, (1, 3), colspan=3, sharex=ax_den)
+            ax_Ex.plot(E_nodes, pex[ii]*1e3, color='red',   label=r'$E_x$')
+            ax_Ex.plot(E_nodes, pey[ii]*1e3, color='cyan',  label=r'$E_y$')
+            ax_Ex.plot(E_nodes, pez[ii]*1e3, color='black', label=r'$E_z$')
+            ax_Ex.set_ylabel(r'$E (mV/m)$', labelpad=25, rotation=0, fontsize=14)
+            
+            ax_Ex.legend(loc='upper right', ncol=3)
+            
+            ax_By  = plt.subplot2grid(fig_size, (2, 3), colspan=3, sharex=ax_den)
+            ax_B   = plt.subplot2grid(fig_size, (3, 3), colspan=3, sharex=ax_den)
+            mag_B  = np.sqrt(pby[ii] ** 2 + pbz[ii] ** 2)
+            
+            ax_Bx = ax_B.twinx()
+            ax_Bx.plot(B_nodes, pbx[ii]*1e9, color='k', label=r'$B_x$', ls=':', alpha=0.6) 
+            
+            if cf.B_eq == cf.Bc.max():
+                pass
+            else:
+                if ylim == True:
+                    ax_Bx.set_ylim(cf.B_eq*1e9, cf.Bc.max()*1e9)
+                
+            ax_Bx.set_ylabel(r'$B_{0x} (nT)$', rotation=0, labelpad=30, fontsize=14)
+            
+            ax_B.plot( B_nodes, mag_B*1e9, color='g')
+            ax_By.plot(B_nodes, pby[ii]*1e9, color='g',   label=r'$B_y$') 
+            ax_By.plot(B_nodes, pbz[ii]*1e9, color='b',   label=r'$B_z$') 
+            ax_By.legend(loc='upper right', ncol=2)
+            
+            ax_B.set_ylabel( r'$B_\perp (nT)$', rotation=0, labelpad=30, fontsize=14)
+            ax_By.set_ylabel(r'$B_{y,z} (nT)$', rotation=0, labelpad=20, fontsize=14)
+            ax_B.set_xlabel('Cell Number')
+            
+            # SET FIELD RANGES #
+            if ylim == True:
                 try:
-                    num_bins = cf.nsp_ppc[jj] // 5
-                    
-                    xs, BinEdgesx = np.histogram(vel[0, idx_start[jj]: idx_end[jj]], bins=num_bins)
-                    bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
-                    ax_vx.plot(bx, xs, '-', c=cf.temp_color[jj], drawstyle='steps', label=cf.species_lbl[jj])
-                    
-                    ys, BinEdgesy = np.histogram(vel_tr[idx_start[jj]: idx_end[jj]], bins=num_bins)
-                    by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
-                    ax_vy.plot(by, ys, '-', c=cf.temp_color[jj], drawstyle='steps', label=cf.species_lbl[jj])
-                except: 
+                    ax_den.set_ylim(den_min, den_max)
+                except:
                     pass
                 
-                ax_vx.set_ylabel(r'$n_{v_\parallel}$')
-                ax_vx.set_ylabel(r'$n_{v_\perp}$')
+                try:
+                    ax_Ex.set_ylim(-E_lim, E_lim)
+                except:
+                    pass
                 
-                ax_vx.set_title('Velocity distribution of each species in simulation domain')
-                ax_vy.set_xlabel(r'$v / v_A$')
-                
-                ax_vx.set_xlim(-vel_lim, vel_lim)
-                ax_vy.set_xlim(0, np.sqrt(2)*vel_lim)
-                
-                for ax, comp in zip([ax_vx, ax_vy], ['v_\parallel', 'v_\perp']):
-                    ax.set_ylim(0, int(cf.N / cf.NX) * 10.0)
-                    ax.legend(loc='upper right')
-                    ax.set_ylabel('$n_{%s}$'%comp)
-        else:
-        
-            for jj in reversed(range(cf.Nj)):
-                ax_vx.scatter(pos[0, idx_start[jj]: idx_end[jj]], vel[0, idx_start[jj]: idx_end[jj]], s=1, c=cf.temp_color[jj], lw=0, label=cf.species_lbl[jj])
-                ax_vy.scatter(pos[0, idx_start[jj]: idx_end[jj]], vel[1, idx_start[jj]: idx_end[jj]], s=1, c=cf.temp_color[jj], lw=0)
-        
-            ax_vx.legend(loc='upper right')
-            ax_vx.set_title(r'Particle velocities (in $v_A$) vs. Position (x)')
-            ax_vy.set_xlabel(r'Cell', labelpad=10)
-            ax_vx.set_ylabel(r'$v_x$', rotation=0)
-            ax_vy.set_ylabel(r'$v_y$', rotation=0)
+                try:
+                    ax_By.set_ylim(-B_lim, B_lim)
+                    ax_B.set_ylim(0, B_lim)
+                except:
+                    pass
             
-            plt.setp(ax_vx.get_xticklabels(), visible=False)
-            ax_vx.set_yticks(ax_vx.get_yticks()[1:])
-        
-            for ax in [ax_vy, ax_vx]:
-                ax.set_xlim(-cf.xmax, cf.xmax)
-                ax.set_ylim(-vel_lim, vel_lim)
-    
-        
-        ## DENSITY ##
-        B_nodes  = (np.arange(cf.NC + 1) - cf.NC // 2)            # B grid points position in space
-        E_nodes  = (np.arange(cf.NC)     - cf.NC // 2 + 0.5)      # E grid points position in space
-
-        ax_den  = plt.subplot2grid(fig_size, (0, 3), colspan=3)
-        ax_den.plot(E_nodes, qdens_norm[ii], color='green')
+            for ax in [ax_den, ax_Ex, ax_By]:
+                plt.setp(ax.get_xticklabels(), visible=False)
+                ax.set_yticks(ax.get_yticks()[1:])
                 
-        ax_den.set_title('Charge Density and Fields')
-        ax_den.set_ylabel(r'$\frac{\rho_c}{\rho_{c0}}$', fontsize=14, rotation=0, labelpad=20)
-        
-
-        ax_Ex   = plt.subplot2grid(fig_size, (1, 3), colspan=3, sharex=ax_den)
-        ax_Ex.plot(E_nodes, pex[ii]*1e3, color='red',   label=r'$E_x$')
-        ax_Ex.plot(E_nodes, pey[ii]*1e3, color='cyan',  label=r'$E_y$')
-        ax_Ex.plot(E_nodes, pez[ii]*1e3, color='black', label=r'$E_z$')
-        ax_Ex.set_ylabel(r'$E (mV/m)$', labelpad=25, rotation=0, fontsize=14)
-        
-        ax_Ex.legend(loc='upper right', ncol=3)
-        
-        ax_By  = plt.subplot2grid(fig_size, (2, 3), colspan=3, sharex=ax_den)
-        ax_B   = plt.subplot2grid(fig_size, (3, 3), colspan=3, sharex=ax_den)
-        mag_B  = np.sqrt(pby[ii] ** 2 + pbz[ii] ** 2)
-        
-        ax_Bx = ax_B.twinx()
-        ax_Bx.plot(B_nodes, pbx[ii]*1e9, color='k', label=r'$B_x$', ls=':', alpha=0.6) 
-        
-        if cf.B_eq == cf.Bc.max():
-            pass
-        else:
-            ax_Bx.set_ylim(cf.B_eq*1e9, cf.Bc.max()*1e9)
-            
-        ax_Bx.set_ylabel(r'$B_{0x} (nT)$', rotation=0, labelpad=30, fontsize=14)
-        
-        ax_B.plot( B_nodes, mag_B*1e9, color='g')
-        ax_By.plot(B_nodes, pby[ii]*1e9, color='g',   label=r'$B_y$') 
-        ax_By.plot(B_nodes, pbz[ii]*1e9, color='b',   label=r'$B_z$') 
-        ax_By.legend(loc='upper right', ncol=2)
-        
-        ax_B.set_ylabel( r'$B_\perp (nT)$', rotation=0, labelpad=30, fontsize=14)
-        ax_By.set_ylabel(r'$B_{y,z} (nT)$', rotation=0, labelpad=20, fontsize=14)
-        ax_B.set_xlabel('Cell Number')
-        
-        # SET FIELD RANGES #
-        try:
-            ax_den.set_ylim(den_min, den_max)
-        except:
-            pass
-        
-        try:
-            ax_Ex.set_ylim(-E_lim, E_lim)
-        except:
-            pass
-        
-        try:
-            ax_By.set_ylim(-B_lim, B_lim)
-            ax_B.set_ylim(0, B_lim)
-        except:
-            pass
-        
-        for ax in [ax_den, ax_Ex, ax_By]:
-            plt.setp(ax.get_xticklabels(), visible=False)
-            ax.set_yticks(ax.get_yticks()[1:])
-            
-        for ax in [ax_den, ax_Ex, ax_By, ax_B]:
-            ax.set_xlim(B_nodes[0], B_nodes[-1])
-            ax.axvline(-cf.NX//2, c='k', ls=':', alpha=0.5)
-            ax.axvline( cf.NX//2, c='k', ls=':', alpha=0.5)
-            ax.grid()
-                
-        plt.tight_layout(pad=1.0, w_pad=1.8)
-        fig.subplots_adjust(hspace=0.125)
-        
-        ###################
-        ### FIGURE TEXT ###
-        ###################
-        Tperp = cf.mass * cf.vth_perp ** 2 / kB
-        anisotropy = (cf.vth_perp ** 2 / cf.vth_par ** 2 - 1).round(1)
-        beta_per   = (2*(4e-7*np.pi)*(1.381e-23)*Tperp*cf.ne / (cf.B_eq**2)).round(1)
-        #beta_e     = np.round((2*(4e-7*np.pi)*(1.381e-23)*cf.Te0*cf.ne  / (cf.B_eq**2)), 2)
-        rdens      = (cf.density / cf.ne).round(2)
-
-        try:
-            vdrift     = (cf.velocity / cf.va).round(1)
-        except:
-            vdrift     = (cf.drift_v / cf.va).round(1)
-        
-        if cf.ie == 0:
-            estring = 'Isothermal electrons'
-        elif cf.ie == 1:
-            estring = 'Adiabatic electrons'
-        else:
-            'Electron relation unknown'
+            for ax in [ax_den, ax_Ex, ax_By, ax_B]:
+                ax.set_xlim(B_nodes[0], B_nodes[-1])
+                ax.axvline(-cf.NX//2, c='k', ls=':', alpha=0.5)
+                ax.axvline( cf.NX//2, c='k', ls=':', alpha=0.5)
+                ax.grid()
                     
-        top  = 0.95
-        gap  = 0.025
-        fontsize = 12
-        plt.figtext(0.855, top        , 'Simulation Parameters', fontsize=fontsize, family='monospace', fontweight='bold')
-        plt.figtext(0.855, top - 1*gap, '{}[{}]'.format(series, run_num), fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 2*gap, '{} cells'.format(cf.NX), fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 3*gap, '{} particles'.format(cf.N_species.sum()), fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 4*gap, '{}'.format(estring), fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 5*gap, '', fontsize=fontsize, family='monospace')
-        
-        plt.figtext(0.855, top - 6*gap, 'B_eq      : {:.1f}nT'.format(cf.B_eq*1e9  ), fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 7*gap, 'B_xmax    : {:.1f}nT'.format(cf.B_xmax*1e9), fontsize=fontsize, family='monospace')
-        
-        plt.figtext(0.855, top - 8*gap,  'ne        : {}cc'.format(cf.ne/1e6), fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 9*gap,  'N_species : {}'.format(cf.N_species), fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 10*gap, 'N_lost    : {}'.format(N_lost), fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 11*gap, '', fontsize=fontsize, family='monospace')
-        
-        #plt.figtext(0.855, top - 12*gap, r'$\beta_e$      : %.2f' % beta_e, fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 13*gap, 'dx      : {}km'.format(round(cf.dx/1e3, 2)), fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 14*gap, 'L       : {}'.format(cf.L), fontsize=fontsize, family='monospace')
-        plt.figtext(0.855, top - 15*gap, 'MLAT_max: $\pm$%.1f$^{\circ}$' % (cf.theta_xmax * 180. / np.pi), fontsize=fontsize, family='monospace')
-
-        plt.figtext(0.855, top - 16*gap, '', fontsize=fontsize, family='monospace')
-        
-        ptop  = top - 17*gap
-        pside = 0.855
-        plt.figtext(pside, ptop, 'Particle Parameters', fontsize=fontsize, family='monospace', fontweight='bold')
-        plt.figtext(pside, ptop - gap, ' SPECIES  ANI  XBET    VDR  RDNS', fontsize=fontsize-2, family='monospace')
-        for jj in range(cf.Nj):
-            plt.figtext(pside       , ptop - (jj + 2)*gap, '{:>10}  {:>3}  {:>5}  {:>4}  {:<5}'.format(
-                    cf.species_lbl[jj], anisotropy[jj], beta_per[jj], vdrift[jj], rdens[jj]),
-                    fontsize=fontsize-2, family='monospace')
- 
-        time_top = 0.1
-        plt.figtext(0.88, time_top - 0*gap, 't_seconds   : {:>10}'.format(round(time_seconds_particle[ii], 3))   , fontsize=fontsize, family='monospace')
-        plt.figtext(0.88, time_top - 1*gap, 't_gperiod   : {:>10}'.format(round(time_gperiods_particle[ii], 3))  , fontsize=fontsize, family='monospace')
-        plt.figtext(0.88, time_top - 2*gap, 't_radperiod : {:>10}'.format(round(time_radperiods_particle[ii], 3)), fontsize=fontsize, family='monospace')
+            plt.tight_layout(pad=1.0, w_pad=1.8)
+            fig.subplots_adjust(hspace=0.125)
+            
+            ###################
+            ### FIGURE TEXT ###
+            ###################
+            Tperp = cf.mass * cf.vth_perp ** 2 / kB
+            anisotropy = (cf.vth_perp ** 2 / cf.vth_par ** 2 - 1).round(1)
+            beta_per   = (2*(4e-7*np.pi)*(1.381e-23)*Tperp*cf.ne / (cf.B_eq**2)).round(1)
+            #beta_e     = np.round((2*(4e-7*np.pi)*(1.381e-23)*cf.Te0*cf.ne  / (cf.B_eq**2)), 2)
+            rdens      = (cf.density / cf.ne).round(2)
     
-        if save == True:
-            plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-        plt.close('all')
+            try:
+                vdrift     = (cf.velocity / cf.va).round(1)
+            except:
+                vdrift     = (cf.drift_v / cf.va).round(1)
+            
+            if cf.ie == 0:
+                estring = 'Isothermal electrons'
+            elif cf.ie == 1:
+                estring = 'Adiabatic electrons'
+            else:
+                'Electron relation unknown'
+                        
+            top  = 0.95
+            gap  = 0.025
+            fontsize = 12
+            plt.figtext(0.855, top        , 'Simulation Parameters', fontsize=fontsize, family='monospace', fontweight='bold')
+            plt.figtext(0.855, top - 1*gap, '{}[{}]'.format(series, run_num), fontsize=fontsize, family='monospace')
+            plt.figtext(0.855, top - 2*gap, '{} cells'.format(cf.NX), fontsize=fontsize, family='monospace')
+            plt.figtext(0.855, top - 3*gap, '{} particles'.format(cf.N_species.sum()), fontsize=fontsize, family='monospace')
+            plt.figtext(0.855, top - 4*gap, '{}'.format(estring), fontsize=fontsize, family='monospace')
+            plt.figtext(0.855, top - 5*gap, '', fontsize=fontsize, family='monospace')
+            
+            plt.figtext(0.855, top - 6*gap, 'B_eq      : {:.1f}nT'.format(cf.B_eq*1e9  ), fontsize=fontsize, family='monospace')
+            plt.figtext(0.855, top - 7*gap, 'B_xmax    : {:.1f}nT'.format(cf.B_xmax*1e9), fontsize=fontsize, family='monospace')
+            
+            plt.figtext(0.855, top - 8*gap,  'ne        : {}cc'.format(cf.ne/1e6), fontsize=fontsize, family='monospace')
+            plt.figtext(0.855, top - 9*gap,  'N_species : {}'.format(cf.N_species), fontsize=fontsize, family='monospace')
+            plt.figtext(0.855, top - 10*gap, 'N_lost    : {}'.format(N_lost), fontsize=fontsize, family='monospace')
+            plt.figtext(0.855, top - 11*gap, '', fontsize=fontsize, family='monospace')
+            
+            #plt.figtext(0.855, top - 12*gap, r'$\beta_e$      : %.2f' % beta_e, fontsize=fontsize, family='monospace')
+            plt.figtext(0.855, top - 13*gap, 'dx      : {}km'.format(round(cf.dx/1e3, 2)), fontsize=fontsize, family='monospace')
+            plt.figtext(0.855, top - 14*gap, 'L       : {}'.format(cf.L), fontsize=fontsize, family='monospace')
+            plt.figtext(0.855, top - 15*gap, 'MLAT_max: $\pm$%.1f$^{\circ}$' % (cf.theta_xmax * 180. / np.pi), fontsize=fontsize, family='monospace')
+    
+            plt.figtext(0.855, top - 16*gap, '', fontsize=fontsize, family='monospace')
+            
+            ptop  = top - 17*gap
+            pside = 0.855
+            plt.figtext(pside, ptop, 'Particle Parameters', fontsize=fontsize, family='monospace', fontweight='bold')
+            plt.figtext(pside, ptop - gap, ' SPECIES  ANI  XBET    VDR  RDNS', fontsize=fontsize-2, family='monospace')
+            for jj in range(cf.Nj):
+                plt.figtext(pside       , ptop - (jj + 2)*gap, '{:>10}  {:>3}  {:>5}  {:>4}  {:<5}'.format(
+                        cf.species_lbl[jj], anisotropy[jj], beta_per[jj], vdrift[jj], rdens[jj]),
+                        fontsize=fontsize-2, family='monospace')
+     
+            time_top = 0.1
+            plt.figtext(0.88, time_top - 0*gap, 't_seconds   : {:>10}'.format(round(time_seconds_particle[ii], 3))   , fontsize=fontsize, family='monospace')
+            plt.figtext(0.88, time_top - 1*gap, 't_gperiod   : {:>10}'.format(round(time_gperiods_particle[ii], 3))  , fontsize=fontsize, family='monospace')
+            plt.figtext(0.88, time_top - 2*gap, 't_radperiod : {:>10}'.format(round(time_radperiods_particle[ii], 3)), fontsize=fontsize, family='monospace')
+        
+            if save == True:
+                plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+            plt.close('all')
     print('\n')
     return
 
@@ -1898,7 +1903,7 @@ def check_fields(save=True, ylim=True, skip=1):
     plt.ioff()
     ftime, bx, by, bz, ex, ey, ez, vex, vey, vez,\
     te, jx, jy, jz, qdens, fsim_time, rD = cf.get_array(get_all=True)
-
+    
     # Convert to plot units
     bx *= 1e9; by *= 1e9; bz *= 1e9
     ex *= 1e3; ey *= 1e3; ez *= 1e3
@@ -1906,88 +1911,13 @@ def check_fields(save=True, ylim=True, skip=1):
     
     ## Initialize plots and prepare plotspace
     fontsize = 14; fsize = 12; lpad = 20
-    fig, axes = plt.subplots(5, ncols=3, figsize=(20,10), sharex=True)
-    fig.patch.set_facecolor('w')   
-    axes[0, 0].set_title('Field outputs: {}[{}]'.format(series, run_num), fontsize=fontsize+4, family='monospace')
 
-    axes[0, 0].set_ylabel('$r_D(x)$'     , rotation=0, labelpad=lpad, fontsize=fsize)
-    axes[1, 0].set_ylabel('$B_y$\n(nT)'  , rotation=0, labelpad=lpad, fontsize=fsize)
-    axes[2, 0].set_ylabel('$B_z$\n(nT)'  , rotation=0, labelpad=lpad, fontsize=fsize)
-    axes[3, 0].set_ylabel('$E_y$\n(mV/m)', rotation=0, labelpad=lpad, fontsize=fsize)
-    axes[4, 0].set_ylabel('$E_z$\n(mV/m)', rotation=0, labelpad=lpad, fontsize=fsize)
-        
-    if ylim == True:
-        axes[0, 0].set_ylim(rD.min(), rD.max())
-        axes[1, 0].set_ylim(by.min(), by.max())
-        axes[2, 0].set_ylim(bz.min(), bz.max())
-        axes[3, 0].set_ylim(ey.min(), ey.max())
-        axes[4, 0].set_ylim(ez.min(), ez.max())
-    
-    axes[0, 1].set_ylabel('$n_e$\n$(cm^{-1})$', fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[1, 1].set_ylabel('$V_{ey}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[2, 1].set_ylabel('$V_{ez}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[3, 1].set_ylabel('$J_{iy}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[4, 1].set_ylabel('$J_{iz}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
-    
-    if ylim == True:
-        axes[0, 1].set_ylim(qdens.min(), qdens.max())
-        axes[1, 1].set_ylim(vey.min(), vey.max())
-        axes[2, 1].set_ylim(vez.min(), vez.max())
-        axes[3, 1].set_ylim(jy.min() , jy.max())
-        axes[4, 1].set_ylim(jz.min() , jz.max())
-    
-    axes[0, 2].set_ylabel('$T_e$\n(eV)'     , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[1, 2].set_ylabel('$V_{ex}$\n(m/s)' , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[2, 2].set_ylabel('$J_{ix}$'        , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[3, 2].set_ylabel('$E_x$\n(mV/m)'   , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[4, 2].set_ylabel('$B_x$\n(nT)'     , fontsize=fsize, rotation=0, labelpad=lpad)
-
-    if ylim == True:
-        axes[0, 2].set_ylim(te.min(), te.max())
-        axes[1, 2].set_ylim(vex.min(), vex.max())
-        axes[2, 2].set_ylim(jx.min(), jx.max())
-        axes[3, 2].set_ylim(ex.min(), ex.max())
-    
-    fig.align_labels()
-            
-    for ii in range(3):
-        axes[4, ii].set_xlabel('Position (m/dx)')
-        for jj in range(5):
-            axes[jj, ii].set_xlim(cf.B_nodes[0] / cf.dx, cf.B_nodes[-1] / cf.dx)
-            axes[jj, ii].axvline(-cf.NX//2, c='k', ls=':', alpha=0.5)
-            axes[jj, ii].axvline( cf.NX//2, c='k', ls=':', alpha=0.5)
-            axes[jj, ii].grid()
-    
-    plt.tight_layout(pad=1.0, w_pad=1.8)
-    fig.subplots_adjust(hspace=0.125)
-    
-    # Initialize line2D with dummy data
-    B_BLANK = np.zeros(cf.B_nodes.shape[0]); E_BLANK = np.zeros(cf.E_nodes.shape[0])
-    
-    # Wave Fields (Plots, Labels, Lims)
-    line_rd, = axes[0, 0].plot(cf.B_nodes / cf.dx, B_BLANK, color='k', label=r'$r_D(x)$') 
-    line_by, = axes[1, 0].plot(cf.B_nodes / cf.dx, B_BLANK, color='b', label=r'$B_y$') 
-    line_bz, = axes[2, 0].plot(cf.B_nodes / cf.dx, B_BLANK, color='g', label=r'$B_z$')
-    line_ey, = axes[3, 0].plot(cf.E_nodes / cf.dx, E_BLANK, color='b', label=r'$E_y$')
-    line_ez, = axes[4, 0].plot(cf.E_nodes / cf.dx, E_BLANK, color='g', label=r'$E_z$')
-    
-    # Transverse Electric Field Variables (Plots, Labels, Lims)
-    line_pc, = axes[0, 1].plot(cf.E_nodes / cf.dx, E_BLANK, color='k', label=r'$n_e$')
-    line_vy, = axes[1, 1].plot(cf.E_nodes / cf.dx, E_BLANK, color='b', label=r'$V_{ey}$')
-    line_vz, = axes[2, 1].plot(cf.E_nodes / cf.dx, E_BLANK, color='g', label=r'$V_{ez}$')
-    line_jy, = axes[3, 1].plot(cf.E_nodes / cf.dx, E_BLANK, color='b', label=r'$J_{iy}$' )
-    line_jz, = axes[4, 1].plot(cf.E_nodes / cf.dx, E_BLANK, color='g', label=r'$J_{iz}$' )
-    
-    # Parallel Variables (Plots, Labels, Lims)
-    line_te, = axes[0, 2].plot(cf.E_nodes / cf.dx, E_BLANK, color='k', label=r'$T_e$')
-    line_vx, = axes[1, 2].plot(cf.E_nodes / cf.dx, E_BLANK, color='r', label=r'$V_{ex}$')
-    line_jx, = axes[2, 2].plot(cf.E_nodes / cf.dx, E_BLANK, color='r', label=r'$J_{ix}$' )
-    line_ex, = axes[3, 2].plot(cf.E_nodes / cf.dx, E_BLANK, color='r', label=r'$E_x$')
-    line_bx, = axes[4, 2].plot(cf.B_nodes / cf.dx, B_BLANK, color='r', label=r'$B_{0x}$')
-    
     ## Do actual plotting and saving of data
     for ii in range(bx.shape[0]):
         if ii%skip == 0:
+            fig, axes = plt.subplots(5, ncols=3, figsize=(20,10), sharex=True)
+            fig.patch.set_facecolor('w') 
+    
             axes[0, 1].set_title('Time :: {:<7.4f}s'.format(ftime[ii]), fontsize=fontsize+4, family='monospace')
     
             filename = 'summ%05d.png' % ii
@@ -1998,17 +1928,80 @@ def check_fields(save=True, ylim=True, skip=1):
             sys.stdout.write('\rCreating summary field plots [{}]{}'.format(run_num, ii))
             sys.stdout.flush()
             
-            # Set y datas for this timestep
-            line_rd.set_ydata(rD[ii]); line_pc.set_ydata(qdens[ii]); line_te.set_ydata(te[ii])
-            line_by.set_ydata(by[ii]); line_vy.set_ydata(vey[ii]);   line_vx.set_ydata(vex[ii])
-            line_bz.set_ydata(bz[ii]); line_vz.set_ydata(vez[ii]);   line_jx.set_ydata(jx[ii])
-            line_ey.set_ydata(ey[ii]); line_jy.set_ydata(jy[ii]);    line_ex.set_ydata(ex[ii])
-            line_ez.set_ydata(ez[ii]); line_jz.set_ydata(jz[ii]);    line_bx.set_ydata(bx[ii])
+            # Wave Fields (Plots, Labels, Lims)
+            axes[0, 0].plot(cf.B_nodes / cf.dx, rD[ii], color='k', label=r'$r_D(x)$') 
+            axes[1, 0].plot(cf.B_nodes / cf.dx, by[ii], color='b', label=r'$B_y$') 
+            axes[2, 0].plot(cf.B_nodes / cf.dx, bz[ii], color='g', label=r'$B_z$')
+            axes[3, 0].plot(cf.E_nodes / cf.dx, ey[ii], color='b', label=r'$E_y$')
+            axes[4, 0].plot(cf.E_nodes / cf.dx, ez[ii], color='g', label=r'$E_z$')
             
-            fig.canvas.draw()
+            # Transverse Electric Field Variables (Plots, Labels, Lims)
+            axes[0, 1].plot(cf.E_nodes / cf.dx, qdens[ii], color='k', label=r'$n_e$')
+            axes[1, 1].plot(cf.E_nodes / cf.dx, vey[ii], color='b', label=r'$V_{ey}$')
+            axes[2, 1].plot(cf.E_nodes / cf.dx, vez[ii], color='g', label=r'$V_{ez}$')
+            axes[3, 1].plot(cf.E_nodes / cf.dx, jy[ii], color='b', label=r'$J_{iy}$' )
+            axes[4, 1].plot(cf.E_nodes / cf.dx, jz[ii], color='g', label=r'$J_{iz}$' )
             
+            # Parallel Variables (Plots, Labels, Lims)
+            axes[0, 2].plot(cf.E_nodes / cf.dx, te[ii], color='k', label=r'$T_e$')
+            axes[1, 2].plot(cf.E_nodes / cf.dx, vex[ii], color='r', label=r'$V_{ex}$')
+            axes[2, 2].plot(cf.E_nodes / cf.dx, jx[ii], color='r', label=r'$J_{ix}$' )
+            axes[3, 2].plot(cf.E_nodes / cf.dx, ex[ii], color='r', label=r'$E_x$')
+            axes[4, 2].plot(cf.B_nodes / cf.dx, bx[ii], color='r', label=r'$B_{0x}$')
+            
+            axes[0, 0].set_title('Field outputs: {}[{}]'.format(series, run_num), fontsize=fontsize+4, family='monospace')
+
+            axes[0, 0].set_ylabel('$r_D(x)$'     , rotation=0, labelpad=lpad, fontsize=fsize)
+            axes[1, 0].set_ylabel('$B_y$\n(nT)'  , rotation=0, labelpad=lpad, fontsize=fsize)
+            axes[2, 0].set_ylabel('$B_z$\n(nT)'  , rotation=0, labelpad=lpad, fontsize=fsize)
+            axes[3, 0].set_ylabel('$E_y$\n(mV/m)', rotation=0, labelpad=lpad, fontsize=fsize)
+            axes[4, 0].set_ylabel('$E_z$\n(mV/m)', rotation=0, labelpad=lpad, fontsize=fsize)
+        
+            axes[0, 1].set_ylabel('$n_e$\n$(cm^{-1})$', fontsize=fsize, rotation=0, labelpad=lpad)
+            axes[1, 1].set_ylabel('$V_{ey}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
+            axes[2, 1].set_ylabel('$V_{ez}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
+            axes[3, 1].set_ylabel('$J_{iy}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
+            axes[4, 1].set_ylabel('$J_{iz}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
+            
+            axes[0, 2].set_ylabel('$T_e$\n(eV)'     , fontsize=fsize, rotation=0, labelpad=lpad)
+            axes[1, 2].set_ylabel('$V_{ex}$\n(m/s)' , fontsize=fsize, rotation=0, labelpad=lpad)
+            axes[2, 2].set_ylabel('$J_{ix}$'        , fontsize=fsize, rotation=0, labelpad=lpad)
+            axes[3, 2].set_ylabel('$E_x$\n(mV/m)'   , fontsize=fsize, rotation=0, labelpad=lpad)
+            axes[4, 2].set_ylabel('$B_x$\n(nT)'     , fontsize=fsize, rotation=0, labelpad=lpad)
+            fig.align_labels()
+            
+            for ii in range(3):
+                axes[4, ii].set_xlabel('Position (m/dx)')
+                for jj in range(5):
+                    axes[jj, ii].set_xlim(cf.B_nodes[0] / cf.dx, cf.B_nodes[-1] / cf.dx)
+                    axes[jj, ii].axvline(-cf.NX//2, c='k', ls=':', alpha=0.5)
+                    axes[jj, ii].axvline( cf.NX//2, c='k', ls=':', alpha=0.5)
+                    axes[jj, ii].grid()
+            
+            if ylim == True:
+                axes[0, 0].set_ylim(rD.min(), rD.max())
+                axes[1, 0].set_ylim(by.min(), by.max())
+                axes[2, 0].set_ylim(bz.min(), bz.max())
+                axes[3, 0].set_ylim(ey.min(), ey.max())
+                axes[4, 0].set_ylim(ez.min(), ez.max())
+                
+                axes[0, 1].set_ylim(qdens.min(), qdens.max())
+                axes[1, 1].set_ylim(vey.min(), vey.max())
+                axes[2, 1].set_ylim(vez.min(), vez.max())
+                axes[3, 1].set_ylim(jy.min() , jy.max())
+                axes[4, 1].set_ylim(jz.min() , jz.max())
+                
+                axes[0, 2].set_ylim(te.min(), te.max())
+                axes[1, 2].set_ylim(vex.min(), vex.max())
+                axes[2, 2].set_ylim(jx.min(), jx.max())
+                axes[3, 2].set_ylim(ex.min(), ex.max())
+            
+            plt.tight_layout(pad=1.0, w_pad=1.8)
+            fig.subplots_adjust(hspace=0.125)
+    
             if save == True:
                 plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+                plt.close('all')
     print('\n')
     return
 
@@ -4227,7 +4220,7 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//CAM_CL_particle_test//']:
+    for series in ['//CAM_CL_nosubcycle_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4302,11 +4295,11 @@ if __name__ == '__main__':
                 
                 #plot_total_density_with_time(save=True)
                 
-                #summary_plots(save=True, histogram=True)
+                summary_plots(save=True, histogram=False, skip=10, ylim=False)
                 #for sp in range(cf.Nj):
                 #    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=10)
                 #scatterplot_velocities(skip=10)
-                check_fields(skip=1)
+                check_fields(skip=10, ylim=False)
             
         #plot_phase_space_with_time()
             

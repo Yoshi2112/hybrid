@@ -5,7 +5,7 @@ import numpy as np
 import numba as nb
 import sys, os, pdb
 
-do_parallel=True
+do_parallel=False
 #nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
 
 ### PHYSICAL CONSTANTS ###
@@ -156,7 +156,7 @@ def set_timestep(vel):
     DT       = min(ion_ts, vel_ts)
     max_time = max_wcinv / gyfreq                 # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1             # Total number of time steps
-    #pdb.set_trace()
+    
     if part_res == 0:
         part_save_iter = 1
     else:
@@ -885,7 +885,6 @@ def get_grad_P_alt2(qn, te):
     return Pe, grad_P
 
 
-#@nb.njit()
 def get_grad_P_alt3(qn, te):
     '''
     Returns the electron pressure gradient (in 1D) on the E-field grid using P = nkT and 
@@ -918,7 +917,7 @@ def get_grad_P_alt3(qn, te):
     return Pe, grad_P
 
 
-#@nb.njit()
+@nb.njit()
 def interpolate_edges_to_center_1D(grad_P, zero_boundaries=True):
     ''' 
     Same as 3D version just rejigged because its used for the grad_P calculation
@@ -968,8 +967,8 @@ def apply_boundary(_B, _damp):
     return
 
 
-@nb.njit()
-def cyclic_leapfrog(B1, B2, rho, J, curl, DT, subcycles, B_damping_array):
+#@nb.njit()
+def cyclic_leapfrog(B1, B2, B_center, rho, J, curl, DT, subcycles, B_damping_array):
     '''
     Solves for the magnetic field push by keeping two copies and subcycling between them,
     averaging them at the end of the cycle as per Matthews (1994). The source terms are
@@ -992,46 +991,52 @@ def cyclic_leapfrog(B1, B2, rho, J, curl, DT, subcycles, B_damping_array):
     B2[:] = B1[:]
 
     ## DESYNC SECOND FIELD COPY - PUSH BY DH ##
-    E, Ve, Te = calculate_E(B1, J, rho)
+    E, Ve, Te = calculate_E(B1, B_center, J, rho)
     get_curl_E(E, curl) 
     B2       -= dh * curl
     apply_boundary(B2, B_damping_array)
+    get_B_cent(B2, B_center)
 
     ## RETURN IF NO SUBCYCLES REQUIRED ##
     if subcycles == 1:
-        return B2
+        B1[:] = B2[:]
+        return 
 
     ## MAIN SUBCYCLE LOOP ##
     for ii in range(subcycles - 1):             
         if ii%2 == 0:
-            E, Ve, Te = calculate_E(B2, J, rho)
+            E, Ve, Te = calculate_E(B2, B_center, J, rho)
             get_curl_E(E, curl) 
             B1  -= 2 * dh * curl
             apply_boundary(B1, B_damping_array)
+            get_B_cent(B1, B_center)
         else:
-            E, Ve, Te = calculate_E(B1, J, rho)
+            E, Ve, Te = calculate_E(B1, B_center, J, rho)
             get_curl_E(E, curl) 
             B2  -= 2 * dh * curl
             apply_boundary(B2, B_damping_array)
+            get_B_cent(B2, B_center)
             
     ## RESYNC FIELD COPIES ##
     if ii%2 == 0:
-        E, Ve, Te = calculate_E(B2, J, rho)
+        E, Ve, Te = calculate_E(B2, B_center, J, rho)
         get_curl_E(E, curl) 
         B2  -= dh * curl
         apply_boundary(B2, B_damping_array)
+        get_B_cent(B2, B_center)
     else:
-        E, Ve, Te = calculate_E(B1, J, rho)
+        E, Ve, Te = calculate_E(B1, B_center, J, rho)
         get_curl_E(E, curl) 
         B1  -= dh * curl
         apply_boundary(B1, B_damping_array)
+        get_B_cent(B1, B_center)
 
     ## AVERAGE FIELD SOLUTIONS: COULD PERFORM A CONVERGENCE TEST HERE IN FUTURE ##
     B1 += B2; B1 /= 2.0
     return
 
 
-@nb.njit()
+#@nb.njit()
 def calculate_E(B, B_center, J, qn):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
@@ -1051,7 +1056,7 @@ def calculate_E(B, B_center, J, qn):
     Ve[:, 2] = (J[:, 2] - curlB[:, 2]) / qn
     
     Te       = get_electron_temp(qn)
-    del_p    = get_grad_P(qn, Te)
+    Pe, del_p= get_grad_P_alt(qn, Te)
     
     VexB     = np.zeros((NC, 3), dtype=np.float64)  
     for ii in np.arange(NC):
@@ -1142,6 +1147,7 @@ def get_B_cent(_B, _B_cent):
     spline interpolation (mine seems to be broken). Could probably make this 
     myself and more efficient later, but need to eliminate problems!
     '''
+    _B_cent *= 0.0
     for jj in range(1, 3):
         coeffs         = splrep(B_nodes, _B[:, jj])
         _B_cent[:, jj] = splev( E_nodes, coeffs)
@@ -1344,7 +1350,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time,
 
 
 def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, sim_time):
-    print('Saving field data')
+    #print('Saving field data')
     d_path = '%s/%s/run_%d/data/fields/' % (drive, save_path, run_num)
     r      = qq / field_save_iter
 
@@ -1359,7 +1365,7 @@ def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, sim_time):
     
     
 def save_particle_data(dt, part_save_iter, qq, pos, vel, idx, sim_time):
-    print('Saving particle data')
+    #print('Saving particle data')
     d_path = '%s/%s/run_%d/data/particles/' % (drive, save_path, run_num)
     r      = qq / part_save_iter
 
@@ -1499,6 +1505,13 @@ def dump_to_file(pos, vel, E_int, Ve, Te, B, Ji, q_dens, qq, folder='parallel', 
 
 
 #%% --- MAIN ---
+# Misc softish-coded stuff    
+min_dens            = 0.05                               # Allowable minimum charge density in a cell, as a fraction of ne*q
+adaptive_timestep   = 1                                  # Flag (True/False) for adaptive timestep based on particle and field parameters
+adaptive_subcycling = 1                                  # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
+default_subcycles   = 12                                 # Number of field subcycling steps for Cyclic Leapfrog
+
+
 #################################
 ### FILENAMES AND DIRECTORIES ###
 #################################
@@ -1610,11 +1623,6 @@ with open(plasma_input, 'r') as f:
     B_eq      = f.readline().split()[1]                  # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
     B_xmax_ovr= f.readline().split()[1]
 
-# Misc softish-coded stuff    
-min_dens            = 0.05                               # Allowable minimum charge density in a cell, as a fraction of ne*q
-adaptive_timestep   = 1                                  # Flag (True/False) for adaptive timestep based on particle and field parameters
-adaptive_subcycling = 1                                  # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
-default_subcycles   = 12                                 # Number of field subcycling steps for Cyclic Leapfrog
 
 if disable_waves == True:
     print('-- Wave solutions disabled, removing subcycles --')
@@ -1789,7 +1797,7 @@ if __name__ == '__main__':
     
     B        = np.zeros((NC + 1, 3), dtype=np.float64)
     B2       = np.zeros((NC + 1, 3), dtype=np.float64)
-    B_cent   = np.zeros((NC       ), dtype=np.float64)
+    B_cent   = np.zeros((NC    , 3), dtype=np.float64)
     E        = np.zeros((NC    , 3), dtype=np.float64)
     Ve       = np.zeros((NC    , 3), dtype=np.float64)
     Te       = np.zeros((NC       ), dtype=np.float64)
@@ -1809,7 +1817,7 @@ if __name__ == '__main__':
     print('Loading initial state...\n')
     init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plus, 
                          rho_int, rho_half, J, J_plus, L, G, 0.5*_DT)
-
+    get_B_cent(B, B_cent)
     
     # Put init into qq = 0 and save as usual, qq = 1 will be at t = dt
     # Need to change this so the initial state gets saved?
@@ -1836,8 +1844,7 @@ if __name__ == '__main__':
         #######################
         ###### MAIN LOOP ######
         #######################
-        cyclic_leapfrog(B, B2, rho_int, J, temp3d, _DT, subcycles, B_damping_array)
-        get_B_cent(B, B_cent)
+        cyclic_leapfrog(B, B2, B_cent, rho_int, J, temp3d, _DT, subcycles, B_damping_array)
         E, Ve, Te = calculate_E(B, B_cent, J, rho_half)
 
         push_current(J_plus, J, E, B, B_cent, L, G, _DT)
@@ -1849,14 +1856,13 @@ if __name__ == '__main__':
         # Store pc(1/2) here while pc(3/2) is collected
         rho_int[:]  = rho_half[:] 
         collect_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus, nu_minus, 
-                                             rho_half, J_minus, J_plus, L, G, _DT)
+                              rho_half, J_minus, J_plus, L, G, _DT)
         
         rho_int += rho_half
         rho_int /= 2.0
         J        = 0.5 * (J_plus  +  J_minus)
 
-        cyclic_leapfrog(B, B2, rho_int, J, temp3d, _DT, subcycles, B_damping_array)
-        get_B_cent(B, B_cent)
+        cyclic_leapfrog(B, B2, B_cent, rho_int, J, temp3d, _DT, subcycles, B_damping_array)
         E, Ve, Te   = calculate_E(B, B_cent, J, rho_int)
 
         ########################

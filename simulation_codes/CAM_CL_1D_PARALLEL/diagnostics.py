@@ -737,7 +737,8 @@ def test_grad_P():
     # Finite differences
     #Pe_diff, gp_diff = main_1D.get_grad_P(rho_c, Te)
     #Pe_diff, gp_diff = main_1D.get_grad_P_alt(rho_c, Te)
-    Pe_diff, gp_diff = main_1D.get_grad_P_alt2(rho_c, Te)
+    #Pe_diff, gp_diff = main_1D.get_grad_P_alt2(rho_c, Te)
+    Pe_diff, gp_diff = main_1D.get_grad_P_alt3(rho_c, Te)
 
     ## PLOT ##
     fig0, ax0 = plt.subplots(figsize=(15, 15))
@@ -1855,6 +1856,6 @@ if __name__ == '__main__':
     #test_particle_orbit()
     #test_curl_E()
     #test_curl_B()
-    #test_grad_P()
-    test_E2C_interpolation()
+    test_grad_P()
+    #test_E2C_interpolation()
     

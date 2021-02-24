@@ -675,7 +675,8 @@ def cyclic_leapfrog(B1, B2, rho, J, curl, DT, subcycles):
 
     ## RETURN IF NO SUBCYCLES REQUIRED ##
     if subcycles == 1:
-        return B2
+        B1[:] = B2[:]
+        return
 
     ## MAIN SUBCYCLE LOOP ##
     for ii in range(subcycles - 1):             
@@ -791,6 +792,7 @@ def interpolate_to_center_cspline1D(arr):
     ''' 
     Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
     1D array
+    THIS IS PROBABLY WRONG
     '''
     interp = np.zeros(arr.shape[0], dtype=np.float64)	
     
@@ -809,6 +811,7 @@ def interpolate_to_center_cspline3D(arr):
     ''' 
     Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
     1D array
+    THIS IS PROBABLY WRONG
     '''
     dim    = arr.shape[1]
     interp = np.zeros((arr.shape[0], dim), dtype=np.float64)	

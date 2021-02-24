@@ -1151,18 +1151,15 @@ def calculate_E(B, B_center, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P, E_
 
     get_electron_temp(q_dens, Te)
 
-    get_grad_P(q_dens, Te, grad_P, temp3Db[:, 0])             # temp1D is now del_p term, temp3D2 slice used for computation
-
-    #cross_product(Ve, temp3Db[:temp3Db.shape[0]-1, :], temp3De) 
-    # temp3De is now Ve x B term                 
+    get_grad_P(q_dens, Te, grad_P, temp3Db[:, 0])
+               
     temp3De[:, 0] += Ve[:, 1] * B_center[:, 2]
     temp3De[:, 1] += Ve[:, 2] * B_center[:, 0]
-    temp3De[:, 2] += Ve[:, 0] * B_center[:temp3Db.shape[0]-1, 1]
+    temp3De[:, 2] += Ve[:, 0] * B_center[:, 1]
     
     temp3De[:, 0] -= Ve[:, 2] * B_center[:, 1]
     temp3De[:, 1] -= Ve[:, 0] * B_center[:, 2]
     temp3De[:, 2] -= Ve[:, 1] * B_center[:, 0]
-    
     
     if E_damping == 1 and field_periodic == 0:
         temp3De *= E_damping_array
