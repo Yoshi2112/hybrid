@@ -607,7 +607,7 @@ def test_force_interpolation():
 
 def test_curl_B():
     '''
-    Confirmed
+    Confirmed CAM_CL_PARALLEL 24/02/2021
     '''
     NC   = main_1D.NC   
     k    = 2 * np.pi / (2 * main_1D.xmax)
@@ -622,8 +622,7 @@ def test_curl_B():
     curl_B_anal[:, 1] =  2.0 * k * np.sin(2.0*k*main_1D.E_nodes)
     curl_B_anal[:, 2] = -1.5 * k * np.sin(1.5*k*main_1D.E_nodes)
     
-    curl_B_FD = np.zeros((NC, 3))
-    main_1D.curl_B_term(B_input, curl_B_FD)
+    curl_B_FD = main_1D.get_curl_B(B_input)
     
     curl_B_FD *= main_1D.mu0
     
@@ -655,7 +654,7 @@ def test_curl_B():
 
 def test_curl_E():
     '''
-    Confirmed with parabolic B0 code
+    Confirmed CAM_CL_PARALLEL 24/02/2021
     '''
     NC   = main_1D.NC   
     k    = 2 * np.pi / (2 * main_1D.xmax)
@@ -672,7 +671,7 @@ def test_curl_E():
     curl_E_anal       = np.zeros((NC + 1, 3))
     curl_E_anal[:, 1] =  2.0 * k * np.sin(2.0*k*main_1D.B_nodes)
     curl_E_anal[:, 2] = -1.5 * k * np.sin(1.5*k*main_1D.B_nodes)
-    pdb.set_trace()
+
     ## PLOT
     plt.figure(figsize=(15, 15))
     marker_size = None
@@ -708,47 +707,67 @@ def test_curl_E():
 
 def test_grad_P():
     '''
-    Verified for parabolic B0 :: Analytic solutions are a pain, but these come
-    out looking sinusoidal as expected
+    Seems to be a lot of inaccuracy in this function, not sure why. Might need
+    to consider other ways of doing it (some sort of matrix method?)
+    
+    Checked: 24/02/2021
     '''
-    k    = 2 * np.pi / (2 * main_1D.xmax)
+    kq  = 2 * np.pi / (2 * main_1D.xmax)
+    kt  = 0.5 * np.pi / (2 * main_1D.xmax)
+    pc0 = main_1D.q * main_1D.ne
+    nkT = main_1D.ne*main_1D.kB*main_1D.Te0
     
-    # Set analytic solutions (input/output)
     if False:
-        q_dens    = np.cos(1.0 * k * main_1D.E_nodes)  * main_1D.q * main_1D.ne
-        te_input  = np.ones(main_1D.NC)*main_1D.Te0_scalar
+        # Varying rho_c case
+        rho_c  = np.cos(1.0 * kq * main_1D.E_nodes) * pc0
+        Te     = np.ones(main_1D.NC)*main_1D.Te0
+        anal_P = -nkT*kq*np.sin(kq*main_1D.E_nodes)
     elif False:
-        q_dens    = np.ones(main_1D.NC) * main_1D.q * main_1D.ne
-        te_input  = np.cos(1.0 * k * main_1D.E_nodes)*main_1D.Te0_scalar
+        # Varying Te case
+        rho_c  = np.ones(main_1D.NC) * pc0
+        Te     = np.cos(1.0 * kt * main_1D.E_nodes)*main_1D.Te0
+        anal_P = -nkT*kt*np.sin(kt*main_1D.E_nodes)
     else:
-        q_dens    = np.cos(1.0 * k * main_1D.E_nodes)* main_1D.q * main_1D.ne
-        te_input  = np.cos(1.0 * k * main_1D.E_nodes)*main_1D.Te0_scalar
-    
-    gp_diff   = np.zeros(main_1D.NC)
-    temp      = np.zeros(main_1D.NC + 1)
-    
+        # Varying both case
+        rho_c  = np.cos(1.0 * kq * main_1D.E_nodes) *         pc0
+        Te     = np.cos(1.0 * kt * main_1D.E_nodes) * main_1D.Te0
+        anal_P = nkT*(-kq*np.sin(kq*main_1D.E_nodes) - kt*np.sin(kt*main_1D.E_nodes))
+    Pe_anal = rho_c * main_1D.kB * Te / main_1D.q
+
     # Finite differences
-    main_1D.get_grad_P(q_dens, te_input, gp_diff, temp)
+    #Pe_diff, gp_diff = main_1D.get_grad_P(rho_c, Te)
+    #Pe_diff, gp_diff = main_1D.get_grad_P_alt(rho_c, Te)
+    Pe_diff, gp_diff = main_1D.get_grad_P_alt2(rho_c, Te)
 
     ## PLOT ##
-    plt.figure(figsize=(15, 15))
+    fig0, ax0 = plt.subplots(figsize=(15, 15))
     marker_size = None
 
-    plt.scatter(main_1D.E_nodes, gp_diff, marker='x', c='r', s=marker_size, label='Finite Difference')
+    ax0.set_title(r'Input $p_e$')
+    ax0.scatter(main_1D.E_nodes, Pe_diff, marker='x', c='r', s=marker_size,  label='From function')
+    ax0.scatter(main_1D.E_nodes, Pe_anal , marker='o', c='k', s=marker_size, label='Input')
     
-    plt.title(r'Test of $\nabla p_e$')
+    
+    fig, ax1 = plt.subplots(figsize=(15, 15))
+    marker_size = None
 
-    for kk in range(main_1D.NC):
-        plt.axvline(main_1D.E_nodes[kk], linestyle='--', c='r', alpha=0.2)
-        plt.axvline(main_1D.B_nodes[kk], linestyle='--', c='b', alpha=0.2)
-    
-    plt.axvline(main_1D.B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
-    plt.axvline(main_1D.B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
-    
-    plt.axvline(main_1D.xmin, linestyle='-', c='k', alpha=0.2)
-    plt.axvline(main_1D.xmax, linestyle='-', c='k', alpha=0.2)
-    
-    plt.legend()
+    ax1.set_title(r'Test of $\nabla p_e$')
+    ax1.scatter(main_1D.E_nodes, gp_diff, marker='x', c='r', s=marker_size, label='Finite Difference')
+    ax1.scatter(main_1D.E_nodes, anal_P , marker='o', c='k', s=marker_size, label='Analytic Solution')
+
+    for ax in [ax0, ax1]:
+        # Plot gridspace
+        for kk in range(main_1D.NC):
+            ax.axvline(main_1D.E_nodes[kk], linestyle='--', c='r', alpha=0.2)
+            ax.axvline(main_1D.B_nodes[kk], linestyle='--', c='b', alpha=0.2)
+        
+        ax.axvline(main_1D.B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
+        ax.axvline(main_1D.B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
+        
+        ax.axvline(main_1D.xmin, linestyle='-', c='k', alpha=0.2)
+        ax.axvline(main_1D.xmax, linestyle='-', c='k', alpha=0.2)
+        
+        ax.legend()
     return
 
 
@@ -1121,29 +1140,16 @@ def test_C2E_interpolation():
     how '4th order' the cubic spline is (derivative uses 2nd order finite difference)
     '''
     marker_size = 20
-    LENGTH      = main_1D.xmax - main_1D.xmin
-    k           = 1.0 / LENGTH
+    k           = 1.0 / (main_1D.xmax - main_1D.xmin)
 
-    # Interpolation
+    # Input value
     E_input       = np.zeros((main_1D.NC, 3))
     E_input[:, 1] = np.cos(2*np.pi*k*main_1D.E_nodes)    
     
     # Analytic solution
     E_anal        = np.zeros((main_1D.NC + 1, 3))
     E_anal[:, 1]  = np.cos(2*np.pi*k*main_1D.B_nodes)
-    
-    # Test y2 Analytic solution (needs return after y2 calculation)
-    if False:
-        y2_anal       = np.zeros((main_1D.NC, 3))
-        y2_anal[:, 1] = (-(2*np.pi*k) ** 2) * np.cos(2*np.pi*k*main_1D.E_nodes)
-       
-        E_edge        = np.zeros((main_1D.NC + 1, 3))
-        y2 = main_1D.interpolate_centers_to_edge(E_input, E_edge)
-    
-        fig, ax = plt.subplots()
-        ax.scatter(main_1D.E_nodes, y2_anal[:, 1], s=marker_size, c='k', marker='o', label='Analytic  y2')
-        ax.scatter(main_1D.E_nodes, y2[     :, 1], s=marker_size, c='r', marker='x', label='Numerical y2')
-    
+        
     ## TEST INTERPOLATION ##
     E_edge        = np.zeros((main_1D.NC + 1, 3))
     main_1D.interpolate_centers_to_edge(E_input, E_edge)
@@ -1814,6 +1820,7 @@ def test_current_push():
     return
 
 
+#%% --MAIN-- 
 if __name__ == '__main__':
     #animate_moving_weight()
     
@@ -1829,8 +1836,8 @@ if __name__ == '__main__':
     
     # New tests: 23/02/2021
     #test_particle_orbit()
-    test_curl_E()
+    #test_curl_E()
     #test_curl_B()
     #test_grad_P()
-    #test_cspline_interpolation()
+    test_C2E_interpolation()
     

@@ -710,6 +710,7 @@ def smooth(function):
 def eval_B0x(x):
     return B_eq * (1. + a * x**2)
 
+
 @nb.njit()
 def get_curl_B(B):
     ''' Returns a vector quantity for the curl of a field valid at the positions 
@@ -727,7 +728,7 @@ def get_curl_B(B):
           E and B fields having the same number of nodes (due to TSC weighting) and
          the lack of derivatives in y, z
     '''
-    curlB = np.zeros(E.shape, dtype=np.float64)
+    curlB = np.zeros((NC, 3), dtype=nb.float64)
     for ii in nb.prange(B.shape[0] - 1):
         curlB[ii, 1] = - (B[ii + 1, 2] - B[ii, 2])
         curlB[ii, 2] =    B[ii + 1, 1] - B[ii, 1]
@@ -735,8 +736,9 @@ def get_curl_B(B):
 
 
 @nb.njit()
-def get_curl_E(field, dE):
-    ''' Returns a vector quantity for the curl of a field valid at the positions 
+def get_curl_E(_E, dE):
+    ''' 
+    Returns a vector quantity for the curl of a field valid at the positions 
     between its gridpoints (i.e. curl(E) -> B-grid, etc.)
     
     INPUT:
@@ -746,22 +748,18 @@ def get_curl_E(field, dE):
                  
     OUTPUT:
         curl  -- Finite-differenced solution for the curl of the input field.
-        
-    NOTE: This function will only work with this specific 1D hybrid code due to both 
-          E and B fields having the same number of nodes (due to TSC weighting) and
-         the lack of derivatives in y, z
     '''   
     dE *= 0.
-    for ii in np.arange(1, field.shape[0]):
-        dE[ii, 1] = - (field[ii, 2] - field[ii - 1, 2])
-        dE[ii, 2] =    field[ii, 1] - field[ii - 1, 1]
+    for ii in np.arange(1, _E.shape[0]):
+        dE[ii, 1] = - (_E[ii, 2] - _E[ii - 1, 2])
+        dE[ii, 2] =    _E[ii, 1] - _E[ii - 1, 1]
         
     # Curl at E[0] : Forward/Backward difference (stored in B[0]/B[NC])
-    dE[0, 1] = -(-3*E[0, 2] + 4*E[1, 2] - E[2, 2]) / 2
-    dE[0, 2] =  (-3*E[0, 1] + 4*E[1, 1] - E[2, 1]) / 2
+    dE[0, 1] = -(-3*_E[0, 2] + 4*_E[1, 2] - _E[2, 2]) / 2
+    dE[0, 2] =  (-3*_E[0, 1] + 4*_E[1, 1] - _E[2, 1]) / 2
     
-    dE[NC, 1] = -(3*E[NC - 1, 2] - 4*E[NC - 2, 2] + E[NC - 3, 2]) / 2
-    dE[NC, 2] =  (3*E[NC - 1, 1] - 4*E[NC - 2, 1] + E[NC - 3, 1]) / 2
+    dE[NC, 1] = -(3*_E[NC - 1, 2] - 4*_E[NC - 2, 2] + _E[NC - 3, 2]) / 2
+    dE[NC, 2] =  (3*_E[NC - 1, 1] - 4*_E[NC - 2, 1] + _E[NC - 3, 1]) / 2
     
     # Linearly extrapolate to endpoints
     dE[0, 1]      -= 2*(dE[1, 1] - dE[0, 1])
@@ -789,7 +787,7 @@ def get_electron_temp(qn):
 
 
 @nb.njit()
-def get_grad_P(qn, te, inter_type=1):
+def get_grad_P(qn, te):
     '''
     Returns the electron pressure gradient (in 1D) on the E-field grid using P = nkT and 
     finite difference.
@@ -804,40 +802,115 @@ def get_grad_P(qn, te, inter_type=1):
     B-grid. Moving it back to the E-grid requires an interpolation. Cubic spline is desired due to its smooth
     derivatives and its higher order weighting (without the polynomial craziness)
     '''
-    grad_pe_B     = np.zeros(qn.shape[0], dtype=np.float64)
-    grad_P        = np.zeros(qn.shape[0], dtype=np.float64)
+    grad_pe_B     = np.zeros(NC + 1, dtype=np.float64)
+    grad_P        = np.zeros(NC    , dtype=np.float64)
     Pe            = qn * kB * te / q
 
+    # Center points
     for ii in np.arange(1, qn.shape[0]):
         grad_pe_B[ii] = (Pe[ii] - Pe[ii - 1])
+            
+    # Set endpoints (there should be no gradients here anyway, but just to be safe)
+    grad_pe_B[0]  = grad_pe_B[1]
+    grad_pe_B[NC] = grad_pe_B[NC - 1]
         
-    grad_pe_B[0] = grad_pe_B[qn.shape[0] - 3]
-    
     # Re-interpolate to E-grid
-    grad_P = interpolate_to_center_cspline1D(grad_pe_B)
-
-    grad_P[0]               = grad_P[qn.shape[0] - 3]
-    grad_P[qn.shape[0] - 2] = grad_P[1]
-    grad_P[qn.shape[0] - 1] = grad_P[2] 
-    grad_P /= dx
-    return grad_P
+    grad_P = interpolate_edges_to_center_1D(grad_pe_B)/dx
+    return Pe, grad_P
 
 
 @nb.njit()
-def interpolate_to_center_cspline1D(arr):
-    ''' 
-    Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
-    1D array
+def get_grad_P_alt(qn, te):
     '''
-    interp = np.zeros(arr.shape[0], dtype=np.float64)	
+    Returns the electron pressure gradient (in 1D) on the E-field grid using P = nkT and 
+    finite difference.
+     
+    INPUT:
+        qn     -- Grid charge density
+        te     -- Grid electron temperature
+        grad_P -- Output array for electron pressure gradient
+        temp   -- intermediary array used to store electron pressure, since both
+                  density and temperature may vary (with adiabatic approx.)
+        
+    Forwards/backwards differencing at the simulation cells at the edge of the
+    physical space domain.
     
-    for ii in range(1, arr.shape[0] - 2):                       
-        interp[ii] = 0.5 * (arr[ii] + arr[ii + 1]) \
-                 - 1./16 * (arr[ii + 2] - arr[ii + 1] - arr[ii] + arr[ii - 1])
-         
-    interp[0]                = interp[arr.shape[0] - 3]
-    interp[arr.shape[0] - 2] = interp[1]
-    interp[arr.shape[0] - 1] = interp[2]
+    Maybe check this at some point, or steal the one from the CAM_CL code.
+    '''
+    grad_P = np.zeros(NC    , dtype=np.float64)
+    Pe     = qn * kB * te / q       # Store Pe in grad_P array for calculation
+
+    # Central differencing, internal points
+    for ii in nb.prange(1, NC - 1):
+        grad_P[ii] = (Pe[ii + 1] - Pe[ii - 1])
+        
+    # Set endpoints (there should be no gradients here anyway, but just to be safe)
+    grad_P[0]    = grad_P[1]
+    grad_P[NC-1] = grad_P[NC - 2]
+
+    grad_P    /= (2*dx)
+    return Pe, grad_P
+
+
+@nb.njit()
+def get_grad_P_alt2(qn, te):
+    '''
+    Returns the electron pressure gradient (in 1D) on the E-field grid using P = nkT and 
+    finite difference.
+     
+    INPUT:
+        qn     -- Grid charge density
+        te     -- Grid electron temperature
+        grad_P -- Output array for electron pressure gradient
+        temp   -- intermediary array used to store electron pressure, since both
+                  density and temperature may vary (with adiabatic approx.)
+        
+    Forwards/backwards differencing at the simulation cells at the edge of the
+    physical space domain.
+    
+    Maybe check this at some point, or steal the one from the CAM_CL code.
+    '''
+    grad_P = np.zeros(NC    , dtype=np.float64)
+    Pe     = qn * kB * te / q       # Store Pe in grad_P array for calculation
+
+    # Central differencing, internal points
+    for ii in nb.prange(1, NC - 1):
+        dpc = (qn[ii + 1] - qn[ii - 1])
+        dTe = (te[ii + 1] - te[ii - 1])
+        grad_P[ii] = (kB / (q*2*dx)) * (te[ii]*dpc + qn[ii]*dTe)
+        
+    # Set endpoints (there should be no gradients here anyway, but just to be safe)
+    grad_P[0]  = grad_P[1]
+    grad_P[NC-1] = grad_P[NC - 2]
+    return Pe, grad_P
+
+
+@nb.njit()
+def interpolate_edges_to_center_1D(grad_P, zero_boundaries=True):
+    ''' 
+    Same as 3D version just rejigged because its used for the grad_P calculation
+    to take grad_P from the B-grid (because of the central difference) and put
+    it back on the E-grid
+    '''
+    y2      = np.zeros((NC + 1), dtype=np.float64)
+    interp  = np.zeros((NC    ), dtype=np.float64)
+    
+    # Calculate second derivative       
+    # Interior B-nodes, Centered difference
+    for ii in range(1, NC):
+        y2[ii] = grad_P[ii + 1] - 2*grad_P[ii] + grad_P[ii - 1]
+            
+    # Edge B-nodes, Forwards/Backwards difference
+    if zero_boundaries == True:
+        y2[0 ] = 0.
+        y2[NC] = 0.
+    else:
+        y2[0]  = 2*grad_P[0 ] - 5*grad_P[1     ] + 4*grad_P[2     ] - grad_P[3     ]
+        y2[NC] = 2*grad_P[NC] - 5*grad_P[NC - 1] + 4*grad_P[NC - 2] - grad_P[NC - 3]
+        
+    # Do spline interpolation: E[ii] node is bracketed by B[ii], B[ii + 1] nodes
+    for ii in range(NC):
+        interp[ii] = 0.5 * (grad_P[ii] + grad_P[ii + 1] + (1/6) * (y2[ii] + y2[ii + 1]))
     return interp
 
 

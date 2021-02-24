@@ -1084,6 +1084,8 @@ def get_grad_P(qn, te, grad_P, temp):
         
     Forwards/backwards differencing at the simulation cells at the edge of the
     physical space domain.
+    
+    Maybe check this at some point, or steal the one from the CAM_CL code.
     '''
     temp     *= 0; grad_P *= 0
     
