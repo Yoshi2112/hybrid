@@ -233,7 +233,9 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*pdt)
     for pp in range(psteps):
         for jj in range(Nj):
-            if temp_type[jj] == 1:
+            if hot_only == True and temp_type[jj] == 0:
+                continue
+            else:
                 st, en = idx_start[jj], idx_end[jj]
                 velocity_update(pos[st:en], vel[:, st:en], Ie[st:en], W_elec[:, st:en],
                                 Ib[st:en], W_mag[:, st:en], idx[st:en], B, E, pdt)
