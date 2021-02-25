@@ -2193,20 +2193,22 @@ if __name__ == '__main__':
         ##### EXAMINE TIMESTEP #####
         ############################
         if adaptive_timestep == 1:
-            ### REMOVE THIS FOR REAL RUNS!!!
-            mt=-1
-            if qq_real > 0 and (qq_real - 1000)%2000 == 0:
-                mt=1
-            elif qq_real > 0 and qq_real%2000 == 0:
-                mt=2
-            if mt != -1:
-                print('Manual selector is', mt)
-            ##################################
+# =============================================================================
+#             ### REMOVE THIS FOR REAL RUNS!!!
+#             mt=-1
+#             if qq_real > 0 and (qq_real - 1000)%2000 == 0:
+#                 mt=1
+#             elif qq_real > 0 and qq_real%2000 == 0:
+#                 mt=2
+#             if mt != -1:
+#                 print('Manual selector is', mt)
+#             ##################################
+# =============================================================================
             
             qq, _DT, max_inc, part_save_iter, field_save_iter, change_flag, subcycles =\
                 check_timestep(qq, _DT, pos, vel, Ie, W_elec, B, B_cent, E, rho_int, 
                                max_inc, part_save_iter, field_save_iter, subcycles,
-                               manual_trip=mt)
+                               manual_trip=0)
     
             # Collect new moments and desync position and velocity
             if change_flag == 1:
