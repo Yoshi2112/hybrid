@@ -523,3 +523,56 @@ def SWSP_timeseries(nx, tmax=None, save=True, log=False, normalize=False):
     else:
         plt.show()
     return
+
+
+def test_seed_sizes():
+    mp   = 1.673e-27
+    qi   = 1.602e-19
+    B0   = 243e-9
+    sat  = 0.58         # Saturation amplitude as (Bw/B0)**2
+    Bwsat= np.sqrt(sat)*B0    
+    #ne   = 177e6
+    pcyc = qi * B0 / mp
+    wcinv= 1. / pcyc
+    
+    t_max = 1800*wcinv
+    dt    = 0.05*wcinv
+    tarr  = np.arange(0.0, t_max, dt)
+    
+    # Wave parameters
+    B_seed = [1e-30, 1e-29, 1e-28, 1e-27, 1e-26]
+    freq   = 0.35*pcyc
+    grate  = 0.035*pcyc
+    nwaves = len(B_seed)
+    wavearr= np.zeros((nwaves, tarr.shape[0]))
+    
+    # Grow waves. Saturate at saturation amplitude
+    for ii in range(nwaves):
+        for jj in range(tarr.shape[0]):
+            soln = np.abs(B_seed[ii] * np.exp(-1j*freq*tarr[jj]) * np.exp(grate*tarr[jj]))
+            if soln > Bwsat:
+                wavearr[ii, jj:] = Bwsat
+                break
+            else:
+                wavearr[ii, jj] = soln
+                
+    tarr /= wcinv
+    plt.ioff()
+    fig, axes = plt.subplots(2, sharex=True)
+    axes[0].set_title('Time to Saturation for different seeds')
+    for ii in range(nwaves):
+        axes[0].plot(    tarr, wavearr[ii]*1e9, label='Seed: {} nT'.format(B_seed[ii]*1e9))
+        axes[1].semilogy(tarr, wavearr[ii]*1e9, label='Seed: {} nT'.format(B_seed[ii]*1e9))
+    axes[1].set_xlabel('Time ($t\Omega_H$)')
+    
+    for ax in axes:
+        ax.set_ylabel('Amplitude (nT)')
+        ax.set_xlim(0, tarr[-1])
+        ax.legend()
+    plt.show()
+    return
+
+
+
+if __name__ == '__main__':
+    test_seed_sizes()

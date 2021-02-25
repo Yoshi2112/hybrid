@@ -736,7 +736,7 @@ def init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plu
                          
     deposit_both_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init)      # Collects sim_particles/cell/species
     position_update(pos, vel, idx, Ie, W_elec, dt)
-    inject_particles(pos, vel, idx, mp_flux, dt)
+    #inject_particles(pos, vel, idx, mp_flux, dt)
     deposit_both_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus)
 
     if source_smoothing == 1:
@@ -810,7 +810,7 @@ def collect_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus, nu_minus,
     
     deposit_velocity_moments(vel, Ie, W_elec, idx, nu_minus)
     position_update(pos, vel, idx, Ie, W_elec, dt)
-    inject_particles(pos, vel, idx, mp_flux, dt)
+    #inject_particles(pos, vel, idx, mp_flux, dt)
     deposit_both_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus)
     
     if source_smoothing == 1:

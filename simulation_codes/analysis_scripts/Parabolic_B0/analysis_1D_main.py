@@ -4214,13 +4214,13 @@ def plot_FB_waves_timeseries(save=True):
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'F:'
+    drive       = 'H:'
         
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//CAM_CL_Fu_fixed//']:
+    for series in ['//CAM_CL_old_new_Fu_compare//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4263,12 +4263,12 @@ if __name__ == '__main__':
 #                 ggg.SWSP_timeseries(nx=x1000, save=True, log=True, normalize=True, tmax=35)
 # =============================================================================
 
-                #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
-                #           normalize=False, B0_lim=None, remove_ND=False)
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
+                           normalize=False, B0_lim=None, remove_ND=False)
                 
-                #plot_wk(saveas='wk_plot', dispersion_overlay=True, save=True,
-                #     pcyc_mult=1.5, xmax=1.5, zero_cold=False,
-                #     linear_only=False, normalize_axes=True)
+                plot_wk(saveas='wk_plot', dispersion_overlay=True, save=True,
+                     pcyc_mult=1.5, xmax=1.5, zero_cold=False,
+                     linear_only=False, normalize_axes=True)
 
                 ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=True,
                                       plot_LT=True, plot_growth=True, klim=1.5, glim=0.05)
@@ -4280,7 +4280,7 @@ if __name__ == '__main__':
 #                     pass            
 # =============================================================================
         
-        if False:
+        if True:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
@@ -4294,10 +4294,10 @@ if __name__ == '__main__':
                 #plot_total_density_with_time(save=True)
                 
                 summary_plots(save=True, histogram=False, skip=10, ylim=False)
-                #for sp in range(cf.Nj):
-                #    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=10)
-                #scatterplot_velocities(skip=10)
-                check_fields(skip=10, ylim=False)
+                for sp in range(cf.Nj):
+                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=10)
+                scatterplot_velocities(skip=10)
+                #check_fields(skip=10, ylim=False)
             
         #plot_phase_space_with_time()
             
