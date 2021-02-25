@@ -2126,7 +2126,7 @@ if __name__ == '__main__':
     print('Sim domain length  : {:5.2f}R_E'.format(2 * xmax / RE))
     print('Density            : {:5.2f}cc'.format(ne / 1e6))
     print('Equatorial B-field : {:5.2f}nT'.format(B_eq*1e9))
-    print('Maximum    B-field : {:5.2f}nT'.format(B_xmax*1e9))
+    print('Boundary   B-field : {:5.2f}nT'.format(B_xmax*1e9))
     print('Iono.      B-field : {:5.2f}mT'.format(B_A*1e6))
     print('Equat. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_eq))
     print('Bound. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_xmax * 180. / np.pi))

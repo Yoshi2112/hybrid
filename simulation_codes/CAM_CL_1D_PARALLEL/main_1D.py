@@ -5,7 +5,7 @@ import numpy as np
 import numba as nb
 import sys, os, pdb
 
-Fu_override=True
+Fu_override=False
 do_parallel=True
 nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
 
@@ -348,54 +348,55 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
 def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
     
     for ii in nb.prange(pos.shape[0]):
-        # Calculate wave fields at particle position
-        _Ep = np.zeros(3, dtype=np.float64)  
-        _Bp = np.zeros(3, dtype=np.float64)
-        
-        for jj in nb.prange(3):
-            for kk in nb.prange(3):
-                _Ep[kk] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]   
-                _Bp[kk] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]   
-# =============================================================================
-#         Jp = J[Ie    , 0:3] * W_elec[0]                 \
-#            + J[Ie + 1, 0:3] * W_elec[1]                 \
-#            + J[Ie + 2, 0:3] * W_elec[2]                 # Current at particle location
-#            
-#         Ep -= (charge[idx] / q) * e_resis * Jp          # "Effective" E-field accounting for electron resistance
-# =============================================================================                
-
-        # Start Boris Method
-        qmi = 0.5 * dt * qm_ratios[idx[ii]]                             # q/m variable including dt
-        
-        # vel -> v_minus
-        vel[0, ii] += qmi * _Ep[0]
-        vel[1, ii] += qmi * _Ep[1]
-        vel[2, ii] += qmi * _Ep[2]
-        
-        # Calculate background field at particle position (using v_minus)
-        _Bp[0]   += B_eq * (1.0 + a * pos[ii] * pos[ii])
-        constant  = a * B_eq
-        l_cyc     = qm_ratios[idx[ii]] * _Bp[0]
-        _Bp[1]   += constant * pos[ii] * vel[2, ii] / l_cyc
-        _Bp[2]   -= constant * pos[ii] * vel[1, ii] / l_cyc
-        T         = qmi * _Bp 
-        S         = 2.*T / (1. + T[0]*T[0] + T[1]*T[1] + T[2]*T[2])
+        if idx[ii] >= 0:
+            # Calculate wave fields at particle position
+            _Ep = np.zeros(3, dtype=np.float64)  
+            _Bp = np.zeros(3, dtype=np.float64)
             
-        # Calculate v_prime (maybe use a temp array here?)
-        v_prime    = np.zeros(3, dtype=np.float64)
-        v_prime[0] = vel[0, ii] + vel[1, ii] * T[2] - vel[2, ii] * T[1]
-        v_prime[1] = vel[1, ii] + vel[2, ii] * T[0] - vel[0, ii] * T[2]
-        v_prime[2] = vel[2, ii] + vel[0, ii] * T[1] - vel[1, ii] * T[0]
-        
-        # vel_minus -> vel_plus
-        vel[0, ii] += v_prime[1] * S[2] - v_prime[2] * S[1]
-        vel[1, ii] += v_prime[2] * S[0] - v_prime[0] * S[2]
-        vel[2, ii] += v_prime[0] * S[1] - v_prime[1] * S[0]
-        
-        # vel_plus -> vel (updated)
-        vel[0, ii] += qmi * _Ep[0]
-        vel[1, ii] += qmi * _Ep[1]
-        vel[2, ii] += qmi * _Ep[2]
+            for jj in nb.prange(3):
+                for kk in nb.prange(3):
+                    _Ep[kk] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]   
+                    _Bp[kk] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]   
+    # =============================================================================
+    #         Jp = J[Ie    , 0:3] * W_elec[0]                 \
+    #            + J[Ie + 1, 0:3] * W_elec[1]                 \
+    #            + J[Ie + 2, 0:3] * W_elec[2]                 # Current at particle location
+    #            
+    #         Ep -= (charge[idx] / q) * e_resis * Jp          # "Effective" E-field accounting for electron resistance
+    # =============================================================================                
+    
+            # Start Boris Method
+            qmi = 0.5 * dt * qm_ratios[idx[ii]]                             # q/m variable including dt
+            
+            # vel -> v_minus
+            vel[0, ii] += qmi * _Ep[0]
+            vel[1, ii] += qmi * _Ep[1]
+            vel[2, ii] += qmi * _Ep[2]
+            
+            # Calculate background field at particle position (using v_minus)
+            _Bp[0]   += B_eq * (1.0 + a * pos[ii] * pos[ii])
+            constant  = a * B_eq
+            l_cyc     = qm_ratios[idx[ii]] * _Bp[0]
+            _Bp[1]   += constant * pos[ii] * vel[2, ii] / l_cyc
+            _Bp[2]   -= constant * pos[ii] * vel[1, ii] / l_cyc
+            T         = qmi * _Bp 
+            S         = 2.*T / (1. + T[0]*T[0] + T[1]*T[1] + T[2]*T[2])
+                
+            # Calculate v_prime (maybe use a temp array here?)
+            v_prime    = np.zeros(3, dtype=np.float64)
+            v_prime[0] = vel[0, ii] + vel[1, ii] * T[2] - vel[2, ii] * T[1]
+            v_prime[1] = vel[1, ii] + vel[2, ii] * T[0] - vel[0, ii] * T[2]
+            v_prime[2] = vel[2, ii] + vel[0, ii] * T[1] - vel[1, ii] * T[0]
+            
+            # vel_minus -> vel_plus
+            vel[0, ii] += v_prime[1] * S[2] - v_prime[2] * S[1]
+            vel[1, ii] += v_prime[2] * S[0] - v_prime[0] * S[2]
+            vel[2, ii] += v_prime[0] * S[1] - v_prime[1] * S[0]
+            
+            # vel_plus -> vel (updated)
+            vel[0, ii] += qmi * _Ep[0]
+            vel[1, ii] += qmi * _Ep[1]
+            vel[2, ii] += qmi * _Ep[2]
     return
 
 
@@ -405,58 +406,59 @@ def position_update(pos, vel, idx, Ie, W_elec, DT):
     Also updates particle nearest node and weighting.
     '''
     for ii in nb.prange(pos.shape[0]):
-        pos[ii] += vel[0, ii] * DT
-        
-        # Check if particle has left simulation and apply boundary conditions
-        if (pos[ii] < xmin or pos[ii] > xmax):
-
-            if particle_periodic == 1:  
-                # Mario (Periodic)
-                if pos[ii] > xmax:
-                    pos[ii] += xmin - xmax
-                elif pos[ii] < xmin:
-                    pos[ii] += xmax - xmin 
-                  
-            elif particle_open == 1:                
-                # Open: Deactivate particles that leave the simulation space
-                pos[ii]     = 0.0
-                vel[0, ii]  = 0.0
-                vel[1, ii]  = 0.0
-                vel[2, ii]  = 0.0
-                idx[ii]     = -1
-                            
-            elif particle_reinit == 1: 
-                # Reinitialize vx based on flux distribution
-                vel[0, ii]  = generate_vx(vth_par[idx[ii]])
-                vel[0, ii] *= -np.sign(pos[ii])
-                
-                # Re-initialize v_perp and check pitch angle
-                if temp_type[idx[ii]] == 0 or homogenous == 1:
-                    vel[1, ii] = np.random.normal(0, vth_perp[idx[ii]])
-                    vel[2, ii] = np.random.normal(0, vth_perp[idx[ii]])
-                else:
-                    particle_PA = 0.0
-                    while np.abs(particle_PA) < loss_cone_xmax:
-                        vel[1, ii]  = np.random.normal(0, vth_perp[idx[ii]])
-                        vel[2, ii]  = np.random.normal(0, vth_perp[idx[ii]])
-                        v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
-                        
-                        particle_PA = np.arctan(v_perp / vel[0, ii])
-
-                # Place back inside simulation domain
-                if pos[ii] < xmin:
-                    pos[ii] = xmin + np.random.uniform(0, 1) * vel[0, ii] * DT
-                elif pos[ii] > xmax:
-                    pos[ii] = xmax + np.random.uniform(0, 1) * vel[0, ii] * DT
+        if idx[ii] > 0:
+            pos[ii] += vel[0, ii] * DT
             
-            else:
-                # Reflect
-                if pos[ii] > xmax:
-                    pos[ii] = 2*xmax - pos[ii]
-                elif pos[ii] < xmin:
-                    pos[ii] = 2*xmin - pos[ii]
+            # Check if particle has left simulation and apply boundary conditions
+            if (pos[ii] < xmin or pos[ii] > xmax):
+    
+                if particle_periodic == 1:  
+                    # Mario (Periodic)
+                    if pos[ii] > xmax:
+                        pos[ii] += xmin - xmax
+                    elif pos[ii] < xmin:
+                        pos[ii] += xmax - xmin 
+                      
+                elif particle_open == 1:                
+                    # Open: Deactivate particles that leave the simulation space
+                    pos[ii]     = 0.0
+                    vel[0, ii]  = 0.0
+                    vel[1, ii]  = 0.0
+                    vel[2, ii]  = 0.0
+                    idx[ii]     = -1
+                                
+                elif particle_reinit == 1: 
+                    # Reinitialize vx based on flux distribution
+                    vel[0, ii]  = generate_vx(vth_par[idx[ii]])
+                    vel[0, ii] *= -np.sign(pos[ii])
                     
-                vel[0, ii] *= -1.0
+                    # Re-initialize v_perp and check pitch angle
+                    if temp_type[idx[ii]] == 0 or homogenous == 1:
+                        vel[1, ii] = np.random.normal(0, vth_perp[idx[ii]])
+                        vel[2, ii] = np.random.normal(0, vth_perp[idx[ii]])
+                    else:
+                        particle_PA = 0.0
+                        while np.abs(particle_PA) < loss_cone_xmax:
+                            vel[1, ii]  = np.random.normal(0, vth_perp[idx[ii]])
+                            vel[2, ii]  = np.random.normal(0, vth_perp[idx[ii]])
+                            v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
+                            
+                            particle_PA = np.arctan(v_perp / vel[0, ii])
+    
+                    # Place back inside simulation domain
+                    if pos[ii] < xmin:
+                        pos[ii] = xmin + np.random.uniform(0, 1) * vel[0, ii] * DT
+                    elif pos[ii] > xmax:
+                        pos[ii] = xmax + np.random.uniform(0, 1) * vel[0, ii] * DT
+                
+                else:
+                    # Reflect
+                    if pos[ii] > xmax:
+                        pos[ii] = 2*xmax - pos[ii]
+                    elif pos[ii] < xmin:
+                        pos[ii] = 2*xmin - pos[ii]
+                        
+                    vel[0, ii] *= -1.0
             
     assign_weighting_TSC(pos, Ie, W_elec)
     return
@@ -630,15 +632,15 @@ def deposit_both_moments(pos, vel, Ie, W_elec, idx, n_i, nu_i):
     for ii in nb.prange(pos.shape[0]):
         I   = Ie[ ii]
         sp  = idx[ii]
-    
-        for kk in range(3):
-            nu_i[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
-            nu_i[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
-            nu_i[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
-        
-        n_i[I,     sp] += W_elec[0, ii]
-        n_i[I + 1, sp] += W_elec[1, ii]
-        n_i[I + 2, sp] += W_elec[2, ii]
+        if sp >= 0:
+            for kk in range(3):
+                nu_i[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
+                nu_i[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
+                nu_i[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
+            
+            n_i[I,     sp] += W_elec[0, ii]
+            n_i[I + 1, sp] += W_elec[1, ii]
+            n_i[I + 2, sp] += W_elec[2, ii]
     return
 
 
@@ -660,10 +662,11 @@ def deposit_velocity_moments(vel, Ie, W_elec, idx, nu_i):
         I   = Ie[ ii]
         sp  = idx[ii]
         
-        for kk in range(3):
-            nu_i[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
-            nu_i[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
-            nu_i[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
+        if sp >= 0:
+            for kk in range(3):
+                nu_i[I,     sp, kk] += W_elec[0, ii] * vel[kk, ii]
+                nu_i[I + 1, sp, kk] += W_elec[1, ii] * vel[kk, ii]
+                nu_i[I + 2, sp, kk] += W_elec[2, ii] * vel[kk, ii]
     return
 
 
@@ -1880,6 +1883,10 @@ E_par     = E_perp / (anisotropy + 1)
 charge    *= q                                           # Cast species charge to Coulomb
 mass      *= mp                                          # Cast species mass to kg
 
+particle_open = 0
+if particle_reflect + particle_reinit + particle_periodic == 0:
+    particle_open = 1
+
 # Particle energy: If beta == 1, energies are in beta. If not, they are in eV 
 if beta_flag == 1:
     Te0    = B_eq ** 2 * E_e    / (2 * mu0 * ne * kB)      # Temperatures of each species in Kelvin
@@ -1931,12 +1938,12 @@ N_species = nsp_ppc * NX
 if field_periodic == 0:
     N_species += 2  
 
-idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
-idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
-
-particle_open = 0
-if particle_reflect + particle_reinit + particle_periodic == 0:
-    particle_open = 1
+# Add number of spare particles proportional to percentage of total (50% standard, high but safe)
+if particle_open == 1:
+    spare_ppc  = N_species.sum() * 0.5
+else:
+    spare_ppc  = 0
+N = N_species.sum() + int(spare_ppc)
 
 if homogenous == 1:
     a      = 0
@@ -1976,7 +1983,10 @@ if particle_open == 1:
     inject_rate = nsp_ppc * (vth_par / dx) / np.sqrt(2 * np.pi)
 else:
     inject_rate = 0.0
-    
+ 
+idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
+idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order   
+ 
 B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx      # B grid points position in space
 E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
     
@@ -2023,13 +2033,18 @@ print('Sim domain length  : {:5.2f}R_E'.format(2 * xmax / RE))
 print('Density            : {:5.2f}cc'.format(ne / 1e6))
 print('Equatorial B-field : {:5.2f}nT'.format(B_eq*1e9))
 print('Boundary   B-field : {:5.2f}nT'.format(B_xmax*1e9))
+print('Iono.      B-field : {:5.2f}mT'.format(B_A*1e6))
+print('Equat. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_eq))
+print('Bound. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_xmax * 180. / np.pi))
+print('Maximum MLAT (+/-) : {:<5.2f} degrees  '.format(theta_xmax * 180. / np.pi))
+print('Iono.   MLAT (+/-) : {:<5.2f} degrees\n'.format(lambda_L * 180. / np.pi))
 
 print('Equat. Gyroperiod: : {}s'.format(round(2. * np.pi / gyfreq, 3)))
 print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq, 3)))
 print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_wcinv /  gyfreq, 2), 
                                                            round(max_wcinv/(2*np.pi), 2)))
-
-print('{} cells'.format(NX))
+print('{} spatial cells, 2x{} damped cells'.format(NX, ND))
+print('{} cells total'.format(NC))
 print('{} particles total\n'.format(N))
     
     #%% BEGIN HYBRID
