@@ -1,5 +1,5 @@
-DRIVE					H:/
-SAVE_PATH			    /runs/CAM_CL_old_new_Fu_compare/
+DRIVE					F:/
+SAVE_PATH			    /runs/PREDCORR_scipy_test/
 RUN						-
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
@@ -14,14 +14,14 @@ SOURCE_SMOOTHING_FLAG	0
 E_DAMPING_FLAG			0
 QUIET_START_FLAG		1
 DAMPING_MULTIPLIER_RD   0.05
-NX 						256
+NX 						1024
 ND 						4
-MAX_REV					1800
+MAX_REV					1200
 DXM						1.0
 IE						1
 RC_HWIDTH				-
-GYROPERIOD_RESOLUTION	0.2
-FREQUENCY_RESOLUTION	0.05	
+GYROPERIOD_RESOLUTION	0.02
+FREQUENCY_RESOLUTION	0.02	
 PARTICLE_DUMP_FREQ		5.0
 FIELD_DUMP_FREQ			0.4
-Comparing the old CAM_CL code to the new parabolic one with period/homogenous conditions to see how it goes. Double maxtime to see saturation amplitude. This is the PARABOLIC code.
+Quick test of PREDCORR just to make sure I didn't break it.

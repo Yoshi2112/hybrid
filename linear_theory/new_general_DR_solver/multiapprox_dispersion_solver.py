@@ -1351,8 +1351,12 @@ def validation_plots_omura2010():
 def hybrid_test_plot():
     '''
     Quick check to see if growth would be expected from a set of inputs or not
+    
+    # Might need revalidation? Or heavy ions do more than I thought.
+    # Actually no, it's just not as well behaved if I don't set tper as 
+    #    zero for the cold populations
     '''
-    B0      = 243e-9                           # Background magnetic field, T
+    B0      = 200e-9                           # Background magnetic field, T
     mp      = 1.673e-27                        # Proton mass (kg)
     qi      = 1.602e-19                        # Elementary charge (C)
     kB      = 1.380649e-23
@@ -1360,8 +1364,8 @@ def hybrid_test_plot():
     name    = np.array(['Warm H'  , 'Cold H' , 'Cold He', 'Cold O'])
     mass    = np.array([1.0       , 1.0      , 4.0      , 16.0    ]) * mp
     charge  = np.array([1.0       , 1.0      , 1.0      ,  1.0    ]) * qi
-    density = np.array([7.5       , 142.5    , 0.0      ,  0.0    ]) * 1e6
-    tper    = np.array([40e3      , 1.0      , 0.0      ,  0.0    ])
+    density = np.array([20.       , 120.     , 40.      ,  20.    ]) * 1e6
+    tper    = np.array([40e3      , 0.0      , 0.0      ,  0.0    ])
     ani     = np.array([1.0       , 0.0      , 0.0      ,  0.0    ])
 
     Spec, PP = create_species_array(B0, name, mass, charge, density, tper, ani)

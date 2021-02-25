@@ -26,7 +26,7 @@ do_parallel       = True       # Whether or not to use available threads to para
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
 #nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
 
-Fu_override=True              # Override to allow density to be calculated as a ratio of frequencies
+Fu_override=False              # Override to allow density to be calculated as a ratio of frequencies
 
 ### ##
 ### INITIALIZATION
@@ -2169,6 +2169,7 @@ if __name__ == '__main__':
                                                    mp_flux  = initialize_tertiary_arrays()
         
         # Collect initial moments and save initial state
+        get_B_cent(B, B_cent)
         collect_moments(vel, Ie, W_elec, idx, q_dens, Ji) 
     
         DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array\
