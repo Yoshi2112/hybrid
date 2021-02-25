@@ -216,6 +216,13 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
     are not updated in this loop.
     
     Should be ready to test after the open particle boundaries are verified.
+    
+    Can be set so that only the ring current warm/hot species are set to the
+    initial equilibrium, since the time taken for the cold species to do this
+    is quite substantial.
+    
+    TODO: Set particle boundary conditions to be species specific - i.e. reflect
+    cold populations, but let hot populations have an open boundary.
     '''
     print('Letting particle distribution relax into static field configuration')
     pdt    = orbit_res * 2 * np.pi / gyfreq
@@ -226,13 +233,14 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*pdt)
     for pp in range(psteps):
         for jj in range(Nj):
-            st, en = idx_start[jj], idx_end[jj]
-            velocity_update(pos[st:en], vel[:, st:en], Ie[st:en], W_elec[:, st:en],
-                            Ib[st:en], W_mag[:, st:en], idx[st:en], B, E, pdt)
-            position_update(pos[st:en], vel[:, st:en], idx[st:en], Ie[st:en],
-                            W_elec[:, st:en], pdt)
-            if particle_open == True:
-                inject_particles(pos, vel, idx, mp_flux, pdt)
+            if temp_type[jj] == 1:
+                st, en = idx_start[jj], idx_end[jj]
+                velocity_update(pos[st:en], vel[:, st:en], Ie[st:en], W_elec[:, st:en],
+                                Ib[st:en], W_mag[:, st:en], idx[st:en], B, E, pdt)
+                position_update(pos[st:en], vel[:, st:en], idx[st:en], Ie[st:en],
+                                W_elec[:, st:en], pdt)
+                if particle_open == True:
+                    inject_particles_1sp(pos, vel, idx, mp_flux, pdt, jj)
     
     # Resync (advance) velocity here
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, 0.5*pdt)
@@ -503,7 +511,19 @@ def position_update(pos, vel, idx, Ie, W_elec, DT):
 
 
 @nb.njit()
-def inject_particles(pos, vel, idx, _mp_flux, DT):        
+def inject_particles_all_species(pos, vel, idx, _mp_flux, DT):
+    '''
+    Control function for injection that does all species.
+    This is so the actual injection function can be per-species (in case
+    I want to inject just one species, such as for the equilibrium stuff)
+    '''
+    for jj in range(Nj):
+        inject_particles_1sp(pos, vel, idx, _mp_flux, DT, jj)
+    return
+
+
+@nb.njit()
+def inject_particles_1sp(pos, vel, idx, _mp_flux, DT, jj):        
     '''
     How to create new particles in parallel? Just test serial for now, but this
     might become my most expensive function for large N.
@@ -515,67 +535,66 @@ def inject_particles(pos, vel, idx, _mp_flux, DT):
     '''
     # Add flux at each boundary 
     for kk in range(2):
-        _mp_flux[kk, :] += inject_rate*DT
+        _mp_flux[kk, jj] += inject_rate[jj]*DT
         
     # acc used only as placeholder to mark place in array. How to do efficiently? 
     acc = 0; n_created = 0
     for ii in nb.prange(2):
-        for jj in nb.prange(Nj):
-            N_inject = int(_mp_flux[ii, jj] // 2)
+        N_inject = int(_mp_flux[ii, jj] // 2)
+        
+        for xx in nb.prange(N_inject):
             
-            for xx in nb.prange(N_inject):
-                
-                # Find two empty particles (Yes clumsy coding but it works)
-                for kk in nb.prange(acc, pos.shape[0]):
-                    if idx[kk] < 0:
-                        kk1 = kk
-                        acc = kk + 1
-                        break
-                for kk in nb.prange(acc, pos.shape[0]):
-                    if idx[kk] < 0:
-                        kk2 = kk
-                        acc = kk + 1
-                        break
+            # Find two empty particles (Yes clumsy coding but it works)
+            for kk in nb.prange(acc, pos.shape[0]):
+                if idx[kk] < 0:
+                    kk1 = kk
+                    acc = kk + 1
+                    break
+            for kk in nb.prange(acc, pos.shape[0]):
+                if idx[kk] < 0:
+                    kk2 = kk
+                    acc = kk + 1
+                    break
 
-                # Reinitialize vx based on flux distribution
-                vel[0, kk1] = generate_vx(vth_par[jj])
-                idx[kk1]    = jj
-                
-                # Re-initialize v_perp and check pitch angle
-                if temp_type[jj] == 0 or homogenous == True:
+            # Reinitialize vx based on flux distribution
+            vel[0, kk1] = generate_vx(vth_par[jj])
+            idx[kk1]    = jj
+            
+            # Re-initialize v_perp and check pitch angle
+            if temp_type[jj] == 0 or homogenous == True:
+                vel[1, kk1] = np.random.normal(0, vth_perp[jj])
+                vel[2, kk1] = np.random.normal(0, vth_perp[jj])
+            else:
+                particle_PA = 0.0
+                while np.abs(particle_PA) <= loss_cone_xmax:
                     vel[1, kk1] = np.random.normal(0, vth_perp[jj])
                     vel[2, kk1] = np.random.normal(0, vth_perp[jj])
-                else:
-                    particle_PA = 0.0
-                    while np.abs(particle_PA) <= loss_cone_xmax:
-                        vel[1, kk1] = np.random.normal(0, vth_perp[jj])
-                        vel[2, kk1] = np.random.normal(0, vth_perp[jj])
-                        v_perp      = np.sqrt(vel[1, kk1] ** 2 + vel[2, kk1] ** 2)
-                        particle_PA = np.arctan(v_perp / vel[0, kk1])
+                    v_perp      = np.sqrt(vel[1, kk1] ** 2 + vel[2, kk1] ** 2)
+                    particle_PA = np.arctan(v_perp / vel[0, kk1])
+            
+            # Amount travelled (vel always +ve at first)
+            dpos = np.random.uniform(0, 1) * vel[0, kk1] * DT
+            
+            # Left boundary injection
+            if ii == 0:
+                pos[kk1]    = xmin + dpos
+                vel[0, kk1] = np.abs(vel[0, kk1])
                 
-                # Amount travelled (vel always +ve at first)
-                dpos = np.random.uniform(0, 1) * vel[0, kk1] * DT
-                
-                # Left boundary injection
-                if ii == 0:
-                    pos[kk1]    = xmin + dpos
-                    vel[0, kk1] = np.abs(vel[0, kk1])
-                    
-                # Right boundary injection
-                else:
-                    pos[kk1]    = xmax - dpos
-                    vel[0, kk1] = -np.abs(vel[0, kk1])
-                
-                # Copy values to second particle (Same position, xvel. Opposite v_perp) 
-                idx[kk2]    = idx[kk1]
-                pos[kk2]    = pos[kk1]
-                vel[0, kk2] = vel[0, kk1]
-                vel[1, kk2] = vel[1, kk1] * -1.0
-                vel[2, kk2] = vel[2, kk1] * -1.0
-                
-                # Subtract new macroparticles from accrued flux
-                _mp_flux[ii, jj] -= 2.0
-                n_created        += 2
+            # Right boundary injection
+            else:
+                pos[kk1]    = xmax - dpos
+                vel[0, kk1] = -np.abs(vel[0, kk1])
+            
+            # Copy values to second particle (Same position, xvel. Opposite v_perp) 
+            idx[kk2]    = idx[kk1]
+            pos[kk2]    = pos[kk1]
+            vel[0, kk2] = vel[0, kk1]
+            vel[1, kk2] = vel[1, kk1] * -1.0
+            vel[2, kk2] = vel[2, kk1] * -1.0
+            
+            # Subtract new macroparticles from accrued flux
+            _mp_flux[ii, jj] -= 2.0
+            n_created        += 2
     return
 
 
@@ -778,7 +797,7 @@ def init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plu
     deposit_both_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init)      # Collects sim_particles/cell/species
     position_update(pos, vel, idx, Ie, W_elec, dt)
     if particle_open == True:
-        inject_particles(pos, vel, idx, _mp_flux, dt)
+        inject_particles_all_species(pos, vel, idx, _mp_flux, dt)
     deposit_both_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus)
 
     if source_smoothing == 1:
@@ -853,7 +872,7 @@ def collect_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus, nu_minus,
     deposit_velocity_moments(vel, Ie, W_elec, idx, nu_minus)
     position_update(pos, vel, idx, Ie, W_elec, dt)
     if particle_open == True:
-        inject_particles(pos, vel, idx, _mp_flux, dt)
+        inject_particles_all_species(pos, vel, idx, _mp_flux, dt)
     deposit_both_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus)
     
     if source_smoothing == 1:
@@ -2163,7 +2182,7 @@ if __name__ == '__main__':
     # Put init into qq = 0 and save as usual, qq = 1 will be at t = dt
     # Need to change this so the initial state gets saved?
     qq      = 0; sim_time = 0.0; qq_real = 0
-    print('Starting loop...')
+    print('Starting loop...'); sys.exit()
     while qq < max_inc:
         #dump_to_file(pos, vel, E, Ve, Te, B, J, rho_int, qq, folder='CAM_CL_srctest_srcparalleloff', print_particles=False)
         #diagnostic_field_plot(B, E, rho_int, J, Ve, Te, B_damping_array, qq, DT, sim_time)
