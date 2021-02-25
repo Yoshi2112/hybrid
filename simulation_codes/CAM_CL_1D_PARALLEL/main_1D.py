@@ -65,7 +65,7 @@ def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
         v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
         
         N_loss, loss_idx = calc_losses(vel[0, st: en], v_perp, B0x, st=st)
-
+        print(N_loss, 'particles in the loss cone')
         # Catch for a particle on the boundary : Set 90 degree pitch angle (gyrophase shouldn't overly matter)
         if N_loss == 1:
             if abs(pos[loss_idx[0]]) == xmax:
@@ -2046,8 +2046,9 @@ else:
         a      = 4.5 / (L*RE)**2
         B_xmax = B_eq * (1 + a*xmax**2)
     else:
+        B_xmax = float(B_xmax_ovr)
         a      = (B_xmax / B_eq - 1) / xmax**2
-        B_xmax = B_xmax_ovr
+        
     
     r_A        = 120e3
     lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L)))       # Anchor latitude in radians

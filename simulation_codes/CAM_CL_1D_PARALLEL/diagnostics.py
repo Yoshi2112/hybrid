@@ -1838,6 +1838,52 @@ def test_current_push():
     return
 
 
+def check_velocity_space_init():
+    '''
+    New figure for each species. Plots in v_perp/v_parallel space
+    '''
+    pos, vel, idx = main_1D.init_quiet_start()
+    
+    vel /= main_1D.va
+    v_para = vel[0]
+    v_perp = np.sqrt(vel[1] ** 2 + vel[2] ** 2) * np.sign(vel[2])
+    
+    plt.ioff()
+    for jj in range(main_1D.Nj):
+        if main_1D.temp_type[jj] == 1:
+            st, en = main_1D.idx_start[jj], main_1D.idx_end[jj]
+            
+            fig, ax = plt.subplots()
+            
+            ax.scatter(v_para[st:en], v_perp[st:en], c=main_1D.temp_color[jj], s=1)
+            
+            ax.set_title(r'Total Velocity Distribution Functions (%s) :: $\alpha_L$ = %.1f$^\circ$' %\
+                         (main_1D.species_lbl[jj], main_1D.loss_cone_eq * 180./np.pi))
+                
+            ax.set_xlabel('$v_\parallel / v_A$')
+            ax.set_ylabel('$v_\perp / v_A$')
+            ax.axis('equal')
+            
+            if main_1D.homogenous == False:
+                # How to plot loss cones?
+                gradient   = np.tan(np.pi/2 - main_1D.loss_cone_xmax)
+                lmin, lmax = ax.get_xlim()
+                #Put some ylims in here too
+        
+                lcx        = np.linspace(lmin, lmax, 100, endpoint=True)
+                lcy1       =  gradient * lcx
+                lcy2       = -gradient * lcx
+    
+                ax.plot(lcx, lcy1, c='k', alpha=0.5, ls=':')
+                ax.plot(lcx, lcy2, c='k', alpha=0.5, ls=':')
+                     
+                ax.axvline(0, c='k')
+                ax.axhline(0, c='k')
+
+    plt.show()
+    return
+
+
 #%% --MAIN-- 
 if __name__ == '__main__':
     #animate_moving_weight()
@@ -1856,6 +1902,9 @@ if __name__ == '__main__':
     #test_particle_orbit()
     #test_curl_E()
     #test_curl_B()
-    test_grad_P()
+    #test_grad_P()
     #test_E2C_interpolation()
+    
+    # New tests: 25/02/2021
+    check_velocity_space_init()
     

@@ -4222,18 +4222,18 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//CAM_CL_open_particle_test//']:
+    for series in ['//PREDCORR_scipy_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
             runs_to_do = [2]
         
         # Extract all summary files and plot field stuff (quick)
-        if False:
+        if True:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
@@ -4273,7 +4273,7 @@ if __name__ == '__main__':
                      linear_only=False, normalize_axes=True)
 
                 ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=True,
-                                      plot_LT=True, plot_growth=True, klim=1.5, glim=0.05)
+                                      plot_LT=True, plot_growth=True, klim=1.5)
                 
                 #try:
                 #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)
@@ -4282,7 +4282,7 @@ if __name__ == '__main__':
 #                     pass            
 # =============================================================================
         
-        if True:
+        if False:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
