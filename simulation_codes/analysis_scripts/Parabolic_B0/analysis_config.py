@@ -169,10 +169,7 @@ def load_simulation_params():
     particle_reflect  = obj['particle_reflect']
     particle_reinit   = obj['particle_reinit']
 
-        
-    if particle_reinit is None and particle_reflect is None and particle_periodic is None:
-        particle_open = None
-    elif particle_reinit + particle_reflect + particle_periodic == 0:
+    if particle_reinit + particle_reflect + particle_periodic == 0:
         particle_open = 1
     else:
         particle_open = 0
@@ -276,7 +273,7 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
     output_file = run_dir + 'simulation_parameter_file.txt'
 
     if particle_open == 1:
-        particle_boundary = 'Open: Zero moment derivative'
+        particle_boundary = 'Open'
     elif particle_reinit == 1:
         particle_boundary = 'Reinitialize'
     elif particle_reflect == 1:
@@ -470,7 +467,7 @@ def load_particles(ii, shuffled_idx=False):
     tsim_time  = data['sim_time']
     tidx       = data['idx']
 
-    if shuffled_idx == True:
+    if shuffled_idx == True or particle_open == True:
         order = np.argsort(tidx)                # Retrieve order of elements by index
         tidx  = tidx[order]
         tx    = tx[order]
@@ -512,6 +509,11 @@ def extract_all_arrays():
     access. Note that magnetic field arrays exclude the last value due to periodic
     boundary conditions. This may be changed later.
     '''
+    # Check if field files exist:
+    if len(os.listdir(field_dir)) == 0:
+        print('No field files found, skipping extraction.')
+        return
+    
     # Check that all components are extracted
     comps_missing = 0
     for component in ['bx', 'by', 'bz', 'ex', 'ey', 'ez']:

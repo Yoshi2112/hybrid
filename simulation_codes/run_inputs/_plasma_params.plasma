@@ -1,5 +1,5 @@
-LABEL        $H^+$_cold   $H^+$_warm   $He^+$_cold   $O^+$_cold
-COLOUR       red          red 		   purple        black
+LABEL        $H^+$_warm   $H^+$_cold   $He^+$_cold   $O^+$_cold
+COLOUR       red          blue 		   purple        black
 TEMP_FLAG    1            0            0             0
 DIST_FLAG    0            0            0             0
 NSP_PPC      512          256          256           256

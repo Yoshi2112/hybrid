@@ -3534,10 +3534,12 @@ def scatterplot_velocities(it_max=None, skip=1):
             fig, axes = plt.subplots(4, figsize=(15, 10), sharex=True)
             axes[0].set_title('All particles :: t = {:.3f}s :: x vs. vx'.format(ptime))
             
-            axes[0].scatter(pos/cf.dx, vel[0, :]/cf.va, c='k', s=1)
-            axes[0].set_ylabel('$v_\parallel$')
+            for jj in range(cf.Nj):
+                st, en = idx_start[jj], idx_end[jj]
+                axes[0].scatter(pos[st:en]/cf.dx, vel[0, st:en]/cf.va, c=cf.temp_color[jj], s=1)
+                axes[1].scatter(pos[st:en]/cf.dx, v_perp[st:en]/cf.va, c=cf.temp_color[jj], s=1)
             
-            axes[1].scatter(pos/cf.dx, v_perp/cf.va, c='k', s=1)
+            axes[0].set_ylabel('$v_\parallel$')
             axes[1].set_ylabel('$v_\perp$')
             
             axes[0].set_ylim(-15, 15)
@@ -4214,24 +4216,24 @@ def plot_FB_waves_timeseries(save=True):
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'H:'
+    drive       = 'F:'
         
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//CAM_CL_old_new_Fu_compare//']:
+    for series in ['//CAM_CL_open_particle_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [2]
+            runs_to_do = [1]
         
         # Extract all summary files and plot field stuff (quick)
-        if True:
+        if False:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
@@ -4293,10 +4295,10 @@ if __name__ == '__main__':
                 
                 #plot_total_density_with_time(save=True)
                 
-                summary_plots(save=True, histogram=False, skip=10, ylim=False)
+                #summary_plots(save=True, histogram=False, skip=10, ylim=False)
                 for sp in range(cf.Nj):
-                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=10)
-                scatterplot_velocities(skip=10)
+                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=2)
+                scatterplot_velocities(skip=2)
                 #check_fields(skip=10, ylim=False)
             
         #plot_phase_space_with_time()

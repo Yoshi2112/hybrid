@@ -7,7 +7,7 @@ import sys, os, pdb
 
 Fu_override=False
 do_parallel=True
-nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
+#nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
 
 ### PHYSICAL CONSTANTS ###
 q   = 1.602177e-19                          # Elementary charge (C)
@@ -203,6 +203,44 @@ def init_quiet_start():
 
 
 @nb.njit()
+def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
+                          mp_flux, frev=20, hot_only=True):
+    '''
+    Still need to test this. Put it just after the initialization of the particles.
+    Actually might want to use the real mp_flux since that'll continue once the
+    waves turn on?
+    
+    Just use all the real arrays, since the particle arrays will be continuous
+    once the fields turn on (right weightings, positions, etc.) and the wave
+    fields should be empty at the start and will continue to be empty since they
+    are not updated in this loop.
+    
+    Should be ready to test after the open particle boundaries are verified.
+    '''
+    print('Letting particle distribution relax into static field configuration')
+    pdt    = orbit_res * 2 * np.pi / gyfreq
+    ptime  = frev / gyfreq
+    psteps = int(ptime / pdt) + 1
+        
+    # Desync (retard) velocity here
+    velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*pdt)
+    for pp in range(psteps):
+        for jj in range(Nj):
+            st, en = idx_start[jj], idx_end[jj]
+            velocity_update(pos[st:en], vel[:, st:en], Ie[st:en], W_elec[:, st:en],
+                            Ib[st:en], W_mag[:, st:en], idx[st:en], B, E, pdt)
+            position_update(pos[st:en], vel[:, st:en], idx[st:en], Ie[st:en],
+                            W_elec[:, st:en], pdt)
+            if particle_open == True:
+                inject_particles(pos, vel, idx, mp_flux, pdt)
+    
+    # Resync (advance) velocity here
+    velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, 0.5*pdt)
+    return
+
+
+
+@nb.njit()
 def set_damping_array(B_damping_array, DT):
     '''Create masking array for magnetic field damping used to apply open
     boundaries. Based on applcation by Shoji et al. (2011) and
@@ -345,7 +383,7 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
 
 
 @nb.njit(parallel=do_parallel)
-def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt):
+def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt, wave_fields=True):
     
     for ii in nb.prange(pos.shape[0]):
         if idx[ii] >= 0:
@@ -406,7 +444,7 @@ def position_update(pos, vel, idx, Ie, W_elec, DT):
     Also updates particle nearest node and weighting.
     '''
     for ii in nb.prange(pos.shape[0]):
-        if idx[ii] > 0:
+        if idx[ii] >= 0:
             pos[ii] += vel[0, ii] * DT
             
             # Check if particle has left simulation and apply boundary conditions
@@ -465,7 +503,7 @@ def position_update(pos, vel, idx, Ie, W_elec, DT):
 
 
 @nb.njit()
-def inject_particles(pos, vel, idx, mp_flux, DT):        
+def inject_particles(pos, vel, idx, _mp_flux, DT):        
     '''
     How to create new particles in parallel? Just test serial for now, but this
     might become my most expensive function for large N.
@@ -477,13 +515,13 @@ def inject_particles(pos, vel, idx, mp_flux, DT):
     '''
     # Add flux at each boundary 
     for kk in range(2):
-        mp_flux[kk, :] += inject_rate*DT
+        _mp_flux[kk, :] += inject_rate*DT
         
     # acc used only as placeholder to mark place in array. How to do efficiently? 
     acc = 0; n_created = 0
     for ii in nb.prange(2):
         for jj in nb.prange(Nj):
-            N_inject = int(mp_flux[ii, jj] // 2)
+            N_inject = int(_mp_flux[ii, jj] // 2)
             
             for xx in nb.prange(N_inject):
                 
@@ -536,8 +574,8 @@ def inject_particles(pos, vel, idx, mp_flux, DT):
                 vel[2, kk2] = vel[2, kk1] * -1.0
                 
                 # Subtract new macroparticles from accrued flux
-                mp_flux[ii, jj] -= 2.0
-                n_created       += 2
+                _mp_flux[ii, jj] -= 2.0
+                n_created        += 2
     return
 
 
@@ -703,7 +741,7 @@ def manage_source_term_boundaries(arr):
 
 @nb.njit()
 def init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plus, 
-                         rho_0, rho, J_init, J_plus, L, G, dt):
+                         rho_0, rho, J_init, J_plus, L, G, _mp_flux, dt):
     '''Moment collection and position advance function. Specifically used at initialization or
     after timestep synchronization.
 
@@ -739,7 +777,8 @@ def init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plu
                          
     deposit_both_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init)      # Collects sim_particles/cell/species
     position_update(pos, vel, idx, Ie, W_elec, dt)
-    #inject_particles(pos, vel, idx, mp_flux, dt)
+    if particle_open == True:
+        inject_particles(pos, vel, idx, _mp_flux, dt)
     deposit_both_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus)
 
     if source_smoothing == 1:
@@ -780,7 +819,7 @@ def init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plu
 
 @nb.njit()
 def collect_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus, nu_minus, 
-                         rho, J_minus, J_plus, L, G, dt):
+                         rho, J_minus, J_plus, L, G, _mp_flux, dt):
     '''
     Moment collection and position advance function.
 
@@ -813,7 +852,8 @@ def collect_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus, nu_minus,
     
     deposit_velocity_moments(vel, Ie, W_elec, idx, nu_minus)
     position_update(pos, vel, idx, Ie, W_elec, dt)
-    #inject_particles(pos, vel, idx, mp_flux, dt)
+    if particle_open == True:
+        inject_particles(pos, vel, idx, _mp_flux, dt)
     deposit_both_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus)
     
     if source_smoothing == 1:
@@ -1395,7 +1435,28 @@ def get_B_cent(_B, _B_cent):
 
 #@nb.njit()
 def check_timestep(qq, DT, pos, vel, Ie, W_elec, B, B_center, E, dns, 
-                   max_inc, part_save_iter, field_save_iter, subcycles):
+                   max_inc, part_save_iter, field_save_iter, subcycles,
+                   manual_trip=0):
+    '''
+    Check that simulation quantities still obey timestep limitations. Reduce
+    timestep for particle violations or increase subcycling for field violations.
+    
+    To Do:
+        -- How many subcycles should be allowed to occur before the timestep itself
+            is shorted? Maybe once subcycle > 100, trip timestep and half subcycles.
+            Would need to make sure they didn't autochange back. Think about this.
+            
+    manual_trip :: Diagnostic flag to manually increase/decrease timestep/subcycle
+       -1  :: Disables all timestep checks
+        0  :: Normal (Auto)
+        1  :: Halve timestep
+        2  :: Double timestep
+        3  :: Double subcycles
+        4  :: Half subcycles
+        
+    '''
+    if manual_trip < 0: # Return without change or check
+        return qq, DT, max_inc, part_save_iter, field_save_iter, 0, subcycles
     max_Vx          = np.abs(vel[0, :]).max()
     max_V           = np.abs(vel      ).max()
 
@@ -1416,7 +1477,7 @@ def check_timestep(qq, DT, pos, vel, Ie, W_elec, B, B_center, E, dns,
     
     # Reduce timestep
     change_flag       = 0
-    if DT_part < 0.9*DT:
+    if (DT_part < 0.9*DT and manual_trip == 0) or manual_trip == 1:
         position_update(pos, vel, idx, Ie, W_elec, -0.5*DT)
         
         change_flag      = 1
@@ -1429,7 +1490,8 @@ def check_timestep(qq, DT, pos, vel, Ie, W_elec, B, B_center, E, dns,
     
     # Increase timestep
     # DISABLED until I work out how to do the injection for half a timestep when this changes
-    elif False and DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0:
+    elif (DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0 and manual_trip == 0)\
+        or manual_trip == 2:
         position_update(pos, vel, idx, Ie, W_elec, -0.5*DT)
         
         change_flag       = 1
@@ -1447,11 +1509,11 @@ def check_timestep(qq, DT, pos, vel, Ie, W_elec, B, B_center, E, dns,
         dt_sc           = freq_res / dispfreq
         new_subcycles   = int(DT / dt_sc + 1)
         
-        if subcycles < 0.75*new_subcycles:                                       
+        if (subcycles < 0.75*new_subcycles and manual_trip == 0) or manual_trip == 3:                                       
             subcycles *= 2
             print('Number of subcycles per timestep doubled to', subcycles)
             
-        if subcycles > 3.0*new_subcycles and subcycles%2 == 0:                                      
+        if (subcycles > 3.0*new_subcycles and subcycles%2 == 0 and manual_trip == 0) or manual_trip == 4:                                      
             subcycles //= 2
             print('Number of subcycles per timestep halved to', subcycles)
             
@@ -1865,7 +1927,7 @@ with open(plasma_input, 'r') as f:
 
 if disable_waves == True:
     print('-- Wave solutions disabled, removing subcycles --')
-    adaptive_timestep = adaptive_subcycling = 0
+    #adaptive_timestep = adaptive_subcycling = 0
     default_subcycles = 1
 
 B_eq      = float(B_eq)                                  # Unform initial magnetic field value (in T)
@@ -2095,12 +2157,12 @@ if __name__ == '__main__':
 
     print('Loading initial state...\n')
     init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plus, 
-                         rho_int, rho_half, J, J_plus, L, G, 0.5*_DT)
+                         rho_int, rho_half, J, J_plus, L, G, mp_flux, 0.5*_DT)
     get_B_cent(B, B_cent)
     
     # Put init into qq = 0 and save as usual, qq = 1 will be at t = dt
     # Need to change this so the initial state gets saved?
-    qq      = 0; sim_time = 0.0
+    qq      = 0; sim_time = 0.0; qq_real = 0
     print('Starting loop...')
     while qq < max_inc:
         #dump_to_file(pos, vel, E, Ve, Te, B, J, rho_int, qq, folder='CAM_CL_srctest_srcparalleloff', print_particles=False)
@@ -2110,16 +2172,27 @@ if __name__ == '__main__':
         ##### EXAMINE TIMESTEP #####
         ############################
         if adaptive_timestep == 1:
+            ### REMOVE THIS FOR REAL RUNS!!!
+            mt=-1
+            if qq_real > 0 and (qq_real - 1000)%2000 == 0:
+                mt=1
+            elif qq_real > 0 and qq_real%2000 == 0:
+                mt=2
+            if mt != -1:
+                print('Manual selector is', mt)
+            ##################################
+            
             qq, _DT, max_inc, part_save_iter, field_save_iter, change_flag, subcycles =\
                 check_timestep(qq, _DT, pos, vel, Ie, W_elec, B, B_cent, E, rho_int, 
-                               max_inc, part_save_iter, field_save_iter, subcycles)
+                               max_inc, part_save_iter, field_save_iter, subcycles,
+                               manual_trip=mt)
     
             # Collect new moments and desync position and velocity
             if change_flag == 1:
                 # If timestep was doubled, do I need to consider 0.5dt's worth of
                 # new particles? Maybe just disable the doubling until I work this out
                 init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plus, 
-                         rho_int, rho_half, J, J_plus, L, G, 0.5*_DT)
+                         rho_int, rho_half, J, J_plus, L, G, mp_flux, 0.5*_DT)
 
         
         #######################
@@ -2137,7 +2210,7 @@ if __name__ == '__main__':
         # Store pc(1/2) here while pc(3/2) is collected
         rho_int[:]  = rho_half[:] 
         collect_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus, nu_minus, 
-                              rho_half, J_minus, J_plus, L, G, _DT)
+                              rho_half, J_minus, J_plus, L, G, mp_flux, _DT)
         
         rho_int += rho_half
         rho_int /= 2.0
@@ -2167,6 +2240,7 @@ if __name__ == '__main__':
 
         qq        += 1
         sim_time  += _DT
+        qq_real   += 1
         
     runtime = round(timer() - start_time,2) 
     print('Run complete : {} s'.format(runtime))
