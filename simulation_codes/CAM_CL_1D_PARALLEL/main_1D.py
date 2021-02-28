@@ -65,7 +65,7 @@ def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
         v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
         
         N_loss, loss_idx = calc_losses(vel[0, st: en], v_perp, B0x, st=st)
-        print(N_loss, 'particles in the loss cone')
+
         # Catch for a particle on the boundary : Set 90 degree pitch angle (gyrophase shouldn't overly matter)
         if N_loss == 1:
             if abs(pos[loss_idx[0]]) == xmax:
@@ -202,9 +202,23 @@ def init_quiet_start():
     return pos, vel, idx
 
 
-@nb.njit()
+def initialize_particles():
+    if quiet_start == 0:
+        pos, idx = uniform_distribution()
+        vel      = gaussian_distribution()
+    else:
+        pos, vel, idx = init_quiet_start()
+        
+    if True:
+        run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
+                          mp_flux, frev=20, hot_only=True)
+        
+    return pos, vel, idx
+
+
+#@nb.njit()
 def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
-                          mp_flux, frev=20, hot_only=True):
+                          mp_flux, frev=200, hot_only=True):
     '''
     Still need to test this. Put it just after the initialization of the particles.
     Actually might want to use the real mp_flux since that'll continue once the
@@ -223,15 +237,24 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
     
     TODO: Set particle boundary conditions to be species specific - i.e. reflect
     cold populations, but let hot populations have an open boundary.
+    
+    Is vel_ts needed? Cells don't really exist in this bottle. But you probably 
+    don't want to jump too quickly through the gradient, surely there's a timestep
+    limitation on that.
     '''
     print('Letting particle distribution relax into static field configuration')
-    pdt    = orbit_res * 2 * np.pi / gyfreq
-    ptime  = frev / gyfreq
-    psteps = int(ptime / pdt) + 1
-        
+    max_vx   = np.max(np.abs(vel[0, :]))
+    ion_ts   = orbit_res * 2 * np.pi / gyfreq
+    vel_ts   = 0.5*dx / max_vx                    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
+    pdt      = min(ion_ts, vel_ts)
+    ptime    = frev / gyfreq
+    psteps   = int(ptime / pdt) + 1
+    pdb.set_trace()
+    
     # Desync (retard) velocity here
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*pdt)
     for pp in range(psteps):
+        print('Equil', pp)
         for jj in range(Nj):
             if hot_only == True and temp_type[jj] == 0:
                 continue
@@ -271,13 +294,14 @@ def set_damping_array(B_damping_array, DT):
 
 def set_timestep(vel):
     # NOTE: Can probably ease off on the ion_ts once I validate this 
+    max_vx   = np.max(np.abs(vel[0, :]))
     ion_ts   = dxm * orbit_res / gyfreq           # Timestep to resolve gyromotion
-    vel_ts   = 0.5*dx / np.max(np.abs(vel[0, :])) # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
+    vel_ts   = 0.5*dx / max_vx                    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
 
     DT       = min(ion_ts, vel_ts)
     max_time = max_wcinv / gyfreq                 # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1             # Total number of time steps
-    
+
     if part_res == 0:
         part_save_iter = 1
     else:
@@ -1329,7 +1353,7 @@ def add_J_ext_pol(sim_time):
 
 
 #@nb.njit()
-def calculate_E(B, B_center, J, qn):
+def calculate_E(B, B_center, J, qn, stime):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
     and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
@@ -1856,7 +1880,8 @@ else:
 run_input    = root_dir +  '/run_inputs/' + args['runfile']
 plasma_input = root_dir +  '/run_inputs/' + args['plasmafile']
 
-
+if Fu_override == True:
+        plasma_input = root_dir +  '/run_inputs/' + '_Fu_test.plasma'
 
 ###########################
 ### LOAD RUN PARAMETERS ###
@@ -1948,7 +1973,7 @@ with open(plasma_input, 'r') as f:
 
 if disable_waves == True:
     print('-- Wave solutions disabled, removing subcycles --')
-    #adaptive_timestep = adaptive_subcycling = 0
+    adaptive_timestep = adaptive_subcycling = 0
     default_subcycles = 1
 
 B_eq      = float(B_eq)                                  # Unform initial magnetic field value (in T)
@@ -1988,9 +2013,10 @@ else:
     vth_perp   = np.sqrt(charge *  E_perp /  mass)       # Perpendicular thermal velocities
     vth_par    = np.sqrt(charge *  E_par  /  mass)       # Parallel thermal velocities
 
+rho        = (mass*density).sum()                        # Mass density for alfven velocity calc.
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 wpe        = np.sqrt(ne * q ** 2 / (me * e0))            # Proton   Plasma Frequency, wpi (rad/s)
-va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed: Assuming pure proton plasma
+va         = B_eq / np.sqrt(mu0*rho)                     # Alfven speed: Assuming pure proton plasma
 
 qm_ratios  = np.divide(charge, mass)
 gyfreq     = q*B_eq/mp                                   # Proton   Gyrofrequency (rad/s) (since this will be the highest of all ion species)
@@ -2130,8 +2156,12 @@ print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_wcinv /  gy
 print('{} spatial cells, 2x{} damped cells'.format(NX, ND))
 print('{} cells total'.format(NC))
 print('{} particles total\n'.format(N))
-    
-    #%% BEGIN HYBRID
+
+
+
+#%%#####################
+### START SIMULATION ###
+########################
 if __name__ == '__main__':
     start_time = timer()
     
@@ -2167,12 +2197,8 @@ if __name__ == '__main__':
 
     temp3d   = np.zeros((NC + 1, 3), dtype=np.float64)
 
-    if quiet_start == 0:
-        pos, idx = uniform_distribution()
-        vel      = gaussian_distribution()
-    else:
-        pos, vel, idx = init_quiet_start()
-
+    pos, vel, idx = initialize_particles()
+    sys.exit()
     assign_weighting_TSC(pos, Ie, W_elec)
 
     _DT, max_inc, part_save_iter, field_save_iter, subcycles, B_damping_array = set_timestep(vel)
@@ -2185,7 +2211,7 @@ if __name__ == '__main__':
     # Put init into qq = 0 and save as usual, qq = 1 will be at t = dt
     # Need to change this so the initial state gets saved?
     qq      = 0; sim_time = 0.0; qq_real = 0
-    print('Starting loop...'); sys.exit()
+    print('Starting loop...')
     while qq < max_inc:
         #dump_to_file(pos, vel, E, Ve, Te, B, J, rho_int, qq, folder='CAM_CL_srctest_srcparalleloff', print_particles=False)
         #diagnostic_field_plot(B, E, rho_int, J, Ve, Te, B_damping_array, qq, DT, sim_time)
@@ -2193,19 +2219,7 @@ if __name__ == '__main__':
         ############################
         ##### EXAMINE TIMESTEP #####
         ############################
-        if adaptive_timestep == 1:
-# =============================================================================
-#             ### REMOVE THIS FOR REAL RUNS!!!
-#             mt=-1
-#             if qq_real > 0 and (qq_real - 1000)%2000 == 0:
-#                 mt=1
-#             elif qq_real > 0 and qq_real%2000 == 0:
-#                 mt=2
-#             if mt != -1:
-#                 print('Manual selector is', mt)
-#             ##################################
-# =============================================================================
-            
+        if adaptive_timestep == 1 and disable_waves == 0:            
             qq, _DT, max_inc, part_save_iter, field_save_iter, change_flag, subcycles =\
                 check_timestep(qq, _DT, pos, vel, Ie, W_elec, B, B_cent, E, rho_int, 
                                max_inc, part_save_iter, field_save_iter, subcycles,

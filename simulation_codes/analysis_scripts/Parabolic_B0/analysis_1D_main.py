@@ -588,7 +588,7 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
     if save == True:
         fullpath = cf.anal_dir + saveas + '_BPERP_{}{}{}'.format(lbl, suff, logsuff) + '.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-        print('t-x Plot saved')
+        print('abs(t-x) Plot saved')
         plt.close('all')
     return
 
@@ -4213,6 +4213,36 @@ def plot_FB_waves_timeseries(save=True):
     return
 
 
+def plot_particle_paths(it_max=None, nsamples=1000):    
+    save_folder = cf.anal_dir + '//particle_trajectories//'
+    if it_max is None:
+        it_max = len(os.listdir(cf.particle_dir))
+    
+    indexes = np.random.randint(0, cf.N, nsamples)
+    Np      = len(indexes)
+    
+    spos = np.zeros((it_max, Np))
+    svel = np.zeros((it_max, Np, 3))
+    
+    for ii in range(it_max):
+        print('Loading timestep', ii, 'of', it_max)
+        pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii, shuffled_idx=False)
+        
+        for index, jj in zip(indexes, range(Np)):
+            spos[ii, jj]    = pos[   index]
+            svel[ii, jj, :] = vel[:, index]
+    
+    for ii in indexes():
+        print('Plotting trajectory for particle', ii)
+        fig, ax = plt.subplots()
+        ax.scatter(spos[:, ii], svel[:, ii, 0], label='$v_x$')
+        ax.scatter(spos[:, ii], svel[:, ii, 1], label='$v_y$')
+        ax.scatter(spos[:, ii], svel[:, ii, 2], label='$v_z$')
+        
+        fig.savefig(save_folder + 'particle_{:08}'.format(ii))
+        plt.close('all')
+    return
+
 
 #%% MAIN
 if __name__ == '__main__':
@@ -4222,7 +4252,7 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//PREDCORR_scipy_test//']:
+    for series in ['//CAM_CL_mirror_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4230,10 +4260,10 @@ if __name__ == '__main__':
         if True:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [2]
+            runs_to_do = [2, 3]
         
         # Extract all summary files and plot field stuff (quick)
-        if True:
+        if False:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
@@ -4282,12 +4312,12 @@ if __name__ == '__main__':
 #                     pass            
 # =============================================================================
         
-        if False:
+        if True:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 cf.load_run(drive, series, run_num, extract_arrays=True)
-
+                plot_particle_paths(it_max=None)
                 #plot_E_components(save=True)
                 
                 #plot_spatial_poynting(save=True, log=True)
@@ -4296,9 +4326,9 @@ if __name__ == '__main__':
                 #plot_total_density_with_time(save=True)
                 
                 #summary_plots(save=True, histogram=False, skip=10, ylim=False)
-                for sp in range(cf.Nj):
-                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=2)
-                scatterplot_velocities(skip=2)
+                #for sp in range(cf.Nj):
+                #    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=10)
+                #scatterplot_velocities(skip=10)
                 #check_fields(skip=10, ylim=False)
             
         #plot_phase_space_with_time()

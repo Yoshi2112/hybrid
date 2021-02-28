@@ -1233,7 +1233,7 @@ if __name__ == '__main__':
     wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
     wpe        = np.sqrt(ne * q ** 2 / (me * e0))            # Proton   Plasma Frequency, wpi (rad/s)
     va         = B0 / np.sqrt(mu0*ne*mp)                     # Alfven speed: Assuming pure proton plasma
-    
+
     qm_ratios  = np.divide(charge, mass)
     gyfreq     = q*B0/mp                                     # Proton   Gyrofrequency (rad/s) (since this will be the highest of all ion species)
     e_gyfreq   = q*B0/me                                     # Electron Gyrofrequency (rad/s)

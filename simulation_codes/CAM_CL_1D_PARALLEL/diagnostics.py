@@ -1855,7 +1855,7 @@ def check_velocity_space_init():
             
             fig, ax = plt.subplots()
             
-            ax.scatter(v_para[st:en], v_perp[st:en], c=main_1D.temp_color[jj], s=1)
+            ax.scatter(v_perp[st:en], v_para[st:en], c=main_1D.temp_color[jj], s=1)
             
             ax.set_title(r'Total Velocity Distribution Functions (%s) :: $\alpha_L$ = %.1f$^\circ$' %\
                          (main_1D.species_lbl[jj], main_1D.loss_cone_eq * 180./np.pi))

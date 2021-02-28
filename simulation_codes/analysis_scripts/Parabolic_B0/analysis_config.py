@@ -502,6 +502,20 @@ def load_particles(ii, shuffled_idx=False):
     return tx, tv, tidx, tsim_time, idx_start, idx_end
 
 
+def unwrap_particle_files():
+    '''
+    Need to memory map this - not gonna be able to hold 100's of GB in RAM.
+    '''
+    particle_folder = data_dir + '/particles_single/'
+    if os.path.exists(particle_folder) == False:
+        os.makedirs(particle_folder)
+        
+    n_files = len(os.listdir(particle_dir))
+    
+    for ii in range(n_files):
+        pos, vel, idx, sim_time, idx_start, idx_end = load_particles(ii)
+    return
+
 
 def extract_all_arrays():
     '''
@@ -608,7 +622,11 @@ def get_array(component='by', get_all=False, timebase=None):
     '''
     if get_all == False:
         arr_path   = temp_dir + component.lower() + '_array' + '.npy'
-        arr        = np.load(arr_path)
+        if os.path.exists(arr_path) == True:
+            arr = np.load(arr_path)
+        else:
+            print('File {} does not exist.'.format(component.lower() + '_array' + '.npy'))
+            arr = None
         ftime_sec  = dt_field * np.arange(arr.shape[0])
         
         if timebase == 'gyperiod':
