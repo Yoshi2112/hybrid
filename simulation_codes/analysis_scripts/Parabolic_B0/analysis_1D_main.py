@@ -1979,22 +1979,25 @@ def check_fields(save=True, ylim=True, skip=1):
                     axes[jj, ii].grid()
             
             if ylim == True:
-                axes[0, 0].set_ylim(rD.min(), rD.max())
-                axes[1, 0].set_ylim(by.min(), by.max())
-                axes[2, 0].set_ylim(bz.min(), bz.max())
-                axes[3, 0].set_ylim(ey.min(), ey.max())
-                axes[4, 0].set_ylim(ez.min(), ez.max())
-                
-                axes[0, 1].set_ylim(qdens.min(), qdens.max())
-                axes[1, 1].set_ylim(vey.min(), vey.max())
-                axes[2, 1].set_ylim(vez.min(), vez.max())
-                axes[3, 1].set_ylim(jy.min() , jy.max())
-                axes[4, 1].set_ylim(jz.min() , jz.max())
-                
-                axes[0, 2].set_ylim(te.min(), te.max())
-                axes[1, 2].set_ylim(vex.min(), vex.max())
-                axes[2, 2].set_ylim(jx.min(), jx.max())
-                axes[3, 2].set_ylim(ex.min(), ex.max())
+                try:
+                    axes[0, 0].set_ylim(rD.min(), rD.max())
+                    axes[1, 0].set_ylim(by.min(), by.max())
+                    axes[2, 0].set_ylim(bz.min(), bz.max())
+                    axes[3, 0].set_ylim(ey.min(), ey.max())
+                    axes[4, 0].set_ylim(ez.min(), ez.max())
+                    
+                    axes[0, 1].set_ylim(qdens.min(), qdens.max())
+                    axes[1, 1].set_ylim(vey.min(), vey.max())
+                    axes[2, 1].set_ylim(vez.min(), vez.max())
+                    axes[3, 1].set_ylim(jy.min() , jy.max())
+                    axes[4, 1].set_ylim(jz.min() , jz.max())
+                    
+                    axes[0, 2].set_ylim(te.min(), te.max())
+                    axes[1, 2].set_ylim(vex.min(), vex.max())
+                    axes[2, 2].set_ylim(jx.min(), jx.max())
+                    axes[3, 2].set_ylim(ex.min(), ex.max())
+                except:
+                    pass
             
             plt.tight_layout(pad=1.0, w_pad=1.8)
             fig.subplots_adjust(hspace=0.125)
@@ -4249,7 +4252,7 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//CAM_CL_equil_test//']:
+    for series in ['//CAM_CL_ABCs_homogenous//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4260,7 +4263,7 @@ if __name__ == '__main__':
             runs_to_do = [2, 3]
         
         # Extract all summary files and plot field stuff (quick)
-        if False:
+        if True:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
@@ -4268,7 +4271,7 @@ if __name__ == '__main__':
 
                 #plot_total_density_with_time()
                 #plot_max_velocity()
-                #check_fields(save=True, ylim=True)
+                check_fields(save=True, ylim=True, skip=1)
                 #check_fields(save=True, ylim=False)
 
                 #winske_summary_plots(save=True)
@@ -4292,15 +4295,17 @@ if __name__ == '__main__':
 #                 ggg.SWSP_timeseries(nx=x1000, save=True, log=True, normalize=True, tmax=35)
 # =============================================================================
 
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
-                           normalize=False, B0_lim=None, remove_ND=False)
-                
-                plot_wk(saveas='wk_plot', dispersion_overlay=True, save=True,
-                     pcyc_mult=1.5, xmax=1.5, zero_cold=False,
-                     linear_only=False, normalize_axes=True)
-
-                ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=True,
-                                      plot_LT=True, plot_growth=True, klim=1.5)
+# =============================================================================
+#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
+#                            normalize=False, B0_lim=None, remove_ND=False)
+#                 
+#                 plot_wk(saveas='wk_plot', dispersion_overlay=True, save=True,
+#                      pcyc_mult=1.5, xmax=1.5, zero_cold=False,
+#                      linear_only=False, normalize_axes=True)
+# 
+#                 ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=True,
+#                                       plot_LT=True, plot_growth=True, klim=1.5)
+# =============================================================================
                 
                 #try:
                 #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)
@@ -4309,7 +4314,7 @@ if __name__ == '__main__':
 #                     pass            
 # =============================================================================
         
-        if True:
+        if False:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
@@ -4321,11 +4326,11 @@ if __name__ == '__main__':
                 #plot_spatial_poynting(save=True, log=True)
                 #plot_spatial_poynting_helical(save=True, log=True)
                 
-                plot_total_density_with_time(save=True)
+                #plot_total_density_with_time(save=True)
                 
                 #summary_plots(save=True, histogram=False, skip=10, ylim=False)
-                #for sp in range(cf.Nj):
-                #    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=10)
+                for sp in range(cf.Nj):
+                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=10)
                 #scatterplot_velocities(skip=10)
                 #check_fields(skip=10, ylim=False)
             

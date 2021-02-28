@@ -2130,11 +2130,11 @@ li1 = ND         ; li2 = ND + 1         # Left inner
 ri1 = ND + NX - 1; ri2 = ND + NX - 2    # Right inner
     
 #%% DRIVEN WAVE STUFF (NOT YET IMPLEMENTED)
-pol_wave    = 0         # 0: No wave, 1: Single point source, 2: Multi point source
+pol_wave    = 1         # 0: No wave, 1: Single point source, 2: Multi point source
 
 # DRIVEN B PARAMS: Sine part
-driven_freq = 2.2       # Driven wave frequency in Hz standard 2.2
-driven_ampl = 50e-7     # Driven wave amplitude in A/m (I think?) Standard 50e-7
+driven_freq = 0.25*gyfreq / (2*np.pi)       # Driven wave frequency in Hz standard 2.2
+driven_ampl = 25e-7                        # Driven wave amplitude in A/m (I think?) Standard 50e-7
 
 # Gaussian part
 pulse_offset = 5.0      # Pulse center time (s)
@@ -2222,7 +2222,7 @@ if __name__ == '__main__':
                          _RHO_INT, _RHO_HALF, _J, _J_PLUS, _L, _G, _MP_FLUX, 0.5*_DT)
     get_B_cent(_B, _B_CENT)
     _E, _VE, _TE = calculate_E(_B, _B_CENT, _J, _RHO_HALF, 0.0)
-    sys.exit()
+
     # Put init into qq = 0 and save as usual, qq = 1 will be at t = dt
     # Need to change this so the initial state gets saved?
     # WARNING :: Accruing sim_time like this leads to numerical error accumulation at the LSB.
@@ -2230,7 +2230,7 @@ if __name__ == '__main__':
     print('Starting loop...')
     while _QQ < _MAX_INC:
         #dump_to_file(pos, vel, E, Ve, Te, B, J, rho_int, qq, folder='CAM_CL_srctest_srcparalleloff', print_particles=False)
-        diagnostic_field_plot(_B, _E, _RHO_INT, _J, _VE, _TE, _B_DAMP, _QQ, _DT, _SIM_TIME)
+        #diagnostic_field_plot(_B, _E, _RHO_INT, _J, _VE, _TE, _B_DAMP, _QQ, _DT, _SIM_TIME)
 
         ############################
         ##### EXAMINE TIMESTEP #####
@@ -2246,7 +2246,7 @@ if __name__ == '__main__':
                 # new particles? Maybe just disable the doubling until I work this out
                 init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IDX, _NI_INIT, _NU_INIT, _NI, _NU_PLUS, 
                          _RHO_INT, _RHO_HALF, _J, _J_PLUS, _L, _G, _MP_FLUX, 0.5*_DT)
-
+        
         
         #######################
         ###### MAIN LOOP ######
