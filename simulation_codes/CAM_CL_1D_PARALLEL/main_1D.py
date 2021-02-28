@@ -214,6 +214,7 @@ def initialize_particles(Ie, W_elec, Ib, W_mag, B, E, mp_flux,
         run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
                           mp_flux, frev=frev, hot_only=hot_only)
         
+    assign_weighting_TSC(pos, Ie, W_elec)
     return pos, vel, idx
 
 
@@ -250,8 +251,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
     pdt      = min(ion_ts, vel_ts)
     ptime    = frev / gyfreq
     psteps   = int(ptime / pdt) + 1
-    pdb.set_trace()
-    
+
     # Desync (retard) velocity here
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*pdt)
     for pp in range(psteps):
@@ -326,7 +326,7 @@ def set_timestep(vel):
     else:
         subcycles = default_subcycles
         print('Number of subcycles set at default: {}'.format(subcycles))
-    
+
     if save_fields == 1 or save_particles == 1:
         store_run_parameters(DT, part_save_iter, field_save_iter, max_inc, max_time, subcycles)
     
@@ -762,12 +762,15 @@ def manage_source_term_boundaries(arr):
     If numba doesn't like the different possible shapes of arr
     just use a loop in the calling function to work each component 
     and this becomes for 1D arrays only
-    
-    DOUBLE CHECK THIS AT SOME POINT
     '''
     if field_periodic == 0:
+        # Mirror on open boundary
         arr[ND]          += arr[ND - 1]
         arr[ND + NX - 1] += arr[ND + NX]
+        
+        # ...and Fill remaining ghost cells
+        arr[:li1] = arr[li1]
+        arr[ro1:] = arr[ri1]
     else:
         # If periodic, move contributions
         arr[li1] += arr[ro1]
@@ -787,7 +790,7 @@ def manage_source_term_boundaries(arr):
     return
 
 
-@nb.njit()
+#@nb.njit()
 def init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plus, 
                          rho_0, rho, J_init, J_plus, L, G, _mp_flux, dt):
     '''Moment collection and position advance function. Specifically used at initialization or
@@ -856,12 +859,14 @@ def init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plu
         manage_source_term_boundaries(J_plus[:, ii])
         manage_source_term_boundaries(G[:, ii])
 
-    for ii in range(rho_0.shape[0]):
-        if rho_0[ii] < min_dens * ne * q:
-            rho_0[ii] = min_dens * ne * q
-            
-        if rho[ii] < min_dens * ne * q:
-            rho[ii] = min_dens * ne * q
+# =============================================================================
+#     for ii in range(rho_0.shape[0]):
+#         if rho_0[ii] < min_dens * ne * q:
+#             rho_0[ii] = min_dens * ne * q
+#             
+#         if rho[ii] < min_dens * ne * q:
+#             rho[ii] = min_dens * ne * q
+# =============================================================================
     return
 
 
@@ -1865,7 +1870,7 @@ def dump_to_file(pos, vel, E_int, Ve, Te, B, Ji, q_dens, qq, folder='parallel', 
 # Misc softish-coded stuff    
 influx_equilibrium  = 0           # Flag to start hot population in equilibrium with the boundary conditions
 min_dens            = 0.05        # Allowable minimum charge density in a cell, as a fraction of ne*q
-adaptive_timestep   = 0           # Flag (True/False) for adaptive timestep based on particle and field parameters
+adaptive_timestep   = 1           # Flag (True/False) for adaptive timestep based on particle and field parameters
 adaptive_subcycling = 0           # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
 default_subcycles   = 12          # Number of field subcycling steps for Cyclic Leapfrog
 
@@ -2210,15 +2215,14 @@ if __name__ == '__main__':
     _POS, _VEL, _IDX = initialize_particles(_IE, _W_ELEC, _IB, _W_MAG, _B, _E,
                                             _MP_FLUX, influx_equil=influx_equilibrium)
     
-    assign_weighting_TSC(_POS, _IE, _W_ELEC)
-
     _DT, _MAX_INC, _PART_SAVE_ITER, _FIELD_SAVE_ITER, _SUBCYCLES, _B_DAMP = set_timestep(_VEL)
 
     print('Loading initial state...\n')
     init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IDX, _NI_INIT, _NU_INIT, _NI, _NU_PLUS, 
                          _RHO_INT, _RHO_HALF, _J, _J_PLUS, _L, _G, _MP_FLUX, 0.5*_DT)
     get_B_cent(_B, _B_CENT)
-    
+    _E, _VE, _TE = calculate_E(_B, _B_CENT, _J, _RHO_HALF, 0.0)
+    sys.exit()
     # Put init into qq = 0 and save as usual, qq = 1 will be at t = dt
     # Need to change this so the initial state gets saved?
     # WARNING :: Accruing sim_time like this leads to numerical error accumulation at the LSB.
@@ -2226,7 +2230,7 @@ if __name__ == '__main__':
     print('Starting loop...')
     while _QQ < _MAX_INC:
         #dump_to_file(pos, vel, E, Ve, Te, B, J, rho_int, qq, folder='CAM_CL_srctest_srcparalleloff', print_particles=False)
-        #diagnostic_field_plot(B, E, rho_int, J, Ve, Te, B_damping_array, qq, DT, sim_time)
+        diagnostic_field_plot(_B, _E, _RHO_INT, _J, _VE, _TE, _B_DAMP, _QQ, _DT, _SIM_TIME)
 
         ############################
         ##### EXAMINE TIMESTEP #####
@@ -2249,13 +2253,13 @@ if __name__ == '__main__':
         #######################
         _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _J, _TEMP3D, _DT, _SUBCYCLES,
                                     _B_DAMP, _SIM_TIME)
-        E, Ve, Te = calculate_E(_B, _B_CENT, _J, _RHO_HALF, _SIM_TIME)
+        _E, _VE, _TE = calculate_E(_B, _B_CENT, _J, _RHO_HALF, _SIM_TIME)
 
-        push_current(_J_PLUS, _J, E, _B, _B_CENT, _L, _G, _DT)
-        E, Ve, Te = calculate_E(_B, _B_CENT, _J, _RHO_HALF, _SIM_TIME)
+        push_current(_J_PLUS, _J, _E, _B, _B_CENT, _L, _G, _DT)
+        _E, _VE, _TE = calculate_E(_B, _B_CENT, _J, _RHO_HALF, _SIM_TIME)
         
         assign_weighting_TSC(_POS, _IB, _W_MAG, E_nodes=False)
-        velocity_update(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, _B, E, _DT)
+        velocity_update(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, _B, _E, _DT)
 
         # Store pc(1/2) here while pc(3/2) is collected
         _RHO_INT[:]  = _RHO_HALF[:] 
@@ -2268,7 +2272,7 @@ if __name__ == '__main__':
 
         _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, J, _TEMP3D, _DT, _SUBCYCLES,
                                     _B_DAMP, _SIM_TIME)
-        E, Ve, Te = calculate_E(_B, _B_CENT, J, _RHO_INT, _SIM_TIME)
+        _E, _VE, _TE = calculate_E(_B, _B_CENT, J, _RHO_INT, _SIM_TIME)
 
         ########################
         ##### OUTPUT DATA  #####
@@ -2277,7 +2281,7 @@ if __name__ == '__main__':
             save_particle_data(_DT, _PART_SAVE_ITER, _QQ, _POS, _VEL, _IDX, _SIM_TIME)
 
         if _QQ%_FIELD_SAVE_ITER == 0 and save_fields == 1:
-            save_field_data(_DT, _FIELD_SAVE_ITER, _QQ, J, E, _B, Ve, Te, _RHO_INT, _SIM_TIME)
+            save_field_data(_DT, _FIELD_SAVE_ITER, _QQ, J, _E, _B, _VE, _TE, _RHO_INT, _SIM_TIME)
         
         if _QQ%100 == 0:
             running_time = int(timer() - start_time)

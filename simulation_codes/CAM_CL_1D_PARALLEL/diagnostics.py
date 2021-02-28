@@ -1386,11 +1386,35 @@ def plot_dipole_field_line(length=True, get_from_sim=True):
     return
 
 
-def check_particle_position_individual():
+def check_particle_position_individual_incl_density():
     '''
-    Verified. RC and cold population positions load fine
     '''
-    pos, vel, idx = main_1D.uniform_gaussian_distribution_quiet()
+    N  = main_1D.N
+    NC = main_1D.NC
+    Nj = main_1D.Nj
+    
+    Ie       = np.zeros(N,       dtype=np.uint16)
+    W_elec   = np.zeros((3, N),  dtype=np.float64)
+    mp_flux  = np.zeros((2, Nj), dtype=np.float64)
+    
+    ni       = np.zeros((NC, Nj), dtype=np.float64)
+    ni_init  = np.zeros((NC, Nj), dtype=np.float64)
+    nu_init  = np.zeros((NC, Nj, 3), dtype=np.float64)
+    nu_plus  = np.zeros((NC, Nj, 3), dtype=np.float64)
+    
+    rho_half = np.zeros(NC, dtype=np.float64)
+    rho_int  = np.zeros(NC, dtype=np.float64)
+    
+    J        = np.zeros((NC, 3), dtype=np.float64)
+    J_plus   = np.zeros((NC, 3), dtype=np.float64)
+
+    L        = np.zeros( NC,     dtype=np.float64)
+    G        = np.zeros((NC, 3), dtype=np.float64)
+    
+    pos, vel, idx = main_1D.init_quiet_start()
+    main_1D.assign_weighting_TSC(pos, Ie, W_elec)
+    main_1D.init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plus, 
+                rho_int, rho_half, J, J_plus, L, G, mp_flux, 0.0)
     
     plt.figure()
     for jj in range(main_1D.Nj):
@@ -1398,6 +1422,9 @@ def check_particle_position_individual():
         en = main_1D.idx_end[  jj]    
         Np = en - st
         plt.scatter(pos[st:en]/main_1D.dx, np.ones(Np)*jj, color=main_1D.temp_color[jj])
+        
+    norm_dens = 2.0 * rho_int / rho_int.max()
+    plt.plot(main_1D.E_nodes/main_1D.dx, norm_dens, c='k')
         
     ## Add node markers and boundaries
     for kk in range(main_1D.NC):
@@ -1409,7 +1436,7 @@ def check_particle_position_individual():
     
     plt.axvline(main_1D.xmin/main_1D.dx, linestyle='-', c='k', alpha=0.2)
     plt.axvline(main_1D.xmax/main_1D.dx, linestyle='-', c='k', alpha=0.2)
-    plt.ylim(-0.1, 2)
+    plt.ylim(-0.1, 2.5)
     return
 
 
@@ -1898,13 +1925,16 @@ if __name__ == '__main__':
     #test_E_convective_exelectron()
     #test_weight_shape_and_alignment()
     
-    # New tests: 23/02/2021
+    # 23/02/2021
     #test_particle_orbit()
     #test_curl_E()
     #test_curl_B()
     #test_grad_P()
     #test_E2C_interpolation()
     
-    # New tests: 25/02/2021
-    check_velocity_space_init()
+    # 25/02/2021
+    #check_velocity_space_init()
+    
+    # Tests 28/02/2021
+    check_particle_position_individual_incl_density()
     

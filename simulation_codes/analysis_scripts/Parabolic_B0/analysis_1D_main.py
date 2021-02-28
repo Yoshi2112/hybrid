@@ -3953,11 +3953,6 @@ def plot_total_density_with_time(save=True):
     return
 
 
-def plot_logB_vs_linear():
-    
-    return
-
-
 def multiplot_fluxes(series, save=True):
     '''
     Load outside loop: Fluxes and charge density of all runs in a series
@@ -4254,7 +4249,7 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//CAM_CL_mirror_test//']:
+    for series in ['//CAM_CL_equil_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4320,13 +4315,13 @@ if __name__ == '__main__':
                 print('\nRun {}'.format(run_num))
                 cf.load_run(drive, series, run_num, extract_arrays=True)
                 #cf.unwrap_particle_files()
-                plot_particle_paths(it_max=None)
+                #plot_particle_paths(it_max=None)
                 #plot_E_components(save=True)
                 
                 #plot_spatial_poynting(save=True, log=True)
                 #plot_spatial_poynting_helical(save=True, log=True)
                 
-                #plot_total_density_with_time(save=True)
+                plot_total_density_with_time(save=True)
                 
                 #summary_plots(save=True, histogram=False, skip=10, ylim=False)
                 #for sp in range(cf.Nj):
