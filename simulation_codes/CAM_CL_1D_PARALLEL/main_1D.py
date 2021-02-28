@@ -1238,6 +1238,9 @@ def cyclic_leapfrog(B1, B2, B_center, rho, J, curl, DT, subcycles, B_damp, sim_t
             
     28/02/2021 :: Added advancement of sim_time within this function. The global
             "clock" now follows the development of the magnetic field.
+            Resync doesn't require a sim_time increment since the field solution
+            is already at 0.5*DT and this solution is used to advance the second
+            field copy for averaging.
     '''
     H     = 0.5 * DT
     dh    = H / subcycles
@@ -1254,7 +1257,7 @@ def cyclic_leapfrog(B1, B2, B_center, rho, J, curl, DT, subcycles, B_damp, sim_t
     ## RETURN IF NO SUBCYCLES REQUIRED ##
     if subcycles == 1:
         B1[:] = B2[:]
-        return 
+        return sim_time
 
     ## MAIN SUBCYCLE LOOP ##
     for ii in range(subcycles - 1):             
@@ -1264,15 +1267,15 @@ def cyclic_leapfrog(B1, B2, B_center, rho, J, curl, DT, subcycles, B_damp, sim_t
             B1  -= 2 * dh * curl
             apply_boundary(B1, B_damp)
             get_B_cent(B1, B_center)
-            sim_time += 2*dh
+            sim_time += dh
         else:
             E, Ve, Te = calculate_E(B1, B_center, J, rho, sim_time)
             get_curl_E(E, curl) 
             B2  -= 2 * dh * curl
             apply_boundary(B2, B_damp)
             get_B_cent(B2, B_center)
-            sim_time += 2*dh
-            
+            sim_time += dh
+
     ## RESYNC FIELD COPIES ##
     if ii%2 == 0:
         E, Ve, Te = calculate_E(B2, B_center, J, rho, sim_time)
@@ -1280,14 +1283,12 @@ def cyclic_leapfrog(B1, B2, B_center, rho, J, curl, DT, subcycles, B_damp, sim_t
         B2  -= dh * curl
         apply_boundary(B2, B_damp)
         get_B_cent(B2, B_center)
-        sim_time += dh
     else:
         E, Ve, Te = calculate_E(B1, B_center, J, rho, sim_time)
         get_curl_E(E, curl) 
         B1  -= dh * curl
         apply_boundary(B1, B_damp)
         get_B_cent(B1, B_center)
-        sim_time += dh
 
     ## AVERAGE FIELD SOLUTIONS: COULD PERFORM A CONVERGENCE TEST HERE IN FUTURE ##
     B1 += B2; B1 /= 2.0
@@ -1313,13 +1314,12 @@ def add_J_ext(sim_time):
     J_ext = np.zeros((NC, 3), dtype=np.float64)
     phase = -90
     N_eq  = ND + NX//2
-    time  = sim_time
-    
-    gaussian = np.exp(- ((time - pulse_offset)/ pulse_width) ** 2 )
+
+    gaussian = np.exp(- ((sim_time - pulse_offset)/ pulse_width) ** 2 )
 
     # Set new field values in array as soft source
-    J_ext[N_eq, 1] = driven_ampl * gaussian*np.sin(2 * np.pi * driven_freq * time)
-    J_ext[N_eq, 2] = driven_ampl * gaussian*np.sin(2 * np.pi * driven_freq * time + phase * np.pi / 180.)    
+    J_ext[N_eq, 1] = driven_ampl*gaussian*np.sin(2 * np.pi * driven_freq * sim_time)
+    J_ext[N_eq, 2] = driven_ampl*gaussian*np.sin(2 * np.pi * driven_freq * sim_time + phase * np.pi / 180.)    
     return J_ext
 
 
@@ -1382,9 +1382,9 @@ def calculate_E(B, B_center, J, qn, sim_time):
         J_ext = add_J_ext_pol(sim_time)
        
     Ve       = np.zeros((J.shape[0], 3), dtype=np.float64) 
-    Ve[:, 0] = (J[:, 0] + J_ext - curlB[:, 0]) / qn
-    Ve[:, 1] = (J[:, 1] + J_ext - curlB[:, 1]) / qn
-    Ve[:, 2] = (J[:, 2] + J_ext - curlB[:, 2]) / qn
+    Ve[:, 0] = (J[:, 0] + J_ext[:, 0] - curlB[:, 0]) / qn
+    Ve[:, 1] = (J[:, 1] + J_ext[:, 1] - curlB[:, 1]) / qn
+    Ve[:, 2] = (J[:, 2] + J_ext[:, 2] - curlB[:, 2]) / qn
     
     Te       = get_electron_temp(qn)
     Pe, del_p= get_grad_P_alt3(qn, Te)
@@ -1861,8 +1861,8 @@ def dump_to_file(pos, vel, E_int, Ve, Te, B, Ji, q_dens, qq, folder='parallel', 
 #%% --- MAIN ---
 # Misc softish-coded stuff    
 min_dens            = 0.05                               # Allowable minimum charge density in a cell, as a fraction of ne*q
-adaptive_timestep   = 1                                  # Flag (True/False) for adaptive timestep based on particle and field parameters
-adaptive_subcycling = 1                                  # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
+adaptive_timestep   = 0                                  # Flag (True/False) for adaptive timestep based on particle and field parameters
+adaptive_subcycling = 0                                  # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
 default_subcycles   = 12                                 # Number of field subcycling steps for Cyclic Leapfrog
 
 
@@ -2216,12 +2216,13 @@ if __name__ == '__main__':
     
     # Put init into qq = 0 and save as usual, qq = 1 will be at t = dt
     # Need to change this so the initial state gets saved?
+    # WARNING :: Accruing sim_time like this leads to numerical error accumulation at the LSB.
     _QQ = 0; _SIM_TIME = 0.0
     print('Starting loop...')
     while _QQ < _MAX_INC:
         #dump_to_file(pos, vel, E, Ve, Te, B, J, rho_int, qq, folder='CAM_CL_srctest_srcparalleloff', print_particles=False)
         #diagnostic_field_plot(B, E, rho_int, J, Ve, Te, B_damping_array, qq, DT, sim_time)
-        
+
         ############################
         ##### EXAMINE TIMESTEP #####
         ############################
@@ -2241,7 +2242,8 @@ if __name__ == '__main__':
         #######################
         ###### MAIN LOOP ######
         #######################
-        cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _J, _TEMP3D, _DT, _SUBCYCLES, _B_DAMP, _SIM_TIME)
+        _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _J, _TEMP3D, _DT, _SUBCYCLES,
+                                    _B_DAMP, _SIM_TIME)
         E, Ve, Te = calculate_E(_B, _B_CENT, _J, _RHO_HALF, _SIM_TIME)
 
         push_current(_J_PLUS, _J, E, _B, _B_CENT, _L, _G, _DT)
@@ -2259,8 +2261,9 @@ if __name__ == '__main__':
         _RHO_INT /= 2.0
         J        = 0.5 * (_J_PLUS  +  _J_MINUS)
 
-        cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, J, _TEMP3D, _DT, _SUBCYCLES, _B_DAMP, _SIM_TIME)
-        E, Ve, Te   = calculate_E(_B, _B_CENT, J, _RHO_INT, _SIM_TIME)
+        _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, J, _TEMP3D, _DT, _SUBCYCLES,
+                                    _B_DAMP, _SIM_TIME)
+        E, Ve, Te = calculate_E(_B, _B_CENT, J, _RHO_INT, _SIM_TIME)
 
         ########################
         ##### OUTPUT DATA  #####
