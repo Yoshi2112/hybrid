@@ -202,16 +202,17 @@ def init_quiet_start():
     return pos, vel, idx
 
 
-def initialize_particles(Ie, W_elec, Ib, W_mag, B, E, mp_flux):
+def initialize_particles(Ie, W_elec, Ib, W_mag, B, E, mp_flux,
+                         influx_equil=False, hot_only=True, frev=200):
     if quiet_start == 0:
         pos, idx = uniform_distribution()
         vel      = gaussian_distribution()
     else:
         pos, vel, idx = init_quiet_start()
         
-    if False:
+    if influx_equil == True:
         run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
-                          mp_flux, frev=20, hot_only=True)
+                          mp_flux, frev=frev, hot_only=hot_only)
         
     return pos, vel, idx
 
@@ -306,11 +307,13 @@ def set_timestep(vel):
         part_save_iter = 1
     else:
         part_save_iter = int(part_res / (DT*gyfreq))
+        if part_save_iter == 0: part_save_iter = 1
 
     if field_res == 0:
         field_save_iter = 1
     else:
         field_save_iter = int(field_res / (DT*gyfreq))
+        if field_save_iter == 0: field_save_iter = 1
 
     print('Timestep: %.4fs, %d iterations total' % (DT, max_inc))
     
@@ -1860,10 +1863,11 @@ def dump_to_file(pos, vel, E_int, Ve, Te, B, Ji, q_dens, qq, folder='parallel', 
 
 #%% --- MAIN ---
 # Misc softish-coded stuff    
-min_dens            = 0.05                               # Allowable minimum charge density in a cell, as a fraction of ne*q
-adaptive_timestep   = 0                                  # Flag (True/False) for adaptive timestep based on particle and field parameters
-adaptive_subcycling = 0                                  # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
-default_subcycles   = 12                                 # Number of field subcycling steps for Cyclic Leapfrog
+influx_equilibrium  = 0           # Flag to start hot population in equilibrium with the boundary conditions
+min_dens            = 0.05        # Allowable minimum charge density in a cell, as a fraction of ne*q
+adaptive_timestep   = 0           # Flag (True/False) for adaptive timestep based on particle and field parameters
+adaptive_subcycling = 0           # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
+default_subcycles   = 12          # Number of field subcycling steps for Cyclic Leapfrog
 
 
 #################################
@@ -2203,7 +2207,8 @@ if __name__ == '__main__':
 
     _TEMP3D   = np.zeros((NC + 1, 3), dtype=np.float64)
 
-    _POS, _VEL, _IDX = initialize_particles(_IE, _W_ELEC, _IB, _W_MAG, _B, _E, _MP_FLUX)
+    _POS, _VEL, _IDX = initialize_particles(_IE, _W_ELEC, _IB, _W_MAG, _B, _E,
+                                            _MP_FLUX, influx_equil=influx_equilibrium)
     
     assign_weighting_TSC(_POS, _IE, _W_ELEC)
 

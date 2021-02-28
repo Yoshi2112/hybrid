@@ -4220,7 +4220,7 @@ def plot_particle_paths(it_max=None, nsamples=1000):
     
     indexes = np.random.randint(0, cf.N, nsamples)
     Np      = len(indexes)
-    
+
     spos = np.zeros((it_max, Np))
     svel = np.zeros((it_max, Np, 3))
     
@@ -4232,12 +4232,14 @@ def plot_particle_paths(it_max=None, nsamples=1000):
             spos[ii, jj]    = pos[   index]
             svel[ii, jj, :] = vel[:, index]
     
-    for ii in indexes():
+    for ii in Np:
+        prt = indexes[ii]
         print('Plotting trajectory for particle', ii)
         fig, ax = plt.subplots()
-        ax.scatter(spos[:, ii], svel[:, ii, 0], label='$v_x$')
-        ax.scatter(spos[:, ii], svel[:, ii, 1], label='$v_y$')
-        ax.scatter(spos[:, ii], svel[:, ii, 2], label='$v_z$')
+        ax.set_title('Particle {} Trajectory :: Bottle {:.1f} - {:.1f} nT'.format(prt, cf.B_eq*1e9, cf.B_xmax*1e9))
+        ax.scatter(spos[:, prt], svel[:, prt, 0], label='$v_x$')
+        ax.scatter(spos[:, prt], svel[:, prt, 1], label='$v_y$')
+        ax.scatter(spos[:, prt], svel[:, prt, 2], label='$v_z$')
         
         fig.savefig(save_folder + 'particle_{:08}'.format(ii))
         plt.close('all')
@@ -4317,8 +4319,8 @@ if __name__ == '__main__':
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 cf.load_run(drive, series, run_num, extract_arrays=True)
-                cf.unwrap_particle_files()
-                #plot_particle_paths(it_max=None)
+                #cf.unwrap_particle_files()
+                plot_particle_paths(it_max=None)
                 #plot_E_components(save=True)
                 
                 #plot_spatial_poynting(save=True, log=True)
