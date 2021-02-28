@@ -202,14 +202,14 @@ def init_quiet_start():
     return pos, vel, idx
 
 
-def initialize_particles():
+def initialize_particles(Ie, W_elec, Ib, W_mag, B, E, mp_flux):
     if quiet_start == 0:
         pos, idx = uniform_distribution()
         vel      = gaussian_distribution()
     else:
         pos, vel, idx = init_quiet_start()
         
-    if True:
+    if False:
         run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
                           mp_flux, frev=20, hot_only=True)
         
@@ -1479,7 +1479,7 @@ def get_B_cent(_B, _B_cent):
 
 
 #@nb.njit()
-def check_timestep(qq, DT, pos, vel, Ie, W_elec, B, B_center, E, dns, 
+def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, B, B_center, E, dns, 
                    max_inc, part_save_iter, field_save_iter, subcycles,
                    manual_trip=0):
     '''
@@ -1966,7 +1966,7 @@ with open(plasma_input, 'r') as f:
     E_e        = float(f.readline().split()[1])
     beta_flag  = int(f.readline().split()[1])
 
-    L         = float(f.readline().split()[1])           # Field line L shell
+    L_val     = float(f.readline().split()[1])           # Field line L shell
     B_eq      = f.readline().split()[1]                  # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
     B_xmax_ovr= f.readline().split()[1]
 
@@ -2069,7 +2069,7 @@ if homogenous == 1:
 else:
     # GENERAL PARABOLIC FIELD
     if B_xmax_ovr == '-':
-        a      = 4.5 / (L*RE)**2
+        a      = 4.5 / (L_val*RE)**2
         B_xmax = B_eq * (1 + a*xmax**2)
     else:
         B_xmax = float(B_xmax_ovr)
@@ -2077,11 +2077,11 @@ else:
         
     
     r_A        = 120e3
-    lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L)))       # Anchor latitude in radians
+    lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L_val)))       # Anchor latitude in radians
     B_A        = B_eq * np.sqrt(4 - 3*np.cos(lat_A) ** 2)\
                 / (np.cos(lat_A) ** 6)                        # Magnetic field at anchor point
     
-    lambda_L   = np.arccos(np.sqrt(1.0 / L)) 
+    lambda_L   = np.arccos(np.sqrt(1.0 / L_val)) 
     
     loss_cone_eq   = np.arcsin(np.sqrt(B_eq   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
     loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
@@ -2166,53 +2166,51 @@ if __name__ == '__main__':
     start_time = timer()
     
     # Initialize arrays and initial conditions
-    Ie       = np.zeros(N,       dtype=np.uint16)
-    Ib       = np.zeros(N,       dtype=np.uint16)
-    W_elec   = np.zeros((3, N),  dtype=np.float64)
-    W_mag    = np.zeros((3, N),  dtype=np.float64)
-    mp_flux  = np.zeros((2, Nj), dtype=np.float64)
+    _IE       = np.zeros(N,       dtype=np.uint16)
+    _IB       = np.zeros(N,       dtype=np.uint16)
+    _W_ELEC   = np.zeros((3, N),  dtype=np.float64)
+    _W_MAG    = np.zeros((3, N),  dtype=np.float64)
+    _MP_FLUX  = np.zeros((2, Nj), dtype=np.float64)
     
-    ni       = np.zeros((NC, Nj), dtype=np.float64)
-    ni_init  = np.zeros((NC, Nj), dtype=np.float64)
+    _NI       = np.zeros((NC, Nj), dtype=np.float64)
+    _NI_INIT  = np.zeros((NC, Nj), dtype=np.float64)
     
-    nu_init  = np.zeros((NC, Nj, 3), dtype=np.float64)
-    nu_plus  = np.zeros((NC, Nj, 3), dtype=np.float64)
-    nu_minus = np.zeros((NC, Nj, 3), dtype=np.float64)
+    _NU_INIT  = np.zeros((NC, Nj, 3), dtype=np.float64)
+    _NU_PLUS  = np.zeros((NC, Nj, 3), dtype=np.float64)
+    _NU_MINUS = np.zeros((NC, Nj, 3), dtype=np.float64)
     
-    rho_half = np.zeros(NC, dtype=np.float64)
-    rho_int  = np.zeros(NC, dtype=np.float64)
+    _RHO_HALF = np.zeros(NC, dtype=np.float64)
+    _RHO_INT  = np.zeros(NC, dtype=np.float64)
     
-    J        = np.zeros((NC, 3), dtype=np.float64)
-    J_plus   = np.zeros((NC, 3), dtype=np.float64)
-    J_minus  = np.zeros((NC, 3), dtype=np.float64)
-    L        = np.zeros( NC,     dtype=np.float64)
-    G        = np.zeros((NC, 3), dtype=np.float64)
+    _J        = np.zeros((NC, 3), dtype=np.float64)
+    _J_PLUS   = np.zeros((NC, 3), dtype=np.float64)
+    _J_MINUS  = np.zeros((NC, 3), dtype=np.float64)
+    _L        = np.zeros( NC,     dtype=np.float64)
+    _G        = np.zeros((NC, 3), dtype=np.float64)
     
-    B        = np.zeros((NC + 1, 3), dtype=np.float64)
-    B2       = np.zeros((NC + 1, 3), dtype=np.float64)
-    B_cent   = np.zeros((NC    , 3), dtype=np.float64)
-    E        = np.zeros((NC    , 3), dtype=np.float64)
-    Ve       = np.zeros((NC    , 3), dtype=np.float64)
-    Te       = np.zeros((NC       ), dtype=np.float64)
+    _B        = np.zeros((NC + 1, 3), dtype=np.float64)
+    _B2       = np.zeros((NC + 1, 3), dtype=np.float64)
+    _B_CENT   = np.zeros((NC    , 3), dtype=np.float64)
+    _E        = np.zeros((NC    , 3), dtype=np.float64)
 
-    temp3d   = np.zeros((NC + 1, 3), dtype=np.float64)
+    _TEMP3D   = np.zeros((NC + 1, 3), dtype=np.float64)
 
-    pos, vel, idx = initialize_particles()
-    sys.exit()
-    assign_weighting_TSC(pos, Ie, W_elec)
+    _POS, _VEL, _IDX = initialize_particles(_IE, _W_ELEC, _IB, _W_MAG, _B, _E, _MP_FLUX)
+    
+    assign_weighting_TSC(_POS, _IE, _W_ELEC)
 
-    _DT, max_inc, part_save_iter, field_save_iter, subcycles, B_damping_array = set_timestep(vel)
+    _DT, _MAX_INC, _PART_SAVE_ITER, _FIELD_SAVE_ITER, _SUBCYCLES, _B_DAMP = set_timestep(_VEL)
 
     print('Loading initial state...\n')
-    init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plus, 
-                         rho_int, rho_half, J, J_plus, L, G, mp_flux, 0.5*_DT)
-    get_B_cent(B, B_cent)
+    init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IDX, _NI_INIT, _NU_INIT, _NI, _NU_PLUS, 
+                         _RHO_INT, _RHO_HALF, _J, _J_PLUS, _L, _G, _MP_FLUX, 0.5*_DT)
+    get_B_cent(_B, _B_CENT)
     
     # Put init into qq = 0 and save as usual, qq = 1 will be at t = dt
     # Need to change this so the initial state gets saved?
-    qq      = 0; sim_time = 0.0; qq_real = 0
+    _QQ = 0; _SIM_TIME = 0.0
     print('Starting loop...')
-    while qq < max_inc:
+    while _QQ < _MAX_INC:
         #dump_to_file(pos, vel, E, Ve, Te, B, J, rho_int, qq, folder='CAM_CL_srctest_srcparalleloff', print_particles=False)
         #diagnostic_field_plot(B, E, rho_int, J, Ve, Te, B_damping_array, qq, DT, sim_time)
         
@@ -2220,53 +2218,52 @@ if __name__ == '__main__':
         ##### EXAMINE TIMESTEP #####
         ############################
         if adaptive_timestep == 1 and disable_waves == 0:            
-            qq, _DT, max_inc, part_save_iter, field_save_iter, change_flag, subcycles =\
-                check_timestep(qq, _DT, pos, vel, Ie, W_elec, B, B_cent, E, rho_int, 
-                               max_inc, part_save_iter, field_save_iter, subcycles,
-                               manual_trip=0)
+            _QQ, _DT, _MAX_INC, _PART_SAVE_ITER, _FIELD_SAVE_ITER, _CHANGE_FLAG, _SUBCYCLES =\
+                check_timestep(_QQ, _DT, _POS, _VEL, _IDX, _IE, _W_ELEC, _B, _B_CENT, _E, _RHO_INT, 
+                               _MAX_INC, _PART_SAVE_ITER, _FIELD_SAVE_ITER, _SUBCYCLES)
     
             # Collect new moments and desync position and velocity
-            if change_flag == 1:
+            if _CHANGE_FLAG == 1:
                 # If timestep was doubled, do I need to consider 0.5dt's worth of
                 # new particles? Maybe just disable the doubling until I work this out
-                init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plus, 
-                         rho_int, rho_half, J, J_plus, L, G, mp_flux, 0.5*_DT)
+                init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IDX, _NI_INIT, _NU_INIT, _NI, _NU_PLUS, 
+                         _RHO_INT, _RHO_HALF, _J, _J_PLUS, _L, _G, _MP_FLUX, 0.5*_DT)
 
         
         #######################
         ###### MAIN LOOP ######
         #######################
-        cyclic_leapfrog(B, B2, B_cent, rho_int, J, temp3d, _DT, subcycles, B_damping_array)
-        E, Ve, Te = calculate_E(B, B_cent, J, rho_half)
+        cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _J, _TEMP3D, _DT, _SUBCYCLES, _B_DAMP)
+        E, Ve, Te = calculate_E(_B, _B_CENT, _J, _RHO_HALF)
 
-        push_current(J_plus, J, E, B, B_cent, L, G, _DT)
-        E, Ve, Te = calculate_E(B, B_cent, J, rho_half)
+        push_current(_J_PLUS, _J, E, _B, _B_CENT, _L, _G, _DT)
+        E, Ve, Te = calculate_E(_B, _B_CENT, _J, _RHO_HALF)
         
-        assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
-        velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, _DT)
+        assign_weighting_TSC(_POS, _IB, _W_MAG, E_nodes=False)
+        velocity_update(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, _B, E, _DT)
 
         # Store pc(1/2) here while pc(3/2) is collected
-        rho_int[:]  = rho_half[:] 
-        collect_moments(pos, vel, Ie, W_elec, idx, ni, nu_plus, nu_minus, 
-                              rho_half, J_minus, J_plus, L, G, mp_flux, _DT)
+        _RHO_INT[:]  = _RHO_HALF[:] 
+        collect_moments(_POS, _VEL, _IE, _W_ELEC, _IDX, _NI, _NU_PLUS, _NU_MINUS, 
+                              _RHO_HALF, _J_MINUS, _J_PLUS, _L, _G, _MP_FLUX, _DT)
         
-        rho_int += rho_half
-        rho_int /= 2.0
-        J        = 0.5 * (J_plus  +  J_minus)
+        _RHO_INT += _RHO_HALF
+        _RHO_INT /= 2.0
+        J        = 0.5 * (_J_PLUS  +  _J_MINUS)
 
-        cyclic_leapfrog(B, B2, B_cent, rho_int, J, temp3d, _DT, subcycles, B_damping_array)
-        E, Ve, Te   = calculate_E(B, B_cent, J, rho_int)
+        cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, J, _TEMP3D, _DT, _SUBCYCLES, _B_DAMP)
+        E, Ve, Te   = calculate_E(_B, _B_CENT, J, _RHO_INT)
 
         ########################
         ##### OUTPUT DATA  #####
         ########################
-        if qq%part_save_iter == 0 and save_particles == 1:
-            save_particle_data(_DT, part_save_iter, qq, pos, vel, idx, sim_time)
+        if _QQ%_PART_SAVE_ITER == 0 and save_particles == 1:
+            save_particle_data(_DT, _PART_SAVE_ITER, _QQ, _POS, _VEL, _IDX, _SIM_TIME)
 
-        if qq%field_save_iter == 0 and save_fields == 1:
-            save_field_data(_DT, field_save_iter, qq, J, E, B, Ve, Te, rho_int, sim_time)
+        if _QQ%_FIELD_SAVE_ITER == 0 and save_fields == 1:
+            save_field_data(_DT, _FIELD_SAVE_ITER, _QQ, J, E, _B, Ve, Te, _RHO_INT, _SIM_TIME)
         
-        if qq%100 == 0:
+        if _QQ%100 == 0:
             running_time = int(timer() - start_time)
             hrs          = running_time // 3600
             rem          = running_time %  3600
@@ -2274,11 +2271,10 @@ if __name__ == '__main__':
             mins         = rem // 60
             sec          = rem %  60
             
-            print('Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(qq, max_inc, hrs, mins, sec))
+            print('Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(_QQ, _MAX_INC, hrs, mins, sec))
 
-        qq        += 1
-        sim_time  += _DT
-        qq_real   += 1
+        _QQ        += 1
+        _SIM_TIME  += _DT
         
     runtime = round(timer() - start_time,2) 
     print('Run complete : {} s'.format(runtime))

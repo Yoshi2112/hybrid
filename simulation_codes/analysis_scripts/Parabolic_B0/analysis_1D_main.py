@@ -4317,7 +4317,8 @@ if __name__ == '__main__':
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 cf.load_run(drive, series, run_num, extract_arrays=True)
-                plot_particle_paths(it_max=None)
+                cf.unwrap_particle_files()
+                #plot_particle_paths(it_max=None)
                 #plot_E_components(save=True)
                 
                 #plot_spatial_poynting(save=True, log=True)

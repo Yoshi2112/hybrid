@@ -504,16 +504,28 @@ def load_particles(ii, shuffled_idx=False):
 
 def unwrap_particle_files():
     '''
-    Need to memory map this - not gonna be able to hold 100's of GB in RAM.
+    Have option to delete original particle files? Although that will cause
+    issues if you want to look at particle quantities per timestep
     '''
     particle_folder = data_dir + '/particles_single/'
     if os.path.exists(particle_folder) == False:
         os.makedirs(particle_folder)
         
-    n_files = len(os.listdir(particle_dir))
+    n_times = len(os.listdir(particle_dir))
+    particle_array = np.memmap(data_dir + 'all_particles.dat', dtype=np.float64,
+                               mode='w+', shape=(n_times, N, 5))
     
-    for ii in range(n_files):
+    for ii in range(n_times):
+        print('Accumulating timestep {} of {}'.format(ii, n_times))
         pos, vel, idx, sim_time, idx_start, idx_end = load_particles(ii)
+        
+        particle_array[ii, :, 0] = pos[:]
+        particle_array[ii, :, 1] = vel[0, :]
+        particle_array[ii, :, 2] = vel[1, :]
+        particle_array[ii, :, 3] = vel[2, :]
+        particle_array[ii, :, 4] = idx[:]
+        
+        particle_array.flush()
     return
 
 
