@@ -473,13 +473,13 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt, wave_fields=
 
 
 @nb.njit(parallel=do_parallel)
-def position_update(pos, vel, idx, Ie, W_elec, DT):
+def position_update(pos, vel, idx, Ie, W_elec, dt):
     '''Updates the position of the particles using x = x0 + vt. 
     Also updates particle nearest node and weighting.
     '''
     for ii in nb.prange(pos.shape[0]):
         if idx[ii] >= 0:
-            pos[ii] += vel[0, ii] * DT
+            pos[ii] += vel[0, ii] * dt
             
             # Check if particle has left simulation and apply boundary conditions
             if (pos[ii] < xmin or pos[ii] > xmax):
@@ -519,9 +519,9 @@ def position_update(pos, vel, idx, Ie, W_elec, DT):
     
                     # Place back inside simulation domain
                     if pos[ii] < xmin:
-                        pos[ii] = xmin + np.random.uniform(0, 1) * vel[0, ii] * DT
+                        pos[ii] = xmin + np.random.uniform(0, 1) * vel[0, ii] * dt
                     elif pos[ii] > xmax:
-                        pos[ii] = xmax + np.random.uniform(0, 1) * vel[0, ii] * DT
+                        pos[ii] = xmax + np.random.uniform(0, 1) * vel[0, ii] * dt
                 
                 else:
                     # Reflect
@@ -537,19 +537,19 @@ def position_update(pos, vel, idx, Ie, W_elec, DT):
 
 
 @nb.njit()
-def inject_particles_all_species(pos, vel, idx, _mp_flux, DT):
+def inject_particles_all_species(pos, vel, idx, _mp_flux, dt):
     '''
     Control function for injection that does all species.
     This is so the actual injection function can be per-species (in case
     I want to inject just one species, such as for the equilibrium stuff)
     '''
     for jj in range(Nj):
-        inject_particles_1sp(pos, vel, idx, _mp_flux, DT, jj)
+        inject_particles_1sp(pos, vel, idx, _mp_flux, dt, jj)
     return
 
 
 @nb.njit()
-def inject_particles_1sp(pos, vel, idx, _mp_flux, DT, jj):        
+def inject_particles_1sp(pos, vel, idx, _mp_flux, dt, jj):        
     '''
     How to create new particles in parallel? Just test serial for now, but this
     might become my most expensive function for large N.
@@ -561,7 +561,7 @@ def inject_particles_1sp(pos, vel, idx, _mp_flux, DT, jj):
     '''
     # Add flux at each boundary 
     for kk in range(2):
-        _mp_flux[kk, jj] += inject_rate[jj]*DT
+        _mp_flux[kk, jj] += inject_rate[jj]*dt
         
     # acc used only as placeholder to mark place in array. How to do efficiently? 
     acc = 0; n_created = 0
@@ -599,7 +599,7 @@ def inject_particles_1sp(pos, vel, idx, _mp_flux, DT, jj):
                     particle_PA = np.arctan(v_perp / vel[0, kk1])
             
             # Amount travelled (vel always +ve at first)
-            dpos = np.random.uniform(0, 1) * vel[0, kk1] * DT
+            dpos = np.random.uniform(0, 1) * vel[0, kk1] * dt
             
             # Left boundary injection
             if ii == 0:
@@ -986,7 +986,7 @@ def get_curl_B(B):
 
 
 @nb.njit()
-def get_curl_E(_E, dE):
+def get_curl_E(E, dE):
     ''' 
     Returns a vector quantity for the curl of a field valid at the positions 
     between its gridpoints (i.e. curl(E) -> B-grid, etc.)
@@ -1000,16 +1000,16 @@ def get_curl_E(_E, dE):
         curl  -- Finite-differenced solution for the curl of the input field.
     '''   
     dE *= 0.
-    for ii in np.arange(1, _E.shape[0]):
-        dE[ii, 1] = - (_E[ii, 2] - _E[ii - 1, 2])
-        dE[ii, 2] =    _E[ii, 1] - _E[ii - 1, 1]
+    for ii in np.arange(1, E.shape[0]):
+        dE[ii, 1] = - (E[ii, 2] - E[ii - 1, 2])
+        dE[ii, 2] =    E[ii, 1] - E[ii - 1, 1]
         
     # Curl at E[0] : Forward/Backward difference (stored in B[0]/B[NC])
-    dE[0, 1] = -(-3*_E[0, 2] + 4*_E[1, 2] - _E[2, 2]) / 2
-    dE[0, 2] =  (-3*_E[0, 1] + 4*_E[1, 1] - _E[2, 1]) / 2
+    dE[0, 1] = -(-3*E[0, 2] + 4*E[1, 2] - E[2, 2]) / 2
+    dE[0, 2] =  (-3*E[0, 1] + 4*E[1, 1] - E[2, 1]) / 2
     
-    dE[NC, 1] = -(3*_E[NC - 1, 2] - 4*_E[NC - 2, 2] + _E[NC - 3, 2]) / 2
-    dE[NC, 2] =  (3*_E[NC - 1, 1] - 4*_E[NC - 2, 1] + _E[NC - 3, 1]) / 2
+    dE[NC, 1] = -(3*E[NC - 1, 2] - 4*E[NC - 2, 2] + E[NC - 3, 2]) / 2
+    dE[NC, 2] =  (3*E[NC - 1, 1] - 4*E[NC - 2, 1] + E[NC - 3, 1]) / 2
     
     # Linearly extrapolate to endpoints
     dE[0, 1]      -= 2*(dE[1, 1] - dE[0, 1])
@@ -1197,28 +1197,28 @@ def interpolate_edges_to_center_1D(grad_P, zero_boundaries=True):
 
 
 @nb.njit()
-def apply_boundary(_B, _damp):
+def apply_boundary(B, B_damp):
     if field_periodic == 0:
-        for ii in nb.prange(1, _B.shape[1]):
-            _B[:, ii] *= _damp
+        for ii in nb.prange(1, B.shape[1]):
+            B[:, ii] *= B_damp
     else:
-        for ii in nb.prange(1, _B.shape[1]):
+        for ii in nb.prange(1, B.shape[1]):
             # Boundary value (should be equal)
-            end_bit = 0.5 * (_B[ND, ii] + _B[ND + NX, ii])
+            end_bit = 0.5 * (B[ND, ii] + B[ND + NX, ii])
 
-            _B[ND,      ii] = end_bit
-            _B[ND + NX, ii] = end_bit
+            B[ND,      ii] = end_bit
+            B[ND + NX, ii] = end_bit
             
-            _B[ND - 1, ii]  = _B[ND + NX - 1, ii]
-            _B[ND - 2, ii]  = _B[ND + NX - 2, ii]
+            B[ND - 1, ii]  = B[ND + NX - 1, ii]
+            B[ND - 2, ii]  = B[ND + NX - 2, ii]
             
-            _B[ND + NX + 1, ii] = _B[ND + 1, ii]
-            _B[ND + NX + 2, ii] = _B[ND + 2, ii]
+            B[ND + NX + 1, ii] = B[ND + 1, ii]
+            B[ND + NX + 2, ii] = B[ND + 2, ii]
     return
 
 
 #@nb.njit()
-def cyclic_leapfrog(B1, B2, B_center, rho, J, curl, DT, subcycles, B_damping_array):
+def cyclic_leapfrog(B1, B2, B_center, rho, J, curl, DT, subcycles, B_damp, sim_time):
     '''
     Solves for the magnetic field push by keeping two copies and subcycling between them,
     averaging them at the end of the cycle as per Matthews (1994). The source terms are
@@ -1235,17 +1235,21 @@ def cyclic_leapfrog(B1, B2, B_center, rho, J, curl, DT, subcycles, B_damping_arr
         
     22/02/2021 :: Applied damping field to each subcycle. Does this damping array
             need to account for subcycling in the DX/DT bit? Test later.
+            
+    28/02/2021 :: Added advancement of sim_time within this function. The global
+            "clock" now follows the development of the magnetic field.
     '''
     H     = 0.5 * DT
     dh    = H / subcycles
     B2[:] = B1[:]
 
     ## DESYNC SECOND FIELD COPY - PUSH BY DH ##
-    E, Ve, Te = calculate_E(B1, B_center, J, rho)
+    E, Ve, Te = calculate_E(B1, B_center, J, rho, sim_time)
     get_curl_E(E, curl) 
     B2       -= dh * curl
-    apply_boundary(B2, B_damping_array)
+    apply_boundary(B2, B_damp)
     get_B_cent(B2, B_center)
+    sim_time += dh
 
     ## RETURN IF NO SUBCYCLES REQUIRED ##
     if subcycles == 1:
@@ -1255,35 +1259,39 @@ def cyclic_leapfrog(B1, B2, B_center, rho, J, curl, DT, subcycles, B_damping_arr
     ## MAIN SUBCYCLE LOOP ##
     for ii in range(subcycles - 1):             
         if ii%2 == 0:
-            E, Ve, Te = calculate_E(B2, B_center, J, rho)
+            E, Ve, Te = calculate_E(B2, B_center, J, rho, sim_time)
             get_curl_E(E, curl) 
             B1  -= 2 * dh * curl
-            apply_boundary(B1, B_damping_array)
+            apply_boundary(B1, B_damp)
             get_B_cent(B1, B_center)
+            sim_time += 2*dh
         else:
-            E, Ve, Te = calculate_E(B1, B_center, J, rho)
+            E, Ve, Te = calculate_E(B1, B_center, J, rho, sim_time)
             get_curl_E(E, curl) 
             B2  -= 2 * dh * curl
-            apply_boundary(B2, B_damping_array)
+            apply_boundary(B2, B_damp)
             get_B_cent(B2, B_center)
+            sim_time += 2*dh
             
     ## RESYNC FIELD COPIES ##
     if ii%2 == 0:
-        E, Ve, Te = calculate_E(B2, B_center, J, rho)
+        E, Ve, Te = calculate_E(B2, B_center, J, rho, sim_time)
         get_curl_E(E, curl) 
         B2  -= dh * curl
-        apply_boundary(B2, B_damping_array)
+        apply_boundary(B2, B_damp)
         get_B_cent(B2, B_center)
+        sim_time += dh
     else:
-        E, Ve, Te = calculate_E(B1, B_center, J, rho)
+        E, Ve, Te = calculate_E(B1, B_center, J, rho, sim_time)
         get_curl_E(E, curl) 
         B1  -= dh * curl
-        apply_boundary(B1, B_damping_array)
+        apply_boundary(B1, B_damp)
         get_B_cent(B1, B_center)
+        sim_time += dh
 
     ## AVERAGE FIELD SOLUTIONS: COULD PERFORM A CONVERGENCE TEST HERE IN FUTURE ##
     B1 += B2; B1 /= 2.0
-    return
+    return sim_time
 
 
 @nb.njit()
@@ -1353,7 +1361,7 @@ def add_J_ext_pol(sim_time):
 
 
 #@nb.njit()
-def calculate_E(B, B_center, J, qn, stime):
+def calculate_E(B, B_center, J, qn, sim_time):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
     and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
@@ -1367,16 +1375,16 @@ def calculate_E(B, B_center, J, qn, stime):
     curlB    = get_curl_B(B)
     
     if pol_wave == 0:
-        pass
+        J_ext = np.zeros((NC, 3), dtype=np.float64)
     elif pol_wave == 1:
-        add_J_ext()
+        J_ext = add_J_ext(sim_time)
     elif pol_wave == 2:
-        add_J_ext_pol()
+        J_ext = add_J_ext_pol(sim_time)
        
     Ve       = np.zeros((J.shape[0], 3), dtype=np.float64) 
-    Ve[:, 0] = (J[:, 0] - curlB[:, 0]) / qn
-    Ve[:, 1] = (J[:, 1] - curlB[:, 1]) / qn
-    Ve[:, 2] = (J[:, 2] - curlB[:, 2]) / qn
+    Ve[:, 0] = (J[:, 0] + J_ext - curlB[:, 0]) / qn
+    Ve[:, 1] = (J[:, 1] + J_ext - curlB[:, 1]) / qn
+    Ve[:, 2] = (J[:, 2] + J_ext - curlB[:, 2]) / qn
     
     Te       = get_electron_temp(qn)
     Pe, del_p= get_grad_P_alt3(qn, Te)
@@ -1392,7 +1400,7 @@ def calculate_E(B, B_center, J, qn, stime):
     E_out[:, 1]  = - VexB[:, 1]
     E_out[:, 2]  = - VexB[:, 2]
 
-    E_out       += e_resis * J
+    E_out       += e_resis * (J + J_ext)
     
     # Copy periodic values
     if field_periodic == 1:
@@ -1464,17 +1472,17 @@ def calculate_E(B, B_center, J, qn, stime):
 # =============================================================================
 
 
-def get_B_cent(_B, _B_cent):
+def get_B_cent(B, B_center):
     '''
     Quick and easy function to calculate B on the E-grid using scipy's cubic
     spline interpolation (mine seems to be broken). Could probably make this 
     myself and more efficient later, but need to eliminate problems!
     '''
-    _B_cent *= 0.0
+    B_center *= 0.0
     for jj in range(1, 3):
-        coeffs         = splrep(B_nodes, _B[:, jj])
-        _B_cent[:, jj] = splev( E_nodes, coeffs)
-    _B_cent[:, 0] = eval_B0x(E_nodes)
+        coeffs          = splrep(B_nodes, B[:, jj])
+        B_center[:, jj] = splev( E_nodes, coeffs)
+    B_center[:, 0] = eval_B0x(E_nodes)
     return
 
 
@@ -2233,11 +2241,11 @@ if __name__ == '__main__':
         #######################
         ###### MAIN LOOP ######
         #######################
-        cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _J, _TEMP3D, _DT, _SUBCYCLES, _B_DAMP)
-        E, Ve, Te = calculate_E(_B, _B_CENT, _J, _RHO_HALF)
+        cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _J, _TEMP3D, _DT, _SUBCYCLES, _B_DAMP, _SIM_TIME)
+        E, Ve, Te = calculate_E(_B, _B_CENT, _J, _RHO_HALF, _SIM_TIME)
 
         push_current(_J_PLUS, _J, E, _B, _B_CENT, _L, _G, _DT)
-        E, Ve, Te = calculate_E(_B, _B_CENT, _J, _RHO_HALF)
+        E, Ve, Te = calculate_E(_B, _B_CENT, _J, _RHO_HALF, _SIM_TIME)
         
         assign_weighting_TSC(_POS, _IB, _W_MAG, E_nodes=False)
         velocity_update(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, _B, E, _DT)
@@ -2251,8 +2259,8 @@ if __name__ == '__main__':
         _RHO_INT /= 2.0
         J        = 0.5 * (_J_PLUS  +  _J_MINUS)
 
-        cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, J, _TEMP3D, _DT, _SUBCYCLES, _B_DAMP)
-        E, Ve, Te   = calculate_E(_B, _B_CENT, J, _RHO_INT)
+        cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, J, _TEMP3D, _DT, _SUBCYCLES, _B_DAMP, _SIM_TIME)
+        E, Ve, Te   = calculate_E(_B, _B_CENT, J, _RHO_INT, _SIM_TIME)
 
         ########################
         ##### OUTPUT DATA  #####
@@ -2274,7 +2282,6 @@ if __name__ == '__main__':
             print('Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(_QQ, _MAX_INC, hrs, mins, sec))
 
         _QQ        += 1
-        _SIM_TIME  += _DT
         
     runtime = round(timer() - start_time,2) 
     print('Run complete : {} s'.format(runtime))
