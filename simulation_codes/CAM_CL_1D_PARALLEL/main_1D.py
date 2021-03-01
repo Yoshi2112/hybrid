@@ -2129,7 +2129,7 @@ ro1 = ND + NX; ro2 = ND + NX + 1        # Right outer
 li1 = ND         ; li2 = ND + 1         # Left inner
 ri1 = ND + NX - 1; ri2 = ND + NX - 2    # Right inner
     
-#%% DRIVEN WAVE STUFF (NOT YET IMPLEMENTED)
+#%% DRIVEN WAVE STUFF
 pol_wave    = 1         # 0: No wave, 1: Single point source, 2: Multi point source
 
 # DRIVEN B PARAMS: Sine part

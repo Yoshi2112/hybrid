@@ -3760,7 +3760,7 @@ def field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None):
         ax.set_xlim(x[0], x[-1])
         ax.axvline(cf.xmin     / cf.dx, c='w', ls=':', alpha=1.0)
         ax.axvline(cf.xmax     / cf.dx, c='w', ls=':', alpha=1.0)
-        ax.axvline(cf.grid_mid / cf.dx, c='w', ls=':', alpha=0.75)   
+        ax.axvline(   0.0      / cf.dx, c='w', ls=':', alpha=0.75)   
         
         # Plot energy
         axl.plot(mag_energy_L/mag_energy_L.max(), t, c='b')
@@ -4271,8 +4271,8 @@ if __name__ == '__main__':
 
                 #plot_total_density_with_time()
                 #plot_max_velocity()
-                check_fields(save=True, ylim=True, skip=1)
-                #check_fields(save=True, ylim=False)
+                #check_fields(save=True, ylim=True, skip=1)
+                check_fields(save=True, ylim=False, skip=10)
 
                 #winske_summary_plots(save=True)
                 #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
@@ -4299,6 +4299,10 @@ if __name__ == '__main__':
 #                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
 #                            normalize=False, B0_lim=None, remove_ND=False)
 #                 
+#                 field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
+# =============================================================================
+                
+# =============================================================================
 #                 plot_wk(saveas='wk_plot', dispersion_overlay=True, save=True,
 #                      pcyc_mult=1.5, xmax=1.5, zero_cold=False,
 #                      linear_only=False, normalize_axes=True)
