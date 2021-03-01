@@ -275,12 +275,13 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
 
 
 @nb.njit()
-def set_damping_array(B_damping_array, DT):
+def set_damping_array(B_damping_array, DT, subcycles):
     '''Create masking array for magnetic field damping used to apply open
     boundaries. Based on applcation by Shoji et al. (2011) and
     Umeda et al. (2001)
     '''
-    r_damp   = np.sqrt(29.7 * 0.5 * va * (0.5 * DT / dx) / ND)   # Damping coefficient
+    dh       = DT / subcycles
+    r_damp   = np.sqrt(29.7 * 0.5 * va * (0.5 * dh / dx) / ND)   # Damping coefficient
     r_damp  *= damping_multiplier
     
     # Do B-damping array
@@ -331,7 +332,7 @@ def set_timestep(vel):
         store_run_parameters(DT, part_save_iter, field_save_iter, max_inc, max_time, subcycles)
     
     B_damping_array = np.ones(NC + 1, dtype=float)
-    set_damping_array(B_damping_array, DT)
+    set_damping_array(B_damping_array, DT, subcycles)
     
     return DT, max_inc, part_save_iter, field_save_iter, subcycles, B_damping_array
 
@@ -1426,6 +1427,12 @@ def calculate_E(B, B_center, J, qn, sim_time):
     # Diagnostic flag for testing
     if disable_waves == 1:   
         E_out *= 0.
+        
+    # Option to try: Test for instabilty. Make outermost E-nodes PEC's (E=0)
+    if False:
+        for ii in range(3):
+            E_out[0,      ii] = 0.0
+            E_out[NC - 1, ii] = 0.0
     
     return E_out, Ve, Te
 
@@ -1871,7 +1878,7 @@ def dump_to_file(pos, vel, E_int, Ve, Te, B, Ji, q_dens, qq, folder='parallel', 
 influx_equilibrium  = 0           # Flag to start hot population in equilibrium with the boundary conditions
 min_dens            = 0.05        # Allowable minimum charge density in a cell, as a fraction of ne*q
 adaptive_timestep   = 1           # Flag (True/False) for adaptive timestep based on particle and field parameters
-adaptive_subcycling = 0           # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
+adaptive_subcycling = 1           # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
 default_subcycles   = 12          # Number of field subcycling steps for Cyclic Leapfrog
 
 
@@ -2240,12 +2247,14 @@ if __name__ == '__main__':
                 check_timestep(_QQ, _DT, _POS, _VEL, _IDX, _IE, _W_ELEC, _B, _B_CENT, _E, _RHO_INT, 
                                _MAX_INC, _PART_SAVE_ITER, _FIELD_SAVE_ITER, _SUBCYCLES)
     
-            # Collect new moments and desync position and velocity
+            # Collect new moments and desync position and velocity. Reset damping array.
             if _CHANGE_FLAG == 1:
                 # If timestep was doubled, do I need to consider 0.5dt's worth of
                 # new particles? Maybe just disable the doubling until I work this out
                 init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IDX, _NI_INIT, _NU_INIT, _NI, _NU_PLUS, 
                          _RHO_INT, _RHO_HALF, _J, _J_PLUS, _L, _G, _MP_FLUX, 0.5*_DT)
+                
+                set_damping_array(_B_DAMP, _DT, _SUBCYCLES)
         
         
         #######################

@@ -4257,10 +4257,10 @@ if __name__ == '__main__':
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [2, 3]
+            runs_to_do = [2]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -4272,7 +4272,7 @@ if __name__ == '__main__':
                 #plot_total_density_with_time()
                 #plot_max_velocity()
                 #check_fields(save=True, ylim=True, skip=1)
-                check_fields(save=True, ylim=False, skip=10)
+                #check_fields(save=True, ylim=False, skip=10)
 
                 #winske_summary_plots(save=True)
                 #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
@@ -4295,12 +4295,10 @@ if __name__ == '__main__':
 #                 ggg.SWSP_timeseries(nx=x1000, save=True, log=True, normalize=True, tmax=35)
 # =============================================================================
 
-# =============================================================================
-#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
-#                            normalize=False, B0_lim=None, remove_ND=False)
-#                 
-#                 field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
-# =============================================================================
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
+                           normalize=False, B0_lim=1.0, remove_ND=False)
+                
+                field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
                 
 # =============================================================================
 #                 plot_wk(saveas='wk_plot', dispersion_overlay=True, save=True,
