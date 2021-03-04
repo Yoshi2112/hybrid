@@ -5,7 +5,7 @@ import numpy as np
 import numba as nb
 import sys, os, pdb
 
-Fu_override=False
+Fu_override=True
 do_parallel=True
 #nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
 
@@ -280,7 +280,7 @@ def set_damping_array(B_damping_array, DT, subcycles):
     boundaries. Based on applcation by Shoji et al. (2011) and
     Umeda et al. (2001)
     '''
-    dh       = DT / subcycles
+    dh       = DT# / subcycles
     r_damp   = np.sqrt(29.7 * 0.5 * va * (0.5 * dh / dx) / ND)   # Damping coefficient
     r_damp  *= damping_multiplier
     
@@ -791,7 +791,7 @@ def manage_source_term_boundaries(arr):
     return
 
 
-#@nb.njit()
+@nb.njit()
 def init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plus, 
                          rho_0, rho, J_init, J_plus, L, G, _mp_flux, dt):
     '''Moment collection and position advance function. Specifically used at initialization or
@@ -860,14 +860,12 @@ def init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plu
         manage_source_term_boundaries(J_plus[:, ii])
         manage_source_term_boundaries(G[:, ii])
 
-# =============================================================================
-#     for ii in range(rho_0.shape[0]):
-#         if rho_0[ii] < min_dens * ne * q:
-#             rho_0[ii] = min_dens * ne * q
-#             
-#         if rho[ii] < min_dens * ne * q:
-#             rho[ii] = min_dens * ne * q
-# =============================================================================
+    for ii in range(rho_0.shape[0]):
+        if rho_0[ii] < min_dens * ne * q:
+            rho_0[ii] = min_dens * ne * q
+            
+        if rho[ii] < min_dens * ne * q:
+            rho[ii] = min_dens * ne * q
     return
 
 
@@ -1428,11 +1426,17 @@ def calculate_E(B, B_center, J, qn, sim_time):
     if disable_waves == 1:   
         E_out *= 0.
         
-    # Option to try: Test for instabilty. Make outermost E-nodes PEC's (E=0)
-    if False:
-        for ii in range(3):
-            E_out[0,      ii] = 0.0
-            E_out[NC - 1, ii] = 0.0
+# =============================================================================
+#     # Option to try: Test for instabilty. Make outermost E-nodes PEC's (E=0)
+#     if False:
+#         for ii in range(3):
+#             E_out[0,      ii] = 0.0
+#             E_out[NC - 1, ii] = 0.0
+#             
+#     # Disable solution for Ex, see if it improves stability
+#     if False:
+#         E_out[:, 0] *= 0.0
+# =============================================================================
     
     return E_out, Ve, Te
 
@@ -1534,7 +1538,7 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, B, B_center, E, dns,
     local_gyfreq    = high_rat  * np.abs(B_tot).max()      
     ion_ts          = orbit_res / local_gyfreq
     
-    if E.max() != 0:
+    if E[:, 0].max() != 0:
         elecfreq    = high_rat * (np.abs(E[:, 0] / max_V)).max()
         freq_ts     = freq_res / elecfreq                            
     else:
@@ -2137,7 +2141,7 @@ li1 = ND         ; li2 = ND + 1         # Left inner
 ri1 = ND + NX - 1; ri2 = ND + NX - 2    # Right inner
     
 #%% DRIVEN WAVE STUFF
-pol_wave    = 1         # 0: No wave, 1: Single point source, 2: Multi point source
+pol_wave    = 0         # 0: No wave, 1: Single point source, 2: Multi point source
 
 # DRIVEN B PARAMS: Sine part
 driven_freq = 0.25*gyfreq / (2*np.pi)       # Driven wave frequency in Hz standard 2.2

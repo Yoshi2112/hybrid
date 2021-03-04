@@ -1104,9 +1104,9 @@ def test_E2C_interpolation():
     '''
     marker_size = 20
     LENGTH      = main_1D.xmax - main_1D.xmin
-    k0          = 1   * 2*np.pi / LENGTH
+    k0          = 4   * 2*np.pi / LENGTH
     k1          = 4   * 2*np.pi / LENGTH
-    k2          = 6   * 2*np.pi / LENGTH
+    k2          = 4   * 2*np.pi / LENGTH
 
     # Interpolation
     B_input       = np.zeros((main_1D.NC + 1, 3))
@@ -1124,18 +1124,22 @@ def test_E2C_interpolation():
     B_scipy       = np.zeros((main_1D.NC, 3))
     main_1D.get_B_cent(B_input, B_scipy)
    
-    
+    #pdb.set_trace()
     ## TEST INTERPOLATION ##
-    B_cent        = np.zeros((main_1D.NC, 3))
+    #B_cent        = np.zeros((main_1D.NC, 3))
     #B_cent[:, 1] = main_1D.interpolate_edges_to_center_1D(B_input[:, 1])
-    B_cent = main_1D.get_B_at_center(B_input)
-
+    #B_cent = main_1D.get_B_at_center(B_input)
+    
     fig, ax = plt.subplots()
     for jj in range(2, 3):
         ax.scatter(main_1D.B_nodes, B_input[:, jj], s=marker_size, c='k', marker='o', label='Input {}'.format(jj))
         ax.scatter(main_1D.E_nodes, B_anal[ :, jj], s=marker_size, c='b', marker='x', label='A. Soln {}'.format(jj))
-        ax.scatter(main_1D.E_nodes, B_cent[ :, jj], s=marker_size, c='r', marker='x', label='N. Soln {}'.format(jj))
+        #ax.scatter(main_1D.E_nodes, B_cent[ :, jj], s=marker_size, c='r', marker='x', label='N. Soln {}'.format(jj))
         ax.scatter(main_1D.E_nodes, B_scipy[:, jj], s=marker_size, c='g', marker='^', label='Scipy   {}'.format(jj))
+    
+    if True:
+        ax2 = ax.twinx()
+        ax2.plot(main_1D.E_nodes, B_scipy[:, 0]*1e9, c='k', label='B0x', alpha=0.5)
     
     for kk in range(main_1D.NC):
         ax.axvline(main_1D.E_nodes[kk], linestyle='--', c='r', alpha=0.2)
@@ -1401,20 +1405,27 @@ def check_particle_position_individual_incl_density():
     ni_init  = np.zeros((NC, Nj), dtype=np.float64)
     nu_init  = np.zeros((NC, Nj, 3), dtype=np.float64)
     nu_plus  = np.zeros((NC, Nj, 3), dtype=np.float64)
+    nu_minus = np.zeros((NC, Nj, 3), dtype=np.float64)
     
     rho_half = np.zeros(NC, dtype=np.float64)
     rho_int  = np.zeros(NC, dtype=np.float64)
     
     J        = np.zeros((NC, 3), dtype=np.float64)
     J_plus   = np.zeros((NC, 3), dtype=np.float64)
+    J_minus  = np.zeros((NC, 3), dtype=np.float64)
 
     L        = np.zeros( NC,     dtype=np.float64)
     G        = np.zeros((NC, 3), dtype=np.float64)
     
     pos, vel, idx = main_1D.init_quiet_start()
     main_1D.assign_weighting_TSC(pos, Ie, W_elec)
-    main_1D.init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plus, 
-                rho_int, rho_half, J, J_plus, L, G, mp_flux, 0.0)
+    
+    if False:
+        main_1D.init_collect_moments(pos, vel, Ie, W_elec, idx, ni_init, nu_init, ni, nu_plus, 
+                    rho_int, rho_half, J, J_plus, L, G, mp_flux, 0.0)
+    else:
+        main_1D.collect_moments(     pos, vel, Ie, W_elec, idx, ni, nu_plus, nu_minus, 
+                         rho_int, J_minus, J_plus, L, G, mp_flux, 0.0)
     
     plt.figure()
     for jj in range(main_1D.Nj):
@@ -1423,9 +1434,22 @@ def check_particle_position_individual_incl_density():
         Np = en - st
         plt.scatter(pos[st:en]/main_1D.dx, np.ones(Np)*jj, color=main_1D.temp_color[jj])
         
-    norm_dens = 2.0 * rho_int / rho_int.max()
-    plt.plot(main_1D.E_nodes/main_1D.dx, norm_dens, c='k')
-        
+    # Arbitrary signs and units. Just using to check source term allocation
+    dens_arr = rho_int
+    J_arr    = J_plus
+    
+    norm_dens = 2.0 * dens_arr             / dens_arr.max()
+    norm_Jix  = 3.0 * np.abs(J_arr[:, 0])  / np.abs(J_arr[:, 0]).max()
+    norm_Jiy  = 4.0 * np.abs(J_arr[:, 1])  / np.abs(J_arr[:, 1]).max()
+    norm_Jiz  = 5.0 * np.abs(J_arr[:, 2])  / np.abs(J_arr[:, 2]).max()
+    
+    plt.plot(main_1D.E_nodes/main_1D.dx, norm_dens, c='k', label=r'$\rho_c$')
+    
+    plt.plot(main_1D.E_nodes/main_1D.dx, norm_Jix,  label=r'$J_x$')
+    plt.plot(main_1D.E_nodes/main_1D.dx, norm_Jiy,  label=r'$J_y$')
+    plt.plot(main_1D.E_nodes/main_1D.dx, norm_Jiz,  label=r'$J_z$')
+    
+    plt.legend()
     ## Add node markers and boundaries
     for kk in range(main_1D.NC):
         plt.axvline(main_1D.E_nodes[kk]/main_1D.dx, linestyle='--', c='r', alpha=0.2)
@@ -1436,7 +1460,7 @@ def check_particle_position_individual_incl_density():
     
     plt.axvline(main_1D.xmin/main_1D.dx, linestyle='-', c='k', alpha=0.2)
     plt.axvline(main_1D.xmax/main_1D.dx, linestyle='-', c='k', alpha=0.2)
-    plt.ylim(-0.1, 2.5)
+    plt.ylim(-0.1, 6.0)
     return
 
 
@@ -1936,5 +1960,5 @@ if __name__ == '__main__':
     #check_velocity_space_init()
     
     # Tests 28/02/2021
-    check_particle_position_individual_incl_density()
+    #check_particle_position_individual_incl_density()
     

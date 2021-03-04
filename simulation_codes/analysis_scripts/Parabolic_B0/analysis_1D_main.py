@@ -3316,7 +3316,7 @@ def plot_vi_vs_t_for_cell(cell=None, comp=0, it_max=None, jj=1, save=True, hexbi
     return
 
 
-def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False, skip=1):
+def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False, skip=1, ppd=False):
     '''
     For each point in time
      - Collect particle information for particles near cell, plus time component
@@ -3332,7 +3332,10 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False, skip=1):
     lt = ['x', 'y', 'z']
     print('Calculating distribution f(v) vs. x for species {},...'.format(jj))
     if it_max is None:
-        it_max = len(os.listdir(cf.particle_dir))
+        if ppd == False:
+            it_max = len(os.listdir(cf.particle_dir))
+        else:
+            it_max = len(os.listdir(cf.run_dir + '//equil_pdata//'))
     
     if cf.Tperp.max() is not None:
         vth = np.sqrt(kB * cf.Tperp[jj] / cf.mass[jj]) / cf.va
@@ -3362,8 +3365,9 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False, skip=1):
                 sys.stdout.write('\rPlotting particle data from p-file {}'.format(ii))
                 sys.stdout.flush()
     
-            pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii, shuffled_idx=shuffled_idx)
-            
+            pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii, shuffled_idx=shuffled_idx,
+                                                                         preparticledata=ppd)
+
             # Do the plotting
             plt.ioff()
             
@@ -4252,27 +4256,27 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//CAM_CL_ABCs_homogenous//']:
+    for series in ['//PET_equil_on//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [2]
+            runs_to_do = [5]
         
         # Extract all summary files and plot field stuff (quick)
-        if True:
+        if False:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
-                cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
+                cf.load_run(drive, series, run_num, extract_arrays=False, overwrite_summary=True)
 
                 #plot_total_density_with_time()
                 #plot_max_velocity()
                 #check_fields(save=True, ylim=True, skip=1)
-                #check_fields(save=True, ylim=False, skip=10)
+                #check_fields(save=True, ylim=False, skip=1)
 
                 #winske_summary_plots(save=True)
                 #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
@@ -4295,12 +4299,12 @@ if __name__ == '__main__':
 #                 ggg.SWSP_timeseries(nx=x1000, save=True, log=True, normalize=True, tmax=35)
 # =============================================================================
 
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
-                           normalize=False, B0_lim=1.0, remove_ND=False)
-                
-                field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
-                
 # =============================================================================
+#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
+#                            normalize=False, B0_lim=None, remove_ND=False)
+#                 
+#                 #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
+#                 
 #                 plot_wk(saveas='wk_plot', dispersion_overlay=True, save=True,
 #                      pcyc_mult=1.5, xmax=1.5, zero_cold=False,
 #                      linear_only=False, normalize_axes=True)
@@ -4316,7 +4320,7 @@ if __name__ == '__main__':
 #                     pass            
 # =============================================================================
         
-        if False:
+        if True:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
@@ -4328,11 +4332,12 @@ if __name__ == '__main__':
                 #plot_spatial_poynting(save=True, log=True)
                 #plot_spatial_poynting_helical(save=True, log=True)
                 
-                #plot_total_density_with_time(save=True)
+                plot_total_density_with_time(save=True)
                 
                 #summary_plots(save=True, histogram=False, skip=10, ylim=False)
                 for sp in range(cf.Nj):
-                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=10)
+                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=4,
+                                 ppd=False)
                 #scatterplot_velocities(skip=10)
                 #check_fields(skip=10, ylim=False)
             

@@ -540,7 +540,7 @@ def test_seed_sizes():
     tarr  = np.arange(0.0, t_max, dt)
     
     # Wave parameters
-    B_seed = [1e-30, 1e-29, 1e-28, 1e-27, 1e-26]
+    B_seed = [1e-10, 1e-15, 1e-20, 1e-25, 1e-30]
     freq   = 0.35*pcyc
     grate  = 0.035*pcyc
     nwaves = len(B_seed)
@@ -561,8 +561,8 @@ def test_seed_sizes():
     fig, axes = plt.subplots(2, sharex=True)
     axes[0].set_title('Time to Saturation for different seeds')
     for ii in range(nwaves):
-        axes[0].plot(    tarr, wavearr[ii]*1e9, label='Seed: {} nT'.format(B_seed[ii]*1e9))
-        axes[1].semilogy(tarr, wavearr[ii]*1e9, label='Seed: {} nT'.format(B_seed[ii]*1e9))
+        axes[0].plot(    tarr, wavearr[ii]*1e9, label='Seed: {:.1E} nT'.format(B_seed[ii]*1e9))
+        axes[1].semilogy(tarr, wavearr[ii]*1e9, label='Seed: {:.1E} nT'.format(B_seed[ii]*1e9))
     axes[1].set_xlabel('Time ($t\Omega_H$)')
     
     for ax in axes:

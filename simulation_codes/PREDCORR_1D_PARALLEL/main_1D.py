@@ -20,13 +20,14 @@ RE     = 6.371e6                            # Earth radius in metres
 B_surf = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
+influx_equil      = True
 adaptive_timestep = True       # Disable adaptive timestep if you hate when it doubles
 print_runtime     = True       # Whether or not to output runtime every 50 iterations 
 do_parallel       = True       # Whether or not to use available threads to parallelize specified functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
 #nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
 
-Fu_override=False               # Override to allow density to be calculated as a ratio of frequencies
+Fu_override=False              # Override to allow density to be calculated as a ratio of frequencies
 
 ### ##
 ### INITIALIZATION
@@ -192,8 +193,8 @@ def uniform_bimaxwellian():
     return pos, vel, idx
 
 
-@nb.njit()
-def initialize_particles():
+#@nb.njit()
+def initialize_particles(B, E, mp_flux):
     '''Initializes particle arrays.
     
     INPUT:
@@ -217,6 +218,10 @@ def initialize_particles():
     Ib         = np.zeros(N,      dtype=np.uint16)
     W_elec     = np.zeros((3, N), dtype=np.float64)
     W_mag      = np.zeros((3, N), dtype=np.float64)
+    
+    if influx_equil == True:
+        run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
+                          mp_flux, hot_only=True, psave=False)
     
     assign_weighting_TSC(pos, Ie, W_elec)
     assign_weighting_TSC(pos, Ib, W_mag)
@@ -369,6 +374,83 @@ def set_timestep(vel):
 
     print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))
     return DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array
+
+
+#@nb.njit()
+def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
+                          mp_flux, frev=100, hot_only=True, psave=True, save_inc=50):
+    '''
+    Still need to test this. Put it just after the initialization of the particles.
+    Actually might want to use the real mp_flux since that'll continue once the
+    waves turn on?
+    
+    Just use all the real arrays, since the particle arrays will be continuous
+    once the fields turn on (right weightings, positions, etc.) and the wave
+    fields should be empty at the start and will continue to be empty since they
+    are not updated in this loop.
+    
+    Should be ready to test after the open particle boundaries are verified.
+    
+    Can be set so that only the ring current warm/hot species are set to the
+    initial equilibrium, since the time taken for the cold species to do this
+    is quite substantial.
+    
+    TODO: Set particle boundary conditions to be species specific - i.e. reflect
+    cold populations, but let hot populations have an open boundary.
+    
+    Is vel_ts needed? Cells don't really exist in this bottle. But you probably 
+    don't want to jump too quickly through the gradient, surely there's a timestep
+    limitation on that.
+    
+    To do: Put check in store_run_params() to delete if it already exists so
+    this particle data doesn't alter it.
+    '''
+    print('Letting particle distribution relax into static field configuration')
+    max_vx   = np.max(np.abs(vel[0, :]))
+    ion_ts   = orbit_res * 2 * np.pi / gyfreq_xmax
+    vel_ts   = 0.5*dx / max_vx                    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
+    pdt      = min(ion_ts, vel_ts)
+    ptime    = frev / gyfreq_eq
+    psteps   = int(ptime / pdt) + 1
+    psim_time = 0.0
+
+    print('Particle-only timesteps: ', psteps)
+    print('Particle-push in seconds:', pdt)
+    
+    if psave == True:
+        print('Generating data for particle equilibrium pushes')
+        # Check dir
+        manage_directories()
+        store_run_parameters(pdt, save_inc, 0, psteps, ptime)
+        pdata_path  = ('%s/%s/run_%d' % (drive, save_path, run))
+        pdata_path += '/data/equil_particles/'
+        if os.path.exists(pdata_path) == False:                                   # Create data directory
+            os.makedirs(pdata_path)
+        pnum = 0
+        
+    # Desync (retard) velocity here
+    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*pdt, vel_only=True, hot_only=hot_only)
+    for pp in range(psteps):
+        if psave == True and pp%save_inc==0:
+            p_fullpath = pdata_path + 'data%05d' % pnum
+            np.savez(p_fullpath, pos=pos, vel=vel, idx=idx, sim_time=psim_time)
+            pnum += 1
+            print('p-Particle data saved')
+            
+        if pp%500 == 0:
+            print('Step', pp)
+        
+        for jj in range(Nj):
+            parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, pdt, hot_only=hot_only)
+            
+            if hot_only == False or temp_type[jj] == 1:
+                if particle_open == True:
+                    inject_particles_1sp(pos, vel, idx, mp_flux, pdt, jj)
+        psim_time += pdt
+    
+    # Resync (advance) velocity here
+    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, 0.5*pdt, vel_only=True, hot_only=hot_only)
+    return
 
 ### ##
 ### PARTICLES
@@ -570,7 +652,7 @@ def assign_weighting_CIC(pos, I, W, E_nodes=True):
 
 
 @nb.njit(parallel=do_parallel)
-def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False):
+def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False, hot_only=False):
     '''
     updates velocities using a Boris particle pusher.
     Based on Birdsall & Langdon (1985), pp. 59-63.
@@ -589,103 +671,192 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False):
     "Periodic" and "Open" boundaries most useful, others kept for legacy purposes.
     '''
     for ii in nb.prange(pos.shape[0]):
-        # Calculate wave fields at particle position
-        Ep = np.zeros(3, dtype=np.float64)  
-        Bp = np.zeros(3, dtype=np.float64)
-        
-        for jj in nb.prange(3):
-            for kk in nb.prange(3):
-                Ep[kk] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]   
-                Bp[kk] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]                   
-
-        # Calculate background field at particle position
-        Bp[0]   += B_eq * (1.0 + a * pos[ii] * pos[ii])
-        constant = a * B_eq
-        l_cyc    = qm_ratios[idx[ii]] * Bp[0]
-        Bp[1]   += constant * pos[ii] * vel[2, ii] / l_cyc
-        Bp[2]   -= constant * pos[ii] * vel[1, ii] / l_cyc
-
-        # Start Boris Method
-        qmi = 0.5 * DT * qm_ratios[idx[ii]]                             # q/m variable including dt
-        T   = qmi * Bp 
-        S   = 2.*T / (1. + T[0]*T[0] + T[1]*T[1] + T[2]*T[2])
-
-        # vel -> v_minus
-        vel[0, ii] += qmi * Ep[0]
-        vel[1, ii] += qmi * Ep[1]
-        vel[2, ii] += qmi * Ep[2]
+        if temp_type[idx[ii]] == 1 or hot_only == False:
+            # Calculate wave fields at particle position
+            Ep = np.zeros(3, dtype=np.float64)  
+            Bp = np.zeros(3, dtype=np.float64)
             
-        # Calculate v_prime (maybe use a temp array here?)
-        v_prime    = np.zeros(3, dtype=np.float64)
-        v_prime[0] = vel[0, ii] + vel[1, ii] * T[2] - vel[2, ii] * T[1]
-        v_prime[1] = vel[1, ii] + vel[2, ii] * T[0] - vel[0, ii] * T[2]
-        v_prime[2] = vel[2, ii] + vel[0, ii] * T[1] - vel[1, ii] * T[0]
-        
-        # vel_minus -> vel_plus
-        vel[0, ii] += v_prime[1] * S[2] - v_prime[2] * S[1]
-        vel[1, ii] += v_prime[2] * S[0] - v_prime[0] * S[2]
-        vel[2, ii] += v_prime[0] * S[1] - v_prime[1] * S[0]
-        
-        # vel_plus -> vel (updated)
-        vel[0, ii] += qmi * Ep[0]
-        vel[1, ii] += qmi * Ep[1]
-        vel[2, ii] += qmi * Ep[2]
-        
-        if vel_only == False:
-            # Update position
-            pos[ii] += vel[0, ii] * DT
-        
-            # Check if particle has left simulation and apply boundary conditions
-            if (pos[ii] < xmin or pos[ii] > xmax):
-
-                if particle_periodic == 1:  
-                    # Mario (Periodic)
-                    if pos[ii] > xmax:
-                        pos[ii] += xmin - xmax
-                    elif pos[ii] < xmin:
-                        pos[ii] += xmax - xmin 
-                        
-                elif particle_open == 1:                
-                    # Open: Deactivate particles that leave the simulation space
-                    pos[ii]     = 0.0
-                    vel[0, ii]  = 0.0
-                    vel[1, ii]  = 0.0
-                    vel[2, ii]  = 0.0
-                    idx[ii]     = -1
-                        
-                elif particle_reinit == 1: 
-                    
-                    # Reinitialize vx based on flux distribution
-                    vel[0, ii]  = generate_vx(vth_par[idx[ii]])
-                    vel[0, ii] *= -np.sign(pos[ii])
-                    
-                    # Re-initialize v_perp and check pitch angle
-                    if temp_type[idx[ii]] == 0 or homogenous == 1:
-                        vel[1, ii] = np.random.normal(0, vth_perp[idx[ii]])
-                        vel[2, ii] = np.random.normal(0, vth_perp[idx[ii]])
-                    else:
-                        particle_PA = 0.0
-                        while np.abs(particle_PA) < loss_cone_xmax:
-                            vel[1, ii]  = np.random.normal(0, vth_perp[idx[ii]])
-                            vel[2, ii]  = np.random.normal(0, vth_perp[idx[ii]])
-                            v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
-                            
-                            particle_PA = np.arctan(v_perp / vel[0, ii])
+            for jj in nb.prange(3):
+                for kk in nb.prange(3):
+                    Ep[kk] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]   
+                    Bp[kk] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]                   
+    
+            # Calculate background field at particle position
+            Bp[0]   += B_eq * (1.0 + a * pos[ii] * pos[ii])
+            constant = a * B_eq
+            l_cyc    = qm_ratios[idx[ii]] * Bp[0]
+            Bp[1]   += constant * pos[ii] * vel[2, ii] / l_cyc
+            Bp[2]   -= constant * pos[ii] * vel[1, ii] / l_cyc
+    
+            # Start Boris Method
+            qmi = 0.5 * DT * qm_ratios[idx[ii]]                             # q/m variable including dt
+            T   = qmi * Bp 
+            S   = 2.*T / (1. + T[0]*T[0] + T[1]*T[1] + T[2]*T[2])
+    
+            # vel -> v_minus
+            vel[0, ii] += qmi * Ep[0]
+            vel[1, ii] += qmi * Ep[1]
+            vel[2, ii] += qmi * Ep[2]
                 
-                    # Place back inside simulation domain
-                    if pos[ii] < xmin:
-                        pos[ii] = xmin + np.random.uniform(0, 1) * vel[0, ii] * DT
-                    elif pos[ii] > xmax:
-                        pos[ii] = xmax + np.random.uniform(0, 1) * vel[0, ii] * DT
-                       
-                else:
-                    # Reflect
-                    if pos[ii] > xmax:
-                        pos[ii] = 2*xmax - pos[ii]
-                    elif pos[ii] < xmin:
-                        pos[ii] = 2*xmin - pos[ii]
+            # Calculate v_prime (maybe use a temp array here?)
+            v_prime    = np.zeros(3, dtype=np.float64)
+            v_prime[0] = vel[0, ii] + vel[1, ii] * T[2] - vel[2, ii] * T[1]
+            v_prime[1] = vel[1, ii] + vel[2, ii] * T[0] - vel[0, ii] * T[2]
+            v_prime[2] = vel[2, ii] + vel[0, ii] * T[1] - vel[1, ii] * T[0]
+            
+            # vel_minus -> vel_plus
+            vel[0, ii] += v_prime[1] * S[2] - v_prime[2] * S[1]
+            vel[1, ii] += v_prime[2] * S[0] - v_prime[0] * S[2]
+            vel[2, ii] += v_prime[0] * S[1] - v_prime[1] * S[0]
+            
+            # vel_plus -> vel (updated)
+            vel[0, ii] += qmi * Ep[0]
+            vel[1, ii] += qmi * Ep[1]
+            vel[2, ii] += qmi * Ep[2]
+            
+            if vel_only == False:
+                # Update position
+                pos[ii] += vel[0, ii] * DT
+            
+                # Check if particle has left simulation and apply boundary conditions
+                if (pos[ii] < xmin or pos[ii] > xmax):
+    
+                    if particle_periodic == 1:  
+                        # Mario (Periodic)
+                        if pos[ii] > xmax:
+                            pos[ii] += xmin - xmax
+                        elif pos[ii] < xmin:
+                            pos[ii] += xmax - xmin 
+                            
+                    elif particle_open == 1:                
+                        # Open: Deactivate particles that leave the simulation space
+                        pos[ii]     = 0.0
+                        vel[0, ii]  = 0.0
+                        vel[1, ii]  = 0.0
+                        vel[2, ii]  = 0.0
+                        idx[ii]     = -1
+                            
+                    elif particle_reinit == 1: 
                         
-                    vel[0, ii] *= -1.0
+                        # Reinitialize vx based on flux distribution
+                        vel[0, ii]  = generate_vx(vth_par[idx[ii]])
+                        vel[0, ii] *= -np.sign(pos[ii])
+                        
+                        # Re-initialize v_perp and check pitch angle
+                        if temp_type[idx[ii]] == 0 or homogenous == 1:
+                            vel[1, ii] = np.random.normal(0, vth_perp[idx[ii]])
+                            vel[2, ii] = np.random.normal(0, vth_perp[idx[ii]])
+                        else:
+                            particle_PA = 0.0
+                            while np.abs(particle_PA) < loss_cone_xmax:
+                                vel[1, ii]  = np.random.normal(0, vth_perp[idx[ii]])
+                                vel[2, ii]  = np.random.normal(0, vth_perp[idx[ii]])
+                                v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
+                                
+                                particle_PA = np.arctan(v_perp / vel[0, ii])
+                    
+                        # Place back inside simulation domain
+                        if pos[ii] < xmin:
+                            pos[ii] = xmin + np.random.uniform(0, 1) * vel[0, ii] * DT
+                        elif pos[ii] > xmax:
+                            pos[ii] = xmax + np.random.uniform(0, 1) * vel[0, ii] * DT
+                           
+                    else:
+                        # Reflect
+                        if pos[ii] > xmax:
+                            pos[ii] = 2*xmax - pos[ii]
+                        elif pos[ii] < xmin:
+                            pos[ii] = 2*xmin - pos[ii]
+                            
+                        vel[0, ii] *= -1.0
+    return
+
+
+@nb.njit()
+def inject_particles_all_species(pos, vel, idx, _mp_flux, dt):
+    '''
+    Control function for injection that does all species.
+    This is so the actual injection function can be per-species (in case
+    I want to inject just one species, such as for the equilibrium stuff)
+    '''
+    for jj in range(Nj):
+        inject_particles_1sp(pos, vel, idx, _mp_flux, dt, jj)
+    return
+
+
+@nb.njit()
+def inject_particles_1sp(pos, vel, idx, _mp_flux, dt, jj):        
+    '''
+    How to create new particles in parallel? Just test serial for now, but this
+    might become my most expensive function for large N.
+    
+    Also need to work out how to add flux in serial (might just have to put it
+    in calling function: advance_particles_and_moments())
+    
+    NOTE: How does this work for -0.5*DT ?? Might have to double check
+    '''
+    # Add flux at each boundary 
+    for kk in range(2):
+        _mp_flux[kk, jj] += inject_rate[jj]*dt
+        
+    # acc used only as placeholder to mark place in array. How to do efficiently? 
+    acc = 0; n_created = 0
+    for ii in nb.prange(2):
+        N_inject = int(_mp_flux[ii, jj] // 2)
+        
+        for xx in nb.prange(N_inject):
+            
+            # Find two empty particles (Yes clumsy coding but it works)
+            for kk in nb.prange(acc, pos.shape[0]):
+                if idx[kk] < 0:
+                    kk1 = kk
+                    acc = kk + 1
+                    break
+            for kk in nb.prange(acc, pos.shape[0]):
+                if idx[kk] < 0:
+                    kk2 = kk
+                    acc = kk + 1
+                    break
+
+            # Reinitialize vx based on flux distribution
+            vel[0, kk1] = generate_vx(vth_par[jj])
+            idx[kk1]    = jj
+            
+            # Re-initialize v_perp and check pitch angle
+            if temp_type[jj] == 0 or homogenous == True:
+                vel[1, kk1] = np.random.normal(0, vth_perp[jj])
+                vel[2, kk1] = np.random.normal(0, vth_perp[jj])
+            else:
+                particle_PA = 0.0
+                while np.abs(particle_PA) <= loss_cone_xmax:
+                    vel[1, kk1] = np.random.normal(0, vth_perp[jj])
+                    vel[2, kk1] = np.random.normal(0, vth_perp[jj])
+                    v_perp      = np.sqrt(vel[1, kk1] ** 2 + vel[2, kk1] ** 2)
+                    particle_PA = np.arctan(v_perp / vel[0, kk1])
+            
+            # Amount travelled (vel always +ve at first)
+            dpos = np.random.uniform(0, 1) * vel[0, kk1] * dt
+            
+            # Left boundary injection
+            if ii == 0:
+                pos[kk1]    = xmin + dpos
+                vel[0, kk1] = np.abs(vel[0, kk1])
+                
+            # Right boundary injection
+            else:
+                pos[kk1]    = xmax - dpos
+                vel[0, kk1] = -np.abs(vel[0, kk1])
+            
+            # Copy values to second particle (Same position, xvel. Opposite v_perp) 
+            idx[kk2]    = idx[kk1]
+            pos[kk2]    = pos[kk1]
+            vel[0, kk2] = vel[0, kk1]
+            vel[1, kk2] = vel[1, kk1] * -1.0
+            vel[2, kk2] = vel[2, kk1] * -1.0
+            
+            # Subtract new macroparticles from accrued flux
+            _mp_flux[ii, jj] -= 2.0
+            n_created        += 2
     return
 
 
@@ -1490,6 +1661,7 @@ def save_field_data(sim_time, dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, da
                        sim_time = sim_time,
                        damping_array = damping_array, E_damping_array=E_damping_array)
     print('Field data saved')
+    return
     
     
 def save_particle_data(sim_time, dt, part_save_iter, qq, pos, vel, idx):
@@ -1500,6 +1672,7 @@ def save_particle_data(sim_time, dt, part_save_iter, qq, pos, vel, idx):
     
     np.savez(d_fullpath, pos = pos, vel = vel, idx=idx, sim_time = sim_time)
     print('Particle data saved')
+    return
     
     
 def add_runtime_to_header(runtime, loop_time):
@@ -1914,7 +2087,8 @@ if seed == '-':
 else:
     seed = int(seed)
 
-manage_directories()
+if __name__ == '__main__':
+    manage_directories()
 
 #######################################
 ### LOAD PARTICLE/PLASMA PARAMETERS ###
@@ -2089,7 +2263,15 @@ else:
     lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L)))       # Anchor latitude in radians
     B_A        = B_eq * np.sqrt(4 - 3*np.cos(lat_A) ** 2)\
                 / (np.cos(lat_A) ** 6)                        # Magnetic field at anchor point
-    B_xmax     = B_eq * (1 + a*xmax**2)
+                
+    # GENERAL PARABOLIC FIELD
+    if B_xmax_ovr == '-':
+        a      = 4.5 / (L*RE)**2
+        B_xmax = B_eq * (1 + a*xmax**2)
+    else:
+        B_xmax = float(B_xmax_ovr)
+        a      = (B_xmax / B_eq - 1) / xmax**2
+        
     lambda_L   = np.arccos(np.sqrt(1.0 / L)) 
     
     loss_cone_eq   = np.arcsin(np.sqrt(B_eq   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
@@ -2164,12 +2346,12 @@ if __name__ == '__main__':
     start_time = timer()
         
     # Initialize simulation: Allocate memory and set time parameters
-    pos, vel, Ie, W_elec, Ib, W_mag, idx                = initialize_particles()
     B, B_cent, E_int, E_half, Ve, Te                    = initialize_fields()
     q_dens, q_dens_adv, Ji                              = initialize_source_arrays()
     old_particles, old_fields, temp3De, temp3Db, temp1D,\
                                                mp_flux  = initialize_tertiary_arrays()
-    
+    pos, vel, Ie, W_elec, Ib, W_mag, idx                = initialize_particles(B, E_int, mp_flux)
+
     # Collect initial moments and save initial state
     get_B_cent(B, B_cent)
     collect_moments(vel, Ie, W_elec, idx, q_dens, Ji) 

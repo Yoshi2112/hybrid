@@ -438,7 +438,7 @@ def load_fields(ii):
     return tB, tE, tVe, tTe, tJ, tdns, tsim_time, tdamping_array
 
 
-def load_particles(ii, shuffled_idx=False):  
+def load_particles(ii, shuffled_idx=False, preparticledata=False):  
     '''
     Sort kw for arranging particles by species index since they get jumbled.
     
@@ -458,9 +458,14 @@ def load_particles(ii, shuffled_idx=False):
     Flag will be anything that involves spare particles. Load it later (nothing like
     that exists yet).
     '''    
-    part_file  = 'data%05d.npz' % ii             # Define target file
-    input_path = particle_dir + part_file        # File location
-    data       = np.load(input_path)             # Load file
+    if preparticledata == True:
+        pdir = run_dir + '//equil_pdata//'
+    else:
+        pdir = particle_dir
+        
+    part_file  = 'data%05d.npz' % ii
+    input_path = pdir + part_file
+    data       = np.load(input_path)
     
     tx         = data['pos']
     tv         = data['vel']
