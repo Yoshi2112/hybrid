@@ -3329,13 +3329,17 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False, skip=1, ppd=F
         print('No species with index {}, skipping.'.format(jj))
         return
     
+    if ppd == True and os.path.exists(cf.data_dir + '//equil_particles//') == False:
+        print('No equilibrium data to plot. Aborting.')
+        return
+    
     lt = ['x', 'y', 'z']
     print('Calculating distribution f(v) vs. x for species {},...'.format(jj))
     if it_max is None:
         if ppd == False:
             it_max = len(os.listdir(cf.particle_dir))
         else:
-            it_max = len(os.listdir(cf.run_dir + '//equil_pdata//'))
+            it_max = len(os.listdir(cf.data_dir + '//equil_particles//'))
     
     if cf.Tperp.max() is not None:
         vth = np.sqrt(kB * cf.Tperp[jj] / cf.mass[jj]) / cf.va
@@ -3352,8 +3356,12 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False, skip=1, ppd=F
 
     for ii in range(it_max):
         if ii%skip == 0:
-            save_dir = cf.anal_dir + '//Particle Spatial Distribution Histograms//Species {}//'.format(jj)
-            filename = 'fv_vs_x_species_{}_{:05}'.format(jj, ii)
+            if ppd == False:
+                save_dir = cf.anal_dir + '//Particle Spatial Distribution Histograms//Species {}//'.format(jj)
+                filename = 'fv_vs_x_species_{}_{:05}'.format(jj, ii)
+            else:
+                save_dir = cf.anal_dir + '//EQUIL_Particle Spatial Distribution Histograms//Species {}//'.format(jj)
+                filename = 'EQ_fv_vs_x_species_{}_{:05}'.format(jj, ii)
             
             if os.path.exists(save_dir) == False:
                 os.makedirs(save_dir)
@@ -3364,9 +3372,10 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False, skip=1, ppd=F
             else:
                 sys.stdout.write('\rPlotting particle data from p-file {}'.format(ii))
                 sys.stdout.flush()
-    
+            
+
             pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii, shuffled_idx=shuffled_idx,
-                                                                         preparticledata=ppd)
+                                                                     preparticledata=ppd)
 
             # Do the plotting
             plt.ioff()
@@ -4270,10 +4279,10 @@ if __name__ == '__main__':
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [5]
+            runs_to_do = [0]
         
         # Extract all summary files and plot field stuff (quick)
         if False:
@@ -4341,12 +4350,16 @@ if __name__ == '__main__':
                 #plot_spatial_poynting(save=True, log=True)
                 #plot_spatial_poynting_helical(save=True, log=True)
                 
-                plot_total_density_with_time(save=True)
+                #plot_total_density_with_time(save=True)
                 
                 #summary_plots(save=True, histogram=False, skip=10, ylim=False)
                 for sp in range(cf.Nj):
                     plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=4,
                                  ppd=False)
+                    
+                for sp in range(cf.Nj):
+                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=4,
+                                 ppd=True)
                 #scatterplot_velocities(skip=10)
                 #check_fields(skip=10, ylim=False)
             

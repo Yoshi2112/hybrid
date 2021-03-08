@@ -459,7 +459,7 @@ def load_particles(ii, shuffled_idx=False, preparticledata=False):
     that exists yet).
     '''    
     if preparticledata == True:
-        pdir = run_dir + '//equil_pdata//'
+        pdir = data_dir + '//equil_particles//'
     else:
         pdir = particle_dir
         
