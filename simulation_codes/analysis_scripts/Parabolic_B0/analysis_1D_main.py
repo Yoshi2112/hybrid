@@ -4268,28 +4268,28 @@ def plot_initial_x_vs_xp():
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'D:'
+    drive       = 'F:'
         
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//PET_equil_on//']:
+    for series in ['//shoji_2013_half_full//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [0]
+            runs_to_do = [1]
         
         # Extract all summary files and plot field stuff (quick)
-        if False:
+        if True:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
-                cf.load_run(drive, series, run_num, extract_arrays=False, overwrite_summary=True)
+                cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
 
                 #plot_total_density_with_time()
                 #plot_max_velocity()
@@ -4317,12 +4317,12 @@ if __name__ == '__main__':
 #                 ggg.SWSP_timeseries(nx=x1000, save=True, log=True, normalize=True, tmax=35)
 # =============================================================================
 
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
+                           normalize=False, B0_lim=None, remove_ND=False)
+                
+                #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
+                
 # =============================================================================
-#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
-#                            normalize=False, B0_lim=None, remove_ND=False)
-#                 
-#                 #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
-#                 
 #                 plot_wk(saveas='wk_plot', dispersion_overlay=True, save=True,
 #                      pcyc_mult=1.5, xmax=1.5, zero_cold=False,
 #                      linear_only=False, normalize_axes=True)
@@ -4350,18 +4350,20 @@ if __name__ == '__main__':
                 #plot_spatial_poynting(save=True, log=True)
                 #plot_spatial_poynting_helical(save=True, log=True)
                 
-                #plot_total_density_with_time(save=True)
-                
-                #summary_plots(save=True, histogram=False, skip=10, ylim=False)
-                for sp in range(cf.Nj):
-                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=4,
-                                 ppd=False)
-                    
-                for sp in range(cf.Nj):
-                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=4,
-                                 ppd=True)
+# =============================================================================
+#                 plot_total_density_with_time(save=True)
+#                 
+#                 #summary_plots(save=True, histogram=False, skip=10, ylim=False)
+#                 for sp in range(cf.Nj):
+#                     plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=4,
+#                                  ppd=False)
+#                     
+#                 for sp in range(cf.Nj):
+#                     plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=4,
+#                                  ppd=True)
+# =============================================================================
                 #scatterplot_velocities(skip=10)
-                #check_fields(skip=10, ylim=False)
+                check_fields(skip=5, ylim=False)
             
         #plot_phase_space_with_time()
             

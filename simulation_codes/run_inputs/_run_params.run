@@ -1,5 +1,5 @@
-DRIVE					D:/
-SAVE_PATH			    /runs/PET_equil_on/
+DRIVE					F:/
+SAVE_PATH			    /runs/equil_test_750_more/
 RUN						-
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
@@ -14,9 +14,9 @@ SOURCE_SMOOTHING_FLAG	0
 E_DAMPING_FLAG			0
 QUIET_START_FLAG		1
 DAMPING_MULTIPLIER_RD   0.05
-NX 						256
+NX 						4096
 ND 						32
-MAX_REV					2000
+MAX_REV					1200
 DXM						1.0
 IE						1
 RC_HWIDTH				-
@@ -24,4 +24,4 @@ GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02	
 PARTICLE_DUMP_FREQ		5.0
 FIELD_DUMP_FREQ			5.0
-Testing particle number density equilibrium code. Equilibrium is off, for comparison.
+Testing particle number density equilibrium code. Hot only, injection BCs. Longer simulation domain to see if this causes a longer equilibrium period.

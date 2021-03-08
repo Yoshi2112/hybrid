@@ -31,6 +31,8 @@ from   emperics          import geomagnetic_magnitude, sheely_plasmasphere
 c  = 3e8
 qp = 1.602e-19
 mp = 1.673e-27
+e0 = 8.854e-12                        # Permittivity of free space
+mu0= 4e-7*np.pi
 
 
 #%% DATA MANAGEMENT FUNCTIONS
@@ -328,8 +330,8 @@ def get_cold_growth_rates(wr, k, Species):
     return temporal_growth_rate, convective_growth_rate, group_velocity
 
 
-def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out=True, print_filtered=True,
-                            magnetospheric_plasma=True, return_vg=False):
+def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out=True,
+                            print_filtered=True, return_vg=False):
     '''
     Given a range of k, returns the real and imaginary parts of the plasma dispersion
     relation specified by the Species present.
@@ -349,15 +351,6 @@ def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out
            Could also change to make sure solutions use previous best solution,
             if the previous solution ended up as a np.nan, and implement nan'ing
             solutions as they're solved to prevent completely losing convergence.
-            
-           Also need to put a catch in for if a species is missing (this is most
-            commonly used for H, He, O plasmas). If so, then
-              -- Detect which species are present by mass
-              -- Solve only for those that are present
-              -- Those that aren't present have their solutions nan'd
-           This can be achieved with the magnetospheric_plasma keyword, which
-           will hard-code the number of solutions to 3, and detect which of the
-           three are present using a Boolean array [Bool, Bool, Bool].
            
            Better way to calculate PDR for k = 0? Exceptions from a bunch of things,
            but surely there's an analytic way of doing it with the not-CPDR (or is 
@@ -1032,7 +1025,6 @@ def validation_plots_chen_2013():
     '''
     mp       = 1.673e-27                        # Proton mass (kg)
     qi       = 1.602e-19                        # Elementary charge (C)
-    e0       = 8.854e-12                        # Permittivity of free space
     _n0      = 100e6                            # Electron number density in /m3                      
     _B0      = 144e-9                           # Background magnetic field in T
     nhh      = 0.03                             # Fraction hot hydrogen
@@ -1772,7 +1764,7 @@ def plot_max_CGR_with_time(times, k_vals, all_cCGR, all_wCGR, all_hCGR,
     return max_k, max_g
 
 
-def plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad, norm=None, norm_B0=200.):
+def plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad, approx='warm'):
     '''
     Main function that downloads the data, queries the growth rates, and 
     plots a 2D colorplot of the temporal and convective growth rates. Might
@@ -1792,14 +1784,15 @@ def plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad, norm=None,
           'absolute' (normalized based on B0 of norm_B0, default 200nT)
     
     How to set growth rate min/max?
-    '''
-    # Frequencies over which to solve (determines frequency cadence)
-    Nf    = 1000
-    f_max = 1.2
-    f_min = 0.0
-    freqs = np.linspace(f_max, f_min, Nf)
-    w     = 2 * np.pi * freqs
     
+    Calculate wavenumber range based on average B0 and density for time period, times 1.5
+    
+    To do:
+        -- Parallelize using existing version (but just do warm approx for speed)
+        -- Plot 2D growth rate and check
+        -- Consider normalization options, or just plot freq array on y (instead of k array)
+        -- Cycle through compositions to find closest one. Can we make a minimization problem?
+    '''   
     # Create species array for each time (determines time cadence)    
     times, B0, name, mass, charge, density, tper, ani, cold_dens = \
     extract_species_arrays(time_start, time_end, probe, pad,
@@ -1809,37 +1802,29 @@ def plot_growth_rates_2D(rbsp_path, time_start, time_end, probe, pad, norm=None,
                            HM_filter_mhz=50,
                            nsec=None)
     
-    # Initialize empty arrays for GR returns
-    Nt  = times.shape[0]
-    TGR = np.zeros((Nt, Nf), dtype=np.float64)
-    CGR = np.zeros((Nt, Nf), dtype=np.float64)
+    # Use average plasma frequency to get k-range
+    wpi    = np.sqrt(cold_dens * qp ** 2 / (mp * e0)).mean()
+    Nk     = 1000
+    kmin   = 0
+    kmax   = 1.5
+    kfac   = c / wpi
+    k_vals = np.linspace(kmin, kmax, Nk) / kfac
     
-    # Calculate growth rate, normalize if flagged
-    try:
-        pcyc_abs = qp * norm_B0 * 1e-9 / mp
-    except:
-        print('Something up with norm_B0 flag = {}. Defaulting to 200nT'.format(norm_B0))
-        pcyc_abs = qp * 200e-9 / mp
+    
+    # Initialize empty arrays for GR returns
+    Nt  = times.shape[0]; N_solns = 3
+    TGR = np.zeros((Nt, Nk, N_solns), dtype=np.complex128)
+    CGR = np.zeros((Nt, Nk, N_solns), dtype=np.float64)
+    VGR = np.zeros((Nt, Nk, N_solns), dtype=np.float64)
         
     for ii in range(times.shape[0]):
+        print('Calculating time', times[ii])
         Species, PP = create_species_array(B0[ii], name, mass, charge, density[:, ii],
                                             tper[:, ii], ani[:, ii])
         
-        TGR[ii], CGR[ii], wVg = get_warm_growth_rates(w, Species)
-        
-        # Normalize
-        if norm is not None:
-            if norm == 'local':
-                pcyc_local = qp * PP['B0'] / mp
-                TGR[ii]   /= pcyc_local
-                CGR[ii]   /= pcyc_local
-            else:
-                if norm != 'absolute': 
-                    print('Unknown normalization flag {}. Defaulting to absolute.'.format(norm))
-                TGR[ii] /= pcyc_abs
-                CGR[ii] /= pcyc_abs
+        TGR[ii], CGR[ii], VGR[ii] = get_dispersion_relation(Species, k_vals, approx=approx, return_vg=True)
                 
-    if True:
+    if False:
         # Set growth rate plot limits based on results
         TGR_min  = 0.0
         #TGR_mean = TGR[np.isnan(TGR) == False].mean()
@@ -2363,20 +2348,24 @@ def plot_residuals(Species, PP, k, w_vals, lbl='', approx='hot'):
     return
 
 
-def plot_all_CGRs_kozyra():
-    return
-
-
-def plot_all_CGRs_kozyra_2D():
-    return
-
 
 if __name__ == '__main__':
     #validation_plots_fraser_1996()
     #validation_plots_omura2010()
     #validation_plots_wang_2016()
-    hybrid_test_plot()
+    #hybrid_test_plot()
     #sys.exit()
+    
+    
+    if True:
+        rbsp_path = 'G://DATA//RBSP//'
+        time_start  = np.datetime64('2015-01-16T04:05:00')
+        time_end    = np.datetime64('2015-01-16T05:15:00')
+        probe       = 'a'
+        pad         = 0
+        
+        plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad, approx='warm')
+    
     
     if False:
         rbsp_path = 'G://DATA//RBSP//'

@@ -20,8 +20,8 @@ RE     = 6.371e6                            # Earth radius in metres
 B_surf = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
-influx_equil      = False
-adaptive_timestep = False      # Disable adaptive timestep if you hate when it doubles
+influx_equil      = True       # Flag to indicate if a distribution relaxes into the field first
+adaptive_timestep = True       # Disable adaptive timestep if you hate when it doubles
 print_runtime     = True       # Whether or not to output runtime every 50 iterations 
 do_parallel       = True       # Whether or not to use available threads to parallelize specified functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
@@ -378,7 +378,7 @@ def set_timestep(vel):
 
 #@nb.njit()
 def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
-                          mp_flux, frev=100, hot_only=True, psave=True, save_inc=50):
+                          mp_flux, frev=1000, hot_only=True, psave=True, save_inc=50):
     '''
     Still need to test this. Put it just after the initialization of the particles.
     Actually might want to use the real mp_flux since that'll continue once the
@@ -413,7 +413,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
     ptime    = frev / gyfreq_eq
     psteps   = int(ptime / pdt) + 1
     psim_time = 0.0
-
+    
     print('Particle-only timesteps: ', psteps)
     print('Particle-push in seconds:', pdt)
     
@@ -423,6 +423,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
         if save_fields + save_particles == 0:
             manage_directories()
             store_run_parameters(pdt, save_inc, 0, psteps, ptime)
+            
         pdata_path  = ('%s/%s/run_%d' % (drive, save_path, run))
         pdata_path += '/data/equil_particles/'
         if os.path.exists(pdata_path) == False:                                   # Create data directory
@@ -451,6 +452,12 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
     
     # Resync (advance) velocity here
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, 0.5*pdt, vel_only=True, hot_only=hot_only)
+    
+    # Dump indicator file
+    if save_fields == 1 or save_particles == 1:
+        fin_path = '%s/%s/run_%d/equil_finished.txt' % (drive, save_path, run)
+        with open(fin_path, 'w') as open_file:
+            pass
     return
 
 ### ##
