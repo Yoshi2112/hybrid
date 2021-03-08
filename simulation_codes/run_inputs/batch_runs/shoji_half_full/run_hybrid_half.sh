@@ -8,5 +8,5 @@
 source /etc/profile.d/modules.sh
 module load numba/0.49.1-python.3.6
 cd $PBS_O_WORKDIR
-python /home/c3134027/hybrid/simulation_codes/PREDCORR_1D_PARALLEL/main_1D.py -r /batch_runs/shoji_half_full/run_params_shoji_half.run  -p /batch_runs/shoji_half_full/plasma_params_half.plasma -n 0
+python /home/c3134027/hybrid/simulation_codes/PREDCORR_1D_PARALLEL/main_1D.py -r /batch_runs/shoji_half_full/run_params_shoji_half.run  -p /batch_runs/shoji_half_full/plasma_params_half.plasma -n 2
 exit 0
