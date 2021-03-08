@@ -1,4 +1,4 @@
-DRIVE					F:/
+DRIVE					D:/
 SAVE_PATH			    /runs/PET_equil_on/
 RUN						-
 SAVE_PARTICLE_FLAG		1
@@ -22,6 +22,6 @@ IE						1
 RC_HWIDTH				-
 GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02	
-PARTICLE_DUMP_FREQ		10.0
+PARTICLE_DUMP_FREQ		5.0
 FIELD_DUMP_FREQ			5.0
-Testing particle number density equilibrium code. Should start at equilibrium.
+Testing particle number density equilibrium code. Equilibrium is off, for comparison.

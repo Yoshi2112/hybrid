@@ -20,8 +20,8 @@ RE     = 6.371e6                            # Earth radius in metres
 B_surf = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
-influx_equil      = True
-adaptive_timestep = True       # Disable adaptive timestep if you hate when it doubles
+influx_equil      = False
+adaptive_timestep = False      # Disable adaptive timestep if you hate when it doubles
 print_runtime     = True       # Whether or not to output runtime every 50 iterations 
 do_parallel       = True       # Whether or not to use available threads to parallelize specified functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
@@ -221,7 +221,7 @@ def initialize_particles(B, E, mp_flux):
     
     if influx_equil == True:
         run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
-                          mp_flux, hot_only=True, psave=False)
+                          mp_flux, hot_only=True, psave=True)
     
     assign_weighting_TSC(pos, Ie, W_elec)
     assign_weighting_TSC(pos, Ib, W_mag)
@@ -420,8 +420,9 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
     if psave == True:
         print('Generating data for particle equilibrium pushes')
         # Check dir
-        manage_directories()
-        store_run_parameters(pdt, save_inc, 0, psteps, ptime)
+        if save_fields + save_particles == 0:
+            manage_directories()
+            store_run_parameters(pdt, save_inc, 0, psteps, ptime)
         pdata_path  = ('%s/%s/run_%d' % (drive, save_path, run))
         pdata_path += '/data/equil_particles/'
         if os.path.exists(pdata_path) == False:                                   # Create data directory

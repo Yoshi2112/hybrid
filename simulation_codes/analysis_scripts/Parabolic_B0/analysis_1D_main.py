@@ -4248,9 +4248,18 @@ def plot_particle_paths(it_max=None, nsamples=1000):
     return
 
 
+def plot_initial_x_vs_xp():
+    '''
+    Plots the initial particle positions in space/velocity for the 'equil' loop
+    and the 't=0' real loop. Are these the same? They shouldn't be, but maybe 
+    python isn't writing to the arrays for some reason.
+    '''
+    return
+
+
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'F:'
+    drive       = 'D:'
         
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
