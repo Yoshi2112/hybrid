@@ -627,7 +627,10 @@ def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp,
                     kmin=0.0, kmax=1.0, Nk=1000, knorm=True,
                     nsec=None, HM_filter_mhz=50, N_procs=7,
                     suff=''):
-
+    '''
+    Calculates all 3 approximations for the linear dispersion relation given
+    satellite data parameters. Parallelized for faster running.
+    '''
     if nsec is None:
         DR_path = save_dir + 'DISP_{}_cc_{:03}_{:03}_{:03}.npz'.format(save_string, int(cmp[0]), int(cmp[1]), int(cmp[2]))
     else:
@@ -746,8 +749,8 @@ def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp,
                     WPDR_out[ii, jj, kk] = WPDR_np[ii, jj, kk, 0] + 1j * WPDR_np[ii, jj, kk, 1]
                     HPDR_out[ii, jj, kk] = HPDR_np[ii, jj, kk, 0] + 1j * HPDR_np[ii, jj, kk, 1]
             
-        cCGR_out = cCGR_np;     cVg_out = hVg_np
-        wCGR_out = wCGR_np;     wVg_out = hVg_np
+        cCGR_out = cCGR_np;     cVg_out = cVg_np
+        wCGR_out = wCGR_np;     wVg_out = wVg_np
         hCGR_out = hCGR_np;     hVg_out = hVg_np
             
         # Saves data used for DR calculation as well, for future reference (and plotting)
@@ -802,7 +805,163 @@ def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp,
     return k_np, CPDR_out, WPDR_out, HPDR_out, cCGR_out, wCGR_out, hCGR_out, \
            cVg_out, wVg_out, hVg_out,                                        \
            times, B0, name, mass, charge, density, tper, ani, cold_dens
- 
+
+
+def get_DRs_chunked_warm_only(Nk, kmin, kmax, knorm, times, B0, name, mass, charge, density, tper, ani,
+                      k_dict, WPDR_dict, wCGR_dict, wVg_dict, st=0, worker=None):
+    '''
+    Function designed to be run in parallel. All dispersion inputs as previous. 
+    output_PDR arrays are shared memory
+    
+    Dispersion inputs (B0, times, density, etc.) are chunked so this function calculates
+    them all.
+    
+    st is the first time index to be computed in the main array, gives position in
+    output array to place results in
+    
+    Thus the array index in output_PDRs will be st+ii for ii in range(Nt)
+    '''
+    k_arr    = np.frombuffer(k_dict['arr']).reshape(k_dict['shape'])
+    
+    WPDR_arr = np.frombuffer(WPDR_dict['arr']).reshape(WPDR_dict['shape'])
+    wCGR_arr = np.frombuffer(wCGR_dict['arr']).reshape(wCGR_dict['shape'])
+    wVg_arr  = np.frombuffer(wVg_dict['arr']).reshape(wVg_dict['shape'])
+
+    for ii in range(times.shape[0]):
+        Species, PP = create_species_array(B0[ii], name, mass, charge, density[:, ii], tper[:, ii], ani[:, ii])
+        this_k      = np.linspace(kmin, kmax, Nk, endpoint=False)
+        
+        # Convert k-extrema to /m if needed
+        if knorm == True: this_k *= PP['pcyc_rad'] / PP['va']
+        
+        # Calculate dispersion relation
+        print('Worker', worker, '::', times[ii])
+        this_WPDR, this_wCGR, this_wVg = get_dispersion_relation(Species, this_k, approx='warm', complex_out=False,
+                                                       print_filtered=False, return_vg=True)
+
+        # Dump to shared memory
+        k_arr[   st+ii, :]       = this_k[...]
+        WPDR_arr[st+ii, :, :, :] = this_WPDR[...]
+        wCGR_arr[st+ii, :, :]    = this_wCGR[...]
+        wVg_arr[ st+ii, :, :]    = this_wVg[ ...]
+    return
+
+
+def get_all_DRs_warm_only(time_start, time_end, probe, pad, cmp, 
+                    kmin=0.0, kmax=1.0, Nk=1000, knorm=True,
+                    nsec=None, HM_filter_mhz=50, N_procs=7,
+                    suff=''):
+    '''
+    As above, but for the warm approximation only (for speed). Similarly parallelized.
+    '''
+    if nsec is None:
+        DR_path = save_dir + 'DISPw_{}_cc_{:03}_{:03}_{:03}.npz'.format(save_string, int(cmp[0]), int(cmp[1]), int(cmp[2]))
+    else:
+        DR_path = save_dir + 'DISPw_{}_cc_{:03}_{:03}_{:03}_{}sec.npz'.format(save_string, int(cmp[0]), int(cmp[1]), int(cmp[2]), nsec)
+    
+    if os.path.exists(DR_path) == False:
+        # Load data
+        times, B0, name, mass, charge, density, tper, ani, cold_dens = \
+        extract_species_arrays(time_start, time_end, probe, pad, cmp=np.asarray(cmp), 
+                               return_raw_ne=True, nsec=nsec, HM_filter_mhz=HM_filter_mhz)
+    
+        Nt      = times.shape[0]
+        
+        procs   = []
+        
+        # Create raw shared memory arrays with shapes. Store in dict to send with each worker
+        k_shape      = (Nt, Nk)
+        k_shm        = multiprocessing.RawArray('d', Nt * Nk)
+        k_dict       = {'arr': k_shm, 'shape': k_shape}
+
+        WPDR_shape   = (Nt, Nk, 3, 2)
+        WPDR_shm     = multiprocessing.RawArray('d', Nt*Nk*3*2)
+        WPDR_dict    = {'arr': WPDR_shm, 'shape': WPDR_shape}
+
+        wCGR_shape   = (Nt, Nk, 3)
+        wCGR_shm     = multiprocessing.RawArray('d', Nt*Nk*3)
+        wCGR_dict    = {'arr': wCGR_shm, 'shape': wCGR_shape}
+
+        wVg_shape   = (Nt, Nk, 3)
+        wVg_shm     = multiprocessing.RawArray('d', Nt*Nk*3)
+        wVg_dict    = {'arr': wVg_shm, 'shape': wVg_shape}
+        
+        # Create numpy view into shared memory
+        k_np         = np.frombuffer(k_shm).reshape(k_shape)
+        WPDR_np      = np.frombuffer(WPDR_shm).reshape(WPDR_shape)
+        wCGR_np      = np.frombuffer(wCGR_shm).reshape(wCGR_shape)
+        wVg_np       = np.frombuffer(wVg_shm).reshape(wVg_shape)
+        
+        # Split input data into a list of chunks
+        time_chunks    = np.array_split(times,   N_procs)
+        field_chunks   = np.array_split(B0,      N_procs)
+        density_chunks = np.array_split(density, N_procs, axis=1)
+        tper_chunks    = np.array_split(tper,    N_procs, axis=1)
+        ani_chunks     = np.array_split(ani,     N_procs, axis=1)
+    
+        # Instatiate each process with a different chunk
+        acc = 0; start = time.time()
+        for xx in range(N_procs):
+            print('Starting process', xx)
+            proc = multiprocessing.Process(target=get_DRs_chunked_warm_only,
+                                        args=(Nk, kmin, kmax, knorm, time_chunks[xx],
+                                        field_chunks[xx], name, mass, charge, density_chunks[xx],
+                                        tper_chunks[xx], ani_chunks[xx],
+                                        k_dict, WPDR_dict, wCGR_dict, wVg_dict),
+                                        kwargs={'st':acc, 'worker':xx})
+            procs.append(proc)
+            proc.start()
+            
+            acc += time_chunks[xx].shape[0]
+        
+        # Complete processes
+        for proc in procs:
+            proc.join()
+                
+        print('All processes complete')
+        end = time.time()
+        print('Total parallel time = {}s'.format(str(end-start)))
+        
+        # Make output complex
+        WPDR_out = np.zeros((Nt, Nk, 3), dtype=np.complex128)
+    
+        for ii in range(Nt):
+            for jj in range(Nk):
+                for kk in range(3):
+                    WPDR_out[ii, jj, kk] = WPDR_np[ii, jj, kk, 0] + 1j * WPDR_np[ii, jj, kk, 1]
+            
+        wCGR_out = wCGR_np;     wVg_out = wVg_np
+            
+        # Saves data used for DR calculation as well, for future reference (and plotting)
+        if os.path.exists(save_dir) == False:
+            os.makedirs(save_dir)
+                
+        print('Saving dispersion history...')
+        np.savez(DR_path, all_k=k_np, all_WPDR=WPDR_out, all_wCGR=wCGR_np, all_wVg=wVg_np,
+                 comp=np.asarray(cmp), times=times, B0=B0, name=name, mass=mass, charge=charge,
+                 density=density, tper=tper, ani=ani, cold_dens=cold_dens,
+                 HM_filter_mhz=np.array([HM_filter_mhz]))
+    else:
+        print('Dispersion results already exist, loading from file...')
+        DR_file   = np.load(DR_path)
+        
+        k_np      = DR_file['all_k']
+        WPDR_out  = DR_file['all_WPDR']
+        wCGR_out  = DR_file['all_wCGR']
+        wVg_out   = DR_file['all_wVg']
+
+        times     = DR_file['times']
+        B0        = DR_file['B0']
+        name      = DR_file['name']
+        mass      = DR_file['mass']
+        charge    = DR_file['charge']
+        density   = DR_file['density']
+        tper      = DR_file['tper']
+        ani       = DR_file['ani']
+        cold_dens = DR_file['cold_dens']
+        
+    return k_np,  WPDR_out, wCGR_out, wVg_out, \
+           times, B0, name, mass, charge, density, tper, ani, cold_dens
 
 #%% KOZYRA FUNCTIONS
 def convective_growth_rate_kozyra(field, ndensc, ndensw, ANI, temperp,
@@ -1793,37 +1952,13 @@ def plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad, ap
         -- Consider normalization options, or just plot freq array on y (instead of k array)
         -- Cycle through compositions to find closest one. Can we make a minimization problem?
     '''   
-    # Create species array for each time (determines time cadence)    
-    times, B0, name, mass, charge, density, tper, ani, cold_dens = \
-    extract_species_arrays(time_start, time_end, probe, pad,
-                           rbsp_path='G://DATA//RBSP//', 
-                           cmp=[70, 20, 10],
-                           return_raw_ne=True,
-                           HM_filter_mhz=50,
-                           nsec=None)
-    
-    # Use average plasma frequency to get k-range
-    wpi    = np.sqrt(cold_dens * qp ** 2 / (mp * e0)).mean()
-    Nk     = 1000
-    kmin   = 0
-    kmax   = 1.5
-    kfac   = c / wpi
-    k_vals = np.linspace(kmin, kmax, Nk) / kfac
-    
-    
-    # Initialize empty arrays for GR returns
-    Nt  = times.shape[0]; N_solns = 3
-    TGR = np.zeros((Nt, Nk, N_solns), dtype=np.complex128)
-    CGR = np.zeros((Nt, Nk, N_solns), dtype=np.float64)
-    VGR = np.zeros((Nt, Nk, N_solns), dtype=np.float64)
-        
-    for ii in range(times.shape[0]):
-        print('Calculating time', times[ii])
-        Species, PP = create_species_array(B0[ii], name, mass, charge, density[:, ii],
-                                            tper[:, ii], ani[:, ii])
-        
-        TGR[ii], CGR[ii], VGR[ii] = get_dispersion_relation(Species, k_vals, approx=approx, return_vg=True)
-                
+    cmp = [70, 20, 10]
+    k_np,  WPDR_out, wCGR_out, wVg_out, times, B0, name, mass, charge, density,\
+        tper, ani, cold_dens = get_all_DRs_warm_only(time_start, time_end, probe, pad, cmp, 
+        kmin=0.0, kmax=1.5, Nk=1000, knorm=True,
+        nsec=2, HM_filter_mhz=50, N_procs=8,
+        suff='')
+            
     if False:
         # Set growth rate plot limits based on results
         TGR_min  = 0.0
@@ -2358,11 +2493,19 @@ if __name__ == '__main__':
     
     
     if True:
-        rbsp_path = 'G://DATA//RBSP//'
+        rbsp_path   = 'G://DATA//RBSP//'
         time_start  = np.datetime64('2015-01-16T04:05:00')
         time_end    = np.datetime64('2015-01-16T05:15:00')
         probe       = 'a'
         pad         = 0
+        
+        date_string = time_start.astype(object).strftime('%Y%m%d')
+        save_string = time_start.astype(object).strftime('%Y%m%d_%H%M_') + time_end.astype(object).strftime('%H%M')
+
+        save_drive  = 'G://'
+        save_dir    = '{}2D_LINEAR_THEORY//EVENT_{}//'.format(save_drive, date_string)
+        
+        
         
         plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad, approx='warm')
     

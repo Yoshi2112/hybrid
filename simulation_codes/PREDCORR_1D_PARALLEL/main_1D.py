@@ -21,7 +21,7 @@ B_surf = 3.12e-5                            # Magnetic field strength at Earth s
 
 # A few internal flags
 influx_equil      = True       # Flag to indicate if a distribution relaxes into the field first
-adaptive_timestep = False       # Disable adaptive timestep if you hate when it doubles
+adaptive_timestep = False      # Disable adaptive timestep if you hate when it doubles
 print_runtime     = True       # Whether or not to output runtime every 50 iterations 
 do_parallel       = True       # Whether or not to use available threads to parallelize specified functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
