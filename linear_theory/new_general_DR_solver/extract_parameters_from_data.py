@@ -366,6 +366,8 @@ def integrate_HOPE_moments(time_start, time_end, probe, pad, rbsp_path='E://DATA
     '''
     Testing self-integration of ion moments from pitch angle data :: Compare to actual
     calculated L3-MOM products.
+    
+    Based on equation from RBSPICE Data Handbook Rev. E (2018) p. 31.
     '''
     qp = 1.602e-19
     mp = 1.673e-27
@@ -380,35 +382,63 @@ def integrate_HOPE_moments(time_start, time_end, probe, pad, rbsp_path='E://DATA
     
     pa_times  = pa_data['Epoch_Ion']
 
-    # Find energy min/max idx for each time (since they can change depending on Ion_Mode)
-    # and integrate
-    fvels = np.sqrt(2 * qp * pa_data['HOPE_ENERGY_Ion'] / mp)
-    vdist = pa_data['FPDO'] / fvels
     vdens = np.zeros(pa_times.shape[0], dtype=np.float64)
+    
+    # Organize pitch angle stuff
+    pitch  = pa_data['PITCH_ANGLE']             # PA bin centers
+    da     = np.ones(pitch.shape[0]) * 18.      # PA bin widths
+    da[0]  = da[-1] = 9.
+    da    *= np.pi / 180.
     
     E_min = 30.0; E_max = None
     for ii in range(pa_times.shape[0]):
         
+        energy = pa_data['HOPE_ENERGY_Ion'][ii]     # Energy bin centers
+        nE     = energy.shape[0]
+        print(np.log10(pa_data['ENERGY_Ion_DELTA'][ii]))
+        print(pa_data['ENERGY_Ion_DELTA'].attrs)
+        #dE     = 
+        
+        plt.figure()
+        plt.scatter(np.log10(energy), np.ones(nE), label='Energy')
+        
+        plt.ylabel('Energy (eV)')
+        plt.legend()
+        plt.show()
+        return
+    
+    
+    
+        # Find energy min/max channels for integration
         if E_min is None:
-            min_idx = None
+            min_idx = 0
         else:
-            diffs   = np.abs(pa_data['HOPE_ENERGY_Ion'][ii] - E_min)
+            diffs   = np.abs(energy - E_min)
             min_idx = np.where(diffs == diffs.min())[0][0]
             
         if E_max is None:
-            max_idx = None
+            max_idx = energy.shape[0] - 1
         else:
-            diffs   = np.abs(pa_data['HOPE_ENERGY_Ion'][ii] - E_max)
+            diffs   = np.abs(energy - E_max)
             min_idx = np.where(diffs == diffs.min())[0][0]
-
-        vdens[ii] = vdist[ii, min_idx:max_idx].sum()
         
-        if vdens[ii] < 0.0:
-            vdens[ii] = np.nan
-
+        pdb.set_trace()
+        #vdens[ii] = vdist[ii, min_idx:max_idx].sum()
+        
+        # Need:
+        # Pitch angle bin list
+        # Pitch angle widths
+        # Energy bin list
+        # Energy bin widths
+        
+        
+    # Filter bad values (fill value -1E-31, and no density should be negative)
     for ii in range(mom_hdens.shape[0]):
         if mom_hdens[ii] < 0.0:
             mom_hdens[ii] = np.nan
+    for ii in range(vdens.shape[0]):
+        if vdens[ii] < 0.0:
+             vdens[ii] = np.nan
 
     plt.ioff()
     plt.figure()
@@ -428,7 +458,7 @@ if __name__ == '__main__':
     _time_end   = np.datetime64('2015-01-16T05:15:00')
     _probe      = 'a'
     _pad        = 0
-    _test_file_pa  = 'E://DATA//RBSP//ECT//HOPE//L3//PITCHANGLE//rbspb_rel04_ect-hope-PA-L3_20150116_v7.1.0.cdf'
+    _test_file_pa  = 'E://DATA//RBSP//ECT//HOPE//L3//PITCHANGLE//rbspa_rel04_ect-hope-PA-L3_20150116_v7.1.0.cdf'
     _test_file_mom = 'E://DATA//RBSP//ECT//HOPE//L3//MOMENTS//rbspa_rel04_ect-hope-MOM-L3_20150116_v7.1.0.cdf'
     
     integrate_HOPE_moments(_time_start, _time_end, _probe, _pad, rbsp_path=_rbsp_path)
