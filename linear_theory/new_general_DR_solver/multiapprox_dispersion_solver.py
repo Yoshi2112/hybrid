@@ -18,6 +18,7 @@ import multiprocessing.sharedctypes
 from   matplotlib.lines        import Line2D
 from   scipy.optimize          import fsolve
 from   scipy.special           import wofz
+from   scipy.interpolate       import griddata
 from   mpl_toolkits.axes_grid1 import make_axes_locatable
 
 sys.path.append(os.environ['GOOGLE_DRIVE'] + '//Uni//PhD 2017//Data//Scripts//')
@@ -850,7 +851,7 @@ def get_DRs_chunked_warm_only(Nk, kmin, kmax, knorm, times, B0, name, mass, char
 def get_all_DRs_warm_only(time_start, time_end, probe, pad, cmp, 
                     kmin=0.0, kmax=1.0, Nk=1000, knorm=True,
                     nsec=None, HM_filter_mhz=50, N_procs=7,
-                    suff=''):
+                    suff='', rbsp_path='E://DATA//RBSP//'):
     '''
     As above, but for the warm approximation only (for speed). Similarly parallelized.
     '''
@@ -863,7 +864,8 @@ def get_all_DRs_warm_only(time_start, time_end, probe, pad, cmp,
         # Load data
         times, B0, name, mass, charge, density, tper, ani, cold_dens = \
         extract_species_arrays(time_start, time_end, probe, pad, cmp=np.asarray(cmp), 
-                               return_raw_ne=True, nsec=nsec, HM_filter_mhz=HM_filter_mhz)
+                               return_raw_ne=True, nsec=nsec, HM_filter_mhz=HM_filter_mhz,
+                               rbsp_path=rbsp_path)
     
         Nt      = times.shape[0]
         
@@ -1923,7 +1925,8 @@ def plot_max_CGR_with_time(times, k_vals, all_cCGR, all_wCGR, all_hCGR,
     return max_k, max_g
 
 
-def plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad, approx='warm'):
+def plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad,
+                                 approx='warm', save=True):
     '''
     Main function that downloads the data, queries the growth rates, and 
     plots a 2D colorplot of the temporal and convective growth rates. Might
@@ -1947,59 +1950,152 @@ def plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad, ap
     Calculate wavenumber range based on average B0 and density for time period, times 1.5
     
     To do:
-        -- Parallelize using existing version (but just do warm approx for speed)
         -- Plot 2D growth rate and check
-        -- Consider normalization options, or just plot freq array on y (instead of k array)
         -- Cycle through compositions to find closest one. Can we make a minimization problem?
-    '''   
-    cmp = [70, 20, 10]
-    k_np,  WPDR_out, wCGR_out, wVg_out, times, B0, name, mass, charge, density,\
+        -- Plot with Pc1 spectrum in the top, 3 solns with k vs. t vs. GR, then combine for vs. freq
+        -- Do one plot each for TGR, CGR. Maybe one for Vg as well?
+        -- Start storing values like nsec, comp, filter_freq, probe etc. as a dict
+        
+    GR output is (time, k, band)
+    To accumulate growth over bands, just add? Because linear like Kozyra et al. (1984)
+    Interpolation should be taken with a grain of salt, especially with the presence of
+    stop bands. Might be better to just code up some solver that converts from w -> k -> GR.
+    (e.g. like Kozyra does, using cold plasma approx for k)
+    
+    How to normalize k axis:
+        1) Set k as independent of each time (i.e. calculate k values outside time loop) OR
+        2) Use 2D time array so that both k_vals and times are shape(times, k) (Done this one)
+    
+    To Do: 
+        Code up separate function for parameter search, don't need a new plot every time, just
+        dump the data.
+    '''
+    cmp = [70, 20, 10]; nsec = 2
+    k_vals,  WPDR, CGR, Vg, times, B0, name, mass, charge, density,\
         tper, ani, cold_dens = get_all_DRs_warm_only(time_start, time_end, probe, pad, cmp, 
         kmin=0.0, kmax=1.5, Nk=1000, knorm=True,
-        nsec=2, HM_filter_mhz=50, N_procs=8,
-        suff='')
+        nsec=nsec, HM_filter_mhz=50, N_procs=8,
+        suff='', rbsp_path=rbsp_path)
+        
+    # Remove nan's at start of arrays (Just copy for now, do smarter later)
+    WPDR[:, 0, :] = WPDR[:, 1, :]
+    CGR[ :, 0, :] = CGR[ :, 1, :]
+    Vg[  :, 0, :] = Vg[  :, 1, :]
+    
+    # Scale values for plotting/interpolating
+    k_vals  *= 1e6
+    TGR      = WPDR.imag*1e3
+    freqs    = WPDR.real / (2*np.pi)
+    max_f    = freqs[np.isnan(freqs) == False].max()
+    
+    time_2D = np.zeros(k_vals.shape, dtype=times.dtype)
+    ti2d    = np.zeros(k_vals.shape, dtype=float)
+    for ii in range(k_vals.shape[1]):
+        time_2D[:, ii] = times[:]
+        ti2d[   :, ii] = np.arange(times.shape[0])
+        
+    # Interpolate the frequency space values or load from file
+    fGR_path    = save_dir + 'fGRw_{}_cc_{:03}_{:03}_{:03}_{}sec.npz'.format(
+                     save_string, int(cmp[0]), int(cmp[1]), int(cmp[2]), nsec)
+
+    if os.path.exists(fGR_path) == False:
+        time_interp = np.arange(times.shape[0], dtype=float)
+        freq_interp = np.linspace(0.0, max_f, 1000)
+        xi, yi      = np.meshgrid(time_interp, freq_interp)
+
+        TGRi  = np.zeros(k_vals.shape).flatten()
+        for ii in range(TGR.shape[2]):
+            x = ti2d.flatten()
+            y = freqs[:, :, ii].flatten()
+            z = TGR[:, :, ii].flatten()
+            print('Interpolating species', ii)
+            TGRi[:] += griddata((x, y), z, (xi.flatten(), yi.flatten()),
+                                method='cubic', fill_value=0.0)
+        TGRi = TGRi.reshape(xi.shape)
+        print('Saving growth rate interpolation...')
+        np.savez(fGR_path, times=times, freq_interp=freq_interp, TGRi=TGRi)
+    else:
+        print('Growth rate interpolation already exist, loading from file...')
+        fGR_file    = np.load(fGR_path)
+        times       = fGR_file['times']
+        freq_interp = fGR_file['freq_interp']
+        TGRi        = fGR_file['TGRi']
+
+    # Load and calculate Pc1 spectra
+    ti, fac_mags, fac_elec, dt, e_flag, gyfreqs = \
+        rfl.load_both_fields(rbsp_path, time_start, time_end, probe, pad=1800)
+    
+    print('Calculating autospectra...')
+    overlap=0.99; pc1_res=25.0; f_max=0.5
+    pc1_xpower, pc1_xtimes, pc1_xfreq = fscr.autopower_spectra(ti, fac_mags[:, 0], time_start, 
+                                                     time_end, dt, overlap=overlap, df=pc1_res)
+    
+    pc1_ypower, pc1_ytimes, pc1_yfreq = fscr.autopower_spectra(ti, fac_mags[:, 1], time_start, 
+                                                     time_end, dt, overlap=overlap, df=pc1_res)
+    
+    pc1_perp_power = np.log10(pc1_xpower[:, :] + pc1_ypower[:, :]).T
+
+    # Set limits        
+    kmin     = 0.0
+    kmax     = 40.0#k_vals.max()
+
+    TGR_max  = TGR[np.isnan(TGR) == False].max()
+    TGR_min  = 0.25*TGR_max
+    
+    # Plot the things
+    plt.ioff()
+    fig1, axes1 = plt.subplots(5, figsize=(16, 10))
+    
+    axes1[0].set_title('Temporal Growth Rate :: RBSP-{} :: {}'.format(probe.upper(), date_string))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        im1a = axes1[0].pcolormesh(pc1_xtimes, pc1_xfreq, pc1_perp_power,
+                                   vmin=-5, vmax=0, cmap='jet')
+        
+        im2a = axes1[1].pcolormesh(time_2D, k_vals, TGR[:, :, 0],
+                                   vmin=TGR_min, vmax=TGR_max, cmap='viridis')
+        im3a = axes1[2].pcolormesh(time_2D, k_vals, TGR[:, :, 1],
+                                   vmin=TGR_min, vmax=TGR_max, cmap='viridis')
+        im4a = axes1[3].pcolormesh(time_2D, k_vals, TGR[:, :, 2],
+                                   vmin=TGR_min, vmax=TGR_max, cmap='viridis')
+        
+        im5a = axes1[4].pcolormesh(times, freq_interp, TGRi,
+                                   vmin=TGR_min, vmax=TGR_max, cmap='viridis')
+    
+    labels = ['f (Hz)',
+              'k ($10^6$/m)\n$H^+$',
+              'k ($10^6$/m)\n$He^+$',
+              'k ($10^6$/m)\n$O^+$',
+              'f (Hz)']
+    
+    for ax, im, lbl in zip(axes1, [im1a, im2a, im3a, im4a, im5a], labels):
+        ax.set_xlim(plot_start, plot_end)
+        
+        divider = make_axes_locatable(ax)
+        cax     = divider.append_axes("right", size="2%", pad=0.5)
+        fig1.colorbar(im, cax=cax, label=r'$\gamma \times 10^3 s^{-1}$', orientation='vertical', extend='both')
+        ax.set_ylabel(lbl, rotation=0, labelpad=30)
+        
+        if ax != axes1[-1]:
+            ax.set_xticklabels([])
             
-    if False:
-        # Set growth rate plot limits based on results
-        TGR_min  = 0.0
-        #TGR_mean = TGR[np.isnan(TGR) == False].mean()
-        TGR_max  = TGR[np.isnan(TGR) == False].max()
-        
-        CGR_min  = 0.0
-        #CGR_mean = CGR[np.isnan(CGR) == False].mean()
-        CGR_max  = CGR[np.isnan(CGR) == False].max()
-        
-        if norm is not None:
-            TGR_max = 1.0
-            CGR_max = None
-        
-        # Plot the things
-        plt.ioff()
-        fig, axes = plt.subplots(2)
-        
-        im1 = axes[0].pcolormesh(times, freqs, TGR.T, vmin=TGR_min, vmax=TGR_max)
-        axes[0].set_title('Temporal Growth Rate')
-        axes[0].set_ylabel('Frequency (Hz)')
-        axes[0].set_xlim(time_start, time_end)
-        axes[0].set_ylim(f_min, f_max)
-        
-        divider1= make_axes_locatable(axes[0])
-        cax1    = divider1.append_axes("right", size="2%", pad=0.5)
-        fig.colorbar(im1, cax=cax1, label='$\gamma$', orientation='vertical', extend='both')
+        if ax == axes1[0] or ax == axes1[-1]:
+            ax.set_ylim(0.0, f_max)
+        else:
+            ax.set_ylim(kmin, kmax)
+            
+    axes1[-1].set_xlabel('Time (UT)')
+    axes1[-1].xaxis.set_major_locator(mdates.MinuteLocator(interval=10))
+    axes1[-1].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
     
-        im2 = axes[1].pcolormesh(times, freqs, CGR.T, vmin=CGR_min, vmax=CGR_max)
-        axes[1].set_title('Convective Growth Rate')
-        axes[1].set_xlim(time_start, time_end)
-        axes[1].set_ylim(f_min, f_max)
-        axes[1].set_ylabel('Frequency (Hz)')
-        axes[1].set_xlabel('Times (UT)')
-        
-        divider2= make_axes_locatable(axes[1])
-        cax2    = divider2.append_axes("right", size="2%", pad=0.5)
-        fig.colorbar(im2, cax=cax2, label='S', orientation='vertical', extend='both')
-        
+    fig1.subplots_adjust(hspace=0.10)
+
+    if save==False:
         plt.show()
-    
+    else:
+        fig1.savefig(save_dir + 'TGR_{}'.format(save_string))
+        print('Plot saved for {}'.format(save_string))
+        plt.close('all')
     return
 
 
@@ -2485,6 +2581,7 @@ def plot_residuals(Species, PP, k, w_vals, lbl='', approx='hot'):
 
 
 if __name__ == '__main__':
+    ext_drive = 'E:'
     #validation_plots_fraser_1996()
     #validation_plots_omura2010()
     #validation_plots_wang_2016()
@@ -2493,26 +2590,26 @@ if __name__ == '__main__':
     
     
     if True:
-        rbsp_path   = 'G://DATA//RBSP//'
+        rbsp_path   = '%s//DATA//RBSP//' % ext_drive
         time_start  = np.datetime64('2015-01-16T04:05:00')
         time_end    = np.datetime64('2015-01-16T05:15:00')
+        plot_start  = np.datetime64('2015-01-16T04:25:00')
+        plot_end    = np.datetime64('2015-01-16T05:10:00')
         probe       = 'a'
         pad         = 0
         
         date_string = time_start.astype(object).strftime('%Y%m%d')
         save_string = time_start.astype(object).strftime('%Y%m%d_%H%M_') + time_end.astype(object).strftime('%H%M')
 
-        save_drive  = 'G://'
-        save_dir    = '{}2D_LINEAR_THEORY//EVENT_{}//'.format(save_drive, date_string)
-        
-        
-        
+        save_drive  = ext_drive
+        save_dir    = '{}//2D_LINEAR_THEORY//EVENT_{}//'.format(save_drive, date_string)
+                
         plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad, approx='warm')
     
     
     if False:
-        rbsp_path = 'G://DATA//RBSP//'
-        save_drive= 'G://'
+        rbsp_path   = '%s//DATA//RBSP//' % ext_drive
+        save_drive  = ext_drive
         
         time_start  = np.datetime64('2015-01-16T04:05:00')
         time_end    = np.datetime64('2015-01-16T05:15:00')
@@ -2532,7 +2629,7 @@ if __name__ == '__main__':
         
         date_string = time_start.astype(object).strftime('%Y%m%d')
         save_string = time_start.astype(object).strftime('%Y%m%d_%H%M_') + time_end.astype(object).strftime('%H%M')
-        save_dir    = '{}NEW_LT//EVENT_{}//CHEN_DR_CODE//'.format(save_drive, date_string)
+        save_dir    = '{}//NEW_LT//EVENT_{}//CHEN_DR_CODE//'.format(save_drive, date_string)
         
     # =============================================================================
     #     all_f, all_CGR_HOPE, all_stop_HOPE, all_CGR_SPICE, all_stop_SPICE,          \
@@ -2542,7 +2639,7 @@ if __name__ == '__main__':
     # =============================================================================
         
     
-        if True:
+        if False:
             vlines = [  '2015-01-16T04:32:53.574540',
                         '2015-01-16T04:35:36.689700',
                         '2015-01-16T04:44:53.200200',

@@ -5,7 +5,7 @@ Created on Mon Aug 26 15:42:27 2019
 @author: Yoshi
 """
 import os, sys, pdb
-sys.path.append('F://Google Drive//Uni//PhD 2017//Data//Scripts//')
+sys.path.append('D://Google Drive//Uni//PhD 2017//Data//Scripts//')
 import numpy as np
 import rbsp_file_readers   as rfr
 import rbsp_fields_loader  as rfl
@@ -362,22 +362,85 @@ def load_CRRES_data(time_start, time_end, crres_path='G://DATA//CRRES//', nsec=N
         return ntime, B_interp, ne_interp
         
 
+def integrate_HOPE_moments(time_start, time_end, probe, pad, rbsp_path='E://DATA//RBSP//'):
+    '''
+    Testing self-integration of ion moments from pitch angle data :: Compare to actual
+    calculated L3-MOM products.
+    '''
+    qp = 1.602e-19
+    mp = 1.673e-27
+    
+    import spacepy.datamodel as dm
+    import matplotlib.pyplot as plt
+    pa_data  = dm.fromCDF(_test_file_pa)
+    mom_data = dm.fromCDF(_test_file_mom)
+    
+    mom_times = mom_data['Epoch_Ion']
+    mom_hdens = mom_data['Dens_p_30']
+    
+    pa_times  = pa_data['Epoch_Ion']
+
+    # Find energy min/max idx for each time (since they can change depending on Ion_Mode)
+    # and integrate
+    fvels = np.sqrt(2 * qp * pa_data['HOPE_ENERGY_Ion'] / mp)
+    vdist = pa_data['FPDO'] / fvels
+    vdens = np.zeros(pa_times.shape[0], dtype=np.float64)
+    
+    E_min = 30.0; E_max = None
+    for ii in range(pa_times.shape[0]):
+        
+        if E_min is None:
+            min_idx = None
+        else:
+            diffs   = np.abs(pa_data['HOPE_ENERGY_Ion'][ii] - E_min)
+            min_idx = np.where(diffs == diffs.min())[0][0]
+            
+        if E_max is None:
+            max_idx = None
+        else:
+            diffs   = np.abs(pa_data['HOPE_ENERGY_Ion'][ii] - E_max)
+            min_idx = np.where(diffs == diffs.min())[0][0]
+
+        vdens[ii] = vdist[ii, min_idx:max_idx].sum()
+        
+        if vdens[ii] < 0.0:
+            vdens[ii] = np.nan
+
+    for ii in range(mom_hdens.shape[0]):
+        if mom_hdens[ii] < 0.0:
+            mom_hdens[ii] = np.nan
+
+    plt.ioff()
+    plt.figure()
+    plt.plot(mom_times, mom_hdens, label='MOM-L3')
+    plt.plot(pa_times , vdens    , label='Manual')
+    plt.legend()
+    plt.show()
+    return
+
+
 
 #%% MAIN FUNCTION :: JUST CHECKING THINGS
 if __name__ == '__main__':
-    _rbsp_path  = 'G://DATA//RBSP//'
-    _crres_path = 'G://DATA//CRRES//'
-    _time_start = np.datetime64('1991-07-17T20:15:00')
-    _time_end   = np.datetime64('1991-07-17T21:00:00')
+    _rbsp_path  = 'E://DATA//RBSP//'
+    _crres_path = 'E://DATA//CRRES//'
+    _time_start = np.datetime64('2015-01-16T04:05:00')
+    _time_end   = np.datetime64('2015-01-16T05:15:00')
     _probe      = 'a'
     _pad        = 0
+    _test_file_pa  = 'E://DATA//RBSP//ECT//HOPE//L3//PITCHANGLE//rbspb_rel04_ect-hope-PA-L3_20150116_v7.1.0.cdf'
+    _test_file_mom = 'E://DATA//RBSP//ECT//HOPE//L3//MOMENTS//rbspa_rel04_ect-hope-MOM-L3_20150116_v7.1.0.cdf'
     
-    _times, _B, _ne = load_CRRES_data(_time_start, _time_end, crres_path=_crres_path, nsec=None)
+    integrate_HOPE_moments(_time_start, _time_end, _probe, _pad, rbsp_path=_rbsp_path)
     
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(2)
-    ax[0].plot(_times, _B)
-    ax[1].plot(_times, _ne)
+    
+    if False:
+        _times, _B, _ne = load_CRRES_data(_time_start, _time_end, crres_path=_crres_path, nsec=None)
+        
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(2)
+        ax[0].plot(_times, _B)
+        ax[1].plot(_times, _ne)
     
     #convert_data_to_hybrid_plasmafile(_time_start, _time_end, _probe, _pad)
     
