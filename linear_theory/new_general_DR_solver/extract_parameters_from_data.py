@@ -368,6 +368,10 @@ def integrate_HOPE_moments(time_start, time_end, probe, pad, rbsp_path='E://DATA
     calculated L3-MOM products.
     
     Based on equation from RBSPICE Data Handbook Rev. E (2018) p. 31.
+    
+    Questions:
+        - Do we have to account for gaps between energy channels? As in, fit a smooth
+            curve to the fluxes and integrate that way?
     '''
     qp = 1.602e-19
     mp = 1.673e-27
@@ -381,34 +385,32 @@ def integrate_HOPE_moments(time_start, time_end, probe, pad, rbsp_path='E://DATA
     mom_hdens = mom_data['Dens_p_30']
     
     pa_times  = pa_data['Epoch_Ion']
-
-    vdens = np.zeros(pa_times.shape[0], dtype=np.float64)
+    
+    n_times = pa_times.shape[0]
+    vdens     = np.zeros(n_times, dtype=np.float64)
     
     # Organize pitch angle stuff
     pitch  = pa_data['PITCH_ANGLE']             # PA bin centers
-    da     = np.ones(pitch.shape[0]) * 18.      # PA bin widths
+    n_pitch= pitch.shape[0]
+    da     = np.ones(n_pitch) * 18.             # PA bin widths
     da[0]  = da[-1] = 9.
     da    *= np.pi / 180.
     
+    # Do energy stuff
+    energy   = pa_data['HOPE_ENERGY_Ion']         # Energy bin centers
+    n_energy = energy.shape[1]
+
+    # Energy bin limits
+    erange = np.zeros((n_times, n_energy, 2))
+    for ii in range(n_energy):
+        erange[:, ii, 0] = (pa_data['HOPE_ENERGY_Ion'][:, ii] - pa_data['ENERGY_Ion_DELTA'][:, ii])
+        erange[:, ii, 1] = (pa_data['HOPE_ENERGY_Ion'][:, ii] + pa_data['ENERGY_Ion_DELTA'][:, ii])
+    
     E_min = 30.0; E_max = None
-    for ii in range(pa_times.shape[0]):
-        
-        energy = pa_data['HOPE_ENERGY_Ion'][ii]     # Energy bin centers
-        nE     = energy.shape[0]
-        print(np.log10(pa_data['ENERGY_Ion_DELTA'][ii]))
-        print(pa_data['ENERGY_Ion_DELTA'].attrs)
-        #dE     = 
-        
-        plt.figure()
-        plt.scatter(np.log10(energy), np.ones(nE), label='Energy')
-        
-        plt.ylabel('Energy (eV)')
-        plt.legend()
-        plt.show()
-        return
-    
-    
-    
+    for ii in range(n_times):
+        E  = energy[ii]
+        dE = erange[ii]
+     
         # Find energy min/max channels for integration
         if E_min is None:
             min_idx = 0
@@ -422,7 +424,6 @@ def integrate_HOPE_moments(time_start, time_end, probe, pad, rbsp_path='E://DATA
             diffs   = np.abs(energy - E_max)
             min_idx = np.where(diffs == diffs.min())[0][0]
         
-        pdb.set_trace()
         #vdens[ii] = vdist[ii, min_idx:max_idx].sum()
         
         # Need:
@@ -452,14 +453,14 @@ def integrate_HOPE_moments(time_start, time_end, probe, pad, rbsp_path='E://DATA
 
 #%% MAIN FUNCTION :: JUST CHECKING THINGS
 if __name__ == '__main__':
-    _rbsp_path  = 'E://DATA//RBSP//'
-    _crres_path = 'E://DATA//CRRES//'
+    _rbsp_path  = 'F://DATA//RBSP//'
+    _crres_path = 'F://DATA//CRRES//'
     _time_start = np.datetime64('2015-01-16T04:05:00')
     _time_end   = np.datetime64('2015-01-16T05:15:00')
     _probe      = 'a'
     _pad        = 0
-    _test_file_pa  = 'E://DATA//RBSP//ECT//HOPE//L3//PITCHANGLE//rbspa_rel04_ect-hope-PA-L3_20150116_v7.1.0.cdf'
-    _test_file_mom = 'E://DATA//RBSP//ECT//HOPE//L3//MOMENTS//rbspa_rel04_ect-hope-MOM-L3_20150116_v7.1.0.cdf'
+    _test_file_pa  = 'F://DATA//RBSP//ECT//HOPE//L3//PITCHANGLE//rbspa_rel04_ect-hope-PA-L3_20150116_v7.1.0.cdf'
+    _test_file_mom = 'F://DATA//RBSP//ECT//HOPE//L3//MOMENTS//rbspa_rel04_ect-hope-MOM-L3_20150116_v7.1.0.cdf'
     
     integrate_HOPE_moments(_time_start, _time_end, _probe, _pad, rbsp_path=_rbsp_path)
     
