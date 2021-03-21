@@ -4268,7 +4268,7 @@ def plot_initial_x_vs_xp():
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'F:'
+    drive       = 'D:'
         
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
@@ -4279,10 +4279,10 @@ if __name__ == '__main__':
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [1]
+            runs_to_do = [2, 3]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
