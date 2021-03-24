@@ -1,7 +1,7 @@
 ## PYTHON MODULES ##
 import numpy as np
 import numba as nb
-import os, sys
+import os, sys, pdb
 import pickle
 from shutil import rmtree
 from timeit import default_timer as timer
@@ -20,14 +20,13 @@ RE     = 6.371e6                            # Earth radius in metres
 B_surf = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
-influx_equil      = True       # Flag to indicate if a distribution relaxes into the field first
-adaptive_timestep = False      # Disable adaptive timestep if you hate when it doubles
+adaptive_timestep = True       # Disable adaptive timestep if you hate when it doubles
 print_runtime     = True       # Whether or not to output runtime every 50 iterations 
 do_parallel       = True       # Whether or not to use available threads to parallelize specified functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
 #nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
 
-Fu_override=False              # Override to allow density to be calculated as a ratio of frequencies
+Fu_override=True              # Override to allow density to be calculated as a ratio of frequencies
 
 ### ##
 ### INITIALIZATION
@@ -219,7 +218,7 @@ def initialize_particles(B, E, mp_flux):
     W_elec     = np.zeros((3, N), dtype=np.float64)
     W_mag      = np.zeros((3, N), dtype=np.float64)
     
-    if influx_equil == True:
+    if homogenous == False:
         run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
                           mp_flux, hot_only=True, psave=True)
     
@@ -351,9 +350,9 @@ def set_timestep(vel):
         
     vel_ts = 0.5 * dx / np.max(np.abs(vel[0, :]))     # Timestep to satisfy particle CFL: <0.5dx per timestep
     
-    DT          = min(ion_ts, vel_ts)                 # Timestep as smallest of options
-    max_time    = max_wcinv / gyfreq_eq               # Total runtime in seconds
-    max_inc     = int(max_time / DT) + 1              # Total number of time steps
+    DT       = min(ion_ts, vel_ts)                    # Timestep as smallest of options
+    max_time = max_wcinv / gyfreq_eq                  # Total runtime in seconds
+    max_inc  = int(max_time / DT) + 1                 # Total number of time steps
     
     if part_res == 0:
         part_save_iter = 1
@@ -455,8 +454,8 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
     
     # Dump indicator file
     if save_fields == 1 or save_particles == 1:
-        fin_path = '%s/%s/run_%d/equil_finished.txt' % (drive, save_path, run)
-        with open(fin_path, 'w') as open_file:
+        efin_path = '%s/%s/run_%d/equil_finished.txt' % (drive, save_path, run)
+        with open(efin_path, 'w') as open_file:
             pass
     return
 
