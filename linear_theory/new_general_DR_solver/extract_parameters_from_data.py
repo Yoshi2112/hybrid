@@ -138,6 +138,8 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, nsec=None,
             spice_temp.append(this_temp)
             spice_anis.append(this_anis)
         else:
+            if HOPE_only == True:
+                print('Only HOPE data requested, discarding SPICE data...')
             spice_dens.append(None)
             spice_temp.append(None)
             spice_anis.append(None)

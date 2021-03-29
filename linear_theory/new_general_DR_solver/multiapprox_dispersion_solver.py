@@ -2746,7 +2746,7 @@ if __name__ == '__main__':
     #### Read in command-line arguments, if present
     import argparse as ap
     parser = ap.ArgumentParser()
-    parser.add_argument('-n', '--N_procs'   , default=7, type=int)
+    parser.add_argument('-n', '--N_procs'   , default=8, type=int)
     args = vars(parser.parse_args())
     n_processes = args['N_procs']
     
