@@ -46,7 +46,8 @@ def nearest_index(items, pivot):
     
     
 def extract_species_arrays(time_start, time_end, probe, rbsp_path='G://DATA//RBSP//',
-                           cmp=[70, 20, 10], return_raw_ne=False, HM_filter_mhz=50, nsec=None):
+                           cmp=[70, 20, 10], return_raw_ne=False, HM_filter_mhz=50,
+                           nsec=None, HOPE_only=False):
     '''
     Data module only extracts the 3 component species dictionary from HOPE and RBSPICE 
     energetic measurements. This function creates the single axis arrays required to 
@@ -61,7 +62,8 @@ def extract_species_arrays(time_start, time_end, probe, rbsp_path='G://DATA//RBS
     '''
     times, B0, cold_dens, hope_dens, hope_temp, hope_anis, spice_dens, spice_temp, spice_anis\
         = data.load_and_interpolate_plasma_params(time_start, time_end, probe, rbsp_path=rbsp_path,
-                                                  HM_filter_mhz=HM_filter_mhz, nsec=nsec)
+                                                  HM_filter_mhz=HM_filter_mhz, nsec=nsec,
+                                                  HOPE_only=HOPE_only)
 
     Nt       = times.shape[0]
     _density = np.zeros((9, Nt), dtype=float)
@@ -989,7 +991,7 @@ def get_all_DRs_warm_only(time_start, time_end, probe, pad, cmp,
         times, B0, name, mass, charge, density, tper, ani, cold_dens = \
         extract_species_arrays(time_start, time_end, probe, cmp=np.asarray(cmp), 
                                return_raw_ne=True, nsec=nsec, HM_filter_mhz=HM_filter_mhz,
-                               rbsp_path=rbsp_path)
+                               rbsp_path=rbsp_path, HOPE_only=True)
     
         Nt      = times.shape[0]
         

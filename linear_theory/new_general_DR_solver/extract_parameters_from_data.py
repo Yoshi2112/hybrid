@@ -83,7 +83,8 @@ def interpolate_ne(new_time, den_time, den_array):
 
 
 def load_and_interpolate_plasma_params(time_start, time_end, probe, nsec=None, 
-                                       rbsp_path='G://DATA//RBSP//', HM_filter_mhz=None):
+                                       rbsp_path='G://DATA//RBSP//', HM_filter_mhz=None,
+                                       HOPE_only=False):
     '''
     Outputs as SI units: B0 in T, densities in /m3, temperatures in eV (pseudo SI)
     
@@ -124,7 +125,7 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, nsec=None,
         # Collect all times (don't assume every file is good)
         spice_times.append(spice_epoch)
         
-        if spice_dict is not None:
+        if spice_dict is not None and HOPE_only==False:
             this_dens = spice_dict['F{}DU_Density'.format(spec)]
             this_anis = spice_dict['F{}DU_PerpPressure'.format(spec)] / spice_dict['F{}DU_ParaPressure'.format(spec)] - 1
             
