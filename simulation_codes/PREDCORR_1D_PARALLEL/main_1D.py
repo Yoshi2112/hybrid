@@ -26,7 +26,7 @@ do_parallel       = True       # Whether or not to use available threads to para
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
 #nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
 
-Fu_override=True              # Override to allow density to be calculated as a ratio of frequencies
+Fu_override=False              # Override to allow density to be calculated as a ratio of frequencies
 
 ### ##
 ### INITIALIZATION
@@ -2343,7 +2343,6 @@ if field_periodic == 1 and damping_multiplier != 0:
     
 if  os.name != 'posix':
     os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
-
 
 
 #%%#####################
