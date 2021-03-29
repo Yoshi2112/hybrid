@@ -82,7 +82,7 @@ def interpolate_ne(new_time, den_time, den_array):
     return np.interp(new_time.astype(np.int64), den_time.astype(np.int64), den_array)
 
 
-def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, nsec=None, 
+def load_and_interpolate_plasma_params(time_start, time_end, probe, nsec=None, 
                                        rbsp_path='G://DATA//RBSP//', HM_filter_mhz=None):
     '''
     Outputs as SI units: B0 in T, densities in /m3, temperatures in eV (pseudo SI)
@@ -97,7 +97,7 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, nsec=No
     
     # Cold (total?) electron plasma density
     den_times, edens, dens_err = rfr.retrieve_RBSP_electron_density_data(rbsp_path, time_start, time_end,
-                                                                         probe, pad=pad)
+                                                                         probe, pad=30)
     
     # Magnetic magnitude
     mag_times, raw_mags = rfl.load_magnetic_field(rbsp_path, time_start, time_end, probe, return_raw=True, pad=3600)
@@ -111,7 +111,7 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, nsec=No
         filt_mags = raw_mags
     
     # HOPE data
-    itime, etime, pdict, perr = rfr.retrieve_RBSP_hope_moment_data(     rbsp_path, time_start, time_end, padding=pad, probe=probe)
+    itime, etime, pdict, perr = rfr.retrieve_RBSP_hope_moment_data(     rbsp_path, time_start, time_end, padding=30, probe=probe)
     hope_dens = np.array([pdict['Dens_p_30'],       pdict['Dens_he_30'],       pdict['Dens_o_30']])
     hope_temp = np.array([pdict['Tperp_p_30'],      pdict['Tperp_he_30'],      pdict['Tperp_o_30']])
     hope_anis = np.array([pdict['Tperp_Tpar_p_30'], pdict['Tperp_Tpar_he_30'], pdict['Tperp_Tpar_o_30']]) - 1
@@ -119,7 +119,7 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, pad, nsec=No
     # SPICE data
     spice_dens = [];    spice_temp = [];    spice_anis = [];    spice_times = []
     for product, spec in zip(['TOFxEH', 'TOFxEHe', 'TOFxEO'], ['P', 'He', 'O']):
-        spice_epoch , spice_dict  = rfr.retrieve_RBSPICE_data(rbsp_path, time_start, time_end, product , padding=pad, probe=probe)
+        spice_epoch , spice_dict  = rfr.retrieve_RBSPICE_data(rbsp_path, time_start, time_end, product , padding=30, probe=probe)
         
         # Collect all times (don't assume every file is good)
         spice_times.append(spice_epoch)
@@ -372,6 +372,9 @@ def integrate_HOPE_moments(time_start, time_end, probe, pad, rbsp_path='E://DATA
     Questions:
         - Do we have to account for gaps between energy channels? As in, fit a smooth
             curve to the fluxes and integrate that way?
+        - Should be able to ignore channels below 30eV for the comparison, and then
+        include them once the fluxes are corrected for a few things? To get an idea
+        of the plasmaspheric composition
     '''
     qp = 1.602e-19
     mp = 1.673e-27

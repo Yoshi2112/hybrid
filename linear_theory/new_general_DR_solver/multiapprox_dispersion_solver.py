@@ -45,7 +45,7 @@ def nearest_index(items, pivot):
     sys.exit('Error: Unable to find index')
     
     
-def extract_species_arrays(time_start, time_end, probe, pad, rbsp_path='G://DATA//RBSP//',
+def extract_species_arrays(time_start, time_end, probe, rbsp_path='G://DATA//RBSP//',
                            cmp=[70, 20, 10], return_raw_ne=False, HM_filter_mhz=50, nsec=None):
     '''
     Data module only extracts the 3 component species dictionary from HOPE and RBSPICE 
@@ -60,7 +60,7 @@ def extract_species_arrays(time_start, time_end, probe, pad, rbsp_path='G://DATA
      -- 6,7,8 are RBSPICE (warmer) "
     '''
     times, B0, cold_dens, hope_dens, hope_temp, hope_anis, spice_dens, spice_temp, spice_anis\
-        = data.load_and_interpolate_plasma_params(time_start, time_end, probe, pad, rbsp_path=rbsp_path,
+        = data.load_and_interpolate_plasma_params(time_start, time_end, probe, rbsp_path=rbsp_path,
                                                   HM_filter_mhz=HM_filter_mhz, nsec=nsec)
 
     Nt       = times.shape[0]
@@ -445,6 +445,122 @@ def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out
         return OUT_solns, CGR_solns, VEL_solns
     else:
         return OUT_solns, CGR_solns
+    
+    
+def get_dispersion_relation_3sp(Species, k, approx='warm', guesses=None, complex_out=True,
+                                print_filtered=True, return_vg=False):
+    '''
+    Given a range of k, returns the real and imaginary parts of the plasma dispersion
+    relation specified by the Species present.
+    
+    Type of dispersion relation controlled by 'approx' kwarg as:
+        hot  :: Full dispersion relation for complex w = wr + i*gamma
+        warm :: Small growth rate approximation that allows D(wr, k) = 0
+        cold :: Dispersion relation used for wr, growth rate calculated as per warm
+        
+    Gamma is only solved for in the DR with the hot approx
+    The other two require calls to another function with a wr arg.
+    
+    To do: Code a number of 'tries' when a solution fails to converge. Change
+            the initial 'guess' for that k by using previous guess multiplied
+            by a random number between 0.99-1.01 (i.e. 1% variation)
+            
+           Could also change to make sure solutions use previous best solution,
+            if the previous solution ended up as a np.nan, and implement nan'ing
+            solutions as they're solved to prevent completely losing convergence.
+           
+           Better way to calculate PDR for k = 0? Exceptions from a bunch of things,
+           but surely there's an analytic way of doing it with the not-CPDR (or is 
+           that valid?)
+    '''
+    gyfreqs, counts = np.unique(Species['gyrofreq'], return_counts=True)
+    
+    # Remove electron count, 
+    gyfreqs = gyfreqs[1:]
+    N_solns = counts.shape[0] - 1
+
+    # fsolve arguments
+    eps    = 1.01           # Offset used to supply initial guess (since right on w_cyc returns an error)
+    tol    = 1e-10          # Absolute solution convergence tolerance in rad/s
+    fev    = 1000000        # Maximum number of iterations
+    Nk     = k.shape[0]     # Number of wavenumbers to solve for
+    
+    # Solution and error arrays :: Two-soln array for wr, gamma. 
+    # PDR_solns init'd as ones because 0.0 returns spurious root
+    PDR_solns = np.ones( (Nk, N_solns, 2), dtype=np.float64)*0.01
+    CGR_solns = np.zeros((Nk, N_solns   ), dtype=np.float64)
+    VEL_solns = np.zeros((Nk, N_solns   ), dtype=np.float64)
+    ier       = np.zeros((Nk, N_solns   ), dtype=int)
+    msg       = np.zeros((Nk, N_solns   ), dtype='<U256')
+
+    # Initial guesses (check this?)
+    for ii in range(1, N_solns):
+        PDR_solns[0, ii - 1]  = np.array([[gyfreqs[-ii - 1] * eps, 0.0]])
+
+    if approx == 'hot':
+        func = hot_dispersion_eqn
+    elif approx == 'warm':
+        func = warm_dispersion_eqn
+    elif approx == 'cold':
+        func = cold_dispersion_eqn
+    else:
+        sys.exit('ABORT :: kwarg approx={} invalid. Must be \'cold\', \'warm\', or \'hot\'.'.format(approx))
+    
+    # Define function to solve for (all have same arguments)
+    if guesses is None or guesses.shape != PDR_solns.shape:
+        for jj in range(N_solns):
+            for ii in range(1, Nk):
+                PDR_solns[ii, jj], infodict, ier[ii, jj], msg[ii, jj] =\
+                    fsolve(func, x0=PDR_solns[ii - 1, jj], args=(k[ii], Species), xtol=tol, maxfev=fev, full_output=True)
+    
+            if False:
+                # Solve for k[0] using initial guess of k[1]
+                PDR_solns[0, jj], infodict, ier[0, jj], msg[0, jj] =\
+                    fsolve(func, x0=PDR_solns[1, jj], args=(k[0], Species), xtol=tol, maxfev=fev, full_output=True)
+            else:
+                # Set k[0] as equal to k[1] (better for large Nk)
+                PDR_solns[0, jj] = PDR_solns[1, jj]
+                
+    else:
+        for jj in range(N_solns):
+            for ii in range(1, Nk):
+                PDR_solns[ii, jj], infodict, ier[ii, jj], msg[ii, jj] =\
+                    fsolve(func, x0=guesses[ii, jj], args=(k[ii], Species), xtol=tol, maxfev=fev, full_output=True)
+
+    # Filter out bad solutions
+    if True:
+        N_bad = 0
+        for jj in range(N_solns):
+            for ii in range(1, Nk):
+                if ier[ii, jj] == 5:
+                    PDR_solns[ii, jj] = np.nan
+                    N_bad += 1
+        if print_filtered == True:
+            print('{} solutions filtered for {} approximation.'.format(N_bad, approx))
+
+    # Solve for growth rate/convective growth rate here
+    if approx == 'hot':
+        CGR_solns *= np.nan
+    elif approx == 'warm':
+        for jj in range(N_solns):
+            PDR_solns[:, jj, 1], CGR_solns[:, jj], VEL_solns[:, jj] = get_warm_growth_rates(PDR_solns[:, jj, 0], k, Species)
+    elif approx == 'cold':
+        for jj in range(N_solns):
+            PDR_solns[:, jj, 1], CGR_solns[:, jj], VEL_solns[:, jj] = get_cold_growth_rates(PDR_solns[:, jj, 0], k, Species)
+
+    # Convert to complex number if flagged, else return as (Nk, N_solns, 2) for real/imag components
+    if complex_out == True:
+        OUT_solns = np.zeros((Nk, N_solns   ), dtype=np.complex128)
+        for ii in range(Nk):
+            for jj in range(N_solns):
+                OUT_solns[ii, jj] = PDR_solns[ii, jj, 0] + 1j*PDR_solns[ii, jj, 1]
+    else:
+        OUT_solns = PDR_solns
+    
+    if return_vg == True:
+        return OUT_solns, CGR_solns, VEL_solns
+    else:
+        return OUT_solns, CGR_solns
 
 
 
@@ -480,7 +596,7 @@ def get_DRs_for_data_timeseries(time_start, time_end, probe, pad, cmp,
     
     if os.path.exists(DR_path) == False:
         times, B0, name, mass, charge, density, tper, ani, cold_dens = \
-        extract_species_arrays(time_start, time_end, probe, pad, cmp=cmp, 
+        extract_species_arrays(time_start, time_end, probe, cmp=cmp, 
                                return_raw_ne=True, nsec=nsec, HM_filter_mhz=HM_filter_mhz)
 
         Nt         = times.shape[0]
@@ -640,7 +756,7 @@ def get_all_DRs_parallel(time_start, time_end, probe, pad, cmp,
     if os.path.exists(DR_path) == False:
         # Load data
         times, B0, name, mass, charge, density, tper, ani, cold_dens = \
-        extract_species_arrays(time_start, time_end, probe, pad, cmp=np.asarray(cmp), 
+        extract_species_arrays(time_start, time_end, probe, cmp=np.asarray(cmp), 
                                return_raw_ne=True, nsec=nsec, HM_filter_mhz=HM_filter_mhz)
     
         Nt      = times.shape[0]
@@ -851,19 +967,27 @@ def get_DRs_chunked_warm_only(Nk, kmin, kmax, knorm, times, B0, name, mass, char
 def get_all_DRs_warm_only(time_start, time_end, probe, pad, cmp, 
                     kmin=0.0, kmax=1.0, Nk=1000, knorm=True,
                     nsec=None, HM_filter_mhz=50, N_procs=7,
-                    suff='', rbsp_path='E://DATA//RBSP//'):
+                    suff='', rbsp_path='E://DATA//RBSP//', output=True):
     '''
     As above, but for the warm approximation only (for speed). Similarly parallelized.
+    
+    Also modified so composition filenames are saved as tenths of an percentage, i.e.
+    a composition of 97.5/0.5/2.0 will be saved with a suffix of 975_005_020
+    
+    This works for now because no species will have a density of 100%
+    i.e. don't have to worry about 1000 (i.e. 100%) blowing out my 3 places.
     '''
     if nsec is None:
-        DR_path = save_dir + 'DISPw_{}_cc_{:03}_{:03}_{:03}.npz'.format(save_string, int(cmp[0]), int(cmp[1]), int(cmp[2]))
+        DR_path = save_dir + 'DISPw_{}_cc_{:03}_{:03}_{:03}.npz'.format(save_string,
+                                                10*int(cmp[0]), 10*int(cmp[1]), 10*int(cmp[2]))
     else:
-        DR_path = save_dir + 'DISPw_{}_cc_{:03}_{:03}_{:03}_{}sec.npz'.format(save_string, int(cmp[0]), int(cmp[1]), int(cmp[2]), nsec)
+        DR_path = save_dir + 'DISPw_{}_cc_{:03}_{:03}_{:03}_{}sec.npz'.format(save_string,
+                                                10*int(cmp[0]), 10*int(cmp[1]), 10*int(cmp[2]), nsec)
     
     if os.path.exists(DR_path) == False:
         # Load data
         times, B0, name, mass, charge, density, tper, ani, cold_dens = \
-        extract_species_arrays(time_start, time_end, probe, pad, cmp=np.asarray(cmp), 
+        extract_species_arrays(time_start, time_end, probe, cmp=np.asarray(cmp), 
                                return_raw_ne=True, nsec=nsec, HM_filter_mhz=HM_filter_mhz,
                                rbsp_path=rbsp_path)
     
@@ -944,6 +1068,8 @@ def get_all_DRs_warm_only(time_start, time_end, probe, pad, cmp,
                  density=density, tper=tper, ani=ani, cold_dens=cold_dens,
                  HM_filter_mhz=np.array([HM_filter_mhz]))
     else:
+        if output == False:
+            return
         print('Dispersion results already exist, loading from file...')
         DR_file   = np.load(DR_path)
         
@@ -964,6 +1090,30 @@ def get_all_DRs_warm_only(time_start, time_end, probe, pad, cmp,
         
     return k_np,  WPDR_out, wCGR_out, wVg_out, \
            times, B0, name, mass, charge, density, tper, ani, cold_dens
+           
+           
+def calculate_warm_sweep(rbsp_path, time_start, time_end, probe, pad, nsec=5, N_procs=7):
+    '''
+    Code up a version of this that can handle when one of the densities are 
+    zero - this will be the get_dispersion_relation_3sp hard-coded for 3 species
+    only. Trick will just be getting the initial guesses/gyrofrequencies right,
+    and then putting the solutions in the right band. Shouldn't be too hard.
+    
+    For now, just don't solve anything that doesn't involve all 3 ions.
+    '''
+    for he_comp in np.arange(0.5, 30., 0.5):
+        for o_comp in np.arange(0.5, 10., 0.5):
+            h_comp = 100. - o_comp - he_comp
+            cmp = np.array([h_comp, he_comp, o_comp], dtype=float)
+            
+            print('Calculating timeseries growth rate for {}/{}/{} cold composition'.format(h_comp, he_comp, o_comp))
+            
+            get_all_DRs_warm_only(time_start, time_end, probe, pad, cmp, 
+                kmin=0.0, kmax=1.5, Nk=1000, knorm=True,
+                nsec=nsec, HM_filter_mhz=50, N_procs=N_procs,
+                suff='', rbsp_path=rbsp_path, output=False)
+    return
+           
 
 #%% KOZYRA FUNCTIONS
 def convective_growth_rate_kozyra(field, ndensc, ndensw, ANI, temperp,
@@ -1109,7 +1259,7 @@ def get_all_CGRs_kozyra(time_start, time_end, probe, pad, cmp=np.array([70, 20, 
     
     if os.path.exists(DR_path) == False:
         times, B0, name, mass, charge, density, tper, anisotropy, cold_dens = \
-        extract_species_arrays(time_start, time_end, probe, pad, cmp=np.asarray(cmp), 
+        extract_species_arrays(time_start, time_end, probe, cmp=np.asarray(cmp), 
                                return_raw_ne=True, nsec=nsec, HM_filter_mhz=HM_filter_mhz)
 
         field  = B0*1e9
@@ -1969,14 +2119,17 @@ def plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad,
     To Do: 
         Code up separate function for parameter search, don't need a new plot every time, just
         dump the data.
+        
+        Zero out any branches for ions that have zero density - these will just be copies
+        of another solution
     '''
-    cmp = [70, 20, 10]; nsec = 2
+    cmp = [100, 0, 0]; nsec = 5
     k_vals,  WPDR, CGR, Vg, times, B0, name, mass, charge, density,\
         tper, ani, cold_dens = get_all_DRs_warm_only(time_start, time_end, probe, pad, cmp, 
         kmin=0.0, kmax=1.5, Nk=1000, knorm=True,
         nsec=nsec, HM_filter_mhz=50, N_procs=8,
         suff='', rbsp_path=rbsp_path)
-        
+    pdb.set_trace()
     # Remove nan's at start of arrays (Just copy for now, do smarter later)
     WPDR[:, 0, :] = WPDR[:, 1, :]
     CGR[ :, 0, :] = CGR[ :, 1, :]
@@ -1997,7 +2150,7 @@ def plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad,
     # Interpolate the frequency space values or load from file
     fGR_path    = save_dir + 'fGRw_{}_cc_{:03}_{:03}_{:03}_{}sec.npz'.format(
                      save_string, int(cmp[0]), int(cmp[1]), int(cmp[2]), nsec)
-
+    
     if os.path.exists(fGR_path) == False:
         time_interp = np.arange(times.shape[0], dtype=float)
         freq_interp = np.linspace(0.0, max_f, 1000)
@@ -2020,7 +2173,7 @@ def plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad,
         times       = fGR_file['times']
         freq_interp = fGR_file['freq_interp']
         TGRi        = fGR_file['TGRi']
-
+    
     # Load and calculate Pc1 spectra
     ti, fac_mags, fac_elec, dt, e_flag, gyfreqs = \
         rfl.load_both_fields(rbsp_path, time_start, time_end, probe, pad=1800)
@@ -2034,7 +2187,7 @@ def plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad,
                                                      time_end, dt, overlap=overlap, df=pc1_res)
     
     pc1_perp_power = np.log10(pc1_xpower[:, :] + pc1_ypower[:, :]).T
-
+    
     # Set limits        
     kmin     = 0.0
     kmax     = 40.0#k_vals.max()
@@ -2113,7 +2266,7 @@ def plot_max_TGR_CGR_timeseries(rbsp_path, time_start, time_end, probe, pad, nor
     
     # Create species array for each time (determines time cadence)    
     times, B0, name, mass, charge, density, tper, ani, cold_dens = \
-    extract_species_arrays(time_start, time_end, probe, pad,
+    extract_species_arrays(time_start, time_end, probe,
                            rbsp_path='G://DATA//RBSP//', 
                            cmp=np.array([70, 20, 10]),
                            return_raw_ne=True,
@@ -2588,6 +2741,12 @@ if __name__ == '__main__':
     #hybrid_test_plot()
     #sys.exit()
     
+    #### Read in command-line arguments, if present
+    import argparse as ap
+    parser = ap.ArgumentParser()
+    parser.add_argument('-n', '--N_procs'   , default=7, type=int)
+    args = vars(parser.parse_args())
+    n_processes = args['N_procs']
     
     if True:
         rbsp_path   = '%s//DATA//RBSP//' % ext_drive
@@ -2603,8 +2762,10 @@ if __name__ == '__main__':
 
         save_drive  = ext_drive
         save_dir    = '{}//2D_LINEAR_THEORY//EVENT_{}//'.format(save_drive, date_string)
-                
-        plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad, approx='warm')
+        
+        calculate_warm_sweep(rbsp_path, time_start, time_end, probe, pad, nsec=5, N_procs=n_processes)
+        
+        #plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad, approx='warm')
     
     
     if False:
@@ -2623,7 +2784,7 @@ if __name__ == '__main__':
         # Test/Check plasma params from files
         if False:
             TIMES, MAG, NAME, MASS, CHARGE, DENS, TPER, ANI, COLD_DENS = \
-            extract_species_arrays(time_start, time_end, probe, pad, cmp=np.asarray([70, 20, 10]), 
+            extract_species_arrays(time_start, time_end, probe, cmp=np.asarray([70, 20, 10]), 
                                    return_raw_ne=True, nsec=None, HM_filter_mhz=50)
             sys.exit()
         

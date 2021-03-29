@@ -60,14 +60,15 @@ if __name__ == '__main__':
     #
     # To Do: Set temperature/anisotropy as constant. Does this cause a constant offset?
     # If so, how does the offset change with temperature? Is this a fiddle factor we could use?
-    hope_dir   = 'F://DATA//RBSP//ECT//HOPE//L3//MOMENTS//'
-    save_dir   = 'F://HOPE_MODEL_DENSITY//'
+    hope_dir   = 'E://DATA//RBSP//ECT//HOPE//L3//MOMENTS//'
+    save_dir   = 'E://HOPE_MODEL_DENSITY//'
     if os.path.exists(save_dir) == False: os.makedirs(save_dir)
         
     time_start = np.datetime64('2015-01-16T04:05:00')
     time_end   = np.datetime64('2015-01-16T05:15:00')
     probe      = 'a'
     dstring    = time_start.astype(object).strftime('%Y%m%d')
+    sp_clrs    = ['red', 'green', 'blue']
     
     # Max/Mins in v = np.sqrt(vp**2 + vx**2)
     eV     = False
@@ -91,7 +92,7 @@ if __name__ == '__main__':
     N_ions   = len(ions) 
     dens_mod = np.zeros((N_ions, times.shape[0]), dtype=float)
     
-    for ii in range(N_ions):
+    for ii, clr in zip(range(N_ions), sp_clrs):
         for jj in range(st, en):
             T_perp  = hope_mom['Tperp_{}_30'.format(ions[ii])][jj]*11600.
             T_para  = hope_mom['Tpar_{}_30'.format(ions[ii])][jj]*11600.
@@ -108,14 +109,11 @@ if __name__ == '__main__':
             
             vperp_eV  = mass[ii]*vperp**2/(2*qp) * np.sign(vperp)
             vpara_eV  = mass[ii]*vpara**2/(2*qp) * np.sign(vpara)
-    
-            try:
-                distro_2D = calc_distro_2D(dens_m3, vperp, vpara, vth_perp, vth_para)
-            except Exception as err:
-                pdb.set_trace()
-                
+
+            distro_2D = calc_distro_2D(dens_m3, vperp, vpara, vth_perp, vth_para)
+
             integral  = integrate_distro_2D(distro_2D, vperp, vpara, mass[ii], min_eV, max_eV)
-            dens_mod[ii, jj] = integral
+            dens_mod[ii, jj] = integral*1e-6
             
             ## Mass-plot each time's Bi-Maxwellian fits with slices through the zeros.
             if False:
@@ -151,8 +149,8 @@ if __name__ == '__main__':
                 axr = fig.add_subplot(gs[:3, 3])
                 axb = fig.add_subplot(gs[3, :3])
                 
-                ax1.set_title('HOPE-{} $H^+$ Normalized Bimaxwellian Distribution :: {}'.format(
-                                                                     probe.upper(), times[jj]))
+                ax1.set_title('HOPE-{} {}-ION Normalized Bimaxwellian Distribution :: {}'.format(
+                                                                     probe.upper(), ions[ii].upper(), times[jj]))
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     ax1.pcolormesh(vperp, vpara, distro_2D.T)
@@ -164,8 +162,8 @@ if __name__ == '__main__':
                 
                 # Slice through zeros
                 midx = Nv//2; midy = Nv//2
-                axb.plot(vperp, distro_2D[midx, :])
-                axr.plot(distro_2D[:, midy], vpara)
+                axb.plot(vperp, distro_2D[midx, :], c=clr)
+                axr.plot(distro_2D[:, midy], vpara, c=clr)
                 axr.yaxis.tick_right()
                 axb.set_xlim(vperp[0], vperp[-1])
                 axr.set_ylim(vpara[0], vpara[-1])
@@ -202,12 +200,14 @@ if __name__ == '__main__':
     if True:
         # Do Density, Temperature, Anisotropy in different plots
         fig, axes = plt.subplots(3, sharex=True)
-        for ii, clr in zip(range(N_ions), ['red', 'green', 'blue']):
-            axes[ii].plot(times[st:en], hope_mom['Dens_{}_30'.format(ions[ii])][st:en], c=clr)
-            axes[ii].plot(times[st:en], dens_mod[ii, st:en], c=clr, ls='--')
+        for ii, clr in zip(range(N_ions), sp_clrs):
+            axes[ii].plot(times[st:en], hope_mom['Dens_{}_30'.format(ions[ii])][st:en], c=clr, label='Data')
+            axes[ii].plot(times[st:en], dens_mod[ii, st:en], c=clr, ls='--', label='Model')
+            axes[ii].legend()
       
         for ax in axes:
             axes[0].set_ylabel('$n_i$\n(/cc)', rotation=0, labelpad=30)
         
         axes[0].set_title('HOPE-{} :: REAL AND MODELLED MOMENTS :: {}'.format(probe.upper(), dstring))
         axes[-1].set_xlim(time_start, time_end)
+        plt.show()
