@@ -2736,7 +2736,7 @@ def plot_residuals(Species, PP, k, w_vals, lbl='', approx='hot'):
 
 
 if __name__ == '__main__':
-    ext_drive = 'E:'
+    ext_drive = 'F:'
     #validation_plots_fraser_1996()
     #validation_plots_omura2010()
     #validation_plots_wang_2016()
@@ -2752,10 +2752,10 @@ if __name__ == '__main__':
     
     if True:
         rbsp_path   = '%s//DATA//RBSP//' % ext_drive
-        time_start  = np.datetime64('2015-01-16T04:05:00')
-        time_end    = np.datetime64('2015-01-16T05:15:00')
-        plot_start  = np.datetime64('2015-01-16T04:25:00')
-        plot_end    = np.datetime64('2015-01-16T05:10:00')
+        time_start  = np.datetime64('2013-07-25T21:00:00')
+        time_end    = np.datetime64('2013-07-25T22:00:00')
+        plot_start  = np.datetime64('2013-07-25T21:25:00')
+        plot_end    = np.datetime64('2013-07-25T21:47:00')
         probe       = 'a'
         pad         = 0
         
