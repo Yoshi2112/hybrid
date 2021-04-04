@@ -2078,7 +2078,8 @@ def plot_max_CGR_with_time(times, k_vals, all_cCGR, all_wCGR, all_hCGR,
 
 
 def plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad,
-                                 approx='warm', save=True):
+                                 approx='warm', save=True, cmp=[70, 20, 10],
+                                 nsec=None):
     '''
     Main function that downloads the data, queries the growth rates, and 
     plots a 2D colorplot of the temporal and convective growth rates. Might
@@ -2125,13 +2126,12 @@ def plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad,
         Zero out any branches for ions that have zero density - these will just be copies
         of another solution
     '''
-    cmp = [100, 0, 0]; nsec = 5
     k_vals,  WPDR, CGR, Vg, times, B0, name, mass, charge, density,\
         tper, ani, cold_dens = get_all_DRs_warm_only(time_start, time_end, probe, pad, cmp, 
         kmin=0.0, kmax=1.5, Nk=1000, knorm=True,
         nsec=nsec, HM_filter_mhz=50, N_procs=8,
         suff='', rbsp_path=rbsp_path)
-    pdb.set_trace()
+
     # Remove nan's at start of arrays (Just copy for now, do smarter later)
     WPDR[:, 0, :] = WPDR[:, 1, :]
     CGR[ :, 0, :] = CGR[ :, 1, :]
@@ -2765,9 +2765,15 @@ if __name__ == '__main__':
         save_drive  = ext_drive
         save_dir    = '{}//2D_LINEAR_THEORY//EVENT_{}//'.format(save_drive, date_string)
         
-        calculate_warm_sweep(rbsp_path, time_start, time_end, probe, pad, nsec=5, N_procs=n_processes)
+        #calculate_warm_sweep(rbsp_path, time_start, time_end, probe, pad, nsec=5, N_procs=n_processes)
         
-        #plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad, approx='warm')
+        for he_comp in np.arange(0.5, 30., 0.5):
+            for o_comp in np.arange(0.5, 10., 0.5):
+                h_comp = 100. - o_comp - he_comp
+                composition = np.array([h_comp, he_comp, o_comp], dtype=float)
+                plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad,
+                                 approx='warm', save=True, cmp=composition,
+                                 nsec=5)
     
     
     if False:
