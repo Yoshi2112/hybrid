@@ -4,15 +4,13 @@ Created on Tue Apr 30 13:14:56 2019
 
 @author: Yoshi
 """
-import pdb
 import analysis_config as cf
 import analysis_backend as bk
 import numpy as np
 import matplotlib.pyplot as plt
 import os, sys
 
-from scipy import signal
-data_scripts_dir = 'C://Users//iarey//Documents//GitHub//hybrid//linear_theory//new_general_DR_solver//'
+data_scripts_dir = 'C://Users//Yoshi//Documents//GitHub//hybrid//linear_theory//new_general_DR_solver//'
 sys.path.append(data_scripts_dir)
 
 

@@ -6,7 +6,6 @@ Created on Tue Apr 30 13:03:47 2019
 """
 import matplotlib.pyplot as plt
 import numpy as np
-import pdb
 
 import analysis_config  as cf
 import analysis_backend as bk
@@ -469,7 +468,7 @@ def straight_line_fit(save=True, normalize_output=True, normalize_time=False,
     return
 
 
-def SWSP_timeseries(nx, tmax=None, save=True, log=False, normalize=False):
+def SWSP_timeseries(nx, tmax=None, save=True, log=False, normalize=False, LT_overlay=False):
     '''
     Single wave, single point timeseries. Splits magnetic field into forwards
     and backwards waves, and tracks their evolution at a single gridpoint.
@@ -489,6 +488,26 @@ def SWSP_timeseries(nx, tmax=None, save=True, log=False, normalize=False):
         ylbl   = '\nnT'
     B_max = max(np.abs(B_fwd).max(), np.abs(B_bwd).max())
     
+    if LT_overlay == True:
+        B_seed = 1e-3
+        
+        dk = 1. / (cf.NX * cf.dx)
+        k  = np.arange(0, 1. / (2*cf.dx), dk) * 2*np.pi
+        k_vals, CPDR_solns, WPDR_solns, HPDR_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=False)
+        k_vals *= 3e8 / cf.wpi
+    
+        # Growth rates in angular units
+        CPDR_solns *= 2*np.pi
+        WPDR_solns *= 2*np.pi
+        HPDR_solns *= 2*np.pi
+        max_gr      = HPDR_solns.imag.max()
+        
+# =============================================================================
+#         linear_line = B_seed * np.exp(max_gr*ftime)
+#         plot_line   = 10**linear_line
+# =============================================================================
+        
+    
     plt.ioff()
     fig, axes = plt.subplots(2, sharex=True, figsize=(15, 10))
     
@@ -505,7 +524,7 @@ def SWSP_timeseries(nx, tmax=None, save=True, log=False, normalize=False):
         
         if normalize == True:
             axes[0].set_ylim(1e-4/(cf.B_eq*1e9), None)
-            axes[1].set_ylim(1e-4/(cf.B_eq*1e9), None)
+            axes[1].set_ylim(1e-4/(cf.B_eq*1e9), None)                
         else:
             axes[0].set_ylim(1e-4, None)
             axes[1].set_ylim(1e-4, None)

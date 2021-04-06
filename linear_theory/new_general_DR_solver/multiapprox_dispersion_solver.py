@@ -148,6 +148,49 @@ def create_species_array(B0, name, mass, charge, density, tper, ani):
     return Species, PlasParams
 
 
+def fix_names(path):
+    # Create destination path
+    new_dir = path + 'FIXED//'
+    if not os.path.exists(new_dir): os.makedirs(new_dir)
+    
+    ii = 0
+    for file in os.listdir(path):
+        if not os.path.isdir(path+file):
+
+            # Load existing data
+            DR_file  = np.load(path+file)
+            cmp      = DR_file['comp']
+            k_np     = DR_file['all_k']
+            WPDR_out = DR_file['all_WPDR']
+            wCGR_out = DR_file['all_wCGR']
+            wVg_out  = DR_file['all_wVg']
+    
+            times    = DR_file['times']
+            B0       = DR_file['B0']
+            name     = DR_file['name']
+            mass     = DR_file['mass']
+            charge   = DR_file['charge']
+            density  = DR_file['density']
+            tper     = DR_file['tper']
+            ani      = DR_file['ani']
+            cold_dens= DR_file['cold_dens']
+            HM_filter_mhz= DR_file['HM_filter_mhz']
+            
+            # Re-save with right filename
+            nsec = 5
+            save_string = file[6:24]
+            new_path = new_dir + 'DISPw_{}_cc_{:03}_{:03}_{:03}_{}sec.npz'.format(save_string,
+                                                int(10*cmp[0]), int(10*cmp[1]), int(10*cmp[2]), nsec)
+            
+            np.savez(new_path, all_k=k_np, all_WPDR=WPDR_out, all_wCGR=wCGR_out, all_wVg=wVg_out,
+                 comp=np.asarray(cmp), times=times, B0=B0, name=name, mass=mass, charge=charge,
+                 density=density, tper=tper, ani=ani, cold_dens=cold_dens,
+                 HM_filter_mhz=np.array([HM_filter_mhz]))
+            ii += 1
+            print('Fixed {} of {}'.format(ii, len(os.listdir(path))))
+    return
+
+
 #%% CALCULATION FUNCTIONS    
 def Z(arg):
     '''
@@ -981,11 +1024,11 @@ def get_all_DRs_warm_only(time_start, time_end, probe, pad, cmp,
     '''
     if nsec is None:
         DR_path = save_dir + 'DISPw_{}_cc_{:03}_{:03}_{:03}.npz'.format(save_string,
-                                                10*int(cmp[0]), 10*int(cmp[1]), 10*int(cmp[2]))
+                                                int(10*cmp[0]), int(10*cmp[1]), int(10*cmp[2]))
     else:
         DR_path = save_dir + 'DISPw_{}_cc_{:03}_{:03}_{:03}_{}sec.npz'.format(save_string,
-                                                10*int(cmp[0]), 10*int(cmp[1]), 10*int(cmp[2]), nsec)
-    
+                                                int(10*cmp[0]), int(10*cmp[1]), int(10*cmp[2]), nsec)
+
     if os.path.exists(DR_path) == False:
         # Load data
         times, B0, name, mass, charge, density, tper, ani, cold_dens = \
@@ -1075,6 +1118,7 @@ def get_all_DRs_warm_only(time_start, time_end, probe, pad, cmp,
         print('Dispersion results already exist, loading from file...')
         DR_file   = np.load(DR_path)
         
+        cmp       = DR_file['comp']
         k_np      = DR_file['all_k']
         WPDR_out  = DR_file['all_WPDR']
         wCGR_out  = DR_file['all_wCGR']
@@ -1091,7 +1135,7 @@ def get_all_DRs_warm_only(time_start, time_end, probe, pad, cmp,
         cold_dens = DR_file['cold_dens']
         
     return k_np,  WPDR_out, wCGR_out, wVg_out, \
-           times, B0, name, mass, charge, density, tper, ani, cold_dens
+           times, B0, name, mass, charge, density, tper, ani, cold_dens, cmp
            
            
 def calculate_warm_sweep(rbsp_path, time_start, time_end, probe, pad, nsec=5, N_procs=7):
@@ -2077,7 +2121,7 @@ def plot_max_CGR_with_time(times, k_vals, all_cCGR, all_wCGR, all_hCGR,
     return max_k, max_g
 
 
-def plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad,
+def plot_growth_rates_2D_warm(rbsp_path, time_start, time_end, probe, pad,
                                  approx='warm', save=True, cmp=[70, 20, 10],
                                  nsec=None):
     '''
@@ -2127,9 +2171,9 @@ def plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad,
         of another solution
     '''
     k_vals,  WPDR, CGR, Vg, times, B0, name, mass, charge, density,\
-        tper, ani, cold_dens = get_all_DRs_warm_only(time_start, time_end, probe, pad, cmp, 
+        tper, ani, cold_dens, CMP = get_all_DRs_warm_only(time_start, time_end, probe, pad, cmp, 
         kmin=0.0, kmax=1.5, Nk=1000, knorm=True,
-        nsec=nsec, HM_filter_mhz=50, N_procs=8,
+        nsec=nsec, HM_filter_mhz=50, N_procs=1,
         suff='', rbsp_path=rbsp_path)
 
     # Remove nan's at start of arrays (Just copy for now, do smarter later)
@@ -2177,8 +2221,10 @@ def plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad,
         TGRi        = fGR_file['TGRi']
     
     # Load and calculate Pc1 spectra
-    ti, fac_mags, fac_elec, dt, e_flag, gyfreqs = \
-        rfl.load_both_fields(rbsp_path, time_start, time_end, probe, pad=1800)
+    ti, fac_mags, dt, gyfreqs = rfl.load_magnetic_field(rbsp_path,
+                        time_start, time_end, probe, pad=1800,
+                        LP_B0=1.0, get_gyfreqs=False, return_raw=False,
+                        wave_HP=None, wave_LP=None)
     
     print('Calculating autospectra...')
     overlap=0.99; pc1_res=25.0; f_max=0.5
@@ -2251,6 +2297,239 @@ def plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad,
         fig1.savefig(save_dir + 'TGR_{}'.format(save_string))
         print('Plot saved for {}'.format(save_string))
         plt.close('all')
+    return
+
+
+def plot_growth_rates_2D_sweep(rbsp_path, time_start, time_end, probe, pad,
+                                 approx='warm', save=True, nsec=None, log=False):
+    '''
+    Main function that downloads the data, queries the growth rates, and 
+    plots a 2D colorplot of the temporal and convective growth rates. Might
+    also include plugins to other data such as the Pc1 power to more directly
+    look at the change. Also include growth rates?
+    
+    To Do: Add a normalize flag? At each point, this will normalize f by the 
+    proton cylcotron frequency (which is varying in time). This may give slightly
+    different results for when there are large perturbations in the background
+    field due to the presence of HM?
+    
+    Also option to normalize based on set B rather than B0 at each time (equivalent
+    to absolute measure)
+    
+    norm: None       (no normalization applied)
+          'local'    (normalized based on B0 at each time)
+          'absolute' (normalized based on B0 of norm_B0, default 200nT)
+    
+    How to set growth rate min/max?
+    
+    Calculate wavenumber range based on average B0 and density for time period, times 1.5
+    
+    To do:
+        -- Plot 2D growth rate and check
+        -- Cycle through compositions to find closest one. Can we make a minimization problem?
+        -- Plot with Pc1 spectrum in the top, 3 solns with k vs. t vs. GR, then combine for vs. freq
+        -- Do one plot each for TGR, CGR. Maybe one for Vg as well?
+        -- Start storing values like nsec, comp, filter_freq, probe etc. as a dict
+        
+    GR output is (time, k, band)
+    To accumulate growth over bands, just add? Because linear like Kozyra et al. (1984)
+    Interpolation should be taken with a grain of salt, especially with the presence of
+    stop bands. Might be better to just code up some solver that converts from w -> k -> GR.
+    (e.g. like Kozyra does, using cold plasma approx for k)
+    
+    How to normalize k axis:
+        1) Set k as independent of each time (i.e. calculate k values outside time loop) OR
+        2) Use 2D time array so that both k_vals and times are shape(times, k) (Done this one)
+    
+    To Do: 
+        Code up separate function for parameter search, don't need a new plot every time, just
+        dump the data.
+        
+        Zero out any branches for ions that have zero density - these will just be copies
+        of another solution
+    '''
+    plot_dir = save_dir + 'EVENT_LT_LINEAR_SCALE//'
+    if not os.path.exists(plot_dir): os.makedirs(plot_dir)
+    
+    # Load and calculate Pc1 spectra
+    ti, fac_mags, dt, gyfreqs = rfl.load_magnetic_field(rbsp_path,
+                        time_start, time_end, probe, pad=1800,
+                        LP_B0=1.0, get_gyfreqs=False, return_raw=False,
+                        wave_HP=None, wave_LP=None)
+    
+    print('Calculating autospectra...')
+    overlap=0.99; pc1_res=25.0; f_max=1.25; clim = [-7, 1]
+    pc1_xpower, pc1_xtimes, pc1_xfreq = fscr.autopower_spectra(ti, fac_mags[:, 0], time_start, 
+                                                     time_end, dt, overlap=overlap, df=pc1_res)
+    
+    pc1_ypower, pc1_ytimes, pc1_yfreq = fscr.autopower_spectra(ti, fac_mags[:, 1], time_start, 
+                                                     time_end, dt, overlap=overlap, df=pc1_res)
+    
+    pc1_perp_power = np.log10(pc1_xpower[:, :] + pc1_ypower[:, :]).T
+    
+    
+    # Load/Calculate each growth rate in sweep
+    for he_comp in np.arange(0.5, 30., 0.5):
+        for o_comp in np.arange(0.5, 10., 0.5):
+            h_comp = 100. - o_comp - he_comp
+            print('Composition: {}/{}/{}'.format(h_comp, he_comp, o_comp))
+            comp = np.array([h_comp, he_comp, o_comp], dtype=float)
+    
+            if nsec is None:
+                DR_path = save_dir + 'DISPw_{}_cc_{:03}_{:03}_{:03}.npz'.format(save_string,
+                                        int(10*comp[0]), int(10*comp[1]), int(10*comp[2]))
+            else:
+                DR_path = save_dir + 'DISPw_{}_cc_{:03}_{:03}_{:03}_{}sec.npz'.format(save_string,
+                                        int(10*comp[0]), int(10*comp[1]), int(10*comp[2]), nsec)
+            
+            if os.path.exists(DR_path):
+                k_vals,  WPDR, CGR, Vg, times, B0, name, mass, charge, density,\
+                    tper, ani, cold_dens, cmp = get_all_DRs_warm_only(time_start, time_end, probe, pad, comp, 
+                    kmin=0.0, kmax=1.5, Nk=1000, knorm=True,
+                    nsec=nsec, HM_filter_mhz=50, N_procs=1,
+                    suff='', rbsp_path=rbsp_path)
+            else:
+                print('No growth rate file for composition {}/{}/{}'.format(h_comp, he_comp, o_comp))
+                continue
+
+            # Remove nan's at start of arrays (Just copy for now, do smarter later)
+            WPDR[:, 0, :] = WPDR[:, 1, :]
+            CGR[ :, 0, :] = CGR[ :, 1, :]
+            Vg[  :, 0, :] = Vg[  :, 1, :]
+            
+            # Scale values for plotting/interpolating
+            k_vals  *= 1e6
+            TGR      = WPDR.imag*1e3
+            freqs    = WPDR.real / (2*np.pi)
+            max_f    = freqs[np.isnan(freqs) == False].max()
+            
+            time_2D = np.zeros(k_vals.shape, dtype=times.dtype)
+            ti2d    = np.zeros(k_vals.shape, dtype=float)
+            for ii in range(k_vals.shape[1]):
+                time_2D[:, ii] = times[:]
+                ti2d[   :, ii] = np.arange(times.shape[0])
+                
+            # Interpolate the frequency space values or load from file
+            fGR_path    = save_dir + 'fGRw_{}_cc_{:03}_{:03}_{:03}_{}sec.npz'.format(
+                             save_string, int(10*cmp[0]), int(10*cmp[1]),
+                                          int(10*cmp[2]), nsec)
+            
+            if os.path.exists(fGR_path) == False:
+                time_interp = np.arange(times.shape[0], dtype=float)
+                freq_interp = np.linspace(0.0, max_f, 1000)
+                xi, yi      = np.meshgrid(time_interp, freq_interp)
+        
+                TGRi  = np.zeros(k_vals.shape).flatten()
+                CGRi  = np.zeros(k_vals.shape).flatten()
+                
+                try:
+                    for ii in range(TGR.shape[2]):
+                        x = ti2d.flatten()
+                        y = freqs[:, :, ii].flatten()
+                        z = TGR[:, :, ii].flatten()
+                        print('Interpolating species TGR', ii)
+                        TGRi[:] += griddata((x, y), z, (xi.flatten(), yi.flatten()),
+                                            method='cubic', fill_value=0.0)
+                    TGRi = TGRi.reshape(xi.shape)
+                    
+                    
+                    for ii in range(CGR.shape[2]):
+                        x = ti2d.flatten()
+                        y = freqs[:, :, ii].flatten()
+                        z = CGR[:, :, ii].flatten()
+                        print('Interpolating species CGR', ii)
+                        CGRi[:] += griddata((x, y), z, (xi.flatten(), yi.flatten()),
+                                            method='cubic', fill_value=0.0)
+                    CGRi = CGRi.reshape(xi.shape)
+                    print('Saving growth rate interpolation...')
+                    np.savez(fGR_path, times=times, freq_interp=freq_interp, TGRi=TGRi, CGRi=CGRi)
+                except:
+                    pass
+            else:
+                print('Growth rate interpolation already exist, loading from file...')
+                fGR_file    = np.load(fGR_path)
+                times       = fGR_file['times']
+                freq_interp = fGR_file['freq_interp']
+                TGRi        = fGR_file['TGRi']
+                CGRi        = fGR_file['CGRi']
+            
+            
+            # Set limits        
+            kmin     = 0.0
+            kmax     = 40.0#k_vals.max()
+        
+            TGR_max  = TGR[np.isnan(TGR) == False].max()
+            #TGR_min  = None
+            
+            # Plot the things
+            plt.ioff()
+            fig1, axes1 = plt.subplots(5, figsize=(16, 10))
+            
+            axes1[0].set_title('Temporal Growth Rate :: RBSP-{} :: {} :: Cold Composition {}/{}/{}'.format(
+                                        probe.upper(), date_string, (cmp[0]), (cmp[1]),
+                                          (cmp[2])))
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                im1a = axes1[0].pcolormesh(pc1_xtimes, pc1_xfreq, pc1_perp_power,
+                                           vmin=clim[0], vmax=clim[1], cmap='jet')
+                
+                im2a = axes1[1].pcolormesh(time_2D, k_vals, TGR[:, :, 0], cmap='viridis', vmin=0.0)
+                                           #vmin=TGR_min, vmax=TGR_max, )
+                im3a = axes1[2].pcolormesh(time_2D, k_vals, TGR[:, :, 1], cmap='viridis', vmin=0.0)
+                                           #vmin=TGR_min, vmax=TGR_max, )
+                im4a = axes1[3].pcolormesh(time_2D, k_vals, TGR[:, :, 2], cmap='viridis', vmin=0.0)
+                                           #vmin=TGR_min, vmax=TGR_max, )
+                
+                try:
+                    im5a = axes1[4].pcolormesh(times, freq_interp, TGRi, cmap='viridis', vmin=0.0, vmax=TGR_max)
+                                               #vmin=TGR_min, vmax=TGR_max, )
+                except:
+                    pass
+            
+            labels = ['f (Hz)',
+                      'k ($10^6$/m)\n$H^+$',
+                      'k ($10^6$/m)\n$He^+$',
+                      'k ($10^6$/m)\n$O^+$',
+                      'f (Hz)']
+            
+            for ax, im, lbl in zip(axes1, [im1a, im2a, im3a, im4a, im5a], labels):
+                if ax is axes1[0]:
+                    clabel = '$P_\perp$ $(nT^2/Hz)$'
+                else:
+                    clabel = r'$\gamma \times 10^3 s^{-1}$'
+                    
+                try:
+                    ax.set_xlim(plot_start, plot_end)
+                    
+                    divider = make_axes_locatable(ax)
+                    cax     = divider.append_axes("right", size="2%", pad=0.5)
+                    fig1.colorbar(im, cax=cax, label=clabel, orientation='vertical', extend='both')
+                    ax.set_ylabel(lbl, rotation=0, labelpad=30)
+                    
+                    if ax != axes1[-1]:
+                        ax.set_xticklabels([])
+                    else:
+                        ax.set_xlabel('Time (UT)')
+                        #ax.xaxis.set_major_locator(mdates.MinuteLocator(interval=10))
+                        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+                        
+                    if ax == axes1[0] or ax == axes1[-1]:
+                        ax.set_ylim(0.0, f_max)
+                    else:
+                        ax.set_ylim(kmin, kmax)
+                except:
+                    pass
+            
+            fig1.subplots_adjust(hspace=0.10)
+        
+            if save==False:
+                plt.show()
+            else:
+                fig1.savefig(plot_dir + 'TGR_{}_cc_{:03}_{:03}_{:03}_{}sec.png'.format(
+                             save_string, int(10*cmp[0]), int(10*cmp[1]),
+                                          int(10*cmp[2]), nsec))
+                print('Plot saved.')
+                plt.close('all')
     return
 
 
@@ -2736,7 +3015,7 @@ def plot_residuals(Species, PP, k, w_vals, lbl='', approx='hot'):
 
 
 if __name__ == '__main__':
-    ext_drive = 'F:'
+    ext_drive = 'E:'
     #validation_plots_fraser_1996()
     #validation_plots_omura2010()
     #validation_plots_wang_2016()
@@ -2746,9 +3025,10 @@ if __name__ == '__main__':
     #### Read in command-line arguments, if present
     import argparse as ap
     parser = ap.ArgumentParser()
-    parser.add_argument('-n', '--N_procs'   , default=8, type=int)
+    parser.add_argument('-n', '--N_procs'   , default=1, type=int)
     args = vars(parser.parse_args())
     n_processes = args['N_procs']
+    
     
     if True:
         rbsp_path   = '%s//DATA//RBSP//' % ext_drive
@@ -2767,13 +3047,8 @@ if __name__ == '__main__':
         
         #calculate_warm_sweep(rbsp_path, time_start, time_end, probe, pad, nsec=5, N_procs=n_processes)
         
-        for he_comp in np.arange(0.5, 30., 0.5):
-            for o_comp in np.arange(0.5, 10., 0.5):
-                h_comp = 100. - o_comp - he_comp
-                composition = np.array([h_comp, he_comp, o_comp], dtype=float)
-                plot_growth_rates_2D_3approx(rbsp_path, time_start, time_end, probe, pad,
-                                 approx='warm', save=True, cmp=composition,
-                                 nsec=5)
+        plot_growth_rates_2D_sweep(rbsp_path, time_start, time_end, probe, pad,
+                         approx='warm', save=True, nsec=5)
     
     
     if False:

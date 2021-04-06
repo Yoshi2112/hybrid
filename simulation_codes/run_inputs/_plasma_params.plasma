@@ -12,5 +12,5 @@ ENERGY_PERP  8e3         1.0         1.0          1.0
 ELECTRON_EV  1.0
 BETA_FLAG    0
 L            4.3
-B_EQ         243e-9
+B_EQ         242.78e-9
 B_XMAX       -

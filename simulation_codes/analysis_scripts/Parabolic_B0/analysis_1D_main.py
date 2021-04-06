@@ -445,18 +445,6 @@ def plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
         fig1.colorbar(im1, extend='both', fraction=0.05).set_label(clab, rotation=0, fontsize=fontsize, family=font, labelpad=30)
         ax1.set_title(r'$\omega/k$ Plot :: {}_\perp :: Linear Theory up to {:.3f}s'.format(field, tf),
                      fontsize=fontsize, family=font)
-        
-# =============================================================================
-#         fig2, ax2 = plt.subplots(1, figsize=(15, 10))
-#         im2 = ax1.pcolormesh(xfac*k[1:], yfac*f[1:], wk_para[1:, 1:].real, cmap='jet',
-#                             norm=colors.LogNorm(vmin=wk_para[1:, 1:].real.min(),
-#                                                 vmax=wk_para[1:, 1:].real.max()))
-# 
-#         fig2.colorbar(im2, extend='both', fraction=0.05).set_label(clab, rotation=0, fontsize=fontsize, family=font, labelpad=30)
-#         ax2.set_title(r'$\omega/k$ Plot :: {}_\parallel :: Linear Theory up to {:.3f}s'.format(field, tf),
-#                      fontsize=fontsize, family=font)
-# =============================================================================
-
             
         for ax in [ax1]:
             ax.set_ylabel(ylab, fontsize=fontsize, family=font, rotation=0, labelpad=30)
@@ -4173,12 +4161,13 @@ def plot_FB_waves_winske(save=True):
             
                 fig.savefig(save_folder + 'FB_wave_check_{:05}.png'.format(ii), edgecolor='none')
                 plt.close('all')
-                
-
     return
+
+
 
 def plot_FB_waves_timeseries(save=True):
     '''
+    DIAGNOSTIC
     Validated by plotting B_sum and B_raw on same plot, they were identical.
     '''
     ftime, B_fwd, B_bwd, B_raw = bk.get_FB_waves(overwrite=False, field='B', st=1, en=-2)
@@ -4274,7 +4263,7 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//shoji_half_full//']:
+    for series in ['//shoji_long//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4305,26 +4294,36 @@ if __name__ == '__main__':
                 #plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=1.0)
                 
                 
-# =============================================================================
-#                 # Find cell at x = 0, 1000km
-#                 diff0 = abs(cf.B_nodes); 
-#                 x0 = np.where(diff0 == diff0.min())[0][0]
-#                 
-#                 diff1000 = abs(cf.B_nodes - 1e6)
-#                 x1000 = np.where(diff1000 == diff1000.min())[0][0]
-# 
-#                 ggg.SWSP_timeseries(nx=x0   , save=True, log=True, normalize=True, tmax=35)
-#                 ggg.SWSP_timeseries(nx=x1000, save=True, log=True, normalize=True, tmax=35)
-# =============================================================================
+                # Find cell at x = 0, 1000km
+                diff0 = abs(cf.B_nodes); 
+                x0    = np.where(diff0 == diff0.min())[0][0]
+                
+                diff1000 = abs(cf.B_nodes - 1e6)
+                x1000    = np.where(diff1000 == diff1000.min())[0][0]
+                
+                diff2000 = abs(cf.B_nodes - 2e6)
+                x2000    = np.where(diff2000 == diff2000.min())[0][0]
+                
+                diff3000 = abs(cf.B_nodes - 3e6)
+                x3000    = np.where(diff3000 == diff3000.min())[0][0]
+                
+                diff4000 = abs(cf.B_nodes - 4e6)
+                x4000    = np.where(diff4000 == diff4000.min())[0][0]
 
+                ggg.SWSP_timeseries(nx=x0   , save=True, log=True, normalize=True, tmax=60, LT_overlay=False)
+                ggg.SWSP_timeseries(nx=x1000, save=True, log=True, normalize=True, tmax=60, LT_overlay=False)
+                ggg.SWSP_timeseries(nx=x2000, save=True, log=True, normalize=True, tmax=60, LT_overlay=False)
+                ggg.SWSP_timeseries(nx=x3000, save=True, log=True, normalize=True, tmax=60, LT_overlay=False)
+                ggg.SWSP_timeseries(nx=x4000, save=True, log=True, normalize=True, tmax=60, LT_overlay=False)
+                
                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
-                           normalize=False, B0_lim=None, remove_ND=False)
+                           normalize=False, B0_lim=0.25, remove_ND=False)
                 
                 #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
                 
 # =============================================================================
 #                 plot_wk(saveas='wk_plot', dispersion_overlay=True, save=True,
-#                      pcyc_mult=1.5, xmax=1.5, zero_cold=False,
+#                      pcyc_mult=1.5, xmax=1.5, zero_cold=True,
 #                      linear_only=False, normalize_axes=True)
 # 
 #                 ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=True,
@@ -4338,7 +4337,7 @@ if __name__ == '__main__':
 #                     pass            
 # =============================================================================
         
-        if True:
+        if False:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
@@ -4363,7 +4362,7 @@ if __name__ == '__main__':
 #                                  ppd=True)
 # =============================================================================
                 #scatterplot_velocities(skip=10)
-                check_fields(skip=5, ylim=False)
+                check_fields(skip=50, ylim=False)
             
         #plot_phase_space_with_time()
             
