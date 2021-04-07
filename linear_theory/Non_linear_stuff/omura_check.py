@@ -879,8 +879,9 @@ if __name__ == '__main__':
     fH0  = 3.7
     omH0 = 2 * np.pi * fH0
     
-    wn   = 1.5/3.7#0.4
-    wphn = 679.*np.sqrt(0.05)                 # What is HOT component?
+    wn   = 0.4
+    wph  = 679.*np.sqrt(0.05)*omH0
+    wphn = wph / omH0
     
     Vth_perpn = 0.00267
     Vth_paran = 0.002

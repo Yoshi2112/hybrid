@@ -67,18 +67,18 @@ def get_group_velocity(w, k, Species):
     Vg    = 2 * c * c * k / denom
     return Vg
 
-def get_resonance_velocity(w, k, Species, PP):
+def get_resonance_velocity(w, k, PP):
     Vr = (w - PP['pcyc_rad']) / k
     return Vr
 
-def get_phase_velocity(w, k, Species):
+def get_phase_velocity(w, k):
     return w / k
 
 def get_velocities(w, Species, PP, normalize=False):
     k  = get_k_cold(w, Species)
     Vg = get_group_velocity(w, k, Species)
-    Vr = get_resonance_velocity(w, k, Species, PP)
-    Vp = get_phase_velocity(w, k, Species)
+    Vr = get_resonance_velocity(w, k, PP)
+    Vp = get_phase_velocity(w, k)
     
     if normalize == False:
         return Vg, Vp, Vr
@@ -299,11 +299,11 @@ def push_w(w_old, Om, s, dt):
     return w_new
 
 
-def get_threshold_value_normalized(w, wph2, Q, s, a, Vp, Vr, Vth_para, Vth_perp):
+def get_threshold_value_normalized(w, wph, Q, s, a, Vp, Vr, Vth_para, Vth_perp):
     '''
     Input values are their normalized counterparts, as per eqn. (62) of Omura et al. (2010)
     '''
-    t1    = 100 * np.pi ** 3 * Vp ** 3 / (w * wph2 ** 2 * Vth_perp ** 5)
+    t1    = 100 * np.pi ** 3 * Vp ** 3 / (w * wph ** 4 * Vth_perp ** 5)
     t2    = (a * s[2] * Vth_para / Q) ** 2
     t3    = np.exp(Vr**2 / Vth_para**2)
     om_th = t1 * t2 * t3
@@ -442,7 +442,7 @@ def define_omura2010_parameters(include_energetic=False):
     '''
     Ambient plasma parameters from Omura et al. (2010) to recreate plots
     '''
-    # Parameters in SI units (Note: Added the hot bit here. Is it going to break anything?) nh = 7.2
+    # Parameters in SI units
     pcyc    = 3.7 # Hz
     B0      = 2 * np.pi * mp * pcyc / qp
     
@@ -451,7 +451,7 @@ def define_omura2010_parameters(include_energetic=False):
         Th_perp  = (mp * (8e5)**2 / kB) / 11603.
         Ah       = Th_perp / Th_para - 1
         #apar_h   = np.sqrt(2.0 * qp * Th_para  / mp)
-    
+        
         name    = np.array(['H'    , 'He'  , 'O'  , 'Hot H'])
         mass    = np.array([1.0    , 4.0   , 16.0 , 1.0    ]) * mp
         charge  = np.array([1.0    , 1.0   , 1.0  , 1.0    ]) * qp
@@ -463,7 +463,8 @@ def define_omura2010_parameters(include_energetic=False):
         name    = np.array(['H'    , 'He'  , 'O' ])
         mass    = np.array([1.0    , 4.0   , 16.0]) * mp
         charge  = np.array([1.0    , 1.0   , 1.0 ]) * qp
-        density = np.array([144.0  , 17.0  , 17.0]) * 1e6
+        #density = np.array([144.0  , 17.0  , 17.0]) * 1e6
+        density = np.array([143.82 , 17.08 , 16.96]) * 1e6
         ani     = np.array([0.0    , 0.0   , 0.0 ])
         tpar    = np.array([0.0    , 0.0   , 0.0 ])
         tper    = (ani + 1) * tpar
@@ -477,35 +478,37 @@ def calculate_threshold_amplitude():
     Self-consistent function designed to try and work out this threshold thing
     from Omura et al. (2010)
     
-    Ideas: Does hot H have to be subtracted from cold H? Won't affect threshold
+    Bounces between 0.38nT to 1.06nT depending on how precise each value is
+    inputted (e.g. putting in 1.5/3.7 instead of 0.4 for w0 or basing the densities
+    off the plasma frequency normalization instead of the data value given). 
+    Might be solving correctly, it's just ridiculously sensitive.
+    
+    Velocities vary the most (up to 5%)
     '''
     Species, PP = define_omura2010_parameters()
     
     B0       = PP['B0']                        # Background magnetic field
-    pcyc     = 3.7 * 2 * np.pi                 # Cyclotron frequency (in rad/s)
+    pcyc     = PP['pcyc_rad']                  # Cyclotron frequency (in rad/s)
     Q        = 0.5                             # Q-factor (proton hole depletion)
-    L        = 4.27
+    L        = 4.27                            # McIllwain L-shell
     
-    w0       = 0.4                             # Normalized initial wave frequency
-    Vth_para = 0.002                           # Parallel thermal velocity
-    Vth_perp = 0.00267                         # Perpendicular thermal velocity
+    w0        = 0.4                            # Normalized initial wave frequency
+    Vth_paran = 0.002                          # Parallel thermal velocity
+    Vth_perpn = 0.00267                        # Perpendicular thermal velocity
     
     a        = 4.5 / ((L * RE)**2)             # Parabolic magnetic field scale factor
-    a       *= (c / pcyc) ** 2                 # Normalized
+    an       = a * (c / pcyc) ** 2             # Normalized
     
-    # Redefine densities based on paper
-    Species[0]['plasma_freq_sq'] = (679.0 * pcyc) ** 2
-    Species[1]['plasma_freq_sq'] = (117.0 * pcyc) ** 2
-    Species[2]['plasma_freq_sq'] = (58.30 * pcyc) ** 2
+    wph      = np.sqrt(0.05*Species[0]['plasma_freq_sq'])
+    wphn     = wph / pcyc
     
-    wph2  = 0.05*Species[0]['plasma_freq_sq'] / pcyc ** 2
-    
-    s          = get_inhomogeneity_terms(w0*pcyc, Species, PP, Vth_perp*c)
-    Vg, Vp, Vr = get_velocities(w0*pcyc, Species, PP, normalize=True)
+    s             = get_inhomogeneity_terms(w0*pcyc, Species, PP, Vth_perpn*c)
+    Vgn, Vpn, Vrn = get_velocities(w0*pcyc, Species, PP, normalize=True)
     
     # Input values need to be normalized
-    Omth = get_threshold_value_normalized(w0, wph2, Q, s, a, Vp, Vr, Vth_para, Vth_perp)
+    Omth = get_threshold_value_normalized(w0, wphn, Q, s, an, Vpn, Vrn, Vth_paran, Vth_perpn)
     print('Bth = {:.2f} nT'.format(Omth*B0*1e9))
+    pdb.set_trace()
     return
 
 
@@ -858,12 +861,22 @@ def just_random():
     return
 
 
+def get_density_wp(ratio, Mi):
+    B0   = 242.78e-9
+    pcyc = qp * B0 / mp
+    
+    wp2  = (ratio*pcyc)**2
+    ni   = Mi * mp * e0 * wp2 / qp ** 2
+    print(ni*1e-6)
+    return
+
+
 if __name__ == '__main__':
     '''
     Ideas to try:
         - Make frequencies constant with integration. (This won't fix threshold issues)
     '''    
-    just_random()
+    #just_random()
     
     #plot_convective_growth_rate_fraser()
     
@@ -871,7 +884,7 @@ if __name__ == '__main__':
     #plot_omura2010_velocities_and_dispersion()
     #plot_omura2010_NLGrowth()
     #plot_omura2010_freqamp()
-    #calculate_threshold_amplitude()
+    calculate_threshold_amplitude()
     
     # --- Check Chen et al. (2011) equations
     #plot_check_group_velocity_chen()
@@ -880,5 +893,6 @@ if __name__ == '__main__':
     
     # --- Check plots of other papers that use these base equations
     #plot_shoji2012_2D()
+
     pass
     
