@@ -2343,7 +2343,7 @@ if field_periodic == 1 and damping_multiplier != 0:
     
 if  os.name != 'posix':
     os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
-sys.exit()
+
 
 #%%#####################
 ### START SIMULATION ###
