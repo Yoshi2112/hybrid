@@ -2358,7 +2358,7 @@ def plot_growth_rates_2D_sweep(rbsp_path, time_start, time_end, probe, pad,
                         wave_HP=None, wave_LP=None)
     
     print('Calculating autospectra...')
-    overlap=0.99; pc1_res=25.0; f_max=1.25; clim = [-7, 1]
+    overlap=0.95; pc1_res=25.0; f_max=1.25; clim = [-7, 1]
     pc1_xpower, pc1_xtimes, pc1_xfreq = fscr.autopower_spectra(ti, fac_mags[:, 0], time_start, 
                                                      time_end, dt, overlap=overlap, df=pc1_res)
     
@@ -3032,10 +3032,10 @@ if __name__ == '__main__':
     
     if True:
         rbsp_path   = '%s//DATA//RBSP//' % ext_drive
-        time_start  = np.datetime64('2013-07-25T21:00:00')
-        time_end    = np.datetime64('2013-07-25T22:00:00')
-        plot_start  = np.datetime64('2013-07-25T21:25:00')
-        plot_end    = np.datetime64('2013-07-25T21:47:00')
+        time_start  = np.datetime64('2015-01-16T04:05:00')
+        time_end    = np.datetime64('2015-01-16T05:15:00')
+        plot_start  = np.datetime64('2015-01-16T04:05:00')
+        plot_end    = np.datetime64('2015-01-16T05:15:00')
         probe       = 'a'
         pad         = 0
         
