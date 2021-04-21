@@ -349,16 +349,10 @@ def do_stft(dat, win_len, slide, num_slides):
     out_mem    = np.zeros((num_slides, win_len), dtype=np.complex128)           # Allocate empty memory for STFT output
     
     for ii in range(num_slides):
-        try:
             temp_in[:]     = np.multiply(dat[ii*slide: 
                                              ii*slide + win_len],               
                                              window)                            # Apply FFT windowing function to windowed data and store in FFT input memory address
             out_mem[ii, :] = fft_object()                                       # Call FFT and store result in output array (involves implicit copy)        
-        except Exception as inst:
-            print(type(inst))     # the exception instance
-            print(inst.args)      # arguments stored in .args
-            print(inst)           # __str__ allows args to be printed directly
-            sys.exit('STFT error')
             
     out_mem /=  win_len                                                         # Normalize
 
@@ -399,3 +393,6 @@ def autopower_spectra(component='By', overlap=0.5, win_idx=None, slide_idx=None,
     freq         = np.asarray([df * jj for jj in range(win_idx//2 + 1)])            # Frequency array up to Nyquist
     power        = np.real(FFT_output * np.conj(FFT_output))
     return power, FFT_times, freq
+
+
+

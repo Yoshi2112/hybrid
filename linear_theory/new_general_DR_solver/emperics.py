@@ -27,7 +27,9 @@ def geomagnetic_magnitude(L_shell, MLAT=0.):
 
 
 def CLW_geomagnetic_magnitude(L_shell, MLAT=0.):
-    '''Returns the magnetic field magnitude (intensity) on the specified L shell at the given MLAT, in nanoTesla.
+    '''
+    Returns the magnetic field magnitude (intensity) on the specified L shell at the given MLAT, in nanoTesla.
+    Based on equation 3.35 of Menk and Waters et al. (2013)
     
     INPUT:
         L_shell : McIlwain L-parameter defining distance of disired field line at equator, in RE
@@ -36,14 +38,12 @@ def CLW_geomagnetic_magnitude(L_shell, MLAT=0.):
     OUPUT:
         B_tot   : Magnetic field magnitude, in T (originally Gauss?)
     '''
-    RE      = 6371e3
-    M       = 7.8e22
-    colat   = (90. - MLAT)*np.pi/180.
-    #pdb.set_trace()
-    r_loc   = L_shell * RE * (np.sin(colat) ** 2)
-    B_tot_G = - M / (r_loc ** 3) * np.sqrt(3*np.cos(colat) + 1)
-    B_tot_T = B_tot_G*1e-4
-    return B_tot_T
+    RE    = 6378e3
+    M     = 7.8e22
+    r_loc = L_shell * RE * np.cos(MLAT*np.pi/180.) ** 2
+    B_mag = M * np.sqrt(4 - 3*np.cos(MLAT*np.pi/180.)**2) / (r_loc ** 3)
+    #B_tot_nT = B_tot_G*1e-4
+    return B_mag
 
 
 
@@ -152,8 +152,8 @@ def plot_field_slice(max_L):
 
     
 if __name__ == '__main__':
-    B_eq = geomagnetic_magnitude(4.27, MLAT=0.)
-    print(B_eq*1e9)
+    #B_eq = CLW_geomagnetic_magnitude(4.27, MLAT=0.)
+    #print(B_eq)
 # =============================================================================
 #     _L = 5.0; _MLAT = 40.0; _MLON = 0.0
 #     
@@ -169,3 +169,8 @@ if __name__ == '__main__':
 #         print('Field       = {:.2f} nT'.format(_B0*1e9))
 #         print('Field CLW   = {:.2f} nT'.format(_B02))
 # =============================================================================
+
+    # Random Omura/Shoji stuff
+    OmH0     = np.pi * 2  * 3.7      # Proton cyclotron frequency (3.7Hz) in radians
+    omura_wp = 679 * OmH0
+    print(omura_wp / (2 * np.pi))

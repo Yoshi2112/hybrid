@@ -430,7 +430,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
         pnum = 0
         
     # Desync (retard) velocity here
-    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*pdt, vel_only=True, hot_only=hot_only)
+    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*pdt, mp_flux, vel_only=True, hot_only=hot_only)
     for pp in range(psteps):
         if psave == True and pp%save_inc==0:
             p_fullpath = pdata_path + 'data%05d' % pnum
@@ -442,7 +442,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
             print('Step', pp)
         
         for jj in range(Nj):
-            parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, pdt, hot_only=hot_only)
+            parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, pdt, mp_flux, hot_only=hot_only)
             
             if hot_only == False or temp_type[jj] == 1:
                 if particle_open == True:
@@ -450,7 +450,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
         psim_time += pdt
     
     # Resync (advance) velocity here
-    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, 0.5*pdt, vel_only=True, hot_only=hot_only)
+    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, 0.5*pdt, mp_flux, vel_only=True, hot_only=hot_only)
     
     # Dump indicator file
     if save_fields == 1 or save_particles == 1:
@@ -468,7 +468,7 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     Helper function to group the particle advance and moment collection functions
     '''
     #parmov_start = timer()
-    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False)
+    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, mp_flux, vel_only=False)
     #parmov_time = round(timer() - parmov_start, 2)
     
     # Particle injector goes here
@@ -659,7 +659,7 @@ def assign_weighting_CIC(pos, I, W, E_nodes=True):
 
 
 @nb.njit(parallel=do_parallel)
-def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False, hot_only=False):
+def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, mp_flux, vel_only=False, hot_only=False):
     '''
     updates velocities using a Boris particle pusher.
     Based on Birdsall & Langdon (1985), pp. 59-63.
@@ -676,7 +676,28 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, vel_only=False, hot_o
         
     Note: Particle boundary conditions arranged in order of probability of use.
     "Periodic" and "Open" boundaries most useful, others kept for legacy purposes.
+    
+    Note: rflag is an internally generated and used flag to count whether or not
+    there is a particle that needs to be reinitialized that hasn't been yet. This
+    is so the quiet start is conserved. Only used if quiet_start is True (1).
+    
+    rflag = -1      Empty
+    rflag > -1      This is the index of the particle that has yet to be reinit'd
+    
+    If rflag > -1 and another particle found outside boundary, then both are reinit'd
+    at the same time (same initial position and v_para, opposite v_perp.
+                      
+    TODO:
+    Actually nevermind, this would break the parallelization. Better to use the
+    injection routine since it can be boundary/species specific. Use mp_flux to 
+    count the particles leaving the boundaries, then call the injection routine
+    at the end of the loop. Thus, the only difference between true 'open/injection'
+    and 'reinit' boundary conditions is that the flux is added at a constant rate
+    and for open, but is reactive to internal conditions for reinit. Technically
+    for a high enough particle count (and low enough wave amplitude) these should
+    be identical, but they're definitely not going to be in practice.
     '''
+    #lflag = -1; rflag = -1
     for ii in nb.prange(pos.shape[0]):
         if temp_type[idx[ii]] == 1 or hot_only == False:
             # Calculate wave fields at particle position
@@ -878,15 +899,20 @@ def inject_particles(pos, vel, idx, mp_flux, DT):
     
     NOTE: How does this work for -0.5*DT ?? Might have to double check
     '''
-    # Add flux at each boundary 
-    for kk in range(2):
-        mp_flux[kk, :] += inject_rate*DT
+    # Add flux at each boundary if 'open' flux boundaries
+    if particle_open == 1:
+        for kk in range(2):
+            mp_flux[kk, :] += inject_rate*DT
         
     # acc used only as placeholder to mark place in array. How to do efficiently? 
-    acc = 0; n_created = 0
+    acc = 0
     for ii in nb.prange(2):
         for jj in nb.prange(Nj):
-            N_inject = int(mp_flux[ii, jj] // 2)
+            
+            if quiet_start == 1:
+                N_inject = int(mp_flux[ii, jj] // 2)
+            else:
+                N_inject = int(mp_flux[ii, jj])
             
             for xx in nb.prange(N_inject):
                 
@@ -896,12 +922,7 @@ def inject_particles(pos, vel, idx, mp_flux, DT):
                         kk1 = kk
                         acc = kk + 1
                         break
-                for kk in nb.prange(acc, pos.shape[0]):
-                    if idx[kk] < 0:
-                        kk2 = kk
-                        acc = kk + 1
-                        break
-
+                
                 # Reinitialize vx based on flux distribution
                 vel[0, kk1] = generate_vx(vth_par[jj])
                 idx[kk1]    = jj
@@ -921,26 +942,31 @@ def inject_particles(pos, vel, idx, mp_flux, DT):
                 # Amount travelled (vel always +ve at first)
                 dpos = np.random.uniform(0, 1) * vel[0, kk1] * DT
                 
-                # Left boundary injection
+                # Inject at either left/right boundary
                 if ii == 0:
                     pos[kk1]    = xmin + dpos
                     vel[0, kk1] = np.abs(vel[0, kk1])
-                    
-                # Right boundary injection
                 else:
                     pos[kk1]    = xmax - dpos
                     vel[0, kk1] = -np.abs(vel[0, kk1])
+                mp_flux[ii, jj] -= 1.0
                 
-                # Copy values to second particle (Same position, xvel. Opposite v_perp) 
-                idx[kk2]    = idx[kk1]
-                pos[kk2]    = pos[kk1]
-                vel[0, kk2] = vel[0, kk1]
-                vel[1, kk2] = vel[1, kk1] * -1.0
-                vel[2, kk2] = vel[2, kk1] * -1.0
-                
-                # Subtract new macroparticles from accrued flux
-                mp_flux[ii, jj] -= 2.0
-                n_created       += 2
+                if quiet_start == 1:
+                    # Copy values to second particle (Same position, xvel. Opposite v_perp) 
+                    for kk in nb.prange(acc, pos.shape[0]):
+                        if idx[kk] < 0:
+                            kk2 = kk
+                            acc = kk + 1
+                            break
+                        
+                    idx[kk2]    = idx[kk1]
+                    pos[kk2]    = pos[kk1]
+                    vel[0, kk2] = vel[0, kk1]
+                    vel[1, kk2] = vel[1, kk1] * -1.0
+                    vel[2, kk2] = vel[2, kk1] * -1.0
+                    
+                    # Subtract new macroparticles from accrued flux
+                    mp_flux[ii, jj] -= 1.0
     return
 
 
@@ -1475,7 +1501,8 @@ def get_max_vx(vel):
 
 @nb.njit()
 def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center,\
-                     qq, DT, max_inc, part_save_iter, field_save_iter, idx, damping_array):
+                     qq, DT, max_inc, part_save_iter, field_save_iter, idx,
+                     damping_array, mp_flux):
     '''
     Evaluates all the things that could cause a violation of the timestep:
         - Magnetic field dispersion (switchable in param file since this can be tiny)
@@ -1515,7 +1542,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center,\
     
     if DT_part < 0.9*DT:
 
-        parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, 0.5*DT, vel_only=True)    # Re-sync vel/pos       
+        parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, 0.5*DT, mp_flux, vel_only=True)    # Re-sync vel/pos       
 
         DT         *= 0.5
         max_inc    *= 2
@@ -1524,7 +1551,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center,\
         field_save_iter *= 2
         part_save_iter *= 2
 
-        parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*DT, vel_only=True)   # De-sync vel/pos 
+        parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*DT, mp_flux, vel_only=True)   # De-sync vel/pos 
         print('Timestep halved. Syncing particle velocity...')
     return qq, DT, max_inc, part_save_iter, field_save_iter, damping_array
 
@@ -1902,8 +1929,9 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
     #check_start = timer()
     if adaptive_timestep == True and qq%1 == 0 and disable_waves == 0:
         qq, DT, max_inc, part_save_iter, field_save_iter, damping_array \
-        = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, B_cent,\
-                         qq, DT, max_inc, part_save_iter, field_save_iter, idx, B_damping_array)
+        = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, B_cent,
+                         qq, DT, max_inc, part_save_iter, field_save_iter, idx,
+                         mp_flux, B_damping_array)
     #check_time = round(timer() - check_start, 2)
     
     

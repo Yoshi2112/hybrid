@@ -625,6 +625,45 @@ def plot_dynamic_spectra(component='By', saveas='power_spectra', save=False, yma
     return
 
 
+def SWSP_dynamic_spectra(nx=None, overlap=0.5, win_idx=None, slide_idx=None, df=50, cell_idx=None):
+    # TODO: Finish this
+    dynspec_folderpath = cf.anal_dir + '//Bfield_SWSP_dynspec//'
+    if not os.path.exists(dynspec_folderpath): os.makedirs(dynspec_folderpath)
+        
+    if nx is None:
+        nx = cf.NC // 2
+        
+    plt.ioff()
+    
+    
+    ftime, B_fwd, B_bwd, B_raw = bk.get_FB_waves(overwrite=False, field='B', st=1, en=-2)
+    
+    dt = cf.dt_field
+
+    if win_idx is None:
+        t_win   = 1000. / df                                                        # Window length (in seconds) for desired frequency resolution
+        win_idx = int(np.ceil(t_win / cf.dt_field))                                 # Window size in indexes
+        hlen    = (win_idx - 1) // 2                                                # Index of first mid-window, starting from idx 0. After this, displaced by slide_idx.
+        
+    if win_idx%2 == 0:
+        win_idx += 1                                                                # Force window length to be odd number (for window-halving in FFT: Center values are always center values)
+
+    if slide_idx is None:
+        if overlap > 100:
+            overlap /= 100.                                                         # Check for accidental percentage instead of decimal overlap
+        slide_idx = int(win_idx * (1. - overlap))                                   # Calculate slide length in index values from overlap percentage
+
+    num_slides   = (y_arr.shape[0] - win_idx) // slide_idx                          # Count number of slides required. Unless multiple of idx_length, last value will not explicitly be computed
+
+    FFT_output   = do_stft(y_arr, win_idx, slide_idx, num_slides)                   # Do dynamic FFT
+    FFT_times    = (np.arange(num_slides) * slide_idx + hlen) * dt                  # Collect times for each FFT slice
+    
+    df           = 1./(win_idx * cf.dt_field)                                       # Frequency increment (in mHz)
+    freq         = np.asarray([df * jj for jj in range(win_idx//2 + 1)])            # Frequency array up to Nyquist
+    power        = np.real(FFT_output * np.conj(FFT_output))
+    return power, FFT_times, freq
+
+
 def plot_energies(normalize=True, save=False):
     mag_energy, electron_energy, particle_energy, total_energy = bk.get_energies()
 
@@ -4263,7 +4302,7 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//shoji_long//']:
+    for series in ['//final_shoji2013_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4295,27 +4334,16 @@ if __name__ == '__main__':
                 
                 
                 # Find cell at x = 0, 1000km
-                diff0 = abs(cf.B_nodes); 
-                x0    = np.where(diff0 == diff0.min())[0][0]
-                
-                diff1000 = abs(cf.B_nodes - 1e6)
-                x1000    = np.where(diff1000 == diff1000.min())[0][0]
-                
-                diff2000 = abs(cf.B_nodes - 2e6)
-                x2000    = np.where(diff2000 == diff2000.min())[0][0]
-                
-                diff3000 = abs(cf.B_nodes - 3e6)
-                x3000    = np.where(diff3000 == diff3000.min())[0][0]
-                
-                diff4000 = abs(cf.B_nodes - 4e6)
-                x4000    = np.where(diff4000 == diff4000.min())[0][0]
+                for x_pos in [5e5, 1e6, 2e6, 3e6, 4e6]:
+                    print('Plotting split-wave single point at x = {:.1f}km'.format(x_pos*1e-3))
+                    try:
+                        diff_xpos = abs(cf.B_nodes - x_pos)
+                        xidx      = np.where(diff_xpos == diff_xpos.min())[0][0]
+                        ggg.SWSP_timeseries(nx=xidx , save=True, log=True, normalize=True, tmax=45, LT_overlay=False)
+                    except:
+                        print('ABORT: SWSP ERROR')
+                        continue
 
-                ggg.SWSP_timeseries(nx=x0   , save=True, log=True, normalize=True, tmax=60, LT_overlay=False)
-                ggg.SWSP_timeseries(nx=x1000, save=True, log=True, normalize=True, tmax=60, LT_overlay=False)
-                ggg.SWSP_timeseries(nx=x2000, save=True, log=True, normalize=True, tmax=60, LT_overlay=False)
-                ggg.SWSP_timeseries(nx=x3000, save=True, log=True, normalize=True, tmax=60, LT_overlay=False)
-                ggg.SWSP_timeseries(nx=x4000, save=True, log=True, normalize=True, tmax=60, LT_overlay=False)
-                
                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
                            normalize=False, B0_lim=0.25, remove_ND=False)
                 
