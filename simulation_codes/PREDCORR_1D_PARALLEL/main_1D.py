@@ -169,7 +169,7 @@ def uniform_bimaxwellian():
     np.random.seed(seed)
     pos   = np.zeros(N)
     vel   = np.zeros((3, N))
-    idx   = np.zeros(N, dtype=np.uint8)
+    idx   = np.ones(N, dtype=np.int8) * -1
 
     # Initialize unformly in space, gaussian in 3-velocity
     for jj in range(Nj):
@@ -822,15 +822,26 @@ def inject_particles_1sp(pos, vel, idx, _mp_flux, dt, jj):
     in calling function: advance_particles_and_moments())
     
     NOTE: How does this work for -0.5*DT ?? Might have to double check
+    
+    TODO: 
+        After checking that the normal inject_particles() works fine with the
+        new QS flag, modify this function to be basically identical to that 
+        one with the new flag put in.
+        
+        THEN, we can finally test the new vA params
     '''
     # Add flux at each boundary 
-    for kk in range(2):
-        _mp_flux[kk, jj] += inject_rate[jj]*dt
+    if particle_open == 1:
+        for kk in range(2):
+            _mp_flux[kk, jj] += inject_rate[jj]*dt
         
     # acc used only as placeholder to mark place in array. How to do efficiently? 
     acc = 0; n_created = 0
     for ii in nb.prange(2):
-        N_inject = int(_mp_flux[ii, jj] // 2)
+        if quiet_start == 1:
+            N_inject = int(mp_flux[ii, jj] // 2)
+        else:
+            N_inject = int(mp_flux[ii, jj])
         
         for xx in nb.prange(N_inject):
             
@@ -840,12 +851,7 @@ def inject_particles_1sp(pos, vel, idx, _mp_flux, dt, jj):
                     kk1 = kk
                     acc = kk + 1
                     break
-            for kk in nb.prange(acc, pos.shape[0]):
-                if idx[kk] < 0:
-                    kk2 = kk
-                    acc = kk + 1
-                    break
-
+            
             # Reinitialize vx based on flux distribution
             vel[0, kk1] = generate_vx(vth_par[jj])
             idx[kk1]    = jj
@@ -865,31 +871,38 @@ def inject_particles_1sp(pos, vel, idx, _mp_flux, dt, jj):
             # Amount travelled (vel always +ve at first)
             dpos = np.random.uniform(0, 1) * vel[0, kk1] * dt
             
-            # Left boundary injection
+            # Left/Right boundary injection
             if ii == 0:
                 pos[kk1]    = xmin + dpos
                 vel[0, kk1] = np.abs(vel[0, kk1])
-                
-            # Right boundary injection
             else:
                 pos[kk1]    = xmax - dpos
                 vel[0, kk1] = -np.abs(vel[0, kk1])
+            _mp_flux[ii, jj] -= 1.0
+            n_created        += 1
             
-            # Copy values to second particle (Same position, xvel. Opposite v_perp) 
-            idx[kk2]    = idx[kk1]
-            pos[kk2]    = pos[kk1]
-            vel[0, kk2] = vel[0, kk1]
-            vel[1, kk2] = vel[1, kk1] * -1.0
-            vel[2, kk2] = vel[2, kk1] * -1.0
-            
-            # Subtract new macroparticles from accrued flux
-            _mp_flux[ii, jj] -= 2.0
-            n_created        += 2
+            if quiet_start == 1:
+                for kk in nb.prange(acc, pos.shape[0]):
+                    if idx[kk] < 0:
+                        kk2 = kk
+                        acc = kk + 1
+                        break
+                
+                # Copy values to second particle (Same position, xvel. Opposite v_perp) 
+                idx[kk2]    = idx[kk1]
+                pos[kk2]    = pos[kk1]
+                vel[0, kk2] = vel[0, kk1]
+                vel[1, kk2] = vel[1, kk1] * -1.0
+                vel[2, kk2] = vel[2, kk1] * -1.0
+                
+                # Subtract new macroparticles from accrued flux
+                _mp_flux[ii, jj] -= 1.0
+                n_created        += 1
     return
 
 
 @nb.njit()
-def inject_particles(pos, vel, idx, mp_flux, DT):        
+def inject_particles(pos, vel, idx, _mp_flux, DT):        
     '''
     How to create new particles in parallel? Just test serial for now, but this
     might become my most expensive function for large N.
@@ -902,17 +915,17 @@ def inject_particles(pos, vel, idx, mp_flux, DT):
     # Add flux at each boundary if 'open' flux boundaries
     if particle_open == 1:
         for kk in range(2):
-            mp_flux[kk, :] += inject_rate*DT
+            _mp_flux[kk, :] += inject_rate*DT
         
     # acc used only as placeholder to mark place in array. How to do efficiently? 
-    acc = 0
+    acc = 0; n_created = 0
     for ii in nb.prange(2):
         for jj in nb.prange(Nj):
             
             if quiet_start == 1:
-                N_inject = int(mp_flux[ii, jj] // 2)
+                N_inject = int(_mp_flux[ii, jj] // 2)
             else:
-                N_inject = int(mp_flux[ii, jj])
+                N_inject = int(_mp_flux[ii, jj])
             
             for xx in nb.prange(N_inject):
                 
@@ -949,7 +962,7 @@ def inject_particles(pos, vel, idx, mp_flux, DT):
                 else:
                     pos[kk1]    = xmax - dpos
                     vel[0, kk1] = -np.abs(vel[0, kk1])
-                mp_flux[ii, jj] -= 1.0
+                _mp_flux[ii, jj] -= 1.0; n_created += 1
                 
                 if quiet_start == 1:
                     # Copy values to second particle (Same position, xvel. Opposite v_perp) 
@@ -966,7 +979,8 @@ def inject_particles(pos, vel, idx, mp_flux, DT):
                     vel[2, kk2] = vel[2, kk1] * -1.0
                     
                     # Subtract new macroparticles from accrued flux
-                    mp_flux[ii, jj] -= 1.0
+                    _mp_flux[ii, jj] -= 1.0; n_created += 1
+    #print('Particles injected:', n_created)
     return
 
 
@@ -2210,6 +2224,7 @@ else:
 rho        = (mass*density).sum()                        # Mass density for alfven velocity calc.
 wpi        = np.sqrt((density * charge ** 2 / (mass * e0)).sum())            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*rho)                     # Alfven speed at equator: Assuming pure proton plasma
+#va         = B_eq / np.sqrt(mu0*mass[1]*density[1])      # Hard-coded to be 'cold proton alfven velocity'
 gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
 dx         = dxm * va / gyfreq_eq                        # Alternate method of calculating dx (better for multicomponent plasmas)
 dx2        = dxm * c / wpi
@@ -2404,7 +2419,7 @@ if __name__ == '__main__':
 
     # Retard velocity
     print('Retarding velocity...')
-    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT, vel_only=True)
+    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT, mp_flux, vel_only=True)
     
     qq       = 1;    sim_time = DT; loop_times = np.zeros(max_inc-1, dtype=float)
     print('Starting main loop...')

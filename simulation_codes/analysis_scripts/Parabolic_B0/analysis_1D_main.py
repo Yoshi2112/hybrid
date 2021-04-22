@@ -4302,18 +4302,18 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//final_shoji2013_test//']:
+    for series in ['//QS_injection_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [2, 3]
+            runs_to_do = [0]
         
         # Extract all summary files and plot field stuff (quick)
-        if True:
+        if False:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
@@ -4365,7 +4365,7 @@ if __name__ == '__main__':
 #                     pass            
 # =============================================================================
         
-        if False:
+        if True:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
@@ -4377,20 +4377,20 @@ if __name__ == '__main__':
                 #plot_spatial_poynting(save=True, log=True)
                 #plot_spatial_poynting_helical(save=True, log=True)
                 
+                plot_total_density_with_time(save=True)
+                
+                #summary_plots(save=True, histogram=False, skip=10, ylim=False)
+                for sp in range(cf.Nj):
+                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=4,
+                                 ppd=False)
+                    
 # =============================================================================
-#                 plot_total_density_with_time(save=True)
-#                 
-#                 #summary_plots(save=True, histogram=False, skip=10, ylim=False)
-#                 for sp in range(cf.Nj):
-#                     plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=4,
-#                                  ppd=False)
-#                     
 #                 for sp in range(cf.Nj):
 #                     plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=4,
 #                                  ppd=True)
 # =============================================================================
                 #scatterplot_velocities(skip=10)
-                check_fields(skip=50, ylim=False)
+                #check_fields(skip=50, ylim=False)
             
         #plot_phase_space_with_time()
             
