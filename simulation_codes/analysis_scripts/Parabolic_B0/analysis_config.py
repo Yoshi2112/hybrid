@@ -472,7 +472,7 @@ def load_particles(ii, shuffled_idx=False, preparticledata=False):
     tsim_time  = data['sim_time']
     tidx       = data['idx']
 
-    if shuffled_idx == True or particle_open == True:
+    if shuffled_idx == True or particle_open == True or particle_reinit == True:
         order = np.argsort(tidx)                # Retrieve order of elements by index
         tidx  = tidx[order]
         tx    = tx[order]

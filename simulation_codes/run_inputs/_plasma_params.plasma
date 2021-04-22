@@ -1,4 +1,4 @@
-LABEL        $H^+$_warm  $He^+$_cold
+LABEL        $H^+$_warm  $H^+$_cold
 COLOUR       red         blue
 TEMP_FLAG    1           0
 DIST_FLAG    0           0

@@ -472,10 +472,13 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     #parmov_time = round(timer() - parmov_start, 2)
     
     # Particle injector goes here
-    if particle_open == 1:
+    if particle_open == 1 or particle_reinit == 1:
         #inject_start = timer()
         
+        if particle_reinit == 1:
+            reinit_count_flux(pos, idx, mp_flux)
         inject_particles(pos, vel, idx, mp_flux, DT)
+        
         #inject_time = round(timer() - inject_start, 2)
         #if print_timings == True:
         #    print('INJCT {} time: {}s'.format(qq, inject_time))
@@ -675,18 +678,7 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, mp_flux, vel_only=Fal
         None -- vel array is mutable (I/O array)
         
     Note: Particle boundary conditions arranged in order of probability of use.
-    "Periodic" and "Open" boundaries most useful, others kept for legacy purposes.
-    
-    Note: rflag is an internally generated and used flag to count whether or not
-    there is a particle that needs to be reinitialized that hasn't been yet. This
-    is so the quiet start is conserved. Only used if quiet_start is True (1).
-    
-    rflag = -1      Empty
-    rflag > -1      This is the index of the particle that has yet to be reinit'd
-    
-    If rflag > -1 and another particle found outside boundary, then both are reinit'd
-    at the same time (same initial position and v_para, opposite v_perp.
-                      
+                          
     TODO:
     Actually nevermind, this would break the parallelization. Better to use the
     injection routine since it can be boundary/species specific. Use mp_flux to 
@@ -697,7 +689,6 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, mp_flux, vel_only=Fal
     for a high enough particle count (and low enough wave amplitude) these should
     be identical, but they're definitely not going to be in practice.
     '''
-    #lflag = -1; rflag = -1
     for ii in nb.prange(pos.shape[0]):
         if temp_type[idx[ii]] == 1 or hot_only == False:
             # Calculate wave fields at particle position
@@ -765,30 +756,19 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, mp_flux, vel_only=Fal
                         idx[ii]     = -1
                             
                     elif particle_reinit == 1: 
-                        
-                        # Reinitialize vx based on flux distribution
-                        vel[0, ii]  = generate_vx(vth_par[idx[ii]])
-                        vel[0, ii] *= -np.sign(pos[ii])
-                        
-                        # Re-initialize v_perp and check pitch angle
-                        if temp_type[idx[ii]] == 0 or homogenous == 1:
-                            vel[1, ii] = np.random.normal(0, vth_perp[idx[ii]])
-                            vel[2, ii] = np.random.normal(0, vth_perp[idx[ii]])
-                        else:
-                            particle_PA = 0.0
-                            while np.abs(particle_PA) < loss_cone_xmax:
-                                vel[1, ii]  = np.random.normal(0, vth_perp[idx[ii]])
-                                vel[2, ii]  = np.random.normal(0, vth_perp[idx[ii]])
-                                v_perp      = np.sqrt(vel[1, ii] ** 2 + vel[2, ii] ** 2)
-                                
-                                particle_PA = np.arctan(v_perp / vel[0, ii])
-                    
-                        # Place back inside simulation domain
-                        if pos[ii] < xmin:
-                            pos[ii] = xmin + np.random.uniform(0, 1) * vel[0, ii] * DT
-                        elif pos[ii] > xmax:
-                            pos[ii] = xmax + np.random.uniform(0, 1) * vel[0, ii] * DT
-                           
+                        # Reinit: Deactivate particle and add flux
+# =============================================================================
+#                         if pos[ii] > xmax:
+#                             mp_flux[1, idx[ii]] += 1.0
+#                         elif pos[ii] < xmin:
+#                             mp_flux[0, idx[ii]] += 1.0
+# =============================================================================
+                            
+                        #pos[ii]     = 0.0
+                        vel[0, ii]  = 0.0
+                        vel[1, ii]  = 0.0
+                        vel[2, ii]  = 0.0
+                        idx[ii]    -= 128                            
                     else:
                         # Reflect
                         if pos[ii] > xmax:
@@ -797,6 +777,27 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, mp_flux, vel_only=Fal
                             pos[ii] = 2*xmin - pos[ii]
                             
                         vel[0, ii] *= -1.0
+    return
+
+
+@nb.njit()
+def reinit_count_flux(pos, idx, mp_flux):
+    '''
+    Simple function to work out where to reinitialize particles (species/side)
+    Coded for serial computation since numba can't do parallel reductions with
+    arrays as a target.
+    
+    Shouldn't be any slower than requiring the source functions to be serial,
+    especially since its only an evaluation for every particle, and then a few
+    more operations for a miniscule portion of those particles.
+    '''
+    for ii in range(idx.shape[0]):
+        if idx[ii] < 0:
+            sp = idx[ii]+128
+            if pos[ii] > xmax:
+                mp_flux[1, sp] += 1.0
+            elif pos[ii] < xmin:
+                mp_flux[0, sp] += 1.0 
     return
 
 

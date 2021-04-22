@@ -3956,7 +3956,6 @@ def plot_total_density_with_time(save=True):
         pos, vel, idx, ptime[ii], id1, id2 = cf.load_particles(ii)
         
         spidx, counts = np.unique(idx, return_counts=True)
-        
         if cf.particle_open == 1:
             # +1 accounts for idx starting at -1 when sorted
             for jj in range(cf.Nj):
@@ -4302,7 +4301,7 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//QS_injection_test//']:
+    for series in ['//new_reinit_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4310,7 +4309,7 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [0]
+            runs_to_do = [3]
         
         # Extract all summary files and plot field stuff (quick)
         if False:
@@ -4381,7 +4380,7 @@ if __name__ == '__main__':
                 
                 #summary_plots(save=True, histogram=False, skip=10, ylim=False)
                 for sp in range(cf.Nj):
-                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=4,
+                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=1,
                                  ppd=False)
                     
 # =============================================================================
