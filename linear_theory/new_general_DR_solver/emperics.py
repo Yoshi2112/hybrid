@@ -150,6 +150,28 @@ def plot_field_slice(max_L):
     plt.show()
     return x_gsm, y_gsm, B0
 
+
+def get_eV_from_vthc(vthc):
+    '''
+    Input : Thermal velocity as fraction of c
+    Output: Equivalent energy in eV
+    '''
+    c   = 2.998925e+08 
+    mp  = 1.672622e-27
+    kB  = 1.380649e-23 # J/K
+    
+    vth = vthc * c
+    EJ  = mp * vth ** 2
+    T   = EJ/kB
+    eV  = T / 11603.
+    
+    print('Input velocity: {}c'.format(vthc))
+    print('              : {} m/s'.format(vth))
+    print('Output energy : {} J'.format(EJ))
+    print('              : {} K'.format(T))
+    print('              : {} eV'.format(eV))
+    return eV
+
     
 if __name__ == '__main__':
     #B_eq = CLW_geomagnetic_magnitude(4.27, MLAT=0.)
@@ -173,4 +195,5 @@ if __name__ == '__main__':
     # Random Omura/Shoji stuff
     OmH0     = np.pi * 2  * 3.7      # Proton cyclotron frequency (3.7Hz) in radians
     omura_wp = 679 * OmH0
-    print(omura_wp / (2 * np.pi))
+    
+    get_eV_from_vthc(0.00283)

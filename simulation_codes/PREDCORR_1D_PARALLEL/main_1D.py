@@ -21,7 +21,7 @@ B_surf = 3.12e-5                            # Magnetic field strength at Earth s
 
 # A few internal flags
 adaptive_timestep = True       # Disable adaptive timestep if you hate when it doubles
-print_runtime     = True       # Whether or not to output runtime every 50 iterations 
+print_runtime     = False      # Whether or not to output runtime every 50 iterations 
 do_parallel       = True       # Whether or not to use available threads to parallelize specified functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
 #nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
@@ -2186,7 +2186,7 @@ if Fu_override == True:
     rat        = 5
     ne         = (rat*B_eq)**2 * e0 / me
     density    = np.array([0.05, 0.94, 0.01])*ne
-### --- DELETE LATER
+### 
 
 NC          = NX + 2*ND                     # Total number of cells
 ne          = density.sum()                 # Electron number density
@@ -2224,11 +2224,11 @@ else:
 
 rho        = (mass*density).sum()                        # Mass density for alfven velocity calc.
 wpi        = np.sqrt((density * charge ** 2 / (mass * e0)).sum())            # Proton   Plasma Frequency, wpi (rad/s)
-va         = B_eq / np.sqrt(mu0*rho)                     # Alfven speed at equator: Assuming pure proton plasma
-#va         = B_eq / np.sqrt(mu0*mass[1]*density[1])      # Hard-coded to be 'cold proton alfven velocity'
+#va         = B_eq / np.sqrt(mu0*rho)                     # Alfven speed at equator: Assuming pure proton plasma
+va         = B_eq / np.sqrt(mu0*mass[1]*density[1])      # Hard-coded to be 'cold proton alfven velocity'
 gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
 dx         = dxm * va / gyfreq_eq                        # Alternate method of calculating dx (better for multicomponent plasmas)
-dx2        = dxm * c / wpi
+#dx2        = dxm * c / wpi
 
 xmax       = NX / 2 * dx                                 # Maximum simulation length, +/-ve on each side
 xmin       =-NX / 2 * dx
@@ -2387,6 +2387,7 @@ if field_periodic == 1 and damping_multiplier != 0:
     
 if  os.name != 'posix':
     os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
+
 
 
 #%%#####################
