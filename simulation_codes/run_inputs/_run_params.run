@@ -1,11 +1,11 @@
-DRIVE					E:/
+DRIVE					D:/
 SAVE_PATH			    /runs/Fu_open_BCs_variable_L/
 RUN						-
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
 SEED					983274
 HOMOGENOUS_B0_FLAG		1
-PERIODIC_FLAG			1
+PERIODIC_FLAG			0
 REFLECT_FLAG			0
 REINIT_FLAG				0
 FIELD_PERIODIC			0
@@ -24,4 +24,4 @@ GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02
 PARTICLE_DUMP_FREQ		10.0
 FIELD_DUMP_FREQ			0.25
-Testing how effective these open boundary conditions are with a uniform background magnetic field. First run is periodic boundary control with 256 cells as per Fu et al. (2016). Then doubling the size of the domain for a few runs with open boundaries. Saving particles because we also want to check gyrophase.
+Testing effect of varying L (proxy for a, the parabolic curve scale factor) on the wave parameters. Start with Run 0 being analytically homogeneous (run 0) as control, then vary L from large (e.g. 20) to small (e.g. 3).
