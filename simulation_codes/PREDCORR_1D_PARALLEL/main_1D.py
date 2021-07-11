@@ -21,10 +21,10 @@ B_surf = 3.12e-5                            # Magnetic field strength at Earth s
 
 # A few internal flags
 adaptive_timestep = True       # Disable adaptive timestep if you hate when it doubles
-print_runtime     = False      # Whether or not to output runtime every 50 iterations 
+print_runtime     = True       # Whether or not to output runtime every 50 iterations 
 do_parallel       = True       # Whether or not to use available threads to parallelize specified functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
-nb.set_num_threads(6)          # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(7)          # Uncomment to manually set number of threads, otherwise will use all available
 
 Fu_override = True              # Override to allow density to be calculated as a ratio of frequencies
 
