@@ -24,9 +24,9 @@ adaptive_timestep = True       # Disable adaptive timestep if you hate when it d
 print_runtime     = False      # Whether or not to output runtime every 50 iterations 
 do_parallel       = True       # Whether or not to use available threads to parallelize specified functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
-#nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(6)          # Uncomment to manually set number of threads, otherwise will use all available
 
-Fu_override=False              # Override to allow density to be calculated as a ratio of frequencies
+Fu_override = True              # Override to allow density to be calculated as a ratio of frequencies
 
 ### ##
 ### INITIALIZATION
@@ -1539,18 +1539,18 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center,\
     
     Shoji code blowing up because of Eacc_ts - what is this and does it matter?
     '''
-    B_magnitude     = np.sqrt(B_center[ND:ND+NX+1, 0] ** 2 +
-                              B_center[ND:ND+NX+1, 1] ** 2 +
-                              B_center[ND:ND+NX+1, 2] ** 2)
-    gyfreq          = qm_ratios.max() * B_magnitude.max()     
-    ion_ts          = dxm * orbit_res / gyfreq
-    max_V           = get_max_vx(vel)
+    B_magnitude = np.sqrt(B_center[ND:ND+NX+1, 0] ** 2 +
+                          B_center[ND:ND+NX+1, 1] ** 2 +
+                          B_center[ND:ND+NX+1, 2] ** 2)
+    gyfreq = qm_ratios.max() * B_magnitude.max()     
+    ion_ts = dxm * orbit_res / gyfreq
+    max_V  = get_max_vx(vel)
     
     if False:#E[:, 0].max() != 0:
-        elecfreq        = qm_ratios.max()*(np.abs(E[:, 0] / max_V).max())    # E-field acceleration "frequency"
-        Eacc_ts         = freq_res / elecfreq                            
+        elecfreq = qm_ratios.max()*(np.abs(E[:, 0] / max_V).max())    # E-field acceleration "frequency"
+        Eacc_ts  = freq_res / elecfreq                            
     else:
-        Eacc_ts = ion_ts
+        Eacc_ts  = ion_ts
     
     vel_ts          = 0.60 * dx / max_V                                      # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
     DT_part         = min(Eacc_ts, vel_ts, ion_ts)                           # Smallest of the allowable timesteps
@@ -2167,17 +2167,17 @@ with open(plasma_input, 'r') as f:
     B_eq      = f.readline().split()[1]                  # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
     B_xmax_ovr= f.readline().split()[1]
 
-charge    *= q                                           # Cast species charge to Coulomb
-mass      *= mp                                          # Cast species mass to kg
+charge *= q                                              # Cast species charge to Coulomb
+mass   *= mp                                             # Cast species mass to kg
 
 #####################################
 ### DERIVED SIMULATION PARAMETERS ###
 #####################################
 if ND < 2:
-    ND = 2                                  # Set minimum (used for array addresses)
+    ND = 2                                               # Set minimum (used for array addresses)
     
 if B_eq == '-':
-    B_eq = (B_surf / (L ** 3))         # Magnetic field at equator, based on L value
+    B_eq = (B_surf / (L ** 3))                           # Magnetic field at equator, based on L value
 else:
     B_eq = float(B_eq)
     
@@ -2224,8 +2224,8 @@ else:
 
 rho        = (mass*density).sum()                        # Mass density for alfven velocity calc.
 wpi        = np.sqrt((density * charge ** 2 / (mass * e0)).sum())            # Proton   Plasma Frequency, wpi (rad/s)
-#va         = B_eq / np.sqrt(mu0*rho)                     # Alfven speed at equator: Assuming pure proton plasma
-va         = B_eq / np.sqrt(mu0*mass[1]*density[1])      # Hard-coded to be 'cold proton alfven velocity'
+va         = B_eq / np.sqrt(mu0*rho)                     # Alfven speed at equator: Assuming pure proton plasma
+#va         = B_eq / np.sqrt(mu0*mass[1]*density[1])      # Hard-coded to be 'cold proton alfven velocity'
 gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
 dx         = dxm * va / gyfreq_eq                        # Alternate method of calculating dx (better for multicomponent plasmas)
 #dx2        = dxm * c / wpi
@@ -2387,7 +2387,6 @@ if field_periodic == 1 and damping_multiplier != 0:
     
 if  os.name != 'posix':
     os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
-
 
 
 #%%#####################
