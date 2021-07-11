@@ -472,8 +472,10 @@ def SWSP_timeseries(nx, tmax=None, save=True, log=False, normalize=False, LT_ove
     '''
     Single wave, single point timeseries. Splits magnetic field into forwards
     and backwards waves, and tracks their evolution at a single gridpoint.
+    
+    To do: Are st, en legit for parabolic code?
     '''
-    ftime, B_fwd, B_bwd, B_raw = bk.get_FB_waves(overwrite=False, field='B', st=1, en=-2)
+    ftime, B_fwd, B_bwd, B_raw = bk.get_FB_waves(overwrite=False, field='B')
     
     if tmax is None:
         tmax = ftime[-1]

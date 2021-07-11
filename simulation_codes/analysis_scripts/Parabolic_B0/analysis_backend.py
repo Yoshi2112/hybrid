@@ -459,6 +459,7 @@ def get_FB_waves(overwrite=False, field='B', st=None, en=None):
      
     The sign in F_perp (I think) just determines which is the +/- wave
     '''
+    print('Calculating positive/negative helicities')
     ftime, Fy = cf.get_array('{}y'.format(field))
     ftime, Fz = cf.get_array('{}z'.format(field))
 

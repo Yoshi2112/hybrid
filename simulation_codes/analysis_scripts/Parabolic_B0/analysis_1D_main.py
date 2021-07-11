@@ -625,43 +625,75 @@ def plot_dynamic_spectra(component='By', saveas='power_spectra', save=False, yma
     return
 
 
-def SWSP_dynamic_spectra(nx=None, overlap=0.5, win_idx=None, slide_idx=None, df=50, cell_idx=None):
-    # TODO: Finish this
+def SWSP_dynamic_spectra(nx=None, overlap=0.5, f_res=50):
+    '''
+    Frequency resolution in fraction of gyfreq (defaults to 1/50th)
+    '''
+    import scipy.signal as sig
+    
     dynspec_folderpath = cf.anal_dir + '//Bfield_SWSP_dynspec//'
     if not os.path.exists(dynspec_folderpath): os.makedirs(dynspec_folderpath)
-        
+    
     if nx is None:
         nx = cf.NC // 2
-        
+    
+    
+    # (time, space)
+    ftime, B_fwd, B_bwd, B_raw = bk.get_FB_waves(overwrite=False, field='B')  
+    
+    fmax = cf.gyfreq / (2*np.pi)    # Gyfreq in Hz
+    _dt  = ftime[1] - ftime[0]
+    _df  = (1. / f_res) * fmax
+    Nwin = int(1. / (_df*_dt))
+    olap = int(overlap*Nwin)
+
+    fwd_tseries = B_fwd[:, nx]
+    bwd_tseries = B_bwd[:, nx]
+    
+    # Calculate spectra of each y, z component (real, imag part of helical timeseries) then add
+    fwd_f, fwd_t, fwd_Syy = sig.spectrogram(fwd_tseries.real, fs=1./_dt, window='hann', detrend=False,
+                                            nperseg=Nwin, noverlap=olap)
+    fwd_f, fwd_t, fwd_Szz = sig.spectrogram(fwd_tseries.imag, fs=1./_dt, window='hann', detrend=False,
+                                            nperseg=Nwin, noverlap=olap)
+    fwd_Stt = fwd_Syy + fwd_Szz
+    
+    bwd_f, bwd_t, bwd_Syy = sig.spectrogram(bwd_tseries.real, fs=1./_dt, window='hann', detrend=False,
+                                            nperseg=Nwin, noverlap=olap)
+    bwd_f, bwd_t, bwd_Szz = sig.spectrogram(bwd_tseries.imag, fs=1./_dt, window='hann', detrend=False,
+                                            nperseg=Nwin, noverlap=olap)
+    bwd_Stt = bwd_Syy + bwd_Szz
+    
+    ## PLOT ##
     plt.ioff()
+    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(16,9),
+                             gridspec_kw={'width_ratios':[1, 0.01]})
     
+    axes[0, 0].set_title('FWD/BWD Propagating Waves at node {}'.format(nx))
     
-    ftime, B_fwd, B_bwd, B_raw = bk.get_FB_waves(overwrite=False, field='B', st=1, en=-2)
+    im1 = axes[0, 0].pcolormesh(fwd_t, fwd_f, fwd_Stt,
+                   norm=colors.LogNorm(), cmap='jet')
     
-    dt = cf.dt_field
-
-    if win_idx is None:
-        t_win   = 1000. / df                                                        # Window length (in seconds) for desired frequency resolution
-        win_idx = int(np.ceil(t_win / cf.dt_field))                                 # Window size in indexes
-        hlen    = (win_idx - 1) // 2                                                # Index of first mid-window, starting from idx 0. After this, displaced by slide_idx.
-        
-    if win_idx%2 == 0:
-        win_idx += 1                                                                # Force window length to be odd number (for window-halving in FFT: Center values are always center values)
-
-    if slide_idx is None:
-        if overlap > 100:
-            overlap /= 100.                                                         # Check for accidental percentage instead of decimal overlap
-        slide_idx = int(win_idx * (1. - overlap))                                   # Calculate slide length in index values from overlap percentage
-
-    num_slides   = (y_arr.shape[0] - win_idx) // slide_idx                          # Count number of slides required. Unless multiple of idx_length, last value will not explicitly be computed
-
-    FFT_output   = do_stft(y_arr, win_idx, slide_idx, num_slides)                   # Do dynamic FFT
-    FFT_times    = (np.arange(num_slides) * slide_idx + hlen) * dt                  # Collect times for each FFT slice
+    im2 = axes[1, 0].pcolormesh(bwd_t, bwd_f, bwd_Stt,
+                   norm=colors.LogNorm(), cmap='jet')
     
-    df           = 1./(win_idx * cf.dt_field)                                       # Frequency increment (in mHz)
-    freq         = np.asarray([df * jj for jj in range(win_idx//2 + 1)])            # Frequency array up to Nyquist
-    power        = np.real(FFT_output * np.conj(FFT_output))
-    return power, FFT_times, freq
+    fig.colorbar(im1, cax=axes[0, 1], extend='max').set_label(
+            '$|P|$\n$nT^2/Hz$', fontsize=12, rotation=0, labelpad=30)
+    
+    fig.colorbar(im2, cax=axes[1, 1], extend='max').set_label(
+            '$|P|$\n$nT^2/Hz$', fontsize=12, rotation=0, labelpad=30)
+    
+    for ax in axes[:, 0]:
+        ax.set_ylabel('Hz', rotation=0, labelpad=30)
+        ax.set_ylim(0, fmax)
+        ax.set_xlim(0, fwd_t[-1])
+    axes[1, 0].set_xlabel('Time (s)')
+
+    fig.savefig(dynspec_folderpath + 'SP_spectra_nx{:04}.png'.format(nx), 
+                facecolor=fig.get_facecolor(), edgecolor='none')
+    
+    plt.close('all')
+    print('Energy plot saved')
+    return 
 
 
 def plot_energies(normalize=True, save=False):
@@ -4301,7 +4333,7 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//new_reinit_test//']:
+    for series in ['//shoji_cold_H_alfven//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4309,10 +4341,10 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [3]
+            runs_to_do = [2]
         
         # Extract all summary files and plot field stuff (quick)
-        if False:
+        if True:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
@@ -4331,20 +4363,23 @@ if __name__ == '__main__':
                 
                 #plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=1.0)
                 
-                
-                # Find cell at x = 0, 1000km
-                for x_pos in [5e5, 1e6, 2e6, 3e6, 4e6]:
-                    print('Plotting split-wave single point at x = {:.1f}km'.format(x_pos*1e-3))
-                    try:
-                        diff_xpos = abs(cf.B_nodes - x_pos)
-                        xidx      = np.where(diff_xpos == diff_xpos.min())[0][0]
-                        ggg.SWSP_timeseries(nx=xidx , save=True, log=True, normalize=True, tmax=45, LT_overlay=False)
-                    except:
-                        print('ABORT: SWSP ERROR')
-                        continue
-
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
-                           normalize=False, B0_lim=0.25, remove_ND=False)
+                for _nx in range(cf.ND, cf.NX+cf.NX+1):
+                    SWSP_dynamic_spectra(nx=_nx, overlap=0.95, f_res=50)
+# =============================================================================
+#                 # Find cell at x = 0, 1000km
+#                 for x_pos in [5e5, 1e6, 2e6, 3e6, 4e6]:
+#                     print('Plotting split-wave single point at x = {:.1f}km'.format(x_pos*1e-3))
+#                     try:
+#                         diff_xpos = abs(cf.B_nodes - x_pos)
+#                         xidx      = np.where(diff_xpos == diff_xpos.min())[0][0]
+#                         ggg.SWSP_timeseries(nx=xidx , save=True, log=True, normalize=True, tmax=45, LT_overlay=False)
+#                     except:
+#                         print('ABORT: SWSP ERROR')
+#                         continue
+# 
+#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
+#                            normalize=False, B0_lim=0.25, remove_ND=False)
+# =============================================================================
                 
                 #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
                 
@@ -4364,7 +4399,7 @@ if __name__ == '__main__':
 #                     pass            
 # =============================================================================
         
-        if True:
+        if False:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
