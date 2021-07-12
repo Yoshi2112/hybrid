@@ -24,7 +24,7 @@ adaptive_timestep = True       # Disable adaptive timestep if you hate when it d
 print_runtime     = True       # Whether or not to output runtime every 50 iterations 
 do_parallel       = True       # Whether or not to use available threads to parallelize specified functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
-nb.set_num_threads(8)          # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(7)          # Uncomment to manually set number of threads, otherwise will use all available
 
 Fu_override = True              # Override to allow density to be calculated as a ratio of frequencies
 
@@ -432,7 +432,9 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
     # Desync (retard) velocity here
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*pdt, mp_flux, vel_only=True, hot_only=hot_only)
     for pp in range(psteps):
-        if psave == True and pp%save_inc==0:
+        
+        # Save first and last only
+        if psave == True and (pp == 0 or pp == psteps - 1):
             p_fullpath = pdata_path + 'data%05d' % pnum
             np.savez(p_fullpath, pos=pos, vel=vel, idx=idx, sim_time=psim_time)
             pnum += 1

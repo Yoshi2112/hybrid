@@ -11,6 +11,6 @@ ANISOTROPY   2.          0.          0.
 ENERGY_PERP  9.          0.01        0.01
 ELECTRON_EV  0.01
 BETA_FLAG    1
-L            15.0
+L            20.0
 B_EQ         200e-9
 B_XMAX       -
