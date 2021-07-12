@@ -24,7 +24,7 @@ adaptive_timestep = True       # Disable adaptive timestep if you hate when it d
 print_runtime     = True       # Whether or not to output runtime every 50 iterations 
 do_parallel       = True       # Whether or not to use available threads to parallelize specified functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
-nb.set_num_threads(7)          # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(8)          # Uncomment to manually set number of threads, otherwise will use all available
 
 Fu_override = True              # Override to allow density to be calculated as a ratio of frequencies
 
