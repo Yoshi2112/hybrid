@@ -20,16 +20,16 @@ RE     = 6.371e6                            # Earth radius in metres
 B_surf = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
-adaptive_timestep = True       # Disable adaptive timestep if you hate when it doubles
-print_runtime     = True       # Whether or not to output runtime every 50 iterations 
-do_parallel       = True       # Whether or not to use available threads to parallelize specified functions
+adaptive_timestep = True       # Disable adaptive timestep to keep it the same as initial
+print_runtime     = True       # Flag to print runtime every 50 iterations 
+do_parallel       = True       # Flag to use available threads to parallelize particle functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
 nb.set_num_threads(7)          # Uncomment to manually set number of threads, otherwise will use all available
 
 Fu_override = True              # Override to allow density to be calculated as a ratio of frequencies
 
 ### ##
-### INITIALIZATION
+#%% INITIALIZATION
 ### ##
 @nb.njit()
 def calc_losses(v_para, v_perp, B0x, st=0):
@@ -64,7 +64,7 @@ def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
     '''
     Takes in a Maxwellian or pseudo-maxwellian distribution. Removes any particles
     inside the loss cone and reinitializes them using the given scale factors 
-    sf_par, sf_per (the thermal velocities).
+    sf_par, sf_per (the thermal velocities) as a Bi-Maxwellian distribution.
     
     Is there a better way to do this with a Monte Carlo perhaps?
     '''
@@ -99,12 +99,14 @@ def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
 
 @nb.njit()
 def quiet_start_bimaxwellian():
-    '''Creates an N-sampled normal distribution across all particle species within each simulation cell
+    '''Initializes position, velocity, and index arrays. Position analytically
+    uniform, velocity randomly sampled normal distributions using perp/para 
+    scale factors. Quiet start initialized as per Birdsall and Langdon (1985).
 
     OUTPUT:
-        pos -- 1xN array of particle positions. Pos[0] is uniformly distributed with boundaries depending on its temperature type
-        vel -- 3xN array of particle velocities. Each component initialized as a Gaussian with a scale factor determined by the species perp/para temperature
-        idx -- N   array of particle indexes, indicating which species it belongs to. Coded as an 8-bit signed integer, allowing values between +/-128
+        pos -- 1xN array of particle positions in meters
+        vel -- 3xN array of particle velocities in m/s
+        idx -- N   array of particle indexes, indicating population types 
     '''
     np.random.seed(seed)
     pos = np.zeros(N, dtype=np.float64)
@@ -165,6 +167,14 @@ def quiet_start_bimaxwellian():
 
 @nb.njit()
 def uniform_bimaxwellian():
+    '''Initializes position, velocity, and index arrays. Positions and velocities
+    both initialized using appropriate numpy random distributions, cell by cell.
+
+    OUTPUT:
+        pos -- 1xN array of particle positions in meters
+        vel -- 3xN array of particle velocities in m/s
+        idx -- N   array of particle indexes, indicating population types 
+    '''
     # Set and initialize seed
     np.random.seed(seed)
     pos   = np.zeros(N)
@@ -194,7 +204,10 @@ def uniform_bimaxwellian():
 
 #@nb.njit()
 def initialize_particles(B, E, mp_flux):
-    '''Initializes particle arrays.
+    '''
+    Initializes particle arrays. Selects which velocity/position function to
+    use for intialization, runs equilibrium loop if required, and calculates
+    the initial weighting functions for the initial particle positions.
     
     INPUT:
         <NONE>
@@ -229,7 +242,8 @@ def initialize_particles(B, E, mp_flux):
 
 @nb.njit()
 def set_damping_array(B_damping_array, E_damping_array, DT):
-    '''Create masking array for magnetic field damping used to apply open
+    '''
+    Create masking array for magnetic field damping used to apply open
     boundaries. Based on applcation by Shoji et al. (2011) and
     Umeda et al. (2001)
     '''
@@ -256,8 +270,9 @@ def set_damping_array(B_damping_array, E_damping_array, DT):
 
 @nb.njit()
 def initialize_fields():
-    '''Initializes field ndarrays and sets initial values for fields based on
-       parameters in config file.
+    '''
+    Initializes field ndarrays and sets initial values for fields based on
+    parameters in config file.
 
     INPUT:
         <NONE>
@@ -281,7 +296,8 @@ def initialize_fields():
 
 @nb.njit()
 def initialize_source_arrays():
-    '''Initializes source term ndarrays. Each term is collected on the E-field grid.
+    '''
+    Initializes source term ndarrays. Each term is collected on the E-field grid.
 
     INPUT:
         <NONE>
@@ -301,7 +317,8 @@ def initialize_source_arrays():
 
 @nb.njit()
 def initialize_tertiary_arrays():
-    '''Initializes source term ndarrays. Each term is collected on the E-field grid.
+    '''
+    Initializes source term ndarrays. Each term is collected on the E-field grid.
 
     INPUT:
         <NONE>
@@ -330,7 +347,7 @@ def initialize_tertiary_arrays():
 def set_timestep(vel):
     '''
     INPUT:
-        vel -- Initial particle velocities
+        vel             -- Initial particle velocities
     OUTPUT:
         DT              -- Maximum allowable timestep (seconds)
         max_inc         -- Number of integer timesteps to get to end time
@@ -457,12 +474,12 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
     # Dump indicator file
     if save_fields == 1 or save_particles == 1:
         efin_path = '%s/%s/run_%d/equil_finished.txt' % (drive, save_path, run)
-        with open(efin_path, 'w') as open_file:
-            pass
+        open_file = open(efin_path, 'w')
+        open_file.close()
     return
 
 ### ##
-### PARTICLES
+#%% PARTICLES
 ### ##
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                   B, E, DT, q_dens_adv, Ji, mp_flux, pc=0):
@@ -1011,7 +1028,7 @@ def generate_vx(vth):
             return y_uni
 
 ### ##
-### SOURCES
+#%% SOURCES
 ### ##
 @nb.njit(parallel=False)
 def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
@@ -1176,7 +1193,7 @@ def three_point_smoothing(arr, temp):
 
 
 ### ##
-### FIELDS
+#%% FIELDS
 ### ##
 
 @nb.njit()
@@ -1412,7 +1429,7 @@ def calculate_E(B, B_center, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P, E_
 
 
 ### ##
-### AUXILLIARY FUNCTIONS 
+#%% AUXILLIARY FUNCTIONS 
 ### ##
 
 # =============================================================================
@@ -1574,7 +1591,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center,\
 
 
 ### ##
-### SAVE ROUTINES 
+#%% SAVE ROUTINES 
 ### ##
 def manage_directories():
     print('Checking directories...')
@@ -1856,7 +1873,7 @@ def diagnostic_field_plot(B, E_half, q_dens, Ji, Ve, Te,
 
 
 ### ##
-### MAIN LOOP
+#%% MAIN FUNCTIONS
 ### ##
 @nb.njit(parallel=do_parallel)
 def store_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields): 
@@ -2100,13 +2117,13 @@ with open(run_input, 'r') as f:
     disable_waves     = int(f.readline().split()[1])   # Zeroes electric field solution at each timestep
     source_smoothing  = int(f.readline().split()[1])   # Smooth source terms with 3-point Gaussian filter
     E_damping         = int(f.readline().split()[1])   # Damp E in a manner similar to B for ABCs
-    quiet_start       = int(f.readline().split()[1])   # Flag to use quiet start (False :: semi-quiet start)
+    quiet_start       = int(f.readline().split()[1])   # Flag to use quiet start
     damping_multiplier= float(f.readline().split()[1]) # Multiplies the r-factor to increase/decrease damping rate.
 
-    NX        = int(f.readline().split()[1])           # Number of cells - doesn't include ghost cells
-    ND        = int(f.readline().split()[1])           # Damping region length: Multiple of NX (on each side of simulation domain)
+    NX        = int(f.readline().split()[1])           # Number of cells - doesn't include ghost/damping cells
+    ND        = int(f.readline().split()[1])           # Damping region length on each side of simulation domain
     max_wcinv = float(f.readline().split()[1])         # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
-    dxm       = float(f.readline().split()[1])         # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
+    dxm       = float(f.readline().split()[1])         # Number of ion inertial lengths per dx
     
     ie        = int(f.readline().split()[1])           # Adiabatic electrons. 0: off (constant), 1: on.
     rc_hwidth = f.readline().split()[1]                # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
@@ -2118,7 +2135,7 @@ with open(run_input, 'r') as f:
 
     run_description = f.readline()                     # Commentary to attach to runs, helpful to have a quick description
 
-# Override because I keep forgetting to change this
+# Hardcode because I keep forgetting to change this
 if os.name == 'posix':
     drive = '/home/c3134027/'
 
@@ -2165,9 +2182,9 @@ with open(plasma_input, 'r') as f:
     E_e        = float(f.readline().split()[1])
     beta_flag  = int(f.readline().split()[1])
 
-    L         = float(f.readline().split()[1])           # Field line L shell
-    B_eq      = f.readline().split()[1]                  # Initial magnetic field at equator: None for L-determined value (in T) :: 'Exact' value in node ND + NX//2
-    B_xmax_ovr= f.readline().split()[1]
+    L         = float(f.readline().split()[1])           # Field line L shell, used to calculate parabolic scale factor.
+    B_eq      = f.readline().split()[1]                  # Magnetic field at equator in T: '-' for L-determined value :: 'Exact' value in node ND + NX//2
+    B_xmax_ovr= f.readline().split()[1]                  # Magnetic field at simulation boundaries (excluding damping cells). Overrides 'a' calculation.
 
 charge *= q                                              # Cast species charge to Coulomb
 mass   *= mp                                             # Cast species mass to kg
@@ -2215,7 +2232,7 @@ if beta_flag == 0:
     T_par      = E_par  * 11603.
     T_perp     = E_perp * 11603.
 else:
-    # Input energies in terms of beta (Generally only used for Winske/Gary stuff... invalid in general?)
+    # Input energies in terms of beta (Generally only used for Winske/Gary/Fu stuff... invalid in general?)
     kbt_par    = E_par  * (B_eq ** 2) / (2 * mu0 * ne)
     kbt_per    = E_perp * (B_eq ** 2) / (2 * mu0 * ne)
     Te0_scalar = E_e    * (B_eq ** 2) / (2 * mu0 * ne * kB)
@@ -2227,7 +2244,7 @@ else:
 rho        = (mass*density).sum()                        # Mass density for alfven velocity calc.
 wpi        = np.sqrt((density * charge ** 2 / (mass * e0)).sum())            # Proton   Plasma Frequency, wpi (rad/s)
 va         = B_eq / np.sqrt(mu0*rho)                     # Alfven speed at equator: Assuming pure proton plasma
-#va         = B_eq / np.sqrt(mu0*mass[1]*density[1])      # Hard-coded to be 'cold proton alfven velocity'
+#va         = B_eq / np.sqrt(mu0*mass[1]*density[1])      # Hard-coded to be 'cold proton alfven velocity' (Shoji et al, 2013)
 gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
 dx         = dxm * va / gyfreq_eq                        # Alternate method of calculating dx (better for multicomponent plasmas)
 #dx2        = dxm * c / wpi
@@ -2235,7 +2252,7 @@ dx         = dxm * va / gyfreq_eq                        # Alternate method of c
 xmax       = NX / 2 * dx                                 # Maximum simulation length, +/-ve on each side
 xmin       =-NX / 2 * dx
 Nj         = len(mass)                                   # Number of species
-n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this density to a cell
+n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this SI density to a cell
 min_dens   = 0.05
 
 # Number of sim particles for each species, total
@@ -2325,18 +2342,16 @@ else:
         B_xmax = float(B_xmax_ovr)
         a      = (B_xmax / B_eq - 1) / xmax**2
         
-    lambda_L   = np.arccos(np.sqrt(1.0 / L)) 
-    
+    lambda_L       = np.arccos(np.sqrt(1.0 / L))                    # MLAT of anchor point
     loss_cone_eq   = np.arcsin(np.sqrt(B_eq   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
     loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
+    theta_xmax     = 0.0                                            # NOT REALLY ANY WAY TO TELL MLAT WITH THIS METHOD
+    
+gyfreq_xmax = q*B_xmax/ mp                                # Proton Gyrofrequency (rad/s) at boundary (highest)
+k_max       = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
+qm_ratios   = np.divide(charge, mass)                     # q/m ratio for each species
 
-    # NOT REALLY ANY WAY TO TELL MLAT WITH THIS METHOD
-    theta_xmax = 0.0
-
-gyfreq_xmax= q*B_xmax/ mp                                # Proton Gyrofrequency (rad/s) at boundary (highest)
-k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
-qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
-
+# Calculate injection rate for open boundaries
 if particle_open == 1:
     inject_rate = nsp_ppc * (vth_par / dx) / np.sqrt(2 * np.pi)
 else:
@@ -2391,9 +2406,9 @@ if  os.name != 'posix':
     os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
 
 
-#%%#####################
-### START SIMULATION ###
-########################
+#####################
+#%% -- GLOBAL MAIN --
+#####################
 if __name__ == '__main__':
     start_time = timer()
         
