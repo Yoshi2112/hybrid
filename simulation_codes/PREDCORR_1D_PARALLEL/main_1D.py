@@ -1093,24 +1093,24 @@ def deposit_moments_to_grid_parallel(vel, Ie, W_elec, idx, ni, nu):
     '''
     # Each thread needs a copy of nu, ni
     # This would be the code run on each thread for some subset of vel.shape[1]
-    ni_threads = np.zeros((NC, Nj,    n_threads), dtype=np.float64)
-    nu_threads = np.zeros((NC, Nj, 3, n_threads), dtype=np.float64)
+    ni_threads = np.zeros((n_threads, NC, Nj), dtype=np.float64)
+    nu_threads = np.zeros((n_threads, NC, Nj, 3, ), dtype=np.float64)
     
     for tt in nb.prange(n_threads):        
         for ii in range(n_start_idxs[tt], n_start_idxs[tt]+N_per_thread[tt]):
             if idx[ii] >= 0:
                 for kk in nb.prange(3):
-                    nu_threads[Ie[ii],     idx[ii], kk, tt] += W_elec[0, ii] * vel[kk, ii]
-                    nu_threads[Ie[ii] + 1, idx[ii], kk, tt] += W_elec[1, ii] * vel[kk, ii]
-                    nu_threads[Ie[ii] + 2, idx[ii], kk, tt] += W_elec[2, ii] * vel[kk, ii]
+                    nu_threads[tt, Ie[ii],     idx[ii], kk] += W_elec[0, ii] * vel[kk, ii]
+                    nu_threads[tt, Ie[ii] + 1, idx[ii], kk] += W_elec[1, ii] * vel[kk, ii]
+                    nu_threads[tt, Ie[ii] + 2, idx[ii], kk] += W_elec[2, ii] * vel[kk, ii]
                 
-                ni_threads[Ie[ii],     idx[ii], tt] += W_elec[0, ii]
-                ni_threads[Ie[ii] + 1, idx[ii], tt] += W_elec[1, ii]
-                ni_threads[Ie[ii] + 2, idx[ii], tt] += W_elec[2, ii]
+                ni_threads[tt, Ie[ii],     idx[ii]] += W_elec[0, ii]
+                ni_threads[tt, Ie[ii] + 1, idx[ii]] += W_elec[1, ii]
+                ni_threads[tt, Ie[ii] + 2, idx[ii]] += W_elec[2, ii]
                 
     # Sum across threads
-    ni[:, :]    = ni_threads.sum(axis=2)
-    nu[:, :, :] = nu_threads.sum(axis=3)
+    ni[:, :]    = ni_threads.sum(axis=0)
+    nu[:, :, :] = nu_threads.sum(axis=0)
     return
 
 
