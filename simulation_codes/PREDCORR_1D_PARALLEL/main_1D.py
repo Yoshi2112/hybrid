@@ -204,7 +204,7 @@ def uniform_bimaxwellian():
     return pos, vel, idx
 
 
-#@nb.njit()
+
 def initialize_particles(B, E, mp_flux):
     '''
     Initializes particle arrays. Selects which velocity/position function to
@@ -286,13 +286,13 @@ def initialize_fields():
         Ve     -- Electron fluid velocity moment: Calculated as part of E-field update equation
         Te     -- Electron temperature          : Calculated as part of E-field update equation          
     '''
-    B       = np.zeros((NC + 1, 3), dtype=nb.float64)
-    B_cent  = np.zeros((NC    , 3), dtype=nb.float64)
-    E_int   = np.zeros((NC    , 3), dtype=nb.float64)
-    E_half  = np.zeros((NC    , 3), dtype=nb.float64)
+    B       = np.zeros((NC + 1, 3), dtype=np.float64)
+    B_cent  = np.zeros((NC    , 3), dtype=np.float64)
+    E_int   = np.zeros((NC    , 3), dtype=np.float64)
+    E_half  = np.zeros((NC    , 3), dtype=np.float64)
     
-    Ve      = np.zeros((NC, 3), dtype=nb.float64)
-    Te      = np.ones(  NC,     dtype=nb.float64) * Te0_scalar
+    Ve      = np.zeros((NC, 3), dtype=np.float64)
+    Te      = np.ones(  NC,     dtype=np.float64) * Te0_scalar
     return B, B_cent, E_int, E_half, Ve, Te
 
 
@@ -311,9 +311,9 @@ def initialize_source_arrays():
         ni      -- Ion number density per species
         nu      -- Ion velocity "density" per species
     '''
-    q_dens  = np.zeros( NC,         dtype=nb.float64)    
-    q_dens2 = np.zeros( NC,         dtype=nb.float64) 
-    Ji      = np.zeros((NC, 3),     dtype=nb.float64)
+    q_dens  = np.zeros( NC,         dtype=np.float64)    
+    q_dens2 = np.zeros( NC,         dtype=np.float64) 
+    Ji      = np.zeros((NC, 3),     dtype=np.float64)
     return q_dens, q_dens2, Ji
 
 
@@ -335,13 +335,13 @@ def initialize_tertiary_arrays():
         mp_flux       -- Tracking variable designed to accrue the flux at each timestep (in terms of macroparticles
                              at each boundary and for each species) and trigger an injection if >= 2.
     '''
-    temp3Db       = np.zeros((NC + 1, 3),  dtype=nb.float64)
-    temp3De       = np.zeros((NC    , 3),  dtype=nb.float64)
-    temp1D        = np.zeros( NC    ,      dtype=nb.float64) 
-    old_fields    = np.zeros((NC + 1, 10), dtype=nb.float64)
+    temp3Db       = np.zeros((NC + 1, 3),  dtype=np.float64)
+    temp3De       = np.zeros((NC    , 3),  dtype=np.float64)
+    temp1D        = np.zeros( NC    ,      dtype=np.float64) 
+    old_fields    = np.zeros((NC + 1, 10), dtype=np.float64)
  
-    old_particles = np.zeros((13, N),      dtype=nb.float64)
-    mp_flux       = np.zeros((2 , Nj),     dtype=nb.float64)
+    old_particles = np.zeros((13, N),      dtype=np.float64)
+    mp_flux       = np.zeros((2 , Nj),     dtype=np.float64)
         
     return old_particles, old_fields, temp3De, temp3Db, temp1D, mp_flux
 
@@ -394,7 +394,7 @@ def set_timestep(vel):
     return DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array
 
 
-#@nb.njit()
+@nb.njit()
 def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
                           mp_flux, frev=1000, hot_only=True, psave=True, save_inc=50):
     '''
@@ -801,7 +801,7 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, mp_flux, vel_only=Fal
     return
 
 
-@nb.njit()
+@nb.njit(parallel=do_parallel)
 def reinit_count_flux(pos, idx, mp_flux):
     '''
     Simple function to work out where to reinitialize particles (species/side)
@@ -812,7 +812,7 @@ def reinit_count_flux(pos, idx, mp_flux):
     especially since its only an evaluation for every particle, and then a few
     more operations for a miniscule portion of those particles.
     '''
-    for ii in range(idx.shape[0]):
+    for ii in nb.prange(idx.shape[0]):
         if idx[ii] < 0:
             sp = idx[ii]+128
             if pos[ii] > xmax:
@@ -1096,12 +1096,8 @@ def deposit_moments_to_grid_parallel(vel, Ie, W_elec, idx, ni, nu):
     ni_threads = np.zeros((NC, Nj,    n_threads), dtype=np.float64)
     nu_threads = np.zeros((NC, Nj, 3, n_threads), dtype=np.float64)
     
-    # Number of particles per thread
-    N_per_thread = vel.shape[1] / n_threads     
-    n_start_idxs = np.arange(n_threads)*N_per_thread
-    
     for tt in nb.prange(n_threads):        
-        for ii in range(n_start_idxs[tt], n_start_idxs[tt]+N_per_thread):
+        for ii in range(n_start_idxs[tt], n_start_idxs[tt]+N_per_thread[tt]):
             if idx[ii] >= 0:
                 for kk in nb.prange(3):
                     nu_threads[Ie[ii],     idx[ii], kk, tt] += W_elec[0, ii] * vel[kk, ii]
@@ -1587,6 +1583,32 @@ def calculate_E(B, B_center, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P, E_
 #     return
 # =============================================================================
 
+def get_thread_values():
+    '''
+    Function to calculate number of particles to work on each thread, and the
+    start index of each batch of particles.
+    '''
+    N_per_thread = (N//n_threads)*np.ones(n_threads, dtype=int)
+    if N%n_threads == 0:
+        n_start_idxs = np.arange(n_threads)*N_per_thread
+    else:
+        leftovers = N%n_threads
+        for _lo in range(leftovers):
+            N_per_thread[_lo] += 1
+        n_start_idxs = np.asarray([np.sum(N_per_thread[0:_si]) for _si in range(0, n_threads)])
+        
+    # Check values (this is important)
+    if N_per_thread.sum() != N:
+        raise ValueError('Number of particles per thread unequal to total number of particles')
+        
+    for _ii in range(1, n_start_idxs.shape[0] + 1):
+        if _ii == n_start_idxs.shape[0]:
+            n_in_thread = N - n_start_idxs[-1]
+        else:
+            n_in_thread = n_start_idxs[_ii] - n_start_idxs[_ii - 1]
+        if n_in_thread != N_per_thread[_ii - 1]:
+            raise ValueError('Thread particle indices are not correct. Check this.')
+    return N_per_thread, n_start_idxs
 
 @nb.njit(parallel=do_parallel)
 def get_max_vx(vel):
@@ -1595,8 +1617,8 @@ def get_max_vx(vel):
 
 @nb.njit()
 def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center,\
-                     qq, DT, max_inc, part_save_iter, field_save_iter, idx,
-                     damping_array, mp_flux):
+                     qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter,
+                     idx, damping_array, mp_flux):
     '''
     Evaluates all the things that could cause a violation of the timestep:
         - Magnetic field dispersion (switchable in param file since this can be tiny)
@@ -1643,11 +1665,12 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center,\
         qq         *= 2
         
         field_save_iter *= 2
-        part_save_iter *= 2
+        part_save_iter  *= 2
+        loop_save_iter  *= 2
 
         parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*DT, mp_flux, vel_only=True)   # De-sync vel/pos 
         print('Timestep halved. Syncing particle velocity...')
-    return qq, DT, max_inc, part_save_iter, field_save_iter, damping_array
+    return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, damping_array
 
 
 ### ##
@@ -1811,7 +1834,7 @@ def add_runtime_to_header(runtime, loop_time):
     params = pickle.load(f)                                             # Load variables from header file into dict
     f.close()  
     
-    params['run_time'] = runtime
+    params['run_time']  = runtime
     params['loop_time'] = loop_time
     
     # Re-save
@@ -2015,17 +2038,18 @@ def restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particl
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
               B, B_cent, E_int, E_half, q_dens, q_dens_adv, Ji, mp_flux,               \
               Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,\
-              B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter, field_save_iter):
+              B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter,
+              field_save_iter, loop_save_iter):
     '''
     Main loop separated from __main__ function, since this is the actual computation bit.
     '''
     # Check timestep (Maybe only check every few. Set in main body)
     #check_start = timer()
     if adaptive_timestep == True and qq%1 == 0 and disable_waves == 0:
-        qq, DT, max_inc, part_save_iter, field_save_iter, damping_array \
+        qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, damping_array \
         = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, B_cent,
-                         qq, DT, max_inc, part_save_iter, field_save_iter, idx,
-                         mp_flux, B_damping_array)
+                         qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter,
+                         idx, mp_flux, B_damping_array)
     #check_time = round(timer() - check_start, 2)
     
     
@@ -2121,7 +2145,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
 #         print('FINAL {} time: {}s'.format(qq, final_time))
 # =============================================================================
         
-    return qq, DT, max_inc, part_save_iter, field_save_iter
+    return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter
 
 
 
@@ -2430,6 +2454,10 @@ if do_parallel:
 else:
     n_threads = 1
     do_parallel = True
+N_per_thread, n_start_idxs = get_thread_values()
+
+
+
 ##############################
 ### INPUT TESTS AND CHECKS ###
 ##############################
@@ -2504,6 +2532,7 @@ if __name__ == '__main__':
 
     loop_times = np.zeros(max_inc-1, dtype=float)
     loop_save_iter = 1
+    
     # Retard velocity
     print('Retarding velocity...')
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT, mp_flux, vel_only=True)
@@ -2518,11 +2547,12 @@ if __name__ == '__main__':
         #diagnostic_field_plot(B, E_half, q_dens, Ji, Ve, Te, B_damping_array, qq, DT, sim_time)
         
         loop_start = timer()
-        qq, DT, max_inc, part_save_iter, field_save_iter =                                \
+        qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter =                                \
         main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                                   \
               B, B_cent, E_int, E_half, q_dens, q_dens_adv, Ji, mp_flux,                          \
               Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,           \
-              B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter, field_save_iter)
+              B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter,
+              field_save_iter, loop_save_iter)
             
         if qq%part_save_iter == 0 and save_particles == 1:
             save_particle_data(sim_time, DT, part_save_iter, qq, pos,
@@ -2542,20 +2572,15 @@ if __name__ == '__main__':
             
             print('Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(qq, max_inc, hrs, mins, sec))
         
-        if qq == 1:
+        if qq%loop_save_iter == 0:
             print('First loop complete.')
             
-# =============================================================================
-#             # Fix by introducing a 'loop_save_iter' variable to account for timestep changes
-#             loop_time = round(timer() - loop_start, 2)
-#             try:
-#                 loop_times[qq-1] = loop_time
-#             except:
-#                 pass
-#             
-#             if print_timings == True:
-#                 print('Loop {}  time: {}s\n'.format(qq, loop_time))
-# =============================================================================
+            loop_time = round(timer() - loop_start, 4)
+            loop_idx  = qq // loop_save_iter
+            loop_times[loop_idx-1] = loop_time
+
+            if print_timings == True:
+                print('Loop {}  time: {}s\n'.format(qq, loop_time))
         
         qq       += 1
         sim_time += DT
@@ -2568,4 +2593,4 @@ if __name__ == '__main__':
         with open(fin_path, 'w') as open_file:
             pass
     print("Time to execute program: {0:.2f} seconds".format(runtime))
-    print('Average loop time: {0:.2f} seconds'.format(loop_times[1:].mean()))
+    print('Average loop time: {0:.4f} seconds'.format(loop_times[1:].mean()))
