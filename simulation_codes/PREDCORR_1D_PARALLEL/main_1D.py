@@ -20,13 +20,15 @@ RE     = 6.371e6                            # Earth radius in metres
 B_surf = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
+Fu_override       = True       # Override to allow density to be calculated as a ratio of frequencies
 adaptive_timestep = True       # Disable adaptive timestep to keep it the same as initial
-print_runtime     = True       # Flag to print runtime every 50 iterations 
+print_runtime     = False      # Flag to print runtime every 50 iterations 
 do_parallel       = True       # Flag to use available threads to parallelize particle functions
-print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
-nb.set_num_threads(7)          # Uncomment to manually set number of threads, otherwise will use all available
+print_timings     = True       # Diagnostic outputs timing each major segment (for efficiency examination)
 
-Fu_override = True              # Override to allow density to be calculated as a ratio of frequencies
+if not do_parallel:
+    nb.set_num_threads(1)          
+#nb.set_num_threads(1)         # Uncomment to manually set number of threads, otherwise will use all available
 
 ### ##
 #%% INITIALIZATION
@@ -488,7 +490,7 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     '''
     #parmov_start = timer()
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, mp_flux, vel_only=False)
-    #parmov_time = round(timer() - parmov_start, 2)
+    #parmov_time = round(timer() - parmov_start, 3)
     
     # Particle injector goes here
     if particle_open == 1 or particle_reinit == 1:
@@ -505,15 +507,15 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     #weight_start = timer()
     assign_weighting_TSC(pos, Ie, W_elec)
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
-    #weight_time = round(timer() - weight_start, 2)
+    #weight_time = round(timer() - weight_start, 3)
     
     #moment_start = timer()
     collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji)
-    #moment_time = round(timer() - moment_start, 2)
+    #moment_time = round(timer() - moment_start, 3)
     
 # =============================================================================
 #     if print_timings == True:
-#         print('PMOVE {} time: {}s'.format(qq, parmov_time))
+#         print('\nPMOVE {} time: {}s'.format(qq, parmov_time))
 #         print('WEGHT {} time: {}s'.format(qq, weight_time))
 #         print('MOMNT {} time: {}s'.format(qq, moment_time))
 # =============================================================================
@@ -1066,6 +1068,56 @@ def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
     return
 
 
+@nb.njit(parallel=True)
+def deposit_moments_to_grid_parallel(vel, Ie, W_elec, idx, ni, nu):
+    '''
+    Collect number and velocity moments in each cell, weighted by their distance
+    from cell nodes.
+
+    INPUT:
+        vel    -- Particle 3-velocities
+        Ie     -- Particle leftmost to nearest E-node
+        W_elec -- Particle TSC weighting across nearest, left, and right nodes
+        idx    -- Particle species identifier
+
+    OUTPUT:
+        ni     -- Species number moment array(size, Nj)
+        nui    -- Species velocity moment array (size, Nj)
+        
+    TODO:
+        -- Initialize thread arrays at runtime (preallocate memory)
+        -- Calculate N_per_thread and n_start_idxs at runtime
+        -- Check if this works for non-multiples of the thread count
+           i.e. N_per_thread may need to be an array with particle counts since
+           we can't assume that it is constant for each thread.
+    '''
+    # Each thread needs a copy of nu, ni
+    # This would be the code run on each thread for some subset of vel.shape[1]
+    ni_threads = np.zeros((NC, Nj,    n_threads), dtype=np.float64)
+    nu_threads = np.zeros((NC, Nj, 3, n_threads), dtype=np.float64)
+    
+    # Number of particles per thread
+    N_per_thread = vel.shape[1] / n_threads     
+    n_start_idxs = np.arange(n_threads)*N_per_thread
+    
+    for tt in nb.prange(n_threads):        
+        for ii in range(n_start_idxs[tt], n_start_idxs[tt]+N_per_thread):
+            if idx[ii] >= 0:
+                for kk in nb.prange(3):
+                    nu_threads[Ie[ii],     idx[ii], kk, tt] += W_elec[0, ii] * vel[kk, ii]
+                    nu_threads[Ie[ii] + 1, idx[ii], kk, tt] += W_elec[1, ii] * vel[kk, ii]
+                    nu_threads[Ie[ii] + 2, idx[ii], kk, tt] += W_elec[2, ii] * vel[kk, ii]
+                
+                ni_threads[Ie[ii],     idx[ii], tt] += W_elec[0, ii]
+                ni_threads[Ie[ii] + 1, idx[ii], tt] += W_elec[1, ii]
+                ni_threads[Ie[ii] + 2, idx[ii], tt] += W_elec[2, ii]
+                
+    # Sum across threads
+    ni[:, :]    = ni_threads.sum(axis=2)
+    nu[:, :, :] = nu_threads.sum(axis=3)
+    return
+
+
 @nb.njit()
 def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji):
     '''
@@ -1089,13 +1141,21 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji):
     Source terms in damping region set to be equal to last valid cell value. 
     Smoothing routines deleted (can be found in earlier versions) since TSC 
     weighting effectively also performs smoothing.
+    
+    Especially for the parallel version, might be again more efficient to initialize
+    ni, nu at runtime, instead of dynamic creation.
     '''
     q_dens *= 0.
     Ji     *= 0.
-    ni      = np.zeros((NC, Nj),    dtype=np.float64)
-    nu      = np.zeros((NC, Nj, 3), dtype=np.float64)
     
-    deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu)
+    ni = np.zeros((NC, Nj),    dtype=np.float64)
+    nu = np.zeros((NC, Nj, 3), dtype=np.float64)
+        
+    # Parallel moment/histogram collection or not
+    if False:
+        deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu)
+    else:
+        deposit_moments_to_grid_parallel(vel, Ie, W_elec, idx, ni, nu)
 
     # Sum contributions across species
     for jj in range(Nj):
@@ -2364,12 +2424,19 @@ ro1 = ND + NX; ro2 = ND + NX + 1        # Right outer
 li1 = ND         ; li2 = ND + 1         # Left inner
 ri1 = ND + NX - 1; ri2 = ND + NX - 2    # Right inner
 
+# Count available threads
+if do_parallel:
+    n_threads = nb.get_num_threads()
+else:
+    n_threads = 1
+    do_parallel = True
 ##############################
 ### INPUT TESTS AND CHECKS ###
 ##############################
 print('Run Started')
 print('Run Series         : {}'.format(save_path.split('//')[-1]))
 print('Run Number         : {}'.format(run))
+print('# threads used     : {}'.format(n_threads))
 print('Field save flag    : {}'.format(save_fields))
 print('Particle save flag : {}\n'.format(save_particles))
 
@@ -2435,20 +2502,20 @@ if __name__ == '__main__':
         save_field_data(0, DT, field_save_iter, 0, Ji, E_int,\
                              B, Ve, Te, q_dens, B_damping_array, E_damping_array)
 
+    loop_times = np.zeros(max_inc-1, dtype=float)
+    loop_save_iter = 1
     # Retard velocity
     print('Retarding velocity...')
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT, mp_flux, vel_only=True)
     
-    qq       = 1;    sim_time = DT; loop_times = np.zeros(max_inc-1, dtype=float)
+    qq       = 1;    sim_time = DT; 
     print('Starting main loop...')
     #part_save_iter = 1; field_save_iter = 1
     while qq < max_inc:
         
         ### DIAGNOSTICS :: MAYBE PUT UNDER A FLAG AT SOME POINT
-# =============================================================================
-#             diagnostic_field_plot(B, E_half, q_dens, Ji, Ve, Te, 
-#                               B_damping_array, qq, DT, sim_time)
-# =============================================================================
+        #dump_to_file(pos, vel, E_int, Ve, Te, B, Ji, q_dens, qq, folder='serial', print_particles=False)
+        #diagnostic_field_plot(B, E_half, q_dens, Ji, Ve, Te, B_damping_array, qq, DT, sim_time)
         
         loop_start = timer()
         qq, DT, max_inc, part_save_iter, field_save_iter =                                \
