@@ -501,19 +501,16 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     '''
     Helper function to group the particle advance and moment collection functions
     '''
-    print('N_spare before anything:', (idx < 0).sum())
     #parmov_start = timer()
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, _mp_flux, vel_only=False)
     #parmov_time = round(timer() - parmov_start, 3)
-    print('N_spare after PARMOV:', (idx < 0).sum())
+
     # Particle injector goes here
     if particle_open == 1 or particle_reinit == 1:
         #inject_start = timer()
-        
         if particle_reinit == 1:
             reinit_count_flux(pos, idx, _mp_flux)
         inject_particles(pos, vel, idx, _mp_flux, DT)
-        print('N_spare after INJECT:', (idx < 0).sum())
         #inject_time = round(timer() - inject_start, 2)
         #if print_timings == True:
         #    print('INJCT {} time: {}s'.format(qq, inject_time))
@@ -521,12 +518,10 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     #weight_start = timer()
     assign_weighting_TSC(pos, Ie, W_elec)
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
-    print('N_spare after WEIGHT:', (idx < 0).sum())
     #weight_time = round(timer() - weight_start, 3)
     
     #moment_start = timer()
     collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji)
-    print('N_spare after MOMENTS:', (idx < 0).sum())
     #moment_time = round(timer() - moment_start, 3)
     
 # =============================================================================
