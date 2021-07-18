@@ -205,7 +205,7 @@ def uniform_bimaxwellian():
 
 
 
-def initialize_particles(B, E, _mp_flux):
+def initialize_particles(B, E, mp_flux):
     '''
     Initializes particle arrays. Selects which velocity/position function to
     use for intialization, runs equilibrium loop if required, and calculates
@@ -235,7 +235,7 @@ def initialize_particles(B, E, _mp_flux):
     
     if homogenous == False:
         run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
-                          _mp_flux, hot_only=True, psave=True)
+                          mp_flux, hot_only=True, psave=True)
     
     assign_weighting_TSC(pos, Ie, W_elec)
     assign_weighting_TSC(pos, Ib, W_mag)
@@ -396,7 +396,7 @@ def set_timestep(vel):
 
 
 def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
-                          _mp_flux, frev=1000, hot_only=True, psave=True, save_inc=50):
+                          mp_flux, frev=1000, hot_only=True, psave=True, save_inc=50):
     '''
     Still need to test this. Put it just after the initialization of the particles.
     Actually might want to use the real mp_flux since that'll continue once the
@@ -423,8 +423,6 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
     To do: Put check in store_run_params() to delete if it already exists so
     this particle data doesn't alter it.
     '''
-    psave = save_particles
-    
     print('Letting particle distribution relax into static field configuration')
     max_vx   = np.max(np.abs(vel[0, :]))
     ion_ts   = orbit_res * 2 * np.pi / gyfreq_xmax
@@ -451,9 +449,9 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
         pnum = 0
         
     # Desync (retard) velocity here
-    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*pdt, _mp_flux, vel_only=True, hot_only=hot_only)
+    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*pdt, mp_flux, vel_only=True, hot_only=hot_only)
     for pp in range(psteps):
-        print(_mp_flux)
+        
         # Save first and last only
         if psave == True and (pp == 0 or pp == psteps - 1):
             p_fullpath = pdata_path + 'data%05d' % pnum
@@ -465,26 +463,15 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
             print('Step', pp)
         
         for jj in range(Nj):
-            parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, pdt, _mp_flux, hot_only=hot_only)
+            parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, pdt, mp_flux, hot_only=hot_only)
             
             if hot_only == False or temp_type[jj] == 1:
                 if particle_open == True:
-                    inject_particles_1sp(pos, vel, idx, _mp_flux, pdt, jj)
-
-        # Check number of spare particles every 25 steps
-        if pp%100 == 0 and particle_open == 1:
-            num_spare = (idx < 0).sum()
-            if num_spare < nsp_ppc.sum():
-                print('WARNING :: Less than one cell of spare particles remaining.')
-                if num_spare < inject_rate.sum() * DT * 5.0:
-                    # Change this to dynamically expand particle arrays later on (adding more particles)
-                    # Can do it by cell lots (i.e. add a cell's worth each time)
-                    raise Exception('WARNING :: No spare particles remaining. Exiting simulation.')
-                
+                    inject_particles_1sp(pos, vel, idx, mp_flux, pdt, jj)
         psim_time += pdt
     
     # Resync (advance) velocity here
-    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, 0.5*pdt, _mp_flux, vel_only=True, hot_only=hot_only)
+    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, 0.5*pdt, mp_flux, vel_only=True, hot_only=hot_only)
     
     # Dump indicator file
     if save_fields == 1 or save_particles == 1:
@@ -497,23 +484,22 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
 #%% PARTICLES
 ### ##
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
-                                  B, E, DT, q_dens_adv, Ji, _mp_flux, pc=0):
+                                  B, E, DT, q_dens_adv, Ji, mp_flux, pc=0):
     '''
     Helper function to group the particle advance and moment collection functions
     '''
-    print('N_spare before anything:', (idx < 0).sum())
     #parmov_start = timer()
-    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, _mp_flux, vel_only=False)
+    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, mp_flux, vel_only=False)
     #parmov_time = round(timer() - parmov_start, 3)
-    print('N_spare after PARMOV:', (idx < 0).sum())
+    
     # Particle injector goes here
     if particle_open == 1 or particle_reinit == 1:
         #inject_start = timer()
         
         if particle_reinit == 1:
-            reinit_count_flux(pos, idx, _mp_flux)
-        inject_particles(pos, vel, idx, _mp_flux, DT)
-        print('N_spare after INJECT:', (idx < 0).sum())
+            reinit_count_flux(pos, idx, mp_flux)
+        inject_particles(pos, vel, idx, mp_flux, DT)
+        
         #inject_time = round(timer() - inject_start, 2)
         #if print_timings == True:
         #    print('INJCT {} time: {}s'.format(qq, inject_time))
@@ -521,12 +507,10 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     #weight_start = timer()
     assign_weighting_TSC(pos, Ie, W_elec)
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
-    print('N_spare after WEIGHT:', (idx < 0).sum())
     #weight_time = round(timer() - weight_start, 3)
     
     #moment_start = timer()
     collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji)
-    print('N_spare after MOMENTS:', (idx < 0).sum())
     #moment_time = round(timer() - moment_start, 3)
     
 # =============================================================================
@@ -818,7 +802,7 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, mp_flux, vel_only=Fal
 
 
 @nb.njit(parallel=do_parallel)
-def reinit_count_flux(pos, idx, _mp_flux):
+def reinit_count_flux(pos, idx, mp_flux):
     '''
     Simple function to work out where to reinitialize particles (species/side)
     Coded for serial computation since numba can't do parallel reductions with
@@ -832,9 +816,9 @@ def reinit_count_flux(pos, idx, _mp_flux):
         if idx[ii] < 0:
             sp = idx[ii]+128
             if pos[ii] > xmax:
-                _mp_flux[1, sp] += 1.0
+                mp_flux[1, sp] += 1.0
             elif pos[ii] < xmin:
-                _mp_flux[0, sp] += 1.0 
+                mp_flux[0, sp] += 1.0 
     return
 
 
@@ -850,7 +834,7 @@ def inject_particles_all_species(pos, vel, idx, _mp_flux, dt):
     return
 
 
-#@nb.njit()
+@nb.njit()
 def inject_particles_1sp(pos, vel, idx, _mp_flux, dt, jj):        
     '''
     How to create new particles in parallel? Just test serial for now, but this
@@ -877,9 +861,9 @@ def inject_particles_1sp(pos, vel, idx, _mp_flux, dt, jj):
     acc = 0; n_created = 0
     for ii in nb.prange(2):
         if quiet_start == 1:
-            N_inject = int(_mp_flux[ii, jj] // 2)
+            N_inject = int(mp_flux[ii, jj] // 2)
         else:
-            N_inject = int(_mp_flux[ii, jj])
+            N_inject = int(mp_flux[ii, jj])
         
         for xx in nb.prange(N_inject):
             
@@ -954,18 +938,17 @@ def inject_particles(pos, vel, idx, _mp_flux, DT):
     if particle_open == 1:
         for kk in range(2):
             _mp_flux[kk, :] += inject_rate*DT
-
-    
+        
     # acc used only as placeholder to mark place in array. How to do efficiently? 
     acc = 0; n_created = 0
     for ii in nb.prange(2):
         for jj in nb.prange(Nj):
-        
+            
             if quiet_start == 1:
                 N_inject = int(_mp_flux[ii, jj] // 2)
             else:
                 N_inject = int(_mp_flux[ii, jj])
-
+            
             for xx in nb.prange(N_inject):
                 
                 # Find two empty particles (Yes clumsy coding but it works)
@@ -2142,15 +2125,13 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
         #final_time = round(timer() - final_start, 2)
         
     # Check number of spare particles every 25 steps
-    if qq%1 == 0 and particle_open == 1:
+    if qq%25 == 0 and particle_open == 1:
         num_spare = (idx < 0).sum()
         if num_spare < nsp_ppc.sum():
             print('WARNING :: Less than one cell of spare particles remaining.')
             if num_spare < inject_rate.sum() * DT * 5.0:
                 # Change this to dynamically expand particle arrays later on (adding more particles)
                 # Can do it by cell lots (i.e. add a cell's worth each time)
-                print('num_spare = ', num_spare)
-                print('inject_rate = ', inject_rate.sum() * DT * 5.0)
                 raise Exception('WARNING :: No spare particles remaining. Exiting simulation.')
         
 # =============================================================================
@@ -2166,6 +2147,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
 #         print('RSTRE {} time: {}s'.format(qq, restore_time))
 #         print('FINAL {} time: {}s'.format(qq, final_time))
 # =============================================================================
+        
     return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter
 
 
@@ -2558,7 +2540,7 @@ if __name__ == '__main__':
     print('Retarding velocity...')
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT, mp_flux, vel_only=True)
     
-    qq       = 1;    sim_time = DT
+    qq       = 1;    sim_time = DT; 
     print('Starting main loop...')
     #part_save_iter = 1; field_save_iter = 1
     while qq < max_inc:
@@ -2566,6 +2548,7 @@ if __name__ == '__main__':
         ### DIAGNOSTICS :: MAYBE PUT UNDER A FLAG AT SOME POINT
         #dump_to_file(pos, vel, E_int, Ve, Te, B, Ji, q_dens, qq, folder='serial', print_particles=False)
         #diagnostic_field_plot(B, E_half, q_dens, Ji, Ve, Te, B_damping_array, qq, DT, sim_time)
+        
         loop_start = timer()
         qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter =                                \
         main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                                   \
