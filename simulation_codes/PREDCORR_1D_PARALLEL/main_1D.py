@@ -22,9 +22,9 @@ B_surf = 3.12e-5                            # Magnetic field strength at Earth s
 # A few internal flags
 Fu_override       = True       # Override to allow density to be calculated as a ratio of frequencies
 adaptive_timestep = True       # Disable adaptive timestep to keep it the same as initial
-print_runtime     = False      # Flag to print runtime every 50 iterations 
 do_parallel       = True       # Flag to use available threads to parallelize particle functions
-print_timings     = True       # Diagnostic outputs timing each major segment (for efficiency examination)
+print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
+print_runtime     = True       # Flag to print runtime every 50 iterations 
 
 if not do_parallel:
     nb.set_num_threads(1)          
@@ -1797,7 +1797,8 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                      anisotropy  = anisotropy,
                      Bc          = Bc,
                      Te0         = None)
-    print('Particle data saved')
+
+    print('Particle parameters saved')
     return
 
 
@@ -1811,7 +1812,8 @@ def save_field_data(sim_time, dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, da
                        dns = dns,      Ve = Ve[:, 0:3], Te = Te,
                        sim_time = sim_time,
                        damping_array = damping_array, E_damping_array=E_damping_array)
-    print('Field data saved')
+    if print_runtime == True:
+        print('Field data saved')
     return
     
     
@@ -1822,7 +1824,8 @@ def save_particle_data(sim_time, dt, part_save_iter, qq, pos, vel, idx):
     d_fullpath = d_path + 'data%05d' % r
     
     np.savez(d_fullpath, pos = pos, vel = vel, idx=idx, sim_time = sim_time)
-    print('Particle data saved')
+    if print_runtime == True:
+        print('Particle data saved')
     return
     
     
@@ -2573,8 +2576,6 @@ if __name__ == '__main__':
             print('Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(qq, max_inc, hrs, mins, sec))
         
         if qq%loop_save_iter == 0:
-            print('First loop complete.')
-            
             loop_time = round(timer() - loop_start, 4)
             loop_idx  = qq // loop_save_iter
             loop_times[loop_idx-1] = loop_time
@@ -2582,6 +2583,8 @@ if __name__ == '__main__':
             if print_timings == True:
                 print('Loop {}  time: {}s\n'.format(qq, loop_time))
         
+        if qq == 1:
+            print('First loop complete.')
         qq       += 1
         sim_time += DT
 

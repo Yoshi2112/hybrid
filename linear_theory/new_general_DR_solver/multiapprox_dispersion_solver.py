@@ -521,7 +521,7 @@ def get_cold_growth_rates(wr, k, Species):
 
 
 def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out=True,
-                            print_filtered=True, return_vg=False, force_3soln=True):
+                            print_filtered=True, return_vg=False, force_3soln=False):
     '''
     Given a range of k, returns the real and imaginary parts of the plasma dispersion
     relation specified by the Species present.

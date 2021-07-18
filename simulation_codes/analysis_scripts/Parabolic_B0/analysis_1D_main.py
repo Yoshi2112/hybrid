@@ -4333,12 +4333,12 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//shoji_cold_H_alfven//']:
+    for series in ['//Fu_open_BCs_variable_L//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
             runs_to_do = [2]
@@ -4348,7 +4348,7 @@ if __name__ == '__main__':
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
-                cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
+                cf.load_run(drive, series, run_num, extract_arrays=False, overwrite_summary=True)
 
                 #plot_total_density_with_time()
                 #plot_max_velocity()
@@ -4363,8 +4363,10 @@ if __name__ == '__main__':
                 
                 #plot_kt(component='By', saveas='kt_plot_norm', save=True, normalize_x=True, xlim=1.0)
                 
-                for _nx in range(cf.ND, cf.NX+cf.NX+1):
-                    SWSP_dynamic_spectra(nx=_nx, overlap=0.95, f_res=50)
+# =============================================================================
+#                 for _nx in range(cf.ND, cf.NX+cf.NX+1):
+#                     SWSP_dynamic_spectra(nx=_nx, overlap=0.95, f_res=50)
+# =============================================================================
 # =============================================================================
 #                 # Find cell at x = 0, 1000km
 #                 for x_pos in [5e5, 1e6, 2e6, 3e6, 4e6]:
@@ -4376,7 +4378,9 @@ if __name__ == '__main__':
 #                     except:
 #                         print('ABORT: SWSP ERROR')
 #                         continue
-# 
+# =============================================================================
+
+# =============================================================================
 #                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
 #                            normalize=False, B0_lim=0.25, remove_ND=False)
 # =============================================================================
@@ -4384,10 +4388,12 @@ if __name__ == '__main__':
                 #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
                 
 # =============================================================================
-#                 plot_wk(saveas='wk_plot', dispersion_overlay=True, save=True,
+#                 plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
 #                      pcyc_mult=1.5, xmax=1.5, zero_cold=True,
 #                      linear_only=False, normalize_axes=True)
-# 
+# =============================================================================
+
+# =============================================================================
 #                 ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=True,
 #                                       plot_LT=True, plot_growth=True, klim=1.5)
 # =============================================================================
