@@ -453,7 +453,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
     # Desync (retard) velocity here
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*pdt, _mp_flux, vel_only=True, hot_only=hot_only)
     for pp in range(psteps):
-        print(_mp_flux)
+
         # Save first and last only
         if psave == True and (pp == 0 or pp == psteps - 1):
             p_fullpath = pdata_path + 'data%05d' % pnum
@@ -850,7 +850,7 @@ def inject_particles_all_species(pos, vel, idx, _mp_flux, dt):
     return
 
 
-#@nb.njit()
+@nb.njit()
 def inject_particles_1sp(pos, vel, idx, _mp_flux, dt, jj):        
     '''
     How to create new particles in parallel? Just test serial for now, but this
