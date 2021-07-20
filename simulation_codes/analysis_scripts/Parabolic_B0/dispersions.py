@@ -8,7 +8,7 @@ import analysis_config as cf
 import analysis_backend as bk
 import numpy as np
 import matplotlib.pyplot as plt
-import os, sys
+import os, sys, pdb
 
 data_scripts_dir = 'C://Users//Yoshi//Documents//GitHub//hybrid//linear_theory//new_general_DR_solver//'
 sys.path.append(data_scripts_dir)
@@ -270,7 +270,7 @@ def plot_fourier_mode_timeseries(it_max=None):
     return
 
 
-def get_wk(component, linear_only=True, norm_z=False):
+def get_wk(component, linear_only=True, norm_z=False, centre_only=False):
     '''
     Spatial boundaries start at index.
     linear_only is kwarg to either take Boolean type or a number specifying up to
@@ -278,6 +278,9 @@ def get_wk(component, linear_only=True, norm_z=False):
     
     norm_z normalizes the field to the background magnetic field, if the input component
     is magnetic.
+    
+    centre_only :: kwarg to only FFT the middle __ % of cells. Calculated by 
+    (1.0-centre_only)/2 indices on each side subtracted.
     '''
     ftime, arr = cf.get_array(component)
     if norm_z == True and component.upper()[0] == 'B':
@@ -303,16 +306,27 @@ def get_wk(component, linear_only=True, norm_z=False):
         diff_sec = np.abs(end_sec - ftime)
         t1       = np.where(diff_sec == diff_sec.min())[0][0]
         tf       = ftime[t1]
-        
-    if component.upper()[0] == 'B':
-        st = cf.x0B; en = cf.x1B
+    
+    if centre_only != False:
+        fraction_cut = (1.0 - centre_only) / 2.0
+        if component.upper()[0] == 'B':
+            cut = int((cf.x1B - cf.x0B)*fraction_cut)
+        else:
+            cut = int((cf.x1E - cf.x0E)*fraction_cut)
+        print(f'Cutting {cut} indices from each side')
     else:
-        st = cf.x0E; en = cf.x1E
+        cut = 0
+    
+    if component.upper()[0] == 'B':
+        st = cf.x0B + cut; en = cf.x1B - cut
+    else:
+        st = cf.x0E + cut; en = cf.x1E - cut
 
-    num_times = t1-t0
+    num_times  = t1-t0
+    num_points = en-st
 
-    df = 1. / (num_times * cf.dt_field)
-    dk = 1. / (cf.NX * cf.dx)
+    df = 1. / (num_times  * cf.dt_field)
+    dk = 1. / (num_points * cf.dx)
 
     f  = np.arange(0, 1. / (2*cf.dt_field), df)
     k  = np.arange(0, 1. / (2*cf.dx), dk) * 2*np.pi

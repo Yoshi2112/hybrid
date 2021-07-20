@@ -396,7 +396,8 @@ def plot_kt(component='By', saveas='kt_plot', save=False, normalize_x=False, xli
 
 def plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
                      pcyc_mult=None, xmax=None, zero_cold=True,
-                     linear_only=False, normalize_axes=False):
+                     linear_only=False, normalize_axes=False,
+                     centre_only=False):
     '''
     21/02/2021 rewriting this to just take the w/k of the perp/parallel fields
     and do all fields in the one call.
@@ -418,9 +419,9 @@ def plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
     for field in ['B', 'E']:
     
         # Calculate dispersion relations from model data
-        k, f, wk_para, tf = disp.get_wk(field+'x', linear_only=linear_only, norm_z=normalize_axes)
-        k, f, wky,     tf = disp.get_wk(field+'y', linear_only=linear_only, norm_z=normalize_axes)
-        k, f, wkz,     tf = disp.get_wk(field+'z', linear_only=linear_only, norm_z=normalize_axes)
+        k, f, wk_para, tf = disp.get_wk(field+'x', linear_only=linear_only, norm_z=normalize_axes, centre_only=centre_only)
+        k, f, wky,     tf = disp.get_wk(field+'y', linear_only=linear_only, norm_z=normalize_axes, centre_only=centre_only)
+        k, f, wkz,     tf = disp.get_wk(field+'z', linear_only=linear_only, norm_z=normalize_axes, centre_only=centre_only)
         
         wk_perp = wky + wkz
         
@@ -4327,13 +4328,13 @@ def plot_initial_x_vs_xp():
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'D:'
+    drive       = 'E:'
         
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//Fu_open_BCs_variable_L//']:
+    for series in ['//Fu_open_BCs//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4356,7 +4357,7 @@ if __name__ == '__main__':
                 #check_fields(save=True, ylim=False, skip=1)
 
                 #winske_summary_plots(save=True)
-                #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
+                plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
                 #winske_magnetic_density_plot()
                 #disp.plot_kt_winske()
                 #disp.plot_fourier_mode_timeseries(it_max=None)
@@ -4388,9 +4389,9 @@ if __name__ == '__main__':
                 #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
                 
 # =============================================================================
-#                 plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
+#                 plot_wk(saveas='wk_plot_middle80', dispersion_overlay=False, save=True,
 #                      pcyc_mult=1.5, xmax=1.5, zero_cold=True,
-#                      linear_only=False, normalize_axes=True)
+#                      linear_only=False, normalize_axes=True, centre_only=False)
 # =============================================================================
 
 # =============================================================================
