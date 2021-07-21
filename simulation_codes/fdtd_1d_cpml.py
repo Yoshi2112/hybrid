@@ -40,7 +40,7 @@ nzPML_2 = nzPML_1                   # RH PML
 kmax    = (nzPML_1 + nz + nzPML_2)  # tot points for PML + bulk grid, must be odd
 
 # Location of source
-src_loc = kmax/2
+src_loc = kmax//2
 
 dz      = lamb/15.0       # grid -> number of points per wavelength
 dt      = 0.8*dz/c
@@ -60,7 +60,7 @@ src_mult = 1.5
 kappa_z_max = 10.0
 ma          = 1
 m           = 3
-sig_z_max   = 0.75*(0.8*(m+1)/(etaz*dz*(mur*epsr)^0.5))    # eqn 7.67 see Fig 7.4 for 0.75 (sig_max/sig_opt)
+sig_z_max   = 0.75*(0.8*(m+1)/(etaz*dz*(mur*epsr)**0.5))    # eqn 7.67 see Fig 7.4 for 0.75 (sig_max/sig_opt)
 alpha_z_max = 0.1                                          # see Fig 7.4
 
 # Allocate arrays
@@ -104,7 +104,7 @@ ch_z_1         = np.zeros(nzPML_1-1)
 
 for kk in range(nzPML_1-1):
     sigh_z_PML_1[kk]   = sig_z_max*((nzPML_1-(kk+1)-0.5)/(nzPML_1-1.0))**m                      # eqn 7.119a
-    alphah_z_PML_1[kk] = alpha_z_max*(((kk+1)-0.5)/(nzPML_1-1.0))^ma                             # eqn 7.119c
+    alphah_z_PML_1[kk] = alpha_z_max*(((kk+1)-0.5)/(nzPML_1-1.0))**ma                             # eqn 7.119c
     kappah_z_PML_1[kk] = 1.0+(kappa_z_max-1.0)*((nzPML_1-(kk+1)-0.5)/(nzPML_1 - 1.0))**m        # eqn 7.119b
     bh_z_1[kk]         = np.exp(-(sigh_z_PML_1[kk]/kappah_z_PML_1[kk] + alphah_z_PML_1[kk])*dt/epsz)  # eqn 7.118a (mistake in book), from eqn 7.102
     denom              = kappah_z_PML_1[kk]*(sigh_z_PML_1[kk] + kappah_z_PML_1[kk]*alphah_z_PML_1[kk])
@@ -178,7 +178,7 @@ for kk in range(nzPML_1-1, kmax-nzPML_2):
 
 k2 = nzPML_2-2
 for kk in range(kmax-nzPML_2, kmax-1):
-    den_ez[kk] = 1.0/(kappae_z_PML_2(k2)*dz)
+    den_ez[kk] = 1.0/(kappae_z_PML_2[k2]*dz)
     k2         = k2 - 1
 
 # =============================================================================
