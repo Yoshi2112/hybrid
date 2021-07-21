@@ -247,24 +247,36 @@ def set_damping_array(B_damping_array, E_damping_array, DT):
     '''
     Create masking array for magnetic field damping used to apply open
     boundaries. Based on applcation by Shoji et al. (2011) and
-    Umeda et al. (2001)
+    Umeda et al. (2001).
+    
+    Equivalent to introducing a magnetic current into Faraday's law (Birdsall
+    and Langdon, 1985, Section 15-11b). Basically the same as Taflove and Hagness, 
+    equation 3.7 with Jm = sigma* x H.
+    
+    E_damping_array applied to Hall Term of E-field update as per Hu & Denton (2009)
     '''
-    r_damp   = np.sqrt(29.7 * 0.5 * va * (0.5 * DT / dx) / ND)   # Damping coefficient
+    # Fraction of simulation domain also damped (in addition to damping region)
+    frac_encroach    = 0.05
+    interior_damp    = frac_encroach*NX
+    damping_boundary = 0.5*NX - interior_damp
+    
+    # Damping coefficient
+    r_damp   = np.sqrt(29.7 * 0.5 * va * (0.5 * DT / dx) / ND)   
     r_damp  *= damping_multiplier
     
     # Do B-damping array
-    B_dist_from_mp  = np.abs(np.arange(NC + 1) - 0.5*NC)                # Distance of each B-node from midpoint
+    B_dist_from_mp  = np.abs(np.arange(NC + 1) - 0.5*NC)
     for ii in range(NC + 1):
-        if B_dist_from_mp[ii] > 0.5*NX:
-            B_damping_array[ii] = 1. - r_damp * ((B_dist_from_mp[ii] - 0.5*NX) / ND) ** 2 
+        if B_dist_from_mp[ii] > damping_boundary:
+            B_damping_array[ii] = 1. - r_damp * ((B_dist_from_mp[ii] - damping_boundary) / ND) ** 2 
         else:
             B_damping_array[ii] = 1.0
             
     # Do E-damping array
-    E_dist_from_mp  = np.abs(np.arange(NC) + 0.5 - 0.5*NC)                # Distance of each B-node from midpoint
+    E_dist_from_mp  = np.abs(np.arange(NC) + 0.5 - 0.5*NC)
     for ii in range(NC):
-        if E_dist_from_mp[ii] > 0.5*NX:
-            E_damping_array[ii] = 1. - r_damp * ((E_dist_from_mp[ii] - 0.5*NX) / ND) ** 2 
+        if E_dist_from_mp[ii] > damping_boundary:
+            E_damping_array[ii] = 1. - r_damp * ((E_dist_from_mp[ii] - damping_boundary) / ND) ** 2 
         else:
             E_damping_array[ii] = 1.0
     return
@@ -389,7 +401,24 @@ def set_timestep(vel):
     B_damping_array = np.ones(NC + 1, dtype=float)
     E_damping_array = np.ones(NC    , dtype=float)
     set_damping_array(B_damping_array, E_damping_array, DT)
-
+    
+    # DIAGNOSTIC PLOT: CHECK OUT DAMPING FACTORS
+    if False:
+        plt.ioff()
+        fig, axes = plt.subplots(2)
+        axes[0].plot(B_nodes_loc/dx, B_damping_array)
+        axes[0].set_ylabel('B damp')
+        axes[1].plot(E_nodes_loc/dx, E_damping_array)
+        axes[1].set_ylabel('E damp')
+        for ax in axes:
+            ax.set_xlim(B_nodes_loc[0]/dx, B_nodes_loc[-1]/dx)
+            ax.axvline(    0, color='k', ls=':', alpha=0.5)
+            ax.axvline( NX/2, color='k', ls=':')
+            ax.axvline(-NX/2, color='k', ls=':')
+        plt.show()
+        sys.exit()
+        
+    
     print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))
     return DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array
 
@@ -1341,9 +1370,9 @@ def get_B_cent(_B, _B_cent):
     myself and more efficient later, but need to eliminate problems!
     '''
     for jj in range(1, 3):
-        coeffs         = splrep(B_nodes, _B[:, jj])
-        _B_cent[:, jj] = splev( E_nodes, coeffs)
-    _B_cent[:, 0] = eval_B0x(E_nodes)
+        coeffs         = splrep(B_nodes_loc, _B[:, jj])
+        _B_cent[:, jj] = splev( E_nodes_loc, coeffs)
+    _B_cent[:, 0] = eval_B0x(E_nodes_loc)
     return
 
 
@@ -1727,6 +1756,9 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center,\
     timesteps.
     
     Shoji code blowing up because of Eacc_ts - what is this and does it matter?
+    
+    TODO: 
+        - Re-evaluate damping array when timestep changes
     '''
     B_magnitude = np.sqrt(B_center[ND:ND+NX+1, 0] ** 2 +
                           B_center[ND:ND+NX+1, 1] ** 2 +
@@ -1801,7 +1833,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
             os.makedirs(folder)
     
     Bc       = np.zeros((NC + 1, 3), dtype=np.float64)
-    Bc[:, 0] = B_eq * (1 + a * B_nodes**2)
+    Bc[:, 0] = B_eq * (1 + a * B_nodes_loc**2)
 
     # Single parameters
     params = dict([('seed', seed),
@@ -1986,27 +2018,27 @@ def diagnostic_field_plot(B, E_half, q_dens, Ji, Ve, Te,
     axes[0, 0].set_title('Diagnostics :: Grid Ouputs ::: {}[{}] :: {:.4f}s'.format(save_path.split('/')[2], run, round(sim_time, 4)),
                          fontsize=fontsize+4, family='monospace')
 
-    background_B = eval_B0x(E_nodes)
+    background_B = eval_B0x(E_nodes_loc)
     
-    axes[0, 0].plot(B_nodes / dx, B_damping_array, color='k', label=r'$r_D(x)$') 
-    axes[1, 0].plot(B_nodes / dx, B[:, 1]*1e9,     color='b', label=r'$B_y$') 
-    axes[2, 0].plot(B_nodes / dx, B[:, 2]*1e9,     color='g', label=r'$B_z$')
-    axes[3, 0].plot(E_nodes / dx, E_int[:, 1]*1e3, color='b', label=r'$E_y$')
-    axes[4, 0].plot(E_nodes / dx, E_int[:, 2]*1e3, color='g', label=r'$E_z$')
+    axes[0, 0].plot(B_nodes_loc / dx, B_damping_array, color='k', label=r'$r_D(x)$') 
+    axes[1, 0].plot(B_nodes_loc / dx, B[:, 1]*1e9,     color='b', label=r'$B_y$') 
+    axes[2, 0].plot(B_nodes_loc / dx, B[:, 2]*1e9,     color='g', label=r'$B_z$')
+    axes[3, 0].plot(E_nodes_loc / dx, E_int[:, 1]*1e3, color='b', label=r'$E_y$')
+    axes[4, 0].plot(E_nodes_loc / dx, E_int[:, 2]*1e3, color='g', label=r'$E_z$')
 
-    axes[0, 1].plot(E_nodes / dx, q_dens,   color='k', label=r'$n_e$')
-    axes[1, 1].plot(E_nodes / dx, Ve[:, 1], color='b', label=r'$V_{ey}$')
-    axes[2, 1].plot(E_nodes / dx, Ve[:, 2], color='g', label=r'$V_{ez}$')
-    axes[3, 1].plot(E_nodes / dx, Ji[:, 1], color='b', label=r'$J_{iy}$' )
-    axes[4, 1].plot(E_nodes / dx, Ji[:, 2], color='g', label=r'$J_{iz}$' )
+    axes[0, 1].plot(E_nodes_loc / dx, q_dens,   color='k', label=r'$n_e$')
+    axes[1, 1].plot(E_nodes_loc / dx, Ve[:, 1], color='b', label=r'$V_{ey}$')
+    axes[2, 1].plot(E_nodes_loc / dx, Ve[:, 2], color='g', label=r'$V_{ez}$')
+    axes[3, 1].plot(E_nodes_loc / dx, Ji[:, 1], color='b', label=r'$J_{iy}$' )
+    axes[4, 1].plot(E_nodes_loc / dx, Ji[:, 2], color='g', label=r'$J_{iz}$' )
     
     axes[0, 2].axhline(Te0_scalar, c='k', alpha=0.5, ls='--')
-    axes[0, 2].plot(E_nodes / dx, Te, color='r',          label=r'$T_e$')
-    axes[1, 2].plot(E_nodes / dx, Ve[:, 0], color='r',    label=r'$V_{ex}$')
-    axes[2, 2].plot(E_nodes / dx, Ji[:, 0], color='r',    label=r'$J_{ix}$' )
-    axes[3, 2].plot(E_nodes / dx, E_int[:, 0]*1e3, color='r', label=r'$E_x$')
-    axes[4, 2].plot(B_nodes / dx, B[:, 0]*1e9, color='r',     label=r'$B_{wx}$')
-    axes[4, 2].plot(E_nodes / dx, background_B, color='k', ls='--',    label=r'$B_{0x}$')
+    axes[0, 2].plot(E_nodes_loc / dx, Te, color='r',          label=r'$T_e$')
+    axes[1, 2].plot(E_nodes_loc / dx, Ve[:, 0], color='r',    label=r'$V_{ex}$')
+    axes[2, 2].plot(E_nodes_loc / dx, Ji[:, 0], color='r',    label=r'$J_{ix}$' )
+    axes[3, 2].plot(E_nodes_loc / dx, E_int[:, 0]*1e3, color='r', label=r'$E_x$')
+    axes[4, 2].plot(B_nodes_loc / dx, B[:, 0]*1e9, color='r',     label=r'$B_{wx}$')
+    axes[4, 2].plot(E_nodes_loc / dx, background_B, color='k', ls='--',    label=r'$B_{0x}$')
     
 
     axes[0, 0].set_ylabel('$r_D(x)$'     , rotation=0, labelpad=lpad, fontsize=fsize)
@@ -2032,7 +2064,7 @@ def diagnostic_field_plot(B, E_half, q_dens, Ji, Ve, Te,
     for ii in range(3):
         axes[4, ii].set_xlabel('Position (m/dx)')
         for jj in range(5):
-            axes[jj, ii].set_xlim(B_nodes[0] / dx, B_nodes[-1] / dx)
+            axes[jj, ii].set_xlim(B_nodes_loc[0] / dx, B_nodes_loc[-1] / dx)
             axes[jj, ii].axvline(-NX//2, c='k', ls=':', alpha=0.5)
             axes[jj, ii].axvline( NX//2, c='k', ls=':', alpha=0.5)
             axes[jj, ii].ticklabel_format(axis='y', useOffset=False)
@@ -2453,8 +2485,8 @@ idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)]
 ############################
 ### MAGNETIC FIELD STUFF ###
 ############################
-B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx      # B grid points position in space
-E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
+B_nodes_loc   = (np.arange(NC + 1) - NC // 2)       * dx     # B grid points position in space
+E_nodes_loc  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
 
 if homogenous == 1:
     a      = 0
