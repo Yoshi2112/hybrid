@@ -2171,7 +2171,7 @@ ri1 = ND + NX - 1; ri2 = ND + NX - 2    # Right inner
 pol_wave    = 0         # 0: No wave, 1: Single point source, 2: Multi point source
 
 # DRIVEN B PARAMS: Sine part
-driven_freq = 0.25*gyfreq / (2*np.pi)       # Driven wave frequency in Hz standard 2.2
+driven_freq = 0.25*gyfreq / (2*np.pi)      # Driven wave frequency in Hz standard 2.2
 driven_ampl = 25e-7                        # Driven wave amplitude in A/m (I think?) Standard 50e-7
 
 # Gaussian part

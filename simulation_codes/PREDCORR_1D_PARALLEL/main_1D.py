@@ -20,7 +20,7 @@ RE     = 6.371e6                            # Earth radius in metres
 B_surf = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
-Fu_override       = True       # Override to allow density to be calculated as a ratio of frequencies
+Fu_override       = False      # Override to allow density to be calculated as a ratio of frequencies
 adaptive_timestep = True       # Disable adaptive timestep to keep it the same as initial
 do_parallel       = True       # Flag to use available threads to parallelize particle functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
@@ -1260,6 +1260,71 @@ def three_point_smoothing(arr, temp):
     return
 
 
+@nb.njit()
+def add_J_ext(sim_time):
+    '''
+    Driven J designed as energy input into simulation. All parameters specified
+    in the simulation_parameters script/file
+    
+    Designed as a Gaussian pulse so that things don't freak out by rising too 
+    quickly. Just test with one source point at first
+    
+    NEED TO ADJUST SIM_TIME TO ACCOUNT FOR SUBCYCLING -- NOT YET DONE
+    PROBABLY JUST NEED TO PASS A TIME ARGUMENT AROUND THE FIELD FUNCTIONS
+    TO KEEP TRACK OF WHAT POINT IN TIME IT IS
+    '''
+    # Soft source wave (What t corresponds to this?)
+    # Should put some sort of ramp on it?
+    # Also needs to be polarised. By or Bz lagging/leading?
+    J_ext = np.zeros((NC, 3), dtype=np.float64)
+    phase = -90
+    N_eq  = ND + NX//2
+
+    gaussian = np.exp(- ((sim_time - pulse_offset)/ pulse_width) ** 2 )
+
+    # Set new field values in array as soft source
+    J_ext[N_eq, 1] = driven_ampl*gaussian*np.sin(2 * np.pi * driven_freq * sim_time)
+    J_ext[N_eq, 2] = driven_ampl*gaussian*np.sin(2 * np.pi * driven_freq * sim_time + phase * np.pi / 180.)    
+    return J_ext
+
+
+@nb.njit()
+def add_J_ext_pol(sim_time):
+    '''
+    Driven J designed as energy input into simulation. All parameters specified
+    in the simulation_parameters script/file
+    
+    Designed as a Gaussian pulse so that things don't freak out by rising too 
+    quickly. Just test with one source point at first
+    
+    Polarised with a LH mode only, uses five points with both w, k specified
+    -- Not quite sure how to code this... do you just add a time delay (td, i.e. phase)
+        to both the envelope and sin values at each point? 
+        
+    -- Source node as td=0, other nodes have td depending on distance from source, 
+        (ii*dx) and the wave phase velocity v_ph = w/k (which are both known)
+    
+    P.S. A bunch of these values could be put in the simulation_parameters script.
+    Optimize later (after testing shows that it actually works!)
+    '''
+    # Soft source wave (What t corresponds to this?)
+    # Should put some sort of ramp on it?
+    # Also needs to be polarised. By or Bz lagging/leading?
+    J_ext = np.zeros((NC, 3), dtype=np.float64)
+    phase = -np.pi / 2
+    N_eq  = ND + NX//2
+    time  = sim_time
+    v_ph  = driven_freq / driven_k
+    
+    for off in np.arange(-2, 3):
+        delay = off*dx / v_ph
+        gauss = driven_ampl * np.exp(- ((time - pulse_offset - delay)/ pulse_width) ** 2 )
+        
+        J_ext[N_eq + off, 1] += gauss * np.sin(2 * np.pi * driven_freq * (time - delay))
+        J_ext[N_eq + off, 2] += gauss * np.sin(2 * np.pi * driven_freq * (time - delay) + phase)    
+    return J_ext
+
+
 ### ##
 #%% FIELDS
 ### ##
@@ -1428,7 +1493,7 @@ def get_grad_P(qn, te, grad_P, temp):
 
 
 @nb.njit()
-def calculate_E(B, B_center, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P, E_damping_array):
+def calculate_E(B, B_center, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P, E_damping_array, sim_time):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
     and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
@@ -1454,14 +1519,22 @@ def calculate_E(B, B_center, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P, E_
     '''
     curl_B_term(B, temp3De)                                   # temp3De is now curl B term
 
-    Ve[:, 0] = (Ji[:, 0] - temp3De[:, 0]) / q_dens
-    Ve[:, 1] = (Ji[:, 1] - temp3De[:, 1]) / q_dens
-    Ve[:, 2] = (Ji[:, 2] - temp3De[:, 2]) / q_dens
+    if pol_wave == 0:
+        J_ext = np.zeros((NC, 3), dtype=np.float64)
+    elif pol_wave == 1:
+        J_ext = add_J_ext(sim_time)
+    elif pol_wave == 2:
+        J_ext = add_J_ext_pol(sim_time)
+    
+    # Calculate Ve
+    Ve[:, 0] = (Ji[:, 0] + J_ext[:, 0] - temp3De[:, 0]) / q_dens
+    Ve[:, 1] = (Ji[:, 1] + J_ext[:, 1] - temp3De[:, 1]) / q_dens
+    Ve[:, 2] = (Ji[:, 2] + J_ext[:, 2] - temp3De[:, 2]) / q_dens
 
     get_electron_temp(q_dens, Te)
-
     get_grad_P(q_dens, Te, grad_P, temp3Db[:, 0])
-               
+    
+    # Calculate Ve x B
     temp3De[:, 0] += Ve[:, 1] * B_center[:, 2]
     temp3De[:, 1] += Ve[:, 2] * B_center[:, 0]
     temp3De[:, 2] += Ve[:, 0] * B_center[:, 1]
@@ -1473,9 +1546,12 @@ def calculate_E(B, B_center, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P, E_
     if E_damping == 1 and field_periodic == 0:
         temp3De *= E_damping_array
     
+    # E = - (Ve x B) - nabla(pe)/rho_c
     E[:, 0]  = - temp3De[:, 0] - grad_P[:] / q_dens[:]
     E[:, 1]  = - temp3De[:, 1]
     E[:, 2]  = - temp3De[:, 2]
+
+    #E_out       += e_resis * (J + J_ext)
 
     # Copy periodic values
     if field_periodic == 1:
@@ -2077,13 +2153,16 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
     q_dens *= 0.5
     q_dens += 0.5 * q_dens_adv
     
-    if disable_waves == 0:    
+    if disable_waves == 0:   
+        # Current temporal position of the velocity moment (same as J_ext)
+        J_time = (qq + 0.5) * DT
+        
         # Average N, N + 1 densities (q_dens at N + 1/2)
         #field_start = timer()
         # Push B from N to N + 1/2 and calculate E(N + 1/2)
         push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
         get_B_cent(B, B_cent)
-        calculate_E(B, B_cent, Ji, q_dens, E_half, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array)
+        calculate_E(B, B_cent, Ji, q_dens, E_half, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array, J_time)
         #field_time = round(timer() - field_start, 2)
         
         ###################################
@@ -2112,10 +2191,11 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
         #correct_start = timer()
         q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
     
-        # Compute predicted fields at N + 3/2
+        # Compute predicted fields at N + 3/2, advance J_ext too
+        J_time = (qq + 1.5) * DT
         push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
         get_B_cent(B, B_cent)
-        calculate_E(B, B_cent, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array)
+        calculate_E(B, B_cent, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array, J_time)
         
         # Determine corrected fields at N + 1 
         E_int *= 0.5;    E_int += 0.5 * E_half
@@ -2472,6 +2552,28 @@ else:
     do_parallel = True
 N_per_thread, n_start_idxs = get_thread_values()
 
+###
+### DRIVEN WAVE STUFF (Load this from file eventually)
+###
+pol_wave    = 1         # 0: No wave, 1: Single point source, 2: Multi point source
+
+# DRIVEN B PARAMS: Sine part
+driven_freq = 1.0       # Driven wave frequency in Hz standard 2.2
+driven_ampl = 25e-7     # Driven wave amplitude in A/m (I think?) Standard 50e-7
+
+# Gaussian part
+pulse_offset = 5.0      # Pulse center time (s)
+pulse_width  = 1.0      # Pulse width (proportional to 2*std. 3*width decayed to 0.0123%) 
+
+species_plasfreq_sq   = (density * charge ** 2) / (mass * e0)
+species_gyrofrequency = qm_ratios * B_eq
+
+# Looks right!
+driven_rad = driven_freq * 2 * np.pi
+driven_k   = (driven_rad / c) ** 2
+driven_k  *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyrofrequency))).sum()
+driven_k   = np.sqrt(driven_k)
+
 
 
 ##############################
@@ -2537,7 +2639,7 @@ if __name__ == '__main__':
     DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array\
         = set_timestep(vel)
 
-    calculate_E(B, B_cent, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array)
+    calculate_E(B, B_cent, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array, 0)
     
     if save_particles == 1:
         save_particle_data(0, DT, part_save_iter, 0, pos, vel, idx)
@@ -2553,7 +2655,7 @@ if __name__ == '__main__':
     print('Retarding velocity...')
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT, mp_flux, vel_only=True)
     
-    qq       = 1;    sim_time = DT
+    qq       = 1;    time_sec = DT
     print('Starting main loop...')
     #part_save_iter = 1; field_save_iter = 1
     while qq < max_inc:
@@ -2570,11 +2672,11 @@ if __name__ == '__main__':
               field_save_iter, loop_save_iter)
             
         if qq%part_save_iter == 0 and save_particles == 1:
-            save_particle_data(sim_time, DT, part_save_iter, qq, pos,
+            save_particle_data(time_sec, DT, part_save_iter, qq, pos,
                                     vel, idx)
             
         if qq%field_save_iter == 0 and save_fields == 1:
-            save_field_data(sim_time, DT, field_save_iter, qq, Ji, E_int,
+            save_field_data(time_sec, DT, field_save_iter, qq, Ji, E_int,
                                  B, Ve, Te, q_dens, B_damping_array, E_damping_array)
         
         if qq%100 == 0 and print_runtime == True:            
@@ -2598,7 +2700,7 @@ if __name__ == '__main__':
         if qq == 1:
             print('First loop complete.')
         qq       += 1
-        sim_time += DT
+        time_sec += DT
 
     runtime = round(timer() - start_time,2)
     

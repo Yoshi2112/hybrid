@@ -4328,28 +4328,28 @@ def plot_initial_x_vs_xp():
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'E:'
+    drive       = 'D:'
         
     #plot_mag_energy(save=True)
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//Fu_open_BCs//']:
+    for series in ['//driven_wave_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [2]
+            runs_to_do = [0]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
-                cf.load_run(drive, series, run_num, extract_arrays=False, overwrite_summary=True)
+                cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
 
                 #plot_total_density_with_time()
                 #plot_max_velocity()
@@ -4357,7 +4357,7 @@ if __name__ == '__main__':
                 #check_fields(save=True, ylim=False, skip=1)
 
                 #winske_summary_plots(save=True)
-                plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
+                #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
                 #winske_magnetic_density_plot()
                 #disp.plot_kt_winske()
                 #disp.plot_fourier_mode_timeseries(it_max=None)
@@ -4381,10 +4381,8 @@ if __name__ == '__main__':
 #                         continue
 # =============================================================================
 
-# =============================================================================
-#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
-#                            normalize=False, B0_lim=0.25, remove_ND=False)
-# =============================================================================
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
+                           normalize=False, B0_lim=0.25, remove_ND=False)
                 
                 #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
                 
