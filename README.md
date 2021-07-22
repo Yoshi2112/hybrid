@@ -49,7 +49,8 @@ _run_params.run, containing
 - `DXM` : Cell size in multiples of the ion inertial length c/wpi. Default is 1.0, but can be smaller if higher frequency waves need to be resolved
 - `IE` : Electron treatment. 1 for adiabatic (default) or 0 for isothermal (contant Te)
 - `GYROPERIOD_RESOLUTION` : Maximum initial timestep in units of inverse gyrofrequency. Generally limited to 0.02 for Predictor-Corrector
-- `FREQUENCY_RESOLUTION` : Deprecated, but originally used as a timestep limiter on other cyclic quantities in the simulation - `PARTICLE_DUMP_FREQ` : Number of inverse gyrofrequencies between each particle dump. Smaller is better, since particles are huge files
+- `FREQUENCY_RESOLUTION` : Deprecated, but originally used as a timestep limiter on other cyclic quantities in the simulation 
+- `PARTICLE_DUMP_FREQ` : Number of inverse gyrofrequencies between each particle dump. Smaller is better, since particles are huge files
 - `FIELD_DUMP_FREQ` : Number of inverse gyrofrequencies between each field dump. Minimum of 0.5 required to resolve frequencies up to the proton gyrofrequency, 0.25 is a good default
 
 Anything under this line gets added to the run save file as a comment. Note for the particle boundary conditions that only one can be active at a time or an error is raised.
