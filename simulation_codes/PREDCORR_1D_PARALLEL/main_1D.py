@@ -254,9 +254,10 @@ def set_damping_array(B_damping_array, E_damping_array, DT):
     equation 3.7 with Jm = sigma* x H.
     
     E_damping_array applied to Hall Term of E-field update as per Hu & Denton (2009)
+     - Might need a factor to make this stronger than the B-damping
     '''
     # Fraction of simulation domain also damped (in addition to damping region)
-    frac_encroach    = 0.05
+    frac_encroach    = 0.10
     interior_damp    = frac_encroach*NX
     damping_boundary = 0.5*NX - interior_damp
     
@@ -279,6 +280,11 @@ def set_damping_array(B_damping_array, E_damping_array, DT):
             E_damping_array[ii] = 1. - r_damp * ((E_dist_from_mp[ii] - damping_boundary) / ND) ** 2 
         else:
             E_damping_array[ii] = 1.0
+            
+    for da in [B_damping_array, E_damping_array]:
+        for _ii in range(da.shape[0]):
+            if da[_ii] < 0.0:
+                da[_ii] = 0.0
     return
 
 
@@ -372,7 +378,8 @@ def set_timestep(vel):
            be initial limiting factor. This may change for inhomogenous loading
            of particles or initial fields.
            
-    To do : Actually put a Courant condition check in here
+    To do : 
+        - Actually put a Courant condition check in here
     '''
     if disable_waves == 0:
         ion_ts = dxm * orbit_res / gyfreq_xmax        # Timestep to highest resolve gyromotion
@@ -738,17 +745,15 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, mp_flux, vel_only=Fal
     OUTPUT:
         None -- vel array is mutable (I/O array)
         
-    Note: Particle boundary conditions arranged in order of probability of use.
-                          
-    TODO:
-    Actually nevermind, this would break the parallelization. Better to use the
-    injection routine since it can be boundary/species specific. Use mp_flux to 
-    count the particles leaving the boundaries, then call the injection routine
-    at the end of the loop. Thus, the only difference between true 'open/injection'
-    and 'reinit' boundary conditions is that the flux is added at a constant rate
-    and for open, but is reactive to internal conditions for reinit. Technically
-    for a high enough particle count (and low enough wave amplitude) these should
-    be identical, but they're definitely not going to be in practice.
+    Notes:
+        -- Particle boundary conditions arranged in order of probability of use.
+        -- mp_flux is used to count the particles leaving the boundaries,
+        then call the injection routine at the end of the loop. Thus, the only
+        difference between true 'open/injection' and 'reinit' boundary conditions
+        is that the flux is added at a constant rate and for open, but is reactive
+        to internal conditions for reinit. Technically for a high enough particle
+        count (and low enough wave amplitude) these should be identical,
+        but they're definitely not going to be in practice.
     '''
     for ii in nb.prange(pos.shape[0]):
         if temp_type[idx[ii]] == 1 or hot_only == False:
@@ -1886,7 +1891,8 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('E_damping', E_damping),
                    ('quiet_start', quiet_start),
                    ('num_threads', nb.get_num_threads()),
-                   ('subcycles', 1)
+                   ('subcycles', 1),
+                   ('damping_multiplier', damping_multiplier)
                    ])
 
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:
@@ -2328,9 +2334,10 @@ with open(run_input, 'r') as f:
     field_periodic    = int(f.readline().split()[1])   # Set field boundary to periodic (False: Absorbtive Boundary Conditions)
     disable_waves     = int(f.readline().split()[1])   # Zeroes electric field solution at each timestep
     source_smoothing  = int(f.readline().split()[1])   # Smooth source terms with 3-point Gaussian filter
-    E_damping         = int(f.readline().split()[1])   # Damp E in a manner similar to B for ABCs
     quiet_start       = int(f.readline().split()[1])   # Flag to use quiet start
+    E_damping         = int(f.readline().split()[1])   # Damp E in a manner similar to B for ABCs
     damping_multiplier= float(f.readline().split()[1]) # Multiplies the r-factor to increase/decrease damping rate.
+    damping_frac_in   = float(f.readline().split()[1]) # Fraction of solution domain (on each side) that includes damping
 
     NX        = int(f.readline().split()[1])           # Number of cells - doesn't include ghost/damping cells
     ND        = int(f.readline().split()[1])           # Damping region length on each side of simulation domain
@@ -2338,7 +2345,6 @@ with open(run_input, 'r') as f:
     dxm       = float(f.readline().split()[1])         # Number of ion inertial lengths per dx
     
     ie        = int(f.readline().split()[1])           # Adiabatic electrons. 0: off (constant), 1: on.
-    rc_hwidth = f.readline().split()[1]                # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
       
     orbit_res = float(f.readline().split()[1])         # Orbit resolution
     freq_res  = float(f.readline().split()[1])         # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
@@ -2432,9 +2438,6 @@ if field_periodic == 1:
 particle_open = 0
 if particle_reflect + particle_reinit + particle_periodic == 0:
     particle_open = 1
-
-if rc_hwidth == '-':
-    rc_hwidth = 0
 
 if beta_flag == 0:
     # Input energies in eV

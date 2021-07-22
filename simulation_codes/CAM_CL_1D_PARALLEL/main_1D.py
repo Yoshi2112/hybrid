@@ -1957,9 +1957,10 @@ with open(run_input, 'r') as f:
     field_periodic    = int(f.readline().split()[1])   # Set field boundary to periodic (False: Absorbtive Boundary Conditions)
     disable_waves     = int(f.readline().split()[1])   # Zeroes electric field solution at each timestep
     source_smoothing  = int(f.readline().split()[1])   # Smooth source terms with 3-point Gaussian filter
+    quiet_start       = int(f.readline().split()[1])   # Flag to use quiet start (False :: semi-quiet start)    
     E_damping         = int(f.readline().split()[1])   # Damp E in a manner similar to B for ABCs
-    quiet_start       = int(f.readline().split()[1])   # Flag to use quiet start (False :: semi-quiet start)
     damping_multiplier= float(f.readline().split()[1]) # Multiplies the r-factor to increase/decrease damping rate.
+    damping_frac_in   = float(f.readline().split()[1]) # Fraction of solution domain (on each side) that includes damping
 
     NX        = int(f.readline().split()[1])           # Number of cells - doesn't include ghost cells
     ND        = int(f.readline().split()[1])           # Damping region length: Multiple of NX (on each side of simulation domain)
@@ -1967,7 +1968,6 @@ with open(run_input, 'r') as f:
     dxm       = float(f.readline().split()[1])         # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't "resolvable" by hybrid code, anything too much more than 1 does funky things to the waveform)
     
     ie        = int(f.readline().split()[1])           # Adiabatic electrons. 0: off (constant), 1: on.
-    rc_hwidth = f.readline().split()[1]                # Ring current half-width in number of cells (2*hwidth gives total cells with RC) 
       
     orbit_res = float(f.readline().split()[1])         # Orbit resolution
     freq_res  = float(f.readline().split()[1])         # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
