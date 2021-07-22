@@ -39,15 +39,15 @@ _run_params.run, containing
 - `FIELD_PERIODIC` : Fields solve on a periodic grid with ghost cells at each end. Absorbing (open) boundaries otherwise
 - `NOWAVES_FLAG` : Disables wave solver. Useful for debugging boundary conditions or observing particle motions in the background field
 - `SOURCE_SMOOTHING_FLAG` : Applies 3-point gaussian smoothing to the source term (current and charge density) arrays. Reduces high frequency noise prevalent with low particle counts
-- `E_DAMPING_FLAG` : For open boundaries, apply damping on the Hall Term of the E-field solution, in addition to damping the B-field.
 - `QUIET_START_FLAG` : Enables the _quiet start_ which initializes particles in pairs with opposing perpendicular velocities. Reduces numerical noise in the current density array which can cause waves to grow unphysically.
+- `E_DAMPING_FLAG` : For open boundaries, apply damping on the Hall Term of the E-field solution, in addition to damping the B-field.
 - `DAMPING_MULTIPLIER_RD` : For open boundary conditions, this factor is multiplied by the Shoji/Omura damping array. Fudge factor because their parameters caused too much damping (and thus reflection)
+- `DAMPING_ENCROACH_FRAC` : Specifies how much of the solution domain includes damping on each side (as a fraction of total solution domain). Independent of ND (but changing ND might alter rD and thus total damping)
 - `NX` : Number of cells containing particles and constituting the 'real' region of the simulation (i.e. solution space)
 - `ND` : Number of damping cells on each side of the solution space, generally set as same fraction of NX (e.g. NX/2)
 - `SIM_TIME` : Maximum simulation time in multiples of the inverse gyrofrequency. Generally 1000-2000 is sufficient
 - `DXM` : Cell size in multiples of the ion inertial length c/wpi. Default is 1.0, but can be smaller if higher frequency waves need to be resolved
 - `IE` : Electron treatment. 1 for adiabatic (default) or 0 for isothermal (contant Te)
-- `RC_HWIDTH` : Deprecated
 - `GYROPERIOD_RESOLUTION` : Maximum initial timestep in units of inverse gyrofrequency. Generally limited to 0.02 for Predictor-Corrector
 - `FREQUENCY_RESOLUTION` : Deprecated, but originally used as a timestep limiter on other cyclic quantities in the simulation - `PARTICLE_DUMP_FREQ` : Number of inverse gyrofrequencies between each particle dump. Smaller is better, since particles are huge files
 - `FIELD_DUMP_FREQ` : Number of inverse gyrofrequencies between each field dump. Minimum of 0.5 required to resolve frequencies up to the proton gyrofrequency, 0.25 is a good default
