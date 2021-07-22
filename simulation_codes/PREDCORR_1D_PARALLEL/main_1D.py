@@ -542,36 +542,19 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     Also evaluates external current so that this is synchronised to when the
     ion current is collected (N + 1/2, N+ 3/2)
     '''
-    #parmov_start = timer()
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, _mp_flux, vel_only=False)
-    #parmov_time = round(timer() - parmov_start, 3)
 
     # Particle injector goes here
     if particle_open == 1 or particle_reinit == 1:
-        #inject_start = timer()
         if particle_reinit == 1:
             reinit_count_flux(pos, idx, _mp_flux)
         inject_particles(pos, vel, idx, _mp_flux, DT)
-        #inject_time = round(timer() - inject_start, 2)
-        #if print_timings == True:
-        #    print('INJCT {} time: {}s'.format(qq, inject_time))
     
-    #weight_start = timer()
     assign_weighting_TSC(pos, Ie, W_elec)
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
-    #weight_time = round(timer() - weight_start, 3)
     
-    #moment_start = timer()
     J_time = (qq + 0.5 + pc) * DT
     collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, J_ext, J_time)
-    #moment_time = round(timer() - moment_start, 3)
-    
-# =============================================================================
-#     if print_timings == True:
-#         print('\nPMOVE {} time: {}s'.format(qq, parmov_time))
-#         print('WEGHT {} time: {}s'.format(qq, weight_time))
-#         print('MOMNT {} time: {}s'.format(qq, moment_time))
-# =============================================================================
     return
 
 
@@ -2181,89 +2164,65 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
     Main loop separated from __main__ function, since this is the actual computation bit.
     '''
     # Check timestep (Maybe only check every few. Set in main body)
-    #check_start = timer()
     if adaptive_timestep == True and qq%1 == 0 and disable_waves == 0:
         qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, damping_array \
         = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, B_cent,
                          qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter,
-                         idx, mp_flux, B_damping_array)
-    #check_time = round(timer() - check_start, 2)
-    
+                         idx, mp_flux, B_damping_array)    
     
     # Move particles, collect moments, deal with particle boundaries
-    #part1_start = timer()
     # Current temporal position of the velocity moment (same as J_ext)
     advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                   B, E_int, DT, q_dens_adv, Ji, J_ext, Ve,
                                   mp_flux, qq, pc=0)
-    #part1_time = round(timer() - part1_start, 2)
     
+    # Average N, N + 1 densities (q_dens at N + 1/2)
     q_dens *= 0.5
     q_dens += 0.5 * q_dens_adv
     
     if disable_waves == 0:   
-        
-        
-        
-        # Average N, N + 1 densities (q_dens at N + 1/2)
-        #field_start = timer()
         # Push B from N to N + 1/2 and calculate E(N + 1/2)
         push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
         get_B_cent(B, B_cent)
         calculate_E(B, B_cent, Ji, J_ext, q_dens, E_half, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array)
-        #field_time = round(timer() - field_start, 2)
         
         ###################################
         ### PREDICTOR CORRECTOR SECTION ###
         ###################################
         # Store old values
-        #store_start = timer()
         mp_flux_old            = mp_flux.copy()
         store_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)
         #store_time = round(timer() - store_start, 2)
         
         # Predict fields
-        #predict_start = timer()
         E_int *= -1.0
         E_int +=  2.0 * E_half
         
         push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
-        #predict_time = round(timer() - predict_start, 2)
     
         # Advance particles to obtain source terms at N + 3/2
-        #part2_start = timer()
         advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                       B, E_int, DT, q_dens, Ji, J_ext, Ve,
                                       mp_flux, qq, pc=1)
-        #part2_time = round(timer() - part2_start, 2)
-        
-        #correct_start = timer()
+
         q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
     
         # Compute predicted fields at N + 3/2, advance J_ext too
-        
         push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
         get_B_cent(B, B_cent)
         calculate_E(B, B_cent, Ji, J_ext, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array)
         
         # Determine corrected fields at N + 1 
-        E_int *= 0.5;    E_int += 0.5 * E_half
-        #correct_time = round(timer() - correct_start, 2)
-        
+        E_int *= 0.5;    E_int += 0.5 * E_half        
     
         # Restore old values and push B-field final time
-        #restore_start = timer()
-        restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)
-        #restore_time = round(timer() - restore_start, 2)
-        
+        restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)        
     
-        #final_start = timer()
         push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
         get_B_cent(B, B_cent)
         
         q_dens[:] = q_dens_adv
         mp_flux   = mp_flux_old.copy()
-        #final_time = round(timer() - final_start, 2)
         
     # Check number of spare particles every 25 steps
     if qq%1 == 0 and particle_open == 1:
@@ -2276,20 +2235,6 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
                 print('num_spare = ', num_spare)
                 print('inject_rate = ', inject_rate.sum() * DT * 5.0)
                 raise Exception('WARNING :: No spare particles remaining. Exiting simulation.')
-        
-# =============================================================================
-#     # Diagnostic output to time each segment
-#     if print_timings == True:
-#         print('CHECK {} time: {}s'.format(qq, check_time))
-#         print('PART1 {} time: {}s'.format(qq, part1_time))
-#         print('FIELD {} time: {}s'.format(qq, field_time))
-#         print('STORE {} time: {}s'.format(qq, store_time))
-#         print('PRDCT {} time: {}s'.format(qq, predict_time))
-#         print('PART2 {} time: {}s'.format(qq, part2_time))
-#         print('CRRCT {} time: {}s'.format(qq, correct_time))
-#         print('RSTRE {} time: {}s'.format(qq, restore_time))
-#         print('FINAL {} time: {}s'.format(qq, final_time))
-# =============================================================================
     return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter
 
 
