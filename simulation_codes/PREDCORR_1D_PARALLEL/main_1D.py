@@ -119,13 +119,13 @@ def quiet_start_bimaxwellian():
         idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle idx        
         half_n = nsp_ppc[jj] // 2                     # Half particles per cell - doubled later
        
-        if temp_type[jj] == 0:                        # Change how many cells are loaded between cold/warm populations
+        # Change how many cells are loaded around equator
+        # Currently deprecated
+        if temp_type[jj] == 0:                        
             NC_load = NX
         else:
-            if rc_hwidth == 0 or rc_hwidth > NX//2:   # Need to change this to be something like the FWHM or something
-                NC_load = NX
-            else:
-                NC_load = 2*rc_hwidth
+            # Need to change this to be something like the FWHM or something
+            NC_load = NX
         
         # Load particles in each applicable cell
         acc = 0; offset  = 0
@@ -332,7 +332,8 @@ def initialize_source_arrays():
     q_dens  = np.zeros( NC,         dtype=np.float64)    
     q_dens2 = np.zeros( NC,         dtype=np.float64) 
     Ji      = np.zeros((NC, 3),     dtype=np.float64)
-    return q_dens, q_dens2, Ji
+    J_ext   = np.zeros((NC, 3),     dtype=np.float64)
+    return q_dens, q_dens2, Ji, J_ext
 
 
 @nb.njit()
@@ -533,9 +534,13 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
 #%% PARTICLES
 ### ##
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
-                                  B, E, DT, q_dens_adv, Ji, _mp_flux, pc=0):
+                                  B, E, DT, q_dens_adv, Ji, J_ext, Ve,
+                                  _mp_flux, qq, pc=0):
     '''
     Helper function to group the particle advance and moment collection functions
+    
+    Also evaluates external current so that this is synchronised to when the
+    ion current is collected (N + 1/2, N+ 3/2)
     '''
     #parmov_start = timer()
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, _mp_flux, vel_only=False)
@@ -557,7 +562,8 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     #weight_time = round(timer() - weight_start, 3)
     
     #moment_start = timer()
-    collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji)
+    J_time = (qq + 0.5 + pc) * DT
+    collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, J_ext, J_time)
     #moment_time = round(timer() - moment_start, 3)
     
 # =============================================================================
@@ -1161,7 +1167,7 @@ def deposit_moments_to_grid_parallel(vel, Ie, W_elec, idx, ni, nu):
 
 
 @nb.njit()
-def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji):
+def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, J_ext, J_time):
     '''
     Moment (charge/current) collection function.
 
@@ -1267,6 +1273,14 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji):
     for ii in range(q_dens.shape[0]):
         if q_dens[ii] < min_dens * ne * q:
             q_dens[ii] = min_dens * ne * q
+            
+    # Calculate J_ext at same instance as Ji
+    if pol_wave == 0:
+        J_ext[:, :] *= 0.0
+    elif pol_wave == 1:
+        get_J_ext(J_ext, J_time)
+    elif pol_wave == 2:
+        get_J_ext_pol(J_ext, J_time)
     return
 
 
@@ -1295,7 +1309,7 @@ def three_point_smoothing(arr, temp):
 
 
 @nb.njit()
-def add_J_ext(sim_time):
+def get_J_ext(J_ext, sim_time):
     '''
     Driven J designed as energy input into simulation. All parameters specified
     in the simulation_parameters script/file
@@ -1310,7 +1324,6 @@ def add_J_ext(sim_time):
     # Soft source wave (What t corresponds to this?)
     # Should put some sort of ramp on it?
     # Also needs to be polarised. By or Bz lagging/leading?
-    J_ext = np.zeros((NC, 3), dtype=np.float64)
     phase = -90
     N_eq  = ND + NX//2
 
@@ -1319,11 +1332,11 @@ def add_J_ext(sim_time):
     # Set new field values in array as soft source
     J_ext[N_eq, 1] = driven_ampl*gaussian*np.sin(2 * np.pi * driven_freq * sim_time)
     J_ext[N_eq, 2] = driven_ampl*gaussian*np.sin(2 * np.pi * driven_freq * sim_time + phase * np.pi / 180.)    
-    return J_ext
+    return
 
 
 @nb.njit()
-def add_J_ext_pol(sim_time):
+def get_J_ext_pol(J_ext, sim_time):
     '''
     Driven J designed as energy input into simulation. All parameters specified
     in the simulation_parameters script/file
@@ -1344,7 +1357,6 @@ def add_J_ext_pol(sim_time):
     # Soft source wave (What t corresponds to this?)
     # Should put some sort of ramp on it?
     # Also needs to be polarised. By or Bz lagging/leading?
-    J_ext = np.zeros((NC, 3), dtype=np.float64)
     phase = -np.pi / 2
     N_eq  = ND + NX//2
     time  = sim_time
@@ -1356,7 +1368,7 @@ def add_J_ext_pol(sim_time):
         
         J_ext[N_eq + off, 1] += gauss * np.sin(2 * np.pi * driven_freq * (time - delay))
         J_ext[N_eq + off, 2] += gauss * np.sin(2 * np.pi * driven_freq * (time - delay) + phase)    
-    return J_ext
+    return
 
 
 ### ##
@@ -1527,7 +1539,7 @@ def get_grad_P(qn, te, grad_P, temp):
 
 
 @nb.njit()
-def calculate_E(B, B_center, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P, E_damping_array, sim_time):
+def calculate_E(B, B_center, Ji, J_ext, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P, E_damping_array):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
     and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
@@ -1553,13 +1565,6 @@ def calculate_E(B, B_center, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P, E_
     '''
     curl_B_term(B, temp3De)                                   # temp3De is now curl B term
 
-    if pol_wave == 0:
-        J_ext = np.zeros((NC, 3), dtype=np.float64)
-    elif pol_wave == 1:
-        J_ext = add_J_ext(sim_time)
-    elif pol_wave == 2:
-        J_ext = add_J_ext_pol(sim_time)
-    
     # Calculate Ve
     Ve[:, 0] = (Ji[:, 0] + J_ext[:, 0] - temp3De[:, 0]) / q_dens
     Ve[:, 1] = (Ji[:, 1] + J_ext[:, 1] - temp3De[:, 1]) / q_dens
@@ -1584,8 +1589,11 @@ def calculate_E(B, B_center, Ji, q_dens, E, Ve, Te, temp3De, temp3Db, grad_P, E_
     E[:, 0]  = - temp3De[:, 0] - grad_P[:] / q_dens[:]
     E[:, 1]  = - temp3De[:, 1]
     E[:, 2]  = - temp3De[:, 2]
-
-    #E_out       += e_resis * (J + J_ext)
+    
+    # Add resistivity
+    E[:, 0] += eta * (Ji[:, 0] - q_dens[:]*Ve[:, 0] + J_ext[:, 0])
+    E[:, 1] += eta * (Ji[:, 1] - q_dens[:]*Ve[:, 1] + J_ext[:, 0])
+    E[:, 2] += eta * (Ji[:, 2] - q_dens[:]*Ve[:, 2] + J_ext[:, 0])
 
     # Copy periodic values
     if field_periodic == 1:
@@ -1865,7 +1873,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('r_A', r_A),
                    ('lat_A', lat_A),
                    ('B_A', B_A),
-                   ('rc_hwidth', rc_hwidth),
+                   ('rc_hwidth', None),
                    ('ne', ne),
                    ('Te0', Te0_scalar),
                    ('ie', ie),
@@ -2164,9 +2172,9 @@ def restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particl
     return
 
 
-def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
-              B, B_cent, E_int, E_half, q_dens, q_dens_adv, Ji, mp_flux,               \
-              Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,\
+def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
+              B, B_cent, E_int, E_half, q_dens, q_dens_adv, Ji, J_ext, mp_flux,
+              Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,
               B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter,
               field_save_iter, loop_save_iter):
     '''
@@ -2184,23 +2192,25 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
     
     # Move particles, collect moments, deal with particle boundaries
     #part1_start = timer()
+    # Current temporal position of the velocity moment (same as J_ext)
     advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
-                                  B, E_int, DT, q_dens_adv, Ji, mp_flux, pc=0)
+                                  B, E_int, DT, q_dens_adv, Ji, J_ext, Ve,
+                                  mp_flux, qq, pc=0)
     #part1_time = round(timer() - part1_start, 2)
     
     q_dens *= 0.5
     q_dens += 0.5 * q_dens_adv
     
     if disable_waves == 0:   
-        # Current temporal position of the velocity moment (same as J_ext)
-        J_time = (qq + 0.5) * DT
+        
+        
         
         # Average N, N + 1 densities (q_dens at N + 1/2)
         #field_start = timer()
         # Push B from N to N + 1/2 and calculate E(N + 1/2)
         push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
         get_B_cent(B, B_cent)
-        calculate_E(B, B_cent, Ji, q_dens, E_half, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array, J_time)
+        calculate_E(B, B_cent, Ji, J_ext, q_dens, E_half, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array)
         #field_time = round(timer() - field_start, 2)
         
         ###################################
@@ -2223,17 +2233,18 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                            \
         # Advance particles to obtain source terms at N + 3/2
         #part2_start = timer()
         advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
-                                      B, E_int, DT, q_dens, Ji, mp_flux, pc=1)
+                                      B, E_int, DT, q_dens, Ji, J_ext, Ve,
+                                      mp_flux, qq, pc=1)
         #part2_time = round(timer() - part2_start, 2)
         
         #correct_start = timer()
         q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
     
         # Compute predicted fields at N + 3/2, advance J_ext too
-        J_time = (qq + 1.5) * DT
+        
         push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
         get_B_cent(B, B_cent)
-        calculate_E(B, B_cent, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array, J_time)
+        calculate_E(B, B_cent, Ji, J_ext, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array)
         
         # Determine corrected fields at N + 1 
         E_int *= 0.5;    E_int += 0.5 * E_half
@@ -2588,6 +2599,11 @@ else:
 N_per_thread, n_start_idxs = get_thread_values()
 
 ###
+### Resistivity calculation
+###
+eta = 0.0
+
+###
 ### DRIVEN WAVE STUFF (Load this from file eventually)
 ###
 pol_wave    = 1         # 0: No wave, 1: Single point source, 2: Multi point source
@@ -2662,19 +2678,19 @@ if __name__ == '__main__':
         
     # Initialize simulation: Allocate memory and set time parameters
     B, B_cent, E_int, E_half, Ve, Te                    = initialize_fields()
-    q_dens, q_dens_adv, Ji                              = initialize_source_arrays()
+    q_dens, q_dens_adv, Ji, J_ext                       = initialize_source_arrays()
     old_particles, old_fields, temp3De, temp3Db, temp1D,\
                                                mp_flux  = initialize_tertiary_arrays()
     pos, vel, Ie, W_elec, Ib, W_mag, idx                = initialize_particles(B, E_int, mp_flux)
 
     # Collect initial moments and save initial state
     get_B_cent(B, B_cent)
-    collect_moments(vel, Ie, W_elec, idx, q_dens, Ji) 
+    collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, J_ext, 0.0) 
 
     DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array\
         = set_timestep(vel)
 
-    calculate_E(B, B_cent, Ji, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array, 0)
+    calculate_E(B, B_cent, Ji, J_ext, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array)
     
     if save_particles == 1:
         save_particle_data(0, DT, part_save_iter, 0, pos, vel, idx)
@@ -2699,10 +2715,10 @@ if __name__ == '__main__':
         #dump_to_file(pos, vel, E_int, Ve, Te, B, Ji, q_dens, qq, folder='serial', print_particles=False)
         #diagnostic_field_plot(B, E_half, q_dens, Ji, Ve, Te, B_damping_array, qq, DT, sim_time)
         loop_start = timer()
-        qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter =                                \
-        main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                                   \
-              B, B_cent, E_int, E_half, q_dens, q_dens_adv, Ji, mp_flux,                          \
-              Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,           \
+        qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter =         \
+        main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                             \
+              B, B_cent, E_int, E_half, q_dens, q_dens_adv, Ji, J_ext, mp_flux,      \
+              Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,            \
               B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter,
               field_save_iter, loop_save_iter)
             

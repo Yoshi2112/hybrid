@@ -4334,15 +4334,15 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
     
-    for series in ['//ABC_encroach_Bdamp_rising_rd2//']:
+    for series in ['//test_new_Jext//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [9, 10, 11, 12]
+            runs_to_do = [1]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
