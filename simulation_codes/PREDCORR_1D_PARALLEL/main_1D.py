@@ -20,7 +20,7 @@ RE     = 6.371e6                            # Earth radius in metres
 B_surf = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
-Fu_override       = False      # Override to allow density to be calculated as a ratio of frequencies
+Fu_override       = True       # Override to allow density to be calculated as a ratio of frequencies
 adaptive_timestep = True       # Disable adaptive timestep to keep it the same as initial
 do_parallel       = True       # Flag to use available threads to parallelize particle functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
@@ -205,7 +205,7 @@ def uniform_bimaxwellian():
 
 
 
-def initialize_particles(B, E, _mp_flux):
+def initialize_particles(B, E, _mp_flux, Ji_in, Ve_in, rho_in):
     '''
     Initializes particle arrays. Selects which velocity/position function to
     use for intialization, runs equilibrium loop if required, and calculates
@@ -235,6 +235,7 @@ def initialize_particles(B, E, _mp_flux):
     
     if homogenous == False:
         run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
+                              Ji_in, Ve_in, rho_in,
                           _mp_flux, hot_only=True, psave=True)
     
     assign_weighting_TSC(pos, Ie, W_elec)
@@ -309,9 +310,10 @@ def initialize_fields():
     E_int   = np.zeros((NC    , 3), dtype=np.float64)
     E_half  = np.zeros((NC    , 3), dtype=np.float64)
     
-    Ve      = np.zeros((NC, 3), dtype=np.float64)
+    Ve_int  = np.zeros((NC, 3), dtype=np.float64)
+    Ve_half = np.zeros((NC, 3), dtype=np.float64)
     Te      = np.ones(  NC,     dtype=np.float64) * Te0_scalar
-    return B, B_cent, E_int, E_half, Ve, Te
+    return B, B_cent, E_int, E_half, Ve_int, Ve_half, Te
 
 
 @nb.njit()
@@ -331,9 +333,10 @@ def initialize_source_arrays():
     '''
     q_dens  = np.zeros( NC,         dtype=np.float64)    
     q_dens2 = np.zeros( NC,         dtype=np.float64) 
-    Ji      = np.zeros((NC, 3),     dtype=np.float64)
+    Ji_int  = np.zeros((NC, 3),     dtype=np.float64)
+    Ji_half = np.zeros((NC, 3),     dtype=np.float64)
     J_ext   = np.zeros((NC, 3),     dtype=np.float64)
-    return q_dens, q_dens2, Ji, J_ext
+    return q_dens, q_dens2, Ji_int, Ji_half, J_ext
 
 
 @nb.njit()
@@ -432,7 +435,7 @@ def set_timestep(vel):
 
 
 
-def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
+def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in, Ve_in, rho_in,
                           _mp_flux, frev=1000, hot_only=True, psave=True, save_inc=50):
     '''
     Still need to test this. Put it just after the initialization of the particles.
@@ -488,7 +491,8 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
         pnum = 0
         
     # Desync (retard) velocity here
-    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*pdt, _mp_flux, vel_only=True, hot_only=hot_only)
+    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, DT,
+           _mp_flux, vel_only=False)
     for pp in range(psteps):
 
         # Save first and last only
@@ -502,7 +506,8 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
             print('Step', pp)
         
         for jj in range(Nj):
-            parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, pdt, _mp_flux, hot_only=hot_only)
+            parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, DT,
+           _mp_flux, vel_only=False)
             
             if hot_only == False or temp_type[jj] == 1:
                 if particle_open == True:
@@ -521,7 +526,8 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
         psim_time += pdt
     
     # Resync (advance) velocity here
-    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, 0.5*pdt, _mp_flux, vel_only=True, hot_only=hot_only)
+    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, DT,
+           _mp_flux, vel_only=False)
     
     # Dump indicator file
     if save_fields == 1 or save_particles == 1:
@@ -534,7 +540,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
 #%% PARTICLES
 ### ##
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
-                                  B, E, DT, q_dens_adv, Ji, J_ext, Ve,
+                                  B, E, DT, rho_in, rho_out, Ji_in, Ji_out, J_ext, Ve,
                                   _mp_flux, qq, pc=0):
     '''
     Helper function to group the particle advance and moment collection functions
@@ -542,8 +548,9 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     Also evaluates external current so that this is synchronised to when the
     ion current is collected (N + 1/2, N+ 3/2)
     '''
-    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, _mp_flux, vel_only=False)
-
+    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve, rho_in, DT,
+           _mp_flux, vel_only=False)
+    
     # Particle injector goes here
     if particle_open == 1 or particle_reinit == 1:
         if particle_reinit == 1:
@@ -554,7 +561,7 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
     
     J_time = (qq + 0.5 + pc) * DT
-    collect_moments(vel, Ie, W_elec, idx, q_dens_adv, Ji, J_ext, J_time)
+    collect_moments(vel, Ie, W_elec, idx, rho_out, Ji_out, J_ext, J_time)
     return
 
 
@@ -719,7 +726,8 @@ def assign_weighting_CIC(pos, I, W, E_nodes=True):
 
 
 @nb.njit(parallel=do_parallel)
-def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, mp_flux, vel_only=False, hot_only=False):
+def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji, Ve, q_dens, DT,
+           mp_flux, vel_only=False, hot_only=False):
     '''
     updates velocities using a Boris particle pusher.
     Based on Birdsall & Langdon (1985), pp. 59-63.
@@ -749,11 +757,21 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, DT, mp_flux, vel_only=Fal
             # Calculate wave fields at particle position
             Ep = np.zeros(3, dtype=np.float64)  
             Bp = np.zeros(3, dtype=np.float64)
+            Jp = np.zeros(3, dtype=np.float64)
             
             for jj in nb.prange(3):
                 for kk in nb.prange(3):
                     Ep[kk] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]   
-                    Bp[kk] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]                   
+                    Bp[kk] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]  
+                    
+                    if eta != 0.0:
+                        Jp[kk] += (Ji[Ie[ii] + jj, kk] - Ve[Ie[ii] + jj, kk]*q_dens[Ie[ii] + jj])
+                    
+            # Add resistivity into 'effective' E-field
+            if eta != 0.0:
+                Ep[0] -= eta * Jp[0]
+                Ep[1] -= eta * Jp[1]
+                Ep[2] -= eta * Jp[2]
     
             # Calculate background field at particle position
             Bp[0]   += B_eq * (1.0 + a * pos[ii] * pos[ii])
@@ -1574,9 +1592,10 @@ def calculate_E(B, B_center, Ji, J_ext, q_dens, E, Ve, Te, temp3De, temp3Db, gra
     E[:, 2]  = - temp3De[:, 2]
     
     # Add resistivity
-    E[:, 0] += eta * (Ji[:, 0] - q_dens[:]*Ve[:, 0] + J_ext[:, 0])
-    E[:, 1] += eta * (Ji[:, 1] - q_dens[:]*Ve[:, 1] + J_ext[:, 0])
-    E[:, 2] += eta * (Ji[:, 2] - q_dens[:]*Ve[:, 2] + J_ext[:, 0])
+    if eta != 0:
+        E[:, 0] += eta * (Ji[:, 0] - q_dens[:]*Ve[:, 0] + J_ext[:, 0])
+        E[:, 1] += eta * (Ji[:, 1] - q_dens[:]*Ve[:, 1] + J_ext[:, 0])
+        E[:, 2] += eta * (Ji[:, 2] - q_dens[:]*Ve[:, 2] + J_ext[:, 0])
 
     # Copy periodic values
     if field_periodic == 1:
@@ -1729,7 +1748,7 @@ def get_max_vx(vel):
 
 
 @nb.njit()
-def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center,\
+def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ji_in, Ve_in, rho_in,\
                      qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter,
                      idx, damping_array, mp_flux):
     '''
@@ -1773,8 +1792,9 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center,\
     DT_part         = min(Eacc_ts, vel_ts, ion_ts)                           # Smallest of the allowable timesteps
     
     if DT_part < 0.9*DT:
-
-        parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, 0.5*DT, mp_flux, vel_only=True)    # Re-sync vel/pos       
+        # Re-sync vel/pos
+        parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve_in, rho_in, DT,
+           mp_flux, vel_only=False)           
 
         DT         *= 0.5
         max_inc    *= 2
@@ -1783,8 +1803,10 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center,\
         field_save_iter *= 2
         part_save_iter  *= 2
         loop_save_iter  *= 2
-
-        parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*DT, mp_flux, vel_only=True)   # De-sync vel/pos 
+        
+        # De-sync vel/pos
+        parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve_in, rho_in, DT,
+           mp_flux, vel_only=False)    
         print('Timestep halved. Syncing particle velocity...')
     return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, damping_array
 
@@ -2156,8 +2178,8 @@ def restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particl
 
 
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
-              B, B_cent, E_int, E_half, q_dens, q_dens_adv, Ji, J_ext, mp_flux,
-              Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,
+              B, B_cent, E_int, E_half, q_dens, q_dens_adv, Ji_int, Ji_half, J_ext, mp_flux,
+              Ve_int, Ve_half, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,
               B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter,
               field_save_iter, loop_save_iter):
     '''
@@ -2166,57 +2188,67 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
     # Check timestep (Maybe only check every few. Set in main body)
     if adaptive_timestep == True and qq%1 == 0 and disable_waves == 0:
         qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, damping_array \
-        = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, B_cent,
+        = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, B_cent, Ji_int, Ve_int, q_dens,
                          qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter,
                          idx, mp_flux, B_damping_array)    
     
     # Move particles, collect moments, deal with particle boundaries
     # Current temporal position of the velocity moment (same as J_ext)
     advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
-                                  B, E_int, DT, q_dens_adv, Ji, J_ext, Ve,
+                                  B, E_int, DT, q_dens, q_dens_adv, Ji_int, Ji_half, J_ext, Ve_half,
                                   mp_flux, qq, pc=0)
     
     # Average N, N + 1 densities (q_dens at N + 1/2)
-    q_dens *= 0.5
-    q_dens += 0.5 * q_dens_adv
+    q_dens *= 0.5; q_dens += 0.5 * q_dens_adv
     
     if disable_waves == 0:   
         # Push B from N to N + 1/2 and calculate E(N + 1/2)
         push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
         get_B_cent(B, B_cent)
-        calculate_E(B, B_cent, Ji, J_ext, q_dens, E_half, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array)
+        calculate_E(B, B_cent, Ji_half, J_ext, q_dens, E_half, Ve_half, Te,
+                    temp3De, temp3Db, temp1D, E_damping_array)
         
         ###################################
         ### PREDICTOR CORRECTOR SECTION ###
         ###################################
         # Store old values
-        mp_flux_old            = mp_flux.copy()
-        store_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)
+        mp_flux_old = mp_flux.copy()
+        store_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji_half, Ve_half, Te, old_particles, old_fields)
         #store_time = round(timer() - store_start, 2)
         
-        # Predict fields
-        E_int *= -1.0
-        E_int +=  2.0 * E_half
+        # Predict fields (and moments?) at N + 1
+        E_int  *= -1.0; E_int  +=  2.0 * E_half
+        Ji_int *= -1.0; Ji_int +=  2.0 * Ji_half
+        Ve_int *= -1.0; Ve_int +=  2.0 * Ve_half
         
         push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
     
         # Advance particles to obtain source terms at N + 3/2
         advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
-                                      B, E_int, DT, q_dens, Ji, J_ext, Ve,
+                                      B, E_int, DT, q_dens_adv, q_dens, Ji_int, Ji_half, J_ext, Ve_half,
                                       mp_flux, qq, pc=1)
 
-        q_dens *= 0.5;    q_dens += 0.5 * q_dens_adv
+        q_dens *= 0.5; q_dens += 0.5 * q_dens_adv
     
         # Compute predicted fields at N + 3/2, advance J_ext too
         push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
         get_B_cent(B, B_cent)
-        calculate_E(B, B_cent, Ji, J_ext, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array)
+        calculate_E(B, B_cent, Ji_half, J_ext, q_dens, E_int, Ve_half, Te,
+                    temp3De, temp3Db, temp1D, E_damping_array)
         
         # Determine corrected fields at N + 1 
-        E_int *= 0.5;    E_int += 0.5 * E_half        
-    
+        E_int  *= 0.5;    E_int  += 0.5 * E_half        
+        
+        # Store 3/2 for averaging after restore
+        Ji_int[:] = Ji_half
+        Ve_int[:] = Ve_half
+        
         # Restore old values and push B-field final time
-        restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)        
+        restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji_half, Ve_half, Te, old_particles, old_fields)        
+    
+        # Determine corrected moments at N + 1
+        Ji_int *= 0.5; Ji_int += 0.5*Ji_half
+        Ve_int *= 0.5; Ve_int += 0.5*Ve_half 
     
         push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
         get_B_cent(B, B_cent)
@@ -2414,9 +2446,11 @@ else:
 
 rho        = (mass*density).sum()                        # Mass density for alfven velocity calc.
 wpi        = np.sqrt((density * charge ** 2 / (mass * e0)).sum())            # Proton   Plasma Frequency, wpi (rad/s)
+wpe        = np.sqrt(ne * q ** 2 / (me * e0))
 va         = B_eq / np.sqrt(mu0*rho)                     # Alfven speed at equator: Assuming pure proton plasma
 #va         = B_eq / np.sqrt(mu0*mass[1]*density[1])      # Hard-coded to be 'cold proton alfven velocity' (Shoji et al, 2013)
 gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
+egyfreq_eq = q*B_eq  / me                                # Electron Gyrofrequency (rad/s) at equator (slowest)
 dx         = dxm * va / gyfreq_eq                        # Alternate method of calculating dx (better for multicomponent plasmas)
 #dx2        = dxm * c / wpi
 
@@ -2544,14 +2578,9 @@ else:
 N_per_thread, n_start_idxs = get_thread_values()
 
 ###
-### Resistivity calculation
-###
-eta = 0.0
-
-###
 ### DRIVEN WAVE STUFF (Load this from file eventually)
 ###
-pol_wave    = 1         # 0: No wave, 1: Single point source, 2: Multi point source
+pol_wave    = 0         # 0: No wave, 1: Single point source, 2: Multi point source
 
 # DRIVEN B PARAMS: Sine part
 driven_freq = 1.0       # Driven wave frequency in Hz standard 2.2
@@ -2571,6 +2600,14 @@ driven_k  *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyro
 driven_k   = np.sqrt(driven_k)
 
 
+###
+### RESISTIVITY STUFF
+###
+LH_frac    = 1.00                                          # Fraction of Lower Hybrid resonance: 
+                                                           # electron/ion collision as some multiple of the LHF. 0 disables e_resis.
+LH_res_is  = 1. / (gyfreq_eq * egyfreq_eq) + 1. / wpi ** 2 # Lower Hybrid Resonance frequency, inverse squared
+LH_res     = 1. / np.sqrt(LH_res_is)                       # Lower Hybrid Resonance frequency: DID I CHECK THIS???
+eta        = (LH_frac * LH_res)  / (e0 * wpe ** 2)         # Electron resistivity (using intial conditions for wpi/wpe)
 
 ##############################
 ### INPUT TESTS AND CHECKS ###
@@ -2622,34 +2659,36 @@ if __name__ == '__main__':
     start_time = timer()
         
     # Initialize simulation: Allocate memory and set time parameters
-    B, B_cent, E_int, E_half, Ve, Te                    = initialize_fields()
-    q_dens, q_dens_adv, Ji, J_ext                       = initialize_source_arrays()
+    B, B_cent, E_int, E_half, Ve_int, Ve_half, Te       = initialize_fields()
+    q_dens, q_dens_adv, Ji_int, Ji_half, J_ext          = initialize_source_arrays()
     old_particles, old_fields, temp3De, temp3Db, temp1D,\
                                                mp_flux  = initialize_tertiary_arrays()
-    pos, vel, Ie, W_elec, Ib, W_mag, idx                = initialize_particles(B, E_int, mp_flux)
+    pos, vel, Ie, W_elec, Ib, W_mag, idx                = initialize_particles(B, E_int, mp_flux,
+                                                                               Ji_int, Ve_int, q_dens)
 
     # Collect initial moments and save initial state
     get_B_cent(B, B_cent)
-    collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, J_ext, 0.0) 
+    collect_moments(vel, Ie, W_elec, idx, q_dens, Ji_int, J_ext, 0.0) 
 
     DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array\
         = set_timestep(vel)
 
-    calculate_E(B, B_cent, Ji, J_ext, q_dens, E_int, Ve, Te, temp3De, temp3Db, temp1D, E_damping_array)
+    calculate_E(B, B_cent, Ji_int, J_ext, q_dens, E_int, Ve_int, Te, temp3De, temp3Db, temp1D, E_damping_array)
     
     if save_particles == 1:
         save_particle_data(0, DT, part_save_iter, 0, pos, vel, idx)
         
     if save_fields == 1:
-        save_field_data(0, DT, field_save_iter, 0, Ji, E_int,\
-                             B, Ve, Te, q_dens, B_damping_array, E_damping_array)
+        save_field_data(0, DT, field_save_iter, 0, Ji_int, E_int,\
+                             B, Ve_int, Te, q_dens, B_damping_array, E_damping_array)
 
     loop_times = np.zeros(max_inc-1, dtype=float)
     loop_save_iter = 1
     
     # Retard velocity
     print('Retarding velocity...')
-    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, -0.5*DT, mp_flux, vel_only=True)
+    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_int, Ve_int, q_dens,
+           -0.5*DT, mp_flux, vel_only=True)
     
     qq       = 1;    time_sec = DT
     print('Starting main loop...')
@@ -2662,8 +2701,8 @@ if __name__ == '__main__':
         loop_start = timer()
         qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter =         \
         main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                             \
-              B, B_cent, E_int, E_half, q_dens, q_dens_adv, Ji, J_ext, mp_flux,      \
-              Ve, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,            \
+              B, B_cent, E_int, E_half, q_dens, q_dens_adv, Ji_int, Ji_half, J_ext, mp_flux,      \
+              Ve_int, Ve_half, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,            \
               B_damping_array, E_damping_array, qq, DT, max_inc, part_save_iter,
               field_save_iter, loop_save_iter)
             
@@ -2672,8 +2711,8 @@ if __name__ == '__main__':
                                     vel, idx)
             
         if qq%field_save_iter == 0 and save_fields == 1:
-            save_field_data(time_sec, DT, field_save_iter, qq, Ji, E_int,
-                                 B, Ve, Te, q_dens, B_damping_array, E_damping_array)
+            save_field_data(time_sec, DT, field_save_iter, qq, Ji_half, E_int,
+                                 B, Ve_half, Te, q_dens, B_damping_array, E_damping_array)
         
         if qq%100 == 0 and print_runtime == True:            
             running_time = int(timer() - start_time)

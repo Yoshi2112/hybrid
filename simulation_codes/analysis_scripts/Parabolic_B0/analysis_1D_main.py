@@ -3766,7 +3766,7 @@ def get_reflection_coefficient(save=True, incl_damping_cells=True):
     return
 
 
-def field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None):
+def field_energy_vs_time(save=False, saveas='mag_energy_reflection', tmax=None):
     '''
     Arrays are time, space. Equatorial gridpoint is at NC//2
     
@@ -3804,7 +3804,7 @@ def field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None):
     L_refl = 100. * mag_energy_L[t_cut_idx:].min() / mag_energy_L.max()
     R_refl = 100. * mag_energy_R[t_cut_idx:].min() / mag_energy_R.max()
 
-    if save is not None:
+    if not save:
         plt.ioff()
         
         ## PLOT IT
@@ -3850,14 +3850,11 @@ def field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None):
                 
         fig.subplots_adjust(wspace=0)
         
-        if save == True:
-            fullpath = cf.anal_dir + saveas + '.png'
-            plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-            print('t-x Plot saved')
-            plt.close('all')
-        else:
-            plt.show()
-        
+        fullpath = cf.anal_dir + saveas + '.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+        print('t-x Plot saved')
+        plt.close('all')
+
     return t, mag_energy
 
 
@@ -4091,44 +4088,48 @@ def multiplot_fluxes(series, save=True):
 
 
 def multiplot_mag_energy(save=False):
+    import matplotlib.cm as cm
     
-    lstyle = ['-', '--', ':']
+    resis_fracs = [0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.50, 0.60, 0.80, 1.00]
+    norm        = mpl.colors.Normalize(vmin=min(resis_fracs), vmax=max(resis_fracs), clip=False)
+    mapper      = cm.ScalarMappable(norm=norm, cmap=cm.jet)
     
-    for series, ls  in zip(['monte_carlo_ABC_freq_test_with_BE_64offset'], lstyle):
-        series_dir  = '{}/runs//{}//'.format(drive, series)
-        num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
-        print('{} runs in series {}'.format(num_runs, series))
-        
-        runs_to_do = range(num_runs)
+    series = 'Fu_resist_test'
+    series_dir  = '{}/runs//{}//'.format(drive, series)
+    num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+    print('{} runs in series {}'.format(num_runs, series))
     
-        # Plot the thing:
-        plt.ioff()
-        fig, ax = plt.subplots(figsize=(15, 10))
+    # Plot the thing:
+    plt.ioff()
+    fig, ax = plt.subplots(figsize=(15, 10))
+                
+    for run_num, eta in zip(range(num_runs), resis_fracs):
+        print('\nRun {}'.format(run_num))
+        cf.load_run(drive, series, run_num, extract_arrays=True)
+        time, mag_energy = field_energy_vs_time(save=False)
+
+        ax.plot(time, mag_energy, c=mapper.to_rgba(eta))
         
-        cmap = mpl.cm.get_cmap('jet')
-        clrs = cmap(np.linspace(0, 1, num_runs))
+        ax.set_xlim(0, time[-1])
+        ax.set_ylim(0, 0.5)
+        ax.set_xlabel('Time (s)')
+        ax.set_ylabel('Normalized $U_B$')
+        ax.set_title('Total Wave Energy vs. Time for different Resistivities')
+        #ax.set_yscale('log')
         
-        for run_num in runs_to_do:
-            print('\nRun {}'.format(run_num))
-            cf.load_run(drive, series, run_num, extract_arrays=True)
-            time, mag_energy = field_energy_vs_time(save=True)
-    
-            ax.plot(time, mag_energy, c=clrs[run_num], label='{} Hz'.format(cf.driven_freq))
-            
-            ax.set_xlim(0, time[-1])
-            ax.set_ylim(0, 0.5)
-            ax.set_xlabel('Time (s)')
-            ax.set_ylabel('Normalized $U_B$')
-            ax.set_title('Absorbing Boundary Efficiency vs. Driver Frequency')
-            #ax.set_yscale('log')
+    divider = make_axes_locatable(ax)
+    cax     = divider.append_axes("right", size="2%", pad=0.00)
+    cbar    = fig.colorbar(mapper, cax=cax, label='Flux', orientation='vertical')
+    cbar.set_label('Resistivity Fraction')
         
-        ax.legend()
-        if save == True:
-            fig.savefig(series_dir + 'mag_energy.png', facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-            print('Reflection coefficient plots saved')
-            plt.close('all')
-        else:
-            plt.show()
+    if save == True:
+        fig.savefig(series_dir + 'mag_energy.png', facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        print('Reflection coefficient plots saved')
+        plt.close('all')
+    else:
+        print('Showing plot...')
+        plt.show()
+        sys.exit()
     return
 
 
@@ -4330,22 +4331,22 @@ def plot_initial_x_vs_xp():
 if __name__ == '__main__':
     drive       = 'D:'
         
-    #plot_mag_energy(save=True)
+    multiplot_mag_energy(save=True)
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
-    
-    for series in ['//test_new_Jext//']:
+
+    for series in ['//Fu_resist_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
             runs_to_do = [1]
         
         # Extract all summary files and plot field stuff (quick)
-        if True:
+        if False:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
@@ -4386,11 +4387,9 @@ if __name__ == '__main__':
                 
                 #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
                 
-# =============================================================================
-#                 plot_wk(saveas='wk_plot_middle80', dispersion_overlay=False, save=True,
-#                      pcyc_mult=1.5, xmax=1.5, zero_cold=True,
-#                      linear_only=False, normalize_axes=True, centre_only=False)
-# =============================================================================
+                plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
+                     pcyc_mult=1.5, xmax=1.5, zero_cold=True,
+                     linear_only=False, normalize_axes=True, centre_only=False)
 
 # =============================================================================
 #                 ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=True,
