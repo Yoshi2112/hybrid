@@ -289,6 +289,15 @@ def set_damping_array(B_damping_array, E_damping_array, DT):
     return
 
 
+def set_resistivity_array():
+    '''
+    Steal this from Hu and Denton (2010), also modify B-damping array to 
+    work like this.
+    '''
+    inner_eta = 0.0         # Resistivity in simulation space
+    return
+
+
 @nb.njit()
 def initialize_fields():
     '''
@@ -1556,13 +1565,6 @@ def calculate_E(B, B_center, Ji, J_ext, q_dens, E, Ve, Te, temp3De, temp3Db, gra
         Te  -- Electron temperature
     
     arr3D, arr1D are tertiary arrays used for intermediary computations
-    
-    NOTE: Sending all but the last element in the cross_product() function seems clumsy... but it works!
-    Check :: Does it dereference anything?
-    
-    12/06/2020 -- Added E-field damping option as per Hu & Denton (2010), Ve x B term only
-    
-    22/02/2021 -- Removed cross product because surely that B term is fucking with things.
     '''
     curl_B_term(B, temp3De)                                   # temp3De is now curl B term
 
