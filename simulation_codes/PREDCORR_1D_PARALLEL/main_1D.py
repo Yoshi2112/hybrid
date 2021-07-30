@@ -20,7 +20,7 @@ RE     = 6.371e6                            # Earth radius in metres
 B_surf = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
-Fu_override       = True       # Override to allow density to be calculated as a ratio of frequencies
+Fu_override       = False      # Override to allow density to be calculated as a ratio of frequencies
 adaptive_timestep = True       # Disable adaptive timestep to keep it the same as initial
 do_parallel       = True       # Flag to use available threads to parallelize particle functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
@@ -287,10 +287,15 @@ def set_damping_arrays(B_damping_array, E_damping_array, resistive_array, DT):
                 da[_ii] = 0.0
                 
     # Set resistivity
-    LH_res_is  = 1. / (gyfreq_eq * egyfreq_eq) + 1. / wpi ** 2 # Lower Hybrid Resonance frequency, inverse squared
-    LH_res     = 1. / np.sqrt(LH_res_is)                       # Lower Hybrid Resonance frequency: DID I CHECK THIS???
-    max_eta    = (LH_frac * LH_res)  / (e0 * wpe ** 2)         # Electron resistivity (using intial conditions for wpi/wpe)
-
+    if True:
+        # Lower Hybrid Resonance method (source?)
+        LH_res_is = 1. / (gyfreq_eq * egyfreq_eq) + 1. / wpi ** 2  # Lower Hybrid Resonance frequency, inverse squared
+        LH_res    = 1. / np.sqrt(LH_res_is)                        # Lower Hybrid Resonance frequency: DID I CHECK THIS???
+        max_eta   = (resis_multiplier * LH_res)  / (e0 * wpe ** 2) # Electron resistivity (using intial conditions for wpi/wpe)
+    else:
+        # Spitzer resistance as per B&T
+        max_eta = (resis_multiplier * vei)  / (e0 * wpe ** 2)
+        
     for ii in range(NC):
         # Damping region
         if E_dist_from_mp[ii] > damping_boundary:
@@ -567,11 +572,17 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve, rho_in, DT,
            _mp_flux, resistive_array, vel_only=False)
     
-    # Particle injector goes here
-    if particle_open == 1 or particle_reinit == 1:
+    # Apply BCs to particles
+    if particle_open == 1:
+        inject_particles(pos, vel, idx, _mp_flux, DT)
+    elif particle_reinit == 1:
         if particle_reinit == 1:
             reinit_count_flux(pos, idx, _mp_flux)
         inject_particles(pos, vel, idx, _mp_flux, DT)
+    elif particle_periodic == 1:
+        periodic_BC(pos, idx)
+    else:
+        reflective_BC(pos, vel, idx)
     
     assign_weighting_TSC(pos, Ie, W_elec)
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
@@ -759,7 +770,9 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji, Ve, q_dens, DT,
         None -- vel array is mutable (I/O array)
         
     Notes:
-        -- Particle boundary conditions arranged in order of probability of use.
+        -- Particle boundary conditions applied by deactivating particles that 
+        leave the simulation space, and reinitializing them once the BCs are
+        applied. Doing -=128 conserves the species identifier.
         -- mp_flux is used to count the particles leaving the boundaries,
         then call the injection routine at the end of the loop. Thus, the only
         difference between true 'open/injection' and 'reinit' boundary conditions
@@ -781,7 +794,7 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji, Ve, q_dens, DT,
                     Ep[kk] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]   
                     Bp[kk] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]  
                     
-                    if LH_frac != 0.0:
+                    if resis_multiplier != 0.0:
                         Jp[kk] += (Ji[Ie[ii] + jj, kk] - Ve[Ie[ii] + jj, kk]*q_dens[Ie[ii] + jj])
                     
             # Add resistivity into 'effective' E-field
@@ -831,42 +844,20 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji, Ve, q_dens, DT,
                 if (pos[ii] < xmin or pos[ii] > xmax):
     
                     if particle_periodic == 1:  
-                        # Mario (Periodic)
-                        if pos[ii] > xmax:
-                            pos[ii] += xmin - xmax
-                        elif pos[ii] < xmin:
-                            pos[ii] += xmax - xmin 
-                            
+                        idx[ii] -= 128                            
                     elif particle_open == 1:                
-                        # Open: Deactivate particles that leave the simulation space
                         pos[ii]     = 0.0
                         vel[0, ii]  = 0.0
                         vel[1, ii]  = 0.0
                         vel[2, ii]  = 0.0
                         idx[ii]     = -1
-                            
-                    elif particle_reinit == 1: 
-                        # Reinit: Deactivate particle and add flux
-# =============================================================================
-#                         if pos[ii] > xmax:
-#                             mp_flux[1, idx[ii]] += 1.0
-#                         elif pos[ii] < xmin:
-#                             mp_flux[0, idx[ii]] += 1.0
-# =============================================================================
-                            
-                        #pos[ii]     = 0.0
+                    elif particle_reinit == 1:
                         vel[0, ii]  = 0.0
                         vel[1, ii]  = 0.0
                         vel[2, ii]  = 0.0
                         idx[ii]    -= 128                            
                     else:
-                        # Reflect
-                        if pos[ii] > xmax:
-                            pos[ii] = 2*xmax - pos[ii]
-                        elif pos[ii] < xmin:
-                            pos[ii] = 2*xmin - pos[ii]
-                            
-                        vel[0, ii] *= -1.0
+                        idx[ii] -= 128 
     return
 
 
@@ -888,6 +879,44 @@ def reinit_count_flux(pos, idx, _mp_flux):
                 _mp_flux[1, sp] += 1.0
             elif pos[ii] < xmin:
                 _mp_flux[0, sp] += 1.0 
+    return
+
+
+@nb.njit(parallel=do_parallel)
+def periodic_BC(pos, idx):
+    '''
+    Simple function to work out where to reinitialize particles (species/side)
+    Coded for serial computation since numba can't do parallel reductions with
+    arrays as a target.
+    
+    Shouldn't be any slower than requiring the source functions to be serial,
+    especially since its only an evaluation for every particle, and then a few
+    more operations for a miniscule portion of those particles.
+    '''
+    for ii in nb.prange(idx.shape[0]):
+        if idx[ii] < 0:
+            if pos[ii] > xmax:
+                pos[ii] += xmin
+                pos[ii] -= xmax
+            elif pos[ii] < xmin:
+                pos[ii] += xmax
+                pos[ii] -= xmin 
+            idx[ii] += 128
+    return
+
+
+@nb.njit(parallel=do_parallel)
+def reflective_BC(pos, vel, idx):
+    for ii in nb.prange(idx.shape[0]):
+        if idx[ii] < 0:
+            # Reflect
+            if pos[ii] > xmax:
+                pos[ii] = 2*xmax - pos[ii]
+            elif pos[ii] < xmin:
+                pos[ii] = 2*xmin - pos[ii]
+                
+            vel[0, ii] *= -1.0
+            idx[ii] += 128
     return
 
 
@@ -1603,7 +1632,7 @@ def calculate_E(B, B_center, Ji, J_ext, q_dens, E, Ve, Te, temp3De, temp3Db, gra
     E[:, 2]  = - temp3De[:, 2]
     
     # Add resistivity
-    if LH_frac != 0:
+    if resis_multiplier != 0:
         E[:, 0] += resistive_array[:] * (Ji[:, 0] - q_dens[:]*Ve[:, 0] + J_ext[:, 0])
         E[:, 1] += resistive_array[:] * (Ji[:, 1] - q_dens[:]*Ve[:, 1] + J_ext[:, 0])
         E[:, 2] += resistive_array[:] * (Ji[:, 2] - q_dens[:]*Ve[:, 2] + J_ext[:, 0])
@@ -2200,19 +2229,24 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
     Main loop separated from __main__ function, since this is the actual computation bit.
     '''
     # Check timestep (Maybe only check every few. Set in main body)
+    check_start = timer()
     if adaptive_timestep == True and qq%1 == 0 and disable_waves == 0:
         qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, damping_array \
         = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, B_cent, Ji_int, Ve_int, q_dens,
                          qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter,
                          idx, mp_flux, B_damping_array, resistive_array)    
+    check_time = round(timer() - check_start, 3)
     
     # Move particles, collect moments, deal with particle boundaries
     # Current temporal position of the velocity moment (same as J_ext)
+    part1_start = timer()
     advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                   B, E_int, DT, q_dens, q_dens_adv, Ji_int, Ji_half, J_ext, Ve_half,
                                   mp_flux, resistive_array, qq, pc=0)
+    part1_time = round(timer() - part1_start, 3)
     
     # Average N, N + 1 densities (q_dens at N + 1/2)
+    field_start = timer()
     q_dens *= 0.5; q_dens += 0.5 * q_dens_adv
     
     if disable_waves == 0:   
@@ -2221,27 +2255,34 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         get_B_cent(B, B_cent)
         calculate_E(B, B_cent, Ji_half, J_ext, q_dens, E_half, Ve_half, Te,
                     temp3De, temp3Db, temp1D, E_damping_array, resistive_array)
+        field_time = round(timer() - field_start, 3)
         
         ###################################
         ### PREDICTOR CORRECTOR SECTION ###
         ###################################
         # Store old values
+        store_start = timer()
         mp_flux_old = mp_flux.copy()
         store_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji_half, Ve_half, Te, old_particles, old_fields)
-        #store_time = round(timer() - store_start, 2)
+        store_time = round(timer() - store_start, 2)
         
         # Predict fields (and moments?) at N + 1
+        predict_start = timer()
         E_int  *= -1.0; E_int  +=  2.0 * E_half
         Ji_int *= -1.0; Ji_int +=  2.0 * Ji_half
         Ve_int *= -1.0; Ve_int +=  2.0 * Ve_half
         
         push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
-    
+        predict_time = round(timer() - predict_start, 3)
+        
         # Advance particles to obtain source terms at N + 3/2
+        part2_start = timer()
         advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                       B, E_int, DT, q_dens_adv, q_dens, Ji_int, Ji_half, J_ext, Ve_half,
                                       mp_flux, resistive_array, qq, pc=1)
-
+        part2_time = round(timer() - part2_start, 3)
+            
+        correct_start = timer()
         q_dens *= 0.5; q_dens += 0.5 * q_dens_adv
     
         # Compute predicted fields at N + 3/2, advance J_ext too
@@ -2252,15 +2293,20 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         
         # Determine corrected fields at N + 1 
         E_int  *= 0.5;    E_int  += 0.5 * E_half        
+        correct_time = round(timer() - correct_start, 3)
         
         # Store 3/2 for averaging after restore
         Ji_int[:] = Ji_half
         Ve_int[:] = Ve_half
         
         # Restore old values and push B-field final time
+        restore_start = timer()
         restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji_half, Ve_half, Te, old_particles, old_fields)        
+        restore_time = round(timer() - restore_start, 3)
     
+        
         # Determine corrected moments at N + 1
+        lastbit_start = timer()
         Ji_int *= 0.5; Ji_int += 0.5*Ji_half
         Ve_int *= 0.5; Ve_int += 0.5*Ve_half 
     
@@ -2269,9 +2315,11 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         
         q_dens[:] = q_dens_adv
         mp_flux   = mp_flux_old.copy()
+        lastbit_time = round(timer() - lastbit_start, 3)
         
     # Check number of spare particles every 25 steps
     if qq%1 == 0 and particle_open == 1:
+        count_start = timer()
         num_spare = (idx < 0).sum()
         if num_spare < nsp_ppc.sum():
             print('WARNING :: Less than one cell of spare particles remaining.')
@@ -2281,6 +2329,21 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
                 print('num_spare = ', num_spare)
                 print('inject_rate = ', inject_rate.sum() * DT * 5.0)
                 raise Exception('WARNING :: No spare particles remaining. Exiting simulation.')
+        count_time = round(timer() - count_start, 3)
+    
+    if False:
+        print('')
+        print(f'CHECK TIME: {check_time}')
+        print(f'PART1 TIME: {part1_time}')
+        print(f'FIELD TIME: {field_time}')
+        print(f'STORE TIME: {store_time}')
+        print(f'PDICT TIME: {predict_time}')
+        print(f'PART2 TIME: {part2_time}')
+        print(f'CRECT TIME: {correct_time}')
+        print(f'RSTRE TIME: {restore_time}')
+        print(f'LSBIT TIME: {lastbit_time}')
+        if particle_open == 1:
+            print(f'COUNT TIME: {count_time}')
     return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter
 
 
@@ -2340,7 +2403,7 @@ with open(run_input, 'r') as f:
     E_damping         = int(f.readline().split()[1])   # Damp E in a manner similar to B for ABCs
     damping_fraction  = float(f.readline().split()[1]) # Fraction of solution domain (on each side) that includes damping    
     damping_multiplier= float(f.readline().split()[1]) # Multiplies the r-factor to increase/decrease damping rate.
-    LH_frac           = float(f.readline().split()[1]) # Fraction of Lower Hybrid resonance used for resistivity calculation
+    resis_multiplier  = float(f.readline().split()[1]) # Fraction of Lower Hybrid resonance used for resistivity calculation
 
     NX        = int(f.readline().split()[1])           # Number of cells - doesn't include ghost/damping cells
     max_wcinv = float(f.readline().split()[1])         # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
@@ -2466,6 +2529,10 @@ gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency 
 egyfreq_eq = q*B_eq  / me                                # Electron Gyrofrequency (rad/s) at equator (slowest)
 dx         = dxm * va / gyfreq_eq                        # Alternate method of calculating dx (better for multicomponent plasmas)
 #dx2        = dxm * c / wpi
+
+# This will change with Te0 which means the resistance will change. Complicated!
+vth_e      = np.sqrt(kB*Te0_scalar/me)
+vei        = np.sqrt(2.) * wpe**4 / (64.*np.pi*ne*vth_e**3) # Ion-Electron collision frequency
 
 xmax       = NX / 2 * dx                                 # Maximum simulation length, +/-ve on each side
 xmin       =-NX / 2 * dx
