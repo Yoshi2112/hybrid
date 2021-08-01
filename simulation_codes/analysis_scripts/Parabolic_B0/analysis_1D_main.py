@@ -568,7 +568,6 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
     ax.set_xlabel('x ($\Delta x$)', fontsize=fontsize, family=font)
     ax.set_ylim(0, tmax)
     
-    
     ax.axvline(cf.xmin     / cf.dx, c='w', ls=':', alpha=1.0)
     ax.axvline(cf.xmax     / cf.dx, c='w', ls=':', alpha=1.0)
     ax.axvline(0.0                , c='w', ls=':', alpha=0.75)   
@@ -581,6 +580,79 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
         plt.close('all')
     return
 
+
+def plot_abs_J(saveas='abs_plot', save=False, log=False, tmax=None, remove_ND=False):
+    '''
+    Plot pcolormesh of tranverse magnetic field in space (x) and time (y).
+    
+    kwargs:
+        saveas    -- Filename (without suffixes) to save as
+        save      -- Save (True) or show (False)
+        log       -- Plot colorbar on log scale
+        tmax      -- Maximum time (y axis limit) to plot to
+        normalize -- Normalize B_tranverse by equatorial B0 (True) or plot in nT (False)
+        B0_lim    -- Colorbar limit (in multiples of B0). If None, plot up to maximum value.
+    '''
+    plt.ioff()
+
+    t, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens, field_sim_time, damping_array\
+        = cf.get_array(get_all=True)
+
+    fontsize = 18
+    font     = 'monospace'
+    
+    tick_label_size = 14
+    mpl.rcParams['xtick.labelsize'] = tick_label_size 
+    mpl.rcParams['ytick.labelsize'] = tick_label_size 
+    
+    Jt     = np.sqrt(jx ** 2 + jy ** 2 + jz ** 2) * 1e3
+    clabel = '$|J_T|$\nmA/m'
+    suff   = '' 
+        
+    x    = cf.E_nodes / cf.dx
+        
+    if tmax is None:
+        lbl = 'full'
+    else:
+        lbl = '{:04}'.format(tmax)
+        
+    if remove_ND == True:
+        xlim = [cf.xmin/cf.dx, cf.xmax/cf.dx]
+    else:
+        xlim = [x[0], x[-1]]
+    
+    ## PLOT IT
+    fig, ax = plt.subplots(1, figsize=(15, 10))
+
+    vmin = 0.0
+    vmax = Jt.max()
+
+    if log == False:
+        im1     = ax.pcolormesh(x, t, Jt, cmap='jet', vmin=vmin, vmax=vmax)
+        logsuff = ''
+    else:
+        im1     = ax.pcolormesh(x, t, np.log10(Jt), cmap='jet', vmin=0.0, vmax=-3)
+        logsuff = '_log'
+        
+    cb   = fig.colorbar(im1)
+    
+    cb.set_label(clabel, rotation=0, family=font, fontsize=fontsize, labelpad=30)
+
+    ax.set_ylabel('t (s)', rotation=0, labelpad=30, fontsize=fontsize, family=font)
+    ax.set_xlabel('x ($\Delta x$)', fontsize=fontsize, family=font)
+    ax.set_ylim(0, tmax)
+    
+    ax.axvline(cf.xmin     / cf.dx, c='w', ls=':', alpha=1.0)
+    ax.axvline(cf.xmax     / cf.dx, c='w', ls=':', alpha=1.0)
+    ax.axvline(0.0                , c='w', ls=':', alpha=0.75)   
+    ax.set_xlim(xlim[0], xlim[1])    
+    
+    if save == True:
+        fullpath = cf.anal_dir + saveas + '_JTOT_{}{}{}'.format(lbl, suff, logsuff) + '.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        print('abs(t-x) Plot saved')
+        plt.close('all')
+    return
 
 def plot_dynamic_spectra(component='By', saveas='power_spectra', save=False, ymax=None, cell=None,
                          overlap=0.99, win_idx=None, slide_idx=None, df=50):
@@ -2378,7 +2450,7 @@ def plot_initial_configurations_loss_with_time(it_max=None, save=True, skip=1):
     return
 
 
-def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True, skip=1):
+def plot_phase_space_with_time(it_max=None, skip=1):
     ## Same plotting routines as above, just for all times, and saving output
     ## to a file
     if it_max is None:
@@ -2408,7 +2480,7 @@ def plot_phase_space_with_time(it_max=None, plot_all=True, lost_black=True, skip
         fig2, ax2 = plt.subplots(figsize=(15, 10))
         fig3, ax3 = plt.subplots(3, sharex=True, figsize=(15, 10))
         
-        for jj in [1]:#range(cf.Nj):
+        for jj in range(cf.Nj):
     
             if True:
                 # Loss cone diagram
@@ -4335,7 +4407,7 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
 
-    for series in ['//driven_resis_variable_LHR//']:
+    for series in ['//damping_tests_varying_20pc_larger//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4343,7 +4415,7 @@ if __name__ == '__main__':
         if True:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [5]
+            runs_to_do = [11]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -4385,6 +4457,9 @@ if __name__ == '__main__':
                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
                            normalize=False, B0_lim=0.25, remove_ND=False)
                 
+                plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None,
+                           remove_ND=False)
+                
                 #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
                 
 # =============================================================================
@@ -4417,19 +4492,20 @@ if __name__ == '__main__':
                 #plot_spatial_poynting(save=True, log=True)
                 #plot_spatial_poynting_helical(save=True, log=True)
                 
-                plot_total_density_with_time(save=True)
+                #plot_total_density_with_time(save=True)
                 
                 #summary_plots(save=True, histogram=False, skip=10, ylim=False)
                 for sp in range(cf.Nj):
                     plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=1,
                                  ppd=False)
+                plot_phase_space_with_time(it_max=None, skip=1)
                     
 # =============================================================================
 #                 for sp in range(cf.Nj):
 #                     plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=4,
 #                                  ppd=True)
 # =============================================================================
-                #scatterplot_velocities(skip=10)
+                #scatterplot_velocities(skip=1)
                 #check_fields(skip=50, ylim=False)
             
         #plot_phase_space_with_time()

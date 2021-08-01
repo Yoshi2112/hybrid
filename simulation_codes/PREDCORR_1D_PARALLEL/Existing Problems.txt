@@ -1,0 +1,4 @@
+Existing Problems with the current iteration of code:
+ - PMC boundary conditions don't seem to work as expected for cases of zero damping and open BCs. When the wave hits the boundary, the reflected wave is not clean.
+ - Spatially varying resistivity and E-field damping don't work properly. Resistivity seems to make the wave stronger, and E-field damping causes weird phase velocity changes (as well as not really damping much or at all)
+  - 

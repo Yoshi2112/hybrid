@@ -1,0 +1,16 @@
+LABEL        $H^+$_warm $H^+$_cold $He^+$_cold  $O^+$_cold
+COLOUR       red        blue       purple       black
+TEMP_FLAG    1          0          0            0
+DIST_FLAG    0          0          0            0
+NSP_PPC      2048       256        256          256
+MASS_PROTON  1.         1.         4.           16.
+CHARGE_ELEM  1.         1.         1.           1.
+DRIFT_VA     0.         0.         0.           0.
+DENSITY_CM3  7.209      136.971    16.91        16.91
+ANISOTROPY   1.0        0.0        0.0          0.0
+ENERGY_PERP  7530       5.0        5.0          5.0
+ELECTRON_EV  5.0
+BETA_FLAG    0
+L            4.3
+B_EQ         243e-9
+B_XMAX       -

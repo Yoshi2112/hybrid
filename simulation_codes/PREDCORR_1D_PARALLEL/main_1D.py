@@ -24,7 +24,7 @@ Fu_override       = False      # Override to allow density to be calculated as a
 adaptive_timestep = True       # Disable adaptive timestep to keep it the same as initial
 do_parallel       = True       # Flag to use available threads to parallelize particle functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
-print_runtime     = True       # Flag to print runtime every 50 iterations 
+print_runtime     = False      # Flag to print runtime every 50 iterations 
 
 if not do_parallel:
     nb.set_num_threads(1)          
@@ -244,7 +244,7 @@ def initialize_particles(B, E, _mp_flux, Ji_in, Ve_in, rho_in):
 
 
 #@nb.njit()
-def set_damping_arrays(B_damping_array, E_damping_array, resistive_array, DT):
+def set_damping_arrays(B_damping_array, E_damping_array, resistive_array, retarding_array, DT):
     '''
     Create masking array for magnetic field damping used to apply open
     boundaries. Based on applcation by Shoji et al. (2011) and
@@ -256,12 +256,17 @@ def set_damping_arrays(B_damping_array, E_damping_array, resistive_array, DT):
     
     E_damping_array applied to Hall Term of E-field update as per Hu & Denton (2009)
      - Might need a factor to make this stronger than the B-damping
+     
+    Retardation array of Umeda et al. (2001). rD and rR vary, might need two knobs
+    for tests to see which is the best. Hardcode for now, and if it works put it
+    in the input file (or replace it with the E-damping)
     '''
     # Location and thickness of damping region (in units of dx)
     damping_thickness  = damping_fraction*NC
     damping_boundary   = 0.5*NC - damping_thickness      
     
-    # Damping coefficient
+    # Damping coefficients
+    r_ret    = 0.0
     r_damp   = np.sqrt(29.7 * 0.5 * va * (0.5 * DT / dx) / damping_thickness)   
     r_damp  *= damping_multiplier
     
@@ -270,8 +275,10 @@ def set_damping_arrays(B_damping_array, E_damping_array, resistive_array, DT):
     for ii in range(NC + 1):
         if B_dist_from_mp[ii] > damping_boundary:
             B_damping_array[ii] = 1. - r_damp * ((B_dist_from_mp[ii] - damping_boundary) / damping_thickness) ** 2 
+            retarding_array[ii] = 1. - r_ret * ((B_dist_from_mp[ii] - damping_boundary) / damping_thickness) ** 2 
         else:
             B_damping_array[ii] = 1.0
+            retarding_array[ii] = 1.0
             
     # Do E-damping array
     E_dist_from_mp  = np.abs(np.arange(NC) + 0.5 - 0.5*NC)
@@ -304,6 +311,12 @@ def set_damping_arrays(B_damping_array, E_damping_array, resistive_array, DT):
         # Inside solution space
         else:
             resistive_array[ii] = 0.0
+            
+    # Make sure no damping arrays go negative (or that's growth!)
+    for arr in [B_damping_array, E_damping_array, resistive_array, retarding_array]:
+        for ii in range(arr.shape[0]):
+            if arr[ii] < 0.0:
+                arr[ii] = 0.0
     return
 
 
@@ -430,7 +443,8 @@ def set_timestep(vel):
     B_damping_array = np.ones(NC + 1, dtype=float)
     E_damping_array = np.ones(NC    , dtype=float)
     resistive_array = np.ones(NC    , dtype=float)
-    set_damping_arrays(B_damping_array, E_damping_array, resistive_array, DT)
+    retarding_array = np.ones(NC + 1, dtype=float)
+    set_damping_arrays(B_damping_array, E_damping_array, resistive_array, retarding_array, DT)
     
     # DIAGNOSTIC PLOT: CHECK OUT DAMPING FACTORS
     if False:
@@ -451,7 +465,8 @@ def set_timestep(vel):
         
     
     print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))
-    return DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array, resistive_array
+    return DT, max_inc, part_save_iter, field_save_iter, B_damping_array,\
+             E_damping_array, resistive_array, retarding_array
 
 
 
@@ -472,9 +487,6 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
     Can be set so that only the ring current warm/hot species are set to the
     initial equilibrium, since the time taken for the cold species to do this
     is quite substantial.
-    
-    TODO: Set particle boundary conditions to be species specific - i.e. reflect
-    cold populations, but let hot populations have an open boundary.
     
     Is vel_ts needed? Cells don't really exist in this bottle. But you probably 
     don't want to jump too quickly through the gradient, surely there's a timestep
@@ -1198,6 +1210,10 @@ def deposit_moments_to_grid_parallel(vel, Ie, W_elec, idx, ni, nu):
     for tt in nb.prange(n_threads):        
         for ii in range(n_start_idxs[tt], n_start_idxs[tt]+N_per_thread[tt]):
             if idx[ii] >= 0:
+                
+                # Calculation of retard(x) would happen here.
+                
+                
                 for kk in nb.prange(3):
                     nu_threads[tt, Ie[ii],     idx[ii], kk] += W_elec[0, ii] * vel[kk, ii]
                     nu_threads[tt, Ie[ii] + 1, idx[ii], kk] += W_elec[1, ii] * vel[kk, ii]
@@ -1239,6 +1255,15 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, J_ext, J_time):
     
     Especially for the parallel version, might be again more efficient to initialize
     ni, nu at runtime, instead of dynamic creation.
+    
+    To do:
+        -- If the retarding method is going to work properly, particles in damping
+        region have to be slowed by a factor of v_new = retard(x) * v_old when
+        collecting the ionic current. This requires evaluation of retard(x) at the
+        particle location OR interpolation of the existing retardation arrays using
+        the B_weightings (Ib, W_mag). That's probably the easiest to implement.
+        -- Although is it possible to just multiply the J_array by a version of
+        retarding_array? Would need a version like an E_retarding_array()
     '''
     q_dens *= 0.
     Ji     *= 0.
@@ -1482,7 +1507,7 @@ def get_curl_E(E, dE):
 
 
 @nb.njit()
-def push_B(B, E, curlE, DT, qq, damping_array, half_flag=1):
+def push_B(B, E, curlE, DT, qq, damping_array, retarding_array, half_flag=1):
     '''
     Used as part of predictor corrector for predicing B based on an approximated
     value of E (rather than cycling with the source terms)
@@ -1497,12 +1522,21 @@ def push_B(B, E, curlE, DT, qq, damping_array, half_flag=1):
     subtracted from the "full" timestep time
     '''
     get_curl_E(E, curlE)
+    if field_periodic == 0:
+        for ii in nb.prange(1, B.shape[1]):              
+            curlE[:, ii] *= retarding_array              # Apply retarding, skipping x-axis
 
     B -= 0.5 * DT * curlE                                # Advance using curl
     
     if field_periodic == 0:
         for ii in nb.prange(1, B.shape[1]):              # Apply damping, skipping x-axis
             B[:, ii] *= damping_array                    # Not sure if this needs to modified for half steps?
+    
+# =============================================================================
+#         # PMC boundary
+#         B[:ND+1,    ii] *= 0.0
+#         B[ND + NX:, ii] *= 0.0
+# =============================================================================
     else:
         for ii in nb.prange(1, B.shape[1]):
             # Boundary value (should be equal)
@@ -1638,8 +1672,8 @@ def calculate_E(B, B_center, Ji, J_ext, q_dens, E, Ve, Te, temp3De, temp3Db, gra
         E[:, 2] += resistive_array[:] * (Ji[:, 2] - q_dens[:]*Ve[:, 2] + J_ext[:, 0])
 
     # Copy periodic values
-    if field_periodic == 1:
-        for ii in range(3):
+    for ii in range(3):
+        if field_periodic == 1:
             # Copy edge cells
             E[ro1, ii] = E[li1, ii]
             E[ro2, ii] = E[li2, ii]
@@ -1649,6 +1683,11 @@ def calculate_E(B, B_center, Ji, J_ext, q_dens, E, Ve, Te, temp3De, temp3Db, gra
             # Fill remaining ghost cells
             E[:lo2, ii] = E[lo2, ii]
             E[ro2:, ii] = E[ro2, ii]
+# =============================================================================
+#         else:
+#             E[:lo2, ii] *= 0.0
+#             E[ro2:, ii] *= 0.0
+# =============================================================================
             
     # Diagnostic flag for testing
     if disable_waves == 1:   
@@ -1755,32 +1794,6 @@ def calculate_E(B, B_center, Ji, J_ext, q_dens, E, Ve, Te, temp3De, temp3Db, gra
 #     return
 # =============================================================================
 
-def get_thread_values():
-    '''
-    Function to calculate number of particles to work on each thread, and the
-    start index of each batch of particles.
-    '''
-    N_per_thread = (N//n_threads)*np.ones(n_threads, dtype=int)
-    if N%n_threads == 0:
-        n_start_idxs = np.arange(n_threads)*N_per_thread
-    else:
-        leftovers = N%n_threads
-        for _lo in range(leftovers):
-            N_per_thread[_lo] += 1
-        n_start_idxs = np.asarray([np.sum(N_per_thread[0:_si]) for _si in range(0, n_threads)])
-        
-    # Check values (this is important)
-    if N_per_thread.sum() != N:
-        raise ValueError('Number of particles per thread unequal to total number of particles')
-        
-    for _ii in range(1, n_start_idxs.shape[0] + 1):
-        if _ii == n_start_idxs.shape[0]:
-            n_in_thread = N - n_start_idxs[-1]
-        else:
-            n_in_thread = n_start_idxs[_ii] - n_start_idxs[_ii - 1]
-        if n_in_thread != N_per_thread[_ii - 1]:
-            raise ValueError('Thread particle indices are not correct. Check this.')
-    return N_per_thread, n_start_idxs
 
 @nb.njit(parallel=do_parallel)
 def get_max_vx(vel):
@@ -1945,7 +1958,14 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('quiet_start', quiet_start),
                    ('num_threads', nb.get_num_threads()),
                    ('subcycles', 1),
-                   ('damping_multiplier', damping_multiplier)
+                   ('damping_multiplier', damping_multiplier),
+                   ('damping_fraction', damping_fraction),
+                   ('pol_wave', pol_wave),
+                   ('driven_freq', driven_freq),
+                   ('driven_ampl', driven_ampl),
+                   ('driven_k', driven_k),
+                   ('pulse_offset', pulse_offset),
+                   ('pulse_width', pulse_width),
                    ])
 
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:
@@ -1982,7 +2002,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
 
 
 def save_field_data(sim_time, dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns,
-                    damping_array, E_damping_array, resistive_array ):
+                    damping_array, E_damping_array, resistive_array):
     d_path   = '%s/%s/run_%d/data/fields/' % (drive, save_path, run)
     r        = qq / field_save_iter
 
@@ -2223,7 +2243,7 @@ def restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particl
 def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
               B, B_cent, E_int, E_half, q_dens, q_dens_adv, Ji_int, Ji_half, J_ext, mp_flux,
               Ve_int, Ve_half, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,
-              B_damping_array, E_damping_array, resistive_array, 
+              B_damping_array, E_damping_array, resistive_array, retarding_array,
               qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter):
     '''
     Main loop separated from __main__ function, since this is the actual computation bit.
@@ -2251,7 +2271,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
     
     if disable_waves == 0:   
         # Push B from N to N + 1/2 and calculate E(N + 1/2)
-        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
+        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, retarding_array, half_flag=1)
         get_B_cent(B, B_cent)
         calculate_E(B, B_cent, Ji_half, J_ext, q_dens, E_half, Ve_half, Te,
                     temp3De, temp3Db, temp1D, E_damping_array, resistive_array)
@@ -2272,7 +2292,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         Ji_int *= -1.0; Ji_int +=  2.0 * Ji_half
         Ve_int *= -1.0; Ve_int +=  2.0 * Ve_half
         
-        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
+        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, retarding_array, half_flag=0)
         predict_time = round(timer() - predict_start, 3)
         
         # Advance particles to obtain source terms at N + 3/2
@@ -2286,7 +2306,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         q_dens *= 0.5; q_dens += 0.5 * q_dens_adv
     
         # Compute predicted fields at N + 3/2, advance J_ext too
-        push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
+        push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, retarding_array, half_flag=1)
         get_B_cent(B, B_cent)
         calculate_E(B, B_cent, Ji_half, J_ext, q_dens, E_int, Ve_half, Te,
                     temp3De, temp3Db, temp1D, E_damping_array, resistive_array)
@@ -2310,7 +2330,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         Ji_int *= 0.5; Ji_int += 0.5*Ji_half
         Ve_int *= 0.5; Ve_int += 0.5*Ve_half 
     
-        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
+        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, retarding_array, half_flag=0)   # Advance the original B
         get_B_cent(B, B_cent)
         
         q_dens[:] = q_dens_adv
@@ -2347,23 +2367,360 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
     return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter
 
 
-
-
-
-### ##
-### MAIN GLOBAL CONTROL
-### ##
-
+def load_run_params():
+    global drive, save_path, run, save_particles, save_fields, seed, homogenous, particle_periodic,\
+        particle_reflect, particle_reinit, field_periodic, disable_waves, source_smoothing, quiet_start,\
+        E_damping, damping_fraction, damping_multiplier, resis_multiplier, NX, max_wcinv, dxm, ie,\
+            orbit_res, freq_res, part_res, field_res, run_description, particle_open, ND, NC,\
+                lo1, lo2, ro1, ro2, li1, li2, ri1, ri2
+            
+    print('LOADING RUNFILE: {}'.format(run_input))
+    with open(run_input, 'r') as f:
+        drive             = f.readline().split()[1]        # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
+        save_path         = f.readline().split()[1]        # Series save dir   : Folder containing all runs of a series
+        run               = f.readline().split()[1]        # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
     
-#################################
-### FILENAMES AND DIRECTORIES ###
-#################################
+        save_particles    = int(f.readline().split()[1])   # Save data flag    : For later analysis
+        save_fields       = int(f.readline().split()[1])   # Save plot flag    : To ensure hybrid is solving correctly during run
+        seed              = f.readline().split()[1]        # RNG Seed          : Set to enable consistent results for parameter studies
+        
+        homogenous        = int(f.readline().split()[1])   # Set B0 to homogenous (as test to compare to parabolic)
+        particle_periodic = int(f.readline().split()[1])   # Set particle boundary conditions to periodic
+        particle_reflect  = int(f.readline().split()[1])   # Set particle boundary conditions to reflective
+        particle_reinit   = int(f.readline().split()[1])   # Set particle boundary conditions to reinitialize
+        field_periodic    = int(f.readline().split()[1])   # Set field boundary to periodic (False: Absorbtive Boundary Conditions)
+        disable_waves     = int(f.readline().split()[1])   # Zeroes electric field solution at each timestep
+        source_smoothing  = int(f.readline().split()[1])   # Smooth source terms with 3-point Gaussian filter
+        quiet_start       = int(f.readline().split()[1])   # Flag to use quiet start
+        E_damping         = int(f.readline().split()[1])   # Damp E in a manner similar to B for ABCs
+        damping_fraction  = float(f.readline().split()[1]) # Fraction of solution domain (on each side) that includes damping    
+        damping_multiplier= float(f.readline().split()[1]) # Multiplies the r-factor to increase/decrease damping rate.
+        resis_multiplier  = float(f.readline().split()[1]) # Fraction of Lower Hybrid resonance used for resistivity calculation
+    
+        NX        = int(f.readline().split()[1])           # Number of cells - doesn't include ghost/damping cells
+        max_wcinv = float(f.readline().split()[1])         # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
+        dxm       = float(f.readline().split()[1])         # Number of ion inertial lengths per dx
+        
+        ie        = int(f.readline().split()[1])           # Adiabatic electrons. 0: off (constant), 1: on.
+          
+        orbit_res = float(f.readline().split()[1])         # Orbit resolution
+        freq_res  = float(f.readline().split()[1])         # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
+        part_res  = float(f.readline().split()[1])         # Data capture resolution in gyroperiod fraction: Particle information
+        field_res = float(f.readline().split()[1])         # Data capture resolution in gyroperiod fraction: Field information
+    
+        run_description = f.readline()                     # Commentary to attach to runs, helpful to have a quick description
+    
+    # Set number of ghost cells, count total
+    ND = 2
+    NC = NX + 2*ND
+    
+    # E-field nodes around boundaries (used for sources and E-fields)
+    lo1 = ND - 1 ; lo2 = ND - 2             # Left outer (to boundary)
+    ro1 = ND + NX; ro2 = ND + NX + 1        # Right outer
+    
+    li1 = ND         ; li2 = ND + 1         # Left inner
+    ri1 = ND + NX - 1; ri2 = ND + NX - 2    # Right inner
 
+    # Check BCs
+    if field_periodic == 1:
+        if particle_periodic == 0:
+            print('Periodic field compatible only with periodic particles.')
+            particle_periodic = 1
+            particle_reflect = particle_reinit = 0
+    
+    particle_open = 0
+    if particle_reflect + particle_reinit + particle_periodic == 0:
+        particle_open = 1
+        
+    # Hardcode because I keep forgetting to change this
+    if os.name == 'posix':
+        drive = '/home/c3134027/'
+    
+    # Set run number
+    if args['run_num'] != -1:                              # Check CLI, or
+        run = args['run_num']
+    elif run != '-':                                       # Check input file, else
+        run = int(run)
+    else:                                                  # Autoset
+        if os.path.exists(drive + save_path) == False:
+            run = 0
+        else:
+            run = len(os.listdir(drive + save_path))
+    
+    if seed == '-':
+        seed = None
+    else:
+        seed = int(seed)
+    
+    if field_periodic == 1 and damping_multiplier != 0:
+        damping_multiplier = 0.0
+    return
+
+
+def load_plasma_params():
+    global species_lbl, temp_color, temp_type, dist_type, nsp_ppc, mass, charge, \
+        drift_v, density, anisotropy, E_perp, E_e, beta_flag, L, B_eq, B_xmax_ovr,\
+        qm_ratios, N, idx_start, idx_end, Nj, N_species, B_eq, ne, density, \
+        E_par, Te0_scalar, vth_perp, vth_par, T_par, T_perp, vth_e, vei,\
+        wpi, wpe, va, gyfreq_eq, egyfreq_eq, dx, n_contr, min_dens, xmax, xmin,\
+            inject_rate, k_max
+        
+    print('LOADING PLASMA: {}'.format(plasma_input))
+    with open(plasma_input, 'r') as f:
+        species_lbl = np.array(f.readline().split()[1:])
+        
+        temp_color = np.array(f.readline().split()[1:])
+        temp_type  = np.array(f.readline().split()[1:], dtype=int)
+        dist_type  = np.array(f.readline().split()[1:], dtype=int)
+        nsp_ppc    = np.array(f.readline().split()[1:], dtype=int)
+        
+        mass       = np.array(f.readline().split()[1:], dtype=float)
+        charge     = np.array(f.readline().split()[1:], dtype=float)
+        drift_v    = np.array(f.readline().split()[1:], dtype=float)
+        density    = np.array(f.readline().split()[1:], dtype=float)*1e6
+        anisotropy = np.array(f.readline().split()[1:], dtype=float)
+        
+        # Particle energy: If beta == 1, energies are in beta. If not, they are in eV                                    
+        E_perp     = np.array(f.readline().split()[1:], dtype=float)
+        E_e        = float(f.readline().split()[1])
+        beta_flag  = int(f.readline().split()[1])
+    
+        L         = float(f.readline().split()[1])           # Field line L shell, used to calculate parabolic scale factor.
+        B_eq      = f.readline().split()[1]                  # Magnetic field at equator in T: '-' for L-determined value :: 'Exact' value in node ND + NX//2
+        B_xmax_ovr= f.readline().split()[1]                  # Magnetic field at simulation boundaries (excluding damping cells). Overrides 'a' calculation.
+    
+    if B_eq == '-':
+        B_eq = (B_surf / (L ** 3))                           # Magnetic field at equator, based on L value
+    else:
+        B_eq = float(B_eq)
+    
+    ### -- Normalization of density override (e.g. Fu, Winkse)
+    if Fu_override == True:
+        rat        = 5
+        ne         = (rat*B_eq)**2 * e0 / me
+        density    = np.array([0.05, 0.94, 0.01])*ne
+    ### 
+    
+    charge    *= q                                           # Cast species charge to Coulomb
+    mass      *= mp                                          # Cast species mass to kg
+    qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
+    
+    ne         = density.sum()                               # Electron number density
+    rho        = (mass*density).sum()                        # Mass density for alfven velocity calc.
+    wpi        = np.sqrt((density * charge ** 2 / (mass * e0)).sum())            # Proton Plasma Frequency, wpi (rad/s)
+    wpe        = np.sqrt(ne * q ** 2 / (me * e0))            # Electron Plasma Frequency, wpi (rad/s)
+    #va         = B_eq / np.sqrt(mu0*rho)                     # Alfven speed at equator: Assuming pure proton plasma
+    gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
+    egyfreq_eq = q*B_eq  / me                                # Electron Gyrofrequency (rad/s) at equator (slowest)
+    va         = B_eq / np.sqrt(mu0*mass[1]*density[1])      # Hard-coded to be 'cold proton alfven velocity' (Shoji et al, 2013)
+    dx         = dxm * va / gyfreq_eq                        # Alternate method of calculating dx (better for multicomponent plasmas)
+    n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this SI density to a cell
+    min_dens   = 0.05                                        # Minimum charge density in a cell
+    xmax       = NX / 2 * dx                                 # Maximum simulation length, +/-ve on each side
+    xmin       =-NX / 2 * dx
+    k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
+
+    E_par       = E_perp / (anisotropy + 1)     # Parallel species energy
+    if beta_flag == 0:
+        # Input energies in eV
+        Te0_scalar = q * E_e / kB
+        vth_perp   = np.sqrt(charge *  E_perp /  mass)    # Perpendicular thermal velocities
+        vth_par    = np.sqrt(charge *  E_par  /  mass)    # Parallel thermal velocities
+        T_par      = E_par  * 11603.
+        T_perp     = E_perp * 11603.
+    else:
+        # Input energies in terms of beta (Generally only used for Winske/Gary/Fu stuff... invalid in general?)
+        kbt_par    = E_par  * (B_eq ** 2) / (2 * mu0 * ne)
+        kbt_per    = E_perp * (B_eq ** 2) / (2 * mu0 * ne)
+        Te0_scalar = E_e    * (B_eq ** 2) / (2 * mu0 * ne * kB)
+        vth_perp   = np.sqrt(kbt_per /  mass)                # Perpendicular thermal velocities
+        vth_par    = np.sqrt(kbt_par /  mass)                # Parallel thermal velocities
+        T_par      = kbt_par / kB
+        T_perp     = kbt_per / kB
+    
+    # This will change with Te0 which means the resistance will change. Complicated!
+    vth_e      = np.sqrt(kB*Te0_scalar/me)
+    vei        = np.sqrt(2.) * wpe**4 / (64.*np.pi*ne*vth_e**3) # Ion-Electron collision frequency
+
+    # Number of sim particles for each species, total
+    Nj        = len(mass)                                    # Number of species
+    N_species = nsp_ppc * NX
+    if field_periodic == 0:
+        N_species += 2   
+    
+    # Add number of spare particles proportional to percentage of total (50% standard, high but safe)
+    if particle_open == 1:
+        spare_ppc  = N_species.sum() * 0.5
+    else:
+        spare_ppc  = 0
+    N = N_species.sum() + int(spare_ppc)
+    
+    # Calculate injection rate for open boundaries
+    if particle_open == 1:
+        inject_rate = nsp_ppc * (vth_par / dx) / np.sqrt(2 * np.pi)
+    else:
+        inject_rate = 0.0
+    
+    idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
+    idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
+    return
+
+
+def load_wave_driver_params():
+    global pol_wave, driven_freq, driven_ampl, driven_k, pulse_offset, pulse_width
+    
+    print('LOADING DRIVER: {}'.format(driver_input))
+    with open(driver_input, 'r') as f:
+        pol_wave     = int(np.array(f.readline().split()[1]))
+        driven_freq  = float(np.array(f.readline().split()[1]))
+        driven_ampl  = float(np.array(f.readline().split()[1]))
+        pulse_offset = float(np.array(f.readline().split()[1]))
+        pulse_cycle  = float(np.array(f.readline().split()[1]))
+    
+    # Define pulse width in terms of wave frequency
+    # i.e. pump X cycles of a wave at driven_freq
+    wave_period = 1. / driven_freq
+    pulse_width = pulse_cycle*wave_period
+    
+    species_plasfreq_sq   = (density * charge ** 2) / (mass * e0)
+    species_gyrofrequency = qm_ratios * B_eq
+    
+    # Looks right!
+    driven_rad = driven_freq * 2 * np.pi
+    driven_k   = (driven_rad / c) ** 2
+    driven_k  *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyrofrequency))).sum()
+    driven_k   = np.sqrt(driven_k)
+    return
+
+
+def calculate_background_magnetic_field():
+    global a, B_xmax, gyfreq_xmax, loss_cone_eq, loss_cone_xmax, lambda_L, theta_xmax,\
+        B_A, r_A, lat_A, B_nodes_loc, E_nodes_loc
+    if homogenous == 1:
+        a      = 0
+        B_xmax = B_eq
+        
+        # Also need to set any numeric values
+        B_A            = 0.0
+        loss_cone_eq   = 0.0
+        loss_cone_xmax = 0.0
+        theta_xmax     = 0.0
+        lambda_L       = 0.0
+        lat_A          = 0.0
+        r_A            = 0.0
+    else:    
+        a          = 4.5 / (L*RE)**2
+        r_A        = 120e3
+        lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L)))       # Anchor latitude in radians
+        B_A        = B_eq * np.sqrt(4 - 3*np.cos(lat_A) ** 2)\
+                    / (np.cos(lat_A) ** 6)                        # Magnetic field at anchor point
+                    
+        # GENERAL PARABOLIC FIELD
+        if B_xmax_ovr == '-':
+            a      = 4.5 / (L*RE)**2
+            B_xmax = B_eq * (1 + a*xmax**2)
+        else:
+            B_xmax = float(B_xmax_ovr)
+            a      = (B_xmax / B_eq - 1) / xmax**2
+            
+        lambda_L       = np.arccos(np.sqrt(1.0 / L))                    # MLAT of anchor point
+        loss_cone_eq   = np.arcsin(np.sqrt(B_eq   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
+        loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
+        theta_xmax     = 0.0                                            # NOT REALLY ANY WAY TO TELL MLAT WITH THIS METHOD
+       
+    B_nodes_loc  = (np.arange(NC + 1) - NC // 2)       * dx      # B grid points position in space
+    E_nodes_loc  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
+    gyfreq_xmax  = q*B_xmax/ mp                                  # Proton Gyrofrequency (rad/s) at boundary (highest)
+    return
+
+
+def get_thread_values():
+    '''
+    Function to calculate number of particles to work on each thread, and the
+    start index of each batch of particles.
+    '''
+    global do_parallel, n_threads, N_per_thread, n_start_idxs
+    
+    # Count available threads
+    if do_parallel:
+        n_threads = nb.get_num_threads()
+    else:
+        # Parallel optimization makes functions run faster even on 1 thread
+        n_threads = 1
+        do_parallel = True
+
+    N_per_thread = (N//n_threads)*np.ones(n_threads, dtype=int)
+    if N%n_threads == 0:
+        n_start_idxs = np.arange(n_threads)*N_per_thread
+    else:
+        leftovers = N%n_threads
+        for _lo in range(leftovers):
+            N_per_thread[_lo] += 1
+        n_start_idxs = np.asarray([np.sum(N_per_thread[0:_si]) for _si in range(0, n_threads)])
+        
+    # Check values (this is important)
+    if N_per_thread.sum() != N:
+        raise ValueError('Number of particles per thread unequal to total number of particles')
+        
+    for _ii in range(1, n_start_idxs.shape[0] + 1):
+        if _ii == n_start_idxs.shape[0]:
+            n_in_thread = N - n_start_idxs[-1]
+        else:
+            n_in_thread = n_start_idxs[_ii] - n_start_idxs[_ii - 1]
+        if n_in_thread != N_per_thread[_ii - 1]:
+            raise ValueError('Thread particle indices are not correct. Check this.')
+    return 
+
+
+def print_summary_and_checks():    
+    print('')
+    print('Run Started')
+    print('Run Series         : {}'.format(save_path.split('//')[-1]))
+    print('Run Number         : {}'.format(run))
+    print('# threads used     : {}'.format(n_threads))
+    print('Field save flag    : {}'.format(save_fields))
+    print('Particle save flag : {}\n'.format(save_particles))
+    
+    print('Sim domain length  : {:5.2f}R_E'.format(2 * xmax / RE))
+    print('Density            : {:5.2f}cc'.format(ne / 1e6))
+    print('Equatorial B-field : {:5.2f}nT'.format(B_eq*1e9))
+    print('Boundary   B-field : {:5.2f}nT'.format(B_xmax*1e9))
+    print('Iono.      B-field : {:5.2f}mT'.format(B_A*1e6))
+    print('Equat. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_eq))
+    print('Bound. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_xmax * 180. / np.pi))
+    print('Maximum MLAT (+/-) : {:<5.2f} degrees  '.format(theta_xmax * 180. / np.pi))
+    print('Iono.   MLAT (+/-) : {:<5.2f} degrees\n'.format(lambda_L * 180. / np.pi))
+    
+    print('Equat. Gyroperiod: : {}s'.format(round(2. * np.pi / gyfreq_eq, 3)))
+    print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq_eq, 3)))
+    print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_wcinv / gyfreq_eq, 2), 
+                                                               round(max_wcinv/(2*np.pi), 2)))    
+    print('{} spatial cells, 2x{} damped cells'.format(NX, ND))
+    print('{} cells total'.format(NC))
+    print('{} particles total\n'.format(N))
+    
+    if theta_xmax > lambda_L:
+        print('ABORT : SIMULATION DOMAIN LONGER THAN FIELD LINE')
+        sys.exit()
+    
+    if particle_periodic + particle_reflect + particle_reinit > 1:
+        print('ABORT : ONLY ONE PARTICLE BOUNDARY CONDITION ALLOWED')
+        sys.exit()
+            
+    if  os.name != 'posix':
+        os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
+    return
+
+#####################
+#%% -- GLOBAL MAIN --
+#####################
+    
 #### Read in command-line arguments, if present
 import argparse as ap
 parser = ap.ArgumentParser()
 parser.add_argument('-r', '--runfile'   , default='_run_params.run', type=str)
 parser.add_argument('-p', '--plasmafile', default='_plasma_params.plasma', type=str)
+parser.add_argument('-d', '--driverfile', default='_driver_params.txt'   , type=str)
 parser.add_argument('-n', '--run_num'   , default=-1, type=int)
 args = vars(parser.parse_args())
 
@@ -2376,357 +2733,21 @@ else:
 # Set input .run and .plasma files
 run_input    = root_dir +  '/run_inputs/' + args['runfile']
 plasma_input = root_dir +  '/run_inputs/' + args['plasmafile']
-
+driver_input = root_dir +  '/run_inputs/' + args['driverfile']
 if Fu_override == True:
     plasma_input = root_dir +  '/run_inputs/' + '_Fu_test.plasma'
 
-###########################
-### LOAD RUN PARAMETERS ###
-###########################
-with open(run_input, 'r') as f:
-    drive             = f.readline().split()[1]        # Drive letter or path for portable HDD e.g. 'E:/' or '/media/yoshi/UNI_HD/'
-    save_path         = f.readline().split()[1]        # Series save dir   : Folder containing all runs of a series
-    run               = f.readline().split()[1]        # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
-
-    save_particles    = int(f.readline().split()[1])   # Save data flag    : For later analysis
-    save_fields       = int(f.readline().split()[1])   # Save plot flag    : To ensure hybrid is solving correctly during run
-    seed              = f.readline().split()[1]        # RNG Seed          : Set to enable consistent results for parameter studies
-    
-    homogenous        = int(f.readline().split()[1])   # Set B0 to homogenous (as test to compare to parabolic)
-    particle_periodic = int(f.readline().split()[1])   # Set particle boundary conditions to periodic
-    particle_reflect  = int(f.readline().split()[1])   # Set particle boundary conditions to reflective
-    particle_reinit   = int(f.readline().split()[1])   # Set particle boundary conditions to reinitialize
-    field_periodic    = int(f.readline().split()[1])   # Set field boundary to periodic (False: Absorbtive Boundary Conditions)
-    disable_waves     = int(f.readline().split()[1])   # Zeroes electric field solution at each timestep
-    source_smoothing  = int(f.readline().split()[1])   # Smooth source terms with 3-point Gaussian filter
-    quiet_start       = int(f.readline().split()[1])   # Flag to use quiet start
-    E_damping         = int(f.readline().split()[1])   # Damp E in a manner similar to B for ABCs
-    damping_fraction  = float(f.readline().split()[1]) # Fraction of solution domain (on each side) that includes damping    
-    damping_multiplier= float(f.readline().split()[1]) # Multiplies the r-factor to increase/decrease damping rate.
-    resis_multiplier  = float(f.readline().split()[1]) # Fraction of Lower Hybrid resonance used for resistivity calculation
-
-    NX        = int(f.readline().split()[1])           # Number of cells - doesn't include ghost/damping cells
-    max_wcinv = float(f.readline().split()[1])         # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
-    dxm       = float(f.readline().split()[1])         # Number of ion inertial lengths per dx
-    
-    ie        = int(f.readline().split()[1])           # Adiabatic electrons. 0: off (constant), 1: on.
-      
-    orbit_res = float(f.readline().split()[1])         # Orbit resolution
-    freq_res  = float(f.readline().split()[1])         # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
-    part_res  = float(f.readline().split()[1])         # Data capture resolution in gyroperiod fraction: Particle information
-    field_res = float(f.readline().split()[1])         # Data capture resolution in gyroperiod fraction: Field information
-
-    run_description = f.readline()                     # Commentary to attach to runs, helpful to have a quick description
-
-# Hardcode because I keep forgetting to change this
-if os.name == 'posix':
-    drive = '/home/c3134027/'
-
-# Set run number
-if args['run_num'] != -1:                              # Check CLI, or
-    run = args['run_num']
-elif run != '-':                                       # Check input file, else
-    run = int(run)
-else:                                                  # Autoset
-    if os.path.exists(drive + save_path) == False:
-        run = 0
-    else:
-        run = len(os.listdir(drive + save_path))
-    print('Run number AUTOSET to ', run)
-
-if seed == '-':
-    seed = None
-else:
-    seed = int(seed)
-
+# Load parameters from files
+load_run_params()
 if __name__ == '__main__':
     manage_directories()
-
-#######################################
-### LOAD PARTICLE/PLASMA PARAMETERS ###
-#######################################
-print('LOADING PLASMA: {}'.format(plasma_input))
-with open(plasma_input, 'r') as f:
-    species_lbl = np.array(f.readline().split()[1:])
-    
-    temp_color = np.array(f.readline().split()[1:])
-    temp_type  = np.array(f.readline().split()[1:], dtype=int)
-    dist_type  = np.array(f.readline().split()[1:], dtype=int)
-    nsp_ppc    = np.array(f.readline().split()[1:], dtype=int)
-    
-    mass       = np.array(f.readline().split()[1:], dtype=float)
-    charge     = np.array(f.readline().split()[1:], dtype=float)
-    drift_v    = np.array(f.readline().split()[1:], dtype=float)
-    density    = np.array(f.readline().split()[1:], dtype=float)*1e6
-    anisotropy = np.array(f.readline().split()[1:], dtype=float)
-    
-    # Particle energy: If beta == 1, energies are in beta. If not, they are in eV                                    
-    E_perp     = np.array(f.readline().split()[1:], dtype=float)
-    E_e        = float(f.readline().split()[1])
-    beta_flag  = int(f.readline().split()[1])
-
-    L         = float(f.readline().split()[1])           # Field line L shell, used to calculate parabolic scale factor.
-    B_eq      = f.readline().split()[1]                  # Magnetic field at equator in T: '-' for L-determined value :: 'Exact' value in node ND + NX//2
-    B_xmax_ovr= f.readline().split()[1]                  # Magnetic field at simulation boundaries (excluding damping cells). Overrides 'a' calculation.
-
-charge *= q                                              # Cast species charge to Coulomb
-mass   *= mp                                             # Cast species mass to kg
-
-#####################################
-### DERIVED SIMULATION PARAMETERS ###
-#####################################
-ND = 2                                                   # Set minimum (used for array addresses)
-    
-if B_eq == '-':
-    B_eq = (B_surf / (L ** 3))                           # Magnetic field at equator, based on L value
-else:
-    B_eq = float(B_eq)
-    
-### -- Normalization of density override (e.g. Fu, Winkse)
-if Fu_override == True:
-    rat        = 5
-    ne         = (rat*B_eq)**2 * e0 / me
-    density    = np.array([0.05, 0.94, 0.01])*ne
-### 
-
-NC          = NX + 2*ND                     # Total number of cells
-ne          = density.sum()                 # Electron number density
-E_par       = E_perp / (anisotropy + 1)     # Parallel species energy
-
-if field_periodic == 1:
-    if particle_periodic == 0:
-        print('Periodic field compatible only with periodic particles.')
-        particle_periodic = 1
-        particle_reflect = particle_reinit = 0
-
-particle_open = 0
-if particle_reflect + particle_reinit + particle_periodic == 0:
-    particle_open = 1
-
-if beta_flag == 0:
-    # Input energies in eV
-    Te0_scalar = q * E_e / kB
-    vth_perp   = np.sqrt(charge *  E_perp /  mass)    # Perpendicular thermal velocities
-    vth_par    = np.sqrt(charge *  E_par  /  mass)    # Parallel thermal velocities
-    T_par      = E_par  * 11603.
-    T_perp     = E_perp * 11603.
-else:
-    # Input energies in terms of beta (Generally only used for Winske/Gary/Fu stuff... invalid in general?)
-    kbt_par    = E_par  * (B_eq ** 2) / (2 * mu0 * ne)
-    kbt_per    = E_perp * (B_eq ** 2) / (2 * mu0 * ne)
-    Te0_scalar = E_e    * (B_eq ** 2) / (2 * mu0 * ne * kB)
-    vth_perp   = np.sqrt(kbt_per /  mass)                # Perpendicular thermal velocities
-    vth_par    = np.sqrt(kbt_par /  mass)                # Parallel thermal velocities
-    T_par      = kbt_par / kB
-    T_perp     = kbt_per / kB
-
-rho        = (mass*density).sum()                        # Mass density for alfven velocity calc.
-wpi        = np.sqrt((density * charge ** 2 / (mass * e0)).sum())            # Proton   Plasma Frequency, wpi (rad/s)
-wpe        = np.sqrt(ne * q ** 2 / (me * e0))
-va         = B_eq / np.sqrt(mu0*rho)                     # Alfven speed at equator: Assuming pure proton plasma
-#va         = B_eq / np.sqrt(mu0*mass[1]*density[1])      # Hard-coded to be 'cold proton alfven velocity' (Shoji et al, 2013)
-gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
-egyfreq_eq = q*B_eq  / me                                # Electron Gyrofrequency (rad/s) at equator (slowest)
-dx         = dxm * va / gyfreq_eq                        # Alternate method of calculating dx (better for multicomponent plasmas)
-#dx2        = dxm * c / wpi
-
-# This will change with Te0 which means the resistance will change. Complicated!
-vth_e      = np.sqrt(kB*Te0_scalar/me)
-vei        = np.sqrt(2.) * wpe**4 / (64.*np.pi*ne*vth_e**3) # Ion-Electron collision frequency
-
-xmax       = NX / 2 * dx                                 # Maximum simulation length, +/-ve on each side
-xmin       =-NX / 2 * dx
-Nj         = len(mass)                                   # Number of species
-n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this SI density to a cell
-min_dens   = 0.05
-
-# Number of sim particles for each species, total
-N_species = nsp_ppc * NX
-if field_periodic == 0:
-    N_species += 2   
-
-# Add number of spare particles proportional to percentage of total (50% standard, high but safe)
-if particle_open == 1:
-    spare_ppc  = N_species.sum() * 0.5
-else:
-    spare_ppc  = 0
-N = N_species.sum() + int(spare_ppc)
-
-idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
-idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
-
-############################
-### MAGNETIC FIELD STUFF ###
-############################
-B_nodes_loc   = (np.arange(NC + 1) - NC // 2)       * dx     # B grid points position in space
-E_nodes_loc  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
-
-if homogenous == 1:
-    a      = 0
-    B_xmax = B_eq
-    
-    # Also need to set any numeric values
-    B_A            = 0.0
-    loss_cone_eq   = 0.0
-    loss_cone_xmax = 0.0
-    theta_xmax     = 0.0
-    lambda_L       = 0.0
-    lat_A          = 0.0
-    r_A            = 0.0
-else:
-    # DIPOLE STUFF THAT I MADE
-# =============================================================================
-#         print('Calculating length of field line...')
-#                                                                       # Ionospheric anchor point (loss zone/max mirror point) - "Below 100km" - Baumjohann, Basic Space Plasma Physics
-#         N_fl   = 1e5                                                                # Number of points to calculate field line length (higher is more accurate)
-#         lat0   = np.arccos(np.sqrt((RE + r_A)/(RE*L)))                              # Latitude for this L value (at ionosphere height)
-#         h      = 2.0*lat0/float(N_fl)                                               # Step size of lambda (latitude)
-#         f_len  = 0.0
-#         for ii in range(int(N_fl)):
-#             lda        = ii*h - lat0                                                # Lattitude for this step
-#             f_len     += L*RE*np.cos(lda)*np.sqrt(4.0 - 3.0*np.cos(lda) ** 2) * h   # Field line length accruance
-#         print('Field line length = {:.2f} RE'.format(f_len/RE))
-#         print('Simulation length = {:.2f} RE'.format(2*xmax/RE))
-#         
-#         if xmax > f_len / 2:
-#             sys.exit('Simulation length longer than field line. Aboring...')
-#         
-#         print('Finding simulation boundary MLAT...')
-#         dlam   = 1e-5                                            # Latitude increment in radians
-#         fx_len = 0.0; ii = 1                                     # Arclength/increment counters
-#         while fx_len < xmax:
-#             theta_xmax = dlam * ii                                                             # Current latitude
-#             d_len      = L * RE * np.cos(theta_xmax) * np.sqrt(4.0 - 3.0*np.cos(theta_xmax) ** 2) * dlam # Length increment
-#             fx_len    += d_len                                                                 # Accrue arclength
-#             ii        += 1                                                                     # Increment counter
-#     
-#         r_xmax      = L * RE * np.cos(theta_xmax) ** 2                                      # Radial distance of simulation boundary
-#         
-#         # Magnetic field intensity at boundary : Calculate or manually set
-#         if B_xmax_ovr == '-':
-#             B_xmax = B_eq*np.sqrt(4 - 3*np.cos(theta_xmax)**2)/np.cos(theta_xmax)**6       
-#         else:
-#             B_xmax = float(B_xmax_ovr)
-#             
-#         a           = (B_xmax / B_eq - 1) / xmax ** 2                                       # Parabolic scale factor: Fitted to B_eq, B_xmax
-#                                                   # Lattitude of Earth's surface at this L
-#     
-# =============================================================================
-    # BASICS THAT I SHOULD HAVE STARTED WITH
-    a          = 4.5 / (L*RE)**2
-    r_A        = 120e3
-    lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L)))       # Anchor latitude in radians
-    B_A        = B_eq * np.sqrt(4 - 3*np.cos(lat_A) ** 2)\
-                / (np.cos(lat_A) ** 6)                        # Magnetic field at anchor point
-                
-    # GENERAL PARABOLIC FIELD
-    if B_xmax_ovr == '-':
-        a      = 4.5 / (L*RE)**2
-        B_xmax = B_eq * (1 + a*xmax**2)
-    else:
-        B_xmax = float(B_xmax_ovr)
-        a      = (B_xmax / B_eq - 1) / xmax**2
-        
-    lambda_L       = np.arccos(np.sqrt(1.0 / L))                    # MLAT of anchor point
-    loss_cone_eq   = np.arcsin(np.sqrt(B_eq   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
-    loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
-    theta_xmax     = 0.0                                            # NOT REALLY ANY WAY TO TELL MLAT WITH THIS METHOD
-    
-gyfreq_xmax = q*B_xmax/ mp                                # Proton Gyrofrequency (rad/s) at boundary (highest)
-k_max       = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
-qm_ratios   = np.divide(charge, mass)                     # q/m ratio for each species
-
-# Calculate injection rate for open boundaries
-if particle_open == 1:
-    inject_rate = nsp_ppc * (vth_par / dx) / np.sqrt(2 * np.pi)
-else:
-    inject_rate = 0.0
-
-# E-field nodes around boundaries (used for sources and E-fields)
-lo1 = ND - 1 ; lo2 = ND - 2             # Left outer (to boundary)
-ro1 = ND + NX; ro2 = ND + NX + 1        # Right outer
-
-li1 = ND         ; li2 = ND + 1         # Left inner
-ri1 = ND + NX - 1; ri2 = ND + NX - 2    # Right inner
-
-# Count available threads
-if do_parallel:
-    n_threads = nb.get_num_threads()
-else:
-    # Parallel optimization makes functions run faster even on 1 thread
-    n_threads = 1
-    do_parallel = True
-N_per_thread, n_start_idxs = get_thread_values()
-
-###
-### DRIVEN WAVE STUFF (Load this from file eventually)
-###
-pol_wave    = 0         # 0: No wave, 1: Single point source, 2: Multi point source
-
-# DRIVEN B PARAMS: Sine part
-driven_freq = 1.0       # Driven wave frequency in Hz standard 2.2
-driven_ampl = 25e-7     # Driven wave amplitude in A/m (I think?) Standard 50e-7
-
-# Gaussian part
-pulse_offset = 5.0      # Pulse center time (s)
-pulse_width  = 1.0      # Pulse width (proportional to 2*std. 3*width decayed to 0.0123%) 
-
-species_plasfreq_sq   = (density * charge ** 2) / (mass * e0)
-species_gyrofrequency = qm_ratios * B_eq
-
-# Looks right!
-driven_rad = driven_freq * 2 * np.pi
-driven_k   = (driven_rad / c) ** 2
-driven_k  *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyrofrequency))).sum()
-driven_k   = np.sqrt(driven_k)
+load_plasma_params()
+load_wave_driver_params()
+get_thread_values()
+calculate_background_magnetic_field()
+print_summary_and_checks()
 
 
-##############################
-### INPUT TESTS AND CHECKS ###
-##############################
-print('Run Started')
-print('Run Series         : {}'.format(save_path.split('//')[-1]))
-print('Run Number         : {}'.format(run))
-print('# threads used     : {}'.format(n_threads))
-print('Field save flag    : {}'.format(save_fields))
-print('Particle save flag : {}\n'.format(save_particles))
-
-print('Sim domain length  : {:5.2f}R_E'.format(2 * xmax / RE))
-print('Density            : {:5.2f}cc'.format(ne / 1e6))
-print('Equatorial B-field : {:5.2f}nT'.format(B_eq*1e9))
-print('Boundary   B-field : {:5.2f}nT'.format(B_xmax*1e9))
-print('Iono.      B-field : {:5.2f}mT'.format(B_A*1e6))
-print('Equat. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_eq))
-print('Bound. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_xmax * 180. / np.pi))
-print('Maximum MLAT (+/-) : {:<5.2f} degrees  '.format(theta_xmax * 180. / np.pi))
-print('Iono.   MLAT (+/-) : {:<5.2f} degrees\n'.format(lambda_L * 180. / np.pi))
-
-print('Equat. Gyroperiod: : {}s'.format(round(2. * np.pi / gyfreq_eq, 3)))
-print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq_eq, 3)))
-print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_wcinv / gyfreq_eq, 2), 
-                                                           round(max_wcinv/(2*np.pi), 2)))    
-print('{} spatial cells, 2x{} damped cells'.format(NX, ND))
-print('{} cells total'.format(NC))
-print('{} particles total\n'.format(N))
-
-if theta_xmax > lambda_L:
-    print('ABORT : SIMULATION DOMAIN LONGER THAN FIELD LINE')
-    sys.exit()
-
-if particle_periodic + particle_reflect + particle_reinit > 1:
-    print('ABORT : ONLY ONE PARTICLE BOUNDARY CONDITION ALLOWED')
-    sys.exit()
-    
-if field_periodic == 1 and damping_multiplier != 0:
-    damping_multiplier = 0.0
-    
-if  os.name != 'posix':
-    os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
-
-
-#####################
-#%% -- GLOBAL MAIN --
-#####################
 if __name__ == '__main__':
     start_time = timer()
         
@@ -2742,8 +2763,8 @@ if __name__ == '__main__':
     get_B_cent(B, B_cent)
     collect_moments(vel, Ie, W_elec, idx, q_dens, Ji_int, J_ext, 0.0) 
 
-    DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array, resistive_array\
-        = set_timestep(vel)
+    DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array,\
+        resistive_array, retarding_array = set_timestep(vel)
 
     calculate_E(B, B_cent, Ji_int, J_ext, q_dens, E_int, Ve_int, Te, temp3De, temp3Db, temp1D,
                 E_damping_array, resistive_array)
@@ -2776,7 +2797,7 @@ if __name__ == '__main__':
         main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,                             \
               B, B_cent, E_int, E_half, q_dens, q_dens_adv, Ji_int, Ji_half, J_ext, mp_flux,      \
               Ve_int, Ve_half, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,            \
-              B_damping_array, E_damping_array, resistive_array, 
+              B_damping_array, E_damping_array, resistive_array, retarding_array,
               qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter)
             
         if qq%part_save_iter == 0 and save_particles == 1:
