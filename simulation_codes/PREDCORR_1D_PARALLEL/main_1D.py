@@ -452,7 +452,7 @@ def set_timestep(vel):
         fig, axes = plt.subplots(2)
         axes[0].plot(B_nodes_loc/dx, B_damping_array)
         axes[0].set_ylabel('B damp')
-        axes[1].plot(E_nodes_loc/dx, resistive_array)
+        axes[1].plot(B_nodes_loc/dx, retarding_array)
         axes[1].set_ylabel('$\eta$')
         for ax in axes:
             ax.set_xlim(B_nodes_loc[0]/dx, B_nodes_loc[-1]/dx)
@@ -492,21 +492,24 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
     don't want to jump too quickly through the gradient, surely there's a timestep
     limitation on that.
     
-    To do: Put check in store_run_params() to delete if it already exists so
+    TODO: 
+        -- Put check in store_run_params() to delete if it already exists so
     this particle data doesn't alter it.
+        -- Put some kind of limit on dB/dx
+        -- Don't need vel_ts since cell size doesn't matter (especially for very small dx)
     '''
     psave = save_particles
     
     print('Letting particle distribution relax into static field configuration')
-    max_vx   = np.max(np.abs(vel[0, :]))
-    ion_ts   = orbit_res * 2 * np.pi / gyfreq_xmax
-    vel_ts   = 0.5*dx / max_vx                    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
-    pdt      = min(ion_ts, vel_ts)
+    #max_vx   = np.max(np.abs(vel[0, :]))
+    ion_ts   = 0.1 * 2 * np.pi / gyfreq_xmax
+    #vel_ts   = 0.5*dx / max_vx
+    pdt      = ion_ts
     ptime    = frev / gyfreq_eq
     psteps   = int(ptime / pdt) + 1
     psim_time = 0.0
     eta_arr = np.zeros(E_int.shape[0], dtype=E_int.dtype)
-    
+
     print('Particle-only timesteps: ', psteps)
     print('Particle-push in seconds:', pdt)
     
