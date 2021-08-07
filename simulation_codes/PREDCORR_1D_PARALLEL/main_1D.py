@@ -9,22 +9,22 @@ from scipy.interpolate import splrep, splev
 import matplotlib.pyplot as plt
 
 ## PHYSICAL CONSTANTS ##
-q      = 1.602177e-19                       # Elementary charge (C)
-c      = 2.998925e+08                       # Speed of light (m/s)
-mp     = 1.672622e-27                       # Mass of proton (kg)
-me     = 9.109384e-31                       # Mass of electron (kg)
-kB     = 1.380649e-23                       # Boltzmann's Constant (J/K)
-e0     = 8.854188e-12                       # Epsilon naught - permittivity of free space
-mu0    = (4e-7) * np.pi                     # Magnetic Permeability of Free Space (SI units)
-RE     = 6.371e6                            # Earth radius in metres
-B_surf = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
+ECHARGE = 1.602177e-19                       # Elementary charge (C)
+SPLIGHT = 2.998925e+08                       # Speed of light (m/s)
+PMASS   = 1.672622e-27                       # Mass of proton (kg)
+EMASS   = 9.109384e-31                       # Mass of electron (kg)
+kB      = 1.380649e-23                       # Boltzmann's Constant (J/K)
+e0      = 8.854188e-12                       # Epsilon naught - permittivity of free space
+mu0     = (4e-7) * np.pi                     # Magnetic Permeability of Free Space (SI units)
+RE      = 6.371e6                            # Earth radius in metres
+B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
 Fu_override       = False      # Override to allow density to be calculated as a ratio of frequencies
 adaptive_timestep = True       # Disable adaptive timestep to keep it the same as initial
 do_parallel       = True       # Flag to use available threads to parallelize particle functions
-print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
-print_runtime     = False      # Flag to print runtime every 50 iterations 
+print_timings     = True       # Diagnostic outputs timing each major segment (for efficiency examination)
+print_runtime     = True       # Flag to print runtime every 50 iterations 
 
 if not do_parallel:
     nb.set_num_threads(1)          
@@ -227,7 +227,7 @@ def initialize_particles(B, E, _mp_flux, Ji_in, Ve_in, rho_in):
         pos, vel, idx = quiet_start_bimaxwellian()
     else:
         pos, vel, idx = uniform_bimaxwellian()
-
+    
     Ie         = np.zeros(N,      dtype=np.uint16)
     Ib         = np.zeros(N,      dtype=np.uint16)
     W_elec     = np.zeros((3, N), dtype=np.float64)
@@ -426,12 +426,12 @@ def set_timestep(vel):
     DT       = min(ion_ts, vel_ts)                    # Timestep as smallest of options
     max_time = max_wcinv / gyfreq_eq                  # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1                 # Total number of time steps
-    
+    #pdb.set_trace()
     if part_res == 0:
         part_save_iter = 1
     else:
         part_save_iter = int(part_res / (DT*gyfreq_eq))
-
+    
     if field_res == 0:
         field_save_iter = 1
     else:
@@ -527,10 +527,22 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
         pnum = 0
         
     # Desync (retard) velocity here
-    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, pdt,
+    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, -0.5*pdt,
            _mp_flux, eta_arr, vel_only=False)
+    
+    # Apply BCs to particles
+    if particle_open == 1:
+        inject_particles(pos, vel, idx, _mp_flux, pdt)
+    elif particle_reinit == 1:
+        if particle_reinit == 1:
+            reinit_count_flux(pos, idx, _mp_flux)
+        inject_particles(pos, vel, idx, _mp_flux, pdt)
+    elif particle_periodic == 1:
+        periodic_BC(pos, idx)
+    else:
+        reflective_BC(pos, vel, idx)
+        
     for pp in range(psteps):
-
         # Save first and last only
         if psave == True and (pp == 0 or pp == psteps - 1):
             p_fullpath = pdata_path + 'data%05d' % pnum
@@ -545,16 +557,28 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
             parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, pdt,
            _mp_flux, eta_arr, vel_only=False)
             
+            # Apply BCs to particles
+            if particle_open == 1:
+                inject_particles(pos, vel, idx, _mp_flux, pdt)
+            elif particle_reinit == 1:
+                if particle_reinit == 1:
+                    reinit_count_flux(pos, idx, _mp_flux)
+                inject_particles(pos, vel, idx, _mp_flux, pdt)
+            elif particle_periodic == 1:
+                periodic_BC(pos, idx)
+            else:
+                reflective_BC(pos, vel, idx)
+            
             if hot_only == False or temp_type[jj] == 1:
                 if particle_open == True:
                     inject_particles_1sp(pos, vel, idx, _mp_flux, pdt, jj)
 
         # Check number of spare particles every 25 steps
-        if pp%100 == 0 and particle_open == 1:
+        if pp > 0 and pp%100 == 0 and particle_open == 1:
             num_spare = (idx < 0).sum()
             if num_spare < nsp_ppc.sum():
                 print('WARNING :: Less than one cell of spare particles remaining.')
-                if num_spare < inject_rate.sum() * DT * 5.0:
+                if num_spare < inject_rate.sum() * pdt * 5.0:
                     # Change this to dynamically expand particle arrays later on (adding more particles)
                     # Can do it by cell lots (i.e. add a cell's worth each time)
                     raise Exception('WARNING :: No spare particles remaining. Exiting simulation.')
@@ -562,8 +586,20 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
         psim_time += pdt
     
     # Resync (advance) velocity here
-    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, pdt,
+    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, 0.5*pdt,
            _mp_flux, eta_arr, vel_only=False)
+    
+    # Apply BCs to particles
+    if particle_open == 1:
+        inject_particles(pos, vel, idx, _mp_flux, pdt)
+    elif particle_reinit == 1:
+        if particle_reinit == 1:
+            reinit_count_flux(pos, idx, _mp_flux)
+        inject_particles(pos, vel, idx, _mp_flux, pdt)
+    elif particle_periodic == 1:
+        periodic_BC(pos, idx)
+    else:
+        reflective_BC(pos, vel, idx)
     
     # Dump indicator file
     if save_fields == 1 or save_particles == 1:
@@ -584,9 +620,12 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     Also evaluates external current so that this is synchronised to when the
     ion current is collected (N + 1/2, N+ 3/2)
     '''
+    parmov_start = timer()
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve, rho_in, DT,
            _mp_flux, resistive_array, vel_only=False)
+    parmov_time = round(timer() - parmov_start, 3)
     
+    BC_start  = timer()
     # Apply BCs to particles
     if particle_open == 1:
         inject_particles(pos, vel, idx, _mp_flux, DT)
@@ -598,12 +637,24 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
         periodic_BC(pos, idx)
     else:
         reflective_BC(pos, vel, idx)
+    BC_time = round(timer() - BC_start, 3)
     
+    weight_start  = timer()
     assign_weighting_TSC(pos, Ie, W_elec)
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
+    weight_time = round(timer() - weight_start, 3)
     
+    moment_start = timer()
     J_time = (qq + 0.5 + pc) * DT
     collect_moments(vel, Ie, W_elec, idx, rho_out, Ji_out, J_ext, J_time)
+    moment_time = round(timer() - moment_start, 3)
+    
+    if print_timings:
+        print('')
+        print(f'PARMV TIME: {parmov_time}')
+        print(f'BOUND TIME: {BC_time}')
+        print(f'WEGHT TIME: {weight_time}')
+        print(f'MOMNT TIME: {moment_time}')
     return
 
 
@@ -795,84 +846,108 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji, Ve, q_dens, DT,
         to internal conditions for reinit. Technically for a high enough particle
         count (and low enough wave amplitude) these should be identical,
         but they're definitely not going to be in practice.
+        -- Put a check in here for negative indices since several values are 
+        species specific and there are no active species with negative indices
+        
+    Question: Did adding the 'if -ve' check slow down the loop a ton? Check.
+    Yes. 
+    I added it because the check in temp_type and qm_ratios was blowing up.
+    Just need a way to preserve indices.
+    But another problem, negative indices don't apply properly.
+    What if we put a check for > Nj instead of negative? Still a numerical check.
+    Then, adding or subtracting Nj still works.
+    
+    4 species plasma:
+    0: H  hot
+    1: H  cold
+    2: He cold
+    3: O  cold
+    4: H  hot  (deactivated)
+    5: H  cold (deactivated)
+    6: He cold (deactivated)
+    7: O  cold (deactivated)
+    
+    Then to deactivate:
+        idx[ii] += Nj
     '''
     for ii in nb.prange(pos.shape[0]):
-        if temp_type[idx[ii]] == 1 or hot_only == False:
-            # Calculate wave fields at particle position
-            Ep = np.zeros(3, dtype=np.float64)  
-            Bp = np.zeros(3, dtype=np.float64)
-            Jp = np.zeros(3, dtype=np.float64)
-            eta=0.0
-            for jj in nb.prange(3):
-                eta += resistive_array[Ie[ii] + jj] * W_elec[jj, ii] 
-                for kk in nb.prange(3):
-                    Ep[kk] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]   
-                    Bp[kk] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]  
+        if idx[ii] >= 0:
+            if temp_type[idx[ii]] == 1 or hot_only == False:
+                # Calculate wave fields at particle position
+                Ep = np.zeros(3, dtype=np.float64)  
+                Bp = np.zeros(3, dtype=np.float64)
+                Jp = np.zeros(3, dtype=np.float64)
+                eta=0.0
+                for jj in nb.prange(3):
+                    eta += resistive_array[Ie[ii] + jj] * W_elec[jj, ii] 
+                    for kk in nb.prange(3):
+                        Ep[kk] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]   
+                        Bp[kk] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]  
+                        
+                        if resis_multiplier != 0.0:
+                            Jp[kk] += (Ji[Ie[ii] + jj, kk] - Ve[Ie[ii] + jj, kk]*q_dens[Ie[ii] + jj])
+                        
+                # Add resistivity into 'effective' E-field
+                if eta != 0.0:
+                    Ep[0] -= eta * Jp[0]
+                    Ep[1] -= eta * Jp[1]
+                    Ep[2] -= eta * Jp[2]
+        
+                # Calculate background field at particle position
+                Bp[0]   += B_eq * (1.0 + a * pos[ii] * pos[ii])
+                constant = a * B_eq
+                l_cyc    = qm_ratios[idx[ii]] * Bp[0]
+                Bp[1]   += constant * pos[ii] * vel[2, ii] / l_cyc
+                Bp[2]   -= constant * pos[ii] * vel[1, ii] / l_cyc
+        
+                # Start Boris Method
+                qmi = 0.5 * DT * qm_ratios[idx[ii]]                             # q/m variable including dt
+                T   = qmi * Bp 
+                S   = 2.*T / (1. + T[0]*T[0] + T[1]*T[1] + T[2]*T[2])
+        
+                # vel -> v_minus
+                vel[0, ii] += qmi * Ep[0]
+                vel[1, ii] += qmi * Ep[1]
+                vel[2, ii] += qmi * Ep[2]
                     
-                    if resis_multiplier != 0.0:
-                        Jp[kk] += (Ji[Ie[ii] + jj, kk] - Ve[Ie[ii] + jj, kk]*q_dens[Ie[ii] + jj])
-                    
-            # Add resistivity into 'effective' E-field
-            if eta != 0.0:
-                Ep[0] -= eta * Jp[0]
-                Ep[1] -= eta * Jp[1]
-                Ep[2] -= eta * Jp[2]
-    
-            # Calculate background field at particle position
-            Bp[0]   += B_eq * (1.0 + a * pos[ii] * pos[ii])
-            constant = a * B_eq
-            l_cyc    = qm_ratios[idx[ii]] * Bp[0]
-            Bp[1]   += constant * pos[ii] * vel[2, ii] / l_cyc
-            Bp[2]   -= constant * pos[ii] * vel[1, ii] / l_cyc
-    
-            # Start Boris Method
-            qmi = 0.5 * DT * qm_ratios[idx[ii]]                             # q/m variable including dt
-            T   = qmi * Bp 
-            S   = 2.*T / (1. + T[0]*T[0] + T[1]*T[1] + T[2]*T[2])
-    
-            # vel -> v_minus
-            vel[0, ii] += qmi * Ep[0]
-            vel[1, ii] += qmi * Ep[1]
-            vel[2, ii] += qmi * Ep[2]
+                # Calculate v_prime (maybe use a temp array here?)
+                v_prime    = np.zeros(3, dtype=np.float64)
+                v_prime[0] = vel[0, ii] + vel[1, ii] * T[2] - vel[2, ii] * T[1]
+                v_prime[1] = vel[1, ii] + vel[2, ii] * T[0] - vel[0, ii] * T[2]
+                v_prime[2] = vel[2, ii] + vel[0, ii] * T[1] - vel[1, ii] * T[0]
                 
-            # Calculate v_prime (maybe use a temp array here?)
-            v_prime    = np.zeros(3, dtype=np.float64)
-            v_prime[0] = vel[0, ii] + vel[1, ii] * T[2] - vel[2, ii] * T[1]
-            v_prime[1] = vel[1, ii] + vel[2, ii] * T[0] - vel[0, ii] * T[2]
-            v_prime[2] = vel[2, ii] + vel[0, ii] * T[1] - vel[1, ii] * T[0]
-            
-            # vel_minus -> vel_plus
-            vel[0, ii] += v_prime[1] * S[2] - v_prime[2] * S[1]
-            vel[1, ii] += v_prime[2] * S[0] - v_prime[0] * S[2]
-            vel[2, ii] += v_prime[0] * S[1] - v_prime[1] * S[0]
-            
-            # vel_plus -> vel (updated)
-            vel[0, ii] += qmi * Ep[0]
-            vel[1, ii] += qmi * Ep[1]
-            vel[2, ii] += qmi * Ep[2]
-            
-            if vel_only == False:
-                # Update position
-                pos[ii] += vel[0, ii] * DT
-            
-                # Check if particle has left simulation and apply boundary conditions
-                if (pos[ii] < xmin or pos[ii] > xmax):
-    
-                    if particle_periodic == 1:  
-                        idx[ii] -= 128                            
-                    elif particle_open == 1:                
-                        pos[ii]     = 0.0
-                        vel[0, ii]  = 0.0
-                        vel[1, ii]  = 0.0
-                        vel[2, ii]  = 0.0
-                        idx[ii]     = -1
-                    elif particle_reinit == 1:
-                        vel[0, ii]  = 0.0
-                        vel[1, ii]  = 0.0
-                        vel[2, ii]  = 0.0
-                        idx[ii]    -= 128                            
-                    else:
-                        idx[ii] -= 128 
+                # vel_minus -> vel_plus
+                vel[0, ii] += v_prime[1] * S[2] - v_prime[2] * S[1]
+                vel[1, ii] += v_prime[2] * S[0] - v_prime[0] * S[2]
+                vel[2, ii] += v_prime[0] * S[1] - v_prime[1] * S[0]
+                
+                # vel_plus -> vel (updated)
+                vel[0, ii] += qmi * Ep[0]
+                vel[1, ii] += qmi * Ep[1]
+                vel[2, ii] += qmi * Ep[2]
+                
+                if vel_only == False:
+                    # Update position
+                    pos[ii] += vel[0, ii] * DT
+                
+                    # Check if particle has left simulation and apply boundary conditions
+                    if (pos[ii] < xmin or pos[ii] > xmax):
+        
+                        if particle_periodic == 1:  
+                            idx[ii] -= 128                            
+                        elif particle_open == 1:                
+                            pos[ii]     = 0.0
+                            vel[0, ii]  = 0.0
+                            vel[1, ii]  = 0.0
+                            vel[2, ii]  = 0.0
+                            idx[ii]     = -1
+                        elif particle_reinit == 1:
+                            vel[0, ii]  = 0.0
+                            vel[1, ii]  = 0.0
+                            vel[2, ii]  = 0.0
+                            idx[ii]    -= 128                            
+                        else:
+                            idx[ii] -= 128 
     return
 
 
@@ -1346,8 +1421,8 @@ def collect_moments(vel, Ie, W_elec, idx, q_dens, Ji, J_ext, J_time):
 
     # Set density minimum
     for ii in range(q_dens.shape[0]):
-        if q_dens[ii] < min_dens * ne * q:
-            q_dens[ii] = min_dens * ne * q
+        if q_dens[ii] < min_dens * ne * ECHARGE:
+            q_dens[ii] = min_dens * ne * ECHARGE
             
     # Calculate J_ext at same instance as Ji
     if pol_wave == 0:
@@ -1584,7 +1659,7 @@ def get_electron_temp(qn, Te):
         Te[:] = np.ones(qn.shape[0]) * Te0_scalar
     elif ie == 1:
         gamma_e = 5./3. - 1.
-        Te[:] = Te0_scalar * np.power(qn / (q*ne), gamma_e)
+        Te[:] = Te0_scalar * np.power(qn / (ECHARGE*ne), gamma_e)
     return
 
 
@@ -1609,7 +1684,7 @@ def get_grad_P(qn, te, grad_P, temp):
     temp     *= 0; grad_P *= 0
     
     nc        = qn.shape[0]
-    grad_P[:] = qn * kB * te / q       # Store Pe in grad_P array for calculation
+    grad_P[:] = qn * kB * te / ECHARGE       # Store Pe in grad_P array for calculation
 
     # Central differencing, internal points
     for ii in nb.prange(1, nc - 1):
@@ -1849,7 +1924,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ji_i
     
     if DT_part < 0.9*DT:
         # Re-sync vel/pos
-        parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve_in, rho_in, DT,
+        parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve_in, rho_in, 0.5*DT,
            mp_flux, resistive_array, vel_only=False)           
 
         DT         *= 0.5
@@ -1861,7 +1936,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ji_i
         loop_save_iter  *= 2
         
         # De-sync vel/pos
-        parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve_in, rho_in, DT,
+        parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve_in, rho_in, -0.5*DT,
            mp_flux, resistive_array, vel_only=False)    
         print('Timestep halved. Syncing particle velocity...')
     return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, damping_array
@@ -2354,7 +2429,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
                 raise Exception('WARNING :: No spare particles remaining. Exiting simulation.')
         count_time = round(timer() - count_start, 3)
     
-    if False:
+    if print_timings:
         print('')
         print(f'CHECK TIME: {check_time}')
         print(f'PART1 TIME: {part1_time}')
@@ -2500,21 +2575,21 @@ def load_plasma_params():
     ### -- Normalization of density override (e.g. Fu, Winkse)
     if Fu_override == True:
         rat        = 5
-        ne         = (rat*B_eq)**2 * e0 / me
+        ne         = (rat*B_eq)**2 * e0 / EMASS
         density    = np.array([0.05, 0.94, 0.01])*ne
     ### 
     
-    charge    *= q                                           # Cast species charge to Coulomb
-    mass      *= mp                                          # Cast species mass to kg
+    charge    *= ECHARGE                                     # Cast species charge to Coulomb
+    mass      *= PMASS                                       # Cast species mass to kg
     qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
     
     ne         = density.sum()                               # Electron number density
     rho        = (mass*density).sum()                        # Mass density for alfven velocity calc.
     wpi        = np.sqrt((density * charge ** 2 / (mass * e0)).sum())            # Proton Plasma Frequency, wpi (rad/s)
-    wpe        = np.sqrt(ne * q ** 2 / (me * e0))            # Electron Plasma Frequency, wpi (rad/s)
-    #va         = B_eq / np.sqrt(mu0*rho)                     # Alfven speed at equator: Assuming pure proton plasma
-    gyfreq_eq  = q*B_eq  / mp                                # Proton Gyrofrequency (rad/s) at equator (slowest)
-    egyfreq_eq = q*B_eq  / me                                # Electron Gyrofrequency (rad/s) at equator (slowest)
+    wpe        = np.sqrt(ne * ECHARGE ** 2 / (EMASS * e0))   # Electron Plasma Frequency, wpi (rad/s)
+    #va         = B_eq / np.sqrt(mu0*rho)                    # Alfven speed at equator: Assuming pure proton plasma
+    gyfreq_eq  = ECHARGE*B_eq  / PMASS                       # Proton Gyrofrequency (rad/s) at equator (slowest)
+    egyfreq_eq = ECHARGE*B_eq  / EMASS                       # Electron Gyrofrequency (rad/s) at equator (slowest)
     va         = B_eq / np.sqrt(mu0*mass[1]*density[1])      # Hard-coded to be 'cold proton alfven velocity' (Shoji et al, 2013)
     dx         = dxm * va / gyfreq_eq                        # Alternate method of calculating dx (better for multicomponent plasmas)
     n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this SI density to a cell
@@ -2526,7 +2601,7 @@ def load_plasma_params():
     E_par       = E_perp / (anisotropy + 1)     # Parallel species energy
     if beta_flag == 0:
         # Input energies in eV
-        Te0_scalar = q * E_e / kB
+        Te0_scalar = ECHARGE * E_e / kB
         vth_perp   = np.sqrt(charge *  E_perp /  mass)    # Perpendicular thermal velocities
         vth_par    = np.sqrt(charge *  E_par  /  mass)    # Parallel thermal velocities
         T_par      = E_par  * 11603.
@@ -2542,7 +2617,7 @@ def load_plasma_params():
         T_perp     = kbt_per / kB
     
     # This will change with Te0 which means the resistance will change. Complicated!
-    vth_e      = np.sqrt(kB*Te0_scalar/me)
+    vth_e      = np.sqrt(kB*Te0_scalar/EMASS)
     vei        = np.sqrt(2.) * wpe**4 / (64.*np.pi*ne*vth_e**3) # Ion-Electron collision frequency
 
     # Number of sim particles for each species, total
@@ -2590,7 +2665,7 @@ def load_wave_driver_params():
     
     # Looks right!
     driven_rad = driven_freq * 2 * np.pi
-    driven_k   = (driven_rad / c) ** 2
+    driven_k   = (driven_rad / SPLIGHT) ** 2
     driven_k  *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyrofrequency))).sum()
     driven_k   = np.sqrt(driven_k)
     return
@@ -2631,9 +2706,9 @@ def calculate_background_magnetic_field():
         loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
         theta_xmax     = 0.0                                            # NOT REALLY ANY WAY TO TELL MLAT WITH THIS METHOD
        
-    B_nodes_loc  = (np.arange(NC + 1) - NC // 2)       * dx      # B grid points position in space
-    E_nodes_loc  = (np.arange(NC)     - NC // 2 + 0.5) * dx      # E grid points position in space
-    gyfreq_xmax  = q*B_xmax/ mp                                  # Proton Gyrofrequency (rad/s) at boundary (highest)
+    B_nodes_loc  = (np.arange(NC + 1) - NC // 2)       * dx             # B grid points position in space
+    E_nodes_loc  = (np.arange(NC)     - NC // 2 + 0.5) * dx             # E grid points position in space
+    gyfreq_xmax  = ECHARGE*B_xmax/ PMASS                                # Proton Gyrofrequency (rad/s) at boundary (highest)
     return
 
 
