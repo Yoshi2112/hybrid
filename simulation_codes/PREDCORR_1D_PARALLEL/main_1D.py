@@ -20,7 +20,7 @@ RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
-Fu_override       = False      # Override to allow density to be calculated as a ratio of frequencies
+Fu_override       = False       # Override to allow density to be calculated as a ratio of frequencies
 adaptive_timestep = True       # Disable adaptive timestep to keep it the same as initial
 do_parallel       = True       # Flag to use available threads to parallelize particle functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
@@ -431,7 +431,7 @@ def set_timestep(vel):
                         and the reason for the 0.02*wc limit in Winske et al.
                         
     What would sub-stepping involve? Running the field computations without a particle
-    push in between?
+    push in between? What's the point of the two copies of the B-field like in the CL method?
     '''
     if disable_waves == 0:
         ion_ts = dxm * orbit_res / gyfreq_xmax        # Timestep to highest resolve gyromotion
@@ -482,7 +482,7 @@ def set_timestep(vel):
         sys.exit()
     
     print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))
-    pdb.set_trace()
+    #pdb.set_trace()
     return DT, max_inc, part_save_iter, field_save_iter, B_damping_array,\
              E_damping_array, resistive_array, retarding_array
 
