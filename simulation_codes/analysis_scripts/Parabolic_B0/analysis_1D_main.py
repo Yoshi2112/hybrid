@@ -2149,6 +2149,10 @@ def analyse_particle_motion(it_max=None):
     # To Do:
     #   - Track bounce period of some hot/cold particles (maybe a handful each?)
     #   - Look at their magnetic moments with time
+    savedir = cf.anal_dir + '/Sample_Particle_Motion/'
+    
+    if os.path.exists(savedir) == False:
+        os.makedirs(savedir)
 
     if it_max is None:
         num_particle_steps = len(os.listdir(cf.particle_dir))
@@ -2158,43 +2162,48 @@ def analyse_particle_motion(it_max=None):
     
     # CREATE SAMPLE ARRAY :: Either equal number from each, or just from the one
     N_samples = 5
+    pos, vel, idx, sim_time, idx_start, idx_end = cf.load_particles(0)    
     
     if False:
         # Collect a sample from each species
         sloc = np.zeros((cf.Nj * N_samples), dtype=int)  # Sample location (to not confuse with particle index)
         for ii in range(cf.Nj):
-            sloc[ii*N_samples: (ii + 1)*N_samples] = np.random.randint(cf.idx_start[ii], cf.idx_end[ii], N_samples, dtype=int)
+            sloc[ii*N_samples: (ii + 1)*N_samples] = np.random.randint(idx_start[ii], idx_end[ii], N_samples, dtype=int)
     elif True:
         # Collect a sample from just one species
-        jj   = 1
-        sloc = np.random.randint(cf.idx_start[jj], cf.idx_end[jj], N_samples, dtype=int)
+        jj   = 0
+        sloc = np.random.randint(idx_start[jj], idx_end[jj], N_samples, dtype=int)
     
     ## COLLECT DATA ON THESE PARTICLES
     sidx      = np.zeros((num_particle_steps, sloc.shape[0]), dtype=int)    # Sample particle index
-    spos      = np.zeros((num_particle_steps, sloc.shape[0], 3))            # Sample particle position
+    spos      = np.zeros((num_particle_steps, sloc.shape[0]))            # Sample particle position
     svel      = np.zeros((num_particle_steps, sloc.shape[0], 3))            # Sample particle velocity
     
     # Load up species index and particle position, velocity for samples
     for ii in range(num_particle_steps):
-        pos, vel, idx, ptime[ii] = cf.load_particles(ii)
+        pos, vel, idx, ptime[ii], idx_start, idx_end = cf.load_particles(ii)
         print('Loading sample particle data for particle file {}'.format(ii))
         for jj in range(sloc.shape[0]):
             sidx[ii, jj]    = idx[sloc[jj]]
-            spos[ii, jj, :] = pos[:, sloc[jj]]
+            spos[ii, jj]    = pos[sloc[jj]]
             svel[ii, jj, :] = vel[:, sloc[jj]]
 
-    if False:
+    if True:
         # Plot position/velocity (will probably have to put a catch in here for absorbed particles: ylim?)
-        fig, axes = plt.subplots(2, sharex=True)
+        plt.ioff()
+        fig, axes = plt.subplots(2, sharex=True, figsize=(16, 10))
         for ii in range(sloc.shape[0]):
-            axes[0].plot(ptime, spos[:, ii, 0], c=cf.temp_color[sidx[0, ii]], marker='o')
-            
-            axes[1].plot(ptime, svel[:, ii, 0], c=cf.temp_color[sidx[0, ii]], marker='o')
+            axes[0].plot(ptime, spos[:, ii]   , c=cf.temp_color[sidx[0, ii]])
+            axes[1].plot(ptime, svel[:, ii, 0], c=cf.temp_color[sidx[0, ii]])
             
             axes[0].set_title('Sample Positions/Velocities of Particles :: Indices {}'.format(sloc))
-            axes[1].set_xlabel('Time (s)')
             axes[0].set_ylabel('Position (m)')
             axes[1].set_ylabel('Velocity (m/s)') 
+            
+            axes[-1].set_xlabel('Time (s)')
+            
+        fig.savefig(savedir + 'sample.png')
+        plt.close('all')
     return
 
 
@@ -3540,60 +3549,6 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False, skip=1, ppd=F
     return
 
 
-def find_the_particles(it_max=None):
-    '''
-    Check location and status of particles
-     - How many with -ve indices?
-     - How many outside sim domain?
-     - How many with zero velocity?
-     
-    '''
-    print('Finding particles')
-    if it_max is None:
-        it_max = len(os.listdir(cf.particle_dir))
-     
-    N_negative = np.zeros(it_max)
-    N_outside  = np.zeros(it_max)
-    N_still    = np.zeros(it_max)
-    
-    for xx in range(it_max):    
-        print('Loading particle information file {}'.format(xx))
-        pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(xx)
-        
-        N_negative[xx] = (idx < 0).sum()
-        N_still[xx]    = (vel[0, :] == 0.0).sum()
-        for ii in range(idx.shape[0]):
-            if pos[0, ii] < cf.xmin:
-                N_outside[xx] += 1
-            elif pos[0, ii] > cf.xmax:
-                N_outside[xx] += 1
-                
-    # Do the plotting
-    filename = 'lost_particles.png'
-    plt.ioff()
-    
-    fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
-    
-    axes[0].plot(N_negative)
-    axes[0].set_ylabel('Negative')
-    
-    axes[1].plot(N_outside)
-    axes[1].set_ylabel('Outside')
-    
-    axes[2].plot(N_still)
-    axes[2].set_ylabel('Still')
-    
-    axes[0].set_title('Check particles')
-    axes[2].set_xlabel('Timestep')
-    axes[2].set_xlim(0, it_max)
-
-    fig.subplots_adjust(hspace=0.0)
-    
-    plt.savefig(cf.anal_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-    plt.close('all')
-    return
-
-
 def plot_sample(it_max=None, N_sample=1000):
     print('Plotting sample of particles...')
     if it_max is None:
@@ -4407,15 +4362,15 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
 
-    for series in ['//damping_tests_varying_20pc_larger//']:
+    for series in ['//test_new_CAMCL//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [11]
+            runs_to_do = [5]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -4454,19 +4409,16 @@ if __name__ == '__main__':
 #                         continue
 # =============================================================================
 
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None,
-                           normalize=False, B0_lim=0.25, remove_ND=False)
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
+                           B0_lim=0.25, remove_ND=False)
                 
-                plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None,
-                           remove_ND=False)
+                #plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
                 
                 #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
                 
-# =============================================================================
-#                 plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
-#                      pcyc_mult=1.5, xmax=1.5, zero_cold=True,
-#                      linear_only=False, normalize_axes=True, centre_only=False)
-# =============================================================================
+                plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
+                     pcyc_mult=1.5, xmax=1.5, zero_cold=True,
+                     linear_only=False, normalize_axes=True, centre_only=False)
 
 # =============================================================================
 #                 ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=True,
@@ -4498,7 +4450,9 @@ if __name__ == '__main__':
                 for sp in range(cf.Nj):
                     plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=1,
                                  ppd=False)
-                plot_phase_space_with_time(it_max=None, skip=1)
+                analyse_particle_motion(it_max=None)
+                #plot_phase_space_with_time(it_max=None, skip=1)
+                
                     
 # =============================================================================
 #                 for sp in range(cf.Nj):

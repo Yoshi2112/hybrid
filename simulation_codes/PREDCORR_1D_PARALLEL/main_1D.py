@@ -1,8 +1,7 @@
 ## PYTHON MODULES ##
 import numpy as np
 import numba as nb
-import os, sys, pdb
-import pickle
+import os, sys, pdb, pickle
 from shutil import rmtree
 from timeit import default_timer as timer
 from scipy.interpolate import splrep, splev
@@ -20,7 +19,7 @@ RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
-Fu_override       = False       # Override to allow density to be calculated as a ratio of frequencies
+Fu_override       = True       # Override to allow density to be calculated as a ratio of frequencies
 adaptive_timestep = True       # Disable adaptive timestep to keep it the same as initial
 do_parallel       = True       # Flag to use available threads to parallelize particle functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
@@ -28,7 +27,7 @@ print_runtime     = True       # Flag to print runtime every 50 iterations
 
 if not do_parallel:
     nb.set_num_threads(1)          
-#nb.set_num_threads(1)         # Uncomment to manually set number of threads, otherwise will use all available
+#nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
 
 ### ##
 #%% INITIALIZATION
@@ -515,6 +514,8 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
     this particle data doesn't alter it.
         -- Put some kind of limit on dB/dx
         -- Don't need vel_ts since cell size doesn't matter (especially for very small dx)
+        
+    Note:
     '''
     psave = save_particles
     
@@ -546,11 +547,11 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
         
     # Desync (retard) velocity here
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, -0.5*pdt,
-           _mp_flux, eta_arr, vel_only=False)
+           eta_arr, vel_only=False)
     
     # Apply BCs to particles
     if particle_open == 1:
-        inject_particles(pos, vel, idx, _mp_flux, pdt)
+        inject_particles(pos, vel, idx, _mp_flux, pdt, hot_only=hot_only)
     elif particle_reinit == 1:
         if particle_reinit == 1:
             reinit_count_flux(pos, idx, _mp_flux)
@@ -573,11 +574,11 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
         
         for jj in range(Nj):
             parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, pdt,
-           _mp_flux, eta_arr, vel_only=False)
+            eta_arr, vel_only=False)
             
             # Apply BCs to particles
             if particle_open == 1:
-                inject_particles(pos, vel, idx, _mp_flux, pdt)
+                inject_particles(pos, vel, idx, _mp_flux, pdt, hot_only=hot_only)
             elif particle_reinit == 1:
                 if particle_reinit == 1:
                     reinit_count_flux(pos, idx, _mp_flux)
@@ -586,10 +587,6 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
                 periodic_BC(pos, idx)
             else:
                 reflective_BC(pos, vel, idx)
-            
-            if hot_only == False or temp_type[jj] == 1:
-                if particle_open == True:
-                    inject_particles_1sp(pos, vel, idx, _mp_flux, pdt, jj)
 
         # Check number of spare particles every 25 steps
         if pp > 0 and pp%100 == 0 and particle_open == 1:
@@ -605,11 +602,11 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
     
     # Resync (advance) velocity here
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, 0.5*pdt,
-           _mp_flux, eta_arr, vel_only=False)
+           eta_arr, vel_only=False)
     
     # Apply BCs to particles
     if particle_open == 1:
-        inject_particles(pos, vel, idx, _mp_flux, pdt)
+        inject_particles(pos, vel, idx, _mp_flux, pdt, hot_only=hot_only)
     elif particle_reinit == 1:
         if particle_reinit == 1:
             reinit_count_flux(pos, idx, _mp_flux)
@@ -640,7 +637,7 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     '''
     parmov_start = timer()
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve, rho_in, DT,
-           _mp_flux, resistive_array, vel_only=False)
+           resistive_array, vel_only=False)
     parmov_time = round(timer() - parmov_start, 3)
     
     BC_start  = timer()
@@ -838,7 +835,7 @@ def assign_weighting_CIC(pos, I, W, E_nodes=True):
 
 @nb.njit(parallel=do_parallel)
 def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji, Ve, q_dens, DT,
-           mp_flux, resistive_array, vel_only=False, hot_only=False):
+           resistive_array, vel_only=False, hot_only=False):
     '''
     updates velocities using a Boris particle pusher.
     Based on Birdsall & Langdon (1985), pp. 59-63.
@@ -927,7 +924,7 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji, Ve, q_dens, DT,
             vel[1, ii] += qmi * Ep[1]
             vel[2, ii] += qmi * Ep[2]
                 
-            # Calculate v_prime (maybe use a temp array here?)
+            # Calculate v_prime
             v_prime    = np.zeros(3, dtype=np.float64)
             v_prime[0] = vel[0, ii] + vel[1, ii] * T[2] - vel[2, ii] * T[1]
             v_prime[1] = vel[1, ii] + vel[2, ii] * T[0] - vel[0, ii] * T[2]
@@ -1129,7 +1126,7 @@ def inject_particles_1sp(pos, vel, idx, _mp_flux, dt, jj):
 
 
 @nb.njit()
-def inject_particles(pos, vel, idx, _mp_flux, DT):        
+def inject_particles(pos, vel, idx, _mp_flux, DT, hot_only=False):        
     '''
     How to create new particles in parallel? Just test serial for now, but this
     might become my most expensive function for large N.
@@ -1142,8 +1139,13 @@ def inject_particles(pos, vel, idx, _mp_flux, DT):
     # Add flux at each boundary if 'open' flux boundaries
     if particle_open == 1:
         for kk in range(2):
-            _mp_flux[kk, :] += inject_rate*DT
-
+            if not hot_only:
+                _mp_flux[kk, :] += inject_rate*DT
+            else:
+                for jj in range(Nj):
+                    if temp_type[jj] == 1:
+                        _mp_flux[kk, jj] += inject_rate[jj]*DT
+            
     
     # acc used only as placeholder to mark place in array. How to do efficiently? 
     acc = 0; n_created = 0
@@ -1778,11 +1780,6 @@ def calculate_E(B, B_center, Ji, J_ext, q_dens, E, Ve, Te, temp3De, temp3Db, gra
             # Fill remaining ghost cells
             E[:lo2, ii] = E[lo2, ii]
             E[ro2:, ii] = E[ro2, ii]
-# =============================================================================
-#         else:
-#             E[:lo2, ii] *= 0.0
-#             E[ro2:, ii] *= 0.0
-# =============================================================================
             
     # Diagnostic flag for testing
     if disable_waves == 1:   
@@ -1942,7 +1939,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ji_i
     if DT_part < 0.9*DT:
         # Re-sync vel/pos
         parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve_in, rho_in, 0.5*DT,
-           mp_flux, resistive_array, vel_only=False)           
+           resistive_array, vel_only=False)           
 
         DT         *= 0.5
         max_inc    *= 2
@@ -1954,7 +1951,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ji_i
         
         # De-sync vel/pos
         parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve_in, rho_in, -0.5*DT,
-           mp_flux, resistive_array, vel_only=False)    
+           resistive_array, vel_only=False)    
         print('Timestep halved. Syncing particle velocity...')
     return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, damping_array
 
@@ -2053,6 +2050,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('quiet_start', quiet_start),
                    ('num_threads', nb.get_num_threads()),
                    ('subcycles', 1),
+                   ('beta_flag', beta_flag),
                    ('damping_multiplier', damping_multiplier),
                    ('damping_fraction', damping_fraction),
                    ('pol_wave', pol_wave),
@@ -2517,7 +2515,7 @@ def load_run_params():
     ri1 = ND + NX - 1; ri2 = ND + NX - 2    # Right inner
 
     # Check BCs
-    if field_periodic == 1:
+    if field_periodic == 1 and not disable_waves:
         if particle_periodic == 0:
             print('Periodic field compatible only with periodic particles.')
             particle_periodic = 1
@@ -2881,7 +2879,7 @@ if __name__ == '__main__':
     # Retard velocity
     print('Retarding velocity...')
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_int, Ve_int, q_dens,
-           -0.5*DT, mp_flux, resistive_array, vel_only=True)
+           -0.5*DT, resistive_array, vel_only=True)
     
     qq       = 1;    time_sec = DT
     print('Starting main loop...')
@@ -2898,7 +2896,7 @@ if __name__ == '__main__':
               Ve_int, Ve_half, Te, temp3De, temp3Db, temp1D, old_particles, old_fields,            \
               B_damping_array, E_damping_array, resistive_array, retarding_array,
               qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter)
-            
+
         if qq%part_save_iter == 0 and save_particles == 1:
             save_particle_data(time_sec, DT, part_save_iter, qq, pos,
                                     vel, idx)
