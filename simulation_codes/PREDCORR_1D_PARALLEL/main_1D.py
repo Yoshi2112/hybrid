@@ -433,6 +433,7 @@ def set_timestep(vel):
     push in between? What's the point of the two copies of the B-field like in the CL method?
     '''
     if disable_waves == 0:
+        # dxm factor to account for B-field dispersion scaling with dx
         ion_ts = dxm * orbit_res / gyfreq_xmax        # Timestep to highest resolve gyromotion
     else:
         ion_ts = 0.25 / gyfreq_xmax                   # If no waves, 20 points per revolution (~4 per wcinv)

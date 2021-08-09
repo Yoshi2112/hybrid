@@ -18,7 +18,7 @@ B_surf  = 3.12e-5                            # Magnetic field strength at Earth 
 
 Fu_override       = True
 do_parallel       = True
-print_timings     = True       # Diagnostic outputs timing each major segment (for efficiency examination)
+print_timings     = False       # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime     = True       # Flag to print runtime every 50 iterations 
 adaptive_timestep = True       # Disable adaptive timestep to keep it the same as initial
 adaptive_subcycling = True     # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
@@ -443,15 +443,10 @@ def set_timestep(vel):
     '''
     Timestep limitations:
         -- Resolve ion gyromotion (controlled by orbit_res)
-        -- Resolve ion velocity (<0.5dx per timestep)
+        -- Resolve ion velocity (<0.5dx per timestep, varies with particle temperature)
         -- Resolve B-field solution on grid (controlled by subcycling and freq_res)
         -- E-field acceleration? (not implemented)
     '''
-    if disable_waves == 0:
-        ion_ts = orbit_res / gyfreq_xmax          # Timestep to highest resolve gyromotion
-    else:
-        ion_ts = 0.25 / gyfreq_xmax               # If no waves, 20 points per revolution (~4 per wcinv)
-
     max_vx   = np.max(np.abs(vel[0, :]))
     ion_ts   = orbit_res / gyfreq_xmax            # Timestep to resolve gyromotion
     vel_ts   = 0.5*dx / max_vx                    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
@@ -1893,6 +1888,8 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, B, B_center, E, dns,
     
     # Increase timestep
     # DISABLED until I work out how to do the injection for half a timestep when this changes
+    # Idea: Maybe implement time_change on next iteration? Or is it possible to push velocity
+    # by half a timestep to sync that way?
     elif (DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0 and manual_trip == 0)\
         or manual_trip == 2:
         position_update(pos, vel, idx, Ie, W_elec, -0.5*DT)
