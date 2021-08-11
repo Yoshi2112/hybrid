@@ -4389,18 +4389,18 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
 
-    for series in ['//CAMCL_relax_test//']:
+    for series in ['//CAMCL_PREDCORR_timing_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [5]
+            runs_to_do = [3]
         
         # Extract all summary files and plot field stuff (quick)
-        if False:
+        if True:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
@@ -4436,20 +4436,16 @@ if __name__ == '__main__':
 #                         continue
 # =============================================================================
 
-# =============================================================================
-#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
-#                            B0_lim=0.25, remove_ND=False)
-# =============================================================================
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
+                           B0_lim=0.25, remove_ND=False)
                 
                 #plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
                 
                 #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
                 
-# =============================================================================
-#                 plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
-#                      pcyc_mult=1.5, xmax=1.5, zero_cold=True,
-#                      linear_only=False, normalize_axes=True, centre_only=False)
-# =============================================================================
+                plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
+                     pcyc_mult=1.5, xmax=1.5, zero_cold=True,
+                     linear_only=False, normalize_axes=True, centre_only=False)
 
 # =============================================================================
 #                 ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=True,
@@ -4463,7 +4459,7 @@ if __name__ == '__main__':
 #                     pass            
 # =============================================================================
         
-        if True:
+        if False:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))

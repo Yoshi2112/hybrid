@@ -1,6 +1,7 @@
 ## PYTHON MODULES ##
 from timeit import default_timer as timer
 from scipy.interpolate import splrep, splev
+from scipy.interpolate import interp1d
 import numpy as np
 import numba as nb
 import sys, os, pdb
@@ -18,7 +19,7 @@ B_surf  = 3.12e-5                            # Magnetic field strength at Earth 
 
 Fu_override       = True
 do_parallel       = True
-print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
+print_timings     = True       # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime     = True       # Flag to print runtime every 50 iterations 
 adaptive_timestep = True       # Disable adaptive timestep to keep it the same as initial
 adaptive_subcycling = True     # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
@@ -970,6 +971,17 @@ def generate_vx(vth):
             return y_uni
 
 
+@nb.njit(parallel=do_parallel)
+def get_max_vx(vel):
+    return np.abs(vel[0]).max()
+
+
+@nb.njit(parallel=do_parallel)
+def get_max_v(vel):
+    max_vx = np.abs(vel[0]).max()
+    max_vy = np.abs(vel[1]).max()
+    max_vz = np.abs(vel[2]).max()
+    return max_vx, max_vy, max_vz
 
 #%% SOURCES
 @nb.njit()
@@ -1211,8 +1223,9 @@ def init_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, rho_0, rho, J_ini
     return
 
 
-@nb.njit()
-def collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, rho, J_minus, J_plus, L, G, mp_flux, dt):
+#@nb.njit()
+def advance_particles_and_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E,
+                    rho_int, rho_half, Ji, Ji_minus, Ji_plus, L, G, mp_flux, dt):
     '''
     Moment collection and position advance function.
 
@@ -1234,20 +1247,36 @@ def collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, rho, J_minus, J_plus, 
         G       -- "Gamma"  MHD variable for current advance
         L       -- "Lambda" MHD variable for current advance    
     '''
+    START_start = timer()
     ni       = np.zeros((NC, Nj), dtype=np.float64)
     nu_plus  = np.zeros((NC, Nj, 3), dtype=np.float64)
     nu_minus = np.zeros((NC, Nj, 3), dtype=np.float64)
     
-    rho      *= 0.0
-    J_minus  *= 0.0
-    J_plus   *= 0.0
-    L        *= 0.0
-    G        *= 0.0
+    rho_int[:] = rho_half[:] # Store pc(1/2) here while pc(3/2) is collected
+    rho_half  *= 0.0
+    Ji_minus  *= 0.0
+    Ji_plus   *= 0.0
+    L         *= 0.0
+    G         *= 0.0
+    START_time = round(timer() - START_start, 3)     
     
+    VELAD_start = timer()
+    velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt)
+    VELAD_time = round(timer() - VELAD_start, 3)
+    
+    VLMOM_start = timer()
     deposit_velocity_moments(vel, Ie, W_elec, idx, nu_minus)
-    position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt)
-    deposit_both_moments(vel, Ie, W_elec, idx, ni, nu_plus)
+    VLMOM_time = round(timer() - VLMOM_start, 3)
     
+    POSAD_start = timer()
+    position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt)
+    POSAD_time = round(timer() - POSAD_start, 3)
+    
+    MOMNT_start = timer()
+    deposit_both_moments(vel, Ie, W_elec, idx, ni, nu_plus)
+    MOMNT_time = round(timer() - MOMNT_start, 3)
+    
+    TREST_start = timer()
     if source_smoothing == 1:
         for jj in range(Nj):
             ni[:, jj]  = smooth(ni[:, jj])
@@ -1257,24 +1286,38 @@ def collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, rho, J_minus, J_plus, 
                 nu_minus[:, jj, kk] = smooth(nu_minus[:, jj, kk])
     
     for jj in range(Nj):
-        rho  += ni[:, jj] * n_contr[jj] * charge[jj]
-        L    += ni[:, jj] * n_contr[jj] * charge[jj] ** 2 / mass[jj]
+        rho_half += ni[:, jj] * n_contr[jj] * charge[jj]
+        L        += ni[:, jj] * n_contr[jj] * charge[jj] ** 2 / mass[jj]
         
         for kk in range(3):
-            J_minus[:, kk] += nu_minus[:, jj, kk] * n_contr[jj] * charge[jj]
-            J_plus[ :, kk] += nu_plus[ :, jj, kk] * n_contr[jj] * charge[jj]
-            G[      :, kk] += nu_plus[ :, jj, kk] * n_contr[jj] * charge[jj] ** 2 / mass[jj]
+            Ji_minus[:, kk] += nu_minus[:, jj, kk] * n_contr[jj] * charge[jj]
+            Ji_plus[ :, kk] += nu_plus[ :, jj, kk] * n_contr[jj] * charge[jj]
+            G[       :, kk] += nu_plus[ :, jj, kk] * n_contr[jj] * charge[jj] ** 2 / mass[jj]
         
-    manage_source_term_boundaries(rho)
+    manage_source_term_boundaries(rho_half)
     manage_source_term_boundaries(L)
     for ii in range(3):
-        manage_source_term_boundaries(J_minus[:, ii])
-        manage_source_term_boundaries(J_plus[:, ii])
+        manage_source_term_boundaries(Ji_minus[:, ii])
+        manage_source_term_boundaries(Ji_plus[:, ii])
         manage_source_term_boundaries(G[:, ii])
         
-    for ii in range(rho.shape[0]):
-        if rho[ii] < min_dens * ne * ECHARGE:
-            rho[ii] = min_dens * ne * ECHARGE  
+    for ii in range(rho_half.shape[0]):
+        if rho_half[ii] < min_dens * ne * ECHARGE:
+            rho_half[ii] = min_dens * ne * ECHARGE  
+            
+    rho_int += rho_half
+    rho_int /= 2.0
+    Ji[:]    = 0.5 * (Ji_plus  +  Ji_minus)
+    TREST_time = round(timer() - TREST_start, 3)
+    
+    if print_timings:
+        print('')
+        print('START TIME:', START_time)
+        print('VELAD TIME:', VELAD_time)
+        print('VLMOM TIME:', VLMOM_time)
+        print('POSAD TIME:', POSAD_time)
+        print('MOMNT TIME:', MOMNT_time)
+        print('TREST TIME:', TREST_time)
     return
 
 
@@ -1706,14 +1749,22 @@ def get_B_cent(B, B_center):
     Quick and easy function to calculate B on the E-grid using scipy's cubic
     spline interpolation (mine seems to be broken). Could probably make this 
     myself and more efficient later, but need to eliminate problems!
-    
-    TODO: Change this to a quadratic fit using poly1D. Also, time.
     '''
-    B_center *= 0.0
-    for jj in range(1, 3):
-        coeffs          = splrep(B_nodes_loc, B[:, jj])
-        B_center[:, jj] = splev( E_nodes_loc, coeffs)
-    B_center[:, 0] = eval_B0x(E_nodes_loc)
+# =============================================================================
+#     for jj in range(1, 3):
+#         if False:
+#             coeffs          = splrep(B_nodes_loc, B[:, jj])
+#             B_center[:, jj] = splev( E_nodes_loc, coeffs)
+#         else:
+# =============================================================================
+    B_center       *= 0.0
+    B_center[:, 0]  = eval_B0x(E_nodes_loc)    
+    
+    yfunc           = interp1d(B_nodes_loc, B[:, 1], kind='quadratic')
+    B_center[:, 1]  = yfunc(E_nodes_loc)
+    
+    zfunc           = interp1d(B_nodes_loc, B[:, 2], kind='quadratic')
+    B_center[:, 2]  = zfunc(E_nodes_loc)
     return
 
 
@@ -1741,9 +1792,10 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, B, B_center, E, dns,
     '''
     if manual_trip < 0: # Return without change or check
         return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, 0, subcycles
-    max_Vx          = np.abs(vel[0, :]).max()
-    max_V           = np.abs(vel      ).max()
-
+    
+    max_vx, max_vy, max_vz = get_max_v(vel)
+    max_V = max(max_vx, max_vy, max_vz)
+    
     B_tot           = np.sqrt(B_center[:, 0] ** 2 + B_center[:, 1] ** 2 + B_center[:, 2] ** 2)
     high_rat        = qm_ratios.max()
     
@@ -1756,7 +1808,7 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, B, B_center, E, dns,
     else:
         freq_ts     = ion_ts
     
-    vel_ts          = 0.75*dx / max_Vx
+    vel_ts          = 0.75*dx / max_vx
     DT_part         = min(freq_ts, vel_ts, ion_ts)
     
     # Reduce timestep
@@ -2576,22 +2628,12 @@ if __name__ == '__main__':
                     _E, _VE, _TE, _RESIS_ARR, _SIM_TIME)
         CAMEL_time = round(timer() - CAMEL_start, 3)
         
-        VELAD_start = timer()
-        velocity_update(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, _B, _E, _DT)
-        VELAD_time = round(timer() - VELAD_start, 3)
-
-        # Store pc(1/2) here while pc(3/2) is collected
-        _RHO_INT[:]  = _RHO_HALF[:]
+        PTMOM_start = timer()
+        advance_particles_and_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG,
+                                              _IDX, _B, _E, _RHO_INT, _RHO_HALF, _Ji,
+                                              _Ji_MINUS, _Ji_PLUS, _L, _G, _MP_FLUX, _DT)
+        PTMOM_time = round(timer() - PTMOM_start, 3)
         
-        MOMAD_start = timer()
-        collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, 
-                              _RHO_HALF, _Ji_MINUS, _Ji_PLUS, _L, _G, _MP_FLUX, _DT)
-        MOMAD_time = round(timer() - MOMAD_start, 3)
-        
-        _RHO_INT += _RHO_HALF
-        _RHO_INT /= 2.0
-        _Ji[:]    = 0.5 * (_Ji_PLUS  +  _Ji_MINUS)
-
         LEAP2_start = timer()
         _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT, _E, _VE, _TE,
                                     _DT, _SUBCYCLES, _B_DAMP, _RESIS_ARR, _SIM_TIME)
@@ -2602,13 +2644,13 @@ if __name__ == '__main__':
         loop_diag = round(timer() - loop_start, 3)
         
         if print_timings:
+            print('')
             print(f'LEAP1 TIME: {LEAP1_time}')
             print(f'CAMEL TIME: {CAMEL_time}')
-            print(f'VELAD TIME: {MOMAD_time}')
-            print(f'MOMAD TIME: {MOMAD_time}')
+            print(f'PTMOM TIME: {PTMOM_time}')
             print(f'LEAP2 TIME: {LEAP2_time}')
             print(f'Total Loop: {loop_diag}')
-
+        
         ########################
         ##### OUTPUT DATA  #####
         ########################
