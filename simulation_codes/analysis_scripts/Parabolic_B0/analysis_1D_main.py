@@ -3508,13 +3508,20 @@ def plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=False, skip=1, pp
                                                                          preparticledata=ppd)
             if cf.disable_waves:
                 ptime = cf.dt_particle*ii
-            for jj in sp_do:           
+            for jj in sp_do:  
+                if ppd == False:
+                    save_dir = cf.anal_dir + '//Particle Spatial Distribution Histograms//Species {}//'.format(jj)
+                    filename = 'fv_vs_x_species_{}_{:05}'.format(jj, ii)
+                else:
+                    save_dir = cf.anal_dir + '//EQUIL_Particle Spatial Distribution Histograms//Species {}//'.format(jj)
+                    filename = 'EQ_fv_vs_x_species_{}_{:05}'.format(jj, ii)
+                    
                 print(f'Plotting particle data for species {jj}, time {ii}')
                     
                 # Do the calculations and plotting
                 cfac = 10  if cf.temp_type[jj] == 1 else 5
-                vlim = 5*cf.vth_perp[jj]
-            
+                vlim = 5*cf.vth_perp[jj]/cf.va
+                #pdb.set_trace()
                 # Manually specify bin edges for histogram
                 vbins = np.linspace(-vlim, vlim, 101, endpoint=True)
                 
@@ -3543,8 +3550,11 @@ def plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=False, skip=1, pp
         
                 fig.subplots_adjust(hspace=0.065)
                 
-                plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-                plt.close('all')
+                if save:
+                    plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+                    plt.close('all')
+                else:
+                    plt.show()
     return
 
 
