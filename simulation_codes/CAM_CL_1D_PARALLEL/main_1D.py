@@ -18,15 +18,16 @@ B_surf  = 3.12e-5                            # Magnetic field strength at Earth 
 
 Fu_override       = True
 do_parallel       = True
-print_timings     = False       # Diagnostic outputs timing each major segment (for efficiency examination)
+print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime     = True       # Flag to print runtime every 50 iterations 
 adaptive_timestep = True       # Disable adaptive timestep to keep it the same as initial
 adaptive_subcycling = True     # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
 default_subcycles   = 12       # Number of field subcycling steps for Cyclic Leapfrog
 
 if not do_parallel:
+    do_parallel = True
     nb.set_num_threads(1)          
-#nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
+#nb.set_num_threads(2)         # Uncomment to manually set number of threads, otherwise will use all available
 
 
 #%% --- FUNCTIONS ---
@@ -67,6 +68,8 @@ def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
     sf_par, sf_per (the thermal velocities).
     
     Is there a better way to do this with a Monte Carlo perhaps?
+    
+    TODO: Check that this still works.
     '''
     B0x    = eval_B0x(pos[st: en])
     N_loss = 1
@@ -280,8 +283,8 @@ def initialize_source_arrays():
     return rho_half, rho_int, Ji, Ji_plus, Ji_minus, J_ext, L, G, mp_flux
 
 
-def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in, Ve_in, rho_in,
-                          _mp_flux, frev=1000, hot_only=True, psave=True, save_inc=50):
+def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
+                          mp_flux, frev=1000, hot_only=True, psave=True, save_inc=50):
     '''
     Still need to test this. Put it just after the initialization of the particles.
     Actually might want to use the real mp_flux since that'll continue once the
@@ -318,7 +321,6 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
     ptime    = frev / gyfreq_eq
     psteps   = int(ptime / pdt) + 1
     psim_time = 0.0
-    eta_arr = np.zeros(E_int.shape[0], dtype=E_int.dtype)
 
     print('Particle-only timesteps: ', psteps)
     print('Particle-push in seconds:', pdt)
@@ -337,8 +339,8 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
         pnum = 0
         
     # Desync (retard) velocity here
-    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, -0.5*pdt,
-           _mp_flux, eta_arr, vel_only=False)
+    velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*pdt,
+                    hot_only=hot_only)
         
     for pp in range(psteps):
         # Save first and last only
@@ -351,13 +353,10 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
         if pp%100 == 0:
             print('Step', pp)
         
-        for jj in range(Nj):
-            parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, pdt,
-           _mp_flux, eta_arr, vel_only=False)
-            
-            if hot_only == False or temp_type[jj] == 1:
-                if particle_open == True:
-                    inject_particles_1sp(pos, vel, idx, _mp_flux, pdt, jj)
+        velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, pdt,
+                        hot_only=hot_only)
+        position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, pdt,
+                        hot_only=hot_only)
 
         # Check number of spare particles every 25 steps
         if pp > 0 and pp%100 == 0 and particle_open == 1:
@@ -372,8 +371,8 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
         psim_time += pdt
     
     # Resync (advance) velocity here
-    parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, 0.5*pdt,
-           _mp_flux, eta_arr, vel_only=False)
+    velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, 0.5*pdt,
+                    hot_only=hot_only)
     
     # Dump indicator file
     if save_fields == 1 or save_particles == 1:
@@ -591,11 +590,12 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
 
 
 @nb.njit(parallel=do_parallel)
-def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji, Ve, q_dens,
-                    dt, resistive_array, hot_only=False):    
+def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, 
+                    dt, hot_only=False):    
     '''
     Note: Keeping the code in case it's useful later, but commenting it out
-    for speed.
+    for speed. Also removed requirement to call Ji, Ve, q_dens (rho) because
+    it makes coding the equilibrium bit easier. Also resisitive_array.
     '''
     for ii in nb.prange(pos.shape[0]):
         if temp_type[idx[ii]] == 1 or hot_only == False:
@@ -655,7 +655,8 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji, Ve, q_dens,
 
 
 @nb.njit(parallel=do_parallel)
-def position_update(pos, vel, idx, Ie, W_elec, mp_flux, dt, hot_only=False):
+def position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt,
+                    hot_only=False):
     '''
     Updates the position of the particles using x = x0 + vt. 
     Also updates particle nearest node and weighting, for E-nodes only since
@@ -689,12 +690,13 @@ def position_update(pos, vel, idx, Ie, W_elec, mp_flux, dt, hot_only=False):
     
     apply_particle_BCs(pos, vel, idx, mp_flux, dt)
     assign_weighting_TSC(pos, Ie, W_elec)
+    assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
     return
 
 
 @nb.njit()
 def apply_particle_BCs(pos, vel, idx, _mp_flux, DT):
-    # TODO: Still need to test open BCs
+    # TODO: Still need to test open BCs, especially in the run_until_equil() bit
     # Also, reinit BCs are weirdly scrambled, but good flux?
     if particle_open == 1:
         inject_particles(pos, vel, idx, _mp_flux, DT)
@@ -1012,7 +1014,7 @@ def push_current(J_in, J_out, E, B_center, L, G, dt):
     return
 
 
-@nb.njit(parallel=True)
+@nb.njit(parallel=do_parallel)
 def deposit_both_moments(vel, Ie, W_elec, idx, ni, nu):
     '''
     Collect number and velocity moments in each cell, weighted by their distance
@@ -1053,7 +1055,7 @@ def deposit_both_moments(vel, Ie, W_elec, idx, ni, nu):
     return
 
 
-@nb.njit(parallel=True)
+@nb.njit(parallel=do_parallel)
 def deposit_velocity_moments(vel, Ie, W_elec, idx, nu):
     '''
     Collect number and velocity moments in each cell, weighted by their distance
@@ -1123,7 +1125,7 @@ def manage_source_term_boundaries(arr):
 
 
 @nb.njit()
-def init_collect_moments(pos, vel, Ie, W_elec, idx, rho_0, rho, J_init, J_plus,
+def init_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, rho_0, rho, J_init, J_plus,
                          L, G, mp_flux, dt):
     '''Moment collection and position advance function. Specifically used at initialization or
     after timestep synchronization.
@@ -1146,6 +1148,16 @@ def init_collect_moments(pos, vel, Ie, W_elec, idx, rho_0, rho, J_init, J_plus,
         J_plus  -- Current density at +0.5 timestep
         G       -- "Gamma"  MHD variable for current advance : Current-like
         L       -- "Lambda" MHD variable for current advance :  Charge-like
+        
+    TODO: Incorporate velocity advance into this and rename function to "particles and moments"
+    Advance would be:
+        -- Advance velocity v0 -> v1
+        -- Collect moments at x1/2
+        -- Advance position
+        -- Collect moments at x3/2
+        -- Post-process to get charge/current densities
+    This may allow it to be better optimised/parallelised, and to separate the
+    particle from the field actions.
     '''
     ni       = np.zeros((NC, Nj), dtype=np.float64)
     ni_init  = np.zeros((NC, Nj), dtype=np.float64)
@@ -1160,7 +1172,7 @@ def init_collect_moments(pos, vel, Ie, W_elec, idx, rho_0, rho, J_init, J_plus,
     G       *= 0.0
                          
     deposit_both_moments(vel, Ie, W_elec, idx, ni_init, nu_init)      # Collects sim_particles/cell/species
-    position_update(pos, vel, idx, Ie, W_elec, mp_flux, dt)
+    position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt)
     deposit_both_moments(vel, Ie, W_elec, idx, ni, nu_plus)
 
     if source_smoothing == 1:
@@ -1200,7 +1212,7 @@ def init_collect_moments(pos, vel, Ie, W_elec, idx, rho_0, rho, J_init, J_plus,
 
 
 @nb.njit()
-def collect_moments(pos, vel, Ie, W_elec, idx, rho, J_minus, J_plus, L, G, mp_flux, dt):
+def collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, rho, J_minus, J_plus, L, G, mp_flux, dt):
     '''
     Moment collection and position advance function.
 
@@ -1233,7 +1245,7 @@ def collect_moments(pos, vel, Ie, W_elec, idx, rho, J_minus, J_plus, L, G, mp_fl
     G        *= 0.0
     
     deposit_velocity_moments(vel, Ie, W_elec, idx, nu_minus)
-    position_update(pos, vel, idx, Ie, W_elec, mp_flux, dt)
+    position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt)
     deposit_both_moments(vel, Ie, W_elec, idx, ni, nu_plus)
     
     if source_smoothing == 1:
@@ -1371,106 +1383,7 @@ def get_electron_temp(qn, te):
     return
 
 
-@nb.njit()
 def get_grad_P(qn, te):
-    '''
-    Returns the electron pressure gradient (in 1D) on the E-field grid using P = nkT and 
-    finite difference.
-    
-    INPUT:
-        qn -- Grid charge density
-        te -- Grid electron temperature
-        DX -- Grid separation, used for diagnostic purposes. Defaults to simulation dx.
-        inter_type -- Linear (0) or cubic spline (1) interpolation.
-        
-    NOTE: Interpolation is needed because the finite differencing causes the result to be deposited on the 
-    B-grid. Moving it back to the E-grid requires an interpolation. Cubic spline is desired due to its smooth
-    derivatives and its higher order weighting (without the polynomial craziness)
-    '''
-    grad_pe_B     = np.zeros(NC + 1, dtype=np.float64)
-    grad_P        = np.zeros(NC    , dtype=np.float64)
-    Pe            = qn * kB * te / ECHARGE
-
-    # Center points
-    for ii in np.arange(1, qn.shape[0]):
-        grad_pe_B[ii] = (Pe[ii] - Pe[ii - 1])
-            
-    # Set endpoints (there should be no gradients here anyway, but just to be safe)
-    grad_pe_B[0]  = grad_pe_B[1]
-    grad_pe_B[NC] = grad_pe_B[NC - 1]
-        
-    # Re-interpolate to E-grid
-    grad_P = interpolate_edges_to_center_1D(grad_pe_B)/dx
-    return Pe, grad_P
-
-
-@nb.njit()
-def get_grad_P_alt(qn, te):
-    '''
-    Returns the electron pressure gradient (in 1D) on the E-field grid using P = nkT and 
-    finite difference.
-     
-    INPUT:
-        qn     -- Grid charge density
-        te     -- Grid electron temperature
-        grad_P -- Output array for electron pressure gradient
-        temp   -- intermediary array used to store electron pressure, since both
-                  density and temperature may vary (with adiabatic approx.)
-        
-    Forwards/backwards differencing at the simulation cells at the edge of the
-    physical space domain.
-    
-    Maybe check this at some point, or steal the one from the CAM_CL code.
-    '''
-    grad_P = np.zeros(NC    , dtype=np.float64)
-    Pe     = qn * kB * te / ECHARGE       # Store Pe in grad_P array for calculation
-
-    # Central differencing, internal points
-    for ii in nb.prange(1, NC - 1):
-        grad_P[ii] = (Pe[ii + 1] - Pe[ii - 1])
-        
-    # Set endpoints (there should be no gradients here anyway, but just to be safe)
-    grad_P[0]    = grad_P[1]
-    grad_P[NC-1] = grad_P[NC - 2]
-
-    grad_P    /= (2*dx)
-    return Pe, grad_P
-
-
-@nb.njit()
-def get_grad_P_alt2(qn, te):
-    '''
-    Returns the electron pressure gradient (in 1D) on the E-field grid using P = nkT and 
-    finite difference.
-     
-    INPUT:
-        qn     -- Grid charge density
-        te     -- Grid electron temperature
-        grad_P -- Output array for electron pressure gradient
-        temp   -- intermediary array used to store electron pressure, since both
-                  density and temperature may vary (with adiabatic approx.)
-        
-    Forwards/backwards differencing at the simulation cells at the edge of the
-    physical space domain.
-    
-    Maybe check this at some point, or steal the one from the CAM_CL code.
-    '''
-    grad_P = np.zeros(NC    , dtype=np.float64)
-    Pe     = qn * kB * te / ECHARGE       # Store Pe in grad_P array for calculation
-
-    # Central differencing, internal points
-    for ii in nb.prange(1, NC - 1):
-        dpc = (qn[ii + 1] - qn[ii - 1])
-        dTe = (te[ii + 1] - te[ii - 1])
-        grad_P[ii] = (kB / (ECHARGE*2*dx)) * (te[ii]*dpc + qn[ii]*dTe)
-        
-    # Set endpoints (there should be no gradients here anyway, but just to be safe)
-    grad_P[0]  = grad_P[1]
-    grad_P[NC-1] = grad_P[NC - 2]
-    return Pe, grad_P
-
-
-def get_grad_P_alt3(qn, te):
     '''
     Returns the electron pressure gradient (in 1D) on the E-field grid using P = nkT and 
     finite difference.
@@ -1500,35 +1413,6 @@ def get_grad_P_alt3(qn, te):
     coeffs = splrep(B_nodes_loc, grad_pe_B)
     grad_P = splev( E_nodes_loc, coeffs)
     return Pe, grad_P
-
-
-@nb.njit()
-def interpolate_edges_to_center_1D(grad_P, zero_boundaries=True):
-    ''' 
-    Same as 3D version just rejigged because its used for the grad_P calculation
-    to take grad_P from the B-grid (because of the central difference) and put
-    it back on the E-grid
-    '''
-    y2      = np.zeros((NC + 1), dtype=np.float64)
-    interp  = np.zeros((NC    ), dtype=np.float64)
-    
-    # Calculate second derivative       
-    # Interior B-nodes, Centered difference
-    for ii in range(1, NC):
-        y2[ii] = grad_P[ii + 1] - 2*grad_P[ii] + grad_P[ii - 1]
-            
-    # Edge B-nodes, Forwards/Backwards difference
-    if zero_boundaries == True:
-        y2[0 ] = 0.
-        y2[NC] = 0.
-    else:
-        y2[0]  = 2*grad_P[0 ] - 5*grad_P[1     ] + 4*grad_P[2     ] - grad_P[3     ]
-        y2[NC] = 2*grad_P[NC] - 5*grad_P[NC - 1] + 4*grad_P[NC - 2] - grad_P[NC - 3]
-        
-    # Do spline interpolation: E[ii] node is bracketed by B[ii], B[ii + 1] nodes
-    for ii in range(NC):
-        interp[ii] = 0.5 * (grad_P[ii] + grad_P[ii + 1] + (1/6) * (y2[ii] + y2[ii + 1]))
-    return interp
 
 
 @nb.njit()
@@ -1578,6 +1462,9 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, DT, subcycles,
             is already at 0.5*DT and this solution is used to advance the second
             field copy for averaging.
     '''
+    if disable_waves:
+        return 0.0
+    
     curl  = np.zeros((NC + 1, 3), dtype=np.float64)
     H     = 0.5 * DT
     dh    = H / subcycles
@@ -1723,7 +1610,7 @@ def calculate_E(B, B_center, Ji, J_ext, qn, E, Ve, Te, resistive_array, sim_time
     Ve[:, 2] = (Ji[:, 2] + J_ext[:, 2] - curlB[:, 2]) / qn
     
     get_electron_temp(qn, Te)
-    Pe, del_p = get_grad_P_alt3(qn, Te)
+    Pe, del_p = get_grad_P(qn, Te)
     
     VexB     = np.zeros((NC, 3), dtype=np.float64)  
     for ii in np.arange(NC):
@@ -1759,7 +1646,7 @@ def calculate_E(B, B_center, Ji, J_ext, qn, E, Ve, Te, resistive_array, sim_time
             E[ro2:, ii] = E[ro2, ii]
             
     # Diagnostic flag for testing
-    if disable_waves == 1:   
+    if disable_waves == 1:
         E *= 0.    
     return
 
@@ -1820,7 +1707,7 @@ def get_B_cent(B, B_center):
     spline interpolation (mine seems to be broken). Could probably make this 
     myself and more efficient later, but need to eliminate problems!
     
-    Change this to a quadratic fit using poly1D. Also, time.
+    TODO: Change this to a quadratic fit using poly1D. Also, time.
     '''
     B_center *= 0.0
     for jj in range(1, 3):
@@ -1998,6 +1885,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time,
                    ('part_save_iter', part_save_iter),
                    ('field_save_iter', field_save_iter),
                    ('max_wcinv', max_wcinv),
+                   ('resis_multiplier', resis_multiplier),
                    ('freq_res', freq_res),
                    ('orbit_res', orbit_res),
                    ('run_desc', run_description),
@@ -2632,7 +2520,7 @@ if __name__ == '__main__':
     _B_DAMP, _RESIS_ARR            = set_timestep(_VEL)    
     
     print('Loading initial state...\n')
-    init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IDX, _RHO_INT, _RHO_HALF,
+    init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, _RHO_INT, _RHO_HALF,
                          _Ji, _Ji_PLUS, _L, _G, _MP_FLUX, 0.5*_DT)
     get_B_cent(_B, _B_CENT)
     calculate_E(_B, _B_CENT, _Ji, _J_EXT, _RHO_HALF, _E, _VE, _TE, _RESIS_ARR, 0.0)
@@ -2665,7 +2553,7 @@ if __name__ == '__main__':
             if _CHANGE_FLAG == 1:
                 # If timestep was doubled, do I need to consider 0.5dt's worth of
                 # new particles? Maybe just disable the doubling until I work this out
-                init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IDX,  
+                init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX,  
                          _RHO_INT, _RHO_HALF, _Ji, _Ji_PLUS, _L, _G, _MP_FLUX, 0.5*_DT)
                 
                 set_damping_arrays(_B_DAMP, _RESIS_ARR, _DT, _SUBCYCLES)
@@ -2688,30 +2576,21 @@ if __name__ == '__main__':
                     _E, _VE, _TE, _RESIS_ARR, _SIM_TIME)
         CAMEL_time = round(timer() - CAMEL_start, 3)
         
-        MAGWT_start = timer()
-        assign_weighting_TSC(_POS, _IB, _W_MAG, E_nodes=False)
-        MAGWT_time = round(timer() - MAGWT_start, 3)
-
         VELAD_start = timer()
-        velocity_update(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, _B, _E,
-                        _Ji, _VE, _RHO_INT, _DT, _RESIS_ARR)
+        velocity_update(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, _B, _E, _DT)
         VELAD_time = round(timer() - VELAD_start, 3)
 
         # Store pc(1/2) here while pc(3/2) is collected
-        STORE_start = timer()
-        _RHO_INT[:]  = _RHO_HALF[:] 
-        STORE_time = round(timer() - STORE_start, 3)
+        _RHO_INT[:]  = _RHO_HALF[:]
         
         MOMAD_start = timer()
-        collect_moments(_POS, _VEL, _IE, _W_ELEC, _IDX, 
+        collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, 
                               _RHO_HALF, _Ji_MINUS, _Ji_PLUS, _L, _G, _MP_FLUX, _DT)
         MOMAD_time = round(timer() - MOMAD_start, 3)
         
-        AVRGE_start = timer()
         _RHO_INT += _RHO_HALF
         _RHO_INT /= 2.0
         _Ji[:]    = 0.5 * (_Ji_PLUS  +  _Ji_MINUS)
-        AVRGE_time = round(timer() - AVRGE_start, 3)
 
         LEAP2_start = timer()
         _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT, _E, _VE, _TE,
@@ -2725,11 +2604,8 @@ if __name__ == '__main__':
         if print_timings:
             print(f'LEAP1 TIME: {LEAP1_time}')
             print(f'CAMEL TIME: {CAMEL_time}')
-            print(f'MAGWT TIME: {MAGWT_time}')
             print(f'VELAD TIME: {MOMAD_time}')
-            print(f'STORE TIME: {STORE_time}')
             print(f'MOMAD TIME: {MOMAD_time}')
-            print(f'AVRGE TIME: {AVRGE_time}')
             print(f'LEAP2 TIME: {LEAP2_time}')
             print(f'Total Loop: {loop_diag}')
 

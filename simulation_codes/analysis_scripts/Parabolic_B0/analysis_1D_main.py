@@ -3457,8 +3457,10 @@ def plot_vi_vs_t_for_cell(cell=None, comp=0, it_max=None, jj=1, save=True, hexbi
     return
 
 
-def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False, skip=1, ppd=False):
+def plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=False, skip=1, ppd=False):
     '''
+    jj can be list of species or int
+    
     For each point in time
      - Collect particle information for particles near cell, plus time component
      - Store in array
@@ -3466,86 +3468,83 @@ def plot_vi_vs_x(it_max=None, jj=1, save=True, shuffled_idx=False, skip=1, ppd=F
      
     Issue : Bins along v changing depending on time (how to set max/min bins? Specify arrays manually)
     '''
-    if jj >= cf.Nj:
-        print('No species with index {}, skipping.'.format(jj))
-        return
-    
+    # Do checks on species specification
+    if sp       is None: sp = np.arange(cf.Nj)
+    if type(sp) is int:  sp = [sp]
+        
     if ppd == True and os.path.exists(cf.data_dir + '//equil_particles//') == False:
-        print('No equilibrium data to plot. Aborting.')
-        return
-    
+            print('No equilibrium data to plot. Aborting.')
+            return
+        
     lt = ['x', 'y', 'z']
-    print('Calculating distribution f(v) vs. x for species {},...'.format(jj))
+    
     if it_max is None:
         if ppd == False:
             it_max = len(os.listdir(cf.particle_dir))
         else:
             it_max = len(os.listdir(cf.data_dir + '//equil_particles//'))
-    
-    if cf.Tperp.max() is not None:
-        vth = np.sqrt(kB * cf.Tperp[jj] / cf.mass[jj]) / cf.va
-    else:
-        vth = cf.vth_perp[jj] / cf.va
-        
-    cfac = 10    if cf.temp_type[jj] == 1 else 5
-    vlim = 5*vth
-    
-    # Manually specify bin edges for histogram
-    vbins = np.linspace(-vlim, vlim, 101, endpoint=True)
+            
     xbins = np.linspace(cf.xmin/cf.dx, cf.xmax/cf.dx, cf.NX + 1, endpoint=True)
-        
-
+            
     for ii in range(it_max):
         if ii%skip == 0:
-            if ppd == False:
-                save_dir = cf.anal_dir + '//Particle Spatial Distribution Histograms//Species {}//'.format(jj)
-                filename = 'fv_vs_x_species_{}_{:05}'.format(jj, ii)
-            else:
-                save_dir = cf.anal_dir + '//EQUIL_Particle Spatial Distribution Histograms//Species {}//'.format(jj)
-                filename = 'EQ_fv_vs_x_species_{}_{:05}'.format(jj, ii)
             
-            if os.path.exists(save_dir) == False:
-                os.makedirs(save_dir)
+            # Decide if continue
+            sp_do = []
+            for jj in sp:           
+                if ppd == False:
+                    save_dir = cf.anal_dir + '//Particle Spatial Distribution Histograms//Species {}//'.format(jj)
+                    filename = 'fv_vs_x_species_{}_{:05}'.format(jj, ii)
+                else:
+                    save_dir = cf.anal_dir + '//EQUIL_Particle Spatial Distribution Histograms//Species {}//'.format(jj)
+                    filename = 'EQ_fv_vs_x_species_{}_{:05}'.format(jj, ii)
+                if not os.path.exists(save_dir): os.makedirs(save_dir)
                 
-            if os.path.exists(save_dir + filename + '.png') == True:
-                print('Particle data plot from p-file {} already exists.'.format(ii))
-                continue
-            else:
-                sys.stdout.write('\rPlotting particle data from p-file {}'.format(ii))
-                sys.stdout.flush()
-            
-
+                if not os.path.exists(save_dir + filename + '.png'):
+                    sp_do.append(jj)
+            if len(sp_do) == 0: continue
+        
             pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii, shuffled_idx=shuffled_idx,
-                                                                     preparticledata=ppd)
-
-            # Do the plotting
-            plt.ioff()
+                                                                         preparticledata=ppd)
+            if cf.disable_waves:
+                ptime = cf.dt_particle*ii
+            for jj in sp_do:           
+                print(f'Plotting particle data for species {jj}, time {ii}')
+                    
+                # Do the calculations and plotting
+                cfac = 10  if cf.temp_type[jj] == 1 else 5
+                vlim = 5*cf.vth_perp[jj]
             
-            fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
-            axes[0].set_title('f(v) vs. x :: {} :: t = {:.3f}s'.format(cf.species_lbl[jj], ptime))
-            
-            st = idx_start[jj]
-            en = idx_end[jj]
-    
-            for kk in range(3):
-                counts, xedges, yedges, im1 = axes[kk].hist2d(pos[st:en]/cf.dx, vel[kk, st:en]/cf.va, 
-                                                        bins=[xbins, vbins],
-                                                        vmin=0, vmax=cf.nsp_ppc[jj] / cfac)
-    
-                cb = fig.colorbar(im1, ax=axes[kk], pad=0.015)
-                cb.set_label('Counts')
+                # Manually specify bin edges for histogram
+                vbins = np.linspace(-vlim, vlim, 101, endpoint=True)
                 
-                axes[kk].set_ylim(-vlim, vlim)
-                axes[kk].set_ylabel('v{}\n($v_A$)'.format(lt[kk]), rotation=0)
+                # Do the plotting
+                plt.ioff()
                 
-            axes[kk].set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
-            axes[kk].set_xlabel('Position (cell)')
-    
-            fig.subplots_adjust(hspace=0.065)
-            
-            plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-            plt.close('all')
-    print('\n')
+                fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
+                axes[0].set_title('f(v) vs. x :: {} :: t = {:.3f}s'.format(cf.species_lbl[jj], ptime))
+                
+                st = idx_start[jj]
+                en = idx_end[jj]
+        
+                for kk in range(3):
+                    counts, xedges, yedges, im1 = axes[kk].hist2d(pos[st:en]/cf.dx, vel[kk, st:en]/cf.va, 
+                                                            bins=[xbins, vbins],
+                                                            vmin=0, vmax=cf.nsp_ppc[jj] / cfac)
+        
+                    cb = fig.colorbar(im1, ax=axes[kk], pad=0.015)
+                    cb.set_label('Counts')
+                    
+                    axes[kk].set_ylim(-vlim, vlim)
+                    axes[kk].set_ylabel('v{}\n($v_A$)'.format(lt[kk]), rotation=0)
+                    
+                axes[kk].set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
+                axes[kk].set_xlabel('Position (cell)')
+        
+                fig.subplots_adjust(hspace=0.065)
+                
+                plt.savefig(save_dir + filename, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+                plt.close('all')
     return
 
 
@@ -4001,7 +4000,7 @@ def plot_abs_with_boundary_parameters(tmax=None, saveas='tx_boundaries_plot', sa
 def plot_total_density_with_time(save=True):
     '''
     Plot total number of particles per species (from particle files)
-    AND total charge density.
+    AND total charge density from field files.
     '''
     # Count active particles
     num_particle_steps = len(os.listdir(cf.particle_dir))
@@ -4345,35 +4344,53 @@ def plot_particle_paths(it_max=None, nsamples=1000):
     return
 
 
-def plot_initial_x_vs_xp():
+def plot_density_change():
     '''
-    Plots the initial particle positions in space/velocity for the 'equil' loop
-    and the 't=0' real loop. Are these the same? They shouldn't be, but maybe 
-    python isn't writing to the arrays for some reason.
+    Use collected charge density to work out if a particle distribution has
+    relaxed into the field or not.
+    -- Calculate change (as percentage) for each grid point from previous time
+    -- Sum absolute changes
+    -- Plot with time
     '''
+    # Get max density (real)
+    ftime, qdens = cf.get_array('qdens')    
+    diffs        = np.zeros((ftime.shape[0], qdens.shape[1]), dtype=float)
+    for ii in range(1, ftime.shape[0]):
+        diffs[ii] = qdens[ii] - qdens[ii - 1]
+    
+    plt.ioff()
+    fig,ax = plt.subplots(figsize=(16, 10))
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Total change (/cm3)')
+    
+    ax.plot(ftime, diffs.sum(axis=1))
+    plt.show()
+    sys.exit()
     return
 
 
 #%% MAIN
 if __name__ == '__main__':
+    # TODO: Function to calculate number density of species at gridpoints, 
+    # and save this to a file
     drive       = 'D:'
         
     #multiplot_mag_energy(save=True)
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
 
-    for series in ['//test_new_CAMCL//']:
+    for series in ['//CAMCL_relax_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
             runs_to_do = [5]
         
         # Extract all summary files and plot field stuff (quick)
-        if True:
+        if False:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
@@ -4409,16 +4426,20 @@ if __name__ == '__main__':
 #                         continue
 # =============================================================================
 
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
-                           B0_lim=0.25, remove_ND=False)
+# =============================================================================
+#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
+#                            B0_lim=0.25, remove_ND=False)
+# =============================================================================
                 
                 #plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
                 
                 #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
                 
-                plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
-                     pcyc_mult=1.5, xmax=1.5, zero_cold=True,
-                     linear_only=False, normalize_axes=True, centre_only=False)
+# =============================================================================
+#                 plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
+#                      pcyc_mult=1.5, xmax=1.5, zero_cold=True,
+#                      linear_only=False, normalize_axes=True, centre_only=False)
+# =============================================================================
 
 # =============================================================================
 #                 ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=True,
@@ -4432,7 +4453,7 @@ if __name__ == '__main__':
 #                     pass            
 # =============================================================================
         
-        if False:
+        if True:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
@@ -4444,21 +4465,16 @@ if __name__ == '__main__':
                 #plot_spatial_poynting(save=True, log=True)
                 #plot_spatial_poynting_helical(save=True, log=True)
                 
+                #plot_density_change()
                 #plot_total_density_with_time(save=True)
                 
                 #summary_plots(save=True, histogram=False, skip=10, ylim=False)
-                for sp in range(cf.Nj):
-                    plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=1,
-                                 ppd=False)
-                analyse_particle_motion(it_max=None)
+                #for sp in range(cf.Nj):
+                plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=True, skip=1,
+                             ppd=False)
+                #analyse_particle_motion(it_max=None)
                 #plot_phase_space_with_time(it_max=None, skip=1)
-                
-                    
-# =============================================================================
-#                 for sp in range(cf.Nj):
-#                     plot_vi_vs_x(it_max=None, jj=sp, save=True, shuffled_idx=True, skip=4,
-#                                  ppd=True)
-# =============================================================================
+
                 #scatterplot_velocities(skip=1)
                 #check_fields(skip=50, ylim=False)
             

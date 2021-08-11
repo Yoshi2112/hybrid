@@ -26,6 +26,7 @@ print_timings     = False      # Diagnostic outputs timing each major segment (f
 print_runtime     = True       # Flag to print runtime every 50 iterations 
 
 if not do_parallel:
+    do_parallel = True
     nb.set_num_threads(1)          
 #nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
 
@@ -2032,7 +2033,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('part_save_iter', part_save_iter),
                    ('field_save_iter', field_save_iter),
                    ('max_wcinv', max_wcinv),
-                   ('LH_frac', 0.0),
+                   ('resis_multiplier', resis_multiplier),
                    ('freq_res', freq_res),
                    ('orbit_res', orbit_res),
                    ('run_desc', run_description),

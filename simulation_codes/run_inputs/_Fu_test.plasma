@@ -13,4 +13,4 @@ ELEC_ENERGY  0.01
 BETA_FLAG    1
 L            10.0
 B_EQ         200e-9
-B_XMAX       -
+B_XMAX       300e-9

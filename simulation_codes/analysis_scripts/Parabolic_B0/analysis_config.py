@@ -80,13 +80,9 @@ def load_species_params():
     except:
         Tperp      = p_data['Tper']
     
-    try:
-        vth_par     = p_data['vth_par']
-        vth_perp    = p_data['vth_perp']
-    except:
-        vth_par     = None
-        vth_perp    = None
-    
+    vth_par     = p_data['vth_par']
+    vth_perp    = p_data['vth_perp']
+
     try:
         Te0_arr = p_data['Te0']
     except:
@@ -115,7 +111,7 @@ def load_simulation_params():
            particle_reinit, particle_open, disable_waves, source_smoothing, \
            E_damping, quiet_start, homogenous, field_periodic, damping_multiplier, \
            driven_freq, driven_ampl, pulse_offset, pulse_offset, pulse_width, driven_k,\
-           driver_status, num_threads, loop_time,\
+           driver_status, num_threads, loop_time, max_inc,\
            x0B, x1B, x0E, x1E
 
     h_name = os.path.join(data_dir, 'simulation_parameters.pckl')       # Load header file
@@ -149,6 +145,7 @@ def load_simulation_params():
     method_type       = obj['method_type'] 
     particle_shape    = obj['particle_shape']
     
+    max_inc           = obj['max_inc']
     try:
         max_wcinv     = obj['max_wcinv']
     except:
@@ -181,19 +178,14 @@ def load_simulation_params():
     homogenous       = obj['homogeneous']
     field_periodic   = obj['field_periodic']
     run_time         = obj['run_time']
+    loop_time        = round(obj['loop_time'], 3)
     
-    if run_time is not None:
-        hrs      = int(run_time // 3600)
-        rem      = run_time %  3600
-        
-        mins     = int(rem // 60)
-        sec      = round(rem %  60, 2)
-        run_time_str = '{:02}:{:02}:{:02}'.format(hrs, mins, sec)
-    else:
-        run_time_str = '-'
+    hrs      = int(run_time // 3600)
+    rem      = run_time %  3600
+    mins     = int(rem // 60)
+    sec      = round(rem %  60, 2)
+    run_time_str = '{:02}:{:02}:{:02}'.format(hrs, mins, sec)
 
-    if rc_hwidth == 0: 
-        rc_hwidth = NX//2
     
     try:
         # Test if scalar
@@ -201,49 +193,22 @@ def load_simulation_params():
     except:
         # If it is, make it a vector
         Te0 = np.ones(NC, dtype=float) * Te0
-        
-    try:
-        driven_freq   = obj['driven_freq']
-        driven_ampl   = obj['driven_ampl']
-        pulse_offset  = obj['pulse_offset']
-        pulse_offset  = obj['pulse_offset']
-        pulse_width   = obj['pulse_width']
-        driven_k      = obj['driven_k']
-        driver_status = obj['driver_status']
-    except:
-        driven_freq   = None
-        driven_ampl   = None
-        pulse_offset  = None
-        pulse_offset  = None
-        pulse_width   = None
-        driven_k      = None
-        driver_status = None
-        
-    try:
-        num_threads = obj['num_threads']
-        loop_time   = obj['loop_time']
-    except:
-        num_threads = None
-        loop_time   = None
-    
-    # Set spatial boundaries as gridpoints (E vs. B, PREDCORR vs. CAM_CL)
-    if ('PREDCORR' in method_type) or method_type == 'CAM_CL_PARABOLIC_PARALLEL':
-        x0B, x1B = ND, ND + NX + 1
-        x0E, x1E = ND, ND + NX
-        
-        B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx                 # B grid points position in space
-        E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx                 # E grid points position in space
 
-    elif 'CAM_CL' in method_type:
-        ND = 1
-        x0B, x1B = 1,NX+2
-        x0E, x1E = 1,NX+2
-        
-        B_nodes  = (np.arange(NX + 3))      * dx
-        E_nodes  = (np.arange(NX + 3)+ 0.5) * dx
-    else:
-        raise ValueError('method_type %s not recognised' % method_type)
+    driven_freq   = obj['driven_freq']
+    driven_ampl   = obj['driven_ampl']
+    pulse_offset  = obj['pulse_offset']
+    pulse_offset  = obj['pulse_offset']
+    pulse_width   = obj['pulse_width']
+    driven_k      = obj['driven_k']
+    driver_status = obj['pol_wave'] 
+    num_threads   = obj['num_threads']
+
+    # Set spatial boundaries and gridpoints
+    x0B, x1B = ND, ND + NX + 1
+    x0E, x1E = ND, ND + NX
     
+    B_nodes  = (np.arange(NC + 1) - NC // 2)       * dx                 # B grid points position in space
+    E_nodes  = (np.arange(NC)     - NC // 2 + 0.5) * dx                 # E grid points position in space    
     return 
 
 
@@ -305,6 +270,8 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
             print('Hybrid Type   :: {}'.format(method_type), file=f)
             print('Random Seed   :: {}'.format(seed), file=f)
             print('Final runtime :: {}'.format(run_time_str), file=f)
+            print('Av. loop time :: {}'.format(loop_time), file=f)
+            print('N_loops_start :: {}'.format(max_inc), file=f)
             print('', file=f)
             print('Flags', file=f)
             print('Disable Wave Growth:: {}'.format(disable_waves), file=f)
@@ -415,6 +382,9 @@ def delete_analysis_folders(drive, series, run_num):
 
 
 def load_fields(ii):
+    '''
+    Note: 'dns' is charge density (usually q_dns)
+    '''
     field_file = 'data%05d.npz' % ii             # Define target file
     input_path = field_dir + field_file          # File location
     data       = np.load(input_path)             # Load file
