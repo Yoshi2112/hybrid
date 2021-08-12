@@ -3558,6 +3558,98 @@ def plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=False, skip=1, pp
     return
 
 
+def plot_number_density(it_max=None, save=True, skip=1, ppd=False):
+    '''
+    jj can be list of species or int
+    
+    For each point in time
+     - Collect particle information for particles near cell, plus time component
+     - Store in array
+     - Plot using either hexbin or hist2D
+     
+    Issue : Bins along v changing depending on time (how to set max/min bins? Specify arrays manually)
+    '''
+    if cf.particle_open == 1:
+        shuffled_idx = True
+    else:
+        shuffled_idx = False
+        
+    if ppd == True and os.path.exists(cf.data_dir + '//equil_particles//') == False:
+        print('No equilibrium data to plot. Aborting.')
+        return
+    
+    if it_max is None:
+        if ppd == False:
+            it_max = len(os.listdir(cf.particle_dir))
+        else:
+            it_max = len(os.listdir(cf.data_dir + '//equil_particles//'))
+
+    save_dir = cf.anal_dir + '//Particle Number Density//'
+    if not os.path.exists(save_dir): os.makedirs(save_dir)
+    
+    for ii in range(it_max):
+        if ii%skip == 0:     
+            
+            if not ppd == False:
+                filename = 'species_number_density_{:05}'.format(ii)
+            else:
+                filename = 'EQ_species_number_density_{:05}'.format(ii)
+            
+            if os.path.exists(save_dir + filename + '.png'):
+                print('Plot already exists.')
+                continue
+            else:
+                print('Plotting moments for part-ts', ii)
+            pos, vel, idx, ptime, idx_start, idx_end = cf.load_particles(ii, shuffled_idx=shuffled_idx,
+                                                                         preparticledata=ppd)
+            
+            if cf.disable_waves:
+                ptime = cf.dt_particle*ii
+            gf_time = ptime * cf.gyfreq_xmax
+            
+            ni, nu = bk.get_number_densities(pos, vel, idx)
+                          
+            # Do the plotting
+            plt.ioff()
+            
+            fig, axes = plt.subplots(nrows=cf.Nj, ncols=2, figsize=(16, 10), sharex=True)
+            axes[0, 0].set_title('Partial Moments vs. x :: t = {:.3f}s = {:.2f} wcinv'.format(
+                ptime, gf_time))
+    
+            # ni: (Nodes, Species)
+            # nu: (Nodes, Species, Component)
+            st = cf.ND
+            en = cf.ND + cf.NX + 1
+            for jj in range(cf.Nj):
+                axes[jj, 0].plot(cf.E_nodes[st:en]/cf.dx, ni[st:en, jj], c=cf.temp_color[jj])
+                axes[jj, 0].set_ylabel('$n_i$\n'+cf.species_lbl[jj], rotation=0)
+            
+                axes[jj, 1].plot(cf.E_nodes[st:en]/cf.dx, nu[st:en, jj, 0], c='r', label='x')
+                axes[jj, 1].plot(cf.E_nodes[st:en]/cf.dx, nu[st:en, jj, 1], c='b', label='y')
+                axes[jj, 1].plot(cf.E_nodes[st:en]/cf.dx, nu[st:en, jj, 2], c='k', label='z')
+                axes[jj, 1].set_ylabel('$n_u$\n'+cf.species_lbl[jj], rotation=0)
+                
+            for ax in axes[:, 0]:
+                ax.set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
+            for ax in axes[:, 1]:
+                if ax is axes[0, 1]:
+                    ax.legend()
+                ax.set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
+            
+            axes[-1, 0].set_xlabel('Position (cell)')
+            axes[-1, 0].set_xlabel('Position (cell)')
+            fig.subplots_adjust(hspace=0.065)
+            
+            if save:
+                plt.savefig(save_dir + filename + '.png',
+                            facecolor=fig.get_facecolor(),
+                            edgecolor='none',
+                            bbox_inches='tight')
+                plt.close('all')
+            else:
+                plt.show()
+    return
+
 def plot_sample(it_max=None, N_sample=1000):
     print('Plotting sample of particles...')
     if it_max is None:
@@ -4354,7 +4446,7 @@ def plot_particle_paths(it_max=None, nsamples=1000):
     return
 
 
-def plot_density_change():
+def plot_density_change(ppd=False, it_max=None, save=True, overwrite_moments=False):
     '''
     Use collected charge density to work out if a particle distribution has
     relaxed into the field or not.
@@ -4362,20 +4454,73 @@ def plot_density_change():
     -- Sum absolute changes
     -- Plot with time
     '''
-    # Get max density (real)
-    ftime, qdens = cf.get_array('qdens')    
-    diffs        = np.zeros((ftime.shape[0], qdens.shape[1]), dtype=float)
-    for ii in range(1, ftime.shape[0]):
-        diffs[ii] = qdens[ii] - qdens[ii - 1]
+    if cf.particle_open == 1:
+        shuffled_idx = True
+    else:
+        shuffled_idx = False
+        
+    if ppd == True and os.path.exists(cf.data_dir + '//equil_particles//') == False:
+        print('No equilibrium data to plot. Aborting.')
+        return
+    
+    if it_max is None:
+        if ppd == False:
+            it_max = len(os.listdir(cf.particle_dir))
+        else:
+            it_max = len(os.listdir(cf.data_dir + '//equil_particles//'))
+    
+    filename = 'number_density_time_variation.png'
+    filepath = cf.anal_dir + filename
+
+    save_file = cf.temp_dir + 'numberflux_densities.npz'
+    if os.path.exists(save_file) and not overwrite_moments:
+        print('Loading moments from file...')
+        dat = np.load(save_file)
+        number_densities = dat['number_densities']
+        flux_densities = dat['flux_densities']
+        ptimes = dat['ptimes']
+        gtimes = dat['gtimes']
+    else:
+        print('Extracting number densities...')
+        number_densities = np.zeros((it_max, cf.NC, cf.Nj))
+        flux_densities   = np.zeros((it_max, cf.NC, cf.Nj, 3))
+        
+        ptimes = np.zeros(it_max)
+        gtimes = np.zeros(it_max)
+        for ii in range(it_max):
+            print('Particle timestep', ii)
+            pos, vel, idx, ptime, idx_start, idx_end =\
+                cf.load_particles(ii, shuffled_idx=shuffled_idx, preparticledata=ppd)
+            
+            if cf.disable_waves:
+                ptime = cf.dt_particle*ii
+            gf_time = ptime * cf.gyfreq_xmax
+            ptimes[ii] = ptime
+            gtimes[ii] = gf_time
+            
+            ni, nu = bk.get_number_densities(pos, vel, idx)
+            
+            number_densities[ii] = ni
+            flux_densities[ii]   = nu
+        print('Saving to file...')
+        np.savez(save_file, number_densities=number_densities,
+                            flux_densities=flux_densities, 
+                            ptimes=ptimes, gtimes=gtimes)
+            
+    # Calculate density change   
+    diffs = np.zeros((it_max, cf.NC, cf.Nj), dtype=float)
+    for ii in range(1, number_densities.shape[0]):
+        diffs[ii] = np.abs(number_densities[ii] - number_densities[ii - 1])
+    diffs = diffs.sum(axis=1)
     
     plt.ioff()
-    fig,ax = plt.subplots(figsize=(16, 10))
-    ax.set_xlabel('Time (s)')
-    ax.set_ylabel('Total change (/cm3)')
+    fig, axes = plt.subplots(cf.Nj, figsize=(16, 10), sharex=True)
+    for jj in range(cf.Nj):
+        axes[jj].plot(gtimes[1:], diffs[1:, jj], c=cf.temp_color[jj])
+        axes[jj].set_ylabel(cf.species_lbl[jj])
+    axes[-1].set_xlabel('Time ($\Omega t$)')
     
-    ax.plot(ftime, diffs.sum(axis=1))
-    plt.show()
-    sys.exit()
+    fig.savefig(filepath)
     return
 
 
@@ -4389,18 +4534,18 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
 
-    for series in ['//CAMCL_PREDCORR_timing_test//']:
+    for series in ['//CAMCL_relax_test_with_pre//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [3]
+            runs_to_do = [10]
         
         # Extract all summary files and plot field stuff (quick)
-        if True:
+        if False:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
@@ -4459,7 +4604,7 @@ if __name__ == '__main__':
 #                     pass            
 # =============================================================================
         
-        if False:
+        if True:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
@@ -4476,14 +4621,19 @@ if __name__ == '__main__':
                 
                 #summary_plots(save=True, histogram=False, skip=10, ylim=False)
                 #for sp in range(cf.Nj):
-                plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=True, skip=1,
-                             ppd=False)
+                plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=True, skip=1, ppd=False)
+                plot_density_change(ppd=False, it_max=None, save=True)
+                plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=True, skip=1, ppd=True)
+
                 #analyse_particle_motion(it_max=None)
                 #plot_phase_space_with_time(it_max=None, skip=1)
 
                 #scatterplot_velocities(skip=1)
                 #check_fields(skip=50, ylim=False)
             
+                #plot_number_density(it_max=None, save=True, skip=1, ppd=False)
+                
+                
         #plot_phase_space_with_time()
             
         #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)

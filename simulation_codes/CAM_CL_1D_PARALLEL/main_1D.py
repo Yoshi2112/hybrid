@@ -17,10 +17,10 @@ mu0     = (4e-7) * np.pi                     # Magnetic Permeability of Free Spa
 RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
-Fu_override       = True
+Fu_override       = False
 do_parallel       = True
-print_timings     = True       # Diagnostic outputs timing each major segment (for efficiency examination)
-print_runtime     = True       # Flag to print runtime every 50 iterations 
+print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
+print_runtime     = False      # Flag to print runtime every 50 iterations 
 adaptive_timestep = True       # Disable adaptive timestep to keep it the same as initial
 adaptive_subcycling = True     # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
 default_subcycles   = 12       # Number of field subcycling steps for Cyclic Leapfrog
@@ -206,7 +206,7 @@ def uniform_bimaxwellian():
     return pos, vel, idx
 
 
-def initialize_particles(B, E, _mp_flux, Ji_in, rho_in):
+def initialize_particles(B, E, mp_flux):
     if quiet_start == 1:
         pos, vel, idx = quiet_start_bimaxwellian()
     else:
@@ -217,13 +217,8 @@ def initialize_particles(B, E, _mp_flux, Ji_in, rho_in):
     W_elec     = np.zeros((3, N), dtype=np.float64)
     W_mag      = np.zeros((3, N), dtype=np.float64)
         
-# =============================================================================
-#     if homogenous == False:
-#         Ve_in = np.zeros((NC, 3), dtype=np.float64)
-#         run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
-#                               Ji_in, Ve_in, rho_in,
-#                           _mp_flux, hot_only=True, psave=True)
-# =============================================================================
+    if homogenous == False:
+        run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E, mp_flux)
     
     assign_weighting_TSC(pos, Ie, W_elec)
     assign_weighting_TSC(pos, Ib, W_mag)
@@ -285,7 +280,7 @@ def initialize_source_arrays():
 
 
 def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
-                          mp_flux, frev=1000, hot_only=True, psave=True, save_inc=50):
+                          mp_flux, frev=1000, hot_only=True, psave=True):
     '''
     Still need to test this. Put it just after the initialization of the particles.
     Actually might want to use the real mp_flux since that'll continue once the
@@ -315,13 +310,13 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
     psave = save_particles
     
     print('Letting particle distribution relax into static field configuration')
-    #max_vx   = np.max(np.abs(vel[0, :]))
-    ion_ts   = 0.1 * 2 * np.pi / gyfreq_xmax
-    #vel_ts   = 0.5*dx / max_vx
-    pdt      = ion_ts
-    ptime    = frev / gyfreq_eq
-    psteps   = int(ptime / pdt) + 1
+    # 20 solutions per gyroperiod (at highest B)
+    ion_ts    = 0.05 * 2 * np.pi / gyfreq_xmax
+    pdt       = ion_ts
+    ptime     = frev / gyfreq_eq
+    psteps    = int(ptime / pdt) + 1
     psim_time = 0.0
+    dump_iter = int(part_res / (pdt*gyfreq_xmax))
 
     print('Particle-only timesteps: ', psteps)
     print('Particle-push in seconds:', pdt)
@@ -331,7 +326,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
         # Check dir
         if save_fields + save_particles == 0:
             manage_directories()
-            store_run_parameters(pdt, save_inc, 0, psteps, ptime)
+            store_run_parameters(pdt, dump_iter, 0, psteps, ptime)
             
         pdata_path  = ('%s/%s/run_%d' % (drive, save_path, run_num))
         pdata_path += '/data/equil_particles/'
@@ -342,16 +337,17 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
     # Desync (retard) velocity here
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*pdt,
                     hot_only=hot_only)
-        
+    
     for pp in range(psteps):
         # Save first and last only
+        #if psave == True and pp%dump_iter == 0:
         if psave == True and (pp == 0 or pp == psteps - 1):
             p_fullpath = pdata_path + 'data%05d' % pnum
             np.savez(p_fullpath, pos=pos, vel=vel, idx=idx, sim_time=psim_time)
             pnum += 1
-            print('p-Particle data saved')
+            print('pre-Particle data saved')
             
-        if pp%100 == 0:
+        if pp%50 == 0:
             print('Step', pp)
         
         velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, pdt,
@@ -359,8 +355,8 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
         position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, pdt,
                         hot_only=hot_only)
 
-        # Check number of spare particles every 25 steps
-        if pp > 0 and pp%100 == 0 and particle_open == 1:
+        # Check number of spare particles every 10 steps, if open conditions
+        if pp > 0 and pp%10 == 0 and particle_open == 1:
             num_spare = (idx >= Nj).sum()
             if num_spare < nsp_ppc.sum():
                 print('WARNING :: Less than one cell of spare particles remaining.')
@@ -512,7 +508,7 @@ def set_timestep(vel):
 def assign_weighting_TSC(pos, I, W, E_nodes=True):
     '''Triangular-Shaped Cloud (TSC) weighting scheme used to distribute particle densities to
     nodes and interpolate field values to particle positions. Ref. Lipatov? Or Birdsall & Langdon?
-
+    
     INPUT:
         pos     -- particle positions (x)
         I       -- Leftmost (to nearest) nodes. Output array
@@ -2566,7 +2562,7 @@ if __name__ == '__main__':
     _Ji_PLUS, _Ji_MINUS, _J_EXT,   \
     _L, _G, _MP_FLUX               = initialize_source_arrays()
     _POS, _VEL, _IE, _W_ELEC, _IB, \
-    _W_MAG, _IDX                   = initialize_particles(_B, _E, _MP_FLUX, _Ji, _RHO_INT)
+    _W_MAG, _IDX                   = initialize_particles(_B, _E, _MP_FLUX)
     _DT, _MAX_INC, _PART_SAVE_ITER,\
     _FIELD_SAVE_ITER, _SUBCYCLES,  \
     _B_DAMP, _RESIS_ARR            = set_timestep(_VEL)    

@@ -213,14 +213,16 @@ def load_simulation_params():
 
 
 def initialize_simulation_variables():
-    global wpi, gyfreq, gyperiod, va
+    global wpi, gyfreq, gyfreq_eq, gyfreq_xmax, gyperiod, va
     q   = 1.602e-19               # Elementary charge (C)
     mp  = 1.673e-27               # Mass of proton (kg)
     e0  = 8.854e-12               # Epsilon naught - permittivity of free space
     mu0 = (4e-7) * np.pi          # Magnetic Permeability of Free Space (SI units)
     
     wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Ion plasma frequency
-    gyfreq     = q * B_eq / mp                               # Proton gyrofrequency (rad/s)
+    gyfreq     = q * B_eq   / mp                             # Proton gyrofrequency (rad/s) (compatibility)
+    gyfreq_eq  = q * B_eq   / mp                             # Proton gyrofrequency (rad/s) (equator)
+    gyfreq_xmax= q * B_xmax / mp                             # Proton gyrofrequency (rad/s) (boundary)
     gyperiod   = (mp * 2 * np.pi) / (q * B_eq)               # Proton gyroperiod (s)
     va         = B_eq / np.sqrt(mu0*ne*mp)                   # Alfven speed: Assuming pure proton plasma
     return

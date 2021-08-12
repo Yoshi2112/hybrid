@@ -33,6 +33,139 @@ mu0 = (4e-7) * np.pi          # Magnetic Permeability of Free Space (SI units)
 kB  = 1.38065e-23             # Boltzmann's Constant (J/K)
 e0  = 8.854e-12               # Epsilon naught - permittivity of free space
 
+
+@nb.njit(parallel=True)
+def assign_weighting_TSC(pos, I, W, E_nodes=True):
+    '''
+    Analysis code version of this since we don't save it
+    '''
+    Np         = pos.shape[0]
+    epsil      = 1e-15
+    
+    if E_nodes == True:
+        grid_offset   = 0.5
+    else:
+        grid_offset   = 0.0
+    
+    particle_transform = xmax + (ND - grid_offset)*dx  + epsil      # Offset to account for E/B grid and damping nodes
+    
+    if field_periodic == 0:
+        for ii in nb.prange(Np):
+            xp          = (pos[ii] + particle_transform) / dx       # Shift particle position >= 0
+            I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node (Vectorize?)
+            delta_left  = I[ii] - xp                                # Distance from left node in grid units
+            
+            if abs(pos[ii] - xmin) < 1e-10:
+                I[ii]    = ND - 1
+                W[0, ii] = 0.0
+                W[1, ii] = 0.5
+                W[2, ii] = 0.0
+            elif abs(pos[ii] - xmax) < 1e-10:
+                I[ii]    = ND + NX - 1
+                W[0, ii] = 0.5
+                W[1, ii] = 0.0
+                W[2, ii] = 0.0
+            else:
+                W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))  # Get weighting factors
+                W[1, ii] = 0.75 - np.square(delta_left + 1.)
+                W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
+    else:
+        for ii in nb.prange(Np):
+            xp          = (pos[ii] + particle_transform) / dx       # Shift particle position >= 0
+            I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node (Vectorize?)
+            delta_left  = I[ii] - xp                                # Distance from left node in grid units
+
+            W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))  # Get weighting factors
+            W[1, ii] = 0.75 - np.square(delta_left + 1.)
+            W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
+    return I, W
+
+
+def get_thread_values():
+    '''
+    Function to calculate number of particles to work on each thread, and the
+    start index of each batch of particles.
+    '''
+
+    n_threads    = nb.get_num_threads()
+    N_per_thread = (cf.N//n_threads)*np.ones(n_threads, dtype=int)
+    
+    if cf.N%n_threads == 0:
+        n_start_idxs = np.arange(n_threads)*N_per_thread
+    else:
+        leftovers = cf.N%n_threads
+        for _lo in range(leftovers):
+            N_per_thread[_lo] += 1
+        n_start_idxs = np.asarray([np.sum(N_per_thread[0:_si]) for _si in range(0, n_threads)])
+        
+    # Check values (this is important)
+    if N_per_thread.sum() != cf.N:
+        raise ValueError('Number of particles per thread unequal to total number of particles')
+        
+    for _ii in range(1, n_start_idxs.shape[0] + 1):
+        if _ii == n_start_idxs.shape[0]:
+            n_in_thread = cf.N - n_start_idxs[-1]
+        else:
+            n_in_thread = n_start_idxs[_ii] - n_start_idxs[_ii - 1]
+        if n_in_thread != N_per_thread[_ii - 1]:
+            raise ValueError('Thread particle indices are not correct. Check this.')
+    return n_threads, N_per_thread, n_start_idxs
+
+
+@nb.njit(parallel=True)
+def deposit_moments(vel, idx, Ie, W_elec, n_threads, N_per_thread, n_start_idxs):
+    ni_threads = np.zeros((n_threads, NC, Nj), dtype=np.float64)
+    nu_threads = np.zeros((n_threads, NC, Nj, 3, ), dtype=np.float64)
+    for tt in nb.prange(n_threads):        
+        for ii in range(n_start_idxs[tt], n_start_idxs[tt]+N_per_thread[tt]):
+            if idx[ii] < Nj:
+                for kk in nb.prange(3):
+                    nu_threads[tt, Ie[ii],     idx[ii], kk] += W_elec[0, ii] * vel[kk, ii]
+                    nu_threads[tt, Ie[ii] + 1, idx[ii], kk] += W_elec[1, ii] * vel[kk, ii]
+                    nu_threads[tt, Ie[ii] + 2, idx[ii], kk] += W_elec[2, ii] * vel[kk, ii]
+                
+                ni_threads[tt, Ie[ii],     idx[ii]] += W_elec[0, ii]
+                ni_threads[tt, Ie[ii] + 1, idx[ii]] += W_elec[1, ii]
+                ni_threads[tt, Ie[ii] + 2, idx[ii]] += W_elec[2, ii]
+    ni = ni_threads.sum(axis=0)
+    nu = nu_threads.sum(axis=0)
+    return ni, nu
+
+
+def get_number_densities(pos, vel, idx):
+    '''
+    Function to calculate the partial moments (unweighted by charge/contribution)
+    ni is equivalent to raw macroparticle density, multiply by n_contr to get
+    equivalent real number density (and charge to get charge density)
+    nu is equivalent to raw macroparticle flux, multiply by n_contr to get equivalent
+    real number flux, and also by charge to get charge density.
+    Note: Is it flux?
+    
+    Split into get_number_densities() and deposit_moments() so numba can do it
+    '''
+    # Set variables as global so numba can access them
+    global NX, ND, NC, Nj, N, dx, xmax, xmin, field_periodic
+    NX = cf.NX
+    ND = cf.ND
+    NC = cf.NC
+    Nj = cf.Nj
+    N = cf.N
+    
+    xmax = cf.xmax
+    xmin = cf.xmin
+    dx = cf.dx
+    
+    field_periodic = cf.field_periodic
+    
+    Ie     = np.zeros(    N,  dtype=int)
+    W_elec = np.zeros((3, N), dtype=float)
+    
+    n_threads, N_per_thread, n_start_idxs = get_thread_values()
+    assign_weighting_TSC(pos, Ie, W_elec, E_nodes=True)
+    ni, nu = deposit_moments(vel, idx, Ie, W_elec, n_threads, N_per_thread, n_start_idxs)
+    return ni, nu
+
+
 @nb.njit()
 def eval_B0x(x):
     return cf.B_eq * (1. + cf.a * x**2)
