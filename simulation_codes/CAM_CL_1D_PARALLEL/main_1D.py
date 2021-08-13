@@ -23,7 +23,7 @@ print_timings       = False    # Diagnostic outputs timing each major segment (f
 print_runtime       = False    # Flag to print runtime every 50 iterations 
 adaptive_timestep   = False    # Disable adaptive timestep to keep it the same as initial
 adaptive_subcycling = False    # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
-default_subcycles   = 16       # Number of field subcycling steps for Cyclic Leapfrog
+default_subcycles   = 150      # Number of field subcycling steps for Cyclic Leapfrog
 
 if not do_parallel:
     do_parallel = True
@@ -311,12 +311,12 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
     
     print('Letting particle distribution relax into static field configuration')
     # 20 solutions per gyroperiod (at highest B)
-    ion_ts    = 0.05 * 2 * np.pi / gyfreq_xmax
+    ion_ts    = 0.05 * 2 * np.pi / gyfreq_eq
     pdt       = ion_ts
     ptime     = frev / gyfreq_eq
     psteps    = int(ptime / pdt) + 1
     psim_time = 0.0
-    dump_iter = int(part_res / (pdt*gyfreq_xmax))
+    dump_iter = int(part_res / (pdt*gyfreq_eq))
 
     print('Particle-only timesteps: ', psteps)
     print('Particle-push in seconds:', pdt)
@@ -449,7 +449,7 @@ def set_timestep(vel):
         -- Reducing dx also increases dispersion. Is there a maximum number of s/c?
     '''
     max_vx   = np.max(np.abs(vel[0, :]))
-    ion_ts   = orbit_res / gyfreq_xmax            # Timestep to resolve gyromotion
+    ion_ts   = orbit_res / gyfreq_eq            # Timestep to resolve gyromotion
     vel_ts   = 0.5*dx / max_vx                    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
 
     DT       = min(ion_ts, vel_ts)
@@ -459,18 +459,18 @@ def set_timestep(vel):
     if part_res == 0:
         part_save_iter = 1
     else:
-        part_save_iter = int(part_res / (DT*gyfreq_xmax))
+        part_save_iter = int(part_res / (DT*gyfreq_eq))
         if part_save_iter == 0: part_save_iter = 1
 
     if field_res == 0:
         field_save_iter = 1
     else:
-        field_save_iter = int(field_res / (DT*gyfreq_xmax))
+        field_save_iter = int(field_res / (DT*gyfreq_eq))
         if field_save_iter == 0: field_save_iter = 1
 
     if adaptive_subcycling == True:
         k_max      = np.pi / dx
-        dispfreq   = (k_max ** 2) * B_xmax / (mu0 * ne * ECHARGE)
+        dispfreq   = (k_max ** 2) * B_eq / (mu0 * ne * ECHARGE)
         dt_sc      = freq_res / dispfreq
         subcycles  = int(DT / dt_sc + 1)
         print('Number of subcycles required: {}'.format(subcycles))
@@ -1082,13 +1082,6 @@ def deposit_velocity_moments(vel, Ie, W_elec, idx, nu):
     OUTPUT:
         ni     -- Species number moment array(size, Nj)
         nui    -- Species velocity moment array (size, Nj)
-        
-    TODO:
-        -- Initialize thread arrays at runtime (preallocate memory)
-        -- Calculate N_per_thread and n_start_idxs at runtime
-        -- Check if this works for non-multiples of the thread count
-           i.e. N_per_thread may need to be an array with particle counts since
-           we can't assume that it is constant for each thread.
     '''
     nu_threads = np.zeros((n_threads, NC, Nj, 3, ), dtype=np.float64)
     for tt in nb.prange(n_threads):        
@@ -1160,16 +1153,6 @@ def init_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, rho_0, rho, J_ini
         J_plus  -- Current density at +0.5 timestep
         G       -- "Gamma"  MHD variable for current advance : Current-like
         L       -- "Lambda" MHD variable for current advance :  Charge-like
-        
-    TODO: Incorporate velocity advance into this and rename function to "particles and moments"
-    Advance would be:
-        -- Advance velocity v0 -> v1
-        -- Collect moments at x1/2
-        -- Advance position
-        -- Collect moments at x3/2
-        -- Post-process to get charge/current densities
-    This may allow it to be better optimised/parallelised, and to separate the
-    particle from the field actions.
     '''
     ni       = np.zeros((NC, Nj), dtype=np.float64)
     ni_init  = np.zeros((NC, Nj), dtype=np.float64)
@@ -2402,7 +2385,7 @@ def load_wave_driver_params():
 
 
 def calculate_background_magnetic_field():
-    global a, B_xmax, gyfreq_xmax, loss_cone_eq, loss_cone_xmax, lambda_L, theta_xmax,\
+    global a, B_xmax, loss_cone_eq, loss_cone_xmax, lambda_L, theta_xmax,\
         B_A, r_A, lat_A, B_nodes_loc, E_nodes_loc
     if homogenous == 1:
         a      = 0
@@ -2438,7 +2421,6 @@ def calculate_background_magnetic_field():
        
     B_nodes_loc  = (np.arange(NC + 1) - NC // 2)       * dx             # B grid points position in space
     E_nodes_loc  = (np.arange(NC)     - NC // 2 + 0.5) * dx             # E grid points position in space
-    gyfreq_xmax  = ECHARGE*B_xmax/ PMASS                                # Proton Gyrofrequency (rad/s) at boundary (highest)
     return
 
 
