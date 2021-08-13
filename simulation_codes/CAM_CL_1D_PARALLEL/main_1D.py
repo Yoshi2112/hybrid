@@ -17,13 +17,13 @@ mu0     = (4e-7) * np.pi                     # Magnetic Permeability of Free Spa
 RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
-Fu_override       = False
-do_parallel       = True
-print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
-print_runtime     = False      # Flag to print runtime every 50 iterations 
-adaptive_timestep = True       # Disable adaptive timestep to keep it the same as initial
-adaptive_subcycling = True     # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
-default_subcycles   = 12       # Number of field subcycling steps for Cyclic Leapfrog
+Fu_override         = False
+do_parallel         = True
+print_timings       = False    # Diagnostic outputs timing each major segment (for efficiency examination)
+print_runtime       = False    # Flag to print runtime every 50 iterations 
+adaptive_timestep   = False    # Disable adaptive timestep to keep it the same as initial
+adaptive_subcycling = False    # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
+default_subcycles   = 16       # Number of field subcycling steps for Cyclic Leapfrog
 
 if not do_parallel:
     do_parallel = True
@@ -338,6 +338,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*pdt,
                     hot_only=hot_only)
     
+    # TODO: NOTE: Even this doesn't have 100% CPU usage. Why not?
     for pp in range(psteps):
         # Save first and last only
         #if psave == True and pp%dump_iter == 0:
@@ -442,6 +443,10 @@ def set_timestep(vel):
         -- Resolve ion velocity (<0.5dx per timestep, varies with particle temperature)
         -- Resolve B-field solution on grid (controlled by subcycling and freq_res)
         -- E-field acceleration? (not implemented)
+        
+    Problems:
+        -- Reducing dx means that the timestep will be shortened by same vx
+        -- Reducing dx also increases dispersion. Is there a maximum number of s/c?
     '''
     max_vx   = np.max(np.abs(vel[0, :]))
     ion_ts   = orbit_res / gyfreq_xmax            # Timestep to resolve gyromotion
@@ -498,7 +503,6 @@ def set_timestep(vel):
         sys.exit()
     
     print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))
-    
     return DT, max_inc, part_save_iter, field_save_iter, subcycles,\
              B_damping_array, resistive_array
 
@@ -2307,13 +2311,13 @@ def load_plasma_params():
     temp_type  = np.concatenate((temp_type, temp_type))
     
     ne         = density.sum()                               # Electron number density
-    rho        = (mass*density).sum()                        # Mass density for alfven velocity calc.
+    #mass_dens  = (mass*density).sum()                        # Mass density for alfven velocity calc.
     wpi        = np.sqrt((density * charge ** 2 / (mass * e0)).sum())            # Proton Plasma Frequency, wpi (rad/s)
     wpe        = np.sqrt(ne * ECHARGE ** 2 / (EMASS * e0))   # Electron Plasma Frequency, wpi (rad/s)
-    va         = B_eq / np.sqrt(mu0*rho)                    # Alfven speed at equator: Assuming pure proton plasma
+    #va         = B_eq / np.sqrt(mu0*mass_dens)              # Alfven speed at equator: Assuming pure proton plasma
     gyfreq_eq  = ECHARGE*B_eq  / PMASS                       # Proton Gyrofrequency (rad/s) at equator (slowest)
     egyfreq_eq = ECHARGE*B_eq  / EMASS                       # Electron Gyrofrequency (rad/s) at equator (slowest)
-    #va         = B_eq / np.sqrt(mu0*mass[1]*density[1])      # Hard-coded to be 'cold proton alfven velocity' (Shoji et al, 2013)
+    va         = B_eq / np.sqrt(mu0*mass[1]*density[1])      # Hard-coded to be 'cold proton alfven velocity' (Shoji et al, 2013)
     dx         = dxm * va / gyfreq_eq                        # Alternate method of calculating dx (better for multicomponent plasmas)
     n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this SI density to a cell
     min_dens   = 0.05                                        # Minimum charge density in a cell
