@@ -1419,10 +1419,10 @@ def get_electron_temp(qn, te):
     and the treatment of electrons: i.e. isothermal (ie=0) or adiabatic (ie=1)
     '''
     if ie == 0:
-        te[:]      = np.ones(qn.shape[0]) * Te0_scalar
+        te[:] = np.ones(qn.shape[0]) * Te0_scalar
     elif ie == 1:
         gamma_e = 5./3. - 1.
-        te[:]      = Te0_scalar * np.power(qn / (ECHARGE*ne), gamma_e)
+        te[:] = Te0_scalar * np.power(qn / (ECHARGE*ne), gamma_e)
     return
 
 
@@ -1453,8 +1453,12 @@ def get_grad_P(qn, te):
     grad_pe_B[NC] = grad_pe_B[NC - 1]
         
     # Re-interpolate to E-grid
-    coeffs = splrep(B_nodes_loc, grad_pe_B)
-    grad_P = splev( E_nodes_loc, coeffs)
+    if False:
+        coeffs = splrep(B_nodes_loc, grad_pe_B)
+        grad_P = splev( E_nodes_loc, coeffs)
+    else:
+        yfunc  = interp1d(B_nodes_loc, grad_pe_B, kind='quadratic')
+        grad_P = yfunc(E_nodes_loc)
     return Pe, grad_P
 
 
@@ -1677,16 +1681,15 @@ def calculate_E(B, B_center, Ji, J_ext, qn, E, Ve, Te, resistive_array, sim_time
     
     # Copy periodic values
     if field_periodic == 1:
-        for ii in range(3):
-            # Copy edge cells
-            E[ro1, ii] = E[li1, ii]
-            E[ro2, ii] = E[li2, ii]
-            E[lo1, ii] = E[ri1, ii]
-            E[lo2, ii] = E[ri2, ii]
-            
-            # Fill remaining ghost cells
-            E[:lo2, ii] = E[lo2, ii]
-            E[ro2:, ii] = E[ro2, ii]
+        # Copy edge cells
+        E[ro1, :] = E[li1, :]
+        E[ro2, :] = E[li2, :]
+        E[lo1, :] = E[ri1, :]
+        E[lo2, :] = E[ri2, :]
+        
+        # Fill remaining ghost cells
+        E[:lo2, :] = E[lo2, :]
+        E[ro2:, :] = E[ro2, :]
             
     # Diagnostic flag for testing
     if disable_waves == 1:
