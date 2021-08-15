@@ -23,7 +23,7 @@ print_timings       = False    # Diagnostic outputs timing each major segment (f
 print_runtime       = False    # Flag to print runtime every 50 iterations 
 adaptive_timestep   = False    # Disable adaptive timestep to keep it the same as initial
 adaptive_subcycling = False    # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
-default_subcycles   = 150      # Number of field subcycling steps for Cyclic Leapfrog
+default_subcycles   = 32       # Number of field subcycling steps for Cyclic Leapfrog
 
 if not do_parallel:
     do_parallel = True
@@ -1491,13 +1491,17 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, DT, subcycles,
             Resync doesn't require a sim_time increment since the field solution
             is already at 0.5*DT and this solution is used to advance the second
             field copy for averaging.
+            
+    TO DO: Need to perform checks every few subcycles for divergence? Or every 
+    few calls? Work out what needs to be done here.
     '''
-    if disable_waves:
-        return 0.0
-    
-    curl  = np.zeros((NC + 1, 3), dtype=np.float64)
     H     = 0.5 * DT
     dh    = H / subcycles
+    
+    if disable_waves:
+        return sim_time+H
+    
+    curl  = np.zeros((NC + 1, 3), dtype=np.float64)
     B2[:] = B1[:]
 
     ## DESYNC SECOND FIELD COPY - PUSH BY DH ##
@@ -1511,7 +1515,7 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, DT, subcycles,
     ## RETURN IF NO SUBCYCLES REQUIRED ##
     if subcycles == 1:
         B1[:] = B2[:]
-        return sim_time
+        return sim_time+H
 
     ## MAIN SUBCYCLE LOOP ##
     for ii in range(subcycles - 1):             
