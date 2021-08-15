@@ -246,7 +246,10 @@ def initialize_fields():
     B_cent  = np.zeros((NC    , 3), dtype=np.float64)
     E       = np.zeros((NC    , 3), dtype=np.float64)
     Ve      = np.zeros((NC, 3), dtype=np.float64)
-    Te      = np.ones(  NC,     dtype=np.float64) * Te0_scalar
+    
+    # Set initial values
+    Te           = np.ones(  NC,     dtype=np.float64) * Te0_scalar
+    B_cent[:, 0] = B_eq * (1. + a*E_nodes_loc[:]*E_nodes_loc[:])
     return B, B2, B_cent, E, Ve, Te
 
 
@@ -1334,7 +1337,7 @@ def eval_B0x(x):
     return B_eq * (1. + a * x**2)
 
 
-@nb.njit()
+@nb.njit(parallel=do_parallel)
 def get_curl_B(B):
     ''' Returns a vector quantity for the curl of a field valid at the positions 
     between its gridpoints (i.e. curl(B) -> E-grid, etc.)
@@ -1355,7 +1358,8 @@ def get_curl_B(B):
     for ii in nb.prange(B.shape[0] - 1):
         curlB[ii, 1] = - (B[ii + 1, 2] - B[ii, 2])
         curlB[ii, 2] =    B[ii + 1, 1] - B[ii, 1]
-    return curlB/(dx*mu0)
+    curlB /= (dx*mu0)
+    return curlB
 
 
 @nb.njit()
@@ -1373,7 +1377,7 @@ def get_curl_E(E, dE):
         curl  -- Finite-differenced solution for the curl of the input field.
     '''   
     dE *= 0.
-    for ii in np.arange(1, E.shape[0]):
+    for ii in nb.prange(1, E.shape[0]):
         dE[ii, 1] = - (E[ii, 2] - E[ii - 1, 2])
         dE[ii, 2] =    E[ii, 1] - E[ii - 1, 1]
         
@@ -1401,55 +1405,45 @@ def get_electron_temp(qn, te):
     Calculate the electron temperature in each cell. Depends on the charge density of each cell
     and the treatment of electrons: i.e. isothermal (ie=0) or adiabatic (ie=1)
     '''
-    if ie == 0:
-        te[:] = np.ones(qn.shape[0]) * Te0_scalar
-    elif ie == 1:
-        gamma_e = 5./3. - 1.
-        te[:] = Te0_scalar * np.power(qn / (ECHARGE*ne), gamma_e)
+    gamma_e = 5./3. - 1.
+    te[:] = Te0_scalar * np.power(qn / (ECHARGE*ne), gamma_e)
     return
 
 
+@nb.njit(parallel=do_parallel)
 def get_grad_P(qn, te):
     '''
-    Returns the electron pressure gradient (in 1D) on the E-field grid using P = nkT and 
-    finite difference.
+    Returns the electron pressure gradient (in 1D) on the E-field grid using
+    P = nkT and finite difference.
     
     INPUT:
         qn -- Grid charge density
         te -- Grid electron temperature
-        DX -- Grid separation, used for diagnostic purposes. Defaults to simulation dx.
-        inter_type -- Linear (0) or cubic spline (1) interpolation.
         
-    NOTE: Interpolation is needed because the finite differencing causes the result to be deposited on the 
-    B-grid. Moving it back to the E-grid requires an interpolation. Cubic spline is desired due to its smooth
-    derivatives and its higher order weighting (without the polynomial craziness)
+    NOTE: Interpolation is needed because the finite differencing causes the
+    result to be deposited on the B-grid. Moving it back to the E-grid requires
+    an interpolation.
     '''
     grad_pe_B     = np.zeros(NC + 1, dtype=np.float64)
-    Pe            = qn * kB * te / ECHARGE
+    temp          = qn * kB * te / ECHARGE
 
-    # Center points
+    # Loop center points, set endpoints for no gradients (just to be safe)
     for ii in np.arange(1, qn.shape[0]):
-        grad_pe_B[ii] = (Pe[ii] - Pe[ii - 1])/dx
-            
-    # Set endpoints (there should be no gradients here anyway, but just to be safe)
+        grad_pe_B[ii] = (temp[ii] - temp[ii - 1])/dx
     grad_pe_B[0]  = grad_pe_B[1]
     grad_pe_B[NC] = grad_pe_B[NC - 1]
-        
-    # Re-interpolate to E-grid
-    if False:
-        coeffs = splrep(B_nodes_loc, grad_pe_B)
-        grad_P = splev( E_nodes_loc, coeffs)
-    else:
-        yfunc  = interp1d(B_nodes_loc, grad_pe_B, kind='quadratic')
-        grad_P = yfunc(E_nodes_loc)
-    return Pe, grad_P
+    
+    for ii in nb.prange(grad_pe_B.shape[0]):
+        temp[ii] = 0.5 * (grad_pe_B[ii] + grad_pe_B[ii + 1])
+    return temp
 
 
-@nb.njit()
+@nb.njit(parallel=do_parallel)
 def apply_boundary(B, B_damp):
     if field_periodic == 0:
-        for ii in nb.prange(1, B.shape[1]):
-            B[:, ii] *= B_damp
+        for ii in nb.prange(B.shape[0]):
+            B[ii, 1] *= B_damp[ii]
+            B[ii, 2] *= B_damp[ii]
     else:
         for ii in nb.prange(1, B.shape[1]):
             # Boundary value (should be equal)
@@ -1466,7 +1460,7 @@ def apply_boundary(B, B_damp):
     return
 
 
-#@nb.njit()
+@nb.njit()
 def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, DT, subcycles,
                     B_damp, resistive_array, sim_time):
     '''
@@ -1550,6 +1544,10 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, DT, subcycles,
 
     ## AVERAGE FIELD SOLUTIONS: COULD PERFORM A CONVERGENCE TEST HERE IN FUTURE ##
     B1 += B2; B1 /= 2.0
+    
+    # Calculate final values
+    get_B_cent(B1, B_center)
+    calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
     return sim_time
 
 
@@ -1617,7 +1615,7 @@ def get_J_ext_pol(sim_time):
     return J_ext
 
 
-#@nb.njit()
+@nb.njit()
 def calculate_E(B, B_center, Ji, J_ext, qn, E, Ve, Te, resistive_array, sim_time):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
@@ -1643,8 +1641,9 @@ def calculate_E(B, B_center, Ji, J_ext, qn, E, Ve, Te, resistive_array, sim_time
     Ve[:, 1] = (Ji[:, 1] + J_ext[:, 1] - curlB[:, 1]) / qn
     Ve[:, 2] = (Ji[:, 2] + J_ext[:, 2] - curlB[:, 2]) / qn
     
-    get_electron_temp(qn, Te)
-    Pe, del_p = get_grad_P(qn, Te)
+    if ie == 1:
+        get_electron_temp(qn, Te)
+    del_p = get_grad_P(qn, Te)
     
     VexB     = np.zeros((NC, 3), dtype=np.float64)  
     for ii in np.arange(NC):
@@ -1685,76 +1684,16 @@ def calculate_E(B, B_center, Ji, J_ext, qn, E, Ve, Te, resistive_array, sim_time
 
 
 #%% AUXILLIARY FUNCTIONS
-# =============================================================================
-# @nb.njit()
-# def get_B_at_center(B, zero_boundaries=True):
-#     ''' 
-#     Used for interpolating values on the B-grid to the E-grid (for E-field calculation)
-#     with a 3D array (e.g. B). Second derivative y2 is calculated on the B-grid, with
-#     forwards/backwards difference used for endpoints. (i.e. y2 at data points)
-#     
-#     interp has one more gridpoint than required just because of the array used. interp[-1]
-#     should remain zero.
-#     
-#     This might be able to be done without the intermediate y2 array since the interpolated
-#     points don't require previous point values.
-#     
-#     As long as B-grid is filled properly in the push_B() routine, this shouldn't have to
-#     vary for homogenous boundary conditions
-#     
-#     ADDS B0 TO X-AXIS ON TOP OF INTERPOLATION
-#     '''
-#     y2      = np.zeros((NC + 1, 3), dtype=np.float64)
-#     interp  = np.zeros((NC    , 3), dtype=np.float64)
-#     
-#     # Calculate second derivative
-#     for jj in range(1, B.shape[1]):
-#         
-#         # Interior B-nodes, Centered difference
-#         for ii in range(1, NC):
-#             y2[ii, jj] = B[ii + 1, jj] - 2*B[ii, jj] + B[ii - 1, jj]
-#                 
-#         # Edge B-nodes, Forwards/Backwards difference
-#         if zero_boundaries == True:
-#             y2[0 , jj] = 0.
-#             y2[NC, jj] = 0.
-#         else:
-#             y2[0,  jj] = 2*B[0 ,    jj] - 5*B[1     , jj] + 4*B[2     , jj] - B[3     , jj]
-#             y2[NC, jj] = 2*B[NC,    jj] - 5*B[NC - 1, jj] + 4*B[NC - 2, jj] - B[NC - 3, jj]
-#         
-#     # Do spline interpolation: E[ii] is bracketed by B[ii], B[ii + 1]
-#     for jj in range(1, B.shape[1]):
-#         for ii in range(NC):
-#             interp[ii, jj] = 0.5 * (B[ii, jj] + B[ii + 1, jj] + (1/6) * (y2[ii, jj] + y2[ii + 1, jj]))
-#     
-#     # Add B0x to interpolated array
-#     for ii in range(NC):
-#         interp[ii, 0] = eval_B0x(E_nodes[ii])
-#     return interp
-# =============================================================================
-
-
+@nb.njit(parallel=do_parallel)
 def get_B_cent(B, B_center):
     '''
     Quick and easy function to calculate B on the E-grid using scipy's cubic
     spline interpolation (mine seems to be broken). Could probably make this 
     myself and more efficient later, but need to eliminate problems!
     '''
-# =============================================================================
-#     for jj in range(1, 3):
-#         if False:
-#             coeffs          = splrep(B_nodes_loc, B[:, jj])
-#             B_center[:, jj] = splev( E_nodes_loc, coeffs)
-#         else:
-# =============================================================================
-    B_center       *= 0.0
-    B_center[:, 0]  = eval_B0x(E_nodes_loc)    
-    
-    yfunc           = interp1d(B_nodes_loc, B[:, 1], kind='quadratic')
-    B_center[:, 1]  = yfunc(E_nodes_loc)
-    
-    zfunc           = interp1d(B_nodes_loc, B[:, 2], kind='quadratic')
-    B_center[:, 2]  = zfunc(E_nodes_loc)
+    for ii in nb.prange(B_center.shape[0]):
+        B_center[ii, 1] = 0.5 * (B[ii, 1] + B[ii + 1, 1])
+        B_center[ii, 2] = 0.5 * (B[ii, 2] + B[ii + 1, 2])
     return
 
 
@@ -2604,30 +2543,31 @@ if __name__ == '__main__':
         #######################
         ###### MAIN LOOP ######
         #######################
+        
+        # First field advance to N + 1/2
         LEAP1_start = timer()
         _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT, _E, _VE, _TE,
                                     _DT, _SUBCYCLES, _B_DAMP, _RESIS_ARR, _SIM_TIME)
-        calculate_E(_B, _B_CENT, _Ji, _J_EXT, _RHO_HALF,
-                    _E, _VE, _TE, _RESIS_ARR, _SIM_TIME)
         LEAP1_time = round(timer() - LEAP1_start, 3)
 
+        # CAM part
         CAMEL_start = timer()
         push_current(_Ji_PLUS, _Ji, _E, _B_CENT, _L, _G, _DT)
         calculate_E(_B, _B_CENT, _Ji, _J_EXT, _RHO_HALF,
                     _E, _VE, _TE, _RESIS_ARR, _SIM_TIME)
         CAMEL_time = round(timer() - CAMEL_start, 3)
         
+        # Particle advance, moment calculation
         PTMOM_start = timer()
         advance_particles_and_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG,
                                               _IDX, _B, _E, _RHO_INT, _RHO_HALF, _Ji,
                                               _Ji_MINUS, _Ji_PLUS, _L, _G, _MP_FLUX, _DT)
         PTMOM_time = round(timer() - PTMOM_start, 3)
         
+        # Second field advance to N + 1
         LEAP2_start = timer()
         _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT, _E, _VE, _TE,
                                     _DT, _SUBCYCLES, _B_DAMP, _RESIS_ARR, _SIM_TIME)
-        calculate_E(_B, _B_CENT, _Ji, _J_EXT, _RHO_INT,
-                    _E, _VE, _TE, _RESIS_ARR, _SIM_TIME)
         LEAP2_time = round(timer() - LEAP2_start, 3)
         
         loop_diag = round(timer() - loop_start, 3)
