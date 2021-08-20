@@ -107,7 +107,7 @@ def load_simulation_params():
            particle_shape, part_save_iter, field_save_iter, dt_field, dt_particle,  \
            ND, NC, N, loss_cone, xmax, B_xmax, B_eq, theta_xmax, a, boundary_type,     \
            rc_hwidth, L, B_nodes, E_nodes, xmin, grid_min, grid_max, \
-           grid_mid, run_time, run_time_str, particle_periodic, particle_reflect, \
+           grid_mid, run_time_str, particle_periodic, particle_reflect, \
            particle_reinit, particle_open, disable_waves, source_smoothing, \
            E_damping, quiet_start, homogenous, field_periodic, damping_multiplier, \
            driven_freq, driven_ampl, pulse_offset, pulse_offset, pulse_width, driven_k,\
@@ -177,15 +177,23 @@ def load_simulation_params():
     quiet_start      = obj['quiet_start']
     homogenous       = obj['homogeneous']
     field_periodic   = obj['field_periodic']
-    run_time         = obj['run_time']
-    loop_time        = round(obj['loop_time'], 3)
     
-    hrs      = int(run_time // 3600)
-    rem      = run_time %  3600
-    mins     = int(rem // 60)
-    sec      = round(rem %  60, 2)
-    run_time_str = '{:02}:{:02}:{:02}'.format(hrs, mins, sec)
-
+    if obj['run_time'] is None:
+        run_time = 0
+        run_time_str = 'Incomplete'
+    else:
+        run_time = obj['run_time']
+        
+        hrs      = int(run_time // 3600)
+        rem      = run_time %  3600
+        mins     = int(rem // 60)
+        sec      = round(rem %  60, 2)
+        run_time_str = '{:02}:{:02}:{:02}'.format(hrs, mins, sec)
+    
+    if obj['loop_time'] is None:
+        loop_time = 'N/A'
+    else:
+        loop_time = round(obj['loop_time'], 3)
     
     try:
         # Test if scalar

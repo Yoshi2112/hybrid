@@ -17,18 +17,17 @@ mu0     = (4e-7) * np.pi                     # Magnetic Permeability of Free Spa
 RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
-Fu_override         = False
+Fu_override         = True
 do_parallel         = True
 print_timings       = False    # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = False    # Flag to print runtime every 50 iterations 
-adaptive_timestep   = False    # Disable adaptive timestep to keep it the same as initial
-adaptive_subcycling = False    # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
-default_subcycles   = 32       # Number of field subcycling steps for Cyclic Leapfrog
+adaptive_timestep   = True     # Disable adaptive timestep to keep it the same as initial
+adaptive_subcycling = True     # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
 
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-#nb.set_num_threads(2)         # Uncomment to manually set number of threads, otherwise will use all available
+#nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
 
 
 #%% --- FUNCTIONS ---
@@ -472,8 +471,12 @@ def set_timestep(vel):
         if field_save_iter == 0: field_save_iter = 1
 
     if adaptive_subcycling == True:
+        # b1 factor accounts for increase in total field due to wave growth
+        # Without this, s/c count doubles as soon as waves start to grow
+        # which unneccessarily slows the simulation
+        b1_fac     = 1.2
         k_max      = np.pi / dx
-        dispfreq   = (k_max ** 2) * B_eq / (mu0 * ne * ECHARGE)
+        dispfreq   = (k_max ** 2) * B_eq*b1_fac / (mu0 * ne * ECHARGE)
         dt_sc      = freq_res / dispfreq
         subcycles  = int(DT / dt_sc + 1)
         print('Number of subcycles required: {}'.format(subcycles))
@@ -1337,7 +1340,7 @@ def eval_B0x(x):
     return B_eq * (1. + a * x**2)
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit(parallel=False)
 def get_curl_B(B):
     ''' Returns a vector quantity for the curl of a field valid at the positions 
     between its gridpoints (i.e. curl(B) -> E-grid, etc.)
@@ -1410,7 +1413,7 @@ def get_electron_temp(qn, te):
     return
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit(parallel=False)
 def get_grad_P(qn, te):
     '''
     Returns the electron pressure gradient (in 1D) on the E-field grid using
@@ -1438,7 +1441,7 @@ def get_grad_P(qn, te):
     return temp
 
 
-@nb.njit(parallel=do_parallel)
+@nb.njit(parallel=False)
 def apply_boundary(B, B_damp):
     if field_periodic == 0:
         for ii in nb.prange(B.shape[0]):
@@ -1489,12 +1492,16 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, DT, subcycles,
     TO DO: Need to perform checks every few subcycles for divergence? Or every 
     few calls? Work out what needs to be done here.
     '''
+    # Convergence test: Maximum difference between solutions 1e-4 nT
+    max_diff = 1e-13
+    
     H     = 0.5 * DT
     dh    = H / subcycles
     
     if disable_waves:
         return sim_time+H
     
+    diff  = np.zeros((NC + 1, 3), dtype=np.float64)
     curl  = np.zeros((NC + 1, 3), dtype=np.float64)
     B2[:] = B1[:]
 
@@ -1527,6 +1534,16 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, DT, subcycles,
             apply_boundary(B2, B_damp)
             get_B_cent(B2, B_center)
             sim_time += dh
+            
+        ## NEED TO PUT A CHECK HERE FOR ERROR: AVERAGE SOLUTIONS IF OVER ERR_VAL
+        if ii%10 == 0:
+            diff[:] = np.abs(B2 - B1)
+            for jj in np.arange(diff.shape[0]):
+                if (diff[jj, 1] > max_diff) or (diff[jj, 2] > max_diff):
+                    print('Divergent solutions, averaging...')
+                    B1   += B2; B1 /= 2.0
+                    B2[:] = B1
+                    break
 
     ## RESYNC FIELD COPIES ##
     if ii%2 == 0:
@@ -1684,7 +1701,7 @@ def calculate_E(B, B_center, Ji, J_ext, qn, E, Ve, Te, resistive_array, sim_time
 
 
 #%% AUXILLIARY FUNCTIONS
-@nb.njit(parallel=do_parallel)
+@nb.njit(parallel=False)
 def get_B_cent(B, B_center):
     '''
     Quick and easy function to calculate B on the E-grid using scipy's cubic
@@ -2458,6 +2475,7 @@ parser.add_argument('-r', '--runfile'   , default='_run_params.run', type=str)
 parser.add_argument('-p', '--plasmafile', default='_plasma_params.plasma', type=str)
 parser.add_argument('-d', '--driverfile', default='_driver_params.txt'   , type=str)
 parser.add_argument('-n', '--run_num'   , default=-1, type=int)
+parser.add_argument('-s', '--subcycle'  , default=16, type=int)
 args = vars(parser.parse_args())
 
 # Check root directory (change if on RCG)
@@ -2472,6 +2490,9 @@ plasma_input = root_dir +  '/run_inputs/' + args['plasmafile']
 driver_input = root_dir +  '/run_inputs/' + args['driverfile']
 if Fu_override == True:
         plasma_input = root_dir +  '/run_inputs/' + '_Fu_test.plasma'
+
+# Set anything else useful before file input load
+default_subcycles = args['subcycle']
 
 load_run_params()
 if __name__ == '__main__':

@@ -77,14 +77,18 @@ def sheeley_trough(L, LT=0, av=True):
         return [mean - var, mean + var]
     
 
-def plot_dipole_field_line(L, MLAT, length=False):
+def plot_dipole_field_line(L, MLAT, length=False, offset=0.0):
     '''
     Plots field lines with basic L = r*sin^2(theta) relation. Can plot
     multiple for all in Ls. Can also calculate arclengths from lat_st/lat_min
     and print as the title (can be changed if you want)
+    
+    Offset in degrees shifts theta
     '''
     import matplotlib.pyplot as plt
 
+    offset *= np.pi/180.
+    
     colat  = np.pi/2 - MLAT*np.pi/180.
     dtheta = 0.001
     
@@ -96,8 +100,8 @@ def plot_dipole_field_line(L, MLAT, length=False):
     plt.gcf().gca().add_artist(plt.Circle((0,0), 1.0, color='k', alpha=0.2))
     
     r     = L * np.sin(theta) ** 2
-    x     = r * np.cos(theta)
-    y     = r * np.sin(theta) 
+    x     = r * np.cos(theta + offset)
+    y     = r * np.sin(theta + offset) 
 
     xp    = L * np.sin(colat) ** 2 * np.cos(colat)
     yp    = L * np.sin(colat) ** 2 * np.sin(colat) 
@@ -174,6 +178,8 @@ def get_eV_from_vthc(vthc):
 
     
 if __name__ == '__main__':
+    plot_dipole_field_line(4.0, 0.0, offset=30.0)
+    
     #B_eq = CLW_geomagnetic_magnitude(4.27, MLAT=0.)
     #print(B_eq)
 # =============================================================================
@@ -191,9 +197,11 @@ if __name__ == '__main__':
 #         print('Field       = {:.2f} nT'.format(_B0*1e9))
 #         print('Field CLW   = {:.2f} nT'.format(_B02))
 # =============================================================================
-
-    # Random Omura/Shoji stuff
-    OmH0     = np.pi * 2  * 3.7      # Proton cyclotron frequency (3.7Hz) in radians
-    omura_wp = 679 * OmH0
-    
-    get_eV_from_vthc(0.00283)
+# =============================================================================
+# 
+#     # Random Omura/Shoji stuff
+#     OmH0     = np.pi * 2  * 3.7      # Proton cyclotron frequency (3.7Hz) in radians
+#     omura_wp = 679 * OmH0
+#     
+#     get_eV_from_vthc(0.00283)
+# =============================================================================

@@ -4534,18 +4534,18 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
 
-    for series in ['//CAMCL_relax_test_with_pre//']:
+    for series in ['//CAMCL_PREDCORR_timing_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [10]
+            runs_to_do = [5]
         
         # Extract all summary files and plot field stuff (quick)
-        if False:
+        if True:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
@@ -4584,7 +4584,7 @@ if __name__ == '__main__':
                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
                            B0_lim=0.25, remove_ND=False)
                 
-                #plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
+                plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
                 
                 #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
                 
@@ -4604,7 +4604,7 @@ if __name__ == '__main__':
 #                     pass            
 # =============================================================================
         
-        if True:
+        if False:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
