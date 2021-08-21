@@ -1,5 +1,5 @@
 DRIVE					D:/
-SAVE_PATH			    /runs/new_shoji_full_CAM_CL/
+SAVE_PATH			    /runs/new_shoji_full_CAM_CL_linterp/
 RUN						-
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
@@ -24,4 +24,4 @@ GYROPERIOD_RESOLUTION	0.20
 FREQUENCY_RESOLUTION	0.05
 PARTICLE_DUMP_FREQ		5.0
 FIELD_DUMP_FREQ			0.25
-Shoji run with damping regions fixed. Full resolution in space to get the triggered emissions. Without damping regions the spatial region is approximately 4096 cells. CAM_CL version for subcycling with disabled adaptive timesteps and adaptive subcycling.
+Shoji run with damping regions fixed. Full resolution in space to get the triggered emissions. Without damping regions the spatial region is approximately 4096 cells. CAM_CL version for subcycling with adaptive timesteps and subcycling, but with linear interpolation for speed.

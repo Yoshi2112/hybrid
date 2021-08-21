@@ -17,7 +17,7 @@ mu0     = (4e-7) * np.pi                     # Magnetic Permeability of Free Spa
 RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
-Fu_override         = True
+Fu_override         = False
 do_parallel         = True
 print_timings       = False    # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = False    # Flag to print runtime every 50 iterations 
@@ -1983,7 +1983,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time,
 
 def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, sim_time,
                     damping_array, resistive_array):
-    #print('Saving field data')
+
     d_path = '%s/%s/run_%d/data/fields/' % (drive, save_path, run_num)
     r      = qq / field_save_iter
 
@@ -1993,15 +1993,14 @@ def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, sim_time,
                          sim_time=sim_time,
                          damping_array=damping_array,
                          resistive_array=resistive_array)
-    if print_runtime == True:
-        print('Field data saved')
+    
+    if print_runtime: print('Field data saved')
     return
     
 
 def save_particle_data(dt, part_save_iter, qq, sim_time, 
                        pos, vel, idx, Ji, E, B, Ve, Te, dns, 
                        damping_array, resistive_array):
-    #print('Saving particle data')
     d_path = '%s/%s/run_%d/data/particles/' % (drive, save_path, run_num)
     r      = qq / part_save_iter
 
@@ -2011,8 +2010,8 @@ def save_particle_data(dt, part_save_iter, qq, sim_time,
              E=E, B=B, Ji=Ji, dns=dns, Ve=Ve, Te=Te,
              damping_array=damping_array,
              resistive_array=resistive_array)
-    if print_runtime == True:
-        print('Particle data saved')
+    
+    if print_runtime == True: print('Particle data saved')
     return
 
 
@@ -2650,7 +2649,7 @@ if __name__ == '__main__':
             save_field_data(_DT, _FIELD_SAVE_ITER, _QQ, _Ji, _E, _B, _VE, _TE,
                             _RHO_INT, _SIM_TIME, _B_DAMP, _RESIS_ARR)
         
-        if _QQ%100 == 0:
+        if _QQ%100 == 0 and print_runtime:
             running_time = int(timer() - start_time)
             hrs          = running_time // 3600
             rem          = running_time %  3600
