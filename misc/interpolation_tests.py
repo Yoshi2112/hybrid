@@ -123,8 +123,6 @@ if __name__ == '__main__':
     xB = np.arange(0.0, Nx*dx, dx)
     xE = np.arange(dx/2, Nx*dx - dx/2, dx)
     
-    #calc_quadspline_coeffs_matlab()
-    
     B      = np.zeros((xB.shape[0], 2), dtype=float)
     B_cent = np.zeros((xE.shape[0], 2), dtype=float)
     

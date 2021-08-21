@@ -1491,9 +1491,18 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, DT, subcycles,
             
     TO DO: Need to perform checks every few subcycles for divergence? Or every 
     few calls? Work out what needs to be done here.
+    
+    Note: Average error divergence calculated by summing the absolute difference
+    and weighting by dxm - number of inertial lengths per dx. This empirically
+    gives an initial 'quiet' error on the order of 1e-8. The question is, how does 
+    this inform the maximum acceptable error.
+    
+    Actually, need to normalise/multiply by dxm*NX, since there's a sum there.
+    Do that later. For now, just average every 32s/c or so.
     '''
-    # Convergence test: Maximum difference between solutions 1e-4 nT
-    max_diff = 1e-13
+    # Convergence test max limit
+    # max_diff = 1.5e-8
+    sc_av = 32
     
     H     = 0.5 * DT
     dh    = H / subcycles
@@ -1517,7 +1526,7 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, DT, subcycles,
     if subcycles == 1:
         B1[:] = B2[:]
         return sim_time+H
-
+    
     ## MAIN SUBCYCLE LOOP ##
     for ii in range(subcycles - 1):             
         if ii%2 == 0:
@@ -1535,15 +1544,40 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, DT, subcycles,
             get_B_cent(B2, B_center)
             sim_time += dh
             
-        ## NEED TO PUT A CHECK HERE FOR ERROR: AVERAGE SOLUTIONS IF OVER ERR_VAL
-        if ii%10 == 0:
-            diff[:] = np.abs(B2 - B1)
-            for jj in np.arange(diff.shape[0]):
-                if (diff[jj, 1] > max_diff) or (diff[jj, 2] > max_diff):
-                    print('Divergent solutions, averaging...')
-                    B1   += B2; B1 /= 2.0
-                    B2[:] = B1
-                    break
+# =============================================================================
+#         ## Check for error divergence or just average every so often ##
+#         if ii%sc_av == 0 and ii > 0:
+#             #diff[:] = np.abs(B2 - B1)
+#             #err = diff.sum()/dxm
+#             
+#             ## RESYNC BEFORE AVERAGE ##
+#             if ii%2 == 0:
+#                 calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+#                 get_curl_E(E, curl) 
+#                 B2  -= dh * curl
+#                 apply_boundary(B2, B_damp)
+#                 get_B_cent(B2, B_center)
+#             else:
+#                 calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+#                 get_curl_E(E, curl) 
+#                 B1  -= dh * curl
+#                 apply_boundary(B1, B_damp)
+#                 get_B_cent(B1, B_center)
+#         
+#             ## AVERAGE AND COPY ##
+#             B1 += B2; B1 /= 2.0
+#             B2[:] = B1[:]
+#             
+#             ## DESYNC ONE FIELD COPY - PUSH BY DH ##
+#             ## THE ONE DESYNCED HAS TO BE THE NEXT ONE PUSHED ##
+#             if ii%2 == 0:
+#                 calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+#                 get_curl_E(E, curl) 
+#                 B2       -= dh * curl
+#                 apply_boundary(B2, B_damp)
+#                 get_B_cent(B2, B_center)
+#                 sim_time += dh
+# =============================================================================
 
     ## RESYNC FIELD COPIES ##
     if ii%2 == 0:
@@ -1559,7 +1593,7 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, DT, subcycles,
         apply_boundary(B1, B_damp)
         get_B_cent(B1, B_center)
 
-    ## AVERAGE FIELD SOLUTIONS: COULD PERFORM A CONVERGENCE TEST HERE IN FUTURE ##
+    ## AVERAGE FOR OUTPUT ##
     B1 += B2; B1 /= 2.0
     
     # Calculate final values
@@ -1704,9 +1738,9 @@ def calculate_E(B, B_center, Ji, J_ext, qn, E, Ve, Te, resistive_array, sim_time
 @nb.njit(parallel=False)
 def get_B_cent(B, B_center):
     '''
-    Quick and easy function to calculate B on the E-grid using scipy's cubic
-    spline interpolation (mine seems to be broken). Could probably make this 
-    myself and more efficient later, but need to eliminate problems!
+    Quick and dirty linear interpolation so I have a working code
+    But this is going to kill the order of my solutions
+    Need at least a quadratic spline fit for true second-order solution
     '''
     for ii in nb.prange(B_center.shape[0]):
         B_center[ii, 1] = 0.5 * (B[ii, 1] + B[ii + 1, 1])
@@ -1955,24 +1989,28 @@ def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, sim_time,
 
     d_fullpath = d_path + 'data%05d' % r
     
-    np.savez(d_fullpath, E = E[:, 0:3], B = B[:, 0:3], Ji = Ji,
-                         dns = dns, Ve = Ve[:, 0:3], Te = Te,
-                         sim_time = sim_time,
-                         damping_array = damping_array,
+    np.savez(d_fullpath, E=E, B=B, Ji=Ji, dns=dns, Ve=Ve, Te=Te,
+                         sim_time=sim_time,
+                         damping_array=damping_array,
                          resistive_array=resistive_array)
     if print_runtime == True:
         print('Field data saved')
     return
     
-    
-def save_particle_data(dt, part_save_iter, qq, pos, vel, idx, sim_time):
+
+def save_particle_data(dt, part_save_iter, qq, sim_time, 
+                       pos, vel, idx, Ji, E, B, Ve, Te, dns, 
+                       damping_array, resistive_array):
     #print('Saving particle data')
     d_path = '%s/%s/run_%d/data/particles/' % (drive, save_path, run_num)
     r      = qq / part_save_iter
 
     d_filename = 'data%05d' % r
     d_fullpath = os.path.join(d_path, d_filename)
-    np.savez(d_fullpath, pos=pos, vel=vel, idx=idx, sim_time = sim_time)
+    np.savez(d_fullpath, pos=pos, vel=vel, idx=idx, sim_time=sim_time,
+             E=E, B=B, Ji=Ji, dns=dns, Ve=Ve, Te=Te,
+             damping_array=damping_array,
+             resistive_array=resistive_array)
     if print_runtime == True:
         print('Particle data saved')
     return
@@ -2605,7 +2643,8 @@ if __name__ == '__main__':
         ##### OUTPUT DATA  #####
         ########################
         if _QQ%_PART_SAVE_ITER == 0 and save_particles == 1:
-            save_particle_data(_DT, _PART_SAVE_ITER, _QQ, _POS, _VEL, _IDX, _SIM_TIME)
+            save_particle_data(_DT, _PART_SAVE_ITER, _QQ, _SIM_TIME, _POS, _VEL, _IDX,
+                               _Ji, _E, _B, _VE, _TE, _RHO_INT, _B_DAMP, _RESIS_ARR)
 
         if _QQ%_FIELD_SAVE_ITER == 0 and save_fields == 1:
             save_field_data(_DT, _FIELD_SAVE_ITER, _QQ, _Ji, _E, _B, _VE, _TE,
