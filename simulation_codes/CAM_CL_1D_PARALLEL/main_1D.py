@@ -1464,7 +1464,7 @@ def apply_boundary(B, B_damp):
 
 
 @nb.njit()
-def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, DT, subcycles,
+def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
                     B_damp, resistive_array, sim_time):
     '''
     Solves for the magnetic field push by keeping two copies and subcycling between them,
@@ -1499,28 +1499,29 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, DT, subcycles,
     
     Actually, need to normalise/multiply by dxm*NX, since there's a sum there.
     Do that later. For now, just average every 32s/c or so.
-    '''
-    # Convergence test max limit
-    # max_diff = 1.5e-8
-    sc_av = 32
     
-    H     = 0.5 * DT
+    Works for even s/c av,
+    
+    '''
+    sc_av = 16
+    H     = 0.5 * dt
     dh    = H / subcycles
     
     if disable_waves:
         return sim_time+H
     
-    diff  = np.zeros((NC + 1, 3), dtype=np.float64)
     curl  = np.zeros((NC + 1, 3), dtype=np.float64)
     B2[:] = B1[:]
 
     ## DESYNC SECOND FIELD COPY - PUSH BY DH ##
+    ## COUNTS AS ONE SUBCYCLE ##
     calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
     get_curl_E(E, curl) 
     B2       -= dh * curl
     apply_boundary(B2, B_damp)
     get_B_cent(B2, B_center)
     sim_time += dh
+    #print('Desync B2')
 
     ## RETURN IF NO SUBCYCLES REQUIRED ##
     if subcycles == 1:
@@ -1528,14 +1529,16 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, DT, subcycles,
         return sim_time+H
     
     ## MAIN SUBCYCLE LOOP ##
-    for ii in range(subcycles - 1):             
-        if ii%2 == 0:
+    ii = 1
+    while ii < subcycles:
+        if ii%2 == 1:
             calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
             get_curl_E(E, curl) 
             B1  -= 2 * dh * curl
             apply_boundary(B1, B_damp)
             get_B_cent(B1, B_center)
             sim_time += dh
+            #print('Push B1')
         else:
             calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
             get_curl_E(E, curl) 
@@ -1543,62 +1546,79 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, DT, subcycles,
             apply_boundary(B2, B_damp)
             get_B_cent(B2, B_center)
             sim_time += dh
+            #print('Push B2')
             
-# =============================================================================
-#         ## Check for error divergence or just average every so often ##
-#         if ii%sc_av == 0 and ii > 0:
-#             #diff[:] = np.abs(B2 - B1)
-#             #err = diff.sum()/dxm
-#             
-#             ## RESYNC BEFORE AVERAGE ##
-#             if ii%2 == 0:
-#                 calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-#                 get_curl_E(E, curl) 
-#                 B2  -= dh * curl
-#                 apply_boundary(B2, B_damp)
-#                 get_B_cent(B2, B_center)
-#             else:
-#                 calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-#                 get_curl_E(E, curl) 
-#                 B1  -= dh * curl
-#                 apply_boundary(B1, B_damp)
-#                 get_B_cent(B1, B_center)
-#         
-#             ## AVERAGE AND COPY ##
-#             B1 += B2; B1 /= 2.0
-#             B2[:] = B1[:]
-#             
-#             ## DESYNC ONE FIELD COPY - PUSH BY DH ##
-#             ## THE ONE DESYNCED HAS TO BE THE NEXT ONE PUSHED ##
-#             if ii%2 == 0:
-#                 calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-#                 get_curl_E(E, curl) 
-#                 B2       -= dh * curl
-#                 apply_boundary(B2, B_damp)
-#                 get_B_cent(B2, B_center)
-#                 sim_time += dh
-# =============================================================================
+        ## Check for error divergence or just average every so often ##
+        ## Could do error check here and double s/c count if needed  ##
+        if ii%sc_av == 0: 
+            #print('Averaging for convergence')
+            ## RESYNC BEFORE AVERAGE ##
+            if ii%2 == 1:
+                calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+                get_curl_E(E, curl) 
+                B2  -= dh * curl
+                apply_boundary(B2, B_damp)
+                get_B_cent(B2, B_center)
+                #print('Resync B2')
+            else:
+                calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+                get_curl_E(E, curl) 
+                B1  -= dh * curl
+                apply_boundary(B1, B_damp)
+                get_B_cent(B1, B_center)
+                #print('Resync B1')
+        
+            ## AVERAGE AND COPY ##
+            B1 += B2; B1 /= 2.0
+            B2[:] = B1[:]
+            
+            ## DESYNC ONE FIELD COPY - PUSH BY DH ##
+            ## THE ONE DESYNCED HAS TO BE THE NEXT ONE PUSHED ##
+            if ii%2 == 1:
+                calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+                get_curl_E(E, curl) 
+                B2       -= dh * curl
+                apply_boundary(B2, B_damp)
+                get_B_cent(B2, B_center)
+                sim_time += dh;  ii += 1
+                #print('Desync B2')
+            else:
+                calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+                get_curl_E(E, curl) 
+                B1       -= dh * curl
+                apply_boundary(B1, B_damp)
+                get_B_cent(B1, B_center)
+                sim_time += dh;  ii += 1
+                #print('Desync B1')
+        ii += 1
 
     ## RESYNC FIELD COPIES ##
+    ## DOESN'T COUNT AS A SUBCYCLE ##
     if ii%2 == 0:
         calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
         get_curl_E(E, curl) 
         B2  -= dh * curl
         apply_boundary(B2, B_damp)
         get_B_cent(B2, B_center)
+        #print('Resync B2')
     else:
         calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
         get_curl_E(E, curl) 
         B1  -= dh * curl
         apply_boundary(B1, B_damp)
         get_B_cent(B1, B_center)
-
+        #print('Resync B1')
+    
     ## AVERAGE FOR OUTPUT ##
+    #print('Averaging for output')
     B1 += B2; B1 /= 2.0
     
     # Calculate final values
     get_B_cent(B1, B_center)
     calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+    #print('Half timestep:', H)
+    #print('Simulation  T:', sim_time)
+    #sys.exit()
     return sim_time
 
 
