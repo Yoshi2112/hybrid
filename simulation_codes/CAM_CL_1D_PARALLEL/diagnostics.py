@@ -705,6 +705,146 @@ def test_curl_E():
     return
 
 
+def test_curl_orders():
+    '''
+    dx not used in these interpolations, so solution order is calculated by
+    having the same waveform sampled with different numbers of cells across
+    LENGTH.
+    '''
+    marker_size    = 20
+    grids          = [128, 256]
+    E_curl_errors  = np.zeros(len(grids))
+    B_curl_errors  = np.zeros(len(grids))
+    
+    for mx, ii in zip(grids, list(range(len(grids)))):
+        print('Testing interpolation :: {} points'.format(mx))
+        dx  = main_1D.dx
+        L   = mx*dx
+        k   = 2.0 * 2*np.pi / L
+        
+        # Physical location of nodes
+        B_nodes  = (np.arange(mx + 1) - mx // 2)       * dx      # B grid points position in space
+        E_nodes  = (np.arange(mx)     - mx // 2 + 0.5) * dx      # E grid points position in space
+    
+        # Define test and analytic solutions
+        B_test       = np.zeros((mx + 1, 3))                     # Input at B nodes
+        B_test[:, 0] = np.cos(k*B_nodes)
+        B_test[:, 1] = np.cos(k*B_nodes)
+        B_test[:, 2] = np.cos(k*B_nodes)
+        
+        E_test       = np.zeros((mx, 3))                     # Input at B nodes
+        E_test[:, 0] = np.cos(k*E_nodes)
+        E_test[:, 1] = np.cos(k*E_nodes)
+        E_test[:, 2] = np.cos(k*E_nodes)
+
+        E_curl_anal       = np.zeros((mx + 1, 3))
+        E_curl_anal[:, 1] =  k * np.sin(k*B_nodes)
+        E_curl_anal[:, 2] = -k * np.sin(k*B_nodes)
+        
+        B_curl_anal       = np.zeros((mx, 3))
+        B_curl_anal[:, 1] =  k * np.sin(k*E_nodes)
+        B_curl_anal[:, 2] = -k * np.sin(k*E_nodes)
+    
+        ## TEST INTERPOLATIONs ##
+        if True:
+            # 2nd Order
+            B_curl_FD = main_1D.get_curl_B(B_test)
+            E_curl_FD = np.zeros((mx + 1, 3))
+            main_1D.get_curl_E(E_test, E_curl_FD)
+        else:
+            # 4th Order
+            B_curl_FD = main_1D.get_curl_B_4thOrder(B_test)
+            E_curl_FD = np.zeros((mx + 1, 3))
+            main_1D.get_curl_E_4thOrder(E_test, E_curl_FD)
+        
+        E_curl_errors[ii] = abs(E_curl_FD[2:-2, 1] - E_curl_anal[2:-2, 1]).sum() / (mx + 1)
+        B_curl_errors[ii] = abs(B_curl_FD[:, 1] - B_curl_anal[:, 1]).sum() / mx
+        
+        if ii == 0:
+            fig, [ax1, ax2] = plt.subplots(2)
+            ax1.set_title('Curl B Test :: {} points'.format(mx))
+            ax1.scatter(E_nodes/dx, B_curl_anal[:, 1], s=marker_size, c='b', marker='x', label='Analytic  Soln')
+            ax1.scatter(E_nodes/dx, B_curl_FD[  :, 1], s=marker_size, c='r', marker='x', label='Numerical Soln')
+            ax1b = ax1.twinx()
+            ax1b.scatter(B_nodes/dx, B_test[:, 1], label='Raw', c='k')
+            ax1.legend(); ax1b.legend()
+            
+            ax2.set_title('Curl E Test :: {} points'.format(mx))
+            ax2.scatter(B_nodes/dx, E_curl_anal[:, 1], s=marker_size, c='b', marker='x', label='Analytic  Soln')
+            ax2.scatter(B_nodes/dx, E_curl_FD[  :, 1], s=marker_size, c='r', marker='x', label='Numerical Soln')
+            ax2b = ax2.twinx()
+            ax2b.scatter(E_nodes/dx, E_test[:, 1], label='Raw', c='k')
+            ax2.legend(); ax2b.legend()
+    
+    for ii in range(len(grids) - 1):
+        curl_E_order = np.log(E_curl_errors[ii] / E_curl_errors[ii + 1]) / np.log(2)
+        curl_B_order = np.log(B_curl_errors[ii] / B_curl_errors[ii + 1]) / np.log(2)
+        print(curl_B_order, curl_E_order)
+    return
+
+
+def test_interpolation():
+    '''
+    Should be fourth order, apparently only second order
+    Still better than the first-order linear stuff I was doing before
+    '''
+    grids   = [32, 64]
+    errors  = np.zeros(len(grids))
+    
+    for mx, ii in zip(grids, list(range(len(grids)))):
+        print('Testing interpolation :: {} points'.format(mx))
+        marker_size = 20
+        dx          = main_1D.dx
+        LENGTH      = mx*dx
+        k0          = 2   * 2*np.pi / LENGTH
+        k1          = 2   * 2*np.pi / LENGTH
+        k2          = 2   * 2*np.pi / LENGTH
+    
+        # Physical location of nodes
+        B_nodes  = (np.arange(mx + 1) - mx // 2)       * dx      # B grid points position in space
+        E_nodes  = (np.arange(mx)     - mx // 2 + 0.5) * dx      # E grid points position in space
+    
+        # Input data
+        B_input       = np.zeros((mx + 1, 3))
+        B_input[:, 0] = np.cos(k0*B_nodes)
+        B_input[:, 1] = np.cos(k1*B_nodes)
+        B_input[:, 2] = np.cos(k2*B_nodes)    
+        
+        # Analytic solution
+        B_anal        = np.zeros((mx, 3))
+        B_anal[:, 0]  = np.cos(k0*E_nodes)
+        B_anal[:, 1]  = np.cos(k1*E_nodes)
+        B_anal[:, 2]  = np.cos(k2*E_nodes)
+    
+        # Numerical solution
+        B_cent       = np.zeros((mx, 3))
+        B_cent[:, 0] = main_1D.interpolate_cell_centre_4thOrder(B_input[:, 0])
+        B_cent[:, 1] = main_1D.interpolate_cell_centre_4thOrder(B_input[:, 1])
+        B_cent[:, 2] = main_1D.interpolate_cell_centre_4thOrder(B_input[:, 2])
+        
+        errors[ii] = abs(B_cent[:, 1] - B_anal[:, 1]).sum() / mx
+       
+        if ii == 0:
+            fig, ax = plt.subplots()
+            for jj in [1]:# range(2, 3):
+                ax.scatter(B_nodes, B_input[:, jj], s=marker_size, c='k', marker='o', label='Input {}'.format(jj))
+                ax.scatter(E_nodes, B_anal[ :, jj], s=marker_size, c='b', marker='x', label='A. Soln {}'.format(jj))
+                ax.scatter(E_nodes, B_cent[ :, jj], s=marker_size, c='r', marker='x', label='N. Soln {}'.format(jj))
+            
+            for kk in range(mx):
+                ax.axvline(E_nodes[kk], linestyle='--', c='r', alpha=0.2)
+                ax.axvline(B_nodes[kk], linestyle='--', c='b', alpha=0.2)
+            ax.axvline(B_nodes[kk+1], linestyle='--', c='b', alpha=0.2)
+                
+            ax.legend()
+            plt.show()
+            
+    for ii in range(len(grids) - 1):
+        interp_order = np.log(errors[ii] / errors[ii + 1]) / np.log(2)
+        print(interp_order)
+    return
+
+
 def test_grad_P():
     '''
     Seems to be a lot of inaccuracy in this function, not sure why. Might need
@@ -1089,108 +1229,6 @@ def test_E_hall():
             plt.axvline(xmax, linestyle='-', c='k', alpha=0.2)
         
         plt.xlim(xmin - 1.5*dx, xmax + 2*dx)
-    return
-
-
-
-def test_E2C_interpolation():
-    '''
-    Tests Edge-to-Center (B to E) cubic spline interpolation. 
-    Only tests y component, since x is constant offset and z should be identical.
-    
-    Problem found: 24/02/2021
-    
-    Doesn't match the scipy interpolation
-    '''
-    marker_size = 20
-    LENGTH      = main_1D.xmax - main_1D.xmin
-    k0          = 4   * 2*np.pi / LENGTH
-    k1          = 4   * 2*np.pi / LENGTH
-    k2          = 4   * 2*np.pi / LENGTH
-
-    # Interpolation
-    B_input       = np.zeros((main_1D.NC + 1, 3))
-    B_input[:, 0] = np.cos(k0*main_1D.B_nodes)
-    B_input[:, 1] = np.cos(k1*main_1D.B_nodes)
-    B_input[:, 2] = np.cos(k2*main_1D.B_nodes)    
-    
-    # Analytic solution
-    B_anal        = np.zeros((main_1D.NC, 3))
-    B_anal[:, 0]  = np.cos(k0*main_1D.E_nodes)
-    B_anal[:, 1]  = np.cos(k1*main_1D.E_nodes)
-    B_anal[:, 2]  = np.cos(k2*main_1D.E_nodes)
-    
-    # Scipy solution
-    B_scipy       = np.zeros((main_1D.NC, 3))
-    main_1D.get_B_cent(B_input, B_scipy)
-   
-    #pdb.set_trace()
-    ## TEST INTERPOLATION ##
-    #B_cent        = np.zeros((main_1D.NC, 3))
-    #B_cent[:, 1] = main_1D.interpolate_edges_to_center_1D(B_input[:, 1])
-    #B_cent = main_1D.get_B_at_center(B_input)
-    
-    fig, ax = plt.subplots()
-    for jj in range(2, 3):
-        ax.scatter(main_1D.B_nodes, B_input[:, jj], s=marker_size, c='k', marker='o', label='Input {}'.format(jj))
-        ax.scatter(main_1D.E_nodes, B_anal[ :, jj], s=marker_size, c='b', marker='x', label='A. Soln {}'.format(jj))
-        #ax.scatter(main_1D.E_nodes, B_cent[ :, jj], s=marker_size, c='r', marker='x', label='N. Soln {}'.format(jj))
-        ax.scatter(main_1D.E_nodes, B_scipy[:, jj], s=marker_size, c='g', marker='^', label='Scipy   {}'.format(jj))
-    
-    if True:
-        ax2 = ax.twinx()
-        ax2.plot(main_1D.E_nodes, B_scipy[:, 0]*1e9, c='k', label='B0x', alpha=0.5)
-    
-    for kk in range(main_1D.NC):
-        ax.axvline(main_1D.E_nodes[kk], linestyle='--', c='r', alpha=0.2)
-        ax.axvline(main_1D.B_nodes[kk], linestyle='--', c='b', alpha=0.2)
-    ax.axvline(main_1D.B_nodes[kk+1], linestyle='--', c='b', alpha=0.2)
-        
-    ax.axvline(main_1D.xmin, linestyle='-', c='k', alpha=0.2)
-    ax.axvline(main_1D.xmax, linestyle='-', c='k', alpha=0.2)
-
-    ax.legend()
-    plt.show()
-    return
-
-
-def test_C2E_interpolation():
-    '''
-    Tests Center-to-Edge (E to B) cubic spline interpolation. 
-    Only tests x component, as the rest should be fine
-    
-    y2 tested and validated, although its not great near edges. May also invalidated
-    how '4th order' the cubic spline is (derivative uses 2nd order finite difference)
-    '''
-    marker_size = 20
-    k           = 2*np.pi / (main_1D.xmax - main_1D.xmin)
-
-    # Input value
-    E_input       = np.zeros((main_1D.NC, 3))
-    E_input[:, 1] = np.cos(k*main_1D.E_nodes)    
-    
-    # Analytic solution
-    E_anal        = np.zeros((main_1D.NC + 1, 3))
-    E_anal[:, 1]  = np.cos(k*main_1D.B_nodes)
-        
-    ## TEST INTERPOLATION ##
-    E_edge = main_1D.interpolate_edges_to_center_1D(E_input[:, 1], zero_boundaries=True)
-
-    fig, ax = plt.subplots()
-    ax.scatter(main_1D.E_nodes, E_input[:, 1], s=marker_size, c='k', marker='o', label='Input')
-    ax.scatter(main_1D.B_nodes, E_anal[ :, 1], s=marker_size, c='b', marker='x', label='Analytic Soln')
-    ax.scatter(main_1D.B_nodes, E_edge[ :, 1], s=marker_size, c='r', marker='x', label='Numerical Soln')
-    
-    for kk in range(main_1D.NC):
-        ax.axvline(main_1D.E_nodes[kk], linestyle='--', c='r', alpha=0.2)
-        ax.axvline(main_1D.B_nodes[kk], linestyle='--', c='b', alpha=0.2)
-    ax.axvline(main_1D.B_nodes[kk+1], linestyle='--', c='b', alpha=0.2)
-        
-    ax.axvline(main_1D.xmin, linestyle='-', c='k', alpha=0.2)
-    ax.axvline(main_1D.xmax, linestyle='-', c='k', alpha=0.2)
-
-    ax.legend()
-    plt.show()
     return
 
 
@@ -1937,6 +1975,9 @@ def check_velocity_space_init():
 
 #%% --MAIN-- 
 if __name__ == '__main__':
+    #test_curl_orders()
+    test_interpolation()
+    
     #animate_moving_weight()
     
     #test_grad_P_varying_qn()

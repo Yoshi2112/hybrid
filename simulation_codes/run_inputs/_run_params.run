@@ -24,4 +24,4 @@ GYROPERIOD_RESOLUTION	0.20
 FREQUENCY_RESOLUTION	0.05
 PARTICLE_DUMP_FREQ		5.0
 FIELD_DUMP_FREQ			0.25
-CAM_CL test with subcycle averaging, using Shoji-like spatial parameters with Fu plasma particle parameters. Half the number of particles just to make it a bit faster.
+CAM_CL test with subcycle averaging, using Shoji-like spatial parameters with Fu plasma particle parameters. Testing the new subcycle limiting functions.

@@ -20,14 +20,14 @@ B_surf  = 3.12e-5                            # Magnetic field strength at Earth 
 Fu_override         = False
 do_parallel         = True
 print_timings       = False    # Diagnostic outputs timing each major segment (for efficiency examination)
-print_runtime       = False    # Flag to print runtime every 50 iterations 
+print_runtime       = True     # Flag to print runtime every 50 iterations 
 adaptive_timestep   = True     # Disable adaptive timestep to keep it the same as initial
 adaptive_subcycling = True     # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
 
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-#nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
 
 
 #%% --- FUNCTIONS ---
@@ -449,15 +449,43 @@ def set_timestep(vel):
     Problems:
         -- Reducing dx means that the timestep will be shortened by same vx
         -- Reducing dx also increases dispersion. Is there a maximum number of s/c?
+        
+    To do: 
+        -- After initial calculation of DT, calculate number of required subcycles.
+        -- If greater than some preset value, change timestep instead.
+        
+        BUG : Wrong number of arguments to update_position()
     '''
     max_vx   = np.max(np.abs(vel[0, :]))
-    ion_ts   = orbit_res / gyfreq_eq            # Timestep to resolve gyromotion
+    ion_ts   = orbit_res / gyfreq_eq              # Timestep to resolve gyromotion
     vel_ts   = 0.5*dx / max_vx                    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
 
     DT       = min(ion_ts, vel_ts)
     max_time = max_wcinv / gyfreq_eq              # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1             # Total number of time steps
 
+    if adaptive_subcycling == True:
+        # b1 factor accounts for increase in total field due to wave growth
+        # Without this, s/c count doubles as soon as waves start to grow
+        # which unneccessarily slows the simulation
+        b1_fac     = 1.2
+        k_max      = np.pi / dx
+        dispfreq   = (k_max ** 2) * B_eq*b1_fac / (mu0 * ne * ECHARGE)
+        dt_sc      = freq_res / dispfreq
+        subcycles  = int(DT / dt_sc + 1)
+        
+        # Set subcycles to maximum, set timestep to match s/c loop length
+        if subcycles > init_max_subcycle:
+            print(f'Subcycles required ({subcycles}) greater than defined max ({init_max_subcycle})')
+            print(f'Number of subcycles set at default init_max: {init_max_subcycle}')
+            print('Resetting timestep to match subcycle loop size')
+            DT = init_max_subcycle * dt_sc
+            subcycles = init_max_subcycle
+            
+    else:
+        subcycles = default_subcycles
+        print('Number of subcycles set at default: {}'.format(subcycles))
+        
     if part_res == 0:
         part_save_iter = 1
     else:
@@ -469,20 +497,6 @@ def set_timestep(vel):
     else:
         field_save_iter = int(field_res / (DT*gyfreq_eq))
         if field_save_iter == 0: field_save_iter = 1
-
-    if adaptive_subcycling == True:
-        # b1 factor accounts for increase in total field due to wave growth
-        # Without this, s/c count doubles as soon as waves start to grow
-        # which unneccessarily slows the simulation
-        b1_fac     = 1.2
-        k_max      = np.pi / dx
-        dispfreq   = (k_max ** 2) * B_eq*b1_fac / (mu0 * ne * ECHARGE)
-        dt_sc      = freq_res / dispfreq
-        subcycles  = int(DT / dt_sc + 1)
-        print('Number of subcycles required: {}'.format(subcycles))
-    else:
-        subcycles = default_subcycles
-        print('Number of subcycles set at default: {}'.format(subcycles))
 
     if save_fields == 1 or save_particles == 1:
         store_run_parameters(DT, part_save_iter, field_save_iter, max_inc, max_time, subcycles)
@@ -508,7 +522,11 @@ def set_timestep(vel):
         plt.show()
         sys.exit()
     
-    print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))
+    if DT < 1e-2:
+        print('Timestep: %.3es with %d subcycles' % (DT, subcycles))
+    else:
+        print('Timestep: %.3fs with %d subcycles' % (DT, subcycles))
+    print(f'{max_inc} iterations total\n')
     return DT, max_inc, part_save_iter, field_save_iter, subcycles,\
              B_damping_array, resistive_array
 
@@ -1357,11 +1375,36 @@ def get_curl_B(B):
           E and B fields having the same number of nodes (due to TSC weighting) and
          the lack of derivatives in y, z
     '''
-    curlB = np.zeros((NC, 3), dtype=nb.float64)
+    curlB = np.zeros((B.shape[0] - 1, 3), dtype=nb.float64)
     for ii in nb.prange(B.shape[0] - 1):
         curlB[ii, 1] = - (B[ii + 1, 2] - B[ii, 2])
         curlB[ii, 2] =    B[ii + 1, 1] - B[ii, 1]
-    curlB /= (dx*mu0)
+    curlB /= dx
+    return curlB
+
+
+@nb.njit(parallel=False)
+def get_curl_B_4thOrder(B):
+    '''
+    Same as other function, but uses 4th order finite difference in the bulk.
+    Gets deposited on the E-grid
+    '''
+    nc    = B.shape[0] - 1
+    curlB = np.zeros((B.shape[0] - 1, 3), dtype=nb.float64)
+    
+    # Do 4th order for bulk
+    for ii in nb.prange(1, B.shape[0] - 2):
+        curlB[ii, 1] = -B[ii - 1, 2] + 27*B[ii, 2] - 27*B[ii + 1, 2] + B[ii + 2, 2]
+        curlB[ii, 2] =  B[ii - 1, 1] - 27*B[ii, 1] + 27*B[ii + 1, 1] - B[ii + 2, 1]
+    
+    curlB /= 24.*dx
+    
+    # Do second order for interior points (LHS/RHS)
+    curlB[0, 1] =  (-B[1, 2] + B[0, 2])/dx
+    curlB[0, 2] =  ( B[1, 1] - B[0, 1])/dx
+    
+    curlB[nc - 1, 1] = (-B[nc, 2] + B[nc - 1, 2])/dx
+    curlB[nc - 1, 2] = ( B[nc, 1] - B[nc - 1, 1])/dx
     return curlB
 
 
@@ -1379,6 +1422,7 @@ def get_curl_E(E, dE):
     OUTPUT:
         curl  -- Finite-differenced solution for the curl of the input field.
     '''   
+    nc  = E.shape[0] 
     dE *= 0.
     for ii in nb.prange(1, E.shape[0]):
         dE[ii, 1] = - (E[ii, 2] - E[ii - 1, 2])
@@ -1388,15 +1432,54 @@ def get_curl_E(E, dE):
     dE[0, 1] = -(-3*E[0, 2] + 4*E[1, 2] - E[2, 2]) / 2
     dE[0, 2] =  (-3*E[0, 1] + 4*E[1, 1] - E[2, 1]) / 2
     
-    dE[NC, 1] = -(3*E[NC - 1, 2] - 4*E[NC - 2, 2] + E[NC - 3, 2]) / 2
-    dE[NC, 2] =  (3*E[NC - 1, 1] - 4*E[NC - 2, 1] + E[NC - 3, 1]) / 2
+    dE[nc, 1] = -(3*E[nc - 1, 2] - 4*E[nc - 2, 2] + E[nc - 3, 2]) / 2
+    dE[nc, 2] =  (3*E[nc - 1, 1] - 4*E[nc - 2, 1] + E[nc - 3, 1]) / 2
     
     # Linearly extrapolate to endpoints
     dE[0, 1]      -= 2*(dE[1, 1] - dE[0, 1])
     dE[0, 2]      -= 2*(dE[1, 2] - dE[0, 2])
     
-    dE[NC, 1]     += 2*(dE[NC, 1] - dE[NC - 1, 1])
-    dE[NC, 2]     += 2*(dE[NC, 2] - dE[NC - 1, 2])
+    dE[nc, 1]     += 2*(dE[nc, 1] - dE[nc - 1, 1])
+    dE[nc, 2]     += 2*(dE[nc, 2] - dE[nc - 1, 2])
+
+    dE /= dx
+    return
+
+
+@nb.njit()
+def get_curl_E_4thOrder(E, dE):
+    ''' 
+    Same as normal function, but 4th order solution for bulk. Gets dumped on B-grid.
+    
+    This is mega messy. Is this really necessary? Get your BCs under control, man.
+    '''   
+    nc  = E.shape[0] 
+    dE *= 0.
+    for ii in nb.prange(2, nc - 1):
+        dE[ii, 1] = - E[ii - 2, 2] + 27*E[ii - 1, 2] - 27*E[ii, 2] + E[ii + 1, 2]
+        dE[ii, 2] =   E[ii - 2, 1] - 27*E[ii - 1, 1] + 27*E[ii, 1] - E[ii + 1, 1]
+    dE /= 24.
+    
+    # 2nd order solution for interior B points (not edge) (LHS/RHS)
+    dE[1, 1] = (-E[1, 2] + E[0, 2])
+    dE[1, 2] = ( E[1, 1] - E[0, 1])
+    
+    dE[nc - 1, 1] = (-E[nc - 1, 2] + E[nc - 2, 2])
+    dE[nc - 1, 2] = ( E[nc - 1, 1] - E[nc - 2, 1])
+        
+    # Curl at E[0] : Forward/Backward difference (stored in B[0]/B[NC])
+    dE[0, 1] = -(-3*E[0, 2] + 4*E[1, 2] - E[2, 2]) / 2
+    dE[0, 2] =  (-3*E[0, 1] + 4*E[1, 1] - E[2, 1]) / 2
+    
+    dE[nc, 1] = -(3*E[nc - 1, 2] - 4*E[nc - 2, 2] + E[nc - 3, 2]) / 2
+    dE[nc, 2] =  (3*E[nc - 1, 1] - 4*E[nc - 2, 1] + E[nc - 3, 1]) / 2
+    
+    # Linearly extrapolate to endpoints
+    dE[0, 1]      -= 2*(dE[1, 1] - dE[0, 1])
+    dE[0, 2]      -= 2*(dE[1, 2] - dE[0, 2])
+    
+    dE[nc, 1]     += 2*(dE[nc, 1] - dE[nc - 1, 1])
+    dE[nc, 2]     += 2*(dE[nc, 2] - dE[nc - 1, 2])
 
     dE /= dx
     return
@@ -1706,7 +1789,8 @@ def calculate_E(B, B_center, Ji, J_ext, qn, E, Ve, Te, resistive_array, sim_time
     elif pol_wave == 2:
         get_J_ext_pol(J_ext, sim_time)
         
-    curlB = get_curl_B(B)
+    curlB  = get_curl_B(B)
+    curlB /= mu0
        
     Ve[:, 0] = (Ji[:, 0] + J_ext[:, 0] - curlB[:, 0]) / qn
     Ve[:, 1] = (Ji[:, 1] + J_ext[:, 1] - curlB[:, 1]) / qn
@@ -1768,6 +1852,30 @@ def get_B_cent(B, B_center):
     return
 
 
+@nb.njit(parallel=False)
+def interpolate_cell_centre_4thOrder(edge_arr):
+    '''
+    Uses equation derived in the TIMCOM model (looks like just a cubic spline?)
+    
+    http://coda.oc.ntu.edu.tw/coda/research/timcom/FRAME/fourth.html
+    
+    Does just a 1D array. Use 4th order interpolation on bulk values. 
+    Use linear for edges (because easy)
+    
+    Seems to only be second order?
+    '''
+    nc = edge_arr.shape[0]-1
+    
+    interp = np.zeros(nc, dtype=np.float64)
+    for ii in nb.prange(1, nc-1):
+        interp[ii] = -edge_arr[ii-1] + 7.*edge_arr[ii] + 7.*edge_arr[ii+1] - edge_arr[ii+2]
+    interp /= 12.
+    
+    interp[0]    = 0.5*(edge_arr[0]  + edge_arr[1])
+    interp[nc-1] = 0.5*(edge_arr[nc] + edge_arr[nc-1]) 
+    return interp
+
+
 #@nb.njit()
 def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, B, B_center, E, dns, 
                    max_inc, part_save_iter, field_save_iter, loop_save_iter,
@@ -1788,7 +1896,10 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, B, B_center, E, dns,
         2  :: Double timestep
         3  :: Double subcycles
         4  :: Half subcycles
-        
+    
+    To do:
+        -- Calculate number of required subcycles first. If greater than some
+            predetermined limit, half timestep instead
     '''
     if manual_trip < 0: # Return without change or check
         return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, 0, subcycles
@@ -1810,6 +1921,27 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, B, B_center, E, dns,
     
     vel_ts          = 0.75*dx / max_vx
     DT_part         = min(freq_ts, vel_ts, ion_ts)
+    
+    # Check subcycles to see if DT_part needs to be changed instead
+    if adaptive_subcycling == 1:
+        k_max           = np.pi / dx
+        dispfreq        = (k_max ** 2) * (B_tot / (mu0 * dns)).max()             # Dispersion frequency
+        dt_sc           = freq_res / dispfreq
+        new_subcycles   = int(DT / dt_sc + 1)
+        
+        if (subcycles < 0.75*new_subcycles and manual_trip == 0) or manual_trip == 3:                                       
+            subcycles *= 2
+            print('Number of subcycles per timestep doubled to', subcycles)
+            
+        if (subcycles > 3.0*new_subcycles and subcycles%2 == 0 and manual_trip == 0) or manual_trip == 4:                                      
+            subcycles //= 2
+            print('Number of subcycles per timestep halved to', subcycles)
+            
+        if subcycles >= max_subcycles:
+            subcycles = max_subcycles
+            print(f'Number of subcycles exceeding maximum, setting to {max_subcycles}')
+            print( 'Modifying timestep...')
+            DT_part = 0.5*DT
     
     # Reduce timestep
     change_flag       = 0
@@ -1842,25 +1974,6 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, B, B_center, E, dns,
         loop_save_iter  //= 2
         
         print('Timestep doubled. Syncing particle velocity/position with DT =', DT)
-
-    if adaptive_subcycling == 1:
-        k_max           = np.pi / dx
-        dispfreq        = (k_max ** 2) * (B_tot / (mu0 * dns)).max()             # Dispersion frequency
-        dt_sc           = freq_res / dispfreq
-        new_subcycles   = int(DT / dt_sc + 1)
-        
-        if (subcycles < 0.75*new_subcycles and manual_trip == 0) or manual_trip == 3:                                       
-            subcycles *= 2
-            print('Number of subcycles per timestep doubled to', subcycles)
-            
-        if (subcycles > 3.0*new_subcycles and subcycles%2 == 0 and manual_trip == 0) or manual_trip == 4:                                      
-            subcycles //= 2
-            print('Number of subcycles per timestep halved to', subcycles)
-            
-        if subcycles >= 2000:
-            subcycles = 2000
-            sys.exit('Maximum number of subcycles reached :: Simulation aborted')
-
     return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, change_flag, subcycles
 
 
@@ -2267,7 +2380,7 @@ def load_plasma_params():
         qm_ratios, N, idx_start, idx_end, Nj, N_species, B_eq, ne, density, \
         E_par, Te0_scalar, vth_perp, vth_par, T_par, T_perp, vth_e, vei,\
         wpi, wpe, va, gyfreq_eq, egyfreq_eq, dx, n_contr, min_dens, xmax, xmin,\
-            inject_rate, k_max
+            inject_rate, k_max, inv_dx, inv_mu0
         
     print('LOADING PLASMA: {}'.format(plasma_input))
     with open(plasma_input, 'r') as f:
@@ -2327,6 +2440,10 @@ def load_plasma_params():
     xmax       = NX / 2 * dx                                 # Maximum simulation length, +/-ve on each side
     xmin       =-NX / 2 * dx
     k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
+
+    # Inverse values so that I can avoid divisions
+    inv_dx  = 1./dx
+    inv_mu0 = 1./mu0 
 
     E_par       = E_perp / (anisotropy + 1)     # Parallel species energy
     if beta_flag == 0:
@@ -2528,11 +2645,13 @@ def get_thread_values():
 #### Read in command-line arguments, if present
 import argparse as ap
 parser = ap.ArgumentParser()
-parser.add_argument('-r', '--runfile'   , default='_run_params.run', type=str)
-parser.add_argument('-p', '--plasmafile', default='_plasma_params.plasma', type=str)
-parser.add_argument('-d', '--driverfile', default='_driver_params.txt'   , type=str)
-parser.add_argument('-n', '--run_num'   , default=-1, type=int)
-parser.add_argument('-s', '--subcycle'  , default=16, type=int)
+parser.add_argument('-r', '--runfile'     , default='_run_params.run', type=str)
+parser.add_argument('-p', '--plasmafile'  , default='_plasma_params.plasma', type=str)
+parser.add_argument('-d', '--driverfile'  , default='_driver_params.txt'   , type=str)
+parser.add_argument('-n', '--run_num'     , default=-1, type=int)
+parser.add_argument('-s', '--subcycle'    , default=16, type=int)
+parser.add_argument('-m', '--max_subcycle', default=64, type=int)
+parser.add_argument('-M', '--init_max_subcycle', default=16, type=int)
 args = vars(parser.parse_args())
 
 # Check root directory (change if on RCG)
@@ -2550,6 +2669,8 @@ if Fu_override == True:
 
 # Set anything else useful before file input load
 default_subcycles = args['subcycle']
+max_subcycles     = args['max_subcycle']
+init_max_subcycle = args['init_max_subcycle']
 
 load_run_params()
 if __name__ == '__main__':
@@ -2558,13 +2679,14 @@ load_plasma_params()
 load_wave_driver_params()
 calculate_background_magnetic_field()
 get_thread_values()
-print_summary_and_checks()
 
 
 #%%#####################
 ### START SIMULATION ###
 ########################
 if __name__ == '__main__':
+    print_summary_and_checks()
+
     start_time = timer()
     
     _B, _B2, _B_CENT, _E, _VE, _TE = initialize_fields()
