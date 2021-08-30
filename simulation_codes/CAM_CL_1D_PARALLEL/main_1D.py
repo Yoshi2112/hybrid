@@ -17,7 +17,7 @@ mu0     = (4e-7) * np.pi                     # Magnetic Permeability of Free Spa
 RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
-Fu_override         = True
+Fu_override         = False
 do_parallel         = True
 print_timings       = False    # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True     # Flag to print runtime every 50 iterations 
@@ -27,7 +27,7 @@ adaptive_subcycling = True     # Flag (True/False) to adaptively change number o
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-#nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
 
 
 #%% --- FUNCTIONS ---
@@ -453,6 +453,8 @@ def set_timestep(vel):
     To do: 
         -- After initial calculation of DT, calculate number of required subcycles.
         -- If greater than some preset value, change timestep instead.
+        
+        BUG : Wrong number of arguments to update_position()
     '''
     max_vx   = np.max(np.abs(vel[0, :]))
     ion_ts   = orbit_res / gyfreq_eq              # Timestep to resolve gyromotion
@@ -1508,18 +1510,18 @@ def get_grad_P(qn, te):
     result to be deposited on the B-grid. Moving it back to the E-grid requires
     an interpolation.
     '''
-    grad_pe       = np.zeros(NC    , dtype=np.float64)
     grad_pe_B     = np.zeros(NC + 1, dtype=np.float64)
-    grad_pe[:]    = qn[:] * kB * te[:] / ECHARGE
+    temp          = qn * kB * te / ECHARGE
 
     # Loop center points, set endpoints for no gradients (just to be safe)
     for ii in np.arange(1, qn.shape[0]):
-        grad_pe_B[ii] = (grad_pe[ii] - grad_pe[ii - 1])/dx
+        grad_pe_B[ii] = (temp[ii] - temp[ii - 1])/dx
     grad_pe_B[0]  = grad_pe_B[1]
     grad_pe_B[NC] = grad_pe_B[NC - 1]
     
-    interpolate_cell_centre_4thOrder(grad_pe_B, grad_pe)
-    return grad_pe
+    for ii in nb.prange(grad_pe_B.shape[0]):
+        temp[ii] = 0.5 * (grad_pe_B[ii] + grad_pe_B[ii + 1])
+    return temp
 
 
 @nb.njit(parallel=False)
@@ -1597,7 +1599,7 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
     ## DESYNC SECOND FIELD COPY - PUSH BY DH ##
     ## COUNTS AS ONE SUBCYCLE ##
     calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-    get_curl_E_4thOrder(E, curl) 
+    get_curl_E(E, curl) 
     B2       -= dh * curl
     apply_boundary(B2, B_damp)
     get_B_cent(B2, B_center)
@@ -1614,7 +1616,7 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
     while ii < subcycles:
         if ii%2 == 1:
             calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-            get_curl_E_4thOrder(E, curl) 
+            get_curl_E(E, curl) 
             B1  -= 2 * dh * curl
             apply_boundary(B1, B_damp)
             get_B_cent(B1, B_center)
@@ -1622,7 +1624,7 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
             #print('Push B1')
         else:
             calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-            get_curl_E_4thOrder(E, curl) 
+            get_curl_E(E, curl) 
             B2  -= 2 * dh * curl
             apply_boundary(B2, B_damp)
             get_B_cent(B2, B_center)
@@ -1636,14 +1638,14 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
             ## RESYNC BEFORE AVERAGE ##
             if ii%2 == 1:
                 calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-                get_curl_E_4thOrder(E, curl) 
+                get_curl_E(E, curl) 
                 B2  -= dh * curl
                 apply_boundary(B2, B_damp)
                 get_B_cent(B2, B_center)
                 #print('Resync B2')
             else:
                 calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-                get_curl_E_4thOrder(E, curl) 
+                get_curl_E(E, curl) 
                 B1  -= dh * curl
                 apply_boundary(B1, B_damp)
                 get_B_cent(B1, B_center)
@@ -1657,7 +1659,7 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
             ## THE ONE DESYNCED HAS TO BE THE NEXT ONE PUSHED ##
             if ii%2 == 1:
                 calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-                get_curl_E_4thOrder(E, curl) 
+                get_curl_E(E, curl) 
                 B2       -= dh * curl
                 apply_boundary(B2, B_damp)
                 get_B_cent(B2, B_center)
@@ -1665,7 +1667,7 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
                 #print('Desync B2')
             else:
                 calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-                get_curl_E_4thOrder(E, curl) 
+                get_curl_E(E, curl) 
                 B1       -= dh * curl
                 apply_boundary(B1, B_damp)
                 get_B_cent(B1, B_center)
@@ -1677,14 +1679,14 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
     ## DOESN'T COUNT AS A SUBCYCLE ##
     if ii%2 == 0:
         calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-        get_curl_E_4thOrder(E, curl) 
+        get_curl_E(E, curl) 
         B2  -= dh * curl
         apply_boundary(B2, B_damp)
         get_B_cent(B2, B_center)
         #print('Resync B2')
     else:
         calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-        get_curl_E_4thOrder(E, curl) 
+        get_curl_E(E, curl) 
         B1  -= dh * curl
         apply_boundary(B1, B_damp)
         get_B_cent(B1, B_center)
@@ -1787,7 +1789,7 @@ def calculate_E(B, B_center, Ji, J_ext, qn, E, Ve, Te, resistive_array, sim_time
     elif pol_wave == 2:
         get_J_ext_pol(J_ext, sim_time)
         
-    curlB  = get_curl_B_4thOrder(B)
+    curlB  = get_curl_B(B)
     curlB /= mu0
        
     Ve[:, 0] = (Ji[:, 0] + J_ext[:, 0] - curlB[:, 0]) / qn
@@ -1843,19 +1845,15 @@ def get_B_cent(B, B_center):
     Quick and dirty linear interpolation so I have a working code
     But this is going to kill the order of my solutions
     Need at least a quadratic spline fit for true second-order solution
-    
-    Modified to use the higher-order interpolation
     '''
-    interpolate_cell_centre_4thOrder(B[:, 1], B_center[:, 1])
-    interpolate_cell_centre_4thOrder(B[:, 2], B_center[:, 2])
-    #for ii in nb.prange(B_center.shape[0]):
-    #    B_center[ii, 1] = 0.5 * (B[ii, 1] + B[ii + 1, 1])
-    #    B_center[ii, 2] = 0.5 * (B[ii, 2] + B[ii + 1, 2])
+    for ii in nb.prange(B_center.shape[0]):
+        B_center[ii, 1] = 0.5 * (B[ii, 1] + B[ii + 1, 1])
+        B_center[ii, 2] = 0.5 * (B[ii, 2] + B[ii + 1, 2])
     return
 
 
 @nb.njit(parallel=False)
-def interpolate_cell_centre_4thOrder(edge_arr, interp):
+def interpolate_cell_centre_4thOrder(edge_arr):
     '''
     Uses equation derived in the TIMCOM model (looks like just a cubic spline?)
     
@@ -1868,17 +1866,18 @@ def interpolate_cell_centre_4thOrder(edge_arr, interp):
     '''
     nc = edge_arr.shape[0]-1
     
+    interp = np.zeros(nc, dtype=np.float64)
     for ii in nb.prange(1, nc-1):
         interp[ii] = -edge_arr[ii-1] + 7.*edge_arr[ii] + 7.*edge_arr[ii+1] - edge_arr[ii+2]
     interp /= 12.
     
     interp[0]    = 0.5*(edge_arr[0]  + edge_arr[1])
     interp[nc-1] = 0.5*(edge_arr[nc] + edge_arr[nc-1]) 
-    return
+    return interp
 
 
 #@nb.njit()
-def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, B, B_center, E, dns, 
+def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, B, B_center, E, dns, 
                    max_inc, part_save_iter, field_save_iter, loop_save_iter,
                    subcycles, manual_trip=0):
     '''
@@ -1947,8 +1946,7 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, B, B_c
     # Reduce timestep
     change_flag       = 0
     if (DT_part < 0.9*DT and manual_trip == 0) or manual_trip == 1:
-        #(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt, hot_only=False)
-        position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, -0.5*DT)
+        position_update(pos, vel, idx, Ie, W_elec, -0.5*DT)
         
         change_flag      = 1
         DT              *= 0.5
@@ -2724,8 +2722,7 @@ if __name__ == '__main__':
         if adaptive_timestep == 1 and disable_waves == 0:  
             CHECK_start = timer()
             _QQ, _DT, _MAX_INC, _PART_SAVE_ITER, _FIELD_SAVE_ITER, _LOOP_SAVE_ITER, _CHANGE_FLAG, _SUBCYCLES =\
-                check_timestep(_QQ, _DT, _POS, _VEL, _IDX, _IE, _W_ELEC, _IB, _W_MAG, _MP_FLUX,
-                               _B, _B_CENT, _E, _RHO_INT, 
+                check_timestep(_QQ, _DT, _POS, _VEL, _IDX, _IE, _W_ELEC, _B, _B_CENT, _E, _RHO_INT, 
                                _MAX_INC, _PART_SAVE_ITER, _FIELD_SAVE_ITER, _LOOP_SAVE_ITER,
                                _SUBCYCLES)
             CHECK_time = round(timer() - CHECK_start, 3)
