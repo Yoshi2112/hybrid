@@ -4534,7 +4534,7 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
 
-    for series in ['//CAMCL_sc_av_test//']:
+    for series in ['//CAMCL_PREDCORR_timing_test//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4542,7 +4542,7 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [1]
+            runs_to_do = [9]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
