@@ -2326,7 +2326,7 @@ def load_run_params():
     # Set number of ghost cells, count total
     ND = 2
     NC = NX + 2*NRX + 2*ND
-    
+    pdb.set_trace()
     # E-field nodes around boundaries (used for periodic sources and E-fields)
     lo1 = ND - 1 ; lo2 = ND - 2             # Left outer (to boundary)
     ro1 = ND + NX; ro2 = ND + NX + 1        # Right outer
@@ -2582,7 +2582,7 @@ def print_summary_and_checks():
     print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq_eq, 3)))
     print('Maximum sim time   : {}s ({} gyroperiods)\n'.format(round(max_wcinv / gyfreq_eq, 2), 
                                                                round(max_wcinv/(2*np.pi), 2)))    
-    print('{} spatial cells, 2x{} damped cells'.format(NX, ND))
+    print('{} spatial cells, 2x{} damped cells'.format(NX, NRX))
     print('{} cells total'.format(NC))
     print('{} particles total\n'.format(N))
     
