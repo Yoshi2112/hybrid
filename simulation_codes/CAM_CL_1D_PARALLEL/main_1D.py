@@ -395,18 +395,17 @@ def set_damping_arrays(B_damping_array, resistive_array, DT, subcycles):
     as yet.
     '''
     # Location and thickness of damping region (in units of dx)
-    damping_thickness  = damping_fraction*NC
-    damping_boundary   = 0.5*NC - damping_thickness  
+    damping_boundary   = 0.5*NC - NRX  
     
     dh       = DT / subcycles
-    r_damp   = np.sqrt(29.7 * 0.5 * va * (0.5 * dh / dx) / damping_thickness)
+    r_damp   = np.sqrt(29.7 * 0.5 * va * (0.5 * dh / dx) / NRX)
     r_damp  *= damping_multiplier
     
     # Do B-damping array
     B_dist_from_mp  = np.abs(np.arange(NC + 1) - 0.5*NC)                # Distance of each B-node from midpoint
     for ii in range(NC + 1):
         if B_dist_from_mp[ii] > damping_boundary:
-            B_damping_array[ii] = 1. - r_damp * ((B_dist_from_mp[ii] - damping_boundary) / damping_thickness) ** 2 
+            B_damping_array[ii] = 1. - r_damp * ((B_dist_from_mp[ii] - damping_boundary) / NRX) ** 2 
         else:
             B_damping_array[ii] = 1.0
             
@@ -424,7 +423,7 @@ def set_damping_arrays(B_damping_array, resistive_array, DT, subcycles):
     for ii in range(NC):
         # Damping region
         if E_dist_from_mp[ii] > damping_boundary:
-            resistive_array[ii] = 0.5*max_eta*(1. + np.cos(np.pi*(E_dist_from_mp[ii] - 0.5*NC) / damping_thickness))
+            resistive_array[ii] = 0.5*max_eta*(1. + np.cos(np.pi*(E_dist_from_mp[ii] - 0.5*NC) / NRX))
         
         # Inside solution space
         else:
@@ -2028,6 +2027,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time,
                    ('NX', NX),
                    ('ND', ND),
                    ('NC', NC),
+                   ('NRX', NRX),
                    ('N' , N),
                    ('dxm', dxm),
                    ('dx', dx),
@@ -2073,7 +2073,6 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time,
                    ('subcycles', subcycles),
                    ('beta_flag', beta_flag),
                    ('damping_multiplier', damping_multiplier),
-                   ('damping_fraction', damping_fraction),
                    ('pol_wave', pol_wave),
                    ('driven_freq', driven_freq),
                    ('driven_ampl', driven_ampl),
@@ -2283,8 +2282,8 @@ def dump_to_file(pos, vel, E_int, Ve, Te, B, Ji, q_dens, qq, folder='parallel', 
 def load_run_params():
     global drive, save_path, run_num, save_particles, save_fields, seed, homogenous, particle_periodic,\
         particle_reflect, particle_reinit, field_periodic, disable_waves, source_smoothing, quiet_start,\
-        E_damping, damping_fraction, damping_multiplier, resis_multiplier, NX, max_wcinv, dxm, ie,\
-            orbit_res, freq_res, part_res, field_res, run_description, particle_open, ND, NC,\
+        E_damping, damping_multiplier, resis_multiplier, NX, max_wcinv, dxm, ie,\
+            orbit_res, freq_res, part_res, field_res, run_description, particle_open, ND, NC, NRX,\
                 lo1, lo2, ro1, ro2, li1, li2, ri1, ri2,\
                 adaptive_timestep, adaptive_subcycling, default_subcycles
             
@@ -2307,11 +2306,11 @@ def load_run_params():
         source_smoothing  = int(f.readline().split()[1])   # Smooth source terms with 3-point Gaussian filter
         quiet_start       = int(f.readline().split()[1])   # Flag to use quiet start
         E_damping         = int(f.readline().split()[1])   # Damp E in a manner similar to B for ABCs
-        damping_fraction  = float(f.readline().split()[1]) # Fraction of solution domain (on each side) that includes damping    
         damping_multiplier= float(f.readline().split()[1]) # Multiplies the r-factor to increase/decrease damping rate.
         resis_multiplier  = float(f.readline().split()[1]) # Fraction of Lower Hybrid resonance used for resistivity calculation
     
         NX        = int(f.readline().split()[1])           # Number of cells - doesn't include ghost/damping cells
+        NRX       = int(f.readline().split()[1])           # Number of cells with damping on each side
         max_wcinv = float(f.readline().split()[1])         # Simulation runtime, in multiples of the ion gyroperiod (in seconds)
         dxm       = float(f.readline().split()[1])         # Number of ion inertial lengths per dx
         
@@ -2326,9 +2325,9 @@ def load_run_params():
     
     # Set number of ghost cells, count total
     ND = 2
-    NC = NX + 2*ND
+    NC = NX + 2*NRX + 2*ND
     
-    # E-field nodes around boundaries (used for sources and E-fields)
+    # E-field nodes around boundaries (used for periodic sources and E-fields)
     lo1 = ND - 1 ; lo2 = ND - 2             # Left outer (to boundary)
     ro1 = ND + NX; ro2 = ND + NX + 1        # Right outer
     
