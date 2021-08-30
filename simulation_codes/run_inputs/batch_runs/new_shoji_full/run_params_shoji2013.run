@@ -1,5 +1,5 @@
 DRIVE					D:/
-SAVE_PATH			    /runs/new_shoji_full_CAM_CL_linterp/
+SAVE_PATH			    /runs/new_shoji_full_CAM_CL_4thOrder/
 RUN						-
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1
@@ -13,15 +13,15 @@ NOWAVES_FLAG			0
 SOURCE_SMOOTHING_FLAG	0
 QUIET_START_FLAG		1
 E_DAMPING_FLAG			0
-DAMPING_LEN_FRACTION	0.20
+DAMPING_LEN_FRACTION	0.214
 B_DAMPING_MULTIPLIER    0.05
 RESISTIVITY_MULTIPLIER  0.00
-NX 						5736
-SIM_TIME				1200
+NX 						7168
+SIM_TIME				1800
 DXM						0.1
 IE						1
 GYROPERIOD_RESOLUTION	0.20
 FREQUENCY_RESOLUTION	0.05
 PARTICLE_DUMP_FREQ		5.0
 FIELD_DUMP_FREQ			0.25
-Shoji run with damping regions fixed. Full resolution in space to get the triggered emissions. Without damping regions the spatial region is approximately 4096 cells. CAM_CL version for subcycling with adaptive timesteps and subcycling, but with linear interpolation for speed.
+Shoji run with damping regions fixed. Full resolution in space to get the triggered emissions. Without damping regions the spatial region is approximately 4096 cells. CAM_CL version for subcycling with adaptive timesteps and subcycling, and upgraded with 4th order field solutions.

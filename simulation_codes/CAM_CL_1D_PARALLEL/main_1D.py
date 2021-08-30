@@ -17,7 +17,7 @@ mu0     = (4e-7) * np.pi                     # Magnetic Permeability of Free Spa
 RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
-Fu_override         = True
+Fu_override         = False    # Note this HAS to be disabled for grid runs.
 do_parallel         = True
 print_timings       = False    # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True     # Flag to print runtime every 50 iterations 
@@ -1072,7 +1072,7 @@ def deposit_both_moments(vel, Ie, W_elec, idx, ni, nu):
            we can't assume that it is constant for each thread.
     '''
     ni_threads = np.zeros((n_threads, NC, Nj), dtype=np.float64)
-    nu_threads = np.zeros((n_threads, NC, Nj, 3, ), dtype=np.float64)
+    nu_threads = np.zeros((n_threads, NC, Nj, 3), dtype=np.float64)
     for tt in nb.prange(n_threads):        
         for ii in range(n_start_idxs[tt], n_start_idxs[tt]+N_per_thread[tt]):
             if idx[ii] < Nj:
@@ -1105,7 +1105,7 @@ def deposit_velocity_moments(vel, Ie, W_elec, idx, nu):
         ni     -- Species number moment array(size, Nj)
         nui    -- Species velocity moment array (size, Nj)
     '''
-    nu_threads = np.zeros((n_threads, NC, Nj, 3, ), dtype=np.float64)
+    nu_threads = np.zeros((n_threads, NC, Nj, 3), dtype=np.float64)
     for tt in nb.prange(n_threads):        
         for ii in range(n_start_idxs[tt], n_start_idxs[tt]+N_per_thread[tt]):
             if idx[ii] < Nj:
@@ -1353,7 +1353,7 @@ def smooth(function):
 #%% FIELDS
 @nb.njit()
 def eval_B0x(x):
-    return B_eq * (1. + a * x**2)
+    return B_eq * (1. + a * x*x)
 
 
 @nb.njit(parallel=False)
@@ -1848,9 +1848,6 @@ def get_B_cent(B, B_center):
     '''
     interpolate_cell_centre_4thOrder(B[:, 1], B_center[:, 1])
     interpolate_cell_centre_4thOrder(B[:, 2], B_center[:, 2])
-    #for ii in nb.prange(B_center.shape[0]):
-    #    B_center[ii, 1] = 0.5 * (B[ii, 1] + B[ii + 1, 1])
-    #    B_center[ii, 2] = 0.5 * (B[ii, 2] + B[ii + 1, 2])
     return
 
 
@@ -2667,7 +2664,7 @@ run_input    = root_dir +  '/run_inputs/' + args['runfile']
 plasma_input = root_dir +  '/run_inputs/' + args['plasmafile']
 driver_input = root_dir +  '/run_inputs/' + args['driverfile']
 if Fu_override == True:
-        plasma_input = root_dir +  '/run_inputs/' + '_Fu_test.plasma'
+    plasma_input = root_dir +  '/run_inputs/' + '_Fu_test.plasma'
 
 # Set anything else useful before file input load
 default_subcycles = args['subcycle']
