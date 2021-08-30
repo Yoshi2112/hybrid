@@ -2326,7 +2326,7 @@ def load_run_params():
     # Set number of ghost cells, count total
     ND = 2
     NC = NX + 2*NRX + 2*ND
-    pdb.set_trace()
+
     # E-field nodes around boundaries (used for periodic sources and E-fields)
     lo1 = ND - 1 ; lo2 = ND - 2             # Left outer (to boundary)
     ro1 = ND + NX; ro2 = ND + NX + 1        # Right outer
