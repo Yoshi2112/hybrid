@@ -17,6 +17,7 @@ mu0     = (4e-7) * np.pi                     # Magnetic Permeability of Free Spa
 RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
+cold_va             = False
 Fu_override         = True     # Note this HAS to be disabled for grid runs.
 do_parallel         = True
 print_timings       = False    # Diagnostic outputs timing each major segment (for efficiency examination)
@@ -2428,14 +2429,19 @@ def load_plasma_params():
     qm_ratios  = np.concatenate((qm_ratios, qm_ratios))
     temp_type  = np.concatenate((temp_type, temp_type))
     
+    # Calculate va based only on cold proton component, or do it normal SI way
+    if cold_va:
+        # Based on Shoji et al. (2013)
+        va         = B_eq / np.sqrt(mu0*mass[1]*density[1])
+    else:
+        mass_dens  = (mass*density).sum()
+        va         = B_eq / np.sqrt(mu0*mass_dens)
+    
     ne         = density.sum()                               # Electron number density
-    #mass_dens  = (mass*density).sum()                        # Mass density for alfven velocity calc.
     wpi        = np.sqrt((density * charge ** 2 / (mass * e0)).sum())            # Proton Plasma Frequency, wpi (rad/s)
     wpe        = np.sqrt(ne * ECHARGE ** 2 / (EMASS * e0))   # Electron Plasma Frequency, wpi (rad/s)
-    #va         = B_eq / np.sqrt(mu0*mass_dens)              # Alfven speed at equator: Assuming pure proton plasma
     gyfreq_eq  = ECHARGE*B_eq  / PMASS                       # Proton Gyrofrequency (rad/s) at equator (slowest)
     egyfreq_eq = ECHARGE*B_eq  / EMASS                       # Electron Gyrofrequency (rad/s) at equator (slowest)
-    va         = B_eq / np.sqrt(mu0*mass[1]*density[1])      # Hard-coded to be 'cold proton alfven velocity' (Shoji et al, 2013)
     dx         = dxm * va / gyfreq_eq                        # Alternate method of calculating dx (better for multicomponent plasmas)
     n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this SI density to a cell
     min_dens   = 0.05                                        # Minimum charge density in a cell
