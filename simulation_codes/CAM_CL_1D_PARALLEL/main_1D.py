@@ -17,7 +17,7 @@ mu0     = (4e-7) * np.pi                     # Magnetic Permeability of Free Spa
 RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
-Fu_override         = False    # Note this HAS to be disabled for grid runs.
+Fu_override         = True     # Note this HAS to be disabled for grid runs.
 do_parallel         = True
 print_timings       = False    # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True     # Flag to print runtime every 50 iterations 
@@ -27,7 +27,7 @@ adaptive_subcycling = True     # Flag (True/False) to adaptively change number o
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-#nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
 
 
 #%% --- FUNCTIONS ---
@@ -1935,7 +1935,7 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, B, B_c
             subcycles //= 2
             print('Number of subcycles per timestep halved to', subcycles)
             
-        if subcycles >= max_subcycles:
+        if subcycles > max_subcycles:
             subcycles = max_subcycles
             print(f'Number of subcycles exceeding maximum, setting to {max_subcycles}')
             print( 'Modifying timestep...')
@@ -1954,15 +1954,18 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, B, B_c
         part_save_iter  *= 2
         field_save_iter *= 2
         loop_save_iter  *= 2
-        print('Timestep halved. Syncing particle velocity/position with DT =', DT)
+        if DT < 1e-2:
+            print('Timestep halved to: %.3es with %d subcycles' % (DT, subcycles))
+        else:
+            print('Timestep halved to: %.3fs with %d subcycles' % (DT, subcycles))
     
     # Increase timestep
     # DISABLED until I work out how to do the injection for half a timestep when this changes
     # Idea: Maybe implement time_change on next iteration? Or is it possible to push velocity
     # by half a timestep to sync that way?
-    elif (DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0 and manual_trip == 0)\
-        or manual_trip == 2:
-        position_update(pos, vel, idx, Ie, W_elec, -0.5*DT)
+    elif False:#(DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0 and manual_trip == 0)\
+        #or manual_trip == 2:
+        position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, -0.5*DT)
         
         change_flag       = 1
         DT               *= 2.0
