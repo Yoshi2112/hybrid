@@ -28,7 +28,7 @@ adaptive_subcycling = True     # Flag (True/False) to adaptively change number o
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
+#nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
 
 
 #%% --- FUNCTIONS ---
@@ -461,8 +461,7 @@ def set_timestep(vel):
 
     DT       = min(ion_ts, vel_ts)
     max_time = max_wcinv / gyfreq_eq              # Total runtime in seconds
-    max_inc  = int(max_time / DT) + 1             # Total number of time steps
-
+    
     if adaptive_subcycling == True:
         # b1 factor accounts for increase in total field due to wave growth
         # Without this, s/c count doubles as soon as waves start to grow
@@ -496,7 +495,8 @@ def set_timestep(vel):
     else:
         field_save_iter = int(field_res / (DT*gyfreq_eq))
         if field_save_iter == 0: field_save_iter = 1
-
+        
+    max_inc = int(max_time / DT) + 1
     if save_fields == 1 or save_particles == 1:
         store_run_parameters(DT, part_save_iter, field_save_iter, max_inc, max_time, subcycles)
     
@@ -2130,7 +2130,7 @@ def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, sim_time,
                          damping_array=damping_array,
                          resistive_array=resistive_array)
     
-    if print_runtime: print('Field data saved')
+    #if print_runtime: print('Field data saved')
     return
     
 
@@ -2147,7 +2147,7 @@ def save_particle_data(dt, part_save_iter, qq, sim_time,
              damping_array=damping_array,
              resistive_array=resistive_array)
     
-    if print_runtime == True: print('Particle data saved')
+    #if print_runtime == True: print('Particle data saved')
     return
 
 
@@ -2658,7 +2658,7 @@ parser.add_argument('-p', '--plasmafile'  , default='_plasma_params.plasma', typ
 parser.add_argument('-d', '--driverfile'  , default='_driver_params.txt'   , type=str)
 parser.add_argument('-n', '--run_num'     , default=-1, type=int)
 parser.add_argument('-s', '--subcycle'    , default=16, type=int)
-parser.add_argument('-m', '--max_subcycle', default=64, type=int)
+parser.add_argument('-m', '--max_subcycle', default=32, type=int)
 parser.add_argument('-M', '--init_max_subcycle', default=16, type=int)
 args = vars(parser.parse_args())
 
@@ -2800,7 +2800,7 @@ if __name__ == '__main__':
             save_field_data(_DT, _FIELD_SAVE_ITER, _QQ, _Ji, _E, _B, _VE, _TE,
                             _RHO_INT, _SIM_TIME, _B_DAMP, _RESIS_ARR)
         
-        if _QQ%100 == 0 and print_runtime:
+        if _QQ%500 == 0 and print_runtime:
             running_time = int(timer() - start_time)
             hrs          = running_time // 3600
             rem          = running_time %  3600
