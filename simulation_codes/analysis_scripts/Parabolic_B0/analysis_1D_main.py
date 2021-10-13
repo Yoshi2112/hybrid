@@ -576,7 +576,7 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
     if save == True:
         fullpath = cf.anal_dir + saveas + '_BPERP_{}{}{}'.format(lbl, suff, logsuff) + '.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-        print('abs(t-x) Plot saved')
+        print('B abs(t-x) Plot saved')
         plt.close('all')
     return
 
@@ -650,7 +650,7 @@ def plot_abs_J(saveas='abs_plot', save=False, log=False, tmax=None, remove_ND=Fa
     if save == True:
         fullpath = cf.anal_dir + saveas + '_JTOT_{}{}{}'.format(lbl, suff, logsuff) + '.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-        print('abs(t-x) Plot saved')
+        print('J abs(t-x) Plot saved')
         plt.close('all')
     return
 
@@ -2047,16 +2047,18 @@ def check_fields(save=True, ylim=True, skip=1):
     ## Do actual plotting and saving of data
     for ii in range(bx.shape[0]):
         if ii%skip == 0:
-            fig, axes = plt.subplots(5, ncols=3, figsize=(20,10), sharex=True)
-            fig.patch.set_facecolor('w') 
-    
-            axes[0, 1].set_title('Time :: {:<7.4f}s'.format(ftime[ii]), fontsize=fontsize+4, family='monospace')
-    
+            
             filename = 'summ%05d.png' % ii
             fullpath = path + filename
             
             if os.path.exists(fullpath):
                 continue
+            
+            fig, axes = plt.subplots(5, ncols=3, figsize=(20,10), sharex=True)
+            fig.patch.set_facecolor('w') 
+    
+            axes[0, 1].set_title('Time :: {:<7.4f}s'.format(ftime[ii]), fontsize=fontsize+4, family='monospace')
+    
             sys.stdout.write('\rCreating summary field plots [{}]{}'.format(run_num, ii))
             sys.stdout.flush()
             
@@ -4534,7 +4536,7 @@ if __name__ == '__main__':
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
 
-    for series in ['//Fu_gridsize_test//']:
+    for series in ['//SS_decreasing_dx//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4542,7 +4544,7 @@ if __name__ == '__main__':
         if True:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [10]
+            runs_to_do = [4, 5]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -4582,15 +4584,17 @@ if __name__ == '__main__':
 # =============================================================================
 
                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
-                           B0_lim=0.25, remove_ND=False)
+                           B0_lim=0.50, remove_ND=False)
                 
-                plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
+                #plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
                 
                 #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
                 
-                plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
-                     pcyc_mult=1.5, xmax=1.5, zero_cold=True,
-                     linear_only=False, normalize_axes=True, centre_only=False)
+# =============================================================================
+#                 plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
+#                      pcyc_mult=1.5, xmax=1.5, zero_cold=True,
+#                      linear_only=False, normalize_axes=True, centre_only=False)
+# =============================================================================
 
 # =============================================================================
 #                 ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=True,
@@ -4604,7 +4608,7 @@ if __name__ == '__main__':
 #                     pass            
 # =============================================================================
         
-        if False:
+        if True:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
@@ -4621,15 +4625,15 @@ if __name__ == '__main__':
                 
                 #summary_plots(save=True, histogram=False, skip=10, ylim=False)
                 #for sp in range(cf.Nj):
-                plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=True, skip=1, ppd=False)
-                plot_density_change(ppd=False, it_max=None, save=True)
-                plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=True, skip=1, ppd=True)
+                #plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=True, skip=1, ppd=False)
+                #plot_density_change(ppd=False, it_max=None, save=True)
+                #plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=True, skip=1, ppd=True)
 
                 #analyse_particle_motion(it_max=None)
                 #plot_phase_space_with_time(it_max=None, skip=1)
 
                 #scatterplot_velocities(skip=1)
-                #check_fields(skip=50, ylim=False)
+                check_fields(skip=25, ylim=False)
             
                 #plot_number_density(it_max=None, save=True, skip=1, ppd=False)
                 

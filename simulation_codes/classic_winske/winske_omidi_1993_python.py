@@ -370,7 +370,7 @@ if __name__ == '__main__':
     save_path = 'E://runs//winske//'
     np.random.seed(21)
     
-    plot         = True
+    plot         = False
     field_zero   = 0
     steady_state = 1
     
@@ -508,7 +508,7 @@ if __name__ == '__main__':
     while it <= ntimes:
         plt.ioff()
         
-        print '{}'.format(it)
+        print('{}'.format(it))
         it += 1
         t  += dtwci
 

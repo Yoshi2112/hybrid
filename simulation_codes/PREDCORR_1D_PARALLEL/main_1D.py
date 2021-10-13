@@ -19,7 +19,8 @@ RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
-Fu_override       = True       # Override to allow density to be calculated as a ratio of frequencies
+cold_va           = False
+Fu_override       = False      # Override to allow density to be calculated as a ratio of frequencies
 adaptive_timestep = True       # Disable adaptive timestep to keep it the same as initial
 do_parallel       = True       # Flag to use available threads to parallelize particle functions
 print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
@@ -446,15 +447,15 @@ def set_timestep(vel):
     max_time = max_wcinv / gyfreq_eq                  # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1                 # Total number of time steps
     
-    if part_res == 0:
+    if part_dumpf == 0:
         part_save_iter = 1
     else:
-        part_save_iter = int(part_res / (DT*gyfreq_eq))
+        part_save_iter = int(part_dumpf / (DT*gyfreq_eq))
     
-    if field_res == 0:
+    if field_dumpf == 0:
         field_save_iter = 1
     else:
-        field_save_iter = int(field_res / (DT*gyfreq_eq))
+        field_save_iter = int(field_dumpf / (DT*gyfreq_eq))
 
     if save_fields == 1 or save_particles == 1:
         store_run_parameters(DT, part_save_iter, field_save_iter, max_inc, max_time)
@@ -490,7 +491,7 @@ def set_timestep(vel):
 
 
 def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in, Ve_in, rho_in,
-                          _mp_flux, frev=1000, hot_only=True, psave=True, save_inc=50):
+                          _mp_flux, frev=1000, hot_only=True, psave=True):
     '''
     Still need to test this. Put it just after the initialization of the particles.
     Actually might want to use the real mp_flux since that'll continue once the
@@ -529,6 +530,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
     ptime    = frev / gyfreq_eq
     psteps   = int(ptime / pdt) + 1
     psim_time = 0.0
+    dump_iter = int(part_dumpf / (pdt*gyfreq_eq))
     eta_arr = np.zeros(E_int.shape[0], dtype=E_int.dtype)
 
     print('Particle-only timesteps: ', psteps)
@@ -539,7 +541,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
         # Check dir
         if save_fields + save_particles == 0:
             manage_directories()
-            store_run_parameters(pdt, save_inc, 0, psteps, ptime)
+            store_run_parameters(pdt, dump_iter, 0, psteps, ptime)
             
         pdata_path  = ('%s/%s/run_%d' % (drive, save_path, run))
         pdata_path += '/data/equil_particles/'
@@ -2109,8 +2111,7 @@ def save_field_data(sim_time, dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns,
                        damping_array = damping_array,
                        E_damping_array=E_damping_array, 
                        resistive_array=resistive_array)
-    if print_runtime == True:
-        print('Field data saved')
+    #if print_runtime: print('Field data saved')
     return
     
     
@@ -2121,8 +2122,7 @@ def save_particle_data(sim_time, dt, part_save_iter, qq, pos, vel, idx):
     d_fullpath = d_path + 'data%05d' % r
     
     np.savez(d_fullpath, pos = pos, vel = vel, idx=idx, sim_time = sim_time)
-    if print_runtime == True:
-        print('Particle data saved')
+    if print_runtime: print('Particle data saved')
     return
     
     
@@ -2466,7 +2466,7 @@ def load_run_params():
     global drive, save_path, run, save_particles, save_fields, seed, homogenous, particle_periodic,\
         particle_reflect, particle_reinit, field_periodic, disable_waves, source_smoothing, quiet_start,\
         E_damping, damping_fraction, damping_multiplier, resis_multiplier, NX, max_wcinv, dxm, ie,\
-            orbit_res, freq_res, part_res, field_res, run_description, particle_open, ND, NC,\
+            orbit_res, freq_res, part_dumpf, field_dumpf, run_description, particle_open, ND, NC,\
                 lo1, lo2, ro1, ro2, li1, li2, ri1, ri2
             
     print('LOADING RUNFILE: {}'.format(run_input))
@@ -2498,10 +2498,10 @@ def load_run_params():
         
         ie        = int(f.readline().split()[1])           # Adiabatic electrons. 0: off (constant), 1: on.
           
-        orbit_res = float(f.readline().split()[1])         # Orbit resolution
-        freq_res  = float(f.readline().split()[1])         # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
-        part_res  = float(f.readline().split()[1])         # Data capture resolution in gyroperiod fraction: Particle information
-        field_res = float(f.readline().split()[1])         # Data capture resolution in gyroperiod fraction: Field information
+        orbit_res   = float(f.readline().split()[1])         # Orbit resolution
+        freq_res    = float(f.readline().split()[1])         # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
+        part_dumpf  = float(f.readline().split()[1])         # Data capture resolution in gyroperiod fraction: Particle information
+        field_dumpf = float(f.readline().split()[1])         # Data capture resolution in gyroperiod fraction: Field information
     
         run_description = f.readline()                     # Commentary to attach to runs, helpful to have a quick description
     
@@ -2608,10 +2608,13 @@ def load_plasma_params():
     rho        = (mass*density).sum()                        # Mass density for alfven velocity calc.
     wpi        = np.sqrt((density * charge ** 2 / (mass * e0)).sum())            # Proton Plasma Frequency, wpi (rad/s)
     wpe        = np.sqrt(ne * ECHARGE ** 2 / (EMASS * e0))   # Electron Plasma Frequency, wpi (rad/s)
-    #va         = B_eq / np.sqrt(mu0*rho)                    # Alfven speed at equator: Assuming pure proton plasma
+    
     gyfreq_eq  = ECHARGE*B_eq  / PMASS                       # Proton Gyrofrequency (rad/s) at equator (slowest)
     egyfreq_eq = ECHARGE*B_eq  / EMASS                       # Electron Gyrofrequency (rad/s) at equator (slowest)
-    va         = B_eq / np.sqrt(mu0*mass[1]*density[1])      # Hard-coded to be 'cold proton alfven velocity' (Shoji et al, 2013)
+    if cold_va:
+        va = B_eq / np.sqrt(mu0*mass[1]*density[1])
+    else:
+        va = B_eq / np.sqrt(mu0*rho)
     dx         = dxm * va / gyfreq_eq                        # Alternate method of calculating dx (better for multicomponent plasmas)
     n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this SI density to a cell
     min_dens   = 0.05                                        # Minimum charge density in a cell
@@ -2842,12 +2845,17 @@ if __name__ == '__main__':
     manage_directories()
 load_plasma_params()
 load_wave_driver_params()
-get_thread_values()
 calculate_background_magnetic_field()
-print_summary_and_checks()
+get_thread_values()
+sys.exit()
 
 
+#%%#####################
+### START SIMULATION ###
+########################
 if __name__ == '__main__':
+    print_summary_and_checks()
+    
     start_time = timer()
         
     # Initialize simulation: Allocate memory and set time parameters

@@ -18,7 +18,7 @@ RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 cold_va             = False
-Fu_override         = True     # Note this HAS to be disabled for grid runs.
+Fu_override         = False    # Note this HAS to be disabled for grid runs.
 do_parallel         = True
 print_timings       = False    # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True     # Flag to print runtime every 50 iterations 
@@ -319,7 +319,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
     ptime     = frev / gyfreq_eq
     psteps    = int(ptime / pdt) + 1
     psim_time = 0.0
-    dump_iter = int(part_res / (pdt*gyfreq_eq))
+    dump_iter = int(part_dumpf / (pdt*gyfreq_eq))
 
     print('Particle-only timesteps: ', psteps)
     print('Particle-push in seconds:', pdt)
@@ -394,6 +394,12 @@ def set_damping_arrays(B_damping_array, resistive_array, DT, subcycles):
     Still need to implement retarding array as per Umeda and E-damping as
     per Hu & Denton (2010). Code in the PREDCORR version but doesn't work
     as yet.
+    
+    QUESTION: WHY ARE THE DAMPING VALUES ON THE ORDER OF 0.99980 OR LESS?
+              I.E. 99.98% OR MORE OF THE ORIGINAL VALUE IS KEPT
+              MOST STUFF I READ SEEMS TO SAY IT SHOULD BE A DECENT PERCENTAGE
+              I.E. A GRADIENT FROM 100% TO 0%, NOT AN INFINITESIMAL
+              IS IT BECAUSE OF MY OUTRAGEOUS NUMBER OF TIMESTEPS?
     '''
     # Location and thickness of damping region (in units of dx)
     damping_thickness  = damping_fraction*NC
@@ -484,16 +490,16 @@ def set_timestep(vel):
         subcycles = default_subcycles
         print('Number of subcycles set at default: {}'.format(subcycles))
         
-    if part_res == 0:
+    if part_dumpf == 0:
         part_save_iter = 1
     else:
-        part_save_iter = int(part_res / (DT*gyfreq_eq))
+        part_save_iter = int(part_dumpf / (DT*gyfreq_eq))
         if part_save_iter == 0: part_save_iter = 1
 
-    if field_res == 0:
+    if field_dumpf == 0:
         field_save_iter = 1
     else:
-        field_save_iter = int(field_res / (DT*gyfreq_eq))
+        field_save_iter = int(field_dumpf / (DT*gyfreq_eq))
         if field_save_iter == 0: field_save_iter = 1
         
     max_inc = int(max_time / DT) + 1
@@ -1510,6 +1516,8 @@ def get_grad_P(qn, te):
     an interpolation.
     '''
     grad_pe       = np.zeros(NC    , dtype=np.float64)
+    # DIAGNOSTIC: DISABLING SOLUTION FOR PE
+    #return grad_pe
     grad_pe_B     = np.zeros(NC + 1, dtype=np.float64)
     grad_pe[:]    = qn[:] * kB * te[:] / ECHARGE
 
@@ -1585,7 +1593,7 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
     Works for even s/c av,
     
     '''
-    sc_av = 16
+    #sc_av = 16
     H     = 0.5 * dt
     dh    = H / subcycles
     
@@ -1630,48 +1638,50 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
             sim_time += dh
             #print('Push B2')
             
-        ## Check for error divergence or just average every so often ##
-        ## Could do error check here and double s/c count if needed  ##
-        if ii%sc_av == 0: 
-            #print('Averaging for convergence')
-            ## RESYNC BEFORE AVERAGE ##
-            if ii%2 == 1:
-                calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-                get_curl_E_4thOrder(E, curl) 
-                B2  -= dh * curl
-                apply_boundary(B2, B_damp)
-                get_B_cent(B2, B_center)
-                #print('Resync B2')
-            else:
-                calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-                get_curl_E_4thOrder(E, curl) 
-                B1  -= dh * curl
-                apply_boundary(B1, B_damp)
-                get_B_cent(B1, B_center)
-                #print('Resync B1')
-        
-            ## AVERAGE AND COPY ##
-            B1 += B2; B1 /= 2.0
-            B2[:] = B1[:]
-            
-            ## DESYNC ONE FIELD COPY - PUSH BY DH ##
-            ## THE ONE DESYNCED HAS TO BE THE NEXT ONE PUSHED ##
-            if ii%2 == 1:
-                calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-                get_curl_E_4thOrder(E, curl) 
-                B2       -= dh * curl
-                apply_boundary(B2, B_damp)
-                get_B_cent(B2, B_center)
-                sim_time += dh;  ii += 1
-                #print('Desync B2')
-            else:
-                calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-                get_curl_E_4thOrder(E, curl) 
-                B1       -= dh * curl
-                apply_boundary(B1, B_damp)
-                get_B_cent(B1, B_center)
-                sim_time += dh;  ii += 1
-                #print('Desync B1')
+# =============================================================================
+#         ## Check for error divergence or just average every so often ##
+#         ## Could do error check here and double s/c count if needed  ##
+#         if ii%sc_av == 0: 
+#             #print('Averaging for convergence')
+#             ## RESYNC BEFORE AVERAGE ##
+#             if ii%2 == 1:
+#                 calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+#                 get_curl_E_4thOrder(E, curl) 
+#                 B2  -= dh * curl
+#                 apply_boundary(B2, B_damp)
+#                 get_B_cent(B2, B_center)
+#                 #print('Resync B2')
+#             else:
+#                 calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+#                 get_curl_E_4thOrder(E, curl) 
+#                 B1  -= dh * curl
+#                 apply_boundary(B1, B_damp)
+#                 get_B_cent(B1, B_center)
+#                 #print('Resync B1')
+#         
+#             ## AVERAGE AND COPY ##
+#             B1 += B2; B1 /= 2.0
+#             B2[:] = B1[:]
+#             
+#             ## DESYNC ONE FIELD COPY - PUSH BY DH ##
+#             ## THE ONE DESYNCED HAS TO BE THE NEXT ONE PUSHED ##
+#             if ii%2 == 1:
+#                 calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+#                 get_curl_E_4thOrder(E, curl) 
+#                 B2       -= dh * curl
+#                 apply_boundary(B2, B_damp)
+#                 get_B_cent(B2, B_center)
+#                 sim_time += dh;  ii += 1
+#                 #print('Desync B2')
+#             else:
+#                 calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+#                 get_curl_E_4thOrder(E, curl) 
+#                 B1       -= dh * curl
+#                 apply_boundary(B1, B_damp)
+#                 get_B_cent(B1, B_center)
+#                 sim_time += dh;  ii += 1
+#                 #print('Desync B1')
+# =============================================================================
         ii += 1
 
     ## RESYNC FIELD COPIES ##
@@ -1878,7 +1888,7 @@ def interpolate_cell_centre_4thOrder(edge_arr, interp):
 #@nb.njit()
 def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, B, B_center, E, dns, 
                    max_inc, part_save_iter, field_save_iter, loop_save_iter,
-                   subcycles, manual_trip=0):
+                   subcycles, B_damping_array, resistive_array, manual_trip=0):
     '''
     Check that simulation quantities still obey timestep limitations. Reduce
     timestep for particle violations or increase subcycling for field violations.
@@ -1927,20 +1937,25 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, B, B_c
         dispfreq        = (k_max ** 2) * (B_tot / (mu0 * dns)).max()             # Dispersion frequency
         dt_sc           = freq_res / dispfreq
         new_subcycles   = int(DT / dt_sc + 1)
+        ch_sc = 0
         
         if (subcycles < 0.75*new_subcycles and manual_trip == 0) or manual_trip == 3:                                       
-            subcycles *= 2
+            subcycles *= 2; ch_sc = 1
             print('Number of subcycles per timestep doubled to', subcycles)
             
         if (subcycles > 3.0*new_subcycles and subcycles%2 == 0 and manual_trip == 0) or manual_trip == 4:                                      
-            subcycles //= 2
+            subcycles //= 2; ch_sc = 1
             print('Number of subcycles per timestep halved to', subcycles)
             
         if subcycles > max_subcycles:
-            subcycles = max_subcycles
+            subcycles = max_subcycles; ch_sc = 1
             print(f'Number of subcycles exceeding maximum, setting to {max_subcycles}')
             print( 'Modifying timestep...')
             DT_part = 0.5*DT
+            
+        # Redo damping arrays if # subcycles changed
+        if ch_sc == 1:
+            set_damping_arrays(B_damping_array, resistive_array, DT, subcycles)
     
     # Reduce timestep
     change_flag       = 0
@@ -2285,7 +2300,7 @@ def load_run_params():
     global drive, save_path, run_num, save_particles, save_fields, seed, homogenous, particle_periodic,\
         particle_reflect, particle_reinit, field_periodic, disable_waves, source_smoothing, quiet_start,\
         E_damping, damping_fraction, damping_multiplier, resis_multiplier, NX, max_wcinv, dxm, ie,\
-            orbit_res, freq_res, part_res, field_res, run_description, particle_open, ND, NC,\
+            orbit_res, freq_res, part_dumpf, field_dumpf, run_description, particle_open, ND, NC,\
                 lo1, lo2, ro1, ro2, li1, li2, ri1, ri2,\
                 adaptive_timestep, adaptive_subcycling, default_subcycles
             
@@ -2320,8 +2335,8 @@ def load_run_params():
           
         orbit_res = float(f.readline().split()[1])         # Orbit resolution
         freq_res  = float(f.readline().split()[1])         # Frequency resolution     : Fraction of angular frequency for multiple cyclical values
-        part_res  = float(f.readline().split()[1])         # Data capture resolution in gyroperiod fraction: Particle information
-        field_res = float(f.readline().split()[1])         # Data capture resolution in gyroperiod fraction: Field information
+        part_dumpf  = float(f.readline().split()[1])         # Data capture resolution in gyroperiod fraction: Particle information
+        field_dumpf = float(f.readline().split()[1])         # Data capture resolution in gyroperiod fraction: Field information
     
         run_description = f.readline()                     # Commentary to attach to runs, helpful to have a quick description
     
@@ -2658,7 +2673,7 @@ parser.add_argument('-p', '--plasmafile'  , default='_plasma_params.plasma', typ
 parser.add_argument('-d', '--driverfile'  , default='_driver_params.txt'   , type=str)
 parser.add_argument('-n', '--run_num'     , default=-1, type=int)
 parser.add_argument('-s', '--subcycle'    , default=16, type=int)
-parser.add_argument('-m', '--max_subcycle', default=32, type=int)
+parser.add_argument('-m', '--max_subcycle', default=16, type=int)
 parser.add_argument('-M', '--init_max_subcycle', default=16, type=int)
 args = vars(parser.parse_args())
 
@@ -2687,6 +2702,7 @@ load_plasma_params()
 load_wave_driver_params()
 calculate_background_magnetic_field()
 get_thread_values()
+sys.exit()
 
 
 #%%#####################
@@ -2707,19 +2723,31 @@ if __name__ == '__main__':
     _FIELD_SAVE_ITER, _SUBCYCLES,  \
     _B_DAMP, _RESIS_ARR            = set_timestep(_VEL)    
     
-    print('Loading initial state...\n')
+    print('Loading initial state...')
     init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, _RHO_INT, _RHO_HALF,
                          _Ji, _Ji_PLUS, _L, _G, _MP_FLUX, 0.5*_DT)
     get_B_cent(_B, _B_CENT)
     calculate_E(_B, _B_CENT, _Ji, _J_EXT, _RHO_HALF, _E, _VE, _TE, _RESIS_ARR, 0.0)
+    
+    print('Saving initial state...\n')
+    if save_particles == 1:
+        save_particle_data(_DT, _PART_SAVE_ITER, 0, 0.0, _POS, _VEL, _IDX,
+                           _Ji, _E, _B, _VE, _TE, _RHO_INT, _B_DAMP, _RESIS_ARR)
+
+    if save_fields == 1:
+        save_field_data(_DT, _FIELD_SAVE_ITER, 0, _Ji, _E, _B, _VE, _TE,
+                        _RHO_INT, 0.0, _B_DAMP, _RESIS_ARR)
 
     _LOOP_TIMES     = np.zeros(_MAX_INC-1, dtype=float)
     _LOOP_SAVE_ITER = 1
 
-    # Put init into qq = 0 and save as usual, qq = 1 will be at t = dt
-    # Need to change this so the initial state gets saved?
-    # WARNING :: Accruing sim_time like this leads to numerical error accumulation at the LSB.
-    _QQ = 0; _SIM_TIME = 0.0
+    # WARNING  :: Accruing sim_time like this leads to numerical error accumulation at the LSB.
+    # QUESTION :: IS IT VALID TO START FIRST LOOP WITH QQ=1 and SIM_TIME=DT? ARE THE TIME 
+    #             VALUES FOR THE START OR END OF THE STEP? OR THE MIDDLE?
+    # ANSWER   :: QQ IS JUST A COUNTER, SET AS 1 SO IT DOESN'T OVERWRITE INITIAL FILES
+    #             SIM_TIME SET AS ZERO BECAUSE IT IS INCREMENTED IN THE LOOP
+    #             BY THE END OF THE FIRST LOOP, THE VALUES WILL BE AT DT
+    _QQ = 1; _SIM_TIME = 0.0
     print('Starting loop...')
     while _QQ < _MAX_INC:
         loop_start = timer()
@@ -2733,7 +2761,7 @@ if __name__ == '__main__':
                 check_timestep(_QQ, _DT, _POS, _VEL, _IDX, _IE, _W_ELEC, _IB, _W_MAG, _MP_FLUX,
                                _B, _B_CENT, _E, _RHO_INT, 
                                _MAX_INC, _PART_SAVE_ITER, _FIELD_SAVE_ITER, _LOOP_SAVE_ITER,
-                               _SUBCYCLES)
+                               _SUBCYCLES, _B_DAMP, _RESIS_ARR)
             CHECK_time = round(timer() - CHECK_start, 3)
             if print_timings: print(f'CHECK TIME: {CHECK_time}')
             
@@ -2800,7 +2828,7 @@ if __name__ == '__main__':
             save_field_data(_DT, _FIELD_SAVE_ITER, _QQ, _Ji, _E, _B, _VE, _TE,
                             _RHO_INT, _SIM_TIME, _B_DAMP, _RESIS_ARR)
         
-        if _QQ%500 == 0 and print_runtime:
+        if _QQ%100 == 0 and print_runtime:
             running_time = int(timer() - start_time)
             hrs          = running_time // 3600
             rem          = running_time %  3600
@@ -2808,7 +2836,11 @@ if __name__ == '__main__':
             mins         = rem // 60
             sec          = rem %  60
             
-            print('Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(_QQ, _MAX_INC, hrs, mins, sec))
+            pcent = round(float(_QQ) / float(_MAX_INC) * 100., 2)
+            print('{:5.2f}% :: Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(
+                                                   pcent, _QQ, _MAX_INC, hrs, mins, sec))
+            
+            #pdb.set_trace()
 
         if _QQ%_LOOP_SAVE_ITER == 0:
             _LOOP_TIME = round(timer() - loop_start, 4)
