@@ -1,0 +1,16 @@
+LABEL          cold $H^{+}$   cold $He^{+}$  cold $O^{+}$   warm $H^{+}$   warm $He^{+}$  warm $O^{+}$   
+COLOUR         b              m              g              r              gold           purple         
+TEMP_FLAG      0              0              0              1              1              1              
+DIST_FLAG      0              0              0              0              0              0              
+NSP_PPC        512            512            512            4096           4096           4096           
+MASS_PROTON    1.0            4.0            16.0           1.0            4.0            16.0           
+CHARGE_ELEM    1.0            1.0            1.0            1.0            1.0            1.0            
+DRIFT_VA       0.0            0.0            0.0            0.0            0.0            0.0            
+DENSITY_CM3    90.771         24.478         7.143          1.142          0.077          0.319          
+ANISOTROPY     0.0            0.0            0.0            0.372          0.326          -0.016         
+ENERGY_PERP    0.1            0.1            0.1            11195.379      9324.531       5562.76        
+ELECTRON_EV    0.1
+BETA_FLAG      0
+L              5.35
+B_EQ           91.5
+B_XMAX         -
