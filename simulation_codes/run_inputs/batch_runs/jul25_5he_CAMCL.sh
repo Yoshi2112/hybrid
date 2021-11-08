@@ -1,5 +1,5 @@
 #!/bin/bash
-PTH=JUL25_PKTS_10HE
+PTH=JUL25_PKTS_5HE_CAMCL
 echo "Submitting all runs to grid"
 qsub ~/hybrid/simulation_codes/run_inputs/batch_runs/$PTH/run0_$PTH.sh
 sleep 5
