@@ -6,6 +6,7 @@ import numpy as np
 import numba as nb
 import sys, os, pdb
 
+
 ## PHYSICAL CONSTANTS ##
 ECHARGE = 1.602177e-19                       # Elementary charge (C)
 SPLIGHT = 2.998925e+08                       # Speed of light (m/s)
@@ -17,18 +18,19 @@ mu0     = (4e-7) * np.pi                     # Magnetic Permeability of Free Spa
 RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
+# A few internal flags
 cold_va             = False
-Fu_override         = False    # Note this HAS to be disabled for grid runs.
+Fu_override         = False       # Note this HAS to be disabled for grid runs.
 do_parallel         = True
-print_timings       = False    # Diagnostic outputs timing each major segment (for efficiency examination)
-print_runtime       = True     # Flag to print runtime every 50 iterations 
-adaptive_timestep   = True     # Disable adaptive timestep to keep it the same as initial
-adaptive_subcycling = True     # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
+adaptive_timestep   = True       # Disable adaptive timestep to keep it the same as initial
+print_timings       = False      # Diagnostic outputs timing each major segment (for efficiency examination)
+print_runtime       = True       # Flag to print runtime every 50 iterations 
+adaptive_subcycling = True       # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
 
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-#nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
 
 
 #%% --- FUNCTIONS ---
@@ -489,7 +491,7 @@ def set_timestep(vel):
     else:
         subcycles = default_subcycles
         print('Number of subcycles set at default: {}'.format(subcycles))
-        
+    
     if part_dumpf == 0:
         part_save_iter = 1
     else:
@@ -2673,7 +2675,7 @@ parser.add_argument('-p', '--plasmafile'  , default='_plasma_params.plasma', typ
 parser.add_argument('-d', '--driverfile'  , default='_driver_params.txt'   , type=str)
 parser.add_argument('-n', '--run_num'     , default=-1, type=int)
 parser.add_argument('-s', '--subcycle'    , default=16, type=int)
-parser.add_argument('-m', '--max_subcycle', default=16, type=int)
+parser.add_argument('-m', '--max_subcycle', default=256, type=int)
 parser.add_argument('-M', '--init_max_subcycle', default=16, type=int)
 args = vars(parser.parse_args())
 
@@ -2702,7 +2704,7 @@ load_plasma_params()
 load_wave_driver_params()
 calculate_background_magnetic_field()
 get_thread_values()
-sys.exit()
+
 
 
 #%%#####################
@@ -2722,7 +2724,7 @@ if __name__ == '__main__':
     _DT, _MAX_INC, _PART_SAVE_ITER,\
     _FIELD_SAVE_ITER, _SUBCYCLES,  \
     _B_DAMP, _RESIS_ARR            = set_timestep(_VEL)    
-    
+
     print('Loading initial state...')
     init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, _RHO_INT, _RHO_HALF,
                          _Ji, _Ji_PLUS, _L, _G, _MP_FLUX, 0.5*_DT)
@@ -2839,8 +2841,6 @@ if __name__ == '__main__':
             pcent = round(float(_QQ) / float(_MAX_INC) * 100., 2)
             print('{:5.2f}% :: Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(
                                                    pcent, _QQ, _MAX_INC, hrs, mins, sec))
-            
-            #pdb.set_trace()
 
         if _QQ%_LOOP_SAVE_ITER == 0:
             _LOOP_TIME = round(timer() - loop_start, 4)

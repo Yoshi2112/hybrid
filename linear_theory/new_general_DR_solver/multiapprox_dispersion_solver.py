@@ -3781,8 +3781,8 @@ if __name__ == '__main__':
     #validation_plots_fraser_1996()
     #validation_plots_omura2010()
     #validation_plots_wang_2016()
-    #hybrid_test_plot()
-    #sys.exit()
+    hybrid_test_plot()
+    sys.exit()
     
     #### Read in command-line arguments, if present
     import argparse as ap

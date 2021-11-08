@@ -19,12 +19,13 @@ RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
-cold_va           = False
-Fu_override       = False      # Override to allow density to be calculated as a ratio of frequencies
-adaptive_timestep = True       # Disable adaptive timestep to keep it the same as initial
-do_parallel       = True       # Flag to use available threads to parallelize particle functions
-print_timings     = False      # Diagnostic outputs timing each major segment (for efficiency examination)
-print_runtime     = True       # Flag to print runtime every 50 iterations 
+cold_va             = False
+Fu_override         = False      # Override to allow density to be calculated as a ratio of frequencies
+do_parallel         = True       # Flag to use available threads to parallelize particle functions
+adaptive_timestep   = True       # Disable adaptive timestep to keep it the same as initial
+print_timings       = False      # Diagnostic outputs timing each major segment (for efficiency examination)
+print_runtime       = False      # Flag to print runtime every 50 iterations 
+
 
 if not do_parallel:
     do_parallel = True
@@ -483,8 +484,11 @@ def set_timestep(vel):
         plt.show()
         sys.exit()
     
-    print('Timestep: %.4fs, %d iterations total\n' % (DT, max_inc))
-    #pdb.set_trace()
+    if DT < 1e-2:
+        print('Timestep: %.3es' % (DT))
+    else:
+        print('Timestep: %.3fs' % (DT))
+    print(f'{max_inc} iterations total\n')
     return DT, max_inc, part_save_iter, field_save_iter, B_damping_array,\
              E_damping_array, resistive_array, retarding_array
 
@@ -2847,7 +2851,7 @@ load_plasma_params()
 load_wave_driver_params()
 calculate_background_magnetic_field()
 get_thread_values()
-sys.exit()
+
 
 
 #%%#####################
@@ -2923,8 +2927,11 @@ if __name__ == '__main__':
             mins         = rem // 60
             sec          = rem %  60
             
-            print('Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(qq, max_inc, hrs, mins, sec))
-        
+            pcent = round(float(qq) / float(max_inc) * 100., 2)
+            
+            print('{:5.2f}% :: Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(
+                                                   pcent, qq, max_inc, hrs, mins, sec))
+
         if qq%loop_save_iter == 0:
             loop_time = round(timer() - loop_start, 4)
             loop_idx  = qq // loop_save_iter

@@ -112,7 +112,7 @@ def load_simulation_params():
            E_damping, quiet_start, homogenous, field_periodic, damping_multiplier, \
            driven_freq, driven_ampl, pulse_offset, pulse_offset, pulse_width, driven_k,\
            driver_status, num_threads, loop_time, max_inc,\
-           x0B, x1B, x0E, x1E
+           x0B, x1B, x0E, x1E, subcycles
 
     h_name = os.path.join(data_dir, 'simulation_parameters.pckl')       # Load header file
     f      = open(h_name, 'rb')                                         # Open header file
@@ -161,6 +161,7 @@ def load_simulation_params():
     
     dt_field          = dt_sim * field_save_iter                        # Time between data slices (seconds)
     dt_particle       = dt_sim * part_save_iter
+    subcycles         = obj['subcycles']
     
     particle_periodic = obj['particle_periodic']
     particle_reflect  = obj['particle_reflect']
@@ -299,6 +300,7 @@ def output_simulation_parameter_file(series, run, overwrite_summary=False):
             print('Field Dump Time    :: {:.5f} seconds'.format(dt_field), file=f)
             print('Frequency Resol.   :: {:.5f} gyroperiods'.format(freq_res), file=f)
             print('Gyro-orbit Resol.  :: {:.5f} gyroperiods'.format(orbit_res), file=f)
+            print('Subcycles init.    :: {} '.format(subcycles), file=f)
             print('', file=f)
             print('Simulation Parameters', file=f)
             print('# Spatial Cells    :: {}'.format(NX), file=f)
