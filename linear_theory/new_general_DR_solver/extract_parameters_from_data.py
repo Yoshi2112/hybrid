@@ -654,7 +654,7 @@ def generate_script_file(run_dir, run_series, hybrid_method='PREDCORR'):
             with open(script_filename, 'w') as f:
                 # PBS Inputs
                 print('#!/bin/bash', file=f)
-                print('#PBS -l select=1:ncpus=32:mem=80GB', file=f)
+                print('#PBS -l select=1:ncpus=32:mem=10GB', file=f)
                 print('#PBS -l walltime=150:00:00 ', file=f)
                 print('#PBS -k oe', file=f)
                 print('#PBS -m ae', file=f)
