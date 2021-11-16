@@ -347,7 +347,7 @@ def load_CRRES_data(time_start, time_end, crres_path='G://DATA//CRRES//', nsec=N
             B[:, ii] = ascr.clw_low_pass(B[:, ii].copy(), nyq, B_dt, filt_order=4)
             
         # Take magnitude and interpolate            
-        B_mag    = np.sqrt(B[0] ** 2 + B[1] ** 2 + B[2] ** 2)
+        B_mag    = np.sqrt(B[:, 0] ** 2 + B[:, 1] ** 2 + B[:, 2] ** 2)
         B_interp = np.interp(den_times.astype(np.int64), times.astype(np.int64), B_mag) 
         
         return den_times, B_interp, edens
@@ -555,13 +555,11 @@ def generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=0.05)
     Tperp = np.zeros((6, Nt), dtype=float)
     A     = np.zeros((6, Nt), dtype=float)
     
-    names    = np.array(['cold $H^{+}$', 'cold $He^{+}$', 'cold $O^{+}$',
-                         'warm $H^{+}$', 'warm $He^{+}$', 'warm $O^{+}$',
-                         'hot $H^{+}$' , 'hot $He^{+}$' , 'hot $O^{+}$'])
+    names    = np.array(['cold_$H^{+}$', 'cold_$He^{+}$', 'cold_$O^{+}$',
+                         'warm_$H^{+}$', 'warm_$He^{+}$', 'warm_$O^{+}$'])
     
     colors   = np.array(['b'      , 'm'     , 'g',
-                        'r'      , 'gold'  , 'purple',
-                        'tomato' , 'orange', 'deeppink'])
+                        'r'      , 'gold'  , 'purple'])
     
     temp_flag = np.array([0,     0,    0,   1,   1,    1])
     dist_flag = np.array([0,     0,    0,   0,   0,    0])
@@ -638,7 +636,7 @@ def generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=0.05)
             print('ELECTRON_EV    {}'.format(electron_ev), file=f)
             print('BETA_FLAG      {}'.format(beta_flag)  , file=f)
             print('L              {}'.format(L)          , file=f)
-            print('B_EQ           {}'.format(b_eq)       , file=f)  
+            print('B_EQ           {}e-9'.format(b_eq)       , file=f)  
             print('B_XMAX         -'                     , file=f) 
     print('Plasmafiles created.')
     return
@@ -672,12 +670,21 @@ def generate_script_file(run_dir, run_series, hybrid_method='PREDCORR'):
     return
 
 def generate_hybrid_files_from_cutoffs(he_conc=0.05):
-    cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//pearl_times.txt'
     run_dir         = 'D://NEW_HYBRID_RUNFILES//'
-    run_series_name = 'JAN16_PKTS_{:.0f}HE_CAMCL'.format(he_conc*100)
     
-    generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=he_conc)
-    generate_script_file(run_dir, run_series_name, hybrid_method='CAM_CL')
+    # July 25 event
+    if True:
+        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
+        run_series_name = 'JUL25_PKTS_{:.0f}HE_CAMCL'.format(he_conc*100)
+        generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=he_conc)
+        generate_script_file(run_dir, run_series_name, hybrid_method='CAM_CL')
+    
+    # Jan 16 event
+    if True:
+        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//pearl_times.txt'
+        run_series_name = 'JAN16_PKTS_{:.0f}HE_CAMCL'.format(he_conc*100)
+        generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=he_conc)
+        generate_script_file(run_dir, run_series_name, hybrid_method='CAM_CL')
     return
 
 

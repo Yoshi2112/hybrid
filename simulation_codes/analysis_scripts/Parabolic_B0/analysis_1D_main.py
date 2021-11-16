@@ -4305,6 +4305,137 @@ def multiplot_parallel_scaling():
     return
 
 
+def multiplot_saturation_amplitudes(save=True):
+    '''
+    Plots the saturation (maximum) amplitude of each run series as a function of
+    'time' (which probably has to be hardcoded)
+    '''
+    #all_series  = ['//JAN16_PKTS_5HE//', '//JAN16_PKTS_10HE//', '//JAN16_PKTS_20HE//',
+    jan_times = ['2015-01-16T04:29:15.000000',
+        '2015-01-16T04:31:45.000000',
+        '2015-01-16T04:34:55.000000',
+        '2015-01-16T04:38:45.000000',
+        '2015-01-16T04:41:50.000000',
+        '2015-01-16T04:43:30.000000',
+        '2015-01-16T04:47:10.000000',
+        '2015-01-16T04:50:35.000000',
+        '2015-01-16T04:53:00.000000',
+        '2015-01-16T05:00:30.000000',
+        '2015-01-16T05:03:10.000000',
+        '2015-01-16T05:04:30.000000',
+        '2015-01-16T05:07:30.000000']
+    
+    all_series  = ['//JUL25_PKTS_5HE//', '//JUL25_PKTS_10HE//', '//JUL25_PKTS_20HE//']
+    jul_times = ['2013-07-25T21:27:54.000000',
+                '2013-07-25T21:28:40.000000',
+                '2013-07-25T21:29:32.000000',
+                '2013-07-25T21:30:27.000000',
+                '2013-07-25T21:33:35.000000',
+                '2013-07-25T21:34:24.000000',
+                '2013-07-25T21:35:20.000000',
+                '2013-07-25T21:36:21.000000',
+                '2013-07-25T21:37:45.000000',
+                '2013-07-25T21:38:45.000000',
+                '2013-07-25T21:39:30.000000',
+                '2013-07-25T21:40:25.000000',
+                '2013-07-25T21:42:02.000000']
+    
+    # Get number of runs (assume same for each series) to set array
+    test_dir  = '{}/runs//{}//'.format(drive, all_series[0])
+    num_runs  = len([name for name in os.listdir(test_dir) if 'run_' in name])
+    sat_amp     = np.zeros((len(all_series), num_runs), dtype=np.float64)
+    
+    print('Collecting saturation amplitudes')
+    for jj in range(len(all_series)):
+        series      = all_series[jj]
+        series_dir  = '{}/runs//{}//'.format(drive, series)
+        num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+        print('{} runs in series {}'.format(num_runs, series))
+    
+        runs_to_do = range(num_runs)                
+        for ii in runs_to_do:
+            print('\nRun {}'.format(ii))
+            cf.load_run(drive, series, ii, extract_arrays=True)
+            
+            ty, by = cf.get_array('By')
+            tz, bz = cf.get_array('Bz')
+            
+            env_amps = np.sqrt(by ** 2 + bz ** 2)
+            sat_amp[jj, ii] = env_amps.max()
+            
+    if 'JAN' in series:
+        timebase = np.array([np.datetime64(this_time) for this_time in jan_times])
+    else:
+        timebase = np.array([np.datetime64(this_time) for this_time in jul_times])
+        
+    # Load comparison data
+    data_scripts_dir = 'D://Google Drive//Uni//PhD 2017//Data//Scripts//'
+    sys.path.append(data_scripts_dir)
+    import rbsp_fields_loader as rfl
+    import fast_scripts as fscr
+    import analysis_scripts as ascr
+    
+    rbsp_path  = 'E://DATA//RBSP//'
+    time_start = np.datetime64('2013-07-25T21:25:00.000000')
+    time_end   = np.datetime64('2013-07-25T21:47:00.000000')
+    probe       = 'a'
+    
+    dat_times, pc1_mags, HM_mags, delt = \
+         rfl.load_decomposed_magnetic_field(rbsp_path, time_start, time_end, probe, 
+                                    pad=600, LP_B0=1.0, LP_HM=30.0, 
+                                    get_gyfreqs=False, return_B0=False)
+         
+    spec_time, spec_freq, spec_power = fscr.get_pc1_tracepower_spectra(dat_times, pc1_mags,
+                             time_start, time_end, 
+                              _dt=delt, _olap=0.95, _res=35.0,
+                              window_data=True)
+        
+    fst, fen = ascr.boundary_idx64(spec_freq, 0.2, 0.8)
+    pc1_int_power = spec_power[fst:fen, :].sum(axis=0)
+    
+    # Plot result -- 3 plots: spectra, envelope (or integrated power? both?)
+    #                then scatterplot with each run type in different color (for he concentration)
+    plt.ioff()
+    fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(16, 10))
+    
+    # Pc1 Spectra
+    axes[0, 0].set_title('Data/Simulation Comparison')
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        im = axes[0, 0].pcolormesh(spec_time, spec_freq, spec_power,
+                       norm=colors.LogNorm(vmin=1e-7, vmax=1e1), cmap='jet')
+        fig.colorbar(im, cax=axes[0, 1], extend='max').set_label(
+                '$Tr(P)$\n$nT^2/Hz$', fontsize=12, rotation=0, labelpad=30)
+        axes[0, 0].set_ylabel('Hz', rotation=0, labelpad=30)
+        axes[0, 0].set_ylim(0.0, 1.1)
+        axes[0, 0].set_xlim(time_start, time_end)
+        axes[0, 0].set_xticklabels([])
+        
+    # Integrated Power
+    axes[1, 1].set_visible(False)
+    axes[1, 0].plot(spec_time, pc1_int_power)
+    axes[1, 0].set_xlim(time_start, time_end)
+    axes[1, 0].set_xticklabels([])
+    axes[1, 0].set_ylim(0.0, None)
+    axes[1, 0].set_ylabel('nT', rotation=0, labelpad=30)
+    
+    # Hybrid Results
+    clrs = ['blue', 'green', 'red']
+    for ii in range(len(all_series)):
+        axes[2, 0].scatter(timebase, sat_amp[ii], c=clrs[ii])
+    axes[2, 0].set_xlim(time_start, time_end)
+    axes[2, 0].set_ylim(0.0, None)
+    axes[2, 0].set_xlabel('Time (UT)')
+    axes[2, 0].set_ylabel('nT')
+    
+    if save==True:  
+        fig.savefig(cf.base_dir + 'data_model_saturation.png', edgecolor='none')
+        plt.close('all')
+    else:
+        plt.show()
+    return
+
+
 def plot_FB_waves_winske(save=True):
     '''
     Routine that splits B-field up into its backwards/forwards propagating
@@ -4535,11 +4666,15 @@ if __name__ == '__main__':
     #multiplot_mag_energy(save=True)
     #multiplot_fluxes(series)
     #multiplot_parallel_scaling()
+    #multiplot_saturation_amplitudes(save=True)
+    #sys.exit()
 
-    for series in ['//HYBRID_FU_PERIODIC_20211101//',
-                   '//HYBRID_H_PERIODIC_20211101//',
-                   '//HYBRID_HHe_PERIODIC_20211101//',
-                   '//HYBRID_HHeO_PERIODIC_20211101//']:
+    for series in ['//JAN16_PKTS_5HE//',
+                   '//JAN16_PKTS_10HE//',
+                   '//JAN16_PKTS_20HE//',
+                   '//JUL25_PKTS_5HE//',
+                   '//JUL25_PKTS_10HE//',
+                   '//JUL25_PKTS_20HE//']:
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -4587,15 +4722,17 @@ if __name__ == '__main__':
 # =============================================================================
 
                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
-                           B0_lim=0.50, remove_ND=False)
+                           B0_lim=0.10, remove_ND=False)
                 
                 #plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
                 
                 #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
                 
-                plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
-                     pcyc_mult=1.5, xmax=1.5, zero_cold=True,
-                     linear_only=False, normalize_axes=True, centre_only=False)
+# =============================================================================
+#                 plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
+#                      pcyc_mult=1.5, xmax=1.5, zero_cold=True,
+#                      linear_only=False, normalize_axes=True, centre_only=False)
+# =============================================================================
 
 # =============================================================================
 #                 ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=True,

@@ -26,6 +26,7 @@ from   scipy.interpolate       import griddata
 from   mpl_toolkits.axes_grid1 import make_axes_locatable
 
 sys.path.append(os.environ['GOOGLE_DRIVE'] + '//Uni//PhD 2017//Data//Scripts//')
+import crres_file_readers as cfr
 import rbsp_fields_loader as rfl
 import rbsp_file_readers  as rfr
 import fast_scripts       as fscr
@@ -303,6 +304,33 @@ def get_mag_data(_plot_start, _plot_end, _probe, _olap=0.95, _res=25.0,
                 _lHM_mags[:, jj] = ascr.clw_low_pass(_HM_mags[:, jj], _split_freq, _dt)
                 _HM_mags[:, jj]  = _HM_mags[:, jj] - _lHM_mags[:, jj]
             return _xtime, _xfreq, _power, _times[_st:_en], _lHM_mags[_st:_en], _HM_mags[_st:_en], gyfreqs[:, _st:_en]
+
+
+def get_power_spectrum(_times, _env, zeropad=False, zmult=1.0):
+    '''
+    Short function to calculate timeseries power spectrum, assuming real input
+    to take advantage of FFT symmetry (directly, not with rfft(), since I'm 
+    not sure how it deals with timeseries power/energy conservation)
+    '''
+    # Demean and zero-pad (if flagged)
+    if zeropad == False:
+        _tseries = _env - _env.mean()
+    else:
+        # Technically this length here could be changed to something else
+        # or set to some condition depending on if _env.shape[0] < X
+        _zeros   = np.zeros(int(zmult*_env.shape[0]))
+        _tseries = _env - _env.mean()
+        _tseries = np.concatenate((_zeros, _tseries, _zeros))
+    
+    print('Calculating power spectrum...')
+    _nP   = _tseries.shape[0]
+    _FFT  = np.fft.fft(_tseries)
+    _nFFT = 2*_FFT[:_nP//2+1] / _env.shape[0]
+    _PWR  = (_nFFT * np.conj(_nFFT)).real
+    _dt   = (_times[1] - _times[0]) / np.timedelta64(1, 's')
+    _df   = 1./(_nP * _dt)
+    _freq = np.arange(_nP//2 + 1) * _df
+    return _freq, _PWR
 
 
 #%% CORE CALCULATION FUNCTIONS  
@@ -1255,16 +1283,13 @@ def convective_growth_rate_kozyra(field, ndensc, ndensw, ANI, temperp,
         ndensc -- Cold plasma densities, /cm3
         ndensw -- Warm plasma densities, /cm3
         ANI    -- Temperature anisotropy of each species
+        temperp-- Perpendicular temperature of species warm component, eV
         
     OPTIONAL:
-        temperp   -- Perpendicular temperature of species warm component, eV
-        beta      -- Parallel plasma beta of species warm component
         norm_ampl -- Flag to normalize growth rate to max value (0: No, 1: Yes). Default 0
         norm_ampl -- Flag to normalize frequency to proton cyclotron units. Default 0
         NPTS      -- Number of sample points up to maxfreq. Default 500
         maxfreq   -- Maximum frequency to calculate for in proton cyclotron units. Default 1.0
-        
-    NOTE: At least one of temperp or beta must be defined. 
     '''
     # Perform input checks 
     N = ndensc.shape[0]
@@ -3227,6 +3252,8 @@ def plot_cold_ion_via_cutoff(_cutoffs, title_suff=None):
                      Will be plot on n_He vs. n_O graph
         
     Note: Do single value first then expand to list. Or do type check?
+    
+    TODO:CHECK THIS
     '''    
     He_min = 0.0;   He_max = 0.5
     O_min  = 0.0;   O_max  = 0.5
@@ -3257,51 +3284,154 @@ def plot_cold_ion_via_cutoff(_cutoffs, title_suff=None):
     return
 
 
-def plot_cold_ion_via_cutoff_sympy(_cutoffs):
+def power_spectrum_CGR_comparison():
     '''
-    Calculates a range of possible n_He and n_O cold ion concentrations
-    based on the cutoff values given in the list _cutoffs.
+    Alexa's version plotting them over each other as a function of L shell
+    I'm assuming she only changed the magnetic field? But we can do one better
+    And use the density/field information to calculate parameters at each time
+    Assuming some constant cold composition and some constant ring current
     
-    Input:
-        _cutoffs  :: List of (normalized) cutoff frequencies
-                     Will be plot on n_He vs. n_O graph
+    TODO: Compare against the Chen et al. (2013) version of this, should be 
+    identical (just like the Fraser, 1996 ones)
+    
+    Sweep through ion compositions (0.5 ):
+        Cold helium: 0-30%
+        Cold oxygen: 0-10%  # Use cutoff to work out what these values should be
+    '''
+    import pandas as pd
+    
+    if True:
+        _crres_path = '%s//DATA//CRRES//' % ext_drive
+        _time_start = np.datetime64('1991-07-17T20:15:00.000000')
+        _time_end   = np.datetime64('1991-07-17T21:00:00.000000')
+    else:
+        _crres_path = '%s//DATA//CRRES//' % ext_drive
+        _time_start = np.datetime64('1991-08-12T22:10:00.000000')
+        _time_end   = np.datetime64('1991-08-12T23:15:00.000000')
         
-    Note: This version was coded as a redundant check of the first version
-    to make sure the substitution was all good and valid. First is faster,
-    but this is a cool example of using sympy. Keep it for future reference!
-    '''
-    import sympy as sym
-    N_soln = 101
+    # Load CRRES data
+    den_times, den_dict = cfr.get_crres_density(_crres_path, _time_start, _time_end, pad=0)
     
-    He_min = 0.0;   He_max = 0.5
-    O_min  = 0.0;   O_max  = 0.5
+    times, B0, HM, dB, E0, HMe, dE, S, B, E = cfr.get_crres_fields(_crres_path,
+                  _time_start, _time_end, pad=0, E_ratio=5.0, rotation_method='vector', 
+                  output_raw_B=True, interpolate_nan=None, B0_LP=1.0,
+                  Pc1_LP=5000, Pc1_HP=100, Pc5_LP=30, Pc5_HP=None, dEx_LP=None)
     
-    He_array = np.linspace(He_min, He_max, N_soln, endpoint=True, dtype=float)
-    O_array  = np.zeros(N_soln, dtype=float)
+    # Calculate power spectrum
+    mag_freq, mag_power_x = get_power_spectrum(times, dB[:, 0])
+    mag_freq, mag_power_y = get_power_spectrum(times, dB[:, 1])
+    mag_freq, mag_power_z = get_power_spectrum(times, dB[:, 2])
+    mag_power = (mag_power_x + mag_power_y + mag_power_z)
     
-    n_He = sym.Symbol('n_He')
-    n_O  = sym.Symbol('n_O')
-    co   = sym.Symbol('co')
-    eqn  = sym.Eq((1. - n_He - n_O)/(1. - co) + n_He/(1. - 4.*co) + n_O/(1. - 16.*co), 1)
+    # Smooth power spectrum (Maybe do rolling mean instead)
+    #smoothed_power = gaussian_smooth(mag_power)
+    smoothed_power = pd.DataFrame(mag_power).rolling(11).mean()
     
-    plt.ioff()
-    fig, ax = plt.subplots(figsize=(16, 10))
-    for co_val in _cutoffs:
-        eqn_co = eqn.subs(co, co_val)
-        for _ii in range(N_soln):
-            sub  = eqn_co.subs(n_He, He_array[_ii])
-            soln = sym.solve(sub, n_O)
-            O_array[_ii] = soln[0]
-        ax.plot(He_array, O_array, label='$\omega_{co} = %.4f$' % co_val)
-        ax.scatter(0.095, 0.095, marker='x', c='red', label='Omura CLUSTER')
-  
-    ax.plot(He_array, He_array, c='k', ls='--', label='$n_{He^+}=n_{O^+}$', alpha=0.3)
-    ax.legend()
+    # Low-pass total field to avoid aliasing (Assume 8.5 second cadence)
+    B_dt  = 1.0 / 32.0
+    nyq   = 1.0 / (2.0 * 8.5) 
+    for ii in range(3):
+        B[:, ii] = ascr.clw_low_pass(B[:, ii].copy(), nyq, B_dt, filt_order=4)
+        
+    # Take magnitude and interpolate            
+    B_mag    = np.sqrt(B[:, 0] ** 2 + B[:, 1] ** 2 + B[:, 2] ** 2)
+    B_interp = np.interp(den_times.astype(np.int64), times.astype(np.int64), B_mag)  
+    edens    = den_dict['NE_CM3']
+    max_gyfreq = qp * B_interp.max() * 1e-9 / (2 * np.pi * mp)
     
-    ax.set_xlim(He_min, He_max)
-    ax.set_ylim(O_min, O_max)
-    ax.set_title('Heavy Ion Concentration via EMIC Cutoff Observations')
-    plt.show()
+    ring_currents = np.arange(0.05, 5.0, 0.05)
+    heliums = np.arange(0, 30., 0.25)
+    oxygens = np.arange(0, 30., 0.25)
+    
+    count = 0
+    save_path = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//19910717_CRRES//CGRS//'
+    for mm in range(ring_currents.shape[0]):
+        for nn in range(heliums.shape[0]):
+            for oo in range(oxygens.shape[0]):
+                
+                fname = save_path+f'EMIC_CGR_JUL171991_{count:05}.png'
+                
+                if os.path.exists(fname):
+                    print(f'Skipping plot {count:05}...')
+                    count += 1
+                    continue
+                else:
+                    nc_o  = oxygens[oo]
+                    nc_he = heliums[nn]
+                    nc_h  = 100. - oxygens[oo] - heliums[nn]
+                    
+                    nh_h = ring_currents[mm]
+                    
+                    print(f'Calculating growth rate plot for {nc_h}/{nc_he}/{nc_o}, {nh_h}')
+                        
+                    # Set compositions used for loop
+                    rc_percent = ring_currents[mm]               # Percentage of density that is ring current
+                    ncold = np.array([nc_h, nc_he, nc_o], dtype=float)  # Percentage Split cold density into components
+                    nwarm = np.array([nh_h, 0, 0], dtype=float)   # Percentage Split warm density into components
+                    
+                    ANI   = np.array([1.0, 0.0, 0.0], dtype=float) # Anisotropy of RC ions
+                    tperp = np.array([40e3, 0, 0], dtype=float)    # Perpendicular temperature of RC ions (eV)
+                    
+                    plt.ioff()
+                    fig, [ax, cax] = plt.subplots(nrows=1, ncols=2, figsize=(16, 10),
+                                     gridspec_kw={'width_ratios':[2, 0.05]})
+                    
+                    ax.set_title('EMIC CGR :: {} :: {:.2f}/{:.2f}/{:.2f} cold, {:.2f} hot protons'.format(
+                        _time_start.astype(object).strftime('%Y-%m-%d'),
+                        nc_h, nc_he, nc_o, nh_h))
+                    ax.set_xlabel('Frequency (Hz)')
+                    ax.set_ylabel('Growth Rate\n$(/cm^{-1})$', rotation=0, labelpad=20)
+                    ax.set_xlim(0.0, max_gyfreq)
+                    
+                        
+                    # Specify color values for time
+                    time0  = _time_start.astype(np.int64)
+                    time1  = _time_end.astype(np.int64)
+                    norm   = mpl.colors.Normalize(vmin=time0, vmax=time1, clip=False)
+                    mapper = cm.ScalarMappable(norm=norm, cmap=cm.viridis)
+                    
+                    for ii in range(den_times.shape[0]):
+                        if ii%2 == 0:
+                            #print('Calculating growth rates for {}'.format(den_times[ii]))
+                            # Set parameters for function input
+                            field  = B_interp[ii]                                       # nT
+                            ndensc = (1. - rc_percent*1e-2) * edens[ii] * ncold*1e-2   # /cm3
+                            ndensw =       rc_percent*1e-2  * edens[ii] * nwarm*1e-2   # /cm3
+                    
+                            # Calculate growth rate
+                            freq, growth, stop = convective_growth_rate_kozyra(field, ndensc, ndensw, ANI, tperp,
+                                                          norm_ampl=0, norm_freq=0, NPTS=1000, maxfreq=1.0)
+                            
+                            # Add line to plot
+                            clr = mapper.to_rgba(den_times[ii].astype(np.int64))
+                            
+                            ax.plot(freq, growth, c=clr)
+                            
+                    # Add colorbar
+                    label_every = 20
+                    cbar    = fig.colorbar(mapper, cax=cax, orientation='vertical',
+                                           ticks=den_times[::label_every].astype(np.int64))
+                    
+                    cbar.set_label('Time (UT)', labelpad=20)
+                    
+                    for label in cbar.ax.get_yminorticklabels():
+                        label.set_visible(False)
+                        
+                    tlabels = [this_time.astype(object).strftime('%H:%M:%S') for this_time in den_times[::label_every]]
+                    cbar.ax.set_yticklabels(tlabels)
+                    
+                    #fig.subplots_adjust(wspace=0.25)
+                    
+                    # Add FFT overlay
+                    ax2 = ax.twinx()
+                    ax2.plot(mag_freq, mag_power, c='k', lw=0.5)
+                    ax2.plot(mag_freq, smoothed_power, c='k', lw=1.5)
+                    ax2.set_ylabel('Power\n$(nT^2/Hz)$', rotation=0, labelpad=20)
+                
+                    fig.savefig(fname)
+                    plt.close('all')
+                    #plt.show()
+                    count += 1
     return
 
 
@@ -3781,7 +3911,9 @@ if __name__ == '__main__':
     #validation_plots_fraser_1996()
     #validation_plots_omura2010()
     #validation_plots_wang_2016()
-    hybrid_test_plot()
+    #hybrid_test_plot()
+
+    power_spectrum_CGR_comparison()
     sys.exit()
     
     #### Read in command-line arguments, if present

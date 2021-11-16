@@ -1,4 +1,4 @@
-LABEL          cold $H^{+}$   cold $He^{+}$  cold $O^{+}$   warm $H^{+}$   warm $He^{+}$  warm $O^{+}$   
+LABEL          cold_$H^{+}$   cold_$He^{+}$  cold_$O^{+}$   warm_$H^{+}$   warm_$He^{+}$  warm_$O^{+}$   
 COLOUR         b              m              g              r              gold           purple         
 TEMP_FLAG      0              0              0              1              1              1              
 DIST_FLAG      0              0              0              0              0              0              
@@ -12,5 +12,5 @@ ENERGY_PERP    0.1            0.1            0.1            13152.218      10741
 ELECTRON_EV    0.1
 BETA_FLAG      0
 L              5.35
-B_EQ           203.68
+B_EQ           203.68e-9
 B_XMAX         -
