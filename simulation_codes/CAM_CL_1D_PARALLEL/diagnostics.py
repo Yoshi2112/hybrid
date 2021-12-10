@@ -113,7 +113,8 @@ def check_cell_velocity_distribution(pos, vel, node_number, j=0): #
     return
 
 
-def check_cell_velocity_distribution_2D(pos, vel, node_number, jj=0, show_cone=False, save=False, qq=None): #
+def check_cell_velocity_distribution_2D(pos, vel, node_number, jj=0, show_cone=False,
+                                        save=False, qq=None): #
     '''
     Checks the velocity distribution of a particle species within a specified cell
     
@@ -170,7 +171,7 @@ def check_cell_velocity_distribution_2D(pos, vel, node_number, jj=0, show_cone=F
             if os.path.exists(save_path) == False:
                 os.makedirs(save_path)
                 
-            if ii is None:
+            if qq is None:
                 fig.savefig(save_path + 'LCD_cell_{:04}_sp{}.png'.format(node, jj))
             else:
                 fig.savefig(save_path + 'LCD_cell_{:04}_sp{}_{:08}.png'.format(node, jj, qq))
@@ -195,39 +196,41 @@ def check_position_distribution(pos, num_bins=None):
     
         ax_x = plt.subplot()
     
-        xs, BinEdgesx = np.histogram(pos[0, main_1D.idx_start[j]: main_1D.idx_end[j]], bins=num_bins)
+        xs, BinEdgesx = np.histogram(pos[main_1D.idx_start[j]: main_1D.idx_end[j]]/main_1D.dx, bins=num_bins)
         bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
         ax_x.plot(bx, xs, '-', c=main_1D.temp_color[main_1D.temp_type[j]], drawstyle='steps')
-        ax_x.set_xlabel(r'$x_p (m)$')
-        ax_x.set_xlim(main_1D.xmin, main_1D.xmax)
+        ax_x.set_xlabel(r'$x_p (dx)$')
+        ax_x.set_xlim(main_1D.xmin/main_1D.dx, main_1D.xmax/main_1D.dx)
 
     plt.show()
     return
 
 def check_velocity_distribution(vel):
-    '''Checks the velocity distribution of an entire species across the simulation domain
     '''
-    for j in range(main_1D.Nj):
+    Checks the velocity distribution of an all species across the simulation domain
+    3 plots, one for each component
+    '''
+    for jj in range(main_1D.Nj):
         fig = plt.figure(figsize=(12,10))
-        fig.suptitle('Velocity distribution of species {} in simulation domain'.format(j))
+        fig.suptitle(f'Velocity distribution in simulation domain :: {main_1D.species_lbl[jj]}')
         fig.patch.set_facecolor('w')
-        num_bins = main_1D.nsp_ppc[j] // 5
+        num_bins = main_1D.nsp_ppc[jj] // 5
     
         ax_x = plt.subplot2grid((2, 3), (0,0), colspan=2, rowspan=2)
         ax_y = plt.subplot2grid((2, 3), (0,2))
         ax_z = plt.subplot2grid((2, 3), (1,2))
     
-        xs, BinEdgesx = np.histogram(vel[0, main_1D.idx_start[j]: main_1D.idx_end[j]] / main_1D.va, bins=num_bins)
+        xs, BinEdgesx = np.histogram(vel[0, main_1D.idx_start[jj]: main_1D.idx_end[jj]] / main_1D.va, bins=num_bins)
         bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
         ax_x.plot(bx, xs, '-', c='c', drawstyle='steps')
         ax_x.set_xlabel(r'$v_x / v_A$')
     
-        ys, BinEdgesy = np.histogram(vel[1, main_1D.idx_start[j]: main_1D.idx_end[j]] / main_1D.va, bins=num_bins)
+        ys, BinEdgesy = np.histogram(vel[1, main_1D.idx_start[jj]: main_1D.idx_end[jj]] / main_1D.va, bins=num_bins)
         by = 0.5 * (BinEdgesy[1:] + BinEdgesy[:-1])
         ax_y.plot(by, ys, '-', c='c', drawstyle='steps')
         ax_y.set_xlabel(r'$v_y / v_A$')
     
-        zs, BinEdgesz = np.histogram(vel[2, main_1D.idx_start[j]: main_1D.idx_end[j]] / main_1D.va, bins=num_bins)
+        zs, BinEdgesz = np.histogram(vel[2, main_1D.idx_start[jj]: main_1D.idx_end[jj]] / main_1D.va, bins=num_bins)
         bz = 0.5 * (BinEdgesz[1:] + BinEdgesz[:-1])
         ax_z.plot(bz, zs, '-', c='c', drawstyle='steps')
         ax_z.set_xlabel(r'$v_z / v_A$')
@@ -235,53 +238,106 @@ def check_velocity_distribution(vel):
     plt.show()
     return
 
+def check_velocity_distribution_2D(pos, vel, show_cone=False,
+                                        save=False, qq=None): #
+    '''
+    Checks the velocity distribution of a particle species across the domain.
+    2D scatterplot of v_perp vs. v_para
+    '''        
+    V_PERP = np.sign(vel[2]) * np.sqrt(vel[1] ** 2 + vel[2] ** 2) / main_1D.va
+    V_PARA = vel[0] / main_1D.va
 
-def check_velocity_components_vs_space(pos, vel, jj=1):
+    for jj in range(main_1D.Nj):
+        plt.ioff()
+        fig, ax1 = plt.subplots(figsize=(15,10))
+        fig.suptitle(f'Particle velocity distribution :: {main_1D.species_lbl[jj]}')
+        fig.patch.set_facecolor('w')
+    
+        ax1.scatter(V_PERP[main_1D.idx_start[jj]: main_1D.idx_end[jj]],
+                    V_PARA[main_1D.idx_start[jj]: main_1D.idx_end[jj]],
+                    s=1, c=main_1D.temp_color[jj])
+    
+        ax1.set_ylabel('$v_\parallel (/v_A)$')
+        ax1.set_xlabel('$v_\perp (/v_A)$')
+        ax1.axis('equal')
+        
+        # Plot loss cone lines : FIX
+# =============================================================================
+#         B_at_nodes     = main_1D.eval_B0x(np.array([x_node + main_1D.dx, x_node - main_1D.dx]))
+#         end_loss_cones = np.arcsin(np.sqrt(B_at_nodes/main_1D.B_A)).max()                    # Calculate max loss cone
+#         
+#         yst, yend = ax1.get_ylim()                  # Get V_PARA lims
+#         yarr      = np.linspace(yst, yend, 100)     # V_PARA values on axis
+#         xarr      = yarr * np.tan(end_loss_cones)   # Calculate V_PERP values
+#         ax1.plot(xarr,  yarr, c='k', label='Loss Cone: {:.1f} deg'.format(end_loss_cones * 180. / np.pi))
+#         ax1.plot(xarr, -yarr, c='k')
+#         ax1.legend()
+#         ax1.set_xlim(yst, yend)
+#         ax1.set_ylim(yst, yend)
+# =============================================================================
+        
+        if save == True:
+            save_path = main_1D.drive + '//' + main_1D.save_path + '//' + 'run_{}//LCD_plot_sp_{}//'.format(main_1D.run, jj)
+            
+            if os.path.exists(save_path) == False:
+                os.makedirs(save_path)
+                
+            if qq is None:
+                fig.savefig(save_path + 'LCD_cell_sp{}.png'.format(jj))
+            else:
+                fig.savefig(save_path + 'LCD_cell_sp{}_{:08}.png'.format(jj, qq))
+            plt.close('all')
+        else:
+            plt.show()
+    return
+
+
+def check_velocity_components_vs_space(pos, vel):
     '''
     For each point in time
      - Collect particle information for particles near cell, plus time component
      - Store in array
      - Plot using either hexbin or hist2D
     '''
-    print('Calculating velocity distributions vs. space for species {},...'.format(jj))
     comp = ['x', 'y', 'z']
-    cfac = 10 if main_1D.temp_type[jj] == 1 else 5
-    vlim = 15 if main_1D.temp_type[jj] == 1 else 5
-    
-    V_PERP = np.sign(vel[2]) * np.sqrt(vel[1] ** 2 + vel[2] ** 2) / main_1D.va
-    V_PARA = vel[0] / main_1D.va
-    
-    # Manually specify bin edges for histogram
-    vbins = np.linspace(-vlim, vlim, 101, endpoint=True)
-    xbins = np.linspace(main_1D.xmin/main_1D.dx, main_1D.xmax/main_1D.dx, main_1D.NX + 1, endpoint=True)
+            
+    for jj in range(main_1D.Nj):
+        print('Calculating velocity distributions vs. space for species {},...'.format(jj))
         
-    # Do the plotting
-    plt.ioff()
-    
-    fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
-    axes[0].set_title('f(v) vs. x :: {}'.format(main_1D.species_lbl[jj]))
-    
-    st = main_1D.idx_start[jj]
-    en = main_1D.idx_end[jj]
-    
-    for ii in range(3):
-        counts, xedges, yedges, im1 = axes[ii].hist2d(pos[0, st:en]/main_1D.dx, vel[ii, st:en]/main_1D.va, 
-                                                bins=[xbins, vbins],
-                                                vmin=0, vmax=main_1D.nsp_ppc[jj] / cfac)
-    
-        cb = fig.colorbar(im1, ax=axes[ii])
-        cb.set_label('Counts')
+        cfac = 10 if main_1D.temp_type[jj] == 1 else 5
+        vlim = 15 if main_1D.temp_type[jj] == 1 else 0.1
         
-        axes[ii].set_xlim(main_1D.xmin/main_1D.dx, main_1D.xmax/main_1D.dx)
-        axes[ii].set_ylim(-vlim, vlim)
+        # Manually specify bin edges for histogram
+        vbins = np.linspace(-vlim, vlim, 101, endpoint=True)
+        xbins = np.linspace(main_1D.xmin/main_1D.dx, main_1D.xmax/main_1D.dx, main_1D.NX + 1, endpoint=True)
+            
+        # Do the plotting
+        plt.ioff()
         
-        axes[ii].set_ylabel('v{}\n($v_A$)'.format(comp[ii]), rotation=0)
+        fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
+        axes[0].set_title('f(v_i) vs. x :: {}'.format(main_1D.species_lbl[jj]))
         
-    axes[2].set_xlabel('Position (cell)')
-    fig.subplots_adjust(hspace=0)
-    plt.show()
-    
-    print('\n')
+        st = main_1D.idx_start[jj]
+        en = main_1D.idx_end[jj]
+        
+        for ii in range(3):
+            counts, xedges, yedges, im1 = axes[ii].hist2d(pos[st:en]/main_1D.dx, vel[ii, st:en]/main_1D.va, 
+                                                    bins=[xbins, vbins],
+                                                    vmin=0, vmax=main_1D.nsp_ppc[jj] / cfac)
+            
+            cb = fig.colorbar(im1, ax=axes[ii])
+            cb.set_label('Counts')
+            
+            axes[ii].set_xlim(main_1D.xmin/main_1D.dx, main_1D.xmax/main_1D.dx)
+            axes[ii].set_ylim(-vlim, vlim)
+            
+            axes[ii].set_ylabel('v{}\n($v_A$)'.format(comp[ii]), rotation=0)
+            
+        axes[2].set_xlabel('Position (cell)')
+        fig.subplots_adjust(hspace=0)
+        plt.show()
+        
+        print('\n')
     return
 
 

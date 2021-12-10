@@ -3,9 +3,15 @@ from timeit import default_timer as timer
 import numpy as np
 import numba as nb
 import sys, os
-import diagnostics as diag
 from scipy.interpolate import splrep, splev
 
+'''
+CAM_CL version of the code where everything's stripped down to its basics until
+it becomes stable. It should be able to recreate the run4 of the 20% He data
+runs the same as the Predictor/Corrector code does.
+
+Keep stripping until we have a MWE of the CAM_CL. Do periodic runs just to check.
+'''
 
 ## PHYSICAL CONSTANTS ##
 ECHARGE = 1.602177e-19                       # Elementary charge (C)
@@ -19,8 +25,6 @@ RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
-cold_va             = False
-Fu_override         = False       # Note this HAS to be disabled for grid runs.
 do_parallel         = True
 adaptive_timestep   = True       # Disable adaptive timestep to keep it the same as initial
 print_timings       = False      # Diagnostic outputs timing each major segment (for efficiency examination)
@@ -35,74 +39,6 @@ nb.set_num_threads(4)         # Uncomment to manually set number of threads, oth
 
 #%% --- FUNCTIONS ---
 #%% INITIALIZATION
-@nb.njit()
-def calc_losses(v_para, v_perp, B0x, st=0):
-    '''
-    For arrays of parallel and perpendicular velocities, finds the number and 
-    indices of particles outside the loss cone.
-    '''
-    alpha        = np.arctan(v_perp / v_para)                   # Calculate particle PA's
-    loss_cone    = np.arcsin(np.sqrt(B0x / B_A))                # Loss cone per particle (based on B0 at particle)
-    
-    in_loss_cone = np.zeros(v_para.shape[0], dtype=nb.int32)
-    for ii in range(v_para.shape[0]):
-        if np.abs(alpha[ii]) < loss_cone[ii]:                   # Determine if particle in loss cone
-            in_loss_cone[ii] = 1
-    
-    N_loss       = in_loss_cone.sum()                           # Count number that are
-    
-    # Collect the indices of those in the loss cone
-    loss_idx     = np.zeros(N_loss, dtype=nb.int32)
-    lc           = 0
-    for ii in range(v_para.shape[0]):
-        if in_loss_cone[ii] == True:
-            loss_idx[lc] = ii
-            lc          += 1
-        
-    loss_idx    += st                                           # Offset indices to account for position in master array
-    return N_loss, loss_idx
-
-
-@nb.njit()
-def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
-    '''
-    Takes in a Maxwellian or pseudo-maxwellian distribution. Removes any particles
-    inside the loss cone and reinitializes them using the given scale factors 
-    sf_par, sf_per (the thermal velocities).
-    
-    Is there a better way to do this with a Monte Carlo perhaps?
-    
-    TODO: Check that this still works.
-    '''
-    B0x    = eval_B0x(pos[st: en])
-    N_loss = 1
-
-    while N_loss > 0:
-        v_perp      = np.sqrt(vel[1, st: en] ** 2 + vel[2, st: en] ** 2)
-        
-        N_loss, loss_idx = calc_losses(vel[0, st: en], v_perp, B0x, st=st)
-
-        # Catch for a particle on the boundary : Set 90 degree pitch angle (gyrophase shouldn't overly matter)
-        if N_loss == 1:
-            if abs(pos[loss_idx[0]]) == xmax:
-                ww = loss_idx[0]
-                vel[0, loss_idx[0]] = 0.
-                vel[1, loss_idx[0]] = np.sqrt(vel[0, ww] ** 2 + vel[1, ww] ** 2 + vel[2, ww] ** 2)
-                vel[2, loss_idx[0]] = 0.
-                N_loss = 0
-
-        if N_loss != 0:   
-            new_vx = np.random.normal(0., sf_par, N_loss)             
-            new_vy = np.random.normal(0., sf_per, N_loss)
-            new_vz = np.random.normal(0., sf_per, N_loss)
-            
-            for ii in range(N_loss):
-                vel[0, loss_idx[ii]] = new_vx[ii]
-                vel[1, loss_idx[ii]] = new_vy[ii]
-                vel[2, loss_idx[ii]] = new_vz[ii]
-    return
-
-
 @nb.njit()
 def quiet_start_bimaxwellian():
     '''Initializes position, velocity, and index arrays. Position analytically
@@ -154,10 +90,6 @@ def quiet_start_bimaxwellian():
             vel[0, st: en] = np.random.normal(0, vth_par[ jj], half_n)  
             vel[1, st: en] = np.random.normal(0, vth_perp[jj], half_n)
             vel[2, st: en] = np.random.normal(0, vth_perp[jj], half_n)
-
-            # Set Loss Cone Distribution: Reinitialize particles in loss cone (move to a function)
-            if homogenous == 0 and temp_type[jj] == 1:
-                LCD_by_rejection(pos, vel, vth_par[jj], vth_perp[jj], st, en, jj)
                 
             # Quiet start : Initialize second half
             pos[en: en + half_n]    = pos[st: en]                   # Other half, same position
@@ -170,93 +102,6 @@ def quiet_start_bimaxwellian():
             acc                     += half_n * 2
     return pos, vel, idx
 
-
-def reverse_radix_quiet_start_uniform():
-    '''
-    TODO: Need to make this faster
-    
-    Creates an N-sampled normal distribution in 3D velocity space that is 
-    uniform in a 1D configuration space. Function uses analytic sampling of
-    distribution function and reverse-radix shuffling to ensure randomness.
-
-    OUTPUT:
-        pos --  N array of uniformly distributed particle positions
-        vel -- 3xN array of gaussian particle velocities, giving a Maxwellian in |v|
-        idx -- N array of particle indexes, indicating which species it belongs to
-    '''
-    print('Initialising particle distributions with Bit-Reversed Radix algorithm')
-    print('Please wait...')
-    def rkbr_uniform_set(arr, base=2):
-        '''
-        Works on array arr to produce fractions in (0, 1) by 
-        traversing base k.
-        
-        Will support arrays of lengths up to at least a billion
-         -- But this is super inefficient, takes up to a minute with 2 million
-         
-        Parallelise?
-        '''
-        def reverse_slicing(s):
-            return s[::-1]
-        
-        # Convert ints to base k strings
-        str_arr = np.zeros(arr.shape[0], dtype='U30')
-        dec_arr = np.zeros(arr.shape[0], dtype=float)
-        for ii in range(arr.shape[0]):
-            str_arr[ii] = np.base_repr(arr[ii], base)   # Returns strings
-    
-        # Reverse string order and convert to decimal, treating as base k fraction (i.e. with 0. at front)
-        for ii in range(arr.shape[0]):
-            rev = reverse_slicing(str_arr[ii])
-    
-            dec_val = 0
-            for jj in range(len(rev)):
-                dec_val += float(rev[jj]) * (base ** -(jj + 1))
-            dec_arr[ii] = dec_val
-        return dec_arr 
-
-    # Set and initialize seed
-    np.random.seed(seed)
-    pos = np.zeros(N, dtype=np.float64)
-    vel = np.zeros((3, N), dtype=np.float64)
-    idx = np.ones(N,       dtype=np.int8) * Nj
-    
-    for jj in range(Nj):
-        half_n = N_species[jj] // 2                     # Half particles of species - doubled later
-                
-        st = idx_start[jj]
-        en = idx_start[jj] + half_n
-        
-        # Set position
-        for kk in range(half_n):
-            pos[st + kk] = 2*xmax*(float(kk) / (half_n - 1))
-        pos[st: en]-= xmax              
-        
-        # Set velocity for half: Randomly Maxwellian
-        arr     = np.arange(half_n)
-        
-        R_vr    = rkbr_uniform_set(arr+1, base=2)
-        R_theta = rkbr_uniform_set(arr  , base=3) 
-        R_vrx   = rkbr_uniform_set(arr+1, base=5)
-        
-        vr      = vth_perp[jj] * np.sqrt(-2 * np.log(R_vr ))
-        vrx     = vth_par[ jj] * np.sqrt(-2 * np.log(R_vrx))
-        theta   = R_theta * np.pi * 2
-
-        vel[0, st: en] = vrx * np.sin(theta) +  drift_v[jj]
-        vel[1, st: en] = vr  * np.sin(theta)
-        vel[2, st: en] = vr  * np.cos(theta)
-        idx[   st: en] = jj
-        
-        # Quiet Start: Other half, same position, parallel velocity, opposite v_perp
-        pos[   en: en + half_n] = pos[   st: en]                
-        vel[0, en: en + half_n] = vel[0, st: en] *  1.0
-        vel[1, en: en + half_n] = vel[1, st: en] * -1.0
-        vel[2, en: en + half_n] = vel[2, st: en] * -1.0
-        
-        idx[st: idx_end[jj]] = jj
-    print('Particles initialised.')
-    return pos, vel, idx
 
 @nb.njit()
 def uniform_bimaxwellian():
@@ -298,7 +143,6 @@ def uniform_bimaxwellian():
 def initialize_particles(B, E, mp_flux):
     if quiet_start == 1:
         pos, vel, idx = quiet_start_bimaxwellian()
-        #pos, vel, idx = reverse_radix_quiet_start_uniform()
     else:
         pos, vel, idx = uniform_bimaxwellian()
         
@@ -306,9 +150,6 @@ def initialize_particles(B, E, mp_flux):
     Ib         = np.zeros(N,      dtype=np.uint16)
     W_elec     = np.zeros((3, N), dtype=np.float64)
     W_mag      = np.zeros((3, N), dtype=np.float64)
-        
-    if homogenous == False:
-        run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E, mp_flux)
     
     assign_weighting_TSC(pos, Ie, W_elec)
     assign_weighting_TSC(pos, Ib, W_mag)
@@ -338,8 +179,8 @@ def initialize_fields():
     Ve      = np.zeros((NC, 3), dtype=np.float64)
     
     # Set initial values
-    Te           = np.ones(  NC,     dtype=np.float64) * Te0_scalar
-    B_cent[:, 0] = B_eq * (1. + a*E_nodes_loc[:]*E_nodes_loc[:])
+    Te           = np.ones(NC, dtype=np.float64) * Te0_scalar
+    B_cent[:, 0] = B_eq
     return B, B2, B_cent, E, Ve, Te
 
 
@@ -364,175 +205,12 @@ def initialize_source_arrays():
     Ji       = np.zeros((NC, 3), dtype=np.float64)
     Ji_plus  = np.zeros((NC, 3), dtype=np.float64)
     Ji_minus = np.zeros((NC, 3), dtype=np.float64)
-    J_ext    = np.zeros((NC, 3), dtype=np.float64)
     L        = np.zeros( NC,     dtype=np.float64)
     G        = np.zeros((NC, 3), dtype=np.float64)
     
     mp_flux  = np.zeros((2, Nj), dtype=np.float64)
-    return rho_half, rho_int, Ji, Ji_plus, Ji_minus, J_ext, L, G, mp_flux
+    return rho_half, rho_int, Ji, Ji_plus, Ji_minus, L, G, mp_flux
 
-
-def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
-                          mp_flux, frev=1000, hot_only=True, psave=True):
-    '''
-    Still need to test this. Put it just after the initialization of the particles.
-    Actually might want to use the real mp_flux since that'll continue once the
-    waves turn on?
-    
-    Just use all the real arrays, since the particle arrays will be continuous
-    once the fields turn on (right weightings, positions, etc.) and the wave
-    fields should be empty at the start and will continue to be empty since they
-    are not updated in this loop.
-    
-    Should be ready to test after the open particle boundaries are verified.
-    
-    Can be set so that only the ring current warm/hot species are set to the
-    initial equilibrium, since the time taken for the cold species to do this
-    is quite substantial.
-    
-    Is vel_ts needed? Cells don't really exist in this bottle. But you probably 
-    don't want to jump too quickly through the gradient, surely there's a timestep
-    limitation on that.
-    
-    TODO: 
-        -- Put check in store_run_params() to delete if it already exists so
-    this particle data doesn't alter it.
-        -- Put some kind of limit on dB/dx
-        -- Don't need vel_ts since cell size doesn't matter (especially for very small dx)
-    '''
-    psave = save_particles
-    
-    print('Letting particle distribution relax into static field configuration')
-    # 20 solutions per gyroperiod (at highest B)
-    ion_ts    = 0.05 * 2 * np.pi / gyfreq_eq
-    pdt       = ion_ts
-    ptime     = frev / gyfreq_eq
-    psteps    = int(ptime / pdt) + 1
-    psim_time = 0.0
-    dump_iter = int(part_dumpf / (pdt*gyfreq_eq))
-
-    print('Particle-only timesteps: ', psteps)
-    print('Particle-push in seconds:', pdt)
-    
-    if psave == True:
-        print('Generating data for particle equilibrium pushes')
-        # Check dir
-        if save_fields + save_particles == 0:
-            manage_directories()
-            store_run_parameters(pdt, dump_iter, 0, psteps, ptime)
-            
-        pdata_path  = ('%s/%s/run_%d' % (drive, save_path, run_num))
-        pdata_path += '/data/equil_particles/'
-        if os.path.exists(pdata_path) == False:                                   # Create data directory
-            os.makedirs(pdata_path)
-        pnum = 0
-        
-    # Desync (retard) velocity here
-    velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*pdt,
-                    hot_only=hot_only)
-    
-    # TODO: NOTE: Even this doesn't have 100% CPU usage. Why not?
-    for pp in range(psteps):
-        # Save first and last only
-        #if psave == True and pp%dump_iter == 0:
-        if psave == True and (pp == 0 or pp == psteps - 1):
-            p_fullpath = pdata_path + 'data%05d' % pnum
-            np.savez(p_fullpath, pos=pos, vel=vel, idx=idx, sim_time=psim_time)
-            pnum += 1
-            print('pre-Particle data saved')
-            
-        if pp%50 == 0:
-            print('Step', pp)
-        
-        velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, pdt,
-                        hot_only=hot_only)
-        position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, pdt,
-                        hot_only=hot_only)
-
-        # Check number of spare particles every 10 steps, if open conditions
-        if pp > 0 and pp%10 == 0 and particle_open == 1:
-            num_spare = (idx >= Nj).sum()
-            if num_spare < nsp_ppc.sum():
-                print('WARNING :: Less than one cell of spare particles remaining.')
-                if num_spare < inject_rate.sum() * pdt * 5.0:
-                    # Change this to dynamically expand particle arrays later on (adding more particles)
-                    # Can do it by cell lots (i.e. add a cell's worth each time)
-                    raise Exception('WARNING :: No spare particles remaining. Exiting simulation.')
-                
-        psim_time += pdt
-    
-    # Resync (advance) velocity here
-    velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, 0.5*pdt,
-                    hot_only=hot_only)
-    
-    # Dump indicator file
-    if save_fields == 1 or save_particles == 1:
-        efin_path = '%s/%s/run_%d/equil_finished.txt' % (drive, save_path, run_num)
-        open_file = open(efin_path, 'w')
-        open_file.close()
-    return
-
-
-@nb.njit()
-def set_damping_arrays(B_damping_array, resistive_array, DT, subcycles):
-    '''Create masking array for magnetic field damping used to apply open
-    boundaries. Based on applcation by Shoji et al. (2011) and
-    Umeda et al. (2001)
-    
-    Question: Which timestep to use? Subcycled one? 
-    
-    Still need to implement retarding array as per Umeda and E-damping as
-    per Hu & Denton (2010). Code in the PREDCORR version but doesn't work
-    as yet.
-    
-    QUESTION: WHY ARE THE DAMPING VALUES ON THE ORDER OF 0.99980 OR LESS?
-              I.E. 99.98% OR MORE OF THE ORIGINAL VALUE IS KEPT
-              MOST STUFF I READ SEEMS TO SAY IT SHOULD BE A DECENT PERCENTAGE
-              I.E. A GRADIENT FROM 100% TO 0%, NOT AN INFINITESIMAL
-              IS IT BECAUSE OF MY OUTRAGEOUS NUMBER OF TIMESTEPS?
-    '''
-    # Location and thickness of damping region (in units of dx)
-    damping_thickness  = damping_fraction*NC
-    damping_boundary   = 0.5*NC - damping_thickness  
-    
-    dh       = DT / subcycles
-    r_damp   = np.sqrt(29.7 * 0.5 * va * (0.5 * dh / dx) / damping_thickness)
-    r_damp  *= damping_multiplier
-    
-    # Do B-damping array
-    B_dist_from_mp  = np.abs(np.arange(NC + 1) - 0.5*NC)                # Distance of each B-node from midpoint
-    for ii in range(NC + 1):
-        if B_dist_from_mp[ii] > damping_boundary:
-            B_damping_array[ii] = 1. - r_damp * ((B_dist_from_mp[ii] - damping_boundary) / damping_thickness) ** 2 
-        else:
-            B_damping_array[ii] = 1.0
-            
-    # Set resistivity
-    if True:
-        # Lower Hybrid Resonance method (source?)
-        LH_res_is = 1. / (gyfreq_eq * egyfreq_eq) + 1. / wpi ** 2  # Lower Hybrid Resonance frequency, inverse squared
-        LH_res    = 1. / np.sqrt(LH_res_is)                        # Lower Hybrid Resonance frequency: DID I CHECK THIS???
-        max_eta   = (resis_multiplier * LH_res)  / (e0 * wpe ** 2) # Electron resistivity (using intial conditions for wpi/wpe)
-    else:
-        # Spitzer resistance as per B&T
-        max_eta = (resis_multiplier * vei)  / (e0 * wpe ** 2)
-    
-    E_dist_from_mp  = np.abs(np.arange(NC) + 0.5 - 0.5*NC)
-    for ii in range(NC):
-        # Damping region
-        if E_dist_from_mp[ii] > damping_boundary:
-            resistive_array[ii] = 0.5*max_eta*(1. + np.cos(np.pi*(E_dist_from_mp[ii] - 0.5*NC) / damping_thickness))
-        
-        # Inside solution space
-        else:
-            resistive_array[ii] = 0.0
-            
-    # Make sure no damping arrays go negative (or that's growth!)
-    for arr in [B_damping_array, resistive_array]:
-        for ii in range(arr.shape[0]):
-            if arr[ii] < 0.0:
-                arr[ii] = 0.0
-    return
 
 
 def set_timestep(vel):
@@ -596,34 +274,12 @@ def set_timestep(vel):
     if save_fields == 1 or save_particles == 1:
         store_run_parameters(DT, part_save_iter, field_save_iter, max_inc, max_time, subcycles)
     
-    B_damping_array = np.ones(NC + 1, dtype=float)
-    resistive_array = np.ones(NC    , dtype=float)
-    set_damping_arrays(B_damping_array, resistive_array, DT, subcycles)
-    
-    # DIAGNOSTIC PLOT: CHECK OUT DAMPING FACTORS
-    if False:
-        plt.ioff()
-        fig, axes = plt.subplots(2)
-        axes[0].plot(B_nodes_loc/dx, B_damping_array)
-        axes[0].set_ylabel('B damp')
-        axes[1].plot(E_nodes_loc/dx, resistive_array)
-        axes[1].set_ylabel('$\eta$')
-        for ax in axes:
-            ax.set_xlim(B_nodes_loc[0]/dx, B_nodes_loc[-1]/dx)
-            ax.axvline(    0, color='k', ls=':', alpha=0.5)
-            ax.axvline( NX/2, color='k', ls=':')
-            ax.axvline(-NX/2, color='k', ls=':')
-            
-        plt.show()
-        sys.exit()
-    
     if DT < 1e-2:
         print('Timestep: %.3es with %d subcycles' % (DT, subcycles))
     else:
         print('Timestep: %.3fs with %d subcycles' % (DT, subcycles))
     print(f'{max_inc} iterations total\n')
-    return DT, max_inc, part_save_iter, field_save_iter, subcycles,\
-             B_damping_array, resistive_array
+    return DT, max_inc, part_save_iter, field_save_iter, subcycles
 
 
 #%% PARTICLES 
@@ -722,21 +378,10 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E,
             # Calculate wave fields at particle position
             Ep = np.zeros(3, dtype=np.float64)  
             Bp = np.zeros(3, dtype=np.float64)
-            #Jp  = np.zeros(3, dtype=np.float64)
-            #eta = 0.0
             for jj in nb.prange(3):
-                #eta += resistive_array[Ie[ii] + jj] * W_elec[jj, ii]
                 for kk in nb.prange(3):
                     Ep[kk] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]   
                     Bp[kk] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]   
-                    #if resis_multiplier != 0.0:
-                    #    Jp[kk] += (Ji[Ie[ii] + jj, kk] - Ve[Ie[ii] + jj, kk]*q_dens[Ie[ii] + jj])
-                
-            # Add resistivity into 'effective' E-field
-            #if eta != 0.0:
-            #    Ep[0] -= eta * Jp[0]
-            #    Ep[1] -= eta * Jp[1]
-            #    Ep[2] -= eta * Jp[2]
 
             # Start Boris Method
             qmi = 0.5 * dt * qm_ratios[idx[ii]]                             # q/m variable including dt
@@ -748,8 +393,8 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E,
             
             # Calculate background field at particle position (using v_minus)
             # Could probably make this more efficient for a=0
-            Bp[0]    += B_eq * (1.0 + a * pos[ii] * pos[ii])
-            constant  = a * B_eq
+            Bp[0]    += B_eq
+            constant  = 0.
             l_cyc     = qm_ratios[idx[ii]] * Bp[0]
             Bp[1]    += constant * pos[ii] * vel[2, ii] / l_cyc
             Bp[2]    -= constant * pos[ii] * vel[1, ii] / l_cyc
@@ -809,47 +454,9 @@ def position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt,
                 else:
                     idx[ii] += Nj 
     
-    apply_particle_BCs(pos, vel, idx, mp_flux, dt)
+    periodic_BC(pos, idx)
     assign_weighting_TSC(pos, Ie, W_elec)
     assign_weighting_TSC(pos, Ib, W_mag, E_nodes=False)
-    return
-
-
-@nb.njit()
-def apply_particle_BCs(pos, vel, idx, _mp_flux, DT):
-    # TODO: Still need to test open BCs, especially in the run_until_equil() bit
-    # Also, reinit BCs are weirdly scrambled, but good flux?
-    if particle_open == 1:
-        inject_particles(pos, vel, idx, _mp_flux, DT)
-    elif particle_reinit == 1:
-        if particle_reinit == 1:
-            reinit_count_flux(pos, idx, _mp_flux)
-        inject_particles(pos, vel, idx, _mp_flux, DT)
-    elif particle_periodic == 1:
-        periodic_BC(pos, idx)
-    else:
-        reflective_BC(pos, vel, idx)
-    return
-
-
-@nb.njit(parallel=do_parallel)
-def reinit_count_flux(pos, idx, _mp_flux):
-    '''
-    Simple function to work out where to reinitialize particles (species/side)
-    Coded for serial computation since numba can't do parallel reductions with
-    arrays as a target.
-    
-    Shouldn't be any slower than requiring the source functions to be serial,
-    especially since its only an evaluation for every particle, and then a few
-    more operations for a miniscule portion of those particles.
-    '''
-    for ii in nb.prange(idx.shape[0]):
-        if idx[ii] >= Nj:
-            sp = idx[ii]-Nj
-            if pos[ii] > xmax:
-                _mp_flux[1, sp] += 1.0
-            elif pos[ii] < xmin:
-                _mp_flux[0, sp] += 1.0 
     return
 
 
@@ -876,221 +483,6 @@ def periodic_BC(pos, idx):
                 pos[ii] -= xmin 
             idx[ii] -= Nj
     return
-
-
-@nb.njit(parallel=do_parallel)
-def reflective_BC(pos, vel, idx):
-    for ii in nb.prange(idx.shape[0]):
-        if idx[ii] >= Nj:
-            # Reflect
-            if pos[ii] > xmax:
-                pos[ii] = 2*xmax - pos[ii]
-            elif pos[ii] < xmin:
-                pos[ii] = 2*xmin - pos[ii]
-                
-            vel[0, ii] *= -1.0
-            idx[ii] -= Nj
-    return
-
-
-@nb.njit()
-def inject_particles_all_species(pos, vel, idx, _mp_flux, dt):
-    '''
-    Control function for injection that does all species.
-    This is so the actual injection function can be per-species (in case
-    I want to inject just one species, such as for the equilibrium stuff)
-    '''
-    for jj in range(Nj):
-        inject_particles_1sp(pos, vel, idx, _mp_flux, dt, jj)
-    return
-
-
-@nb.njit()
-def inject_particles_1sp(pos, vel, idx, _mp_flux, dt, jj):        
-    '''
-    How to create new particles in parallel? Just test serial for now, but this
-    might become my most expensive function for large N.
-    
-    Also need to work out how to add flux in serial (might just have to put it
-    in calling function: advance_particles_and_moments())
-    
-    NOTE: How does this work for -0.5*DT ?? Might have to double check
-    '''
-    # Add flux at each boundary 
-    if particle_open == 1:
-        for kk in range(2):
-            _mp_flux[kk, jj] += inject_rate[jj]*dt
-        
-    # acc used only as placeholder to mark place in array. How to do efficiently? 
-    acc = 0; n_created = 0
-    for ii in nb.prange(2):
-        N_inject = int(_mp_flux[ii, jj] // 2)
-        
-        for xx in nb.prange(N_inject):
-            
-            # Find two empty particles (Yes clumsy coding but it works)
-            for kk in nb.prange(acc, pos.shape[0]):
-                if idx[kk] >= Nj:
-                    kk1 = kk
-                    acc = kk + 1
-                    break
-            for kk in nb.prange(acc, pos.shape[0]):
-                if idx[kk] >= Nj:
-                    kk2 = kk
-                    acc = kk + 1
-                    break
-
-            # Reinitialize vx based on flux distribution
-            vel[0, kk1] = generate_vx(vth_par[jj])
-            idx[kk1]    = jj
-            
-            # Re-initialize v_perp and check pitch angle
-            if temp_type[jj] == 0 or homogenous == True:
-                vel[1, kk1] = np.random.normal(0, vth_perp[jj])
-                vel[2, kk1] = np.random.normal(0, vth_perp[jj])
-            else:
-                particle_PA = 0.0
-                while np.abs(particle_PA) <= loss_cone_xmax:
-                    vel[1, kk1] = np.random.normal(0, vth_perp[jj])
-                    vel[2, kk1] = np.random.normal(0, vth_perp[jj])
-                    v_perp      = np.sqrt(vel[1, kk1] ** 2 + vel[2, kk1] ** 2)
-                    particle_PA = np.arctan(v_perp / vel[0, kk1])
-            
-            # Amount travelled (vel always +ve at first)
-            dpos = np.random.uniform(0, 1) * vel[0, kk1] * dt
-            
-            # Left boundary injection
-            if ii == 0:
-                pos[kk1]    = xmin + dpos
-                vel[0, kk1] = np.abs(vel[0, kk1])
-                
-            # Right boundary injection
-            else:
-                pos[kk1]    = xmax - dpos
-                vel[0, kk1] = -np.abs(vel[0, kk1])
-            
-            # Copy values to second particle (Same position, xvel. Opposite v_perp) 
-            idx[kk2]    = idx[kk1]
-            pos[kk2]    = pos[kk1]
-            vel[0, kk2] = vel[0, kk1]
-            vel[1, kk2] = vel[1, kk1] * -1.0
-            vel[2, kk2] = vel[2, kk1] * -1.0
-            
-            # Subtract new macroparticles from accrued flux
-            _mp_flux[ii, jj] -= 2.0
-            n_created        += 2
-    return
-
-
-@nb.njit()
-def inject_particles(pos, vel, idx, _mp_flux, DT):        
-    '''
-    Modified version designed to be used  for reinit conditions. Flag for 
-    quiet start that halves mp_flux (since two particles are required for
-                                     injection)
-    
-    How to create new particles in parallel? Just test serial for now, but this
-    might become my most expensive function for large N.
-    
-    Also need to work out how to add flux in serial (might just have to put it
-    in calling function: advance_particles_and_moments())
-    
-    NOTE: How does this work for -0.5*DT ?? Might have to double check
-    '''
-    # Add flux at each boundary if 'open' flux boundaries
-    if particle_open == 1:
-        for kk in range(2):
-            _mp_flux[kk, :] += inject_rate*DT
-    
-    # acc used only as placeholder to mark place in array. How to do efficiently? 
-    acc = 0; n_created = 0
-    for ii in nb.prange(2):
-        for jj in nb.prange(Nj):
-        
-            if quiet_start == 1:
-                N_inject = int(_mp_flux[ii, jj] // 2)
-            else:
-                N_inject = int(_mp_flux[ii, jj])
-
-            for xx in nb.prange(N_inject):
-                
-                # Find two empty particles (Yes clumsy coding but it works)
-                for kk in nb.prange(acc, pos.shape[0]):
-                    if idx[kk] >= Nj:
-                        kk1 = kk
-                        acc = kk + 1
-                        break
-                
-                # Reinitialize vx based on flux distribution
-                vel[0, kk1] = generate_vx(vth_par[jj])
-                idx[kk1]    = jj
-                
-                # Re-initialize v_perp and check pitch angle
-                if temp_type[jj] == 0 or homogenous == True:
-                    vel[1, kk1] = np.random.normal(0, vth_perp[jj])
-                    vel[2, kk1] = np.random.normal(0, vth_perp[jj])
-                else:
-                    particle_PA = 0.0
-                    while np.abs(particle_PA) <= loss_cone_xmax:
-                        vel[1, kk1] = np.random.normal(0, vth_perp[jj])
-                        vel[2, kk1] = np.random.normal(0, vth_perp[jj])
-                        v_perp      = np.sqrt(vel[1, kk1] ** 2 + vel[2, kk1] ** 2)
-                        particle_PA = np.arctan(v_perp / vel[0, kk1])
-                
-                # Amount travelled (vel always +ve at first)
-                dpos = np.random.uniform(0, 1) * vel[0, kk1] * DT
-                
-                # Inject at either left/right boundary
-                if ii == 0:
-                    pos[kk1]    = xmin + dpos
-                    vel[0, kk1] = np.abs(vel[0, kk1])
-                else:
-                    pos[kk1]    = xmax - dpos
-                    vel[0, kk1] = -np.abs(vel[0, kk1])
-                _mp_flux[ii, jj] -= 1.0; n_created += 1
-                
-                if quiet_start == 1:
-                    # Copy values to second particle (Same position, xvel. Opposite v_perp) 
-                    for kk in nb.prange(acc, pos.shape[0]):
-                        if idx[kk] >= Nj:
-                            kk2 = kk
-                            acc = kk + 1
-                            break
-                        
-                    idx[kk2]    = idx[kk1]
-                    pos[kk2]    = pos[kk1]
-                    vel[0, kk2] = vel[0, kk1]
-                    vel[1, kk2] = vel[1, kk1] * -1.0
-                    vel[2, kk2] = vel[2, kk1] * -1.0
-                    
-                    # Subtract new macroparticles from accrued flux
-                    _mp_flux[ii, jj] -= 1.0; n_created += 1
-    #print('Particles injected:', n_created)
-    return
-
-
-@nb.njit()
-def vfx(vx, vth):
-    f_vx  = np.exp(- 0.5 * (vx / vth) ** 2)
-    f_vx /= vth * np.sqrt(2 * np.pi)
-    return vx * f_vx
-
-
-@nb.njit()
-def generate_vx(vth):
-    '''
-    Maybe could try batch approach? If we need X number of solutions and we do
-    batches of 100 or something and just pick the first x number. Then again,
-    it depends on how long this has to loop until a valid value is found... if
-    it only takes a few iterations, it's not worth it. But if it takes a few
-    thousand to get sufficient numbers, then maybe it'll be worth it?
-    '''
-    while True:
-        y_uni = np.random.uniform(0, 4*vth)
-        Py    = vfx(y_uni, vth)
-        x_uni = np.random.uniform(0, 0.25)
-        if Py >= x_uni:
-            return y_uni
 
 
 @nb.njit(parallel=do_parallel)
@@ -1224,30 +616,21 @@ def manage_source_term_boundaries(arr):
     just use a loop in the calling function to work each component 
     and this becomes for 1D arrays only
     '''
-    if field_periodic == 0:
-        # Mirror on open boundary
-        arr[ND]          += arr[ND - 1]
-        arr[ND + NX - 1] += arr[ND + NX]
-        
-        # ...and Fill remaining ghost cells
-        arr[:li1] = arr[li1]
-        arr[ro1:] = arr[ri1]
-    else:
-        # If periodic, move contributions
-        arr[li1] += arr[ro1]
-        arr[li2] += arr[ro2]
-        arr[ri1] += arr[lo1]
-        arr[ri2] += arr[lo2]
-        
-        # ...and copy periodic values
-        arr[ro1] = arr[li1]
-        arr[ro2] = arr[li2]
-        arr[lo1] = arr[ri1]
-        arr[lo2] = arr[ri2]
-        
-        # ...and Fill remaining ghost cells
-        arr[:lo2] = arr[lo2]
-        arr[ro2:] = arr[ro2]
+    # If periodic, move contributions
+    arr[li1] += arr[ro1]
+    arr[li2] += arr[ro2]
+    arr[ri1] += arr[lo1]
+    arr[ri2] += arr[lo2]
+    
+    # ...and copy periodic values
+    arr[ro1] = arr[li1]
+    arr[ro2] = arr[li2]
+    arr[lo1] = arr[ri1]
+    arr[lo2] = arr[ri2]
+    
+    # ...and Fill remaining ghost cells
+    arr[:lo2] = arr[lo2]
+    arr[ro2:] = arr[ro2]
     return
 
 
@@ -1352,7 +735,6 @@ def advance_particles_and_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, 
         G       -- "Gamma"  MHD variable for current advance
         L       -- "Lambda" MHD variable for current advance    
     '''
-    START_start = timer()
     ni       = np.zeros((NC, Nj), dtype=np.float64)
     nu_plus  = np.zeros((NC, Nj, 3), dtype=np.float64)
     nu_minus = np.zeros((NC, Nj, 3), dtype=np.float64)
@@ -1362,26 +744,16 @@ def advance_particles_and_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, 
     Ji_minus  *= 0.0
     Ji_plus   *= 0.0
     L         *= 0.0
-    G         *= 0.0
-    START_time = round(timer() - START_start, 3)     
+    G         *= 0.0   
     
-    VELAD_start = timer()
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt)
-    VELAD_time = round(timer() - VELAD_start, 3)
     
-    VLMOM_start = timer()
     deposit_velocity_moments(vel, Ie, W_elec, idx, nu_minus)
-    VLMOM_time = round(timer() - VLMOM_start, 3)
     
-    POSAD_start = timer()
     position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt)
-    POSAD_time = round(timer() - POSAD_start, 3)
     
-    MOMNT_start = timer()
     deposit_both_moments(vel, Ie, W_elec, idx, ni, nu_plus)
-    MOMNT_time = round(timer() - MOMNT_start, 3)
     
-    TREST_start = timer()
     if source_smoothing == 1:
         for jj in range(Nj):
             ni[:, jj]  = smooth(ni[:, jj])
@@ -1413,16 +785,6 @@ def advance_particles_and_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, 
     rho_int += rho_half
     rho_int /= 2.0
     Ji[:]    = 0.5 * (Ji_plus  +  Ji_minus)
-    TREST_time = round(timer() - TREST_start, 3)
-    
-    if print_timings:
-        print('')
-        print('START TIME:', START_time)
-        print('VELAD TIME:', VELAD_time)
-        print('VLMOM TIME:', VLMOM_time)
-        print('POSAD TIME:', POSAD_time)
-        print('MOMNT TIME:', MOMNT_time)
-        print('TREST TIME:', TREST_time)
     return
 
 
@@ -1451,36 +813,6 @@ def smooth(function):
 
 
 #%% FIELDS
-@nb.njit()
-def eval_B0x(x):
-    return B_eq * (1. + a * x*x)
-
-
-@nb.njit(parallel=False)
-def get_curl_B(B):
-    ''' Returns a vector quantity for the curl of a field valid at the positions 
-    between its gridpoints (i.e. curl(B) -> E-grid, etc.)
-    
-    INPUT:
-        field    -- The 3D field to take the curl of
-        DX       -- Spacing between the nodes, mostly for diagnostics. 
-                    Defaults to grid spacing specified at initialization.
-                 
-    OUTPUT:
-        curl  -- Finite-differenced solution for the curl of the input field.
-        
-    NOTE: This function will only work with this specific 1D hybrid code due to both 
-          E and B fields having the same number of nodes (due to TSC weighting) and
-         the lack of derivatives in y, z
-    '''
-    curlB = np.zeros((B.shape[0] - 1, 3), dtype=nb.float64)
-    for ii in nb.prange(B.shape[0] - 1):
-        curlB[ii, 1] = - (B[ii + 1, 2] - B[ii, 2])
-        curlB[ii, 2] =    B[ii + 1, 1] - B[ii, 1]
-    curlB /= dx
-    return curlB
-
-
 @nb.njit(parallel=False)
 def get_curl_B_4thOrder(B):
     '''
@@ -1504,44 +836,6 @@ def get_curl_B_4thOrder(B):
     curlB[nc - 1, 1] = (-B[nc, 2] + B[nc - 1, 2])/dx
     curlB[nc - 1, 2] = ( B[nc, 1] - B[nc - 1, 1])/dx
     return curlB
-
-
-@nb.njit()
-def get_curl_E(E, dE):
-    ''' 
-    Returns a vector quantity for the curl of a field valid at the positions 
-    between its gridpoints (i.e. curl(E) -> B-grid, etc.)
-    
-    INPUT:
-        field    -- The 3D field to take the curl of
-        DX       -- Spacing between the nodes, mostly for diagnostics. 
-                    Defaults to grid spacing specified at initialization.
-                 
-    OUTPUT:
-        curl  -- Finite-differenced solution for the curl of the input field.
-    '''   
-    nc  = E.shape[0] 
-    dE *= 0.
-    for ii in nb.prange(1, E.shape[0]):
-        dE[ii, 1] = - (E[ii, 2] - E[ii - 1, 2])
-        dE[ii, 2] =    E[ii, 1] - E[ii - 1, 1]
-        
-    # Curl at E[0] : Forward/Backward difference (stored in B[0]/B[NC])
-    dE[0, 1] = -(-3*E[0, 2] + 4*E[1, 2] - E[2, 2]) / 2
-    dE[0, 2] =  (-3*E[0, 1] + 4*E[1, 1] - E[2, 1]) / 2
-    
-    dE[nc, 1] = -(3*E[nc - 1, 2] - 4*E[nc - 2, 2] + E[nc - 3, 2]) / 2
-    dE[nc, 2] =  (3*E[nc - 1, 1] - 4*E[nc - 2, 1] + E[nc - 3, 1]) / 2
-    
-    # Linearly extrapolate to endpoints
-    dE[0, 1]      -= 2*(dE[1, 1] - dE[0, 1])
-    dE[0, 2]      -= 2*(dE[1, 2] - dE[0, 2])
-    
-    dE[nc, 1]     += 2*(dE[nc, 1] - dE[nc - 1, 1])
-    dE[nc, 2]     += 2*(dE[nc, 2] - dE[nc - 1, 2])
-
-    dE /= dx
-    return
 
 
 @nb.njit()
@@ -1609,8 +903,6 @@ def get_grad_P(qn, te):
     an interpolation.
     '''
     grad_pe       = np.zeros(NC    , dtype=np.float64)
-    # DIAGNOSTIC: DISABLING SOLUTION FOR PE
-    #return grad_pe
     grad_pe_B     = np.zeros(NC + 1, dtype=np.float64)
     grad_pe[:]    = qn[:] * kB * te[:] / ECHARGE
 
@@ -1625,30 +917,25 @@ def get_grad_P(qn, te):
 
 
 @nb.njit(parallel=False)
-def apply_boundary(B, B_damp):
-    if field_periodic == 0:
-        for ii in nb.prange(B.shape[0]):
-            B[ii, 1] *= B_damp[ii]
-            B[ii, 2] *= B_damp[ii]
-    else:
-        for ii in nb.prange(1, B.shape[1]):
-            # Boundary value (should be equal)
-            end_bit = 0.5 * (B[ND, ii] + B[ND + NX, ii])
+def apply_boundary(B):
+    for ii in nb.prange(1, B.shape[1]):
+        # Boundary value (should be equal)
+        end_bit = 0.5 * (B[ND, ii] + B[ND + NX, ii])
 
-            B[ND,      ii] = end_bit
-            B[ND + NX, ii] = end_bit
-            
-            B[ND - 1, ii]  = B[ND + NX - 1, ii]
-            B[ND - 2, ii]  = B[ND + NX - 2, ii]
-            
-            B[ND + NX + 1, ii] = B[ND + 1, ii]
-            B[ND + NX + 2, ii] = B[ND + 2, ii]
+        B[ND,      ii] = end_bit
+        B[ND + NX, ii] = end_bit
+        
+        B[ND - 1, ii]  = B[ND + NX - 1, ii]
+        B[ND - 2, ii]  = B[ND + NX - 2, ii]
+        
+        B[ND + NX + 1, ii] = B[ND + 1, ii]
+        B[ND + NX + 2, ii] = B[ND + 2, ii]
     return
 
 
 @nb.njit()
-def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
-                    B_damp, resistive_array, sim_time):
+def cyclic_leapfrog(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
+                    sim_time):
     '''
     Solves for the magnetic field push by keeping two copies and subcycling between them,
     averaging them at the end of the cycle as per Matthews (1994). The source terms are
@@ -1661,50 +948,22 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
         rho_i -- Total ion charge density
         J_i   -- Total ionic current density
         DT    -- Master simulation timestep. This function advances the field by 0.5*DT
-        subcycles -- The number of subcycle steps to be performed. 
-        
-    22/02/2021 :: Applied damping field to each subcycle. Does this damping array
-            need to account for subcycling in the DX/DT bit? Test later.
-            
-    28/02/2021 :: Added advancement of sim_time within this function. The global
-            "clock" now follows the development of the magnetic field.
-            Resync doesn't require a sim_time increment since the field solution
-            is already at 0.5*DT and this solution is used to advance the second
-            field copy for averaging.
-            
-    TO DO: Need to perform checks every few subcycles for divergence? Or every 
-    few calls? Work out what needs to be done here.
-    
-    Note: Average error divergence calculated by summing the absolute difference
-    and weighting by dxm - number of inertial lengths per dx. This empirically
-    gives an initial 'quiet' error on the order of 1e-8. The question is, how does 
-    this inform the maximum acceptable error.
-    
-    Actually, need to normalise/multiply by dxm*NX, since there's a sum there.
-    Do that later. For now, just average every 32s/c or so.
-    
-    Works for even s/c av,
-    
+        subcycles -- The number of subcycle steps to be performed.
     '''
-    #sc_av = 16
     H     = 0.5 * dt
     dh    = H / subcycles
-    
-    if disable_waves:
-        return sim_time+H
     
     curl  = np.zeros((NC + 1, 3), dtype=np.float64)
     B2[:] = B1[:]
 
     ## DESYNC SECOND FIELD COPY - PUSH BY DH ##
     ## COUNTS AS ONE SUBCYCLE ##
-    calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+    calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
     get_curl_E_4thOrder(E, curl) 
     B2       -= dh * curl
-    apply_boundary(B2, B_damp)
+    apply_boundary(B2)
     get_B_cent(B2, B_center)
     sim_time += dh
-    #print('Desync B2')
 
     ## RETURN IF NO SUBCYCLES REQUIRED ##
     if subcycles == 1:
@@ -1715,164 +974,48 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
     ii = 1
     while ii < subcycles:
         if ii%2 == 1:
-            calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+            calculate_E(B2, B_center, Ji, rho, E, Ve, Te, sim_time)
             get_curl_E_4thOrder(E, curl) 
             B1  -= 2 * dh * curl
-            apply_boundary(B1, B_damp)
+            apply_boundary(B1)
             get_B_cent(B1, B_center)
             sim_time += dh
-            #print('Push B1')
         else:
-            calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+            calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
             get_curl_E_4thOrder(E, curl) 
             B2  -= 2 * dh * curl
-            apply_boundary(B2, B_damp)
+            apply_boundary(B2)
             get_B_cent(B2, B_center)
             sim_time += dh
-            #print('Push B2')
             
-# =============================================================================
-#         ## Check for error divergence or just average every so often ##
-#         ## Could do error check here and double s/c count if needed  ##
-#         if ii%sc_av == 0: 
-#             #print('Averaging for convergence')
-#             ## RESYNC BEFORE AVERAGE ##
-#             if ii%2 == 1:
-#                 calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-#                 get_curl_E_4thOrder(E, curl) 
-#                 B2  -= dh * curl
-#                 apply_boundary(B2, B_damp)
-#                 get_B_cent(B2, B_center)
-#                 #print('Resync B2')
-#             else:
-#                 calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-#                 get_curl_E_4thOrder(E, curl) 
-#                 B1  -= dh * curl
-#                 apply_boundary(B1, B_damp)
-#                 get_B_cent(B1, B_center)
-#                 #print('Resync B1')
-#         
-#             ## AVERAGE AND COPY ##
-#             B1 += B2; B1 /= 2.0
-#             B2[:] = B1[:]
-#             
-#             ## DESYNC ONE FIELD COPY - PUSH BY DH ##
-#             ## THE ONE DESYNCED HAS TO BE THE NEXT ONE PUSHED ##
-#             if ii%2 == 1:
-#                 calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-#                 get_curl_E_4thOrder(E, curl) 
-#                 B2       -= dh * curl
-#                 apply_boundary(B2, B_damp)
-#                 get_B_cent(B2, B_center)
-#                 sim_time += dh;  ii += 1
-#                 #print('Desync B2')
-#             else:
-#                 calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-#                 get_curl_E_4thOrder(E, curl) 
-#                 B1       -= dh * curl
-#                 apply_boundary(B1, B_damp)
-#                 get_B_cent(B1, B_center)
-#                 sim_time += dh;  ii += 1
-#                 #print('Desync B1')
-# =============================================================================
         ii += 1
 
     ## RESYNC FIELD COPIES ##
     ## DOESN'T COUNT AS A SUBCYCLE ##
     if ii%2 == 0:
-        calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+        calculate_E(B2, B_center, Ji, rho, E, Ve, Te, sim_time)
         get_curl_E_4thOrder(E, curl) 
         B2  -= dh * curl
-        apply_boundary(B2, B_damp)
+        apply_boundary(B2)
         get_B_cent(B2, B_center)
-        #print('Resync B2')
     else:
-        calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+        calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
         get_curl_E_4thOrder(E, curl) 
         B1  -= dh * curl
-        apply_boundary(B1, B_damp)
+        apply_boundary(B1)
         get_B_cent(B1, B_center)
-        #print('Resync B1')
     
     ## AVERAGE FOR OUTPUT ##
-    #print('Averaging for output')
     B1 += B2; B1 /= 2.0
     
     # Calculate final values
     get_B_cent(B1, B_center)
-    calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-    #print('Half timestep:', H)
-    #print('Simulation  T:', sim_time)
-    #sys.exit()
+    calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
     return sim_time
 
 
 @nb.njit()
-def get_J_ext(J_ext, sim_time):
-    '''
-    Driven J designed as energy input into simulation. All parameters specified
-    in the simulation_parameters script/file
-    
-    Designed as a Gaussian pulse so that things don't freak out by rising too 
-    quickly. Just test with one source point at first
-    
-    NEED TO ADJUST SIM_TIME TO ACCOUNT FOR SUBCYCLING -- NOT YET DONE
-    PROBABLY JUST NEED TO PASS A TIME ARGUMENT AROUND THE FIELD FUNCTIONS
-    TO KEEP TRACK OF WHAT POINT IN TIME IT IS
-    '''
-    # Soft source wave (What t corresponds to this?)
-    # Should put some sort of ramp on it?
-    # Also needs to be polarised. By or Bz lagging/leading?
-    phase = -90
-    N_eq  = ND + NX//2
-
-    gaussian = np.exp(- ((sim_time - pulse_offset)/ pulse_width) ** 2 )
-
-    # Set new field values in array as soft source
-    J_ext[N_eq, 1] = driven_ampl*gaussian*np.sin(2 * np.pi * driven_freq * sim_time)
-    J_ext[N_eq, 2] = driven_ampl*gaussian*np.sin(2 * np.pi * driven_freq * sim_time + phase * np.pi / 180.)    
-    return
-
-
-@nb.njit()
-def get_J_ext_pol(sim_time):
-    '''
-    Driven J designed as energy input into simulation. All parameters specified
-    in the simulation_parameters script/file
-    
-    Designed as a Gaussian pulse so that things don't freak out by rising too 
-    quickly. Just test with one source point at first
-    
-    Polarised with a LH mode only, uses five points with both w, k specified
-    -- Not quite sure how to code this... do you just add a time delay (td, i.e. phase)
-        to both the envelope and sin values at each point? 
-        
-    -- Source node as td=0, other nodes have td depending on distance from source, 
-        (ii*dx) and the wave phase velocity v_ph = w/k (which are both known)
-    
-    P.S. A bunch of these values could be put in the simulation_parameters script.
-    Optimize later (after testing shows that it actually works!)
-    '''
-    # Soft source wave (What t corresponds to this?)
-    # Should put some sort of ramp on it?
-    # Also needs to be polarised. By or Bz lagging/leading?
-    J_ext = np.zeros((NC, 3), dtype=np.float64)
-    phase = -np.pi / 2
-    N_eq  = ND + NX//2
-    time  = sim_time
-    v_ph  = driven_freq / driven_k
-    
-    for off in np.arange(-2, 3):
-        delay = off*dx / v_ph
-        gauss = driven_ampl * np.exp(- ((time - pulse_offset - delay)/ pulse_width) ** 2 )
-        
-        J_ext[N_eq + off, 1] += gauss * np.sin(2 * np.pi * driven_freq * (time - delay))
-        J_ext[N_eq + off, 2] += gauss * np.sin(2 * np.pi * driven_freq * (time - delay) + phase)    
-    return J_ext
-
-
-@nb.njit()
-def calculate_E(B, B_center, Ji, J_ext, qn, E, Ve, Te, resistive_array, sim_time):
+def calculate_E(B, B_center, Ji, qn, E, Ve, Te, sim_time):
     '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
     electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
     and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
@@ -1882,21 +1025,13 @@ def calculate_E(B, B_center, Ji, J_ext, qn, E, Ve, Te, resistive_array, sim_time
         qn  -- Charge density. Source term, based on particle positions
     OUTPUT:
         E_out -- Updated electric field array
-    '''
-    # Calculate J_ext at same instance as Ji
-    if pol_wave == 0:
-        J_ext[:, :] *= 0.0
-    elif pol_wave == 1:
-        get_J_ext(J_ext, sim_time)
-    elif pol_wave == 2:
-        get_J_ext_pol(J_ext, sim_time)
-        
+    '''        
     curlB  = get_curl_B_4thOrder(B)
     curlB /= mu0
        
-    Ve[:, 0] = (Ji[:, 0] + J_ext[:, 0] - curlB[:, 0]) / qn
-    Ve[:, 1] = (Ji[:, 1] + J_ext[:, 1] - curlB[:, 1]) / qn
-    Ve[:, 2] = (Ji[:, 2] + J_ext[:, 2] - curlB[:, 2]) / qn
+    Ve[:, 0] = (Ji[:, 0] - curlB[:, 0]) / qn
+    Ve[:, 1] = (Ji[:, 1] - curlB[:, 1]) / qn
+    Ve[:, 2] = (Ji[:, 2] - curlB[:, 2]) / qn
     
     if ie == 1:
         get_electron_temp(qn, Te)
@@ -1907,36 +1042,20 @@ def calculate_E(B, B_center, Ji, J_ext, qn, E, Ve, Te, resistive_array, sim_time
         VexB[ii, 0] = Ve[ii, 1] * B_center[ii, 2] - Ve[ii, 2] * B_center[ii, 1]
         VexB[ii, 1] = Ve[ii, 2] * B_center[ii, 0] - Ve[ii, 0] * B_center[ii, 2]
         VexB[ii, 2] = Ve[ii, 0] * B_center[ii, 1] - Ve[ii, 1] * B_center[ii, 0]
-    
-    # When I finally get around to adding E_damping back
-    #if E_damping == 1 and field_periodic == 0:
-    #    temp3De *= E_damping_array
         
     E[:, 0]  = - VexB[:, 0] - del_p / qn
     E[:, 1]  = - VexB[:, 1]
     E[:, 2]  = - VexB[:, 2]
 
-    # Add resistivity
-    if resis_multiplier != 0:
-        E[:, 0] += resistive_array[:] * (Ji[:, 0] - qn[:]*Ve[:, 0] + J_ext[:, 0])
-        E[:, 1] += resistive_array[:] * (Ji[:, 1] - qn[:]*Ve[:, 1] + J_ext[:, 0])
-        E[:, 2] += resistive_array[:] * (Ji[:, 2] - qn[:]*Ve[:, 2] + J_ext[:, 0])
+    # Copy edge cells
+    E[ro1, :] = E[li1, :]
+    E[ro2, :] = E[li2, :]
+    E[lo1, :] = E[ri1, :]
+    E[lo2, :] = E[ri2, :]
     
-    # Copy periodic values
-    if field_periodic == 1:
-        # Copy edge cells
-        E[ro1, :] = E[li1, :]
-        E[ro2, :] = E[li2, :]
-        E[lo1, :] = E[ri1, :]
-        E[lo2, :] = E[ri2, :]
-        
-        # Fill remaining ghost cells
-        E[:lo2, :] = E[lo2, :]
-        E[ro2:, :] = E[ro2, :]
-            
-    # Diagnostic flag for testing
-    if disable_waves == 1:
-        E *= 0.    
+    # Fill remaining ghost cells
+    E[:lo2, :] = E[lo2, :]
+    E[ro2:, :] = E[ro2, :] 
     return
 
 
@@ -1949,7 +1068,7 @@ def get_B_cent(B, _B_cent):
     Need at least a quadratic spline fit for true second-order solution
     
     Modified to use the higher-order interpolation
-    '''    
+    '''
     interpolate_cell_centre_4thOrder(B[:, 1], _B_cent[:, 1])
     interpolate_cell_centre_4thOrder(B[:, 2], _B_cent[:, 2])
     return
@@ -1981,7 +1100,7 @@ def interpolate_cell_centre_4thOrder(edge_arr, interp):
 #@nb.njit()
 def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, B, B_center, E, dns, 
                    max_inc, part_save_iter, field_save_iter, loop_save_iter,
-                   subcycles, B_damping_array, resistive_array, manual_trip=0):
+                   subcycles, manual_trip=0):
     '''
     Check that simulation quantities still obey timestep limitations. Reduce
     timestep for particle violations or increase subcycling for field violations.
@@ -2030,25 +1149,20 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, B, B_c
         dispfreq        = (k_max ** 2) * (B_tot / (mu0 * dns)).max()             # Dispersion frequency
         dt_sc           = freq_res / dispfreq
         new_subcycles   = int(DT / dt_sc + 1)
-        ch_sc = 0
         
         if (subcycles < 0.75*new_subcycles and manual_trip == 0) or manual_trip == 3:                                       
-            subcycles *= 2; ch_sc = 1
+            subcycles *= 2
             print('Number of subcycles per timestep doubled to', subcycles)
             
         if (subcycles > 3.0*new_subcycles and subcycles%2 == 0 and manual_trip == 0) or manual_trip == 4:                                      
-            subcycles //= 2; ch_sc = 1
+            subcycles //= 2
             print('Number of subcycles per timestep halved to', subcycles)
             
         if subcycles > max_subcycles:
-            subcycles = max_subcycles; ch_sc = 1
+            subcycles = max_subcycles
             print(f'Number of subcycles exceeding maximum, setting to {max_subcycles}')
             print( 'Modifying timestep...')
             DT_part = 0.5*DT
-            
-        # Redo damping arrays if # subcycles changed
-        if ch_sc == 1:
-            set_damping_arrays(B_damping_array, resistive_array, DT, subcycles)
     
     # Reduce timestep
     change_flag       = 0
@@ -2067,24 +1181,6 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, B, B_c
             print('Timestep halved to: %.3es with %d subcycles' % (DT, subcycles))
         else:
             print('Timestep halved to: %.3fs with %d subcycles' % (DT, subcycles))
-    
-    # Increase timestep
-    # DISABLED until I work out how to do the injection for half a timestep when this changes
-    # Idea: Maybe implement time_change on next iteration? Or is it possible to push velocity
-    # by half a timestep to sync that way?
-    elif False:#(DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0 and manual_trip == 0)\
-        #or manual_trip == 2:
-        position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, -0.5*DT)
-        
-        change_flag       = 1
-        DT               *= 2.0
-        max_inc         //= 2
-        qq              //= 2
-        part_save_iter  //= 2
-        field_save_iter //= 2
-        loop_save_iter  //= 2
-        
-        print('Timestep doubled. Syncing particle velocity/position with DT =', DT)
     return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, change_flag, subcycles
 
 
@@ -2126,7 +1222,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time,
             os.makedirs(folder)
 
     Bc       = np.zeros((NC + 1, 3), dtype=np.float64)
-    Bc[:, 0] = B_eq * (1 + a * B_nodes_loc**2)
+    Bc[:, 0] = B_eq
     
     # Save simulation parameters to file (Some unused, copied from PREDCORR)
     params = dict([('seed', seed),
@@ -2144,8 +1240,8 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time,
                    ('B_eq', B_eq),
                    ('xmax', xmax),
                    ('xmin', xmin),
-                   ('B_xmax', B_xmax),
-                   ('a', a),
+                   ('B_xmax', B_eq),
+                   ('a', 0),
                    ('theta_xmax', 0.0),
                    ('theta_L', 0.0),
                    ('loss_cone', 0.0),
@@ -2161,7 +1257,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time,
                    ('part_save_iter', part_save_iter),
                    ('field_save_iter', field_save_iter),
                    ('max_wcinv', max_wcinv),
-                   ('resis_multiplier', resis_multiplier),
+                   ('resis_multiplier', 0),
                    ('freq_res', freq_res),
                    ('orbit_res', orbit_res),
                    ('run_desc', run_description),
@@ -2181,14 +1277,14 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time,
                    ('num_threads', nb.get_num_threads()),
                    ('subcycles', subcycles),
                    ('beta_flag', beta_flag),
-                   ('damping_multiplier', damping_multiplier),
-                   ('damping_fraction', damping_fraction),
-                   ('pol_wave', pol_wave),
-                   ('driven_freq', driven_freq),
-                   ('driven_ampl', driven_ampl),
-                   ('driven_k', driven_k),
-                   ('pulse_offset', pulse_offset),
-                   ('pulse_width', pulse_width),
+                   ('damping_multiplier', 0),
+                   ('damping_fraction', 0),
+                   ('pol_wave', 0),
+                   ('driven_freq', 0),
+                   ('driven_ampl', 0),
+                   ('driven_k', 0),
+                   ('pulse_offset', 0),
+                   ('pulse_width', 0),
                    ])
 
     with open(d_path + 'simulation_parameters.pckl', 'wb') as f:
@@ -2225,8 +1321,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time,
     return
 
 
-def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, sim_time,
-                    damping_array, resistive_array):
+def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, sim_time):
 
     d_path = '%s/%s/run_%d/data/fields/' % (drive, save_path, run_num)
     r      = qq / field_save_iter
@@ -2235,10 +1330,8 @@ def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, sim_time,
     
     np.savez(d_fullpath, E=E, B=B, Ji=Ji, dns=dns, Ve=Ve, Te=Te,
                          sim_time=sim_time,
-                         damping_array=damping_array,
-                         resistive_array=resistive_array)
-    
-    #if print_runtime: print('Field data saved')
+                         damping_array=None,
+                         resistive_array=None)
     return
     
 
@@ -2252,10 +1345,8 @@ def save_particle_data(dt, part_save_iter, qq, sim_time,
     d_fullpath = os.path.join(d_path, d_filename)
     np.savez(d_fullpath, pos=pos, vel=vel, idx=idx, sim_time=sim_time,
              E=E, B=B, Ji=Ji, dns=dns, Ve=Ve, Te=Te,
-             damping_array=damping_array,
-             resistive_array=resistive_array)
-    
-    #if print_runtime == True: print('Particle data saved')
+             damping_array=None,
+             resistive_array=None)
     return
 
 
@@ -2279,120 +1370,10 @@ def add_runtime_to_header(runtime, loop_time):
     return
 
 
-import matplotlib.pyplot as plt
-def diagnostic_field_plot(B, E, q_dens, Ji, Ve, Te,
-                          B_damping_array, qq, DT, sim_time):
-    '''
-    Check field grid arrays, probably at every timestep
-    '''
-    print('Generating diagnostic plot for timestep', qq)
-    # Check dir
-    diagnostic_path = drive + save_path + 'run_{}/diagnostic_plots/'.format(run_num)
-    if os.path.exists(diagnostic_path) == False:                                   # Create data directory
-        os.makedirs(diagnostic_path)
-    
-    ## Initialize plots and prepare plotspace
-    plt.ioff()
-    fontsize = 14; fsize = 12; lpad = 20
-    fig, axes = plt.subplots(5, ncols=3, figsize=(20,10), sharex=True)
-    fig.patch.set_facecolor('w')   
-    axes[0, 0].set_title('Diagnostics :: Grid Ouputs ::: {}[{}] :: {:.4f}s'.format(save_path.split('/')[2], run_num, round(sim_time, 4)),
-                         fontsize=fontsize+4, family='monospace')
-
-    background_B = eval_B0x(E_nodes_loc)
-    
-    axes[0, 0].plot(B_nodes_loc / dx, B_damping_array, color='k', label=r'$r_D(x)$') 
-    axes[1, 0].plot(B_nodes_loc / dx, B[:, 1]*1e9,     color='b', label=r'$B_y$') 
-    axes[2, 0].plot(B_nodes_loc / dx, B[:, 2]*1e9,     color='g', label=r'$B_z$')
-    axes[3, 0].plot(E_nodes_loc / dx, E[:, 1]*1e3, color='b', label=r'$E_y$')
-    axes[4, 0].plot(E_nodes_loc / dx, E[:, 2]*1e3, color='g', label=r'$E_z$')
-
-    axes[0, 1].plot(E_nodes_loc / dx, q_dens,   color='k', label=r'$n_e$')
-    axes[1, 1].plot(E_nodes_loc / dx, Ve[:, 1], color='b', label=r'$V_{ey}$')
-    axes[2, 1].plot(E_nodes_loc / dx, Ve[:, 2], color='g', label=r'$V_{ez}$')
-    axes[3, 1].plot(E_nodes_loc / dx, Ji[:, 1], color='b', label=r'$J_{iy}$' )
-    axes[4, 1].plot(E_nodes_loc / dx, Ji[:, 2], color='g', label=r'$J_{iz}$' )
-    
-    axes[0, 2].axhline(Te0_scalar, c='k', alpha=0.5, ls='--')
-    axes[0, 2].plot(E_nodes_loc / dx, Te, color='r',          label=r'$T_e$')
-    axes[1, 2].plot(E_nodes_loc / dx, Ve[:, 0], color='r',    label=r'$V_{ex}$')
-    axes[2, 2].plot(E_nodes_loc / dx, Ji[:, 0], color='r',    label=r'$J_{ix}$' )
-    axes[3, 2].plot(E_nodes_loc / dx, E[:, 0]*1e3, color='r', label=r'$E_x$')
-    axes[4, 2].plot(B_nodes_loc / dx, B[:, 0]*1e9, color='r',     label=r'$B_{wx}$')
-    axes[4, 2].plot(E_nodes_loc / dx, background_B, color='k', ls='--',    label=r'$B_{0x}$')
-    
-
-    axes[0, 0].set_ylabel('$r_D(x)$'     , rotation=0, labelpad=lpad, fontsize=fsize)
-    axes[1, 0].set_ylabel('$B_y$\n(nT)'  , rotation=0, labelpad=lpad, fontsize=fsize)
-    axes[2, 0].set_ylabel('$B_z$\n(nT)'  , rotation=0, labelpad=lpad, fontsize=fsize)
-    axes[3, 0].set_ylabel('$E_y$\n(mV/m)', rotation=0, labelpad=lpad, fontsize=fsize)
-    axes[4, 0].set_ylabel('$E_z$\n(mV/m)', rotation=0, labelpad=lpad, fontsize=fsize)
-    
-    axes[0, 1].set_ylabel('$n_e$\n$(cm^{-1})$', fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[1, 1].set_ylabel('$V_{ey}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[2, 1].set_ylabel('$V_{ez}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[3, 1].set_ylabel('$J_{iy}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[4, 1].set_ylabel('$J_{iz}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
-    
-    axes[0, 2].set_ylabel('$T_e$\n(eV)'     , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[1, 2].set_ylabel('$V_{ex}$\n(m/s)' , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[2, 2].set_ylabel('$J_{ix}$'        , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[3, 2].set_ylabel('$E_x$\n(mV/m)'   , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[4, 2].set_ylabel('$B_x$\n(nT)'     , fontsize=fsize, rotation=0, labelpad=lpad)
-    
-    fig.align_labels()
-            
-    for ii in range(3):
-        axes[4, ii].set_xlabel('Position (m/dx)')
-        for jj in range(5):
-            axes[jj, ii].set_xlim(B_nodes_loc[0] / dx, B_nodes_loc[-1] / dx)
-            axes[jj, ii].axvline(-NX//2, c='k', ls=':', alpha=0.5)
-            axes[jj, ii].axvline( NX//2, c='k', ls=':', alpha=0.5)
-            axes[jj, ii].ticklabel_format(axis='y', useOffset=False)
-            axes[jj, ii].grid()
-    
-    plt.tight_layout(pad=1.0, w_pad=1.8)
-    fig.subplots_adjust(hspace=0.125)
-    plt.savefig(diagnostic_path + 'diag_field_{:07}'.format(qq), 
-                facecolor=fig.get_facecolor(), edgecolor='none')
-    plt.close('all')
-    return
-
-def dump_to_file(pos, vel, E_int, Ve, Te, B, Ji, q_dens, qq, folder='parallel', print_particles=False):
-    import os
-    np.set_printoptions(threshold=sys.maxsize)
-    
-    dirpath = drive + save_path + '/{}/timestep_{:05}/'.format(folder, qq) 
-    if os.path.exists(dirpath) == False:
-        os.makedirs(dirpath)
-        
-    print('Dumping arrays to file')
-    if print_particles == True:
-        with open(dirpath + 'pos.txt', 'w') as f:
-            print(pos, file=f)
-        with open(dirpath + 'vel.txt', 'w') as f:
-            print(vel, file=f)
-    with open(dirpath + 'E.txt', 'w') as f:
-        print(E_int, file=f)
-    with open(dirpath + 'Ve.txt', 'w') as f:
-        print(Ve, file=f)
-    with open(dirpath + 'Te.txt', 'w') as f:
-        print(Te, file=f)
-    with open(dirpath + 'B.txt', 'w') as f:
-        print(B, file=f)
-    with open(dirpath + 'Ji.txt', 'w') as f:
-        print(Ji, file=f)
-    with open(dirpath + 'rho.txt', 'w') as f:
-        print(q_dens, file=f)
-
-    np.set_printoptions(threshold=1000)
-    return
-
-
 def load_run_params():
     global drive, save_path, run_num, save_particles, save_fields, seed, homogenous, particle_periodic,\
         particle_reflect, particle_reinit, field_periodic, disable_waves, source_smoothing, quiet_start,\
-        E_damping, damping_fraction, damping_multiplier, resis_multiplier, NX, max_wcinv, dxm, ie,\
+        NX, max_wcinv, dxm, ie, E_damping, damping_fraction, resis_multiplier, \
             orbit_res, freq_res, part_dumpf, field_dumpf, run_description, particle_open, ND, NC,\
                 lo1, lo2, ro1, ro2, li1, li2, ri1, ri2,\
                 adaptive_timestep, adaptive_subcycling, default_subcycles
@@ -2433,6 +1414,9 @@ def load_run_params():
     
         run_description = f.readline()                     # Commentary to attach to runs, helpful to have a quick description
     
+    particle_periodic = 1
+    field_periodic = 1
+    
     # Set number of ghost cells, count total
     ND = 2
     NC = NX + 2*ND
@@ -2443,17 +1427,6 @@ def load_run_params():
     
     li1 = ND         ; li2 = ND + 1         # Left inner
     ri1 = ND + NX - 1; ri2 = ND + NX - 2    # Right inner
-
-    # Check BCs
-    if field_periodic == 1 and not disable_waves:
-        if particle_periodic == 0:
-            print('Periodic field compatible only with periodic particles.')
-            particle_periodic = 1
-            particle_reflect = particle_reinit = 0
-    
-    particle_open = 0
-    if particle_reflect + particle_reinit + particle_periodic == 0:
-        particle_open = 1
         
     # Hardcode because I keep forgetting to change this
     if os.name == 'posix':
@@ -2491,7 +1464,7 @@ def load_plasma_params():
         qm_ratios, N, idx_start, idx_end, Nj, N_species, B_eq, ne, density, \
         E_par, Te0_scalar, vth_perp, vth_par, T_par, T_perp, vth_e, vei,\
         wpi, wpe, va, gyfreq_eq, egyfreq_eq, dx, n_contr, min_dens, xmax, xmin,\
-            inject_rate, k_max, inv_dx, inv_mu0
+            k_max, inv_dx, inv_mu0
         
     print('LOADING PLASMA: {}'.format(plasma_input))
     with open(plasma_input, 'r') as f:
@@ -2522,13 +1495,6 @@ def load_plasma_params():
     else:
         B_eq = float(B_eq)
     
-    ### -- Normalization of density override (e.g. Fu, Winkse)
-    if Fu_override == True:
-        rat        = 5
-        ne         = (rat*B_eq)**2 * e0 / EMASS
-        density    = np.array([0.05, 0.94, 0.01])*ne
-    ### 
-    
     charge    *= ECHARGE                                     # Cast species charge to Coulomb
     mass      *= PMASS                                       # Cast species mass to kg
     qm_ratios  = np.divide(charge, mass)                     # q/m ratio for each species
@@ -2536,15 +1502,9 @@ def load_plasma_params():
     # DOUBLE ARRAYS THAT MIGHT BE ACCESSED BY DEACTIVATED PARTICLES
     qm_ratios  = np.concatenate((qm_ratios, qm_ratios))
     temp_type  = np.concatenate((temp_type, temp_type))
-    
-    # Calculate va based only on cold proton component, or do it normal SI way
-    if cold_va:
-        # Based on Shoji et al. (2013)
-        va         = B_eq / np.sqrt(mu0*mass[1]*density[1])
-    else:
-        mass_dens  = (mass*density).sum()
-        va         = B_eq / np.sqrt(mu0*mass_dens)
-    
+
+    mass_dens  = (mass*density).sum()
+    va         = B_eq / np.sqrt(mu0*mass_dens)
     ne         = density.sum()                               # Electron number density
     wpi        = np.sqrt((density * charge ** 2 / (mass * e0)).sum())            # Proton Plasma Frequency, wpi (rad/s)
     wpe        = np.sqrt(ne * ECHARGE ** 2 / (EMASS * e0))   # Electron Plasma Frequency, wpi (rad/s)
@@ -2588,89 +1548,11 @@ def load_plasma_params():
     N_species = nsp_ppc * NX
     if field_periodic == 0:
         N_species += 2   
-    
-    # Add number of spare particles proportional to percentage of total (50% standard, high but safe)
-    if particle_open == 1:
-        spare_ppc  = N_species.sum() * 0.5
-    else:
-        spare_ppc  = 0
-    N = N_species.sum() + int(spare_ppc)
-    
-    # Calculate injection rate for open boundaries
-    if particle_open == 1:
-        inject_rate = nsp_ppc * (vth_par / dx) / np.sqrt(2 * np.pi)
-    else:
-        inject_rate = 0.0
+
+    N = N_species.sum()
     
     idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
     idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
-    return
-
-
-def load_wave_driver_params():
-    global pol_wave, driven_freq, driven_ampl, driven_k, pulse_offset, pulse_width
-    
-    print('LOADING DRIVER: {}'.format(driver_input))
-    with open(driver_input, 'r') as f:
-        pol_wave     = int(np.array(f.readline().split()[1]))
-        driven_freq  = float(np.array(f.readline().split()[1]))
-        driven_ampl  = float(np.array(f.readline().split()[1]))
-        pulse_offset = float(np.array(f.readline().split()[1]))
-        pulse_cycle  = float(np.array(f.readline().split()[1]))
-    
-    # Define pulse width in terms of wave frequency
-    # i.e. pump X cycles of a wave at driven_freq
-    wave_period = 1. / driven_freq
-    pulse_width = pulse_cycle*wave_period
-    
-    species_plasfreq_sq   = (density * charge ** 2) / (mass * e0)
-    species_gyrofrequency = np.divide(charge, mass) * B_eq
-    
-    # Looks right!
-    driven_rad = driven_freq * 2 * np.pi
-    driven_k   = (driven_rad / SPLIGHT) ** 2
-    driven_k  *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyrofrequency))).sum()
-    driven_k   = np.sqrt(driven_k)
-    return
-
-
-def calculate_background_magnetic_field():
-    global a, B_xmax, loss_cone_eq, loss_cone_xmax, lambda_L, theta_xmax,\
-        B_A, r_A, lat_A, B_nodes_loc, E_nodes_loc
-    if homogenous == 1:
-        a      = 0
-        B_xmax = B_eq
-        
-        # Also need to set any numeric values
-        B_A            = 0.0
-        loss_cone_eq   = 0.0
-        loss_cone_xmax = 0.0
-        theta_xmax     = 0.0
-        lambda_L       = 0.0
-        lat_A          = 0.0
-        r_A            = 0.0
-    else:    
-        a          = 4.5 / (L_val*RE)**2
-        r_A        = 120e3
-        lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L_val)))    # Anchor latitude in radians
-        B_A        = B_eq * np.sqrt(4 - 3*np.cos(lat_A) ** 2)\
-                    / (np.cos(lat_A) ** 6)                        # Magnetic field at anchor point
-                    
-        # GENERAL PARABOLIC FIELD
-        if B_xmax_ovr == '-':
-            a      = 4.5 / (L_val*RE)**2
-            B_xmax = B_eq * (1 + a*xmax**2)
-        else:
-            B_xmax = float(B_xmax_ovr)
-            a      = (B_xmax / B_eq - 1) / xmax**2
-            
-        lambda_L       = np.arccos(np.sqrt(1.0 / L_val))                # MLAT of anchor point
-        loss_cone_eq   = np.arcsin(np.sqrt(B_eq   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
-        loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
-        theta_xmax     = 0.0                                            # NOT REALLY ANY WAY TO TELL MLAT WITH THIS METHOD
-       
-    B_nodes_loc  = (np.arange(NC + 1) - NC // 2)       * dx             # B grid points position in space
-    E_nodes_loc  = (np.arange(NC)     - NC // 2 + 0.5) * dx             # E grid points position in space
     return
 
 
@@ -2686,12 +1568,6 @@ def print_summary_and_checks():
     print('Sim domain length  : {:5.2f}R_E'.format(2 * xmax / RE))
     print('Density            : {:5.2f}cc'.format(ne / 1e6))
     print('Equatorial B-field : {:5.2f}nT'.format(B_eq*1e9))
-    print('Boundary   B-field : {:5.2f}nT'.format(B_xmax*1e9))
-    print('Iono.      B-field : {:5.2f}mT'.format(B_A*1e6))
-    print('Equat. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_eq))
-    print('Bound. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_xmax * 180. / np.pi))
-    print('Maximum MLAT (+/-) : {:<5.2f} degrees  '.format(theta_xmax * 180. / np.pi))
-    print('Iono.   MLAT (+/-) : {:<5.2f} degrees\n'.format(lambda_L * 180. / np.pi))
     
     print('Equat. Gyroperiod: : {}s'.format(round(2. * np.pi / gyfreq_eq, 3)))
     print('Inverse rad gyfreq : {}s'.format(round(1 / gyfreq_eq, 3)))
@@ -2700,17 +1576,8 @@ def print_summary_and_checks():
     print('{} spatial cells, 2x{} damped cells'.format(NX, ND))
     print('{} cells total'.format(NC))
     print('{} particles total\n'.format(N))
-    
-    if theta_xmax > lambda_L:
-        print('ABORT : SIMULATION DOMAIN LONGER THAN FIELD LINE')
-        sys.exit()
-    
-    if particle_periodic + particle_reflect + particle_reinit > 1:
-        print('ABORT : ONLY ONE PARTICLE BOUNDARY CONDITION ALLOWED')
-        sys.exit()
             
-    if  os.name != 'posix':
-        os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run_num))
+    os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run_num))
     return
 
 
@@ -2780,8 +1647,6 @@ else:
 run_input    = root_dir +  '/run_inputs/' + args['runfile']
 plasma_input = root_dir +  '/run_inputs/' + args['plasmafile']
 driver_input = root_dir +  '/run_inputs/' + args['driverfile']
-if Fu_override == True:
-    plasma_input = root_dir +  '/run_inputs/' + '_Fu_test.plasma'
 
 # Set anything else useful before file input load
 default_subcycles = args['subcycle']
@@ -2792,8 +1657,6 @@ load_run_params()
 if __name__ == '__main__':
     manage_directories()
 load_plasma_params()
-load_wave_driver_params()
-calculate_background_magnetic_field()
 get_thread_values()
 
 
@@ -2808,127 +1671,81 @@ if __name__ == '__main__':
     
     _B, _B2, _B_CENT, _E, _VE, _TE = initialize_fields()
     _RHO_HALF, _RHO_INT, _Ji,      \
-    _Ji_PLUS, _Ji_MINUS, _J_EXT,   \
+    _Ji_PLUS, _Ji_MINUS,    \
     _L, _G, _MP_FLUX               = initialize_source_arrays()
     _POS, _VEL, _IE, _W_ELEC, _IB, \
     _W_MAG, _IDX                   = initialize_particles(_B, _E, _MP_FLUX)
     _DT, _MAX_INC, _PART_SAVE_ITER,\
-    _FIELD_SAVE_ITER, _SUBCYCLES,  \
-    _B_DAMP, _RESIS_ARR            = set_timestep(_VEL)    
-
-
-    ### DIAGNOSTICS ###
-    if False:
-        diag.check_position_distribution(_POS)
-        diag.check_velocity_distribution(_VEL)
-        diag.check_velocity_components_vs_space(_POS, _VEL)
-        diag.check_velocity_distribution_2D(_POS, _VEL)
-        sys.exit()
+    _FIELD_SAVE_ITER, _SUBCYCLES   = set_timestep(_VEL)    
         
     print('Loading initial state...')
     init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, _RHO_INT, _RHO_HALF,
                          _Ji, _Ji_PLUS, _L, _G, _MP_FLUX, 0.5*_DT)
     get_B_cent(_B, _B_CENT)
-    calculate_E(_B, _B_CENT, _Ji, _J_EXT, _RHO_HALF, _E, _VE, _TE, _RESIS_ARR, 0.0)
+    calculate_E(_B, _B_CENT, _Ji, _RHO_HALF, _E, _VE, _TE, 0.0)
     
     print('Saving initial state...\n')
     if save_particles == 1:
         save_particle_data(_DT, _PART_SAVE_ITER, 0, 0.0, _POS, _VEL, _IDX,
-                           _Ji, _E, _B, _VE, _TE, _RHO_INT, _B_DAMP, _RESIS_ARR)
+                           _Ji, _E, _B, _VE, _TE, _RHO_INT)
 
     if save_fields == 1:
         save_field_data(_DT, _FIELD_SAVE_ITER, 0, _Ji, _E, _B, _VE, _TE,
-                        _RHO_INT, 0.0, _B_DAMP, _RESIS_ARR)
+                        _RHO_INT, 0.0)
 
     _LOOP_TIMES     = np.zeros(_MAX_INC-1, dtype=float)
     _LOOP_SAVE_ITER = 1
 
-    # WARNING  :: Accruing sim_time like this leads to numerical error accumulation at the LSB.
-    # QUESTION :: IS IT VALID TO START FIRST LOOP WITH QQ=1 and SIM_TIME=DT? ARE THE TIME 
-    #             VALUES FOR THE START OR END OF THE STEP? OR THE MIDDLE?
-    # ANSWER   :: QQ IS JUST A COUNTER, SET AS 1 SO IT DOESN'T OVERWRITE INITIAL FILES
-    #             SIM_TIME SET AS ZERO BECAUSE IT IS INCREMENTED IN THE LOOP
-    #             BY THE END OF THE FIRST LOOP, THE VALUES WILL BE AT DT
     _QQ = 1; _SIM_TIME = 0.0
     print('Starting loop...')
     while _QQ < _MAX_INC:
-        loop_start = timer()
-        if print_timings:
-            print('')
-            print(f'Loop {_QQ}:')
         
         if adaptive_timestep == 1 and disable_waves == 0:  
-            CHECK_start = timer()
             _QQ, _DT, _MAX_INC, _PART_SAVE_ITER, _FIELD_SAVE_ITER, _LOOP_SAVE_ITER, _CHANGE_FLAG, _SUBCYCLES =\
                 check_timestep(_QQ, _DT, _POS, _VEL, _IDX, _IE, _W_ELEC, _IB, _W_MAG, _MP_FLUX,
                                _B, _B_CENT, _E, _RHO_INT, 
                                _MAX_INC, _PART_SAVE_ITER, _FIELD_SAVE_ITER, _LOOP_SAVE_ITER,
-                               _SUBCYCLES, _B_DAMP, _RESIS_ARR)
-            CHECK_time = round(timer() - CHECK_start, 3)
-            if print_timings: print(f'CHECK TIME: {CHECK_time}')
+                               _SUBCYCLES)
             
             # Collect new moments and desync position and velocity. Reset damping array.
-            CHNGE_start = timer()
             if _CHANGE_FLAG == 1:
                 # If timestep was doubled, do I need to consider 0.5dt's worth of
                 # new particles? Maybe just disable the doubling until I work this out
                 init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX,  
                          _RHO_INT, _RHO_HALF, _Ji, _Ji_PLUS, _L, _G, _MP_FLUX, 0.5*_DT)
-                
-                set_damping_arrays(_B_DAMP, _RESIS_ARR, _DT, _SUBCYCLES)
-            CHNGE_time = round(timer() - CHNGE_start, 3) 
-            if print_timings: print(f'CHNGE TIME: {CHNGE_time}')
         
         #######################
         ###### MAIN LOOP ######
         #######################
         
         # First field advance to N + 1/2
-        LEAP1_start = timer()
-        _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT, _E, _VE, _TE,
-                                    _DT, _SUBCYCLES, _B_DAMP, _RESIS_ARR, _SIM_TIME)
-        LEAP1_time = round(timer() - LEAP1_start, 3)
+        _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
+                                    _DT, _SUBCYCLES, _SIM_TIME)
 
         # CAM part
-        CAMEL_start = timer()
         push_current(_Ji_PLUS, _Ji, _E, _B_CENT, _L, _G, _DT)
-        calculate_E(_B, _B_CENT, _Ji, _J_EXT, _RHO_HALF,
-                    _E, _VE, _TE, _RESIS_ARR, _SIM_TIME)
-        CAMEL_time = round(timer() - CAMEL_start, 3)
+        calculate_E(_B, _B_CENT, _Ji, _RHO_HALF,
+                    _E, _VE, _TE, _SIM_TIME)
         
         # Particle advance, moment calculation
-        PTMOM_start = timer()
         advance_particles_and_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG,
                                               _IDX, _B, _E, _RHO_INT, _RHO_HALF, _Ji,
                                               _Ji_MINUS, _Ji_PLUS, _L, _G, _MP_FLUX, _DT)
-        PTMOM_time = round(timer() - PTMOM_start, 3)
         
         # Second field advance to N + 1
-        LEAP2_start = timer()
-        _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT, _E, _VE, _TE,
-                                    _DT, _SUBCYCLES, _B_DAMP, _RESIS_ARR, _SIM_TIME)
-        LEAP2_time = round(timer() - LEAP2_start, 3)
-        
-        loop_diag = round(timer() - loop_start, 3)
-        
-        if print_timings:
-            print('')
-            print(f'LEAP1 TIME: {LEAP1_time}')
-            print(f'CAMEL TIME: {CAMEL_time}')
-            print(f'PTMOM TIME: {PTMOM_time}')
-            print(f'LEAP2 TIME: {LEAP2_time}')
-            print(f'Total Loop: {loop_diag}')
+        _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
+                                    _DT, _SUBCYCLES, _SIM_TIME)
         
         ########################
         ##### OUTPUT DATA  #####
         ########################
         if _QQ%_PART_SAVE_ITER == 0 and save_particles == 1:
             save_particle_data(_DT, _PART_SAVE_ITER, _QQ, _SIM_TIME, _POS, _VEL, _IDX,
-                               _Ji, _E, _B, _VE, _TE, _RHO_INT, _B_DAMP, _RESIS_ARR)
+                               _Ji, _E, _B, _VE, _TE, _RHO_INT)
 
         if _QQ%_FIELD_SAVE_ITER == 0 and save_fields == 1:
             save_field_data(_DT, _FIELD_SAVE_ITER, _QQ, _Ji, _E, _B, _VE, _TE,
-                            _RHO_INT, _SIM_TIME, _B_DAMP, _RESIS_ARR)
+                            _RHO_INT, _SIM_TIME)
         
         if _QQ%100 == 0 and print_runtime:
             running_time = int(timer() - start_time)
@@ -2941,18 +1758,8 @@ if __name__ == '__main__':
             pcent = round(float(_QQ) / float(_MAX_INC) * 100., 2)
             print('{:5.2f}% :: Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(
                                                    pcent, _QQ, _MAX_INC, hrs, mins, sec))
-
-        if _QQ%_LOOP_SAVE_ITER == 0:
-            _LOOP_TIME = round(timer() - loop_start, 4)
-            _LOOP_IDX  = _QQ // _LOOP_SAVE_ITER
-            _LOOP_TIMES[_LOOP_IDX-1] = _LOOP_TIME
             
         _QQ += 1
         
     runtime = round(timer() - start_time,2) 
     print('Run complete : {} s'.format(runtime))
-    if save_fields == 1 or save_particles == 1:
-        add_runtime_to_header(runtime, _LOOP_TIMES[1:].mean())
-        fin_path = '%s/%s/run_%d/run_finished.txt' % (drive, save_path, run_num)
-        with open(fin_path, 'w') as open_file:
-            pass

@@ -4159,6 +4159,7 @@ def multiplot_fluxes(series, save=True):
     '''
     Load outside loop: Fluxes and charge density of all runs in a series
     '''
+    print('Plotting fluxes for multiple series...')
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
     runs_to_do  = range(num_runs)
@@ -4218,6 +4219,7 @@ def multiplot_fluxes(series, save=True):
 
 
 def multiplot_mag_energy(save=False):
+    print('Plotting magnetic field energy for multiple series...')
     import matplotlib.cm as cm
     
     resis_fracs = [0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.50, 0.60, 0.80, 1.00]
@@ -4265,7 +4267,7 @@ def multiplot_mag_energy(save=False):
 
 def multiplot_parallel_scaling():
     # Only specific for this run, because nb.get_num_threads() didn't work
-    
+    print('Plotting parallel scaling for multiple series...')
     series  = 'parallel_time_test'
     series_dir  = '{}/runs//{}//'.format(drive, series)
     num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
@@ -4310,6 +4312,7 @@ def multiplot_saturation_amplitudes(save=True):
     Plots the saturation (maximum) amplitude of each run series as a function of
     'time' (which probably has to be hardcoded)
     '''
+    print('Plotting saturation amplitudes for multiple series...')
     #all_series  = ['//JAN16_PKTS_5HE//', '//JAN16_PKTS_10HE//', '//JAN16_PKTS_20HE//',
     jan_times = ['2015-01-16T04:29:15.000000',
         '2015-01-16T04:31:45.000000',
@@ -4357,11 +4360,11 @@ def multiplot_saturation_amplitudes(save=True):
             print('\nRun {}'.format(ii))
             cf.load_run(drive, series, ii, extract_arrays=True)
             
-            ty, by = cf.get_array('By')
+            ty, by = cf.get_array('By') 
             tz, bz = cf.get_array('Bz')
             
             env_amps = np.sqrt(by ** 2 + bz ** 2)
-            sat_amp[jj, ii] = env_amps.max()
+            sat_amp[jj, ii] = env_amps.max() * 1e9
             
     if 'JAN' in series:
         timebase = np.array([np.datetime64(this_time) for this_time in jan_times])
@@ -4396,10 +4399,11 @@ def multiplot_saturation_amplitudes(save=True):
     # Plot result -- 3 plots: spectra, envelope (or integrated power? both?)
     #                then scatterplot with each run type in different color (for he concentration)
     plt.ioff()
-    fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(16, 10))
+    fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(16, 9),
+                             gridspec_kw={'width_ratios':[1, 0.01]})
     
     # Pc1 Spectra
-    axes[0, 0].set_title('Data/Simulation Comparison')
+    axes[0, 0].set_title('Data/Simulation Comparison :: July 25, 2013')
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         im = axes[0, 0].pcolormesh(spec_time, spec_freq, spec_power,
@@ -4417,17 +4421,22 @@ def multiplot_saturation_amplitudes(save=True):
     axes[1, 0].set_xlim(time_start, time_end)
     axes[1, 0].set_xticklabels([])
     axes[1, 0].set_ylim(0.0, None)
-    axes[1, 0].set_ylabel('nT', rotation=0, labelpad=30)
+    axes[1, 0].set_ylabel('Integrated Power (nT^2/Hz)', rotation=0, labelpad=30)
+    
+    for xx in range(2):
+        for this_time in timebase:
+            axes[xx, 0].axvline(this_time, c='k', ls='--', alpha=0.75)
     
     # Hybrid Results
     clrs = ['blue', 'green', 'red']
-    for ii in range(len(all_series)):
-        axes[2, 0].scatter(timebase, sat_amp[ii], c=clrs[ii])
+    for ii, lbl in zip(range(len(all_series)), ['5% He', '10% He', '20% He']):
+        axes[2, 0].scatter(timebase, sat_amp[ii], c=clrs[ii], label=lbl)
+    axes[2, 1].set_visible(False)
     axes[2, 0].set_xlim(time_start, time_end)
     axes[2, 0].set_ylim(0.0, None)
     axes[2, 0].set_xlabel('Time (UT)')
-    axes[2, 0].set_ylabel('nT')
-    
+    axes[2, 0].set_ylabel('Saturation Amplitude (nT)')
+    axes[2, 0].legend(loc='upper right')
     if save==True:  
         fig.savefig(cf.base_dir + 'data_model_saturation.png', edgecolor='none')
         plt.close('all')
@@ -4662,24 +4671,28 @@ if __name__ == '__main__':
     # TODO: Function to calculate number density of species at gridpoints, 
     # and save this to a file
     drive       = 'D:'
-        
-    #multiplot_mag_energy(save=True)
-    #multiplot_fluxes(series)
-    #multiplot_parallel_scaling()
-    #multiplot_saturation_amplitudes(save=True)
-    #sys.exit()
+    
+    #############################
+    ### MULTI-SERIES ROUTINES ###
+    #############################
+    if False:
+        #multiplot_mag_energy(save=True)
+        #multiplot_fluxes(series)
+        #multiplot_parallel_scaling()
+        #multiplot_saturation_amplitudes(save=True)
+        #print('Exiting multiplot routines successfully.')
+        sys.exit()
 
-    for series in ['//JAN16_PKTS_5HE//',
-                   '//JAN16_PKTS_10HE//',
-                   '//JAN16_PKTS_20HE//',
-                   '//JUL25_PKTS_5HE//',
-                   '//JUL25_PKTS_10HE//',
-                   '//JUL25_PKTS_20HE//']:
+    ####################################
+    ### SINGLE SERIES ANALYSIS ########
+    ################################
+    for series in ['//CAMCL_STRIPPED_STABILITY_TEST//']:
+        
         series_dir = '{}/runs//{}//'.format(drive, series)
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
             runs_to_do = [1]
@@ -4691,10 +4704,21 @@ if __name__ == '__main__':
                 #cf.delete_analysis_folders(drive, series, run_num)
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
 
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
+                           B0_lim=None, remove_ND=False)
+                plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
+                
+                plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
+                     pcyc_mult=1.5, xmax=1.5, zero_cold=True,
+                     linear_only=False, normalize_axes=True, centre_only=False)
+                
+                #check_fields(save=True, ylim=False, skip=25)
+
+
                 #plot_total_density_with_time()
                 #plot_max_velocity()
-                #check_fields(save=True, ylim=True, skip=1)
-                #check_fields(save=True, ylim=False, skip=1)
+                #check_fields(save=True, ylim=True, skip=25)
+                
 
                 #winske_summary_plots(save=True)
                 #plot_helical_waterfall(title='', save=True, overwrite=False, it_max=None)
@@ -4721,19 +4745,7 @@ if __name__ == '__main__':
 #                         continue
 # =============================================================================
 
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
-                           B0_lim=0.10, remove_ND=False)
-                
-                #plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
-                
                 #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
-                
-# =============================================================================
-#                 plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
-#                      pcyc_mult=1.5, xmax=1.5, zero_cold=True,
-#                      linear_only=False, normalize_axes=True, centre_only=False)
-# =============================================================================
-
 # =============================================================================
 #                 ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=True,
 #                                       plot_LT=True, plot_growth=True, klim=1.5)
@@ -4763,15 +4775,15 @@ if __name__ == '__main__':
                 
                 #summary_plots(save=True, histogram=False, skip=10, ylim=False)
                 #for sp in range(cf.Nj):
-                #plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=True, skip=1, ppd=False)
+                plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=True, skip=1, ppd=False)
                 #plot_density_change(ppd=False, it_max=None, save=True)
                 #plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=True, skip=1, ppd=True)
 
                 #analyse_particle_motion(it_max=None)
-                #plot_phase_space_with_time(it_max=None, skip=1)
+                plot_phase_space_with_time(it_max=None, skip=1)
 
-                #scatterplot_velocities(skip=1)
-                check_fields(skip=25, ylim=False)
+                scatterplot_velocities(skip=1)
+                #check_fields(skip=25, ylim=False)
             
                 #plot_number_density(it_max=None, save=True, skip=1, ppd=False)
                 

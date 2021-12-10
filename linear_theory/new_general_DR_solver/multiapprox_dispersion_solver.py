@@ -156,12 +156,16 @@ def CRRES_extract_species_arrays(_time_start, _time_end, crres_path='G://DATA//C
         return times, B0, _name, _mass, _charge, _density, _tper, _ani, cold_dens    
 
     
-def create_species_array(B0, name, mass, charge, density, tper, ani, remove_zero_density_species=False):
+def create_species_array(B0, name, mass, charge, density, tper, ani,
+                         remove_zero_density_species=False, pcyc_rad=None):
     '''
     For each ion species, total density is collated and an entry for 'electrons' added (treated as cold)
     Also output a PlasmaParameters dict containing things like alfven speed, density, hydrogen gyrofrequency, etc.
     
     Inputs must be in SI units: nT, kg, C, /m3, eV, etc.
+    
+    -- NOTE --:: if pcyc_rad is defined (as it might be for some paper validations, normalization
+                 checks, etc.) it will overwrite the value for B0 to prevent conflicting values
     ''' 
     nsp       = name.shape[0]
     e0        = 8.854e-12
@@ -170,6 +174,9 @@ def create_species_array(B0, name, mass, charge, density, tper, ani, remove_zero
     me        = 9.101e-31
     mp        = 1.673e-27
     ne        = density.sum()
+    
+    if pcyc_rad is not None:
+        B0 = pcyc_rad * mp / qp
     
     t_par = np.zeros(nsp); alpha_par = np.zeros(nsp)
     for ii in range(nsp):
@@ -204,8 +211,14 @@ def create_species_array(B0, name, mass, charge, density, tper, ani, remove_zero
     PlasParams = {}
     PlasParams['va']       = B0 / np.sqrt(mu0*(density * mass).sum())  # Alfven speed (m/s)
     PlasParams['n0']       = ne                                        # Electron number density (/m3)
-    PlasParams['pcyc_rad'] = q*B0 / mp                                 # Proton cyclotron frequency (rad/s)
-    PlasParams['B0']       = B0                                        # Magnetic field value (T)
+    
+    if pcyc_rad is None:
+        PlasParams['pcyc_rad'] = q*B0 / mp                                 # Proton cyclotron frequency (rad/s)
+        PlasParams['B0']       = B0                                        # Magnetic field value (T)
+    else:
+        PlasParams['pcyc_rad'] = q*B0 / mp                                 # Proton cyclotron frequency (rad/s)
+        PlasParams['B0']       = B0                                        # Magnetic field value (T)
+
     return Species, PlasParams
 
 
@@ -579,7 +592,15 @@ def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out
            there's only one solution). This most likely occurs when cold density is
            close to zero for a species, generally the warm species part isn't enough
            to sustain the wave in a band (or is this a result of the approximations?)
-          '''
+           
+    More TODO: 
+        -- Find a better way to solve for w from k instead of relying on fsolve. Is there
+            a way to solve for each individual mode without the risk of jumping bands?
+            I mean it's just the zero to an equation, but we don't want it to grab onto 
+            the wrong one. But also how do you tell it if it's the wrong one or not?
+        -- Find a way to solve for the R mode as well. Stick this as the first returned
+            solution so that the number of ions doesn't matter.
+    '''
     gyfreqs, counts = np.unique(Species['gyrofreq'], return_counts=True)
     
     # Remove electron count, 
@@ -607,7 +628,7 @@ def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out
     # Initial guesses (check this?)
     for ii in range(1, N_solns):
         PDR_solns[0, ii - 1]  = np.array([[gyfreqs[-ii - 1] * eps, 0.0]])
-
+    
     if approx == 'hot':
         func = hot_dispersion_eqn
     elif approx == 'warm':
@@ -621,9 +642,12 @@ def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out
     if guesses is None or guesses.shape != PDR_solns.shape:
         for jj in range(N_solns):
             for ii in range(1, Nk):
-                PDR_solns[ii, jj], infodict, ier[ii, jj], msg[ii, jj] =\
-                    fsolve(func, x0=PDR_solns[ii - 1, jj], args=(k[ii], Species), xtol=tol, maxfev=fev, full_output=True)
-    
+                #if np.isnan(k[ii]):
+                #    PDR_solns[ii, jj] = np.nan
+                #else:
+                    PDR_solns[ii, jj], infodict, ier[ii, jj], msg[ii, jj] =\
+                        fsolve(func, x0=PDR_solns[ii - 1, jj], args=(k[ii], Species), xtol=tol, maxfev=fev, full_output=True)
+            
             if False:
                 # Solve for k[0] using initial guess of k[1]
                 PDR_solns[0, jj], infodict, ier[0, jj], msg[0, jj] =\
@@ -631,7 +655,6 @@ def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out
             else:
                 # Set k[0] as equal to k[1] (better for large Nk)
                 PDR_solns[0, jj] = PDR_solns[1, jj]
-                
     else:
         for jj in range(N_solns):
             for ii in range(1, Nk):
@@ -639,10 +662,10 @@ def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out
                     fsolve(func, x0=guesses[ii, jj], args=(k[ii], Species), xtol=tol, maxfev=fev, full_output=True)
 
     N_bad = remove_bad_solutions(PDR_solns, ier)
-    N_dup = remove_duplicates(PDR_solns)
+    #N_dup = remove_duplicates(PDR_solns)
     if print_filtered == True:
         print(f'{N_bad} solutions filtered for {approx} approximation.')
-        print(f'{N_dup} duplicates removed.')
+        #print(f'{N_dup} duplicates removed.')
 
     # Solve for growth rate/convective growth rate here
     if approx == 'hot':

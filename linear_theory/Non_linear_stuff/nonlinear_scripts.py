@@ -9,6 +9,7 @@ about 10 times in some places). Can always optimize later.
 """
 import sys, warnings, pdb
 import numpy as np
+import matplotlib.cm     as cm
 import matplotlib.pyplot as plt
 from   scipy.special     import wofz
 
@@ -17,16 +18,16 @@ sys.path.append('..//new_general_DR_solver//')
 from multiapprox_dispersion_solver import create_species_array, get_dispersion_relation
 
 # Constants
-qp     = 1.602e-19
-qe     =-1.602e-19
-mp     = 1.673e-27
-me     = 9.110e-31
-e0     = 8.854e-12
-mu0    = 4e-7*np.pi
-RE     = 6.371e6
-c      = 3e8
-kB     = 1.380649e-23
-B_surf = 3.12e-5
+PCHARGE = 1.602e-19
+ECHARGE =-1.602e-19
+PMASS   = 1.673e-27
+EMASS   = 9.110e-31
+EPS0    = 8.854e-12
+MU0     = 4e-7*np.pi
+RE      = 6.371e6
+SPLIGHT = 3e8
+KB      = 1.380649e-23
+B_SURF  = 3.12e-5
 
 def get_k_cold(w, Species):
     '''
@@ -38,12 +39,12 @@ def get_k_cold(w, Species):
     specified, since the CPDR is surjective in w (i.e. only one possible k for each w)
     '''
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+        warnings.filterwarnings("ignore", category=RuntimeWarning) 
         cold_sum = 0.0
         for ii in range(Species.shape[0]):
             cold_sum += Species[ii]['plasma_freq_sq'] / (w * (w - Species[ii]['gyrofreq']))
     
-        k = np.sqrt(1 - cold_sum) * w / c
+        k = np.sqrt(1 - cold_sum) * w / SPLIGHT
     return k
 
 def get_gamma_c(w, Species):
@@ -64,7 +65,7 @@ def get_group_velocity(w, k, Species):
         ion_sum += Species[ii]['plasma_freq_sq'] / (Species[ii]['gyrofreq'] - w) ** 2
         
     denom = gam_c + w*ion_sum
-    Vg    = 2 * c * c * k / denom
+    Vg    = 2 * SPLIGHT * SPLIGHT * k / denom
     return Vg
 
 def get_resonance_velocity(w, k, Species, PP):
@@ -76,33 +77,63 @@ def get_phase_velocity(w, k, Species):
 
 def get_velocities(w, Species, PP, normalize=False):
     k  = get_k_cold(w, Species)
+    
     Vg = get_group_velocity(w, k, Species)
     Vr = get_resonance_velocity(w, k, Species, PP)
     Vp = get_phase_velocity(w, k, Species)
-    
+
     if normalize == False:
         return Vg, Vp, Vr
     else:
-        return Vg/c, Vp/c, Vr/c
+        return Vg/SPLIGHT, Vp/SPLIGHT, Vr/SPLIGHT
+    
+def get_energies(w_vals, k_vals, cyc, mass):
+    '''
+    Calculate the cyclotron and Landau resonance energies given values
+    Equation is just the cyclotron resonance equation from Summers et al. (2005)
+    with a relativistic adjustment that makes it suitable for electrons too.
+    Note that 'cyclotron' resonance has N = 1, 'landau' resonance is N = 0.
+    Also note: Forget the relativistic factor, since v is what we're solving for.
+    Also, this only does the energies for a single particle species.
+    
+    Input:
+        w_vals -- Wave angular frequency (rad/s)
+        k_vals -- Wave angular wavenumber (/m)
+        cyc    -- Particle cyclotron frequency (rad/s)
+        mass   -- Particle mass (kg)
+        
+    Returns:
+        E_landau    -- Landau resonant energy (eV)
+        E_cyclotron -- Cyclotron resonant energy (eV)
+    '''
+    v_para_landau = (w_vals - 0*np.abs(cyc)) / k_vals
+    E_landau = 0.5*mass*v_para_landau**2 / PCHARGE
+    
+    v_para_cyclotron = (w_vals - 1*np.abs(cyc)) / k_vals
+    E_cyclotron = 0.5*mass*v_para_cyclotron**2 / PCHARGE
+    return E_landau, E_cyclotron
     
     
-def get_inhomogeneity_terms(w, Species, PP, Vth_perp):
+def get_inhomogeneity_terms(w, Species, PP, Vth_perp, normalize_vel=True):
     '''
     Validated about as much as possible. Results are dimensionless since 
     velocities and frequencies cancel out. Only input frequency matters
     as dimensional or not, since it involves the pcyc term (whether value or 1)
+    
+    kwarg is determined by whether or not Vth_perp is normalized or not, since
+    if it is (or is not), the output from get_velocities() also has to be (or not)
     '''
     # Third term in bracks: - Vr**2/(2*Vp**2)
-    Vg, Vp, Vr = get_velocities(w, Species, PP)     # Each length w
+    Vg, Vp, Vr = get_velocities(w, Species, PP, normalize=normalize_vel)
     pcyc       = PP['pcyc_rad']
-    
+
     s0 = Vth_perp / Vp
     s1 = (1.0 - Vr/Vg) ** 2
-    s2 = (Vth_perp**2/(2*Vp**2) + Vr**2 / (Vp*Vg) - Vr**2/(2*Vp**2))*(w / pcyc) - Vr/Vp
-    return np.array([s0, s1, s2])
+    s2 = ((Vth_perp**2)/(2*Vp**2) + Vr**2 / (Vp*Vg) - Vr**2/(2*Vp**2))*(w / pcyc) - Vr/Vp
+    return s0, s1, s2
 
 
-def nonlinear_growth_rate(w, Species, PP, nh, Q, Vth_para, Vth_perp, Bw):
+def nonlinear_growth_rate(w, wph, Q, Vth_para, Vth_perp, Vg, Vp, Vr, Bw):
     '''
     Can return non-linear growth rate as a function of frequency, but each
     velocity then needs to also be a function of frequency.
@@ -129,15 +160,15 @@ def nonlinear_growth_rate(w, Species, PP, nh, Q, Vth_para, Vth_perp, Bw):
     # Or if I specify a frequency and get just a single value back (for the integration stuff??)
     #
     # Normalize=True could be used and c terms removed from equation
-    '''
-    wph2 = nh * qp ** 2 / (mp * e0)                 # Constant
-    wc_w = qp * Bw / mp                             # Constant
     
-    Vg, Vp, Vr = get_velocities(w, Species, PP)     # Each length w
-
-    t1 = 0.5 * wph2 * Q
-    t2 = np.sqrt(Vp / (c*wc_w*w)) * Vg / Vth_para
-    t3 = (Vth_perp / (c*np.pi)) ** (3/2) * np.exp(- Vr**2 / (2*Vth_para**2))
+    Bw could be a single value or it could be an array with the same length as w
+    '''
+    Om_w = PCHARGE * Bw / PMASS
+    
+    t1 = 0.5 * wph**2 * Q
+    t2 = np.sqrt(Vp / (SPLIGHT*Om_w*w)) * Vg / Vth_para
+    t3 = (Vth_perp / (SPLIGHT*np.pi)) ** (3/2) * np.exp(- Vr**2 / (2*Vth_para**2))
+    pdb.set_trace()
     return t1 * t2 * t3
 
 
@@ -194,7 +225,7 @@ def linear_growth_rates_chen(w, Species):
     
     # Get and return ratio
     Dr_wder = 2*w + w_der_sum
-    Dr_kder = -2*k*c**2 - k_der_sum
+    Dr_kder = -2*k*SPLIGHT**2 - k_der_sum
 
     temporal_growth_rate   = - Di / Dr_wder
     group_velocity         = - Dr_kder / Dr_wder
@@ -262,8 +293,7 @@ def get_stop_bands(k_cold, pythonic_range=False):
 # Equations seem to assume that what the satellite measures is the equatorial values?
 # Also very lousy distinctions between variables and their '0' versions (e.g. OmH vs. OmH0)
 #
-    
-def omega_equation(Om, w, Vth_para, Vth_perp, Vg, Vp, Vr, s, Q, wph2, a):
+def omega_equation(Om, w, Vth_para, Vth_perp, Vg, Vp, Vr, s0, s2, Q, wph2, a):
     '''
     Value of the derivative expressed in eq. 63.  SEEMS OK? HOW TO VERIFY?
     '''
@@ -271,91 +301,78 @@ def omega_equation(Om, w, Vth_para, Vth_perp, Vg, Vp, Vr, s, Q, wph2, a):
     br1 = (Vth_perp / np.pi) ** (3/2)               # Bracket 1
     br2 = np.sqrt(Vp * Om / w)                      # Bracket 2
     exp = np.exp(-0.5 * Vr ** 2 / Vth_para ** 2)    # Exponential bit
-    lat = 5 * Vp * s[2] * a / (s[0] * w)            # Last Term
+    lat = 5 * Vp * s2 * a / (s0 * w)            # Last Term
     return (Vg * (nob * br1 * br2 * exp - lat))
 
 
-def push_Om(Om_in, w, Vth_para, Vth_perp, Vg, Vp, Vr, s, Q, wph2, a, dt):
+def push_Om(Om_in, w, Vth_para, Vth_perp, Vg, Vp, Vr, s0, s2, Q, wph2, a, dt):
     '''
     Solution to eq. 63 via RK4 method. SEEMS OK? HOW TO VERIFY?
     '''
-    k1 = omega_equation(Om_in          , w, Vth_para, Vth_perp, Vg, Vp, Vr, s, Q, wph2, a)
-    k2 = omega_equation(Om_in + dt*k1/2, w, Vth_para, Vth_perp, Vg, Vp, Vr, s, Q, wph2, a)
-    k3 = omega_equation(Om_in + dt*k2/2, w, Vth_para, Vth_perp, Vg, Vp, Vr, s, Q, wph2, a)
-    k4 = omega_equation(Om_in + dt*k3  , w, Vth_para, Vth_perp, Vg, Vp, Vr, s, Q, wph2, a)
+    k1 = omega_equation(Om_in          , w, Vth_para, Vth_perp, Vg, Vp, Vr, s0, s2, Q, wph2, a)
+    k2 = omega_equation(Om_in + dt*k1/2, w, Vth_para, Vth_perp, Vg, Vp, Vr, s0, s2, Q, wph2, a)
+    k3 = omega_equation(Om_in + dt*k2/2, w, Vth_para, Vth_perp, Vg, Vp, Vr, s0, s2, Q, wph2, a)
+    k4 = omega_equation(Om_in + dt*k3  , w, Vth_para, Vth_perp, Vg, Vp, Vr, s0, s2, Q, wph2, a)
     
     Om_out = Om_in + (1/6) * dt * (k1 + 2*k2 + 2*k3 + k4)
     return Om_out
 
 
-def push_w(w_old, Om, s, dt):
+def push_w(w_old, Om, s0, s1, dt):
     '''
     Solution to eq. 64 via finite difference. SEEMS OK? HOW TO VERIFY?
     '''
-    K1 = 0.4 * s[0] / s[1]
+    K1 = 0.4 * s0 / s1
     Z  = 0.5 * dt * K1 * Om
     
     w_new = w_old * (1 + Z) / (1 - Z)
     return w_new
 
 
-def get_threshold_value_normalized(w, wph2, Q, s, a, Vp, Vr, Vth_para, Vth_perp):
+def get_threshold_amplitude(w, wph, Q, s2, a, Vp, Vr, Vth_para, Vth_perp):
     '''
     Input values are their normalized counterparts, as per eqn. (62) of Omura et al. (2010)
+    
+    This seems validated by Shoji et al. (2013)
+    
+    Output is normalized by B0_eq
+    
+    Might need to put some sort of filter in here for low k that requires resonance
+    velocities > c, especially for low frequencies
     '''
-    t1    = 100 * np.pi ** 3 * Vp ** 3 / (w * wph2 ** 2 * Vth_perp ** 5)
-    t2    = (a * s[2] * Vth_para / Q) ** 2
-    t3    = np.exp(Vr**2 / Vth_para**2)
+    t1    = 100. * (np.pi ** 3) * (Vp ** 3) / (w * (wph ** 4) * (Vth_perp ** 5))
+    t2    = (a * s2 * Vth_para / Q) ** 2
+    
+    vrat  = Vr**2 / Vth_para**2
+    
+    # Suppress overflow by calculating np.exp() term manually
+    # Assume anything with a logarithm of more than some value is infinite
+    t3 = np.zeros(w.shape[0])
+    for ii in range(w.shape[0]):
+        if vrat[ii] > 600.0:
+            t3[ii] = np.inf
+        else:
+            t3[ii] = np.exp(vrat[ii])
+
     om_th = t1 * t2 * t3
     return om_th
 
 
-def get_threshold_value(w, Species, PP, nh, a, Q, Vth_para, Vth_perp, Bw):
-    '''
-    This is the un-normalized input-output for B_th from Omura et al. (2010)
-    eqn (60). However, it relies on the calculation for non-linear growth rate
-    Gamma_NL, which has not as yet been verified.
-    '''
-    Vg, Vp, Vr = get_velocities(w, Species, PP)
-    s          = get_inhomogeneity_terms(w, Species, PP, Vth_perp)
-    NL         = nonlinear_growth_rate(w, Species, PP, nh, Q, Vth_para, Vth_perp, Bw)
-    
-    Om_thresh  = 5*Vp*a*s[2]*PP['pcyc_rad']*Vg / (s[0]*w*NL)
-    Bw_thresh  = 1e9*Om_thresh*mp / qp
-    return Bw_thresh
+def get_optimum_amplitude(w, wph, Q, tau, s0, s1, Vg, Vr, Vth_para, Vth_perp):
+    t1 = 0.81*(Q / tau) / np.sqrt(np.pi**5)
+    t2 = s1 * Vg / (s0 * w * Vth_para) 
+    t3 = (wph**2)*(Vth_perp**2)*np.exp(-0.5*Vr**2 / Vth_para**2)
+    om_opt = t1*t2*t3
+    return om_opt
 
 
-def get_threshold_value_UNIO(w, Species, PP, nh, Vth_para, Vth_perp, Q, L):
+def get_nonlinear_trapping_period(k, Vth_perp, Bw):
     '''
-    Input and Output values are un-normalized, but the calculation is done
-    using the normalized eqn (62) of Omura et al. (2010). 
+    QUESTION: Is Bw a single value? Or is it a function of frequency/k?
     '''
-    # Un-normalized values
-    #B0         = PP['B0']
-    pcyc       = PP['pcyc_rad']
-    Vg, Vp, Vr = get_velocities(w, Species, PP)
-    S          = get_inhomogeneity_terms(w, Species, PP, Vth_perp)
-    wph        = np.sqrt(nh * qp ** 2/ (mp * e0))
-    a          = 4.5 / (L*RE)**2
-    
-    # Normalizations
-    VPN        = Vp/c
-    VRN        = Vr/c
-    WN         = w/pcyc 
-    WPHN       = wph/pcyc
-    AN         = a * c**2 / pcyc ** 2
-    VTH_PERP_N = Vth_perp/c
-    VTH_PARA_N = Vth_para/c
-
-    Bth  = np.zeros(w.shape[0])
-    for NN in range(w.shape[0]):
-        # Calculate threshold
-        t1      = 100 * (np.pi * VPN[NN]) ** 3 / (WN[NN] * WPHN ** 4 * VTH_PERP_N ** 5)
-        t2      = (AN * S[2, NN] * VTH_PARA_N / Q) ** 2
-        t3      = np.exp((VRN[NN] / VTH_PARA_N)**2)
-        OMTH    = t1 * t2 * t3
-        Bth[NN] = OMTH
-    return Bth
+    bottom  = k * Vth_perp * PCHARGE * Bw
+    bracket = np.sqrt(PMASS / bottom) 
+    return 2 * np.pi * bracket
 
 
 def leapfrog_coupled_equations(Species, PP, init_f, init_Bw, L, nh, Q, Vth_para, Vth_perp):
@@ -378,17 +395,17 @@ def leapfrog_coupled_equations(Species, PP, init_f, init_Bw, L, nh, Q, Vth_para,
     # Constants:
     B0        = PP['B0']                                 # Equatorial magnetic field
     pcyc_eq   = PP['pcyc_rad']                           # Equatorial proton cyclotron frequency
-    wph2      = nh * qp ** 2 / (mp * e0)                 # Hot proton plasma frequency squared
+    wph2      = nh * PCHARGE ** 2 / (PMASS * EPS0)       # Hot proton plasma frequency squared
     a         = 4.5 / ((L * RE)**2)                      # Parabolic magnetic field scale factor
     w_init    = 0.4*pcyc_eq #2 * np.pi * init_f
 
-    Bw_thresh = get_threshold_value(w_init, Species, PP, nh, a, Q, Vth_para, Vth_perp, init_Bw)
+    Bw_thresh = get_threshold_amplitude(w_init, Species, PP, nh, a, Q, Vth_para, Vth_perp, init_Bw)
     print('Threshold |Bw|: {:>6.2f} nT'.format(Bw_thresh))
 
     # Normalizations
-    a         = a * ((c/pcyc_eq) ** 2)                   # Parabolic magnetic field scale factor (normalized)
-    Vth_para  = Vth_para / c
-    Vth_perp  = Vth_perp / c
+    a         = a * ((SPLIGHT/pcyc_eq) ** 2)                   # Parabolic magnetic field scale factor (normalized)
+    Vth_para  = Vth_para / SPLIGHT
+    Vth_perp  = Vth_perp / SPLIGHT
     wph2      = wph2/(pcyc_eq**2)
 
     # Define time variables (in seconds) and intialize arrays with normalized initial values
@@ -405,18 +422,18 @@ def leapfrog_coupled_equations(Species, PP, init_f, init_Bw, L, nh, Q, Vth_para,
     
     # Get initial parameters, solve for threshold
     Vg, Vp, Vr = get_velocities(w_arr[0]*pcyc_eq, Species, PP, normalize=True)
-    s          = get_inhomogeneity_terms(w_arr[0]*pcyc_eq, Species, PP, Vth_perp*c)
+    s0, s1, s2 = get_inhomogeneity_terms(w_arr[0]*pcyc_eq, Species, PP, Vth_perp*SPLIGHT)
     
     
     # Retard initial w soln to N - 1/2 (overwriting w[0]):
-    w_arr[0]   = push_w(w_arr[0], Om_arr[0], s, -0.5*dt) 
-    s          = get_inhomogeneity_terms(w_arr[0]*pcyc_eq, Species, PP, Vth_perp*c)
+    w_arr[0]   = push_w(w_arr[0], Om_arr[0], s0, s1, -0.5*dt) 
+    s0, s1, s2 = get_inhomogeneity_terms(w_arr[0]*pcyc_eq, Species, PP, Vth_perp*SPLIGHT)
     
     # Leapfrog LOOP
     for ii in range(1, t_arr.shape[0]):
         # Push w, re-solve functions of w
-        w_arr[ii]  = push_w(w_arr[ii - 1], Om_arr[ii - 1], s, dt) 
-        s          = get_inhomogeneity_terms(w_arr[ii]*pcyc_eq, Species, PP, Vth_perp*c)
+        w_arr[ii]  = push_w(w_arr[ii - 1], Om_arr[ii - 1], s0, s1, dt) 
+        s0, s1, s2 = get_inhomogeneity_terms(w_arr[ii]*pcyc_eq, Species, PP, Vth_perp*SPLIGHT)
         Vg, Vp, Vr = get_velocities(w_arr[ii]*pcyc_eq, Species, PP, normalize=True)
         
         # Check saturation (THIS PART IS UNCERTAIN. WHY TIME-VARYING LIMIT??)
@@ -425,7 +442,7 @@ def leapfrog_coupled_equations(Species, PP, init_f, init_Bw, L, nh, Q, Vth_para,
         if Om_arr[ii - 1] > Om_limit:
             Om_arr[ii] = Om_arr[ii - 1]
         else:
-            Om_arr[ii] = push_Om(Om_arr[ii - 1], w_arr[ii], Vth_para, Vth_perp, Vg, Vp, Vr, s, Q, wph2, a, dt)
+            Om_arr[ii] = push_Om(Om_arr[ii - 1], w_arr[ii], Vth_para, Vth_perp, Vg, Vp, Vr, s0, s2, Q, wph2, a, dt)
     
     # Un-normalize solutions and return plottable values
     f_arr  = (w_arr * pcyc_eq) / (2 * np.pi)
@@ -441,28 +458,31 @@ def leapfrog_coupled_equations(Species, PP, init_f, init_Bw, L, nh, Q, Vth_para,
 def define_omura2010_parameters(include_energetic=False):
     '''
     Ambient plasma parameters from Omura et al. (2010) to recreate plots
+    
+    Note: Does n_H in equations count hot plus cold? Temperature doesn't matter
+    for some things. Need to check this.
     '''
     # Parameters in SI units (Note: Added the hot bit here. Is it going to break anything?) nh = 7.2
     pcyc    = 3.7 # Hz
-    B0      = 2 * np.pi * mp * pcyc / qp
+    B0      = 2 * np.pi * PMASS * pcyc / PCHARGE
     
     if include_energetic == True:
-        Th_para  = (mp * (6e5)**2 / kB) / 11603.
-        Th_perp  = (mp * (8e5)**2 / kB) / 11603.
+        Th_para  = (PMASS * (6e5)**2 / KB) / 11603.
+        Th_perp  = (PMASS * (8e5)**2 / KB) / 11603.
         Ah       = Th_perp / Th_para - 1
         #apar_h   = np.sqrt(2.0 * qp * Th_para  / mp)
         
         name    = np.array(['H'    , 'He'  , 'O'  , 'Hot H'])
-        mass    = np.array([1.0    , 4.0   , 16.0 , 1.0    ]) * mp
-        charge  = np.array([1.0    , 1.0   , 1.0  , 1.0    ]) * qp
+        mass    = np.array([1.0    , 4.0   , 16.0 , 1.0    ]) * PMASS
+        charge  = np.array([1.0    , 1.0   , 1.0  , 1.0    ]) * PCHARGE
         density = np.array([136.8  , 17.0  , 17.0 , 7.2    ]) * 1e6
         ani     = np.array([0.0    , 0.0   , 0.0  , Ah])
         tpar    = np.array([0.0    , 0.0   , 0.0  , Th_para])
         tper    = (ani + 1) * tpar
     else:
         name    = np.array(['H'    , 'He'  , 'O' ])
-        mass    = np.array([1.0    , 4.0   , 16.0]) * mp
-        charge  = np.array([1.0    , 1.0   , 1.0 ]) * qp
+        mass    = np.array([1.0    , 4.0   , 16.0]) * PMASS
+        charge  = np.array([1.0    , 1.0   , 1.0 ]) * PCHARGE
         density = np.array([144.0  , 17.0  , 17.0]) * 1e6
         ani     = np.array([0.0    , 0.0   , 0.0 ])
         tpar    = np.array([0.0    , 0.0   , 0.0 ])
@@ -472,44 +492,64 @@ def define_omura2010_parameters(include_energetic=False):
     return Species, PP
 
 
-def calculate_threshold_amplitude():
+def define_ohja2021_parameters(ne, include_energetic=False):
     '''
-    Self-consistent function designed to try and work out this threshold thing
-    from Omura et al. (2010)
-    
-    Ideas: Does hot H have to be subtracted from cold H? Won't affect threshold
+    Ambient plasma parameters from Ohja et al. (2021) to recreate plots
+    ne in /cm3, cast to /m3 in function
     '''
-    Species, PP = define_omura2010_parameters()
+    # Parameters in SI units
+    pcyc    = 1.3 # Hz
+    B0      = 2 * np.pi * PMASS * pcyc / PCHARGE
+    #B0      = 85e-9
     
-    B0       = PP['B0']                        # Background magnetic field
-    pcyc     = 3.7 * 2 * np.pi                 # Cyclotron frequency (in rad/s)
-    Q        = 0.5                             # Q-factor (proton hole depletion)
-    L        = 4.27
+    if include_energetic == True:
+        Th_para  = (PMASS * (4.2e5)**2 / KB) / 11603.
+        Th_perp  = (PMASS * (5.4e5)**2 / KB) / 11603.
+        Ah       = Th_perp / Th_para - 1
+        
+        name    = np.array(['H'       , 'He'  , 'O'  , 'Hot H'])
+        mass    = np.array([1.0       , 4.0   , 16.0 , 1.0    ]) * PMASS
+        charge  = np.array([1.0       , 1.0   , 1.0  , 1.0    ]) * PCHARGE
+        density = np.array([0.88*0.999, 0.06  , 0.06 , 0.001  ]) * ne*1e6
+        ani     = np.array([0.0       , 0.0   , 0.0  , Ah])
+        tpar    = np.array([0.0       , 0.0   , 0.0  , Th_para])
+        tper    = (ani + 1) * tpar
+    else:
+        name    = np.array(['H' , 'He'  , 'O' ])
+        mass    = np.array([1.0 , 4.0   , 16.0]) * PMASS
+        charge  = np.array([1.0 , 1.0   , 1.0 ]) * PCHARGE
+        density = np.array([0.88, 0.06  , 0.06]) * ne*1e6
+        ani     = np.array([0.0 , 0.0   , 0.0 ])
+        tpar    = np.array([0.0 , 0.0   , 0.0 ])
+        tper    = (ani + 1) * tpar
     
-    w0       = 0.4                             # Normalized initial wave frequency
-    Vth_para = 0.002                           # Parallel thermal velocity
-    Vth_perp = 0.00267                         # Perpendicular thermal velocity
-    
-    a        = 4.5 / ((L * RE)**2)             # Parabolic magnetic field scale factor
-    a       *= (c / pcyc) ** 2                 # Normalized
-    
-    # Redefine densities based on paper
-    Species[0]['plasma_freq_sq'] = (679.0 * pcyc) ** 2
-    Species[1]['plasma_freq_sq'] = (117.0 * pcyc) ** 2
-    Species[2]['plasma_freq_sq'] = (58.30 * pcyc) ** 2
-    
-    wph2  = 0.05*Species[0]['plasma_freq_sq'] / pcyc ** 2
-    
-    s          = get_inhomogeneity_terms(w0*pcyc, Species, PP, Vth_perp*c)
-    Vg, Vp, Vr = get_velocities(w0*pcyc, Species, PP, normalize=True)
-    
-    # Input values need to be normalized
-    Omth = get_threshold_value_normalized(w0, wph2, Q, s, a, Vp, Vr, Vth_para, Vth_perp)
-    print('Bth = {:.2f} nT'.format(Omth*B0*1e9))
-    return
+    Species, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
+    return Species, PP
 
 
-def plot_omura2010_velocities_and_dispersion():
+def define_shoji2013_parameters():
+    '''
+    Ambient plasma parameters from Ohja et al. (2021) to recreate plots
+    ne in /cm3, cast to /m3 in function
+    '''
+    # Parameters in SI units
+    ne      = 178 # cc
+    pcyc    = 3.7 # Hz
+    B0      = 2 * np.pi * PMASS * pcyc / PCHARGE
+
+    name    = np.array(['H' , 'He'  , 'O'  ])
+    mass    = np.array([1.0 , 4.0   , 16.0 ]) * PMASS
+    charge  = np.array([1.0 , 1.0   , 1.0  ]) * PCHARGE
+    density = np.array([0.81, 0.095 , 0.095]) * ne*1e6
+    ani     = np.array([0.0 , 0.0   , 0.0  ])
+    tpar    = np.array([0.0 , 0.0   , 0.0  ])
+    tper    = (ani + 1) * tpar
+    
+    Species, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
+    return Species, PP
+
+
+def plot_omura2010_figs34():
     '''
     Looks good
     '''
@@ -531,7 +571,6 @@ def plot_omura2010_velocities_and_dispersion():
     ax.set_xlim(0, 0.025)
     
     # Resonance and Group Velocities plot (Figure 4a,b validated)
-    Species, PP = define_omura2010_parameters()
     V_group, V_phase, V_resonance = get_velocities(w_vals, Species, PP)
 
     fig, ax = plt.subplots()
@@ -588,31 +627,6 @@ def plot_omura2010_freqamp():
     ax[1].set_ylabel('f (Hz)', rotation=0, fontsize=14, labelpad=30)
     #ax[1].set_xlim(0, 30)
     #ax[1].set_ylim(0, 3.0)
-    return
-
-
-def plot_omura2010_NLGrowth():
-    Species, PP = define_omura2010_parameters()
-    
-    nh                = 0.05*Species[0]['density']
-    vth_parallel      = 6e5
-    vth_perpendicular = 8e5
-    Q_value           = 0.5
-    Bw_init           = 0.5e-9
-    
-    f_max  = 4.0
-    f_vals = np.linspace(0.0, f_max, 10000)
-    w_vals = 2 * np.pi * f_vals
-    
-    Gamma_NL = nonlinear_growth_rate(w_vals, Species, PP, nh, Q_value, vth_parallel, vth_perpendicular, Bw_init)
-    
-    fig, ax = plt.subplots()
-    ax.plot(f_vals, Gamma_NL)
-    ax.set_title('Non-linear Growth Rate by Frequency (Omura et al., 2010)')
-    ax.set_xlabel('f (Hz)', fontsize=14)
-    ax.set_ylabel('$\Gamma_{NL}$\n$(s^{-1})$', rotation=0, fontsize=14, labelpad=30)
-    ax.set_xlim(0, f_max)
-    #ax.set_ylim(0, 250)
     return
 
 
@@ -697,6 +711,54 @@ def plot_check_temporal_growth_rate_chen():
     return
 
 
+def plot_check_CPDR():
+    '''
+    Compares solution of CPDR using some mix of ions (e.g. omura2101_parameters)
+    using the algebraic cold plasma dispersion relation (algebraic) vs. the 
+    root finding method that underpins the warm and kinetic solutions (used
+    for Wang et al., Chen et al., etc.)
+    
+    Note: The CPDR solver retrieves the same frequency multiples times because
+    get_k_cold() doesn't return unique values - Different frequencies may return
+    the same k (in fact, for a 3 component plasma, 3 frequencies below p_cyc
+    will return the same k).
+    
+    Will get a better result if I code k_min to k_max and get the 3-component
+    solution for that.
+    '''
+    Species, PP = define_omura2010_parameters(include_energetic=False)
+    
+    # Cold dispersion from get_k_cold()
+    f_max  = 4.0
+    Nf     = 10000
+    f_vals = np.linspace(0.0, f_max, Nf)
+    w_vals = 2*np.pi*f_vals
+    k_vals = get_k_cold(w_vals, Species)
+    wlen   = 1e-3 * 2*np.pi / k_vals
+        
+    # Use this k range to get new k array
+    k_min = k_vals[np.isnan(k_vals) == False].min()
+    k_max = k_vals[np.isnan(k_vals) == False].max()
+    k_vals_CPDR = np.linspace(k_min, k_max, Nf*3)
+    wlen_CPDR = 1e-3 * 2*np.pi / k_vals_CPDR
+    
+    CPDR, cCGR = get_dispersion_relation(Species, k_vals_CPDR, approx='cold')
+    f_vals_CPDR= CPDR.real / (2*np.pi)
+        
+    fig, ax = plt.subplots()
+    ax.plot(1/wlen, f_vals                  , c='k', label='Algebraic')
+    ax.plot(1/wlen_CPDR, f_vals_CPDR[:, 0], c='b', label='Solver-H')
+    ax.plot(1/wlen_CPDR, f_vals_CPDR[:, 1], c='b', label='Solver-He')
+    ax.plot(1/wlen_CPDR, f_vals_CPDR[:, 2], c='b', label='Solver-O')
+    ax.set_xlabel('$1/\lambda$ (/km)')
+    ax.set_ylabel('f', rotation=0)
+    ax.set_ylim(0, 3.5)
+    ax.set_xlim(0, 0.025)
+    ax.legend()
+    plt.show()
+    return
+
+
 def plot_convective_growth_rate_chen():
     '''
     Check this with Fraser (1989) parameters
@@ -778,72 +840,351 @@ def plot_convective_growth_rate_fraser():
 
 
 def plot_shoji2012_2D():
-    # Shoji et al. (2012) recreation of 2D plot
-    #   --- Varies with normalized frequency (to pcyc) and ion density (plasma freq. proxy)
-    #   --- Need to get Bth first, then NL growth rate calculated with Bw = Bth
-    #   --- BTH ALMOST VALIDATED. Min growth region looked a little off, and weird nan's at bottom left.
-    #       -- NOPE, H band completely different (way lower in higher density lower frequency section). Error?
-    Nw   = 500
-    B0   = 243e-9   # T 
-    pcyc = 23.2     # rad/s 
-    #ecyc = 4.27e4   # rad/s
+    '''
+    Shoji et al. (2012) recreation of 2D plots in Figures 5 and 6
+     -- Varies with normalized frequency (to pcyc) and ion density (plasma freq. proxy)
+     -- Assume Bth validated via plots from Shoji et al. (2013)
+     -- Can re-validate afterwards (but assume this isn't a problem for now)
+     -- Non-linear growth rates are a function of density, assume constant B0
+     
+     Awkward because threshold amplitude requires normalized parameters, but the
+     non-linear growth rate function doesn't.
+     
+    Threshold Amplitude is off, much more for the higher frequency H band than
+    the He band (but the threshold amplitude is still lower than it should be)
+    '''
+    # Magnetospheric parameters
+    B0 = 243e-9 
+    L  = 4.0
+    a  = 4.5/(L*RE)**2
     
-    Nr          = 500
-    wpe_wce_max = 17    # Ratio max
-    
-    # Frequency axis
-    pcyc_min = 0.375
-    pcyc_max = 1.0
+    # Frequency axis (rad/s)
+    Nw       = 500
+    pcyc     = 23.2
+    ecyc     = np.abs(ECHARGE) * B0 / EMASS
+    pcyc_min = 0.126
+    pcyc_max = 0.249
     w_axis   = np.linspace(pcyc_min, pcyc_max, Nw)
-    w        = w_axis * pcyc
+    w_vals   = w_axis * pcyc
     
-    # Density axis 
-    wpe_wce  = np.linspace(0.0, wpe_wce_max, Nr)
-    ne       = wpe_wce ** 2 * B0 ** 2 * e0 / me
+    # Density axis (/m3)
+    Nr          = 500
+    wpe_wce_max = 17
+    wpe_wce     = np.linspace(0.0, wpe_wce_max, Nr)
+    ne          = wpe_wce ** 2 * B0 ** 2 * EPS0 / EMASS
     
-    # Energetic plasma parameters
+    # Energetic plasma parameters (normalized)
     Q        = 0.5
-    Vth_para = 0.00800*c
-    Vth_perp = 0.01068*c
+    Vth_para = 0.00800
+    Vth_perp = 0.01068    
+    
+    # Cold plasma parameters (constant)
+    name   = np.array(['H'    , 'He'  , 'O'   ])
+    mass   = np.array([1.0    , 4.0   , 16.0  ]) * PMASS
+    charge = np.array([1.0    , 1.0   , 1.0   ]) * PCHARGE
+    tpar   = np.array([0.0    , 0.0   , 0.0   ])
+    ani    = np.array([0.0    , 0.0   , 0.0   ])
+    tper   = (ani + 1) * tpar
     
     # Other parameters
-    L        = 4.0
-    #Bw_init  = 0.5e-9
+    white_line = np.sqrt(50e6*PCHARGE**2/(EMASS*EPS0))/ecyc
     
-    # Cold plasma parameters
-    name    = np.array(['H'    , 'He'  , 'O'   ])
-    mass    = np.array([1.0    , 4.0   , 16.0  ]) * mp
-    charge  = np.array([1.0    , 1.0   , 1.0   ]) * qp
-    tpar    = np.array([0.0    , 0.0   , 0.0   ])
-    ani     = np.array([0.0    , 0.0   , 0.0   ])
-    tper    = (ani + 1) * tpar
-
-    BTH = np.zeros((Nr, Nw), dtype=float)
-    for MM in range(Nr):
+    # Return arrays
+    BTH = np.zeros((Nr, Nw), dtype=np.float64)
+    NLG = np.zeros((Nr, Nw), dtype=np.float64)
+    
+    BTH[0] = np.inf
+    for MM in range(1, Nr):
         nh           = 0.0081 * ne[MM]
+        wph          = np.sqrt(nh*PCHARGE**2/(PMASS*EPS0))
         density      = np.array([0.8019 , 0.0950, 0.0950]) * ne[MM]
-        Species, PP  = create_species_array(B0, name, mass, charge, density, tper, ani)
-
-        BTH[MM] = get_threshold_value_UNIO(w, Species, PP, nh, Vth_para, Vth_perp, Q, L)
+        Species, PP  = create_species_array(B0, name, mass, charge, density, tper, ani,
+                                            pcyc_rad=pcyc)
         
-    fig, ax = plt.subplots()
+        # Get (normalized) velocities and inhomogeneity parameters
+        Vg, Vp, Vr = get_velocities(w_vals, Species, PP, normalize=True)
+        s0, s1, s2 = get_inhomogeneity_terms(w_vals, Species, PP, Vth_perp, normalize_vel=True)
         
-    im1 = ax.pcolormesh(w_axis, wpe_wce, BTH, cmap='jet', vmin=0.0, vmax=0.1)
-    fig.colorbar(im1)
+        # Normalize the rest of the parameters
+        wphn   = wph / pcyc
+        a_norm = a*(SPLIGHT**2/PP['pcyc_rad']**2)
+        
+        # This one uses all normalized parameters
+        BTH[MM, :] = get_threshold_amplitude(w_axis, wphn, Q, s2, a_norm, Vp, Vr, Vth_para, Vth_perp)
+        
+        # This one uses SI units (just to be confusing)
+        NLG[MM, :] = nonlinear_growth_rate(w_vals, wph, Q, Vth_para*SPLIGHT,
+                                           Vth_perp*SPLIGHT, Vg*SPLIGHT, Vp*SPLIGHT, 
+                                           Vr*SPLIGHT, BTH[MM, :]*B0)
     
-    #NL = nonlinear_growth_rate(_w, _Species, _PP, _nh, _Q, _Vth_para, _Vth_perp, _Bw_init)
+    NLG = NLG/pcyc
+    cmap = cm.get_cmap('jet')
+    cmap.set_bad(color=cmap(1.0))
+    
+    if False:
+        # Plot Bth
+        plt.ioff()
+        fig, ax = plt.subplots()
+        im1 = ax.pcolormesh(w_axis, wpe_wce, BTH, cmap=cmap, vmin=0.0, vmax=0.1)
+        ax.axhline(white_line, c='white', ls='--')
+        fig.colorbar(im1, extend='both')
+    
+    if True:
+        # Plot Non-linear Growth Rate
+        plt.ioff()
+        fig2, ax2 = plt.subplots()
+        im2 = ax2.pcolormesh(w_axis, wpe_wce, NLG, cmap='jet', vmin=0.0, vmax=1.5)
+        ax2.axhline(white_line, c='white', ls='--')
+        fig2.colorbar(im2, extend='both')
+    
+    plt.show()
+    return
+
+
+def plot_shoji2013_fig7():
+    '''
+    Validation plot to generate Figure 7 of Shoji et al. (2013) showing:
+    a) Threshold and optimum wave amplitudes for values of tau = 0.25, 0.5, 1.0, 2.0
+    b) Nonlinear transition times for the same tau values
+    each between a frequency range of ~0.35 - 1.0 normalized proton cyclotron range
+    
+    Validated against the paper, looks great! Note: The 10^-2 label in the paper looks
+    off, but the lines in proportion to the graph look correct.
+    '''
+    Species, PP = define_shoji2013_parameters()
+
+    # Frequencies to evaluate
+    f_min  = 1.3
+    f_max  = 3.7
+    Nf     = 10000
+    f_vals = np.linspace(f_min, f_max, Nf)
+    w_vals = 2*np.pi*f_vals
+    k_vals = get_k_cold(w_vals, Species)
+    
+    # Define hot proton parameters
+    nh = 0.0405*PP['n0']
+    wph2 = nh * PCHARGE ** 2 / (PMASS * EPS0) 
+    Vth_para = 0.002
+    Vth_perp = 0.00283
+    Q = 0.5
+    
+    # Curvature parameters
+    L  = 4.3
+    a  = 4.5  / (L*RE)**2
+    a  = a*(SPLIGHT**2/PP['pcyc_rad']**2)
+    
+    Vg, Vp, Vr = get_velocities(w_vals, Species, PP, normalize=True)
+    s0, s1, s2 = get_inhomogeneity_terms(w_vals, Species, PP, Vth_perp, normalize_vel=True)
+    
+    # Normalize input parameters
+    wph = np.sqrt(wph2) / PP['pcyc_rad']
+    w   = w_vals / PP['pcyc_rad']
+
+    B_th   = get_threshold_amplitude(w, wph, Q, s2, a, Vp, Vr, Vth_para, Vth_perp)
+    B_opt1 = get_optimum_amplitude(w, wph, Q, 0.25, s0, s1, Vg, Vr, Vth_para, Vth_perp)
+    B_opt2 = get_optimum_amplitude(w, wph, Q, 0.50, s0, s1, Vg, Vr, Vth_para, Vth_perp)
+    B_opt3 = get_optimum_amplitude(w, wph, Q, 1.00, s0, s1, Vg, Vr, Vth_para, Vth_perp)
+    B_opt4 = get_optimum_amplitude(w, wph, Q, 2.00, s0, s1, Vg, Vr, Vth_para, Vth_perp)
+    
+    T_tr1  = get_nonlinear_trapping_period(k_vals, Vth_perp*SPLIGHT, B_opt1*PP['B0'])
+    T_tr2  = get_nonlinear_trapping_period(k_vals, Vth_perp*SPLIGHT, B_opt2*PP['B0'])
+    T_tr3  = get_nonlinear_trapping_period(k_vals, Vth_perp*SPLIGHT, B_opt3*PP['B0'])
+    T_tr4  = get_nonlinear_trapping_period(k_vals, Vth_perp*SPLIGHT, B_opt4*PP['B0'])
+    
+    T_N1   = 0.25*T_tr1*PP['pcyc_rad']
+    T_N2   = 0.50*T_tr2*PP['pcyc_rad']
+    T_N3   = 1.00*T_tr3*PP['pcyc_rad']
+    T_N4   = 2.00*T_tr4*PP['pcyc_rad']
+    
+    plt.ioff()
+    fig, axes = plt.subplots(nrows=2, figsize=(16,9))
+    
+    axes[0].semilogy(w, B_th, c='k', ls='--')
+    axes[0].semilogy(w, B_opt1, c='k', ls='-', label='$\\tau=0.25$')
+    axes[0].semilogy(w, B_opt2, c='k', ls='-', label='$\\tau=0.50$')
+    axes[0].semilogy(w, B_opt3, c='k', ls='-', label='$\\tau=1.00$')
+    axes[0].semilogy(w, B_opt4, c='k', ls='-', label='$\\tau=2.00$')
+    axes[0].set_ylim(1e-5, 1e0)
+    axes[0].set_ylabel('$B_{opt}/B_{0eq}$')
+    axes[0].set_xlabel('$\omega/\Omega_{H0}$')
+    axes[0].set_xlim(0.35, 1.0)
+    axes[0].tick_params(top=True, right=True)
+    
+    axes[1].semilogy(w, T_N1, c='k', ls='-', label='$\\tau=0.25$')
+    axes[1].semilogy(w, T_N2, c='k', ls='-', label='$\\tau=0.50$')
+    axes[1].semilogy(w, T_N3, c='k', ls='-', label='$\\tau=1.00$')
+    axes[1].semilogy(w, T_N4, c='k', ls='-', label='$\\tau=2.00$')
+    axes[1].set_xlim(0.35, 1.0)
+    axes[1].set_ylabel('$T_N \Omega_{H0}$')
+    axes[1].set_xlabel('$\omega/\Omega_{H0}$')
+    axes[1].set_ylim(1e0, 1e4)
+    plt.show()
     return
 
     
-def plot_optimum_amplitudes():
-    # To do (e.g. Nakamura et al. 2016, Shoji et al. 2013)
+def plot_ohja2021_fig8(crosscheck_CPDR=False):
+    '''
+    3 Panel plot that relies on calculating the dispersion relation, velocities
+    (ground, phase, resonance) and resonant energies (cyclotron, Landau)
+    
+    Panel 1: Dispersion relation of EMIC wavelength (km, y) vs. Frequency (x)
+        for total electron densities 4, 6, 8 /cm3
+    Panel 2: Velocities (km/s y) vs. Frequency (x) for ne = 6/cm3
+    Panel 3: Energies (keV, y) vs. Frequency (x) for ne = 6/cm3
+    
+    NOTE: Some discrepancies in the calculated wavelengths and velocities.
+        Doesn't seem to be a mistake, since my Omura values are spot on.
+    '''
+    fig, axes = plt.subplots(nrows=3)
+    
+    # Cold dispersion from get_k_cold()
+    Spec4, PP4 = define_ohja2021_parameters(4, include_energetic=False)
+    Spec6, PP6 = define_ohja2021_parameters(6, include_energetic=False)
+    Spec8, PP6 = define_ohja2021_parameters(8, include_energetic=False)
+    
+    ################
+    ## WAVELENGTH ##
+    ################
+    # Frequencies to evaluate
+    f_max  = 1.3
+    Nf     = 10000
+    f_vals = np.linspace(0.0, f_max, Nf)
+    w_vals = 2*np.pi*f_vals
+    
+    # Calculate k for each
+    k_vals4 = get_k_cold(w_vals, Spec4)
+    k_vals6 = get_k_cold(w_vals, Spec6)
+    k_vals8 = get_k_cold(w_vals, Spec8)
+    
+    wlen4   = 1e-3 * 2*np.pi / k_vals4
+    wlen6   = 1e-3 * 2*np.pi / k_vals6
+    wlen8   = 1e-3 * 2*np.pi / k_vals8
+    
+    axes[0].plot(f_vals, wlen4, c='lime', label='4 cc') 
+    axes[0].plot(f_vals, wlen6, c='k'   , label='6 cc')
+    axes[0].plot(f_vals, wlen8, c='r'   , label='8 cc')
+    
+    if crosscheck_CPDR:
+        # Use this k range to get new k array
+        k_min = k_vals6[np.isnan(k_vals6) == False].min()
+        k_max = k_vals6[np.isnan(k_vals6) == False].max()
+        k_vals_CPDR = np.linspace(k_min, k_max, Nf*3)
+        wlen_CPDR = 1e-3 * 2*np.pi / k_vals_CPDR
+        
+        CPDR, cCGR = get_dispersion_relation(Spec6, k_vals_CPDR, approx='cold')
+        f_vals_CPDR= CPDR.real / (2*np.pi)
+            
+        axes[0].plot(f_vals_CPDR[:, 0], wlen_CPDR, c='b', label='Solver-H')
+        axes[0].plot(f_vals_CPDR[:, 1], wlen_CPDR, c='b', label='Solver-He')
+        axes[0].plot(f_vals_CPDR[:, 2], wlen_CPDR, c='b', label='Solver-O')
+        
+    axes[0].set_ylabel('$\lambda_{EMIC}$ [km]')
+    axes[0].set_ylim(0, 4000)
+    axes[0].legend(loc='upper right')
+    
+    ################
+    ## VELOCITIES ##
+    ################
+    Vg, Vp, Vr = get_velocities(w_vals, Spec6, PP6)
+    
+    axes[1].semilogy(f_vals, Vg*1e-3, c='k', label='$V_g$') 
+    axes[1].semilogy(f_vals, Vp*1e-3, c='r', label='$V_p$')
+    axes[1].semilogy(f_vals,-Vr*1e-3, c='b', label='$-V_R$')
+    axes[1].set_ylim(10, 2000)
+    axes[1].set_ylabel('Velocities [km/s]')
+    axes[1].legend(loc='upper right')
+    
+    for ax in axes:
+        ax.set_xlim(0.4, 1.3)
+    
+    ##############
+    ## ENERGIES ##
+    ##############
+    ELAND, ECYCL = get_energies(w_vals, k_vals6, PP6['pcyc_rad'], PMASS)
+    
+    axes[2].semilogy(f_vals, ECYCL*1e-3, c='b', label='$E_R$ Cyclotron')
+    axes[2].semilogy(f_vals, ELAND*1e-3, c='r', label='$E_R$ Landau')
+    axes[2].set_ylim(1e-5, 1e4)
+    axes[2].set_ylabel('$E_R$ [keV]')
+    axes[2].set_xlabel('Freq [Hz]', rotation=0)
+    axes[2].legend(loc='upper right')
+    
+    plt.show()
+    return
+
+
+def plot_ohja2021_fig9():
+    '''
+    4 Panel plot showing the non-linear properties of wavepackets from Ohja
+    et al. (2021)
+    
+    Panel 1: Scatterplot with EMD-HHT scatterplot IA/IF from THEMIS data
+             Overlaid: Threshold and Optimum amplitudes vs. frequency
+    Panel 2: Temporal linear and non-linear (with Bw = thresh, optim.) growth rates
+    Panel 3: As above, but convective (no linear)
+    Panel 4: Nonlinear transition time T_N = tau * T_tr
+    
+    Need to calculate:
+        Threshold amplitude with eqn. 62 of Omura et al. (2010)
+        Optimum amplitude with eqn. 22 of Shoji et al. (2013)
+        Non-linear growth rate with eqn. 54 of Omura et al. (2010)
+        Non-linear convective growth rate is just Gamma_NL/Vg (Kozyra I guess?)
+        Non-linear transition time relying on
+            - Nonlinear trapping period (given by a trapping frequency between
+                 eqns 39-40 in-text in Omura et al., 2010)
+            - What is tau? Some value between 0.25 - 2.0? Weighting factor relating
+                the trapping period to the transition time? Tau *is* the ratio,
+                and apparent tau = 0.5 is the best
+                
+    Doesn't work at all
+    '''
+    Species, PP = define_ohja2021_parameters(6, include_energetic=False)
+    
+    # Frequencies to evaluate
+    f_max  = 1.4
+    Nf     = 10000
+    f_vals = np.linspace(0.0, f_max, Nf)
+    w_vals = 2*np.pi*f_vals
+    
+    # Define hot proton parameters
+    nh = 0.001 * 0.88 * 6e6
+    wph2 = nh * PCHARGE ** 2 / (PMASS * EPS0) 
+    Vth_para = 420e3 / SPLIGHT
+    Vth_perp = 540e3 / SPLIGHT
+    
+    # Nonlinear hole parameters
+    tau = 0.5
+    Q = 0.5
+    
+    # Curvature parameters
+    L  = 8
+    a  = 4.5  / (L*RE)**2
+    a  = a*(SPLIGHT**2/PP['pcyc_rad']**2)
+    
+    Vg, Vp, Vr = get_velocities(w_vals, Species, PP, normalize=True)
+    s0, s1, s2 = get_inhomogeneity_terms(w_vals, Species, PP, Vth_perp, normalize_vel=True)
+    
+    # Normalize a few things
+    w_vals  = w_vals / PP['pcyc_rad']
+    wph     = np.sqrt(wph2) / PP['pcyc_rad']  # Is this supposed to be squared? I guess if the freq. is...
+    
+    # Calculate
+    B_th = get_threshold_amplitude(w_vals, wph, Q, s2, a, Vp, Vr, Vth_para, Vth_perp)
+    B_opt = get_optimum_amplitude(w_vals, wph, Q, tau, s0, s1, Vg, Vr, Vth_para, Vth_perp)
+    
+    fig, ax = plt.subplots(figsize=(16, 9))
+    ax.semilogy(f_vals, B_opt, ls='-' , label='Optimum Amplitude')
+    ax.semilogy(f_vals, B_th , ls='--', label='Threshold Amplitude')
+    ax.set_xlim(0.0, 1.4)
+    #ax.set_ylim(10**(-7.5), 1e-1)
+    plt.show()
     return
 
 
 def just_random():
     name    = np.array(['H'  ])
-    mass    = np.array([1.0  ]) * mp
-    charge  = np.array([1.0  ]) * qp
+    mass    = np.array([1.0  ]) * PMASS
+    charge  = np.array([1.0  ]) * PCHARGE
     density = np.array([200.0]) * 1e6
     ani     = np.array([0.0  ])
     tper    = np.array([0.0  ])
@@ -858,47 +1199,46 @@ def just_random():
     return
 
 
-def norm_thresh():
-    t1    = 100 * np.pi ** 3 * Vpn ** 3 / (wn * wphn ** 4 * Vth_perpn ** 5)
-    t2    = (an * s2 * Vth_paran / Q) ** 2
-    t3    = np.exp(Vrn**2 / Vth_paran**2)
-    om_th = t1 * t2 * t3
-    return om_th
-
-
-if __name__ == '__main__':  
-    # I get 0.382nT, paper says I should get 0.48
-    # Which bits am I assuming, and what's the uncertainty?
-    #
-    # Phase velocity: Should be w/k
-    #
-    Q    = 0.5
-    wlen = 370e3
-    B0   = 243e-9
-    k    = 2 * np.pi / wlen 
-    fH0  = 3.7
-    omH0 = 2 * np.pi * fH0
+if __name__ == '__main__': 
+    #plot_omura2010_figs34()
+    #plot_shoji2013_fig7()
+    plot_shoji2012_2D()
     
-    wn   = 0.4
-    wph  = 679.*np.sqrt(0.05)*omH0
-    wphn = wph / omH0
-    
-    Vth_perpn = 0.00267
-    Vth_paran = 0.002
-    
-    Vpn = (wn * omH0 / k)/c
-    Vrn = (-800e3)/c
-    Vgn = 150e3/c
-    
-    a  = 4.5 / (4.3*RE)**2
-    an = a * c**2/omH0**2
-    
-    s2 = (0.5*(Vth_perpn/Vpn)**2 + Vrn**2/(Vpn*Vgn))*wn - Vrn/Vpn   # - 0.5*(Vrn/Vpn)**2
-    
-    om_th = norm_thresh()
-    print('Non-linear growth threshold:')
-    print(om_th*B0*1e9, 'nT')
-    
-    
-    
-    
+    #plot_check_CPDR()
+    #plot_ohja2021_fig8()
+    #plot_ohja2021_fig9()
+        
+# =============================================================================
+#     if False:
+#         # I get 0.382nT, paper says I should get 0.48
+#         # Which bits am I assuming, and what's the uncertainty?
+#         #
+#         # Phase velocity: Should be w/k
+#         #
+#         Q    = 0.5
+#         wlen = 370e3
+#         B0   = 243e-9
+#         k    = 2 * np.pi / wlen 
+#         fH0  = 3.7
+#         omH0 = 2 * np.pi * fH0
+#         
+#         wn   = 0.4
+#         wph  = 679.*np.sqrt(0.05)*omH0
+#         wphn = wph / omH0
+#         
+#         Vth_perpn = 0.00267
+#         Vth_paran = 0.002
+#         
+#         Vpn = (wn * omH0 / k)/c
+#         Vrn = (-800e3)/c
+#         Vgn = 150e3/c
+#         
+#         a  = 4.5 / (4.3*RE)**2
+#         an = a * c**2/omH0**2
+#         
+#         s2 = (0.5*(Vth_perpn/Vpn)**2 + Vrn**2/(Vpn*Vgn))*wn - Vrn/Vpn   # - 0.5*(Vrn/Vpn)**2
+#         
+#         om_th = get_threshold_amplitude()
+#         print('Non-linear growth threshold:')
+#         print(om_th*B0*1e9, 'nT')
+# =============================================================================

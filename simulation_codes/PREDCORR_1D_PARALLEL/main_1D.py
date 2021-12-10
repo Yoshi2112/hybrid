@@ -20,12 +20,11 @@ B_surf  = 3.12e-5                            # Magnetic field strength at Earth 
 
 # A few internal flags
 cold_va             = False
-Fu_override         = False      # Override to allow density to be calculated as a ratio of frequencies
-do_parallel         = True       # Flag to use available threads to parallelize particle functions
-adaptive_timestep   = True       # Disable adaptive timestep to keep it the same as initial
-print_timings       = False      # Diagnostic outputs timing each major segment (for efficiency examination)
-print_runtime       = False      # Flag to print runtime every 50 iterations 
-
+Fu_override         = True      # Override to allow density to be calculated as a ratio of frequencies
+do_parallel         = True      # Flag to use available threads to parallelize particle functions
+adaptive_timestep   = True      # Disable adaptive timestep to keep it the same as initial
+print_timings       = False     # Diagnostic outputs timing each major segment (for efficiency examination)
+print_runtime       = True      # Flag to print runtime every 50 iterations 
 
 if not do_parallel:
     do_parallel = True
@@ -1310,7 +1309,7 @@ def deposit_moments_to_grid_parallel(vel, Ie, W_elec, idx, ni, nu):
     # Each thread needs a copy of nu, ni
     # This would be the code run on each thread for some subset of vel.shape[1]
     ni_threads = np.zeros((n_threads, NC, Nj), dtype=np.float64)
-    nu_threads = np.zeros((n_threads, NC, Nj, 3, ), dtype=np.float64)
+    nu_threads = np.zeros((n_threads, NC, Nj, 3), dtype=np.float64)
     
     for tt in nb.prange(n_threads):        
         for ii in range(n_start_idxs[tt], n_start_idxs[tt]+N_per_thread[tt]):
@@ -1612,6 +1611,46 @@ def get_curl_E(E, dE):
 
 
 @nb.njit()
+def get_curl_E_4thOrder(E, dE):
+    ''' 
+    Same as normal function, but 4th order solution for bulk. Gets dumped on B-grid.
+    
+    This is mega messy. Is this really necessary? Get your BCs under control, man.
+    '''   
+    nc  = E.shape[0] 
+    dE[:, :] *= 0
+    
+    for ii in nb.prange(2, nc - 1):
+        dE[ii, 1] = - E[ii - 2, 2] + 27*E[ii - 1, 2] - 27*E[ii, 2] + E[ii + 1, 2]
+        dE[ii, 2] =   E[ii - 2, 1] - 27*E[ii - 1, 1] + 27*E[ii, 1] - E[ii + 1, 1]
+    dE /= 24.
+    
+    # 2nd order solution for interior B points (not edge) (LHS/RHS)
+    dE[1, 1] = (-E[1, 2] + E[0, 2])
+    dE[1, 2] = ( E[1, 1] - E[0, 1])
+    
+    dE[nc - 1, 1] = (-E[nc - 1, 2] + E[nc - 2, 2])
+    dE[nc - 1, 2] = ( E[nc - 1, 1] - E[nc - 2, 1])
+        
+    # Curl at E[0] : Forward/Backward difference (stored in B[0]/B[NC])
+    dE[0, 1] = -(-3*E[0, 2] + 4*E[1, 2] - E[2, 2]) / 2
+    dE[0, 2] =  (-3*E[0, 1] + 4*E[1, 1] - E[2, 1]) / 2
+    
+    dE[nc, 1] = -(3*E[nc - 1, 2] - 4*E[nc - 2, 2] + E[nc - 3, 2]) / 2
+    dE[nc, 2] =  (3*E[nc - 1, 1] - 4*E[nc - 2, 1] + E[nc - 3, 1]) / 2
+    
+    # Linearly extrapolate to endpoints
+    dE[0, 1]      -= 2*(dE[1, 1] - dE[0, 1])
+    dE[0, 2]      -= 2*(dE[1, 2] - dE[0, 2])
+    
+    dE[nc, 1]     += 2*(dE[nc, 1] - dE[nc - 1, 1])
+    dE[nc, 2]     += 2*(dE[nc, 2] - dE[nc - 1, 2])
+
+    dE /= dx
+    return
+
+
+@nb.njit()
 def push_B(B, E, curlE, DT, qq, damping_array, retarding_array, half_flag=1):
     '''
     Used as part of predictor corrector for predicing B based on an approximated
@@ -1626,7 +1665,8 @@ def push_B(B, E, curlE, DT, qq, damping_array, retarding_array, half_flag=1):
     The half_flag can be thought of as 'not having done the full timestep yet' for N + 1/2, so 0.5*DT is
     subtracted from the "full" timestep time
     '''
-    get_curl_E(E, curlE)
+    get_curl_E_4thOrder(E, curlE)
+    #get_curl_E(E, curlE)
     if field_periodic == 0:
         for ii in nb.prange(1, B.shape[1]):              
             curlE[:, ii] *= retarding_array              # Apply retarding, skipping x-axis
@@ -1671,6 +1711,33 @@ def curl_B_term(B, curlB):
     for ii in nb.prange(B.shape[0] - 1):
         curlB[ii, 1] = - (B[ii + 1, 2] - B[ii, 2])
         curlB[ii, 2] =    B[ii + 1, 1] - B[ii, 1]
+    
+    curlB /= (dx * mu0)
+    return 
+
+
+@nb.njit()
+def get_curl_B_4thOrder(B, curlB):
+    '''
+    Same as other function, but uses 4th order finite difference in the bulk.
+    Gets deposited on the E-grid
+    '''
+    nc    = B.shape[0] - 1
+    curlB[:, :] *= 0
+    
+    # Do 4th order for bulk
+    for ii in nb.prange(1, B.shape[0] - 2):
+        curlB[ii, 1] = -B[ii - 1, 2] + 27*B[ii, 2] - 27*B[ii + 1, 2] + B[ii + 2, 2]
+        curlB[ii, 2] =  B[ii - 1, 1] - 27*B[ii, 1] + 27*B[ii + 1, 1] - B[ii + 2, 1]
+    
+    curlB /= 24.
+    
+    # Do second order for interior points (LHS/RHS)
+    curlB[0, 1] =  (-B[1, 2] + B[0, 2])
+    curlB[0, 2] =  ( B[1, 1] - B[0, 1])
+    
+    curlB[nc - 1, 1] = (-B[nc, 2] + B[nc - 1, 2])
+    curlB[nc - 1, 2] = ( B[nc, 1] - B[nc - 1, 1])
     
     curlB /= (dx * mu0)
     return 
@@ -1743,7 +1810,8 @@ def calculate_E(B, B_center, Ji, J_ext, q_dens, E, Ve, Te, temp3De, temp3Db, gra
     
     arr3D, arr1D are tertiary arrays used for intermediary computations
     '''
-    curl_B_term(B, temp3De)                                   # temp3De is now curl B term
+    get_curl_B_4thOrder(B, temp3De)
+    #curl_B_term(B, temp3De)                                   # temp3De is now curl B term
 
     # Calculate Ve
     Ve[:, 0] = (Ji[:, 0] + J_ext[:, 0] - temp3De[:, 0]) / q_dens
