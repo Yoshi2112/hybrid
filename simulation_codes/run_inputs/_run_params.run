@@ -24,4 +24,4 @@ GYROPERIOD_RESOLUTION	0.05
 FREQUENCY_RESOLUTION	0.05
 PARTICLE_DUMP_FREQ		5.00
 FIELD_DUMP_FREQ			0.25
-Testing if this code is stable or not. Removed boundary conditions, damping arrays, parabolic field options, external field options.
+Testing if this code is stable or not. Removed particle mirror force function, source smoothing, mp_flux, forced constant Te, put equations back to second order and linear interpolations

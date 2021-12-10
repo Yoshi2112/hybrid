@@ -3,8 +3,6 @@ from timeit import default_timer as timer
 import numpy as np
 import numba as nb
 import sys, os
-from scipy.interpolate import splrep, splev
-
 '''
 CAM_CL version of the code where everything's stripped down to its basics until
 it becomes stable. It should be able to recreate the run4 of the 20% He data
@@ -41,15 +39,6 @@ nb.set_num_threads(4)         # Uncomment to manually set number of threads, oth
 #%% INITIALIZATION
 @nb.njit()
 def quiet_start_bimaxwellian():
-    '''Initializes position, velocity, and index arrays. Position analytically
-    uniform, velocity randomly sampled normal distributions using perp/para 
-    scale factors. Quiet start initialized as per Birdsall and Langdon (1985).
-
-    OUTPUT:
-        pos -- 1xN array of particle positions in meters
-        vel -- 3xN array of particle velocities in m/s
-        idx -- N   array of particle indexes, indicating population types 
-    '''
     np.random.seed(seed)
     pos = np.zeros(N, dtype=np.float64)
     vel = np.zeros((3, N), dtype=np.float64)
@@ -105,14 +94,6 @@ def quiet_start_bimaxwellian():
 
 @nb.njit()
 def uniform_bimaxwellian():
-    '''Initializes position, velocity, and index arrays. Positions and velocities
-    both initialized using appropriate numpy random distributions, cell by cell.
-
-    OUTPUT:
-        pos -- 1xN array of particle positions in meters
-        vel -- 3xN array of particle velocities in m/s
-        idx -- N   array of particle indexes, indicating population types 
-    '''
     # Set and initialize seed
     np.random.seed(seed)
     pos   = np.zeros(N)
@@ -140,7 +121,7 @@ def uniform_bimaxwellian():
     return pos, vel, idx
 
 
-def initialize_particles(B, E, mp_flux):
+def initialize_particles(B, E):
     if quiet_start == 1:
         pos, vel, idx = quiet_start_bimaxwellian()
     else:
@@ -158,20 +139,6 @@ def initialize_particles(B, E, mp_flux):
 
 @nb.njit()
 def initialize_fields():
-    '''
-    Initializes field ndarrays and sets initial values for fields based on
-    parameters in config file.
-
-    INPUT:
-        <NONE>
-
-    OUTPUT:
-        B      -- Magnetic field array: Node locations on cell edges/vertices
-        E_int  -- Electric field array: Node locations in cell centres
-        E_half -- Electric field array: Node locations in cell centres
-        Ve     -- Electron fluid velocity moment: Calculated as part of E-field update equation
-        Te     -- Electron temperature          : Calculated as part of E-field update equation          
-    '''    
     B       = np.zeros((NC + 1, 3), dtype=np.float64)
     B2      = np.zeros((NC + 1, 3), dtype=np.float64)
     B_cent  = np.zeros((NC    , 3), dtype=np.float64)
@@ -186,19 +153,6 @@ def initialize_fields():
 
 @nb.njit()
 def initialize_source_arrays():
-    '''
-    Initializes source term ndarrays. Each term is collected on the E-field grid.
-
-    INPUT:
-        <NONE>
-
-    OUTPUT:
-        q_dens  -- Total ion charge  density
-        q_dens2 -- Total ion charge  density (used for averaging)
-        Ji      -- Total ion current density
-        ni      -- Ion number density per species
-        nu      -- Ion velocity "density" per species
-    '''
     rho_half = np.zeros(NC, dtype=np.float64)
     rho_int  = np.zeros(NC, dtype=np.float64)
     
@@ -207,28 +161,11 @@ def initialize_source_arrays():
     Ji_minus = np.zeros((NC, 3), dtype=np.float64)
     L        = np.zeros( NC,     dtype=np.float64)
     G        = np.zeros((NC, 3), dtype=np.float64)
-    
-    mp_flux  = np.zeros((2, Nj), dtype=np.float64)
-    return rho_half, rho_int, Ji, Ji_plus, Ji_minus, L, G, mp_flux
+    return rho_half, rho_int, Ji, Ji_plus, Ji_minus, L, G
 
 
 
 def set_timestep(vel):
-    '''
-    Timestep limitations:
-        -- Resolve ion gyromotion (controlled by orbit_res)
-        -- Resolve ion velocity (<0.5dx per timestep, varies with particle temperature)
-        -- Resolve B-field solution on grid (controlled by subcycling and freq_res)
-        -- E-field acceleration? (not implemented)
-        
-    Problems:
-        -- Reducing dx means that the timestep will be shortened by same vx
-        -- Reducing dx also increases dispersion. Is there a maximum number of s/c?
-        
-    To do: 
-        -- After initial calculation of DT, calculate number of required subcycles.
-        -- If greater than some preset value, change timestep instead.
-    '''
     max_vx   = np.max(np.abs(vel[0, :]))
     ion_ts   = orbit_res / gyfreq_eq              # Timestep to resolve gyromotion
     vel_ts   = 0.5*dx / max_vx                    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
@@ -285,44 +222,6 @@ def set_timestep(vel):
 #%% PARTICLES 
 @nb.njit(parallel=do_parallel)
 def assign_weighting_TSC(pos, I, W, E_nodes=True):
-    '''Triangular-Shaped Cloud (TSC) weighting scheme used to distribute particle densities to
-    nodes and interpolate field values to particle positions. Ref. Lipatov? Or Birdsall & Langdon?
-    
-    INPUT:
-        pos     -- particle positions (x)
-        I       -- Leftmost (to nearest) nodes. Output array
-        W       -- TSC weights, 3xN array starting at respective I
-        E_nodes -- True/False flag for calculating values at electric field
-                   nodes (grid centres) or not (magnetic field, edges)
-    
-    The maths effectively converts a particle position into multiples of dx (i.e. nodes),
-    rounded (to get nearest node) and then offset to account for E/B grid staggering and 
-    to get the leftmost node. This is then offset by the damping number of nodes, ND. The
-    calculation for weighting (dependent on delta_left).
-    
-    NOTE: The addition of `epsilon' prevents banker's rounding due to precision limits. This
-          is the easiest way to get around it.
-          
-    NOTE2: If statements in weighting prevent double counting of particles on simulation
-           boundaries. abs() with threshold used due to machine accuracy not recognising the
-           upper boundary sometimes. Note sure how big I can make this and still have it
-           be valid/not cause issues, but considering the scale of normal particle runs (speeds
-           on the order of va) it should be plenty fine.
-           
-    Could vectorize this with the temp_N array, then check for particles on the boundaries (for
-    manual setting)
-    
-    QUESTION :: Why do particles on the boundary only give 0.5 weighting? 
-    ANSWER   :: It seems legit and prevents double counting of a particle on the boundary. Since it
-                is a B-field node, there should be 0.5 weighted to both nearby E-nodes. In this case,
-                reflection doesn't make sense because there cannot be another particle there - there is 
-                only one midpoint position (c.f. mirroring contributions of all other particles due to 
-                pretending there's another identical particle on the other side of the simulation boundary).
-    
-    UPDATE :: Periodic fields don't require weightings of 0.5 on the boundaries. Loop was copied without
-               this option below because it prevents needing to evaluating field_periodic for every
-               particle.
-    '''
     Np         = pos.shape[0]
     epsil      = 1e-15
     
@@ -368,11 +267,6 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
 @nb.njit(parallel=do_parallel)
 def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, 
                     dt, hot_only=False):    
-    '''
-    Note: Keeping the code in case it's useful later, but commenting it out
-    for speed. Also removed requirement to call Ji, Ve, q_dens (rho) because
-    it makes coding the equilibrium bit easier. Also resisitive_array.
-    '''
     for ii in nb.prange(pos.shape[0]):
         if temp_type[idx[ii]] == 1 or hot_only == False:
             # Calculate wave fields at particle position
@@ -391,14 +285,8 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E,
             vel[1, ii] += qmi * Ep[1]
             vel[2, ii] += qmi * Ep[2]
             
-            # Calculate background field at particle position (using v_minus)
-            # Could probably make this more efficient for a=0
+            # Boris variables
             Bp[0]    += B_eq
-            constant  = 0.
-            l_cyc     = qm_ratios[idx[ii]] * Bp[0]
-            Bp[1]    += constant * pos[ii] * vel[2, ii] / l_cyc
-            Bp[2]    -= constant * pos[ii] * vel[1, ii] / l_cyc
-            
             T         = qmi * Bp 
             S         = 2.*T / (1. + T[0]*T[0] + T[1]*T[1] + T[2]*T[2])
                 
@@ -421,16 +309,8 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E,
 
 
 @nb.njit(parallel=do_parallel)
-def position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt,
+def position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, dt,
                     hot_only=False):
-    '''
-    Updates the position of the particles using x = x0 + vt. 
-    Also updates particle nearest node and weighting, for E-nodes only since
-    these are used for source term collection (mag only used for vel push) and
-    is called much more frequently.
-    Also injects particles since this is one of the four particle boundary 
-    conditions.
-    '''
     for ii in nb.prange(pos.shape[0]):
         if temp_type[idx[ii]] == 1 or hot_only == False:
             pos[ii] += vel[0, ii] * dt
@@ -440,19 +320,6 @@ def position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt,
 
                 if particle_periodic == 1:  
                     idx[ii] += Nj                            
-                elif particle_open == 1:                
-                    pos[ii]     = 0.0
-                    vel[0, ii]  = 0.0
-                    vel[1, ii]  = 0.0
-                    vel[2, ii]  = 0.0
-                    idx[ii]     = Nj
-                elif particle_reinit == 1:
-                    vel[0, ii]  = 0.0
-                    vel[1, ii]  = 0.0
-                    vel[2, ii]  = 0.0
-                    idx[ii]    += Nj                            
-                else:
-                    idx[ii] += Nj 
     
     periodic_BC(pos, idx)
     assign_weighting_TSC(pos, Ie, W_elec)
@@ -462,17 +329,6 @@ def position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt,
 
 @nb.njit(parallel=do_parallel)
 def periodic_BC(pos, idx):
-    '''
-    Simple function to work out where to reinitialize particles (species/side)
-    Coded for serial computation since numba can't do parallel reductions with
-    arrays as a target.
-    
-    Shouldn't be any slower than requiring the source functions to be serial,
-    especially since its only an evaluation for every particle, and then a few
-    more operations for a miniscule portion of those particles.
-    
-    Note: This function may only work because xmin = -xmax. Make more generic.
-    '''
     for ii in nb.prange(idx.shape[0]):
         if idx[ii] >= Nj:
             if pos[ii] > xmax:
@@ -500,20 +356,6 @@ def get_max_v(vel):
 #%% SOURCES
 @nb.njit()
 def push_current(J_in, J_out, E, B_center, L, G, dt):
-    '''Uses an MHD-like equation to advance the current with a moment method as 
-    per Matthews (1994) CAM-CL method. Fills in ghost cells at edges (excluding very last one)
-    
-    INPUT:
-        J  -- Ionic current (J plus)
-        E  -- Electric field
-        B  -- Magnetic field (offset from E by 0.5dx)
-        L  -- "Lambda" MHD variable
-        G  -- "Gamma"  MHD variable
-        dt -- Timestep
-        
-    OUTPUT:
-        J_plus in main() becomes J_half (same memory space)
-    '''
     J_out    *= 0
     
     G_cross_B = np.zeros(E.shape, dtype=np.float64)
@@ -526,43 +368,21 @@ def push_current(J_in, J_out, E, B_center, L, G, dt):
         J_out[:, ii] = J_in[:, ii] + 0.5*dt * (L * E[:, ii] + G_cross_B[:, ii]) 
     
     # Copy periodic values
-    if field_periodic == 1:
-        for ii in range(3):
-            # Copy edge cells
-            J_out[ro1, ii] = J_out[li1, ii]
-            J_out[ro2, ii] = J_out[li2, ii]
-            J_out[lo1, ii] = J_out[ri1, ii]
-            J_out[lo2, ii] = J_out[ri2, ii]
-            
-            # Fill remaining ghost cells
-            J_out[:lo2, ii] = J_out[lo2, ii]
-            J_out[ro2:, ii] = J_out[ro2, ii]
+    for ii in range(3):
+        # Copy edge cells
+        J_out[ro1, ii] = J_out[li1, ii]
+        J_out[ro2, ii] = J_out[li2, ii]
+        J_out[lo1, ii] = J_out[ri1, ii]
+        J_out[lo2, ii] = J_out[ri2, ii]
+        
+        # Fill remaining ghost cells
+        J_out[:lo2, ii] = J_out[lo2, ii]
+        J_out[ro2:, ii] = J_out[ro2, ii]
     return
 
 
 @nb.njit(parallel=do_parallel)
 def deposit_both_moments(vel, Ie, W_elec, idx, ni, nu):
-    '''
-    Collect number and velocity moments in each cell, weighted by their distance
-    from cell nodes.
-
-    INPUT:
-        vel    -- Particle 3-velocities
-        Ie     -- Particle leftmost to nearest E-node
-        W_elec -- Particle TSC weighting across nearest, left, and right nodes
-        idx    -- Particle species identifier
-
-    OUTPUT:
-        ni     -- Species number moment array(size, Nj)
-        nui    -- Species velocity moment array (size, Nj)
-        
-    TODO:
-        -- Initialize thread arrays at runtime (preallocate memory)
-        -- Calculate N_per_thread and n_start_idxs at runtime
-        -- Check if this works for non-multiples of the thread count
-           i.e. N_per_thread may need to be an array with particle counts since
-           we can't assume that it is constant for each thread.
-    '''
     ni_threads = np.zeros((n_threads, NC, Nj), dtype=np.float64)
     nu_threads = np.zeros((n_threads, NC, Nj, 3), dtype=np.float64)
     for tt in nb.prange(n_threads):        
@@ -583,20 +403,6 @@ def deposit_both_moments(vel, Ie, W_elec, idx, ni, nu):
 
 @nb.njit(parallel=do_parallel)
 def deposit_velocity_moments(vel, Ie, W_elec, idx, nu):
-    '''
-    Collect number and velocity moments in each cell, weighted by their distance
-    from cell nodes.
-
-    INPUT:
-        vel    -- Particle 3-velocities
-        Ie     -- Particle leftmost to nearest E-node
-        W_elec -- Particle TSC weighting across nearest, left, and right nodes
-        idx    -- Particle species identifier
-
-    OUTPUT:
-        ni     -- Species number moment array(size, Nj)
-        nui    -- Species velocity moment array (size, Nj)
-    '''
     nu_threads = np.zeros((n_threads, NC, Nj, 3), dtype=np.float64)
     for tt in nb.prange(n_threads):        
         for ii in range(n_start_idxs[tt], n_start_idxs[tt]+N_per_thread[tt]):
@@ -611,11 +417,6 @@ def deposit_velocity_moments(vel, Ie, W_elec, idx, nu):
 
 @nb.njit()
 def manage_source_term_boundaries(arr):
-    '''
-    If numba doesn't like the different possible shapes of arr
-    just use a loop in the calling function to work each component 
-    and this becomes for 1D arrays only
-    '''
     # If periodic, move contributions
     arr[li1] += arr[ro1]
     arr[li2] += arr[ro2]
@@ -636,29 +437,7 @@ def manage_source_term_boundaries(arr):
 
 @nb.njit()
 def init_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, rho_0, rho, J_init, J_plus,
-                         L, G, mp_flux, dt):
-    '''Moment collection and position advance function. Specifically used at initialization or
-    after timestep synchronization.
-
-    INPUT:
-        pos    -- Particle positions (x)
-        vel    -- Particle 3-velocities
-        Ie     -- Particle leftmost to nearest E-node
-        W_elec -- Particle TSC weighting across nearest, left, and right nodes
-        idx    -- Particle species identifier
-        DT     -- Timestep for position advance
-        
-    OUTPUT:
-        pos     -- Advanced particle positions
-        Ie      -- Updated leftmost to nearest E-nodes
-        W_elec  -- Updated TSC weighting coefficients
-        rho_0   -- Charge  density at initial time (p0)
-        rho     -- Charge  density at +0.5 timestep
-        J_init  -- Current density at initial time (J0)
-        J_plus  -- Current density at +0.5 timestep
-        G       -- "Gamma"  MHD variable for current advance : Current-like
-        L       -- "Lambda" MHD variable for current advance :  Charge-like
-    '''
+                         L, G, dt):
     ni       = np.zeros((NC, Nj), dtype=np.float64)
     ni_init  = np.zeros((NC, Nj), dtype=np.float64)
     nu_init  = np.zeros((NC, Nj, 3), dtype=np.float64)
@@ -672,16 +451,8 @@ def init_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, rho_0, rho, J_ini
     G       *= 0.0
                          
     deposit_both_moments(vel, Ie, W_elec, idx, ni_init, nu_init)
-    position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt)
+    position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, dt)
     deposit_both_moments(vel, Ie, W_elec, idx, ni, nu_plus)
-
-    if source_smoothing == 1:
-        for jj in range(Nj):
-            ni[:, jj]  = smooth(ni[:, jj])
-        
-            for kk in range(3):
-                nu_plus[:, jj, kk] = smooth(nu_plus[:,  jj, kk])
-                nu_init[:, jj, kk] = smooth(nu_init[:, jj, kk])
     
     # Sum contributions across species
     for jj in range(Nj):
@@ -711,30 +482,9 @@ def init_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, rho_0, rho, J_ini
     return
 
 
-#@nb.njit()
+@nb.njit()
 def advance_particles_and_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E,
-                    rho_int, rho_half, Ji, Ji_minus, Ji_plus, L, G, mp_flux, dt):
-    '''
-    Moment collection and position advance function.
-
-    INPUT:
-        pos    -- Particle positions (x)
-        vel    -- Particle 3-velocities
-        Ie     -- Particle leftmost to nearest E-node
-        W_elec -- Particle TSC weighting across nearest, left, and right nodes
-        idx    -- Particle species identifier
-        DT     -- Timestep for position advance
-        
-    OUTPUT:
-        pos     -- Advanced particle positions
-        Ie      -- Updated leftmost to nearest E-nodes
-        W_elec  -- Updated TSC weighting coefficients
-        rho     -- Charge  density at +0.5 timestep
-        J_plus  -- Current density at +0.5 timestep
-        J_minus -- Current density at initial time (J0)
-        G       -- "Gamma"  MHD variable for current advance
-        L       -- "Lambda" MHD variable for current advance    
-    '''
+                    rho_int, rho_half, Ji, Ji_minus, Ji_plus, L, G, dt):
     ni       = np.zeros((NC, Nj), dtype=np.float64)
     nu_plus  = np.zeros((NC, Nj, 3), dtype=np.float64)
     nu_minus = np.zeros((NC, Nj, 3), dtype=np.float64)
@@ -747,20 +497,9 @@ def advance_particles_and_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, 
     G         *= 0.0   
     
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt)
-    
     deposit_velocity_moments(vel, Ie, W_elec, idx, nu_minus)
-    
-    position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt)
-    
+    position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, dt)
     deposit_both_moments(vel, Ie, W_elec, idx, ni, nu_plus)
-    
-    if source_smoothing == 1:
-        for jj in range(Nj):
-            ni[:, jj]  = smooth(ni[:, jj])
-        
-            for kk in range(3):
-                nu_plus[ :, jj, kk] = smooth(nu_plus[:,  jj, kk])
-                nu_minus[:, jj, kk] = smooth(nu_minus[:, jj, kk])
     
     for jj in range(Nj):
         rho_half += ni[:, jj] * n_contr[jj] * charge[jj]
@@ -788,76 +527,24 @@ def advance_particles_and_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, 
     return
 
 
-@nb.njit()
-def smooth(function):
-    '''
-    Smoothing function: Applies Gaussian smoothing routine across adjacent cells. 
-    Assummes no contribution from ghost cells.
-    '''
-    size         = function.shape[0]
-    new_function = np.zeros(size, dtype=np.float64)
-
-    for ii in np.arange(1, size - 1):
-        new_function[ii - 1] = 0.25*function[ii] + new_function[ii - 1]
-        new_function[ii]     = 0.50*function[ii] + new_function[ii]
-        new_function[ii + 1] = 0.25*function[ii] + new_function[ii + 1]
-
-    # Move Ghost Cell Contributions: Periodic Boundary Condition
-    new_function[1]        += new_function[size - 1]
-    new_function[size - 2] += new_function[0]
-
-    # Set ghost cell values to mirror corresponding real cell
-    new_function[0]        = new_function[size - 2]
-    new_function[size - 1] = new_function[1]
-    return new_function
-
-
 #%% FIELDS
 @nb.njit(parallel=False)
-def get_curl_B_4thOrder(B):
-    '''
-    Same as other function, but uses 4th order finite difference in the bulk.
-    Gets deposited on the E-grid
-    '''
-    nc    = B.shape[0] - 1
+def get_curl_B(B):
     curlB = np.zeros((B.shape[0] - 1, 3), dtype=nb.float64)
-    
-    # Do 4th order for bulk
-    for ii in nb.prange(1, B.shape[0] - 2):
-        curlB[ii, 1] = -B[ii - 1, 2] + 27*B[ii, 2] - 27*B[ii + 1, 2] + B[ii + 2, 2]
-        curlB[ii, 2] =  B[ii - 1, 1] - 27*B[ii, 1] + 27*B[ii + 1, 1] - B[ii + 2, 1]
-    
-    curlB /= 24.*dx
-    
-    # Do second order for interior points (LHS/RHS)
-    curlB[0, 1] =  (-B[1, 2] + B[0, 2])/dx
-    curlB[0, 2] =  ( B[1, 1] - B[0, 1])/dx
-    
-    curlB[nc - 1, 1] = (-B[nc, 2] + B[nc - 1, 2])/dx
-    curlB[nc - 1, 2] = ( B[nc, 1] - B[nc - 1, 1])/dx
+    for ii in nb.prange(B.shape[0] - 1):
+        curlB[ii, 1] = - (B[ii + 1, 2] - B[ii, 2])
+        curlB[ii, 2] =    B[ii + 1, 1] - B[ii, 1]
+    curlB /= dx
     return curlB
 
 
 @nb.njit()
-def get_curl_E_4thOrder(E, dE):
-    ''' 
-    Same as normal function, but 4th order solution for bulk. Gets dumped on B-grid.
-    
-    This is mega messy. Is this really necessary? Get your BCs under control, man.
-    '''   
+def get_curl_E(E, dE):
     nc  = E.shape[0] 
     dE *= 0.
-    for ii in nb.prange(2, nc - 1):
-        dE[ii, 1] = - E[ii - 2, 2] + 27*E[ii - 1, 2] - 27*E[ii, 2] + E[ii + 1, 2]
-        dE[ii, 2] =   E[ii - 2, 1] - 27*E[ii - 1, 1] + 27*E[ii, 1] - E[ii + 1, 1]
-    dE /= 24.
-    
-    # 2nd order solution for interior B points (not edge) (LHS/RHS)
-    dE[1, 1] = (-E[1, 2] + E[0, 2])
-    dE[1, 2] = ( E[1, 1] - E[0, 1])
-    
-    dE[nc - 1, 1] = (-E[nc - 1, 2] + E[nc - 2, 2])
-    dE[nc - 1, 2] = ( E[nc - 1, 1] - E[nc - 2, 1])
+    for ii in nb.prange(1, E.shape[0]):
+        dE[ii, 1] = - (E[ii, 2] - E[ii - 1, 2])
+        dE[ii, 2] =    E[ii, 1] - E[ii - 1, 1]
         
     # Curl at E[0] : Forward/Backward difference (stored in B[0]/B[NC])
     dE[0, 1] = -(-3*E[0, 2] + 4*E[1, 2] - E[2, 2]) / 2
@@ -877,31 +564,8 @@ def get_curl_E_4thOrder(E, dE):
     return
 
 
-@nb.njit()
-def get_electron_temp(qn, te):
-    '''
-    Calculate the electron temperature in each cell. Depends on the charge density of each cell
-    and the treatment of electrons: i.e. isothermal (ie=0) or adiabatic (ie=1)
-    '''
-    gamma_e = 5./3. - 1.
-    te[:] = Te0_scalar * np.power(qn / (ECHARGE*ne), gamma_e)
-    return
-
-
 @nb.njit(parallel=False)
 def get_grad_P(qn, te):
-    '''
-    Returns the electron pressure gradient (in 1D) on the E-field grid using
-    P = nkT and finite difference.
-    
-    INPUT:
-        qn -- Grid charge density
-        te -- Grid electron temperature
-        
-    NOTE: Interpolation is needed because the finite differencing causes the
-    result to be deposited on the B-grid. Moving it back to the E-grid requires
-    an interpolation.
-    '''
     grad_pe       = np.zeros(NC    , dtype=np.float64)
     grad_pe_B     = np.zeros(NC + 1, dtype=np.float64)
     grad_pe[:]    = qn[:] * kB * te[:] / ECHARGE
@@ -912,7 +576,7 @@ def get_grad_P(qn, te):
     grad_pe_B[0]  = grad_pe_B[1]
     grad_pe_B[NC] = grad_pe_B[NC - 1]
     
-    interpolate_cell_centre_4thOrder(grad_pe_B, grad_pe)
+    grad_pe = 0.5*(grad_pe_B[:-1] + grad_pe_B[1:])
     return grad_pe
 
 
@@ -936,20 +600,6 @@ def apply_boundary(B):
 @nb.njit()
 def cyclic_leapfrog(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
                     sim_time):
-    '''
-    Solves for the magnetic field push by keeping two copies and subcycling between them,
-    averaging them at the end of the cycle as per Matthews (1994). The source terms are
-    unchanged during the subcycle step. This method damps the high frequency dispersion 
-    inherent in explicit hybrid simulations.
-    
-    INPUT:
-        B1    -- Magnetic field to update (return value comes through here)
-        B2    -- Empty array for second copy
-        rho_i -- Total ion charge density
-        J_i   -- Total ionic current density
-        DT    -- Master simulation timestep. This function advances the field by 0.5*DT
-        subcycles -- The number of subcycle steps to be performed.
-    '''
     H     = 0.5 * dt
     dh    = H / subcycles
     
@@ -959,7 +609,7 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
     ## DESYNC SECOND FIELD COPY - PUSH BY DH ##
     ## COUNTS AS ONE SUBCYCLE ##
     calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
-    get_curl_E_4thOrder(E, curl) 
+    get_curl_E(E, curl) 
     B2       -= dh * curl
     apply_boundary(B2)
     get_B_cent(B2, B_center)
@@ -975,14 +625,14 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
     while ii < subcycles:
         if ii%2 == 1:
             calculate_E(B2, B_center, Ji, rho, E, Ve, Te, sim_time)
-            get_curl_E_4thOrder(E, curl) 
+            get_curl_E(E, curl) 
             B1  -= 2 * dh * curl
             apply_boundary(B1)
             get_B_cent(B1, B_center)
             sim_time += dh
         else:
             calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
-            get_curl_E_4thOrder(E, curl) 
+            get_curl_E(E, curl) 
             B2  -= 2 * dh * curl
             apply_boundary(B2)
             get_B_cent(B2, B_center)
@@ -994,13 +644,13 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
     ## DOESN'T COUNT AS A SUBCYCLE ##
     if ii%2 == 0:
         calculate_E(B2, B_center, Ji, rho, E, Ve, Te, sim_time)
-        get_curl_E_4thOrder(E, curl) 
+        get_curl_E(E, curl) 
         B2  -= dh * curl
         apply_boundary(B2)
         get_B_cent(B2, B_center)
     else:
         calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
-        get_curl_E_4thOrder(E, curl) 
+        get_curl_E(E, curl) 
         B1  -= dh * curl
         apply_boundary(B1)
         get_B_cent(B1, B_center)
@@ -1015,26 +665,15 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
 
 
 @nb.njit()
-def calculate_E(B, B_center, Ji, qn, E, Ve, Te, sim_time):
-    '''Calculates the value of the electric field based on source term and magnetic field contributions, assuming constant
-    electron temperature across simulation grid. This is done via a reworking of Ampere's Law that assumes quasineutrality,
-    and removes the requirement to calculate the electron current. Based on equation 10 of Buchner (2003, p. 140).
-    INPUT:
-        B   -- Magnetic field array. Displaced from E-field array by half a spatial step.
-        J   -- Ion current density. Source term, based on particle velocities
-        qn  -- Charge density. Source term, based on particle positions
-    OUTPUT:
-        E_out -- Updated electric field array
-    '''        
-    curlB  = get_curl_B_4thOrder(B)
+def calculate_E(B, B_center, Ji, qn, E, Ve, Te, sim_time):    
+    curlB  = get_curl_B(B)
     curlB /= mu0
        
     Ve[:, 0] = (Ji[:, 0] - curlB[:, 0]) / qn
     Ve[:, 1] = (Ji[:, 1] - curlB[:, 1]) / qn
     Ve[:, 2] = (Ji[:, 2] - curlB[:, 2]) / qn
     
-    if ie == 1:
-        get_electron_temp(qn, Te)
+    Te
     del_p = get_grad_P(qn, Te)
     
     VexB     = np.zeros((NC, 3), dtype=np.float64)  
@@ -1062,75 +701,20 @@ def calculate_E(B, B_center, Ji, qn, E, Ve, Te, sim_time):
 #%% AUXILLIARY FUNCTIONS
 @nb.njit(parallel=False)
 def get_B_cent(B, _B_cent):
-    '''
-    Quick and dirty linear interpolation so I have a working code
-    But this is going to kill the order of my solutions
-    Need at least a quadratic spline fit for true second-order solution
-    
-    Modified to use the higher-order interpolation
-    '''
-    interpolate_cell_centre_4thOrder(B[:, 1], _B_cent[:, 1])
-    interpolate_cell_centre_4thOrder(B[:, 2], _B_cent[:, 2])
+    _B_cent[:, 1] = 0.5*(B[:-1, 1] + B[1:, 1])
+    _B_cent[:, 2] = 0.5*(B[:-1, 2] + B[1:, 2])
     return
 
 
-@nb.njit(parallel=False)
-def interpolate_cell_centre_4thOrder(edge_arr, interp):
-    '''
-    Uses equation derived in the TIMCOM model (looks like just a cubic spline?)
-    
-    http://coda.oc.ntu.edu.tw/coda/research/timcom/FRAME/fourth.html
-    
-    Does just a 1D array. Use 4th order interpolation on bulk values. 
-    Use linear for edges (because easy)
-    
-    Seems to only be second order?
-    '''
-    nc = edge_arr.shape[0]-1
-    
-    for ii in nb.prange(1, nc-1):
-        interp[ii] = -edge_arr[ii-1] + 7.*edge_arr[ii] + 7.*edge_arr[ii+1] - edge_arr[ii+2]
-    interp /= 12.
-    
-    interp[0]    = 0.5*(edge_arr[0]  + edge_arr[1])
-    interp[nc-1] = 0.5*(edge_arr[nc] + edge_arr[nc-1]) 
-    return
-
-
-#@nb.njit()
-def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, B, B_center, E, dns, 
+def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, B, B_center, E, dns, 
                    max_inc, part_save_iter, field_save_iter, loop_save_iter,
-                   subcycles, manual_trip=0):
-    '''
-    Check that simulation quantities still obey timestep limitations. Reduce
-    timestep for particle violations or increase subcycling for field violations.
-    
-    To Do:
-        -- How many subcycles should be allowed to occur before the timestep itself
-            is shorted? Maybe once subcycle > 100, trip timestep and half subcycles.
-            Would need to make sure they didn't autochange back. Think about this.
-            
-    manual_trip :: Diagnostic flag to manually increase/decrease timestep/subcycle
-       -1  :: Disables all timestep checks
-        0  :: Normal (Auto)
-        1  :: Halve timestep
-        2  :: Double timestep
-        3  :: Double subcycles
-        4  :: Half subcycles
-    
-    To do:
-        -- Calculate number of required subcycles first. If greater than some
-            predetermined limit, half timestep instead
-    '''
-    if manual_trip < 0: # Return without change or check
-        return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, 0, subcycles
-    
+                   subcycles):
+
     max_vx, max_vy, max_vz = get_max_v(vel)
     max_V = max(max_vx, max_vy, max_vz)
     
     B_tot           = np.sqrt(B_center[:, 0] ** 2 + B_center[:, 1] ** 2 + B_center[:, 2] ** 2)
     high_rat        = qm_ratios.max()
-    
     local_gyfreq    = high_rat  * np.abs(B_tot).max()      
     ion_ts          = orbit_res / local_gyfreq
     
@@ -1150,11 +734,11 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, B, B_c
         dt_sc           = freq_res / dispfreq
         new_subcycles   = int(DT / dt_sc + 1)
         
-        if (subcycles < 0.75*new_subcycles and manual_trip == 0) or manual_trip == 3:                                       
+        if subcycles < 0.75*new_subcycles:                                       
             subcycles *= 2
             print('Number of subcycles per timestep doubled to', subcycles)
             
-        if (subcycles > 3.0*new_subcycles and subcycles%2 == 0 and manual_trip == 0) or manual_trip == 4:                                      
+        if (subcycles > 3.0*new_subcycles and subcycles%2 == 0):                                      
             subcycles //= 2
             print('Number of subcycles per timestep halved to', subcycles)
             
@@ -1166,9 +750,8 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, B, B_c
     
     # Reduce timestep
     change_flag       = 0
-    if (DT_part < 0.9*DT and manual_trip == 0) or manual_trip == 1:
-        #(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt, hot_only=False)
-        position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, -0.5*DT)
+    if DT_part < 0.9*DT:
+        position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, -0.5*DT)
         
         change_flag      = 1
         DT              *= 0.5
@@ -1582,10 +1165,6 @@ def print_summary_and_checks():
 
 
 def get_thread_values():
-    '''
-    Function to calculate number of particles to work on each thread, and the
-    start index of each batch of particles.
-    '''
     global do_parallel, n_threads, N_per_thread, n_start_idxs
     
     # Count available threads
@@ -1672,15 +1251,15 @@ if __name__ == '__main__':
     _B, _B2, _B_CENT, _E, _VE, _TE = initialize_fields()
     _RHO_HALF, _RHO_INT, _Ji,      \
     _Ji_PLUS, _Ji_MINUS,    \
-    _L, _G, _MP_FLUX               = initialize_source_arrays()
+    _L, _G               = initialize_source_arrays()
     _POS, _VEL, _IE, _W_ELEC, _IB, \
-    _W_MAG, _IDX                   = initialize_particles(_B, _E, _MP_FLUX)
+    _W_MAG, _IDX                   = initialize_particles(_B, _E)
     _DT, _MAX_INC, _PART_SAVE_ITER,\
     _FIELD_SAVE_ITER, _SUBCYCLES   = set_timestep(_VEL)    
         
     print('Loading initial state...')
     init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, _RHO_INT, _RHO_HALF,
-                         _Ji, _Ji_PLUS, _L, _G, _MP_FLUX, 0.5*_DT)
+                         _Ji, _Ji_PLUS, _L, _G, 0.5*_DT)
     get_B_cent(_B, _B_CENT)
     calculate_E(_B, _B_CENT, _Ji, _RHO_HALF, _E, _VE, _TE, 0.0)
     
@@ -1702,7 +1281,7 @@ if __name__ == '__main__':
         
         if adaptive_timestep == 1 and disable_waves == 0:  
             _QQ, _DT, _MAX_INC, _PART_SAVE_ITER, _FIELD_SAVE_ITER, _LOOP_SAVE_ITER, _CHANGE_FLAG, _SUBCYCLES =\
-                check_timestep(_QQ, _DT, _POS, _VEL, _IDX, _IE, _W_ELEC, _IB, _W_MAG, _MP_FLUX,
+                check_timestep(_QQ, _DT, _POS, _VEL, _IDX, _IE, _W_ELEC, _IB, _W_MAG,
                                _B, _B_CENT, _E, _RHO_INT, 
                                _MAX_INC, _PART_SAVE_ITER, _FIELD_SAVE_ITER, _LOOP_SAVE_ITER,
                                _SUBCYCLES)
@@ -1712,7 +1291,7 @@ if __name__ == '__main__':
                 # If timestep was doubled, do I need to consider 0.5dt's worth of
                 # new particles? Maybe just disable the doubling until I work this out
                 init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX,  
-                         _RHO_INT, _RHO_HALF, _Ji, _Ji_PLUS, _L, _G, _MP_FLUX, 0.5*_DT)
+                         _RHO_INT, _RHO_HALF, _Ji, _Ji_PLUS, _L, _G, 0.5*_DT)
         
         #######################
         ###### MAIN LOOP ######
@@ -1730,7 +1309,7 @@ if __name__ == '__main__':
         # Particle advance, moment calculation
         advance_particles_and_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG,
                                               _IDX, _B, _E, _RHO_INT, _RHO_HALF, _Ji,
-                                              _Ji_MINUS, _Ji_PLUS, _L, _G, _MP_FLUX, _DT)
+                                              _Ji_MINUS, _Ji_PLUS, _L, _G, _DT)
         
         # Second field advance to N + 1
         _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,

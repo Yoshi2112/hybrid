@@ -4695,7 +4695,7 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [1]
+            runs_to_do = [2]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
