@@ -1,5 +1,5 @@
 DRIVE					D:/
-SAVE_PATH			    /runs/new_shoji_full_CAM_CL_4thOrder/
+SAVE_PATH			    /runs/new_shoji_full_PRECORR_4thOrder/
 RUN						-
 SAVE_PARTICLE_FLAG		1
 SAVE_FIELD_FLAG			1

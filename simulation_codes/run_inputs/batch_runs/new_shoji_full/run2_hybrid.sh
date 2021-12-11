@@ -1,6 +1,6 @@
 #!/bin/bash
 # Created 24/06/2020 by c3134027
-#PBS -l select=1:ncpus=32:mem=20GB
+#PBS -l select=1:ncpus=36:mem=20GB
 #PBS -l walltime=300:00:00           
 #PBS -k oe
 #PBS -m ae
