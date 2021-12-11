@@ -29,7 +29,7 @@ SPLIGHT = 3e8
 KB      = 1.380649e-23
 B_SURF  = 3.12e-5
 
-def get_k_cold(w, Species):
+def get_k_cold(w, Species, omura=True):
     '''
     Calculate the k of a specific angular frequency w in a cold
     multicomponent plasma. Assumes a cold plasma (i.e. negates 
@@ -37,20 +37,28 @@ def get_k_cold(w, Species):
     
     This will give the cold plasma dispersion relation for the Species array
     specified, since the CPDR is surjective in w (i.e. only one possible k for each w)
-    '''
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=RuntimeWarning) 
-        cold_sum = 0.0
-        for ii in range(Species.shape[0]):
-            cold_sum += Species[ii]['plasma_freq_sq'] / (w * (w - Species[ii]['gyrofreq']))
     
-        k = np.sqrt(1 - cold_sum) * w / SPLIGHT
+    Derived directly from the SI form of the CPDR for the L mode, Swanson et al.
+    (2003), eqn. 2.15. Identical to the Stix definitition, just in SI.
+    '''
+    if not omura:
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=RuntimeWarning) 
+            cold_sum = 0.0
+            for ii in range(Species.shape[0]):
+                cold_sum += Species[ii]['plasma_freq_sq'] / (w * (w - Species[ii]['gyrofreq']))
+        
+            k = np.sqrt(1 - cold_sum) * w / SPLIGHT
+    else:
+        gam_c = get_gamma_c(w, Species)
+        k = np.sqrt(w*gam_c) / SPLIGHT
     return k
+
 
 def get_gamma_c(w, Species):
     # Electron bit (gyfreq is signed, so this is a minus)
     cold_sum = Species[-1]['plasma_freq_sq'] / Species[-1]['gyrofreq']
-    
+
     # Sum over ion species
     for ii in range(Species.shape[0] - 1):
         cold_sum += Species[ii]['plasma_freq_sq'] / (Species[ii]['gyrofreq'] - w)
@@ -59,7 +67,6 @@ def get_gamma_c(w, Species):
 def get_group_velocity(w, k, Species):
     gam_c = get_gamma_c(w, Species) 
     
-    # Ions only?
     ion_sum = 0.0
     for ii in range(Species.shape[0] - 1):
         ion_sum += Species[ii]['plasma_freq_sq'] / (Species[ii]['gyrofreq'] - w) ** 2
@@ -69,11 +76,18 @@ def get_group_velocity(w, k, Species):
     return Vg
 
 def get_resonance_velocity(w, k, Species, PP):
+    '''This would need to change if we wanted resonant Helium, etc.'''
     Vr = (w - PP['pcyc_rad']) / k
     return Vr
 
-def get_phase_velocity(w, k, Species):
-    return w / k
+def get_phase_velocity(w, k, Species, omura=True):
+    '''These definitions should be equivalent'''
+    if not omura:
+        Vp = w/k
+    else:
+        gam_c = get_gamma_c(w, Species)
+        Vp = SPLIGHT*np.sqrt(w/gam_c)
+    return Vp
 
 def get_velocities(w, Species, PP, normalize=False):
     k  = get_k_cold(w, Species)
@@ -168,7 +182,6 @@ def nonlinear_growth_rate(w, wph, Q, Vth_para, Vth_perp, Vg, Vp, Vr, Bw):
     t1 = 0.5 * wph**2 * Q
     t2 = np.sqrt(Vp / (SPLIGHT*Om_w*w)) * Vg / Vth_para
     t3 = (Vth_perp / (SPLIGHT*np.pi)) ** (3/2) * np.exp(- Vr**2 / (2*Vth_para**2))
-    pdb.set_trace()
     return t1 * t2 * t3
 
 
@@ -359,6 +372,7 @@ def get_threshold_amplitude(w, wph, Q, s2, a, Vp, Vr, Vth_para, Vth_perp):
 
 
 def get_optimum_amplitude(w, wph, Q, tau, s0, s1, Vg, Vr, Vth_para, Vth_perp):
+    '''Output is normalized by B0'''
     t1 = 0.81*(Q / tau) / np.sqrt(np.pi**5)
     t2 = s1 * Vg / (s0 * w * Vth_para) 
     t3 = (wph**2)*(Vth_perp**2)*np.exp(-0.5*Vr**2 / Vth_para**2)
@@ -554,7 +568,7 @@ def plot_omura2010_figs34():
     Looks good
     '''
     Species, PP = define_omura2010_parameters()
-    
+    pdb.set_trace()
     # Cold dispersion from get_k_cold() (Fig. 3, validated):
     f_max  = 4.0
     Nf     = 10000
@@ -562,6 +576,17 @@ def plot_omura2010_figs34():
     w_vals = 2*np.pi*f_vals
     k_vals = get_k_cold(w_vals, Species)
     wlen   = 1e-3 * 2*np.pi / k_vals
+    
+    if False:
+        ## DIAGNOSTIC ##
+        plt.ioff()
+        k_omura = get_k_cold(w_vals, Species, omura=True)
+        plt.figure()
+        plt.plot(w_vals, k_vals, label='Normal')
+        plt.plot(w_vals, k_omura, label='Omura')
+        plt.show()
+        plt.legend()
+        sys.exit()
     
     fig, ax = plt.subplots()
     ax.plot(1/wlen, f_vals, c='k')
@@ -869,7 +894,7 @@ def plot_shoji2012_2D():
     
     # Density axis (/m3)
     Nr          = 500
-    wpe_wce_max = 17
+    wpe_wce_max = 18
     wpe_wce     = np.linspace(0.0, wpe_wce_max, Nr)
     ne          = wpe_wce ** 2 * B0 ** 2 * EPS0 / EMASS
     
@@ -888,6 +913,8 @@ def plot_shoji2012_2D():
     
     # Other parameters
     white_line = np.sqrt(50e6*PCHARGE**2/(EMASS*EPS0))/ecyc
+    circ_x = (2*np.pi*0.56)/pcyc
+    circ_y = np.sqrt(178e6*PCHARGE**2/(EMASS*EPS0))/ecyc
     
     # Return arrays
     BTH = np.zeros((Nr, Nw), dtype=np.float64)
@@ -920,20 +947,23 @@ def plot_shoji2012_2D():
     NLG = NLG/pcyc
     cmap = cm.get_cmap('jet')
     cmap.set_bad(color=cmap(1.0))
-    
-    if False:
+
+    if True:
         # Plot Bth
         plt.ioff()
         fig, ax = plt.subplots()
-        im1 = ax.pcolormesh(w_axis, wpe_wce, BTH, cmap=cmap, vmin=0.0, vmax=0.1)
+        im1 = ax.pcolormesh(w_axis, wpe_wce, BTH, cmap=cmap,
+                            vmin=0.0, vmax=0.1, shading='auto')
         ax.axhline(white_line, c='white', ls='--')
+        ax.scatter(circ_x, circ_y, marker='o', facecolors='none', edgecolors='white', lw=2.0, s=100)
         fig.colorbar(im1, extend='both')
     
-    if True:
+    if False:
         # Plot Non-linear Growth Rate
         plt.ioff()
         fig2, ax2 = plt.subplots()
-        im2 = ax2.pcolormesh(w_axis, wpe_wce, NLG, cmap='jet', vmin=0.0, vmax=1.5)
+        im2 = ax2.pcolormesh(w_axis, wpe_wce, NLG, cmap='jet',
+                             vmin=0.0, vmax=1.5, shading='auto')
         ax2.axhline(white_line, c='white', ls='--')
         fig2.colorbar(im2, extend='both')
     
@@ -1147,7 +1177,8 @@ def plot_ohja2021_fig9():
     w_vals = 2*np.pi*f_vals
     
     # Define hot proton parameters
-    nh = 0.001 * 0.88 * 6e6
+    ne = 6e6
+    nh = 0.001 * 0.88 * ne  # 0.1% of an 88% Proton plasma (6% each He, O)
     wph2 = nh * PCHARGE ** 2 / (PMASS * EPS0) 
     Vth_para = 420e3 / SPLIGHT
     Vth_perp = 540e3 / SPLIGHT
@@ -1157,26 +1188,26 @@ def plot_ohja2021_fig9():
     Q = 0.5
     
     # Curvature parameters
-    L  = 8
-    a  = 4.5  / (L*RE)**2
-    a  = a*(SPLIGHT**2/PP['pcyc_rad']**2)
+    L      = 8
+    a      = 4.5  / (L*RE)**2
+    a_norm = a*(SPLIGHT**2/PP['pcyc_rad']**2)
     
     Vg, Vp, Vr = get_velocities(w_vals, Species, PP, normalize=True)
     s0, s1, s2 = get_inhomogeneity_terms(w_vals, Species, PP, Vth_perp, normalize_vel=True)
     
     # Normalize a few things
-    w_vals  = w_vals / PP['pcyc_rad']
+    w_norm  = w_vals / PP['pcyc_rad']
     wph     = np.sqrt(wph2) / PP['pcyc_rad']  # Is this supposed to be squared? I guess if the freq. is...
     
     # Calculate
-    B_th = get_threshold_amplitude(w_vals, wph, Q, s2, a, Vp, Vr, Vth_para, Vth_perp)
-    B_opt = get_optimum_amplitude(w_vals, wph, Q, tau, s0, s1, Vg, Vr, Vth_para, Vth_perp)
-    
+    B_th = get_threshold_amplitude(w_norm, wph, Q, s2, a_norm, Vp, Vr, Vth_para, Vth_perp)
+    B_opt = get_optimum_amplitude(w_norm, wph, Q, tau, s0, s1, Vg, Vr, Vth_para, Vth_perp)
+    pdb.set_trace()
     fig, ax = plt.subplots(figsize=(16, 9))
     ax.semilogy(f_vals, B_opt, ls='-' , label='Optimum Amplitude')
     ax.semilogy(f_vals, B_th , ls='--', label='Threshold Amplitude')
     ax.set_xlim(0.0, 1.4)
-    #ax.set_ylim(10**(-7.5), 1e-1)
+    ax.set_ylim(10**(-7.5), 1e5)
     plt.show()
     return
 
@@ -1202,11 +1233,11 @@ def just_random():
 if __name__ == '__main__': 
     #plot_omura2010_figs34()
     #plot_shoji2013_fig7()
-    plot_shoji2012_2D()
+    #plot_shoji2012_2D()
     
     #plot_check_CPDR()
     #plot_ohja2021_fig8()
-    #plot_ohja2021_fig9()
+    plot_ohja2021_fig9()
         
 # =============================================================================
 #     if False:

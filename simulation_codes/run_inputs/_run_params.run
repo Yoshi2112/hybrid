@@ -24,4 +24,4 @@ GYROPERIOD_RESOLUTION	0.05
 FREQUENCY_RESOLUTION	0.05
 PARTICLE_DUMP_FREQ		5.00
 FIELD_DUMP_FREQ			0.25
-Testing if this code is stable or not. Removed particle mirror force function, source smoothing, mp_flux, forced constant Te, put equations back to second order and linear interpolations
+This is the regular code, with the curls back to 4th order and the interpolation using the scipy cubic spline.

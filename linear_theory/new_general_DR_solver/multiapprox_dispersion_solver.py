@@ -163,6 +163,7 @@ def create_species_array(B0, name, mass, charge, density, tper, ani,
     Also output a PlasmaParameters dict containing things like alfven speed, density, hydrogen gyrofrequency, etc.
     
     Inputs must be in SI units: nT, kg, C, /m3, eV, etc.
+    Outputs are in SI units, with frequencies being angular frequencies
     
     -- NOTE --:: if pcyc_rad is defined (as it might be for some paper validations, normalization
                  checks, etc.) it will overwrite the value for B0 to prevent conflicting values

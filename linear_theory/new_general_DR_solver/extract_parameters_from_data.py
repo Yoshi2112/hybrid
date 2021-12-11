@@ -669,22 +669,22 @@ def generate_script_file(run_dir, run_series, hybrid_method='PREDCORR'):
             ii += 1
     return
 
-def generate_hybrid_files_from_cutoffs(he_conc=0.05):
-    run_dir         = 'D://NEW_HYBRID_RUNFILES//'
+def generate_hybrid_files_from_cutoffs(he_conc=0.05, hybrid_method='PREDCORR'):
+    run_dir     = 'D://NEW_HYBRID_RUNFILES//'
     
     # July 25 event
     if True:
         cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
-        run_series_name = 'JUL25_PKTS_{:.0f}HE_CAMCL'.format(he_conc*100)
+        run_series_name = f'JUL25_PKTS_{he_conc*100:.0f}HE_{hybrid_method}'
         generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=he_conc)
-        generate_script_file(run_dir, run_series_name, hybrid_method='CAM_CL')
+        generate_script_file(run_dir, run_series_name, hybrid_method=hybrid_method)
     
     # Jan 16 event
     if True:
         cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//pearl_times.txt'
-        run_series_name = 'JAN16_PKTS_{:.0f}HE_CAMCL'.format(he_conc*100)
+        run_series_name = f'JAN16_PKTS_{he_conc*100:.0f}HE_{hybrid_method}'
         generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=he_conc)
-        generate_script_file(run_dir, run_series_name, hybrid_method='CAM_CL')
+        generate_script_file(run_dir, run_series_name, hybrid_method=hybrid_method)
     return
 
 
@@ -699,12 +699,11 @@ if __name__ == '__main__':
     _test_file_pa  = 'F://DATA//RBSP//ECT//HOPE//L3//PITCHANGLE//rbspa_rel04_ect-hope-PA-L3_20150116_v7.1.0.cdf'
     _test_file_mom = 'F://DATA//RBSP//ECT//HOPE//L3//MOMENTS//rbspa_rel04_ect-hope-MOM-L3_20150116_v7.1.0.cdf'
     
-    #integrate_HOPE_moments(_time_start, _time_end, _probe, _pad, rbsp_path=_rbsp_path)
     generate_hybrid_files_from_cutoffs(he_conc=0.05)
-    generate_hybrid_files_from_cutoffs(he_conc=0.10)
-    generate_hybrid_files_from_cutoffs(he_conc=0.20)
+    generate_hybrid_files_from_cutoffs(he_conc=0.15)
+    generate_hybrid_files_from_cutoffs(he_conc=0.30)
     
-    
+    #integrate_HOPE_moments(_time_start, _time_end, _probe, _pad, rbsp_path=_rbsp_path)
     if False:
         _times, _B, _ne = load_CRRES_data(_time_start, _time_end, crres_path=_crres_path, nsec=None)
         

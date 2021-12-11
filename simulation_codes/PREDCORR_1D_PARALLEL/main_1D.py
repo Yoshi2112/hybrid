@@ -20,7 +20,7 @@ B_surf  = 3.12e-5                            # Magnetic field strength at Earth 
 
 # A few internal flags
 cold_va             = False
-Fu_override         = True      # Override to allow density to be calculated as a ratio of frequencies
+Fu_override         = False     # Override to allow density to be calculated as a ratio of frequencies
 do_parallel         = True      # Flag to use available threads to parallelize particle functions
 adaptive_timestep   = True      # Disable adaptive timestep to keep it the same as initial
 print_timings       = False     # Diagnostic outputs timing each major segment (for efficiency examination)

@@ -30,7 +30,7 @@ adaptive_subcycling = True       # Flag (True/False) to adaptively change number
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
+#nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
 
 
 #%% --- FUNCTIONS ---
@@ -1608,19 +1608,13 @@ def get_grad_P(qn, te):
     result to be deposited on the B-grid. Moving it back to the E-grid requires
     an interpolation.
     '''
-    grad_pe       = np.zeros(NC    , dtype=np.float64)
-    # DIAGNOSTIC: DISABLING SOLUTION FOR PE
-    #return grad_pe
-    grad_pe_B     = np.zeros(NC + 1, dtype=np.float64)
-    grad_pe[:]    = qn[:] * kB * te[:] / ECHARGE
+    grad_pe = np.zeros(NC    , dtype=np.float64)
+    Pe = qn * kB * te / ECHARGE
 
-    # Loop center points, set endpoints for no gradients (just to be safe)
-    for ii in np.arange(1, qn.shape[0]):
-        grad_pe_B[ii] = (grad_pe[ii] - grad_pe[ii - 1])/dx
-    grad_pe_B[0]  = grad_pe_B[1]
-    grad_pe_B[NC] = grad_pe_B[NC - 1]
-    
-    interpolate_cell_centre_4thOrder(grad_pe_B, grad_pe)
+    # Central differencing, internal points
+    for ii in nb.prange(1, NC - 1):
+        grad_pe[ii] = (Pe[ii + 1] - Pe[ii - 1])
+    grad_pe    /= (2*dx)
     return grad_pe
 
 
@@ -1646,7 +1640,7 @@ def apply_boundary(B, B_damp):
     return
 
 
-@nb.njit()
+#@nb.njit()
 def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
                     B_damp, resistive_array, sim_time):
     '''
@@ -1941,7 +1935,7 @@ def calculate_E(B, B_center, Ji, J_ext, qn, E, Ve, Te, resistive_array, sim_time
 
 
 #%% AUXILLIARY FUNCTIONS
-@nb.njit(parallel=False)
+#@nb.njit(parallel=False)
 def get_B_cent(B, _B_cent):
     '''
     Quick and dirty linear interpolation so I have a working code
@@ -1949,9 +1943,15 @@ def get_B_cent(B, _B_cent):
     Need at least a quadratic spline fit for true second-order solution
     
     Modified to use the higher-order interpolation
-    '''    
-    interpolate_cell_centre_4thOrder(B[:, 1], _B_cent[:, 1])
-    interpolate_cell_centre_4thOrder(B[:, 2], _B_cent[:, 2])
+    '''   
+    for jj in range(1, 3):
+        coeffs         = splrep(B_nodes_loc, _B[:, jj])
+        _B_cent[:, jj] = splev( E_nodes_loc, coeffs)
+    _B_cent[:, 0] = eval_B0x(E_nodes_loc)
+    #_B_cent[:, 1] = 0.5*(B[:-1, 1] + B[1:, 1])
+    #_B_cent[:, 2] = 0.5*(B[:-1, 2] + B[1:, 2])
+    #interpolate_cell_centre_4thOrder(B[:, 1], _B_cent[:, 1])
+    #interpolate_cell_centre_4thOrder(B[:, 2], _B_cent[:, 2])
     return
 
 

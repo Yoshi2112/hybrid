@@ -32,7 +32,7 @@ adaptive_subcycling = True       # Flag (True/False) to adaptively change number
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
+#nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
 
 
 #%% --- FUNCTIONS ---
@@ -545,20 +545,6 @@ def get_curl_E(E, dE):
     for ii in nb.prange(1, E.shape[0]):
         dE[ii, 1] = - (E[ii, 2] - E[ii - 1, 2])
         dE[ii, 2] =    E[ii, 1] - E[ii - 1, 1]
-        
-    # Curl at E[0] : Forward/Backward difference (stored in B[0]/B[NC])
-    dE[0, 1] = -(-3*E[0, 2] + 4*E[1, 2] - E[2, 2]) / 2
-    dE[0, 2] =  (-3*E[0, 1] + 4*E[1, 1] - E[2, 1]) / 2
-    
-    dE[nc, 1] = -(3*E[nc - 1, 2] - 4*E[nc - 2, 2] + E[nc - 3, 2]) / 2
-    dE[nc, 2] =  (3*E[nc - 1, 1] - 4*E[nc - 2, 1] + E[nc - 3, 1]) / 2
-    
-    # Linearly extrapolate to endpoints
-    dE[0, 1]      -= 2*(dE[1, 1] - dE[0, 1])
-    dE[0, 2]      -= 2*(dE[1, 2] - dE[0, 2])
-    
-    dE[nc, 1]     += 2*(dE[nc, 1] - dE[nc - 1, 1])
-    dE[nc, 2]     += 2*(dE[nc, 2] - dE[nc - 1, 2])
 
     dE /= dx
     return
