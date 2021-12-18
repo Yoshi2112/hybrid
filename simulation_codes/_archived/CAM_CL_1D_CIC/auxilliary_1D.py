@@ -50,7 +50,7 @@ def cross_product(A, B):
 
 
 def set_timestep(part):
-    gyperiod = (2*np.pi) / gyfreq               
+    gyperiod = (2*np.pi) / gyfreq               # Seconds (gyfreq in rad/s)
     ion_ts   = orbit_res * gyperiod             # Timestep to resolve gyromotion
     vel_ts   = dx / (2 * np.max(part[3, :]))    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
 

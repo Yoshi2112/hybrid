@@ -7,15 +7,15 @@ Created on Fri Sep 22 11:00:58 2017
 import numpy as np
 
 ### RUN DESCRIPTION ###                     # Saves within run for easy referencing
-run_description = '''Testing against linear theory and PREDCORR :: CIC version'''
+run_description = '''Testing Run4 parameters using old CAM_CL code to check for long-term stability'''
 
 ### RUN PARAMETERS ###
-drive           = 'F:/'                     # Drive letter or path for portable HDD e.g. 'E:/'
-save_path       = 'runs/CAM_CL_LT/'         # Series save dir   : Folder containing all runs of a series
-run_num         = 0                         # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
+drive           = 'D:/'                     # Drive letter or path for portable HDD e.g. 'E:/'
+save_path       = 'runs/CAMCL_STRIPPED_STABILITY_TEST/'         # Series save dir   : Folder containing all runs of a series
+run_num         = 10                        # Series run number : For multiple runs (e.g. parameter studies) with same overall structure (i.e. test series)
 generate_data   = 1                         # Save data flag    : For later analysis
 generate_plots  = 0                         # Save plot flag    : To ensure hybrid is solving correctly during run
-seed            = 101                       # RNG Seed          : Set to enable consistent results for parameter studies
+seed            = 983274                    # RNG Seed          : Set to enable consistent results for parameter studies
 
 ### PHYSICAL CONSTANTS ###
 q   = 1.602177e-19                          # Elementary charge (C)
@@ -29,37 +29,48 @@ RE  = 6.371e6                               # Earth radius in metres
 
 
 ### SIMULATION PARAMETERS ###
-NX       = 512                              # Number of cells - doesn't include ghost cells
-max_rev  = 200                              # Simulation runtime, in multiples of the gyroperiod
+NX       = 256                              # Number of cells - doesn't include ghost cells
+max_rev  = 1600                             # Simulation runtime, in multiples of the gyroperiod
 
 dxm         = 1.0                           # Number of c/wpi per dx (Ion inertial length: anything less than 1 isn't resolvable by hybrid code)
 subcycles   = 8                             # Number of field subcycling steps for Cyclic Leapfrog
-cellpart    = 400                           # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
+cellpart    = 1280                          # Number of Particles per cell. Ensure this number is divisible by macroparticle proportion
 
 ie       = 1                                # Adiabatic electrons. 0: off (constant), 1: on.
 theta    = 0                                # Angle of B0 to x axis (in xy plane in units of degrees)
-B0       = 200e-9                           # Unform initial magnetic field value (in T)
-ne       = 200e6                            # Electron density (in /m3, same as total ion density)
+B0       = 217.27e-9                        # Unform initial magnetic field value (in T)
+ne       = 235.721e6                        # Electron density (in /m3, same as total ion density)
 
-orbit_res= 0.10                             # Particle orbit resolution: fraction of gyroperiod (gyrofraction, lol)
-data_res = 0.1                              # Data capture resolution in gyrofraction
+orbit_res= 0.05                             # Particle orbit resolution: fraction of gyroperiod (gyrofraction, lol)
+data_res = 0.05                             # Data capture resolution in gyrofraction
 plot_res = 0                                # Plot capture resolution in gyrofraction
 
 
 ### PARTICLE PARAMETERS ###
-species    = [r'$H^+$ cold', r'$H^+$ hot']                  # Species name/labels        : Used for plotting
-temp_type  = np.asarray([0, 1])                             # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
-dist_type  = np.asarray([0, 0])                             # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
+species    = [r'cold_$H^{+}$', r'cold_$He^{+}$', 'cold_$O^{+}$', 'warm_$H^{+}$']                  # Species name/labels        : Used for plotting
+temp_type  = np.asarray([0, 0, 0, 0, 1])                    # Particle temperature type  : Cold (0) or Hot (1) : Used for plotting
+dist_type  = np.asarray([0, 0, 0, 0])                       # Particle distribution type : Uniform (0) or sinusoidal/other (1) : Used for plotting (normalization)
 
-mass       = np.asarray([1.00 , 1.00])                      # Species ion mass (proton mass units)
-charge     = np.asarray([1.00 , 1.00])                      # Species ion charge (elementary charge units)
-velocity   = np.asarray([0.00 , 0.00])                      # Species parallel bulk velocity (alfven velocity units)
-density    = np.asarray([0.90 , 0.10])                      # Species charge density as fraction of total (charge) density
-sim_repr   = np.asarray([50.0 , 50.0])                      # Macroparticle weighting: Percentage of macroparticles assigned to each species
+mass       = np.asarray([1.00 , 4.00, 16.00, 1.00])         # Species ion mass (proton mass units)
+charge     = np.asarray([1.00 , 1.00, 1.00 , 1.00])         # Species ion charge (elementary charge units)
+velocity   = np.asarray([0.00 , 0.00, 0.00 , 0.00])         # Species parallel bulk velocity (alfven velocity units)
+#density    = np.asarray([0.90 , 0.10, 0.90 , 0.10])         # Species charge density as fraction of total (charge) density
+sim_repr   = np.asarray([20.0 , 20.0, 20.0 , 40.0])         # Macroparticle weighting: Percentage of macroparticles assigned to each species
 
-beta_e     = 0.1                                            # Electron beta
-beta_par   = np.array([0.1, 10.])                           # Ion species parallel beta
-beta_per   = np.array([0.1, 50.])                           # Ion species perpendicular beta
+density    = np.asarray([182.496, 46.813, 4.755, 1.657])*1e6 / ne
+
+do_beta = 0
+if False:
+    beta_e     = 0.1                                            # Electron beta
+    beta_par   = np.array([0.1, 10.])                           # Ion species parallel beta
+    beta_per   = np.array([0.1, 50.])                           # Ion species perpendicular beta
+else:
+    # Do in eV
+    anisotropy = np.array([0.0, 0.0, 0.0, 0.246])
+    beta_e     = 0.1                                            # Electron beta
+    beta_per   = np.array([0.1, 0.1, 0.1, 13156.414])           # Ion species perpendicular beta
+    beta_par   = beta_per / (anisotropy+1)                      # Ion species parallel beta
+    
 
 do_parallel    = False                                      # Flag (True/False) for auto-parallel using numba.njit()
 smooth_sources = 0                                          # Flag for source smoothing: Gaussian
@@ -107,10 +118,15 @@ if set_override == 1:
     print('----------------------------------------------------------------')
     print('WARNING: RATIO OVERRIDE IN EFFECT - INPUT MAGNETIC FIELD IGNORED')
     print('----------------------------------------------------------------')
-    
-Te0        = B0 ** 2 * beta_e   / (2 * mu0 * ne * kB)   # Temperatures of species in Kelvin
-Tpar       = B0 ** 2 * beta_par / (2 * mu0 * ne * kB)
-Tper       = B0 ** 2 * beta_per / (2 * mu0 * ne * kB)
+
+if do_beta:
+    Te0        = B0 ** 2 * beta_e   / (2 * mu0 * ne * kB)   # Temperatures of species in Kelvin
+    Tpar       = B0 ** 2 * beta_par / (2 * mu0 * ne * kB)
+    Tper       = B0 ** 2 * beta_per / (2 * mu0 * ne * kB)
+else:
+    Te0  = beta_e*11603.
+    Tpar = beta_par*11603.
+    Tper = beta_per*11603.
 
 wpi        = np.sqrt(ne * q ** 2 / (mp * e0))            # Proton   Plasma Frequency, wpi (rad/s)
 wpe        = np.sqrt(ne * q ** 2 / (me * e0))            # Electron Plasma Frequency, wpe (rad/s)

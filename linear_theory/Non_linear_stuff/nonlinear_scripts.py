@@ -563,6 +563,65 @@ def define_shoji2013_parameters():
     return Species, PP
 
 
+def define_nakamura2016_parameters(case=0):
+    '''
+    Parameters for Night/Pre-Noon/Post-Noon sectors from dipole model (IGRF?)
+    Taken from Nakamura et al. (2016)
+    
+    Select case:
+        0: Nightside
+        1: Postnoon
+        2: Prenoon
+    
+    Returns hot plasma parameters as well as cold Species, PP arrays (all in SI)
+    L = 8 for all parameters, but not needed for calculation. Equations a bit
+    crazy because they're all normalized in the paper.
+    
+    Questions:
+    -- Is N_H+ all hydrogen? Or just cold component? Assume all, since that's the 
+        standard
+    -- Why is N_H+ = N_He+ on the nightside? What's the precedent? Does
+       this inform my parameter values for the Jul25/Jan16 events?
+    -- Are these only H/He plasmas?
+    
+    
+    '''
+    w_pH     = np.array([50, 200, 150]) * 2*np.pi
+    V_perp   = np.array([60, 20, 90])*1e3
+    V_para   = np.array([40, 15, 60])*1e3
+    Nh_frac  = np.array([0.01, 0.01, 0.01])
+    NHe_frac = np.array([1.0, 0.25, 0.11])
+    a_value  = np.array([5e-15, 5e-16, 5e-16])
+    CH_rat   = np.array([50, 100, 200])
+    
+    # Parameters in SI units
+    ne     = w_pH**2 * PMASS * EPS0 / PCHARGE**2   # /m3
+    w_cH   = w_pH / CH_rat                         # rad/s
+    B0     = PMASS * w_cH / PCHARGE                # Tesla
+
+    #N_cold  = ne / (Nh_frac   + 1)     # Cold plasma number density, combination of H, He
+    N_hot   = ne / (1/Nh_frac + 1)     # Hot  plasma number density, consists of Hydrogen only
+    NHe     = ne / (1 + 1/NHe_frac)    # Helium number density, assuming cold only
+    NH      = ne -  NHe                # Total Hydrogen number density (hot and cold)
+
+    name    = np.array(['H'     , 'He'      , 'O'  ])
+    mass    = np.array([1.0     , 4.0       , 16.0 ]) * PMASS
+    charge  = np.array([1.0     , 1.0       , 1.0  ]) * PCHARGE
+    density = np.array([NH[case], NHe[case] , 0.0  ])
+    ani     = np.array([0.0     , 0.0       , 0.0  ])
+    tpar    = np.array([0.0     , 0.0       , 0.0  ])
+    tper    = (ani + 1) * tpar
+    
+    Species, PP = create_species_array(B0[case], name, mass, charge, density, tper, ani,
+                                       remove_zero_density_species=True)
+    
+    # Energetic plasma parameters (SI)
+    Vth_para = V_para[case]
+    Vth_perp = V_perp[case]
+    
+    return Species, PP, N_hot, Vth_para, Vth_perp, a_value[case]
+
+
 def plot_omura2010_figs34():
     '''
     Looks good
@@ -1051,6 +1110,19 @@ def plot_shoji2013_fig7():
     plt.show()
     return
 
+
+def plot_nakamura2016_fig11():
+    '''
+    Recreates three-plot (for three separate cases) from Nakamura et al. (2016)
+    Figure 11.
+    
+    This plot defines three different density/magnetic regimes for three different
+    values of a (defined by the position in the magnetosphere). So, nine 
+    different calculations take place: Three for each value of a
+    
+    How to handle this?
+    '''
+    return
     
 def plot_ohja2021_fig8(crosscheck_CPDR=False):
     '''
@@ -1237,7 +1309,9 @@ if __name__ == '__main__':
     
     #plot_check_CPDR()
     #plot_ohja2021_fig8()
-    plot_ohja2021_fig9()
+    #plot_ohja2021_fig9()
+    
+    define_nakamura2016_parameters(case=0)
         
 # =============================================================================
 #     if False:

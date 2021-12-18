@@ -521,6 +521,10 @@ def extract_all_arrays():
     Extracts and saves all field arrays separate from the timestep slice files for easy
     access. Note that magnetic field arrays exclude the last value due to periodic
     boundary conditions. This may be changed later.
+    
+    TODO: Have option to delete files once extracted. This probably won't get
+    used much, but in the event more storage space is needed, extracted files
+    are just duplicating the data and originals aren't needed.
     '''
     # Check if field files exist:
     if len(os.listdir(field_dir)) == 0:
@@ -533,7 +537,7 @@ def extract_all_arrays():
         check_path = temp_dir + component + '_array.npy'
         if os.path.isfile(check_path) == False:
             comps_missing += 1
-        
+    
     if comps_missing == 0:
         print('Field components already extracted.')
         return

@@ -24,15 +24,13 @@ B_surf  = 3.12e-5                            # Magnetic field strength at Earth 
 
 # A few internal flags
 do_parallel         = True
-adaptive_timestep   = True       # Disable adaptive timestep to keep it the same as initial
 print_timings       = False      # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True       # Flag to print runtime every 50 iterations 
-adaptive_subcycling = True       # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
 
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-#nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(6)
 
 
 #%% --- FUNCTIONS ---
@@ -166,34 +164,12 @@ def initialize_source_arrays():
 
 
 def set_timestep(vel):
-    max_vx   = np.max(np.abs(vel[0, :]))
-    ion_ts   = orbit_res / gyfreq_eq              # Timestep to resolve gyromotion
-    vel_ts   = 0.5*dx / max_vx                    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
-
-    DT       = min(ion_ts, vel_ts)
-    max_time = max_wcinv / gyfreq_eq              # Total runtime in seconds
-    
-    if adaptive_subcycling == True:
-        # b1 factor accounts for increase in total field due to wave growth
-        # Without this, s/c count doubles as soon as waves start to grow
-        # which unneccessarily slows the simulation
-        b1_fac     = 1.2
-        k_max      = np.pi / dx
-        dispfreq   = (k_max ** 2) * B_eq*b1_fac / (mu0 * ne * ECHARGE)
-        dt_sc      = freq_res / dispfreq
-        subcycles  = int(DT / dt_sc + 1)
-        
-        # Set subcycles to maximum, set timestep to match s/c loop length
-        if subcycles > init_max_subcycle:
-            print(f'Subcycles required ({subcycles}) greater than defined max ({init_max_subcycle})')
-            print(f'Number of subcycles set at default init_max: {init_max_subcycle}')
-            print('Resetting timestep to match subcycle loop size')
-            DT = init_max_subcycle * dt_sc
-            subcycles = init_max_subcycle
-            
-    else:
-        subcycles = default_subcycles
-        print('Number of subcycles set at default: {}'.format(subcycles))
+    max_vx    = np.max(np.abs(vel[0, :]))         # Fastest particle velocity
+    ion_ts    = orbit_res / gyfreq_eq             # Timestep to resolve gyromotion
+    vel_ts    = 0.5*dx / max_vx                   # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
+    DT        = min(ion_ts, vel_ts)               # Set global timestep as smallest of these
+    max_time  = max_wcinv / gyfreq_eq             # Total runtime in seconds
+    subcycles = default_subcycles                 # Number of subcycles per particle step
     
     if part_dumpf == 0:
         part_save_iter = 1
@@ -692,67 +668,6 @@ def get_B_cent(B, _B_cent):
     return
 
 
-def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, B, B_center, E, dns, 
-                   max_inc, part_save_iter, field_save_iter, loop_save_iter,
-                   subcycles):
-
-    max_vx, max_vy, max_vz = get_max_v(vel)
-    max_V = max(max_vx, max_vy, max_vz)
-    
-    B_tot           = np.sqrt(B_center[:, 0] ** 2 + B_center[:, 1] ** 2 + B_center[:, 2] ** 2)
-    high_rat        = qm_ratios.max()
-    local_gyfreq    = high_rat  * np.abs(B_tot).max()      
-    ion_ts          = orbit_res / local_gyfreq
-    
-    if E[:, 0].max() != 0:
-        elecfreq    = high_rat * (np.abs(E[:, 0] / max_V)).max()
-        freq_ts     = freq_res / elecfreq                            
-    else:
-        freq_ts     = ion_ts
-    
-    vel_ts          = 0.75*dx / max_vx
-    DT_part         = min(freq_ts, vel_ts, ion_ts)
-    
-    # Check subcycles to see if DT_part needs to be changed instead
-    if adaptive_subcycling == 1:
-        k_max           = np.pi / dx
-        dispfreq        = (k_max ** 2) * (B_tot / (mu0 * dns)).max()             # Dispersion frequency
-        dt_sc           = freq_res / dispfreq
-        new_subcycles   = int(DT / dt_sc + 1)
-        
-        if subcycles < 0.75*new_subcycles:                                       
-            subcycles *= 2
-            print('Number of subcycles per timestep doubled to', subcycles)
-            
-        if (subcycles > 3.0*new_subcycles and subcycles%2 == 0):                                      
-            subcycles //= 2
-            print('Number of subcycles per timestep halved to', subcycles)
-            
-        if subcycles > max_subcycles:
-            subcycles = max_subcycles
-            print(f'Number of subcycles exceeding maximum, setting to {max_subcycles}')
-            print( 'Modifying timestep...')
-            DT_part = 0.5*DT
-    
-    # Reduce timestep
-    change_flag       = 0
-    if DT_part < 0.9*DT:
-        position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, -0.5*DT)
-        
-        change_flag      = 1
-        DT              *= 0.5
-        max_inc         *= 2
-        qq              *= 2
-        part_save_iter  *= 2
-        field_save_iter *= 2
-        loop_save_iter  *= 2
-        if DT < 1e-2:
-            print('Timestep halved to: %.3es with %d subcycles' % (DT, subcycles))
-        else:
-            print('Timestep halved to: %.3fs with %d subcycles' % (DT, subcycles))
-    return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, change_flag, subcycles
-
-
 #%% SAVE FUNCTIONS
 def manage_directories():
     from shutil import rmtree
@@ -944,8 +859,7 @@ def load_run_params():
         particle_reflect, particle_reinit, field_periodic, disable_waves, source_smoothing, quiet_start,\
         NX, max_wcinv, dxm, ie, E_damping, damping_fraction, resis_multiplier, \
             orbit_res, freq_res, part_dumpf, field_dumpf, run_description, particle_open, ND, NC,\
-                lo1, lo2, ro1, ro2, li1, li2, ri1, ri2,\
-                adaptive_timestep, adaptive_subcycling, default_subcycles
+                lo1, lo2, ro1, ro2, li1, li2, ri1, ri2
             
     print('LOADING RUNFILE: {}'.format(run_input))
     with open(run_input, 'r') as f:
@@ -1016,14 +930,6 @@ def load_run_params():
         seed = None
     else:
         seed = int(seed)
-    
-    if field_periodic == 1 and damping_multiplier != 0:
-        damping_multiplier = 0.0
-        
-    if disable_waves == True:
-        print('-- Wave solutions disabled, removing subcycles --')
-        adaptive_timestep = adaptive_subcycling = 0
-        default_subcycles = 1
     return
 
 
@@ -1264,20 +1170,6 @@ if __name__ == '__main__':
     _QQ = 1; _SIM_TIME = 0.0
     print('Starting loop...')
     while _QQ < _MAX_INC:
-        
-        if adaptive_timestep == 1 and disable_waves == 0:  
-            _QQ, _DT, _MAX_INC, _PART_SAVE_ITER, _FIELD_SAVE_ITER, _LOOP_SAVE_ITER, _CHANGE_FLAG, _SUBCYCLES =\
-                check_timestep(_QQ, _DT, _POS, _VEL, _IDX, _IE, _W_ELEC, _IB, _W_MAG,
-                               _B, _B_CENT, _E, _RHO_INT, 
-                               _MAX_INC, _PART_SAVE_ITER, _FIELD_SAVE_ITER, _LOOP_SAVE_ITER,
-                               _SUBCYCLES)
-            
-            # Collect new moments and desync position and velocity. Reset damping array.
-            if _CHANGE_FLAG == 1:
-                # If timestep was doubled, do I need to consider 0.5dt's worth of
-                # new particles? Maybe just disable the doubling until I work this out
-                init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX,  
-                         _RHO_INT, _RHO_HALF, _Ji, _Ji_PLUS, _L, _G, 0.5*_DT)
         
         #######################
         ###### MAIN LOOP ######
