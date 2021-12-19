@@ -563,7 +563,7 @@ def define_shoji2013_parameters():
     return Species, PP
 
 
-def define_nakamura2016_parameters(case=0):
+def define_nakamura2016_parameters(case=0, CH_rat=50):
     '''
     Parameters for Night/Pre-Noon/Post-Noon sectors from dipole model (IGRF?)
     Taken from Nakamura et al. (2016)
@@ -592,7 +592,6 @@ def define_nakamura2016_parameters(case=0):
     Nh_frac  = np.array([0.01, 0.01, 0.01])
     NHe_frac = np.array([1.0, 0.25, 0.11])
     a_value  = np.array([5e-15, 5e-16, 5e-16])
-    CH_rat   = np.array([50, 100, 200])
     
     # Parameters in SI units
     ne     = w_pH**2 * PMASS * EPS0 / PCHARGE**2   # /m3
@@ -1120,8 +1119,13 @@ def plot_nakamura2016_fig11():
     values of a (defined by the position in the magnetosphere). So, nine 
     different calculations take place: Three for each value of a
     
-    How to handle this?
+    For each plot (case), feed three different plasma/cyclotron frequency ratios
+    into the variable loader.
     '''
+    # Ratios for case 0 (night-side)
+    low_night  = define_nakamura2016_parameters(case=0, CH_rat=50)
+    med_night  = define_nakamura2016_parameters(case=0, CH_rat=100)
+    high_night = define_nakamura2016_parameters(case=0, CH_rat=200)
     return
     
 def plot_ohja2021_fig8(crosscheck_CPDR=False):
