@@ -1695,7 +1695,7 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
     ## DESYNC SECOND FIELD COPY - PUSH BY DH ##
     ## COUNTS AS ONE SUBCYCLE ##
     calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-    get_curl_E(E, curl) 
+    get_curl_E_4thOrder(E, curl) 
     B2       -= dh * curl
     apply_boundary(B2, B_damp)
     get_B_cent(B2, B_center)
@@ -1712,7 +1712,7 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
     while ii < subcycles:
         if ii%2 == 1:
             calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-            get_curl_E(E, curl) 
+            get_curl_E_4thOrder(E, curl) 
             B1  -= 2 * dh * curl
             apply_boundary(B1, B_damp)
             get_B_cent(B1, B_center)
@@ -1720,7 +1720,7 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
             #print('Push B1')
         else:
             calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-            get_curl_E(E, curl) 
+            get_curl_E_4thOrder(E, curl) 
             B2  -= 2 * dh * curl
             apply_boundary(B2, B_damp)
             get_B_cent(B2, B_center)
@@ -1735,14 +1735,14 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
 #             ## RESYNC BEFORE AVERAGE ##
 #             if ii%2 == 1:
 #                 calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-#                 get_curl_E(E, curl) 
+#                 get_curl_E_4thOrder(E, curl) 
 #                 B2  -= dh * curl
 #                 apply_boundary(B2, B_damp)
 #                 get_B_cent(B2, B_center)
 #                 #print('Resync B2')
 #             else:
 #                 calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-#                 get_curl_E(E, curl) 
+#                 get_curl_E_4thOrder(E, curl) 
 #                 B1  -= dh * curl
 #                 apply_boundary(B1, B_damp)
 #                 get_B_cent(B1, B_center)
@@ -1756,7 +1756,7 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
 #             ## THE ONE DESYNCED HAS TO BE THE NEXT ONE PUSHED ##
 #             if ii%2 == 1:
 #                 calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-#                 get_curl_E(E, curl) 
+#                 get_curl_E_4thOrder(E, curl) 
 #                 B2       -= dh * curl
 #                 apply_boundary(B2, B_damp)
 #                 get_B_cent(B2, B_center)
@@ -1764,7 +1764,7 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
 #                 #print('Desync B2')
 #             else:
 #                 calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-#                 get_curl_E(E, curl) 
+#                 get_curl_E_4thOrder(E, curl) 
 #                 B1       -= dh * curl
 #                 apply_boundary(B1, B_damp)
 #                 get_B_cent(B1, B_center)
@@ -1777,14 +1777,14 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
     ## DOESN'T COUNT AS A SUBCYCLE ##
     if ii%2 == 0:
         calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-        get_curl_E(E, curl) 
+        get_curl_E_4thOrder(E, curl) 
         B2  -= dh * curl
         apply_boundary(B2, B_damp)
         get_B_cent(B2, B_center)
         #print('Resync B2')
     else:
         calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-        get_curl_E(E, curl) 
+        get_curl_E_4thOrder(E, curl) 
         B1  -= dh * curl
         apply_boundary(B1, B_damp)
         get_B_cent(B1, B_center)
@@ -1887,7 +1887,7 @@ def calculate_E(B, B_center, Ji, J_ext, qn, E, Ve, Te, resistive_array, sim_time
     elif pol_wave == 2:
         get_J_ext_pol(J_ext, sim_time)
         
-    curlB  = get_curl_B(B)
+    curlB  = get_curl_B_4thOrder(B)
     curlB /= mu0
        
     Ve[:, 0] = (Ji[:, 0] + J_ext[:, 0] - curlB[:, 0]) / qn
@@ -1950,8 +1950,8 @@ def get_B_cent(B, _B_cent):
     #    coeffs         = splrep(B_nodes_loc/dx, _B[:, jj])
     #    _B_cent[:, jj] = splev( E_nodes_loc/dx, coeffs)
     #_B_cent[:, 0] = eval_B0x(E_nodes_loc)
-    #_B_cent[:, 1] = 0.5*(B[:-1, 1] + B[1:, 1])
-    #_B_cent[:, 2] = 0.5*(B[:-1, 2] + B[1:, 2])
+    _B_cent[:, 1] = 0.5*(B[:-1, 1] + B[1:, 1])
+    _B_cent[:, 2] = 0.5*(B[:-1, 2] + B[1:, 2])
     #interpolate_cell_centre_4thOrder(B[:, 1], _B_cent[:, 1])
     #interpolate_cell_centre_4thOrder(B[:, 2], _B_cent[:, 2])
     return
