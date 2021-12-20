@@ -31,6 +31,7 @@ if not do_parallel:
     nb.set_num_threads(1)          
 #nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
 
+#%% --- FUNCTIONS ---
 ### ##
 #%% INITIALIZATION
 ### ##
@@ -244,6 +245,33 @@ def initialize_particles(B, E, _mp_flux, Ji_in, Ve_in, rho_in):
     return pos, vel, Ie, W_elec, Ib, W_mag, idx
 
 
+@nb.njit()
+def initialize_fields():
+    '''
+    Initializes field ndarrays and sets initial values for fields based on
+    parameters in config file.
+
+    INPUT:
+        <NONE>
+
+    OUTPUT:
+        B      -- Magnetic field array: Node locations on cell edges/vertices
+        E_int  -- Electric field array: Node locations in cell centres
+        E_half -- Electric field array: Node locations in cell centres
+        Ve     -- Electron fluid velocity moment: Calculated as part of E-field update equation
+        Te     -- Electron temperature          : Calculated as part of E-field update equation          
+    '''
+    B       = np.zeros((NC + 1, 3), dtype=np.float64)
+    B_cent  = np.zeros((NC    , 3), dtype=np.float64)
+    E_int   = np.zeros((NC    , 3), dtype=np.float64)
+    E_half  = np.zeros((NC    , 3), dtype=np.float64)
+    
+    Ve_int  = np.zeros((NC, 3), dtype=np.float64)
+    Ve_half = np.zeros((NC, 3), dtype=np.float64)
+    Te      = np.ones(  NC,     dtype=np.float64) * Te0_scalar
+    return B, B_cent, E_int, E_half, Ve_int, Ve_half, Te
+
+
 #@nb.njit()
 def set_damping_arrays(B_damping_array, E_damping_array, resistive_array, retarding_array, DT):
     '''
@@ -322,33 +350,6 @@ def set_damping_arrays(B_damping_array, E_damping_array, resistive_array, retard
 
 
 @nb.njit()
-def initialize_fields():
-    '''
-    Initializes field ndarrays and sets initial values for fields based on
-    parameters in config file.
-
-    INPUT:
-        <NONE>
-
-    OUTPUT:
-        B      -- Magnetic field array: Node locations on cell edges/vertices
-        E_int  -- Electric field array: Node locations in cell centres
-        E_half -- Electric field array: Node locations in cell centres
-        Ve     -- Electron fluid velocity moment: Calculated as part of E-field update equation
-        Te     -- Electron temperature          : Calculated as part of E-field update equation          
-    '''
-    B       = np.zeros((NC + 1, 3), dtype=np.float64)
-    B_cent  = np.zeros((NC    , 3), dtype=np.float64)
-    E_int   = np.zeros((NC    , 3), dtype=np.float64)
-    E_half  = np.zeros((NC    , 3), dtype=np.float64)
-    
-    Ve_int  = np.zeros((NC, 3), dtype=np.float64)
-    Ve_half = np.zeros((NC, 3), dtype=np.float64)
-    Te      = np.ones(  NC,     dtype=np.float64) * Te0_scalar
-    return B, B_cent, E_int, E_half, Ve_int, Ve_half, Te
-
-
-@nb.njit()
 def initialize_source_arrays():
     '''
     Initializes source term ndarrays. Each term is collected on the E-field grid.
@@ -398,99 +399,6 @@ def initialize_tertiary_arrays():
     mp_flux       = np.zeros((2 , Nj),     dtype=np.float64)
         
     return old_particles, old_fields, temp3De, temp3Db, temp1D, mp_flux
-
-
-def set_timestep(vel):
-    '''
-    INPUT:
-        vel             -- Initial particle velocities
-    OUTPUT:
-        DT              -- Maximum allowable timestep (seconds)
-        max_inc         -- Number of integer timesteps to get to end time
-        part_save_iter  -- Number of timesteps between particle data saves
-        field_save_iter -- Number of timesteps between field    data saves
-    
-    Note : Assumes no dispersion effects or electric field acceleration to
-           be initial limiting factor. This may change for inhomogenous loading
-           of particles or initial fields.
-           
-    To do : 
-        - Actually put a Courant condition check in here
-        
-    Question: What is slowing us down so much?
-            The 0.02 requirement on the ion timestep
-            This requirement is lifted from Winske et al. (2003) for P/C method
-            But is it really due to a grid effect (i.e. dispersion?)
-            If so, how do I calculate that for comparison?
-            
-    Timestep limitations:
-        Velocity resolution  : Particle can't go more than 1/2 cell per timestep
-        Gyro-orbit resolution: Must be resolved ~ 20 points per revolution or so
-        E-field acceleration : Not sure about this one, but its in Matthews (1994)
-        B-field dispersion   : This produces the whistler noise and seems to be the
-                        biggest issue. Is the reason for sub-cycling in Matthews (1994)
-                        and the reason for the 0.02*wc limit in Winske et al.
-                        
-    What would sub-stepping involve? Running the field computations without a particle
-    push in between? What's the point of the two copies of the B-field like in the CL method?
-    '''
-    if disable_waves == 0:
-        # dxm factor to account for B-field dispersion scaling with dx
-        ion_ts = dxm * orbit_res / gyfreq_xmax        # Timestep to highest resolve gyromotion
-    else:
-        ion_ts = 0.25 / gyfreq_xmax                   # If no waves, 20 points per revolution (~4 per wcinv)
-        
-    vel_ts = 0.5 * dx / np.max(np.abs(vel[0, :]))     # Timestep to satisfy particle CFL: <0.5dx per timestep
-    dis_ts = 1./(k_max**2 * B_xmax / (mu0 * ECHARGE * ne)) # Dispersion timestep: Probably requires subcycling
-    
-    DT       = min(ion_ts, vel_ts)                    # Timestep as smallest of options
-    max_time = max_wcinv / gyfreq_eq                  # Total runtime in seconds
-    max_inc  = int(max_time / DT) + 1                 # Total number of time steps
-    
-    if part_dumpf == 0:
-        part_save_iter = 1
-    else:
-        part_save_iter = int(part_dumpf / (DT*gyfreq_eq))
-    
-    if field_dumpf == 0:
-        field_save_iter = 1
-    else:
-        field_save_iter = int(field_dumpf / (DT*gyfreq_eq))
-
-    if save_fields == 1 or save_particles == 1:
-        store_run_parameters(DT, part_save_iter, field_save_iter, max_inc, max_time)
-    
-    B_damping_array = np.ones(NC + 1, dtype=float)
-    E_damping_array = np.ones(NC    , dtype=float)
-    resistive_array = np.ones(NC    , dtype=float)
-    retarding_array = np.ones(NC + 1, dtype=float)
-    set_damping_arrays(B_damping_array, E_damping_array, resistive_array, retarding_array, DT)
-    
-    # DIAGNOSTIC PLOT: CHECK OUT DAMPING FACTORS
-    if False:
-        plt.ioff()
-        fig, axes = plt.subplots(2)
-        axes[0].plot(B_nodes_loc/dx, B_damping_array)
-        axes[0].set_ylabel('B damp')
-        axes[1].plot(B_nodes_loc/dx, retarding_array)
-        axes[1].set_ylabel('$\eta$')
-        for ax in axes:
-            ax.set_xlim(B_nodes_loc[0]/dx, B_nodes_loc[-1]/dx)
-            ax.axvline(    0, color='k', ls=':', alpha=0.5)
-            ax.axvline( NX/2, color='k', ls=':')
-            ax.axvline(-NX/2, color='k', ls=':')
-            
-        plt.show()
-        sys.exit()
-    
-    if DT < 1e-2:
-        print('Timestep: %.3es' % (DT))
-    else:
-        print('Timestep: %.3fs' % (DT))
-    print(f'{max_inc} iterations total\n')
-    return DT, max_inc, part_save_iter, field_save_iter, B_damping_array,\
-             E_damping_array, resistive_array, retarding_array
-
 
 
 def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in, Ve_in, rho_in,
@@ -629,6 +537,98 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
         open_file = open(efin_path, 'w')
         open_file.close()
     return
+
+
+def set_timestep(vel):
+    '''
+    INPUT:
+        vel             -- Initial particle velocities
+    OUTPUT:
+        DT              -- Maximum allowable timestep (seconds)
+        max_inc         -- Number of integer timesteps to get to end time
+        part_save_iter  -- Number of timesteps between particle data saves
+        field_save_iter -- Number of timesteps between field    data saves
+    
+    Note : Assumes no dispersion effects or electric field acceleration to
+           be initial limiting factor. This may change for inhomogenous loading
+           of particles or initial fields.
+           
+    To do : 
+        - Actually put a Courant condition check in here
+        
+    Question: What is slowing us down so much?
+            The 0.02 requirement on the ion timestep
+            This requirement is lifted from Winske et al. (2003) for P/C method
+            But is it really due to a grid effect (i.e. dispersion?)
+            If so, how do I calculate that for comparison?
+            
+    Timestep limitations:
+        Velocity resolution  : Particle can't go more than 1/2 cell per timestep
+        Gyro-orbit resolution: Must be resolved ~ 20 points per revolution or so
+        E-field acceleration : Not sure about this one, but its in Matthews (1994)
+        B-field dispersion   : This produces the whistler noise and seems to be the
+                        biggest issue. Is the reason for sub-cycling in Matthews (1994)
+                        and the reason for the 0.02*wc limit in Winske et al.
+                        
+    What would sub-stepping involve? Running the field computations without a particle
+    push in between? What's the point of the two copies of the B-field like in the CL method?
+    '''
+    if disable_waves == 0:
+        # dxm factor to account for B-field dispersion scaling with dx
+        ion_ts = dxm * orbit_res / gyfreq_xmax        # Timestep to highest resolve gyromotion
+    else:
+        ion_ts = 0.25 / gyfreq_xmax                   # If no waves, 20 points per revolution (~4 per wcinv)
+        
+    vel_ts = 0.5 * dx / np.max(np.abs(vel[0, :]))     # Timestep to satisfy particle CFL: <0.5dx per timestep
+    dis_ts = 1./(k_max**2 * B_xmax / (mu0 * ECHARGE * ne)) # Dispersion timestep: Probably requires subcycling
+    
+    DT       = min(ion_ts, vel_ts)                    # Timestep as smallest of options
+    max_time = max_wcinv / gyfreq_eq                  # Total runtime in seconds
+    max_inc  = int(max_time / DT) + 1                 # Total number of time steps
+    
+    if part_dumpf == 0:
+        part_save_iter = 1
+    else:
+        part_save_iter = int(part_dumpf / (DT*gyfreq_eq))
+    
+    if field_dumpf == 0:
+        field_save_iter = 1
+    else:
+        field_save_iter = int(field_dumpf / (DT*gyfreq_eq))
+
+    if save_fields == 1 or save_particles == 1:
+        store_run_parameters(DT, part_save_iter, field_save_iter, max_inc, max_time)
+    
+    B_damping_array = np.ones(NC + 1, dtype=float)
+    E_damping_array = np.ones(NC    , dtype=float)
+    resistive_array = np.ones(NC    , dtype=float)
+    retarding_array = np.ones(NC + 1, dtype=float)
+    set_damping_arrays(B_damping_array, E_damping_array, resistive_array, retarding_array, DT)
+    
+    # DIAGNOSTIC PLOT: CHECK OUT DAMPING FACTORS
+    if False:
+        plt.ioff()
+        fig, axes = plt.subplots(2)
+        axes[0].plot(B_nodes_loc/dx, B_damping_array)
+        axes[0].set_ylabel('B damp')
+        axes[1].plot(B_nodes_loc/dx, retarding_array)
+        axes[1].set_ylabel('$\eta$')
+        for ax in axes:
+            ax.set_xlim(B_nodes_loc[0]/dx, B_nodes_loc[-1]/dx)
+            ax.axvline(    0, color='k', ls=':', alpha=0.5)
+            ax.axvline( NX/2, color='k', ls=':')
+            ax.axvline(-NX/2, color='k', ls=':')
+            
+        plt.show()
+        sys.exit()
+    
+    if DT < 1e-2:
+        print('Timestep: %.3es' % (DT))
+    else:
+        print('Timestep: %.3fs' % (DT))
+    print(f'{max_inc} iterations total\n')
+    return DT, max_inc, part_save_iter, field_save_iter, B_damping_array,\
+             E_damping_array, resistive_array, retarding_array
 
 ### ##
 #%% PARTICLES

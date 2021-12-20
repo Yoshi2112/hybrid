@@ -1591,7 +1591,7 @@ def validation_plots_wang_2016():
     tpar    = np.array([25e3      , 0.0      , 0.0      ,  0.0    ])
     ani     = np.array([2.0       , 0.0      , 0.0      ,  0.0    ])
     tper    = (ani + 1) * tpar
-    pdb.set_trace()
+
     Spec, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
     
     knorm_fac             = PP['pcyc_rad'] / PP['va']
@@ -1603,7 +1603,7 @@ def validation_plots_wang_2016():
     CPDR_solns /= PP['pcyc_rad']
     HPDR_solns /= PP['pcyc_rad']   
     k_vals     *= PP['va'] / PP['pcyc_rad']
-
+    
     species_colors = ['r', 'b', 'g']
     
     print('Plotting solutions...')
@@ -3934,10 +3934,10 @@ if __name__ == '__main__':
     ext_drive = 'E:'
     #validation_plots_fraser_1996()
     #validation_plots_omura2010()
-    #validation_plots_wang_2016()
+    validation_plots_wang_2016()
     #hybrid_test_plot()
 
-    power_spectrum_CGR_comparison()
+    #power_spectrum_CGR_comparison()
     sys.exit()
     
     #### Read in command-line arguments, if present

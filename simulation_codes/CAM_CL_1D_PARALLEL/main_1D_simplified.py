@@ -197,6 +197,50 @@ def set_timestep(vel):
 
 #%% PARTICLES 
 @nb.njit(parallel=do_parallel)
+def assign_weighting_CIC(pos, I, W, E_nodes=True):
+    Np         = pos.shape[0]
+    epsil      = 1e-15
+    
+    if E_nodes == True:
+        grid_offset   = 0.5
+    else:
+        grid_offset   = 0.0
+    
+    particle_transform = xmax + (ND - grid_offset)*dx  + epsil      # Offset to account for E/B grid and damping nodes
+    
+    if field_periodic == 0:
+        for ii in nb.prange(Np):
+            xp          = (pos[ii] + particle_transform) / dx       # Shift particle position >= 0
+            I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node (Vectorize?)
+            delta_left  = I[ii] - xp                                # Distance from left node in grid units
+            
+            if abs(pos[ii] - xmin) < 1e-10:
+                I[ii]    = ND - 1
+                W[0, ii] = 0.0
+                W[1, ii] = 0.5
+                W[2, ii] = 0.0
+            elif abs(pos[ii] - xmax) < 1e-10:
+                I[ii]    = ND + NX - 1
+                W[0, ii] = 0.5
+                W[1, ii] = 0.0
+                W[2, ii] = 0.0
+            else:
+                W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))  # Get weighting factors
+                W[1, ii] = 0.75 - np.square(delta_left + 1.)
+                W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
+    else:
+        for ii in nb.prange(Np):
+            xp          = (pos[ii] + particle_transform) / dx       # Shift particle position >= 0
+            I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node (Vectorize?)
+            delta_left  = I[ii] - xp                                # Distance from left node in grid units
+
+            W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))  # Get weighting factors
+            W[1, ii] = 0.75 - np.square(delta_left + 1.)
+            W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
+    return
+
+
+@nb.njit(parallel=do_parallel)
 def assign_weighting_TSC(pos, I, W, E_nodes=True):
     Np         = pos.shape[0]
     epsil      = 1e-15

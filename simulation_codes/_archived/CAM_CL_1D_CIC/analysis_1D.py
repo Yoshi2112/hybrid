@@ -4,8 +4,9 @@ Created on Wed Apr 27 11:56:34 2016
 
 @author: c3134027
 """
-
+import sys
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import os
 from numpy import pi
@@ -16,14 +17,15 @@ import pdb
 
 
 def manage_dirs():
-    global run_dir, data_dir, anal_dir, temp_dir
+    global run_dir, data_dir, anal_dir, temp_dir, extracted_dir
     
     run_dir  = '{}/runs/{}/run_{}/'.format(drive, series, run_num)      # Main run directory
     data_dir = run_dir + 'data/'                                        # Directory containing .npz output files for the simulation run
     anal_dir = run_dir + 'analysis/'                                    # Output directory for all this analysis (each will probably have a subfolder)
     temp_dir = run_dir + 'temp/'                                        # Saving things like matrices so we only have to do them once
+    extracted_dir = run_dir + 'extracted/'
     
-    for this_dir in [anal_dir, temp_dir]:
+    for this_dir in [anal_dir, temp_dir, extracted_dir]:
         if os.path.exists(this_dir) == False:                           # Make Output folder if they don't exist
             os.makedirs(this_dir)        
     return
@@ -64,10 +66,11 @@ def load_particles():
 
 
 def load_header():
-    global Nj, cellpart, data_dump_iter, ne, NX, dxm, seed, B0, dx, Te0, theta, dt, max_rev, ie, run_desc, seed, subcycles
+    global Nj, cellpart, data_dump_iter, ne, NX, dxm, seed, B0, dx, Te0, theta,\
+        dt, max_rev, ie, run_desc, seed, subcycles
     
     h_name = os.path.join(data_dir, 'Header.pckl')                      # Load header file
-    f      = open(h_name)                                               # Open header file
+    f      = open(h_name, 'rb')                                               # Open header file
     obj    = pickle.load(f)                                             # Load variables from header file into python object
     f.close()                                                           # Close header file
     
@@ -94,7 +97,6 @@ def load_header():
 
 
 def load_timestep(ii):
-    print('Loading file {} of {}'.format(ii+1, num_files))
     d_file     = 'data%05d.npz' % ii                # Define target file
     input_path = data_dir + d_file                  # File location
     data       = np.load(input_path)                # Load file
@@ -106,6 +108,79 @@ def load_timestep(ii):
     tdns             = data['dns']
     tJ               = data['J']
     return tposition, tvelocity, tB, tE, tdns, tJ
+
+
+def extract_field_arrays():
+    '''
+    Extracts and saves all field arrays separate from the timestep slice files for easy
+    access. Note that magnetic field arrays exclude the last value due to periodic
+    boundary conditions. This may be changed later.
+    
+    TODO: Have option to delete files once extracted. This probably won't get
+    used much, but in the event more storage space is needed, extracted files
+    are just duplicating the data and originals aren't needed.
+    '''
+    # Check if field files exist:
+    if len(os.listdir(data_dir)) == 0:
+        print('No field files found, skipping extraction.')
+        return
+    
+    # Check that all components are extracted
+    comps_missing = 0
+    for component in ['bx', 'by', 'bz', 'ex', 'ey', 'ez']:
+        check_path = temp_dir + component + '_array.npy'
+        if os.path.isfile(check_path) == False:
+            comps_missing += 1
+    
+    if comps_missing == 0:
+        print('Field components already extracted.')
+        return
+    else:
+        num_field_steps = len(os.listdir(data_dir)) - 2
+        
+        # Set arrays
+        bx_arr, by_arr, bz_arr = [np.zeros((num_field_steps, NX + 1)) for _ in range(3)]
+        ex_arr, ey_arr, ez_arr, qdns_arr, jx_arr, jy_arr, jz_arr\
+            = [np.zeros((num_field_steps, NX + 2)) for _ in range(7)]
+    
+        print('Extracting fields...')
+        for ii in range(num_field_steps):
+            print(f'Extracting field timestep {ii} of {num_field_steps}')
+            
+            position, velocity, B, E, q_dns, J = load_timestep(ii)
+
+            bx_arr[ii, :] = B[:, 0]
+            by_arr[ii, :] = B[:, 1]
+            bz_arr[ii, :] = B[:, 2]
+            
+            ex_arr[ii, :] = E[:, 0]
+            ey_arr[ii, :] = E[:, 1]
+            ez_arr[ii, :] = E[:, 2]
+
+            jx_arr[ii, :] = J[:, 0]
+            jy_arr[ii, :] = J[:, 1]
+            jz_arr[ii, :] = J[:, 2]
+                        
+            qdns_arr[ii, :]      = q_dns
+
+        print('\nExtraction Complete.')
+        
+        np.save(temp_dir + 'bx' +'_array.npy', bx_arr)
+        np.save(temp_dir + 'by' +'_array.npy', by_arr)
+        np.save(temp_dir + 'bz' +'_array.npy', bz_arr)
+        
+        np.save(temp_dir + 'ex' +'_array.npy', ex_arr)
+        np.save(temp_dir + 'ey' +'_array.npy', ey_arr)
+        np.save(temp_dir + 'ez' +'_array.npy', ez_arr)
+        
+        np.save(temp_dir + 'jx' +'_array.npy', jx_arr)
+        np.save(temp_dir + 'jy' +'_array.npy', jy_arr)
+        np.save(temp_dir + 'jz' +'_array.npy', jz_arr)
+        
+        np.save(temp_dir + 'qdens' +'_array.npy', qdns_arr)
+        
+        print('Field component arrays saved in {}'.format(temp_dir))
+    return
 
 
 @nb.njit()
@@ -140,40 +215,17 @@ def collect_density(pos):
     return n_i
 
 
-def get_array(component, tmin, tmax):
-    if component[-1].lower() == 'x':
-        comp_idx = 0
-    elif component[-1].lower() == 'y':
-        comp_idx = 1
-    elif component[-1].lower() == 'z':
-        comp_idx = 2
-    
+def get_array(component, tmin=None, tmax=None):
     if tmax == None:
         tmax = num_files
     
-    num_iter = tmax - tmin
-    arr      = np.zeros((num_iter, NX))
-    
-    if tmin == 0 and tmax == num_files:
-        check_path = temp_dir + component.lower() + '_array' + '.npy'
-    else:
-        check_path = temp_dir + component.lower() + '_array' + '_{}'.format(tmin) + '_{}'.format(tmax) + '.npy'
+    check_path = temp_dir + component.lower() + '_array' + '.npy'
 
-    if os.path.isfile(check_path) == True:
-        print('Array file for {} loaded from memory...'.format(component.upper()))
-        arr = np.load(check_path)   
-    else:
-        for ii in range(tmin, tmax):
-            position, velocity, B, E, dns, J = load_timestep(ii)
-            
-            if component[0].upper() == 'B':
-                arr[ii] = B[0:-1, comp_idx]
-            elif component[0].upper() == 'E':
-                arr[ii] = E[1:-1, comp_idx]
-                
-        print('Saving array file as {}'.format(check_path))
-        np.save(check_path, arr)
-    return arr
+    if os.path.isfile(check_path) == False:
+        extract_field_arrays()
+    print('Array file for {} loaded from memory...'.format(component.upper()))
+    arr = np.load(check_path)   
+    return arr[tmin: tmax]
 
 
 def generate_wk_plot(component='By', plot=True, tmin=0, tmax=None, normalize=False):
@@ -301,6 +353,53 @@ def plot_wk(arr, norm, saveas='dispersion_relation'):
     plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
     plt.close()
     print('Dispersion Plot saved')
+    return
+
+
+def plot_tx(tarr, inarr, norm_fac=1., saveas='tx_plot', title='', 
+            save=False, tmax=None, absolute=False):   
+    arr = inarr/norm_fac
+    xarr = np.arange(0, arr.shape[1], 1)
+    
+    # Find largest value (for colorbar)
+    maxval = np.abs(arr).max()
+    if absolute:
+        vmin = 0.0
+        vmax = maxval
+    else:
+        vmin = - maxval
+        vmax =   maxval
+        
+    ## PLOT IT
+    fontsize = 18
+    font     = 'monospace'
+    
+    tick_label_size = 14
+    mpl.rcParams['xtick.labelsize'] = tick_label_size 
+    mpl.rcParams['ytick.labelsize'] = tick_label_size 
+    
+    plt.ioff()
+    fig, ax = plt.subplots(1, figsize=(15, 10))
+    
+    im1 = ax.pcolormesh(xarr, tarr, arr, cmap='bwr', vmin=vmin, vmax=vmax,
+                        shading='auto')
+    
+    cb  = fig.colorbar(im1)
+    cb.set_label('nT', rotation=0, family=font, fontsize=fontsize, labelpad=30)
+
+    ax.set_title(f'Time-Space t-x Plot :: {title}', fontsize=fontsize, family=font)
+    ax.set_ylabel('t (s)', rotation=0, labelpad=30, fontsize=fontsize, family=font)
+    ax.set_xlabel('x ($\Delta x$)', fontsize=fontsize, family=font)
+    ax.set_ylim(0, tmax)
+    ax.set_xlim(xarr[0], xarr[-1])
+    
+    if save == True:
+        fullpath = anal_dir + saveas + '.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        print('t-x Plot saved')
+        plt.close('all')
+    else:
+        plt.show()
     return
 
 
@@ -452,9 +551,9 @@ def plot_energies(ii, dns):
 
 
 if __name__ == '__main__':   
-    drive    = 'E:'
-    series   = 'CAM_CL_test2'                               # Run identifier string 
-    run_num  = 0                                            # Run number
+    drive    = 'D:'
+    series   = 'CAMCL_STRIPPED_STABILITY_TEST'              # Run identifier string 
+    run_num  = 10                                           # Run number
 
     manage_dirs()                                           # Initialize directories
     load_constants()                                        # Load SI constants
@@ -472,19 +571,27 @@ if __name__ == '__main__':
     time_radperiods = time_seconds * gyfreq 
     
     np.random.seed(seed)                                    # Initialize random seed
+    extract_field_arrays()
+    
+    jy = get_array('jy')
+    jz = get_array('jz')
+    jt = np.sqrt(jy**2 + jz**2)
+    
+    plot_tx(time_seconds, jt, norm_fac=1e-8, saveas='jt_plot_abs', save=True,
+            absolute=True, title='|Jt|', tmax=140.)
+    sys.exit()
     
     mag_energy      = np.zeros(num_files)
     particle_energy = np.zeros((num_files, Nj))
     electron_energy = np.zeros(num_files)
 
     #generate_kt_plot(normalize=True)
-        
-    for ii in range(num_files):
-        position, velocity, B, E, q_dns, J = load_timestep(ii)
-        dns                                = collect_density(position)
-        
-        plot_energies(ii, dns)
-        
-        #winske_stackplot(ii, title=r'Winske test check: $\Delta t$ = 0.02$\omega^{-1}$, Smoothing ON')
-
     
+    if False:
+        for ii in range(num_files):
+            position, velocity, B, E, q_dns, J = load_timestep(ii)
+            dns                                = collect_density(position)
+            
+            plot_energies(ii, dns)
+            
+            #winske_stackplot(ii, title=r'Winske test check: $\Delta t$ = 0.02$\omega^{-1}$, Smoothing ON')

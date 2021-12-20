@@ -21,7 +21,7 @@ B_surf  = 3.12e-5                            # Magnetic field strength at Earth 
 # A few internal flags
 cold_va             = False
 Fu_override         = False       # Note this HAS to be disabled for grid runs.
-do_parallel         = True
+do_parallel         = False
 adaptive_timestep   = True       # Disable adaptive timestep to keep it the same as initial
 print_timings       = False      # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True       # Flag to print runtime every 50 iterations 
@@ -30,7 +30,7 @@ adaptive_subcycling = True       # Flag (True/False) to adaptively change number
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-nb.set_num_threads(6)         # Uncomment to manually set number of threads, otherwise will use all available
+#nb.set_num_threads(6)         # Uncomment to manually set number of threads, otherwise will use all available
 
 
 #%% --- FUNCTIONS ---
@@ -171,92 +171,94 @@ def quiet_start_bimaxwellian():
     return pos, vel, idx
 
 
-def reverse_radix_quiet_start_uniform():
-    '''
-    TODO: Need to make this faster
-    
-    Creates an N-sampled normal distribution in 3D velocity space that is 
-    uniform in a 1D configuration space. Function uses analytic sampling of
-    distribution function and reverse-radix shuffling to ensure randomness.
-
-    OUTPUT:
-        pos --  N array of uniformly distributed particle positions
-        vel -- 3xN array of gaussian particle velocities, giving a Maxwellian in |v|
-        idx -- N array of particle indexes, indicating which species it belongs to
-    '''
-    print('Initialising particle distributions with Bit-Reversed Radix algorithm')
-    print('Please wait...')
-    def rkbr_uniform_set(arr, base=2):
-        '''
-        Works on array arr to produce fractions in (0, 1) by 
-        traversing base k.
-        
-        Will support arrays of lengths up to at least a billion
-         -- But this is super inefficient, takes up to a minute with 2 million
-         
-        Parallelise?
-        '''
-        def reverse_slicing(s):
-            return s[::-1]
-        
-        # Convert ints to base k strings
-        str_arr = np.zeros(arr.shape[0], dtype='U30')
-        dec_arr = np.zeros(arr.shape[0], dtype=float)
-        for ii in range(arr.shape[0]):
-            str_arr[ii] = np.base_repr(arr[ii], base)   # Returns strings
-    
-        # Reverse string order and convert to decimal, treating as base k fraction (i.e. with 0. at front)
-        for ii in range(arr.shape[0]):
-            rev = reverse_slicing(str_arr[ii])
-    
-            dec_val = 0
-            for jj in range(len(rev)):
-                dec_val += float(rev[jj]) * (base ** -(jj + 1))
-            dec_arr[ii] = dec_val
-        return dec_arr 
-
-    # Set and initialize seed
-    np.random.seed(seed)
-    pos = np.zeros(N, dtype=np.float64)
-    vel = np.zeros((3, N), dtype=np.float64)
-    idx = np.ones(N,       dtype=np.int8) * Nj
-    
-    for jj in range(Nj):
-        half_n = N_species[jj] // 2                     # Half particles of species - doubled later
-                
-        st = idx_start[jj]
-        en = idx_start[jj] + half_n
-        
-        # Set position
-        for kk in range(half_n):
-            pos[st + kk] = 2*xmax*(float(kk) / (half_n - 1))
-        pos[st: en]-= xmax              
-        
-        # Set velocity for half: Randomly Maxwellian
-        arr     = np.arange(half_n)
-        
-        R_vr    = rkbr_uniform_set(arr+1, base=2)
-        R_theta = rkbr_uniform_set(arr  , base=3) 
-        R_vrx   = rkbr_uniform_set(arr+1, base=5)
-        
-        vr      = vth_perp[jj] * np.sqrt(-2 * np.log(R_vr ))
-        vrx     = vth_par[ jj] * np.sqrt(-2 * np.log(R_vrx))
-        theta   = R_theta * np.pi * 2
-
-        vel[0, st: en] = vrx * np.sin(theta) +  drift_v[jj]
-        vel[1, st: en] = vr  * np.sin(theta)
-        vel[2, st: en] = vr  * np.cos(theta)
-        idx[   st: en] = jj
-        
-        # Quiet Start: Other half, same position, parallel velocity, opposite v_perp
-        pos[   en: en + half_n] = pos[   st: en]                
-        vel[0, en: en + half_n] = vel[0, st: en] *  1.0
-        vel[1, en: en + half_n] = vel[1, st: en] * -1.0
-        vel[2, en: en + half_n] = vel[2, st: en] * -1.0
-        
-        idx[st: idx_end[jj]] = jj
-    print('Particles initialised.')
-    return pos, vel, idx
+# =============================================================================
+# def reverse_radix_quiet_start_uniform():
+#     '''
+#     TODO: Need to make this faster
+#     
+#     Creates an N-sampled normal distribution in 3D velocity space that is 
+#     uniform in a 1D configuration space. Function uses analytic sampling of
+#     distribution function and reverse-radix shuffling to ensure randomness.
+# 
+#     OUTPUT:
+#         pos --  N array of uniformly distributed particle positions
+#         vel -- 3xN array of gaussian particle velocities, giving a Maxwellian in |v|
+#         idx -- N array of particle indexes, indicating which species it belongs to
+#     '''
+#     print('Initialising particle distributions with Bit-Reversed Radix algorithm')
+#     print('Please wait...')
+#     def rkbr_uniform_set(arr, base=2):
+#         '''
+#         Works on array arr to produce fractions in (0, 1) by 
+#         traversing base k.
+#         
+#         Will support arrays of lengths up to at least a billion
+#          -- But this is super inefficient, takes up to a minute with 2 million
+#          
+#         Parallelise?
+#         '''
+#         def reverse_slicing(s):
+#             return s[::-1]
+#         
+#         # Convert ints to base k strings
+#         str_arr = np.zeros(arr.shape[0], dtype='U30')
+#         dec_arr = np.zeros(arr.shape[0], dtype=float)
+#         for ii in range(arr.shape[0]):
+#             str_arr[ii] = np.base_repr(arr[ii], base)   # Returns strings
+#     
+#         # Reverse string order and convert to decimal, treating as base k fraction (i.e. with 0. at front)
+#         for ii in range(arr.shape[0]):
+#             rev = reverse_slicing(str_arr[ii])
+#     
+#             dec_val = 0
+#             for jj in range(len(rev)):
+#                 dec_val += float(rev[jj]) * (base ** -(jj + 1))
+#             dec_arr[ii] = dec_val
+#         return dec_arr 
+# 
+#     # Set and initialize seed
+#     np.random.seed(seed)
+#     pos = np.zeros(N, dtype=np.float64)
+#     vel = np.zeros((3, N), dtype=np.float64)
+#     idx = np.ones(N,       dtype=np.int8) * Nj
+#     
+#     for jj in range(Nj):
+#         half_n = N_species[jj] // 2                     # Half particles of species - doubled later
+#                 
+#         st = idx_start[jj]
+#         en = idx_start[jj] + half_n
+#         
+#         # Set position
+#         for kk in range(half_n):
+#             pos[st + kk] = 2*xmax*(float(kk) / (half_n - 1))
+#         pos[st: en]-= xmax              
+#         
+#         # Set velocity for half: Randomly Maxwellian
+#         arr     = np.arange(half_n)
+#         
+#         R_vr    = rkbr_uniform_set(arr+1, base=2)
+#         R_theta = rkbr_uniform_set(arr  , base=3) 
+#         R_vrx   = rkbr_uniform_set(arr+1, base=5)
+#         
+#         vr      = vth_perp[jj] * np.sqrt(-2 * np.log(R_vr ))
+#         vrx     = vth_par[ jj] * np.sqrt(-2 * np.log(R_vrx))
+#         theta   = R_theta * np.pi * 2
+# 
+#         vel[0, st: en] = vrx * np.sin(theta) +  drift_v[jj]
+#         vel[1, st: en] = vr  * np.sin(theta)
+#         vel[2, st: en] = vr  * np.cos(theta)
+#         idx[   st: en] = jj
+#         
+#         # Quiet Start: Other half, same position, parallel velocity, opposite v_perp
+#         pos[   en: en + half_n] = pos[   st: en]                
+#         vel[0, en: en + half_n] = vel[0, st: en] *  1.0
+#         vel[1, en: en + half_n] = vel[1, st: en] * -1.0
+#         vel[2, en: en + half_n] = vel[2, st: en] * -1.0
+#         
+#         idx[st: idx_end[jj]] = jj
+#     print('Particles initialised.')
+#     return pos, vel, idx
+# =============================================================================
 
 @nb.njit()
 def uniform_bimaxwellian():
@@ -341,6 +343,68 @@ def initialize_fields():
     Te           = np.ones(  NC,     dtype=np.float64) * Te0_scalar
     B_cent[:, 0] = B_eq * (1. + a*E_nodes_loc[:]*E_nodes_loc[:])
     return B, B2, B_cent, E, Ve, Te
+
+
+@nb.njit()
+def set_damping_arrays(B_damping_array, resistive_array, DT, subcycles):
+    '''Create masking array for magnetic field damping used to apply open
+    boundaries. Based on applcation by Shoji et al. (2011) and
+    Umeda et al. (2001)
+    
+    Question: Which timestep to use? Subcycled one? 
+    
+    Still need to implement retarding array as per Umeda and E-damping as
+    per Hu & Denton (2010). Code in the PREDCORR version but doesn't work
+    as yet.
+    
+    QUESTION: WHY ARE THE DAMPING VALUES ON THE ORDER OF 0.99980 OR LESS?
+              I.E. 99.98% OR MORE OF THE ORIGINAL VALUE IS KEPT
+              MOST STUFF I READ SEEMS TO SAY IT SHOULD BE A DECENT PERCENTAGE
+              I.E. A GRADIENT FROM 100% TO 0%, NOT AN INFINITESIMAL
+              IS IT BECAUSE OF MY OUTRAGEOUS NUMBER OF TIMESTEPS?
+    '''
+    # Location and thickness of damping region (in units of dx)
+    damping_thickness  = damping_fraction*NC
+    damping_boundary   = 0.5*NC - damping_thickness  
+    
+    dh       = DT / subcycles
+    r_damp   = np.sqrt(29.7 * 0.5 * va * (0.5 * dh / dx) / damping_thickness)
+    r_damp  *= damping_multiplier
+    
+    # Do B-damping array
+    B_dist_from_mp  = np.abs(np.arange(NC + 1) - 0.5*NC)                # Distance of each B-node from midpoint
+    for ii in range(NC + 1):
+        if B_dist_from_mp[ii] > damping_boundary:
+            B_damping_array[ii] = 1. - r_damp * ((B_dist_from_mp[ii] - damping_boundary) / damping_thickness) ** 2 
+        else:
+            B_damping_array[ii] = 1.0
+            
+    # Set resistivity
+    if True:
+        # Lower Hybrid Resonance method (source?)
+        LH_res_is = 1. / (gyfreq_eq * egyfreq_eq) + 1. / wpi ** 2  # Lower Hybrid Resonance frequency, inverse squared
+        LH_res    = 1. / np.sqrt(LH_res_is)                        # Lower Hybrid Resonance frequency: DID I CHECK THIS???
+        max_eta   = (resis_multiplier * LH_res)  / (e0 * wpe ** 2) # Electron resistivity (using intial conditions for wpi/wpe)
+    else:
+        # Spitzer resistance as per B&T
+        max_eta = (resis_multiplier * vei)  / (e0 * wpe ** 2)
+    
+    E_dist_from_mp  = np.abs(np.arange(NC) + 0.5 - 0.5*NC)
+    for ii in range(NC):
+        # Damping region
+        if E_dist_from_mp[ii] > damping_boundary:
+            resistive_array[ii] = 0.5*max_eta*(1. + np.cos(np.pi*(E_dist_from_mp[ii] - 0.5*NC) / damping_thickness))
+        
+        # Inside solution space
+        else:
+            resistive_array[ii] = 0.0
+            
+    # Make sure no damping arrays go negative (or that's growth!)
+    for arr in [B_damping_array, resistive_array]:
+        for ii in range(arr.shape[0]):
+            if arr[ii] < 0.0:
+                arr[ii] = 0.0
+    return
 
 
 @nb.njit()
@@ -470,68 +534,6 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
         efin_path = '%s/%s/run_%d/equil_finished.txt' % (drive, save_path, run_num)
         open_file = open(efin_path, 'w')
         open_file.close()
-    return
-
-
-@nb.njit()
-def set_damping_arrays(B_damping_array, resistive_array, DT, subcycles):
-    '''Create masking array for magnetic field damping used to apply open
-    boundaries. Based on applcation by Shoji et al. (2011) and
-    Umeda et al. (2001)
-    
-    Question: Which timestep to use? Subcycled one? 
-    
-    Still need to implement retarding array as per Umeda and E-damping as
-    per Hu & Denton (2010). Code in the PREDCORR version but doesn't work
-    as yet.
-    
-    QUESTION: WHY ARE THE DAMPING VALUES ON THE ORDER OF 0.99980 OR LESS?
-              I.E. 99.98% OR MORE OF THE ORIGINAL VALUE IS KEPT
-              MOST STUFF I READ SEEMS TO SAY IT SHOULD BE A DECENT PERCENTAGE
-              I.E. A GRADIENT FROM 100% TO 0%, NOT AN INFINITESIMAL
-              IS IT BECAUSE OF MY OUTRAGEOUS NUMBER OF TIMESTEPS?
-    '''
-    # Location and thickness of damping region (in units of dx)
-    damping_thickness  = damping_fraction*NC
-    damping_boundary   = 0.5*NC - damping_thickness  
-    
-    dh       = DT / subcycles
-    r_damp   = np.sqrt(29.7 * 0.5 * va * (0.5 * dh / dx) / damping_thickness)
-    r_damp  *= damping_multiplier
-    
-    # Do B-damping array
-    B_dist_from_mp  = np.abs(np.arange(NC + 1) - 0.5*NC)                # Distance of each B-node from midpoint
-    for ii in range(NC + 1):
-        if B_dist_from_mp[ii] > damping_boundary:
-            B_damping_array[ii] = 1. - r_damp * ((B_dist_from_mp[ii] - damping_boundary) / damping_thickness) ** 2 
-        else:
-            B_damping_array[ii] = 1.0
-            
-    # Set resistivity
-    if True:
-        # Lower Hybrid Resonance method (source?)
-        LH_res_is = 1. / (gyfreq_eq * egyfreq_eq) + 1. / wpi ** 2  # Lower Hybrid Resonance frequency, inverse squared
-        LH_res    = 1. / np.sqrt(LH_res_is)                        # Lower Hybrid Resonance frequency: DID I CHECK THIS???
-        max_eta   = (resis_multiplier * LH_res)  / (e0 * wpe ** 2) # Electron resistivity (using intial conditions for wpi/wpe)
-    else:
-        # Spitzer resistance as per B&T
-        max_eta = (resis_multiplier * vei)  / (e0 * wpe ** 2)
-    
-    E_dist_from_mp  = np.abs(np.arange(NC) + 0.5 - 0.5*NC)
-    for ii in range(NC):
-        # Damping region
-        if E_dist_from_mp[ii] > damping_boundary:
-            resistive_array[ii] = 0.5*max_eta*(1. + np.cos(np.pi*(E_dist_from_mp[ii] - 0.5*NC) / damping_thickness))
-        
-        # Inside solution space
-        else:
-            resistive_array[ii] = 0.0
-            
-    # Make sure no damping arrays go negative (or that's growth!)
-    for arr in [B_damping_array, resistive_array]:
-        for ii in range(arr.shape[0]):
-            if arr[ii] < 0.0:
-                arr[ii] = 0.0
     return
 
 

@@ -24,4 +24,4 @@ GYROPERIOD_RESOLUTION	0.05
 FREQUENCY_RESOLUTION	0.05
 PARTICLE_DUMP_FREQ		5.00
 FIELD_DUMP_FREQ			0.25
-Stripped code. Removed adaptive timestep and subcycling. Should be stable for some default set of parameters like DT = 0.05inv_wci and 4-16 subcycles per timestep. If not, try setting more subcycles or smaller timestep.
+Original code with parallel calculation disabled (nthreads = 1 to still take advantage of the optimisations).
