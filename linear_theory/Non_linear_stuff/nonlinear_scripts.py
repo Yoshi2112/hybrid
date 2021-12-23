@@ -1201,7 +1201,7 @@ def plot_nakamura2016_fig11():
             # Calculate amplitudes
             B_th  = get_threshold_amplitude(w_norm, wph, Q, s2, a_norm, Vp, Vr, Vth_para, Vth_perp)
             B_opt = get_optimum_amplitude(w_norm, wph, Q, tau, s0, s1, Vg, Vr, Vth_para, Vth_perp)
-            pdb.set_trace()
+
             ax = axes[ii]
             ax.semilogy(w_norm, B_opt, c=clr[jj])
             ax.semilogy(w_norm, B_th,  c=clr[jj], ls='--')
@@ -1446,7 +1446,7 @@ def plot_ohja2021_fig9():
     # Calculate
     B_th = get_threshold_amplitude(w_norm, wph, Q, s2, a_norm, Vp, Vr, Vth_para, Vth_perp)
     B_opt = get_optimum_amplitude(w_norm, wph, Q, tau, s0, s1, Vg, Vr, Vth_para, Vth_perp)
-    pdb.set_trace()
+
     fig, ax = plt.subplots(figsize=(16, 9))
     ax.semilogy(f_vals, B_opt, ls='-' , label='Optimum Amplitude')
     ax.semilogy(f_vals, B_th , ls='--', label='Threshold Amplitude')
@@ -1480,12 +1480,12 @@ if __name__ == '__main__':
     #plot_shoji2012_2D()
     
     #plot_check_CPDR()
-    #plot_ohja2021_fig8()
-    #plot_ohja2021_fig9()
+    plot_ohja2021_fig8()
+    plot_ohja2021_fig9()
     
     #plot_nakamura2016_fig11()
     
-    plot_kim2016_fig16_alternative()
+    #plot_kim2016_fig16_alternative()
         
 # =============================================================================
 #     if False:
