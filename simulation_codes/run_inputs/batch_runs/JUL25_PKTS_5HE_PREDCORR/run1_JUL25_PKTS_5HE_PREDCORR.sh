@@ -1,6 +1,6 @@
 #!/bin/bash
 #PBS -l select=1:ncpus=32:mem=10GB
-#PBS -l walltime=150:00:00 
+#PBS -l walltime=300:00:00 
 #PBS -k oe
 #PBS -m ae
 #PBS -M joshua.s.williams@uon.edu.au
