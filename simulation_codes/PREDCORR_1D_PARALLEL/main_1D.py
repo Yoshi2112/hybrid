@@ -5,7 +5,6 @@ import os, sys, pdb, pickle
 from shutil import rmtree
 from timeit import default_timer as timer
 from scipy.interpolate import splrep, splev
-import matplotlib.pyplot as plt
 
 ## PHYSICAL CONSTANTS ##
 ECHARGE = 1.602177e-19                       # Elementary charge (C)
@@ -23,13 +22,13 @@ cold_va             = False
 Fu_override         = False     # Override to allow density to be calculated as a ratio of frequencies
 do_parallel         = True      # Flag to use available threads to parallelize particle functions
 adaptive_timestep   = True      # Disable adaptive timestep to keep it the same as initial
-print_timings       = False     # Diagnostic outputs timing each major segment (for efficiency examination)
+print_timings       = True      # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True      # Flag to print runtime every 50 iterations 
 
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-nb.set_num_threads(6)         # Uncomment to manually set number of threads, otherwise will use all available
+#nb.set_num_threads(6)         # Uncomment to manually set number of threads, otherwise will use all available
 
 #%% --- FUNCTIONS ---
 ### ##
@@ -431,6 +430,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
         
     Note:
     '''
+    sys.exit('This configuration is disabled until you fix hot_only injection and push')
     psave = save_particles
     
     print('Letting particle distribution relax into static field configuration')
@@ -462,7 +462,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
         
     # Desync (retard) velocity here
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, -0.5*pdt,
-           eta_arr, vel_only=False)
+           eta_arr)
     
     # Apply BCs to particles
     if particle_open == 1:
@@ -489,7 +489,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
         
         for jj in range(Nj):
             parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, pdt,
-            eta_arr, vel_only=False)
+            eta_arr)
             
             # Apply BCs to particles
             if particle_open == 1:
@@ -517,7 +517,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
     
     # Resync (advance) velocity here
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, 0.5*pdt,
-           eta_arr, vel_only=False)
+           eta_arr)
     
     # Apply BCs to particles
     if particle_open == 1:
@@ -607,6 +607,7 @@ def set_timestep(vel):
     
     # DIAGNOSTIC PLOT: CHECK OUT DAMPING FACTORS
     if False:
+        import matplotlib.pyplot as plt
         plt.ioff()
         fig, axes = plt.subplots(2)
         axes[0].plot(B_nodes_loc/dx, B_damping_array)
@@ -644,7 +645,9 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     '''
     parmov_start = timer()
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve, rho_in, DT,
-           resistive_array, vel_only=False)
+           resistive_array)
+    #parmov.parallel_diagnostics(level=4)
+    #sys.exit()
     parmov_time = round(timer() - parmov_start, 3)
     
     BC_start  = timer()
@@ -842,7 +845,7 @@ def assign_weighting_CIC(pos, I, W, E_nodes=True):
 
 @nb.njit(parallel=do_parallel)
 def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji, Ve, q_dens, DT,
-           resistive_array, vel_only=False, hot_only=False):
+           resistive_array):
     '''
     updates velocities using a Boris particle pusher.
     Based on Birdsall & Langdon (1985), pp. 59-63.
@@ -893,82 +896,80 @@ def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji, Ve, q_dens, DT,
         idx[ii] += Nj
     '''
     for ii in nb.prange(pos.shape[0]):
-        if temp_type[idx[ii]] == 1 or hot_only == False:
-            # Calculate wave fields at particle position
-            Ep = np.zeros(3, dtype=np.float64)  
-            Bp = np.zeros(3, dtype=np.float64)
-            Jp = np.zeros(3, dtype=np.float64)
-            eta= 0.0
-            for jj in nb.prange(3):
-                eta += resistive_array[Ie[ii] + jj] * W_elec[jj, ii] 
-                for kk in nb.prange(3):
-                    Ep[kk] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]   
-                    Bp[kk] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]  
-                    
-                    if resis_multiplier != 0.0:
-                        Jp[kk] += (Ji[Ie[ii] + jj, kk] - Ve[Ie[ii] + jj, kk]*q_dens[Ie[ii] + jj])
-                    
-            # Add resistivity into 'effective' E-field
-            if eta != 0.0:
-                Ep[0] -= eta * Jp[0]
-                Ep[1] -= eta * Jp[1]
-                Ep[2] -= eta * Jp[2]
-    
-            # Calculate background field at particle position
-            Bp[0]   += B_eq * (1.0 + a * pos[ii] * pos[ii])
-            constant = a * B_eq
-            l_cyc    = qm_ratios[idx[ii]] * Bp[0]
-            Bp[1]   += constant * pos[ii] * vel[2, ii] / l_cyc
-            Bp[2]   -= constant * pos[ii] * vel[1, ii] / l_cyc
-    
-            # Start Boris Method
-            qmi = 0.5 * DT * qm_ratios[idx[ii]]                             # q/m variable including dt
-            T   = qmi * Bp 
-            S   = 2.*T / (1. + T[0]*T[0] + T[1]*T[1] + T[2]*T[2])
-    
-            # vel -> v_minus
-            vel[0, ii] += qmi * Ep[0]
-            vel[1, ii] += qmi * Ep[1]
-            vel[2, ii] += qmi * Ep[2]
+        # Calculate wave fields at particle position
+        Ep = np.zeros(3, dtype=np.float64)  
+        Bp = np.zeros(3, dtype=np.float64)
+        #Jp = np.zeros(3, dtype=np.float64)
+        #eta= 0.0
+        for jj in nb.prange(3):
+            #eta += resistive_array[Ie[ii] + jj] * W_elec[jj, ii] 
+            for kk in nb.prange(3):
+                Ep[kk] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]   
+                Bp[kk] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]  
                 
-            # Calculate v_prime
-            v_prime    = np.zeros(3, dtype=np.float64)
-            v_prime[0] = vel[0, ii] + vel[1, ii] * T[2] - vel[2, ii] * T[1]
-            v_prime[1] = vel[1, ii] + vel[2, ii] * T[0] - vel[0, ii] * T[2]
-            v_prime[2] = vel[2, ii] + vel[0, ii] * T[1] - vel[1, ii] * T[0]
+                #if resis_multiplier != 0.0:
+                #    Jp[kk] += (Ji[Ie[ii] + jj, kk] - Ve[Ie[ii] + jj, kk]*q_dens[Ie[ii] + jj])
+                
+        # Add resistivity into 'effective' E-field
+        #if eta != 0.0:
+        #    Ep[0] -= eta * Jp[0]
+        #    Ep[1] -= eta * Jp[1]
+        #    Ep[2] -= eta * Jp[2]
+
+        # Calculate background field at particle position
+        Bp[0]   += B_eq * (1.0 + a * pos[ii] * pos[ii])
+        constant = a * B_eq
+        l_cyc    = qm_ratios[idx[ii]] * Bp[0]
+        Bp[1]   += constant * pos[ii] * vel[2, ii] / l_cyc
+        Bp[2]   -= constant * pos[ii] * vel[1, ii] / l_cyc
+
+        # Start Boris Method
+        qmi = 0.5 * DT * qm_ratios[idx[ii]]                             # q/m variable including dt
+        T   = qmi * Bp 
+        S   = 2.*T / (1. + T[0]*T[0] + T[1]*T[1] + T[2]*T[2])
+
+        # vel -> v_minus
+        vel[0, ii] += qmi * Ep[0]
+        vel[1, ii] += qmi * Ep[1]
+        vel[2, ii] += qmi * Ep[2]
             
-            # vel_minus -> vel_plus
-            vel[0, ii] += v_prime[1] * S[2] - v_prime[2] * S[1]
-            vel[1, ii] += v_prime[2] * S[0] - v_prime[0] * S[2]
-            vel[2, ii] += v_prime[0] * S[1] - v_prime[1] * S[0]
-            
-            # vel_plus -> vel (updated)
-            vel[0, ii] += qmi * Ep[0]
-            vel[1, ii] += qmi * Ep[1]
-            vel[2, ii] += qmi * Ep[2]
-            
-            if vel_only == False:
-                # Update position
-                pos[ii] += vel[0, ii] * DT
-            
-                # Check if particle has left simulation and apply boundary conditions
-                if (pos[ii] < xmin or pos[ii] > xmax):
+        # Calculate v_prime
+        v_prime    = np.zeros(3, dtype=np.float64)
+        v_prime[0] = vel[0, ii] + vel[1, ii] * T[2] - vel[2, ii] * T[1]
+        v_prime[1] = vel[1, ii] + vel[2, ii] * T[0] - vel[0, ii] * T[2]
+        v_prime[2] = vel[2, ii] + vel[0, ii] * T[1] - vel[1, ii] * T[0]
+        
+        # vel_minus -> vel_plus
+        vel[0, ii] += v_prime[1] * S[2] - v_prime[2] * S[1]
+        vel[1, ii] += v_prime[2] * S[0] - v_prime[0] * S[2]
+        vel[2, ii] += v_prime[0] * S[1] - v_prime[1] * S[0]
+        
+        # vel_plus -> vel (updated)
+        vel[0, ii] += qmi * Ep[0]
+        vel[1, ii] += qmi * Ep[1]
+        vel[2, ii] += qmi * Ep[2]
+        
+        # Update position
+        pos[ii] += vel[0, ii] * DT
     
-                    if particle_periodic == 1:  
-                        idx[ii] += Nj                            
-                    elif particle_open == 1:                
-                        pos[ii]     = 0.0
-                        vel[0, ii]  = 0.0
-                        vel[1, ii]  = 0.0
-                        vel[2, ii]  = 0.0
-                        idx[ii]     = Nj
-                    elif particle_reinit == 1:
-                        vel[0, ii]  = 0.0
-                        vel[1, ii]  = 0.0
-                        vel[2, ii]  = 0.0
-                        idx[ii]    += Nj                            
-                    else:
-                        idx[ii] += Nj 
+        # Check if particle has left simulation and apply boundary conditions
+        if (pos[ii] < xmin or pos[ii] > xmax):
+
+            if particle_periodic == 1:  
+                idx[ii] += Nj                            
+            elif particle_open == 1:                
+                pos[ii]     = 0.0
+                vel[0, ii]  = 0.0
+                vel[1, ii]  = 0.0
+                vel[2, ii]  = 0.0
+                idx[ii]     = Nj
+            elif particle_reinit == 1:
+                vel[0, ii]  = 0.0
+                vel[1, ii]  = 0.0
+                vel[2, ii]  = 0.0
+                idx[ii]    += Nj                            
+            else:
+                idx[ii] += Nj 
     return
 
 
@@ -2015,7 +2016,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ji_i
     if DT_part < 0.9*DT:
         # Re-sync vel/pos
         parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve_in, rho_in, 0.5*DT,
-           resistive_array, vel_only=False)           
+           resistive_array)           
 
         DT         *= 0.5
         max_inc    *= 2
@@ -2027,7 +2028,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ji_i
         
         # De-sync vel/pos
         parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve_in, rho_in, -0.5*DT,
-           resistive_array, vel_only=False)    
+           resistive_array)    
         print('Timestep halved. Syncing particle velocity...')
     return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, damping_array
 
@@ -2253,6 +2254,7 @@ def diagnostic_field_plot(B, E_half, q_dens, Ji, Ve, Te,
     '''
     Check field grid arrays, probably at every timestep
     '''
+    import matplotlib.pyplot as plt
     print('Generating diagnostic plot for timestep', qq)
     # Check dir
     diagnostic_path = drive + save_path + 'run_{}/diagnostic_plots/'.format(run)
@@ -2960,8 +2962,10 @@ if __name__ == '__main__':
     
     # Retard velocity
     print('Retarding velocity...')
+    old_particles[0] = pos[:]
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_int, Ve_int, q_dens,
-           -0.5*DT, resistive_array, vel_only=True)
+           -0.5*DT, resistive_array)
+    pos[:] = old_particles[0]
     
     qq       = 1;    time_sec = DT
     print('Starting main loop...')

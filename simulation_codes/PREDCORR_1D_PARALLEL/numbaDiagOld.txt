@@ -1,0 +1,537 @@
+LOADING RUNFILE: /home/yoshi/hybrid/simulation_codes/run_inputs/_run_params.run
+Checking directories...
+LOADING PLASMA: /home/yoshi/hybrid/simulation_codes/run_inputs/_plasma_params.plasma
+LOADING DRIVER: /home/yoshi/hybrid/simulation_codes/run_inputs/_driver_params.txt
+
+Run Started
+Run Series         : /runs/JUL25_PKTS_30HE_SAMPLE/
+Run Number         : 0
+# threads used     : 6
+Field save flag    : 0
+Particle save flag : 0
+
+Sim domain length  :  1.09R_E
+Density            : 123.75cc
+Equatorial B-field : 202.50nT
+Boundary   B-field : 202.50nT
+Iono.      B-field :  0.00mT
+Equat. Loss cone   : 0.00  degrees  
+Bound. Loss cone   : 0.00  degrees  
+Maximum MLAT (+/-) : 0.00  degrees  
+Iono.   MLAT (+/-) : 0.00  degrees
+
+Equat. Gyroperiod: : 0.324s
+Inverse rad gyfreq : 0.052s
+Maximum sim time   : 103.11s (318.31 gyroperiods)
+
+512 spatial cells, 2x2 damped cells
+516 cells total
+7077888 particles total
+
+Timestep: 1.031e-03s
+100001 iterations total
+
+Retarding velocity...
+Starting main loop...
+ 
+================================================================================
+===== Parallel Accelerator Optimizing:  Function parmov, main_1D.py (845)  =====
+================================================================================
+
+
+Parallel loop listing for  Function parmov, main_1D.py (845) 
+-----------------------------------------------------------------------------------------------------------|loop #ID
+@nb.njit(parallel=do_parallel)                                                                             | 
+def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji, Ve, q_dens, DT,                                 | 
+           resistive_array, vel_only=False, hot_only=False):                                               | 
+    '''                                                                                                    | 
+    updates velocities using a Boris particle pusher.                                                      | 
+    Based on Birdsall & Langdon (1985), pp. 59-63.                                                         | 
+                                                                                                           | 
+    INPUT:                                                                                                 | 
+        part -- Particle array containing velocities to be updated                                         | 
+        B    -- Magnetic field on simulation grid                                                          | 
+        E    -- Electric field on simulation grid                                                          | 
+        dt   -- Simulation time cadence                                                                    | 
+        W    -- Weighting factor of particles to rightmost node                                            | 
+                                                                                                           | 
+    OUTPUT:                                                                                                | 
+        None -- vel array is mutable (I/O array)                                                           | 
+                                                                                                           | 
+    Notes:                                                                                                 | 
+        -- Particle boundary conditions applied by deactivating particles that                             | 
+        leave the simulation space, and reinitializing them once the BCs are                               | 
+        applied. Doing -=128 conserves the species identifier.                                             | 
+        -- mp_flux is used to count the particles leaving the boundaries,                                  | 
+        then call the injection routine at the end of the loop. Thus, the only                             | 
+        difference between true 'open/injection' and 'reinit' boundary conditions                          | 
+        is that the flux is added at a constant rate and for open, but is reactive                         | 
+        to internal conditions for reinit. Technically for a high enough particle                          | 
+        count (and low enough wave amplitude) these should be identical,                                   | 
+        but they're definitely not going to be in practice.                                                | 
+        -- Put a check in here for negative indices since several values are                               | 
+        species specific and there are no active species with negative indices                             | 
+                                                                                                           | 
+    Question: Did adding the 'if -ve' check slow down the loop a ton? Check.                               | 
+    Yes.                                                                                                   | 
+    I added it because the check in temp_type and qm_ratios was blowing up.                                | 
+    Just need a way to preserve indices.                                                                   | 
+    But another problem, negative indices don't apply properly.                                            | 
+    What if we put a check for > Nj instead of negative? Still a numerical check.                          | 
+    Then, adding or subtracting Nj still works.                                                            | 
+                                                                                                           | 
+    4 species plasma:                                                                                      | 
+    0: H  hot                                                                                              | 
+    1: H  cold                                                                                             | 
+    2: He cold                                                                                             | 
+    3: O  cold                                                                                             | 
+    4: H  hot  (deactivated)                                                                               | 
+    5: H  cold (deactivated)                                                                               | 
+    6: He cold (deactivated)                                                                               | 
+    7: O  cold (deactivated)                                                                               | 
+                                                                                                           | 
+    Then to deactivate:                                                                                    | 
+        idx[ii] += Nj                                                                                      | 
+    '''                                                                                                    | 
+    for ii in nb.prange(pos.shape[0]):---------------------------------------------------------------------| #15
+        if temp_type[idx[ii]] == 1 or hot_only == False:                                                   | 
+            # Calculate wave fields at particle position                                                   | 
+            Ep = np.zeros(3, dtype=np.float64)  -----------------------------------------------------------| #7
+            Bp = np.zeros(3, dtype=np.float64)-------------------------------------------------------------| #8
+            Jp = np.zeros(3, dtype=np.float64)-------------------------------------------------------------| #9
+            eta= 0.0                                                                                       | 
+            for jj in nb.prange(3):------------------------------------------------------------------------| #14
+                eta += resistive_array[Ie[ii] + jj] * W_elec[jj, ii]                                       | 
+                for kk in nb.prange(3):--------------------------------------------------------------------| #13
+                    Ep[kk] += E[Ie[ii] + jj, kk] * W_elec[jj, ii]                                          | 
+                    Bp[kk] += B[Ib[ii] + jj, kk] * W_mag[ jj, ii]                                          | 
+                                                                                                           | 
+                    if resis_multiplier != 0.0:                                                            | 
+                        Jp[kk] += (Ji[Ie[ii] + jj, kk] - Ve[Ie[ii] + jj, kk]*q_dens[Ie[ii] + jj])          | 
+                                                                                                           | 
+            # Add resistivity into 'effective' E-field                                                     | 
+            if eta != 0.0:                                                                                 | 
+                Ep[0] -= eta * Jp[0]                                                                       | 
+                Ep[1] -= eta * Jp[1]                                                                       | 
+                Ep[2] -= eta * Jp[2]                                                                       | 
+                                                                                                           | 
+            # Calculate background field at particle position                                              | 
+            Bp[0]   += B_eq * (1.0 + a * pos[ii] * pos[ii])                                                | 
+            constant = a * B_eq                                                                            | 
+            l_cyc    = qm_ratios[idx[ii]] * Bp[0]                                                          | 
+            Bp[1]   += constant * pos[ii] * vel[2, ii] / l_cyc                                             | 
+            Bp[2]   -= constant * pos[ii] * vel[1, ii] / l_cyc                                             | 
+                                                                                                           | 
+            # Start Boris Method                                                                           | 
+            qmi = 0.5 * DT * qm_ratios[idx[ii]]                             # q/m variable including dt    | 
+            T   = qmi * Bp --------------------------------------------------------------------------------| #10
+            S   = 2.*T / (1. + T[0]*T[0] + T[1]*T[1] + T[2]*T[2])------------------------------------------| #11
+                                                                                                           | 
+            # vel -> v_minus                                                                               | 
+            vel[0, ii] += qmi * Ep[0]                                                                      | 
+            vel[1, ii] += qmi * Ep[1]                                                                      | 
+            vel[2, ii] += qmi * Ep[2]                                                                      | 
+                                                                                                           | 
+            # Calculate v_prime                                                                            | 
+            v_prime    = np.zeros(3, dtype=np.float64)-----------------------------------------------------| #12
+            v_prime[0] = vel[0, ii] + vel[1, ii] * T[2] - vel[2, ii] * T[1]                                | 
+            v_prime[1] = vel[1, ii] + vel[2, ii] * T[0] - vel[0, ii] * T[2]                                | 
+            v_prime[2] = vel[2, ii] + vel[0, ii] * T[1] - vel[1, ii] * T[0]                                | 
+                                                                                                           | 
+            # vel_minus -> vel_plus                                                                        | 
+            vel[0, ii] += v_prime[1] * S[2] - v_prime[2] * S[1]                                            | 
+            vel[1, ii] += v_prime[2] * S[0] - v_prime[0] * S[2]                                            | 
+            vel[2, ii] += v_prime[0] * S[1] - v_prime[1] * S[0]                                            | 
+                                                                                                           | 
+            # vel_plus -> vel (updated)                                                                    | 
+            vel[0, ii] += qmi * Ep[0]                                                                      | 
+            vel[1, ii] += qmi * Ep[1]                                                                      | 
+            vel[2, ii] += qmi * Ep[2]                                                                      | 
+                                                                                                           | 
+            if vel_only == False:                                                                          | 
+                # Update position                                                                          | 
+                pos[ii] += vel[0, ii] * DT                                                                 | 
+                                                                                                           | 
+                # Check if particle has left simulation and apply boundary conditions                      | 
+                if (pos[ii] < xmin or pos[ii] > xmax):                                                     | 
+                                                                                                           | 
+                    if particle_periodic == 1:                                                             | 
+                        idx[ii] += Nj                                                                      | 
+                    elif particle_open == 1:                                                               | 
+                        pos[ii]     = 0.0                                                                  | 
+                        vel[0, ii]  = 0.0                                                                  | 
+                        vel[1, ii]  = 0.0                                                                  | 
+                        vel[2, ii]  = 0.0                                                                  | 
+                        idx[ii]     = Nj                                                                   | 
+                    elif particle_reinit == 1:                                                             | 
+                        vel[0, ii]  = 0.0                                                                  | 
+                        vel[1, ii]  = 0.0                                                                  | 
+                        vel[2, ii]  = 0.0                                                                  | 
+                        idx[ii]    += Nj                                                                   | 
+                    else:                                                                                  | 
+                        idx[ii] += Nj                                                                      | 
+    return                                                                                                 | 
+--------------------------------- Fusing loops ---------------------------------
+Attempting fusion of parallel loops (combines loops with similar properties)...
+  Trying to fuse loops #11 and #12:
+    - fusion succeeded: parallel for-loop #12 is fused into for-loop #11.
+  Trying to fuse loops #7 and #8:
+    - fusion succeeded: parallel for-loop #8 is fused into for-loop #7.
+  Trying to fuse loops #9 and #14:
+    - fusion failed: cross iteration dependency found between loops #9 and #14
+  Trying to fuse loops #7 and #9:
+    - fusion succeeded: parallel for-loop #9 is fused into for-loop #7.
+  Trying to fuse loops #7 and #14:
+    - fusion failed: cross iteration dependency found between loops #7 and #14
+  Trying to fuse loops #7 and #14:
+    - fusion failed: cross iteration dependency found between loops #7 and #14
+----------------------------- Before Optimisation ------------------------------
+Parallel region 0:
++--15 (parallel)
+   +--10 (parallel)
+   +--11 (parallel)
+   +--12 (parallel)
+   +--14 (parallel)
+      +--13 (parallel)
+   +--7 (parallel)
+   +--8 (parallel)
+   +--9 (parallel)
+
+
+--------------------------------------------------------------------------------
+------------------------------ After Optimisation ------------------------------
+Parallel region 0:
++--15 (parallel)
+   +--10 (serial)
+   +--11 (serial, fused with loop(s): 12)
+   +--14 (serial)
+      +--13 (serial)
+   +--7 (serial, fused with loop(s): 8, 9)
+
+
+ 
+Parallel region 0 (loop #15) had 3 loop(s) fused and 5 loop(s) serialized as 
+part of the larger parallel loop (#15).
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+ 
+---------------------------Loop invariant code motion---------------------------
+Allocation hoisting:
+The memory allocation derived from the instruction at main_1D.py (928) is 
+hoisted out of the parallel loop labelled #15 (it will be performed before the 
+loop is executed and reused inside the loop):
+   Allocation:: T   = qmi * Bp
+    - numpy.empty() is used for the allocation.
+The memory allocation derived from the instruction at main_1D.py (929) is 
+hoisted out of the parallel loop labelled #15 (it will be performed before the 
+loop is executed and reused inside the loop):
+   Allocation:: S   = 2.*T / (1. + T[0]*T[0] + T[1]*T[1] + T[2]*T[2])
+    - numpy.empty() is used for the allocation.
+The memory allocation derived from the instruction at main_1D.py (937) is 
+hoisted out of the parallel loop labelled #15 (it will be performed before the 
+loop is executed and reused inside the loop):
+   Allocation:: v_prime    = np.zeros(3, dtype=np.float64)
+    - numpy.empty() is used for the allocation.
+The memory allocation derived from the instruction at main_1D.py (900) is 
+hoisted out of the parallel loop labelled #15 (it will be performed before the 
+loop is executed and reused inside the loop):
+   Allocation:: Ep = np.zeros(3, dtype=np.float64)
+    - numpy.empty() is used for the allocation.
+The memory allocation derived from the instruction at main_1D.py (901) is 
+hoisted out of the parallel loop labelled #15 (it will be performed before the 
+loop is executed and reused inside the loop):
+   Allocation:: Bp = np.zeros(3, dtype=np.float64)
+    - numpy.empty() is used for the allocation.
+The memory allocation derived from the instruction at main_1D.py (902) is 
+hoisted out of the parallel loop labelled #15 (it will be performed before the 
+loop is executed and reused inside the loop):
+   Allocation:: Jp = np.zeros(3, dtype=np.float64)
+    - numpy.empty() is used for the allocation.
+
+Instruction hoisting:
+loop #15:
+  Has the following hoisted:
+    $1226.6 = global(Nj: 6)
+    $const422.2 = const(int, 0)
+    $422.6 = global(B_eq: 2.025e-07)
+    $const422.7 = const(float, 1.0)
+    $422.8 = global(a: 0)
+    $422.20 = global(a: 0)
+    $422.21 = global(B_eq: 2.025e-07)
+    $constant.1040 = $422.20 * $422.21
+    $422.23 = global(qm_ratios: [95788349.07109915 23947087.26777479  5986771.8169437  95788349.07109915
+ 23947087.26777479  5986771.8169437  95788349.07109915 23947087.26777479
+  5986771.8169437  95788349.07109915 23947087.26777479  5986771.8169437 ])
+    $const422.29 = const(int, 0)
+    $const422.33 = const(int, 1)
+    $const422.43 = const(int, 2)
+    $const422.52 = const(int, 2)
+    $const422.62 = const(int, 1)
+    $const422.70 = const(float, 0.5)
+    $422.72 = $const422.70 * DT
+    $422.73 = global(qm_ratios: [95788349.07109915 23947087.26777479  5986771.8169437  95788349.07109915
+ 23947087.26777479  5986771.8169437  95788349.07109915 23947087.26777479
+  5986771.8169437  95788349.07109915 23947087.26777479  5986771.8169437 ])
+    $const422.85 = const(float, 1.0)
+    $const422.87 = const(int, 0)
+    $np_g_var.992 = global(np: <module 'numpy' from '/home/yoshi/venv_dir/sim_venv/lib/python3.6/site-packages/numpy/__init__.py'>)
+    $empty_attr_attr.993 = getattr(value=$np_g_var.992, attr=empty)
+    $np_typ_var.994 = getattr(value=$np_g_var.992, attr=float64)
+    $const422.90 = const(int, 0)
+    $const422.95 = const(int, 1)
+    $const422.98 = const(int, 1)
+    $const422.103 = const(int, 2)
+    $const422.106 = const(int, 2)
+    $const422.112 = const(int, 0)
+    $const422.120 = const(int, 0)
+    $const422.125 = const(int, 1)
+    $const422.133 = const(int, 1)
+    $const422.138 = const(int, 2)
+    $const422.146 = const(int, 2)
+    $const422.158 = const(int, 0)
+    $const422.163 = const(int, 1)
+    $const422.168 = const(int, 2)
+    $const422.173 = const(int, 2)
+    $const422.178 = const(int, 1)
+    $const422.183 = const(int, 0)
+    $np_g_var.999 = global(np: <module 'numpy' from '/home/yoshi/venv_dir/sim_venv/lib/python3.6/site-packages/numpy/__init__.py'>)
+    $empty_attr_attr.1000 = getattr(value=$np_g_var.999, attr=empty)
+    $np_typ_var.1001 = getattr(value=$np_g_var.999, attr=float64)
+    $np_g_var.1010 = global(np: <module 'numpy' from '/home/yoshi/venv_dir/sim_venv/lib/python3.6/site-packages/numpy/__init__.py'>)
+    $empty_attr_attr.1011 = getattr(value=$np_g_var.1010, attr=empty)
+    $np_typ_var.1012 = getattr(value=$np_g_var.1010, attr=float64)
+    $const422.185 = const(int, 1)
+    $const422.190 = const(int, 2)
+    $const422.195 = const(int, 0)
+    $const422.200 = const(int, 0)
+    $const422.205 = const(int, 2)
+    $const422.210 = const(int, 1)
+    $const422.212 = const(int, 2)
+    $const422.217 = const(int, 0)
+    $const422.222 = const(int, 1)
+    $const422.227 = const(int, 1)
+    $const422.232 = const(int, 0)
+    $const422.237 = const(int, 2)
+    $const422.239 = const(int, 0)
+    $const422.246 = const(int, 1)
+    $const422.249 = const(int, 2)
+    $const422.253 = const(int, 2)
+    $const422.256 = const(int, 1)
+    $const422.262 = const(int, 1)
+    $const422.269 = const(int, 2)
+    $const422.272 = const(int, 0)
+    $const422.276 = const(int, 0)
+    $const422.279 = const(int, 2)
+    $const422.285 = const(int, 2)
+    $const422.292 = const(int, 0)
+    $const422.295 = const(int, 1)
+    $const422.299 = const(int, 1)
+    $const422.302 = const(int, 0)
+    $const422.308 = const(int, 0)
+    $const422.316 = const(int, 0)
+    $const422.321 = const(int, 1)
+    $const422.329 = const(int, 1)
+    $const422.334 = const(int, 2)
+    $const422.342 = const(int, 2)
+    $const422.347 = const(bool, False)
+    $422.348 = vel__only == $const422.347
+    $const1162.7 = const(int, 0)
+    $1162.17 = global(xmin: -3472277.4760554233)
+    $const44.2 = const(bool, False)
+    $44.3 = hot__only == $const44.2
+    $const52.3 = const(int, 3)
+    $eta.2.1608 = const(float, 0.0)
+    $const106.3 = const(int, 3)
+    $const340.2 = const(float, 0.0)
+    $np_g_var.977 = global(np: <module 'numpy' from '/home/yoshi/venv_dir/sim_venv/lib/python3.6/site-packages/numpy/__init__.py'>)
+    $empty_attr_attr.978 = getattr(value=$np_g_var.977, attr=empty)
+    $np_typ_var.979 = getattr(value=$np_g_var.977, attr=float64)
+    $Ep.1041 = call $empty_attr_attr.978($const52.3, $np_typ_var.979, func=$empty_attr_attr.978, args=[Var($const52.3, main_1D.py:900), Var($np_typ_var.979, main_1D.py:900)], kws=(), vararg=None)
+    $np_g_var.982 = global(np: <module 'numpy' from '/home/yoshi/venv_dir/sim_venv/lib/python3.6/site-packages/numpy/__init__.py'>)
+    $empty_attr_attr.983 = getattr(value=$np_g_var.982, attr=empty)
+    $np_typ_var.984 = getattr(value=$np_g_var.982, attr=float64)
+    $Bp.1042 = call $empty_attr_attr.983($const52.3, $np_typ_var.984, func=$empty_attr_attr.983, args=[Var($const52.3, main_1D.py:900), Var($np_typ_var.984, main_1D.py:901)], kws=(), vararg=None)
+    $np_g_var.987 = global(np: <module 'numpy' from '/home/yoshi/venv_dir/sim_venv/lib/python3.6/site-packages/numpy/__init__.py'>)
+    $empty_attr_attr.988 = getattr(value=$np_g_var.987, attr=empty)
+    $np_typ_var.989 = getattr(value=$np_g_var.987, attr=float64)
+    $Jp.1047 = call $empty_attr_attr.988($const52.3, $np_typ_var.989, func=$empty_attr_attr.988, args=[Var($const52.3, main_1D.py:900), Var($np_typ_var.989, main_1D.py:902)], kws=(), vararg=None)
+    $1204.4 = global(xmax: 3472277.4760554233)
+    $26.2 = global(temp_type: [0 0 0 1 1 1 0 0 0 1 1 1])
+    $const26.7 = const(int, 1)
+    $const350.2 = const(int, 0)
+    $const350.8 = const(int, 0)
+    $const350.13 = const(int, 1)
+    $const350.19 = const(int, 1)
+    $const350.24 = const(int, 2)
+    $const350.30 = const(int, 2)
+  Failed to hoist the following:
+    dependency: $1226.5 = getitem(value=idx, index=$parfor__index_1019.1408)
+    dependency: $1226.7 = inplace_binop(fn=<built-in function iadd>, immutable_fn=<built-in function add>, lhs=$1226.5, rhs=$push_global_to_block.1535, static_lhs=Undefined, static_rhs=Undefined)
+    dependency: $422.5 = static_getitem(value=$Bp.1042, index=0, index_var=$const422.2)
+    dependency: $422.11 = getitem(value=pos, index=$parfor__index_1019.1408)
+    dependency: $422.12 = $push_global_to_block.1536 * $422.11
+    dependency: $422.15 = getitem(value=pos, index=$parfor__index_1019.1408)
+    dependency: $422.16 = $422.12 * $422.15
+    dependency: $422.17 = $const422.7 + $422.16
+    dependency: $422.18 = $push_global_to_block.1537 * $422.17
+    dependency: $422.19 = inplace_binop(fn=<built-in function iadd>, immutable_fn=<built-in function add>, lhs=$422.5, rhs=$422.18, static_lhs=Undefined, static_rhs=Undefined)
+    dependency: $422.26 = getitem(value=idx, index=$parfor__index_1019.1408)
+    dependency: $422.27 = getitem(value=$push_global_to_block.1538, index=$422.26)
+    dependency: $422.30 = static_getitem(value=$Bp.1042, index=0, index_var=$const422.29)
+    dependency: $l_cyc.1044 = $422.27 * $422.30
+    dependency: $422.36 = static_getitem(value=$Bp.1042, index=1, index_var=$const422.33)
+    dependency: $422.40 = getitem(value=pos, index=$parfor__index_1019.1408)
+    dependency: $422.41 = $constant.1040 * $422.40
+    dependency: $422.45 = build_tuple(items=[Var($const422.43, main_1D.py:923), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.46 = getitem(value=vel, index=$422.45)
+    dependency: $422.47 = $422.41 * $422.46
+    dependency: $422.49 = $422.47 / $l_cyc.1044
+    dependency: $422.50 = inplace_binop(fn=<built-in function iadd>, immutable_fn=<built-in function add>, lhs=$422.36, rhs=$422.49, static_lhs=Undefined, static_rhs=Undefined)
+    dependency: $422.55 = static_getitem(value=$Bp.1042, index=2, index_var=$const422.52)
+    dependency: $422.59 = getitem(value=pos, index=$parfor__index_1019.1408)
+    dependency: $422.60 = $constant.1040 * $422.59
+    dependency: $422.64 = build_tuple(items=[Var($const422.62, main_1D.py:924), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.65 = getitem(value=vel, index=$422.64)
+    dependency: $422.66 = $422.60 * $422.65
+    dependency: $422.68 = $422.66 / $l_cyc.1044
+    dependency: $422.69 = inplace_binop(fn=<built-in function isub>, immutable_fn=<built-in function sub>, lhs=$422.55, rhs=$422.68, static_lhs=Undefined, static_rhs=Undefined)
+    dependency: $422.76 = getitem(value=idx, index=$parfor__index_1019.1408)
+    dependency: $422.77 = getitem(value=$push_global_to_block.1539, index=$422.76)
+    dependency: $qmi.1039 = $422.72 * $422.77
+    dependency: $T.1038 = call $empty_attr_attr.993($const52.3, $np_typ_var.994, func=$empty_attr_attr.993, args=[Var($const52.3, main_1D.py:900), Var($np_typ_var.994, main_1D.py:928)], kws=(), vararg=None)
+    dependency: $422.88 = static_getitem(value=$T.1038, index=0, index_var=$const422.87)
+    dependency: $422.91 = static_getitem(value=$T.1038, index=0, index_var=$const422.90)
+    dependency: $422.92 = $422.88 * $422.91
+    dependency: $422.93 = $const422.85 + $422.92
+    dependency: $422.96 = static_getitem(value=$T.1038, index=1, index_var=$const422.95)
+    dependency: $422.99 = static_getitem(value=$T.1038, index=1, index_var=$const422.98)
+    dependency: $422.100 = $422.96 * $422.99
+    dependency: $422.101 = $422.93 + $422.100
+    dependency: $422.104 = static_getitem(value=$T.1038, index=2, index_var=$const422.103)
+    dependency: $422.107 = static_getitem(value=$T.1038, index=2, index_var=$const422.106)
+    dependency: $422.108 = $422.104 * $422.107
+    dependency: $422.109 = $422.101 + $422.108
+    dependency: $422.114 = build_tuple(items=[Var($const422.112, main_1D.py:932), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.117 = getitem(value=vel, index=$422.114)
+    dependency: $422.121 = static_getitem(value=$Ep.1041, index=0, index_var=$const422.120)
+    dependency: $422.122 = $qmi.1039 * $422.121
+    dependency: $422.123 = inplace_binop(fn=<built-in function iadd>, immutable_fn=<built-in function add>, lhs=$422.117, rhs=$422.122, static_lhs=Undefined, static_rhs=Undefined)
+    dependency: $422.127 = build_tuple(items=[Var($const422.125, main_1D.py:933), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.130 = getitem(value=vel, index=$422.127)
+    dependency: $422.134 = static_getitem(value=$Ep.1041, index=1, index_var=$const422.133)
+    dependency: $422.135 = $qmi.1039 * $422.134
+    dependency: $422.136 = inplace_binop(fn=<built-in function iadd>, immutable_fn=<built-in function add>, lhs=$422.130, rhs=$422.135, static_lhs=Undefined, static_rhs=Undefined)
+    dependency: $422.140 = build_tuple(items=[Var($const422.138, main_1D.py:934), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.143 = getitem(value=vel, index=$422.140)
+    dependency: $422.147 = static_getitem(value=$Ep.1041, index=2, index_var=$const422.146)
+    dependency: $422.148 = $qmi.1039 * $422.147
+    dependency: $422.149 = inplace_binop(fn=<built-in function iadd>, immutable_fn=<built-in function add>, lhs=$422.143, rhs=$422.148, static_lhs=Undefined, static_rhs=Undefined)
+    dependency: $422.160 = build_tuple(items=[Var($const422.158, main_1D.py:938), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.161 = getitem(value=vel, index=$422.160)
+    dependency: $422.165 = build_tuple(items=[Var($const422.163, main_1D.py:938), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.166 = getitem(value=vel, index=$422.165)
+    dependency: $422.169 = static_getitem(value=$T.1038, index=2, index_var=$const422.168)
+    dependency: $422.170 = $422.166 * $422.169
+    dependency: $422.171 = $422.161 + $422.170
+    dependency: $422.175 = build_tuple(items=[Var($const422.173, main_1D.py:938), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.176 = getitem(value=vel, index=$422.175)
+    dependency: $422.179 = static_getitem(value=$T.1038, index=1, index_var=$const422.178)
+    dependency: $422.180 = $422.176 * $422.179
+    dependency: $422.181 = $422.171 - $422.180
+    dependency: $S.1046 = call $empty_attr_attr.1000($const52.3, $np_typ_var.1001, func=$empty_attr_attr.1000, args=[Var($const52.3, main_1D.py:900), Var($np_typ_var.1001, main_1D.py:929)], kws=(), vararg=None)
+    dependency: $v_prime.1045 = call $empty_attr_attr.1011($const52.3, $np_typ_var.1012, func=$empty_attr_attr.1011, args=[Var($const52.3, main_1D.py:900), Var($np_typ_var.1012, main_1D.py:937)], kws=(), vararg=None)
+    dependency: $422.187 = build_tuple(items=[Var($const422.185, main_1D.py:939), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.188 = getitem(value=vel, index=$422.187)
+    dependency: $422.192 = build_tuple(items=[Var($const422.190, main_1D.py:939), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.193 = getitem(value=vel, index=$422.192)
+    dependency: $422.196 = static_getitem(value=$T.1038, index=0, index_var=$const422.195)
+    dependency: $422.197 = $422.193 * $422.196
+    dependency: $422.198 = $422.188 + $422.197
+    dependency: $422.202 = build_tuple(items=[Var($const422.200, main_1D.py:939), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.203 = getitem(value=vel, index=$422.202)
+    dependency: $422.206 = static_getitem(value=$T.1038, index=2, index_var=$const422.205)
+    dependency: $422.207 = $422.203 * $422.206
+    dependency: $422.208 = $422.198 - $422.207
+    dependency: $422.214 = build_tuple(items=[Var($const422.212, main_1D.py:940), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.215 = getitem(value=vel, index=$422.214)
+    dependency: $422.219 = build_tuple(items=[Var($const422.217, main_1D.py:940), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.220 = getitem(value=vel, index=$422.219)
+    dependency: $422.223 = static_getitem(value=$T.1038, index=1, index_var=$const422.222)
+    dependency: $422.224 = $422.220 * $422.223
+    dependency: $422.225 = $422.215 + $422.224
+    dependency: $422.229 = build_tuple(items=[Var($const422.227, main_1D.py:940), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.230 = getitem(value=vel, index=$422.229)
+    dependency: $422.233 = static_getitem(value=$T.1038, index=0, index_var=$const422.232)
+    dependency: $422.234 = $422.230 * $422.233
+    dependency: $422.235 = $422.225 - $422.234
+    dependency: $422.241 = build_tuple(items=[Var($const422.239, main_1D.py:943), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.244 = getitem(value=vel, index=$422.241)
+    dependency: $422.247 = static_getitem(value=$v_prime.1045, index=1, index_var=$const422.246)
+    dependency: $422.250 = static_getitem(value=$S.1046, index=2, index_var=$const422.249)
+    dependency: $422.251 = $422.247 * $422.250
+    dependency: $422.254 = static_getitem(value=$v_prime.1045, index=2, index_var=$const422.253)
+    dependency: $422.257 = static_getitem(value=$S.1046, index=1, index_var=$const422.256)
+    dependency: $422.258 = $422.254 * $422.257
+    dependency: $422.259 = $422.251 - $422.258
+    dependency: $422.260 = inplace_binop(fn=<built-in function iadd>, immutable_fn=<built-in function add>, lhs=$422.244, rhs=$422.259, static_lhs=Undefined, static_rhs=Undefined)
+    dependency: $422.264 = build_tuple(items=[Var($const422.262, main_1D.py:944), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.267 = getitem(value=vel, index=$422.264)
+    dependency: $422.270 = static_getitem(value=$v_prime.1045, index=2, index_var=$const422.269)
+    dependency: $422.273 = static_getitem(value=$S.1046, index=0, index_var=$const422.272)
+    dependency: $422.274 = $422.270 * $422.273
+    dependency: $422.277 = static_getitem(value=$v_prime.1045, index=0, index_var=$const422.276)
+    dependency: $422.280 = static_getitem(value=$S.1046, index=2, index_var=$const422.279)
+    dependency: $422.281 = $422.277 * $422.280
+    dependency: $422.282 = $422.274 - $422.281
+    dependency: $422.283 = inplace_binop(fn=<built-in function iadd>, immutable_fn=<built-in function add>, lhs=$422.267, rhs=$422.282, static_lhs=Undefined, static_rhs=Undefined)
+    dependency: $422.287 = build_tuple(items=[Var($const422.285, main_1D.py:945), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.290 = getitem(value=vel, index=$422.287)
+    dependency: $422.293 = static_getitem(value=$v_prime.1045, index=0, index_var=$const422.292)
+    dependency: $422.296 = static_getitem(value=$S.1046, index=1, index_var=$const422.295)
+    dependency: $422.297 = $422.293 * $422.296
+    dependency: $422.300 = static_getitem(value=$v_prime.1045, index=1, index_var=$const422.299)
+    dependency: $422.303 = static_getitem(value=$S.1046, index=0, index_var=$const422.302)
+    dependency: $422.304 = $422.300 * $422.303
+    dependency: $422.305 = $422.297 - $422.304
+    dependency: $422.306 = inplace_binop(fn=<built-in function iadd>, immutable_fn=<built-in function add>, lhs=$422.290, rhs=$422.305, static_lhs=Undefined, static_rhs=Undefined)
+    dependency: $422.310 = build_tuple(items=[Var($const422.308, main_1D.py:948), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.313 = getitem(value=vel, index=$422.310)
+    dependency: $422.317 = static_getitem(value=$Ep.1041, index=0, index_var=$const422.316)
+    dependency: $422.318 = $qmi.1039 * $422.317
+    dependency: $422.319 = inplace_binop(fn=<built-in function iadd>, immutable_fn=<built-in function add>, lhs=$422.313, rhs=$422.318, static_lhs=Undefined, static_rhs=Undefined)
+    dependency: $422.323 = build_tuple(items=[Var($const422.321, main_1D.py:949), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.326 = getitem(value=vel, index=$422.323)
+    dependency: $422.330 = static_getitem(value=$Ep.1041, index=1, index_var=$const422.329)
+    dependency: $422.331 = $qmi.1039 * $422.330
+    dependency: $422.332 = inplace_binop(fn=<built-in function iadd>, immutable_fn=<built-in function add>, lhs=$422.326, rhs=$422.331, static_lhs=Undefined, static_rhs=Undefined)
+    dependency: $422.336 = build_tuple(items=[Var($const422.334, main_1D.py:950), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $422.339 = getitem(value=vel, index=$422.336)
+    dependency: $422.343 = static_getitem(value=$Ep.1041, index=2, index_var=$const422.342)
+    dependency: $422.344 = $qmi.1039 * $422.343
+    dependency: $422.345 = inplace_binop(fn=<built-in function iadd>, immutable_fn=<built-in function add>, lhs=$422.339, rhs=$422.344, static_lhs=Undefined, static_rhs=Undefined)
+    dependency: $1162.5 = getitem(value=pos, index=$parfor__index_1019.1408)
+    dependency: $1162.9 = build_tuple(items=[Var($const1162.7, main_1D.py:954), Var($parfor__index_1019.1408, <string>:2)])
+    dependency: $1162.10 = getitem(value=vel, index=$1162.9)
+    dependency: $1162.12 = $1162.10 * DT
+    dependency: $1162.13 = inplace_binop(fn=<built-in function iadd>, immutable_fn=<built-in function add>, lhs=$1162.5, rhs=$1162.12, static_lhs=Undefined, static_rhs=Undefined)
+    dependency: $1162.16 = getitem(value=pos, index=$parfor__index_1019.1408)
+    dependency: $1162.18 = $1162.16 < $push_global_to_block.1540
+    dependency: $340.3 = eta.2 != $const340.2
+    dependency: $1204.3 = getitem(value=pos, index=$parfor__index_1019.1408)
+    dependency: $1204.5 = $1204.3 > $push_global_to_block.1541
+    dependency: $26.5 = getitem(value=idx, index=$parfor__index_1019.1408)
+    dependency: $26.6 = getitem(value=$push_global_to_block.1534, index=$26.5)
+    dependency: $26.8 = $26.6 == $const26.7
+    dependency: $350.5 = static_getitem(value=$Ep.1041, index=0, index_var=$const350.2)
+    dependency: $350.9 = static_getitem(value=$Jp.1047, index=0, index_var=$const350.8)
+    dependency: $350.10 = eta.2 * $350.9
+    dependency: $350.11 = inplace_binop(fn=<built-in function isub>, immutable_fn=<built-in function sub>, lhs=$350.5, rhs=$350.10, static_lhs=Undefined, static_rhs=Undefined)
+    dependency: $350.16 = static_getitem(value=$Ep.1041, index=1, index_var=$const350.13)
+    dependency: $350.20 = static_getitem(value=$Jp.1047, index=1, index_var=$const350.19)
+    dependency: $350.21 = eta.2 * $350.20
+    dependency: $350.22 = inplace_binop(fn=<built-in function isub>, immutable_fn=<built-in function sub>, lhs=$350.16, rhs=$350.21, static_lhs=Undefined, static_rhs=Undefined)
+    dependency: $350.27 = static_getitem(value=$Ep.1041, index=2, index_var=$const350.24)
+    dependency: $350.31 = static_getitem(value=$Jp.1047, index=2, index_var=$const350.30)
+    dependency: $350.32 = eta.2 * $350.31
+    dependency: $350.33 = inplace_binop(fn=<built-in function isub>, immutable_fn=<built-in function sub>, lhs=$350.27, rhs=$350.32, static_lhs=Undefined, static_rhs=Undefined)
+--------------------------------------------------------------------------------
