@@ -4686,16 +4686,16 @@ if __name__ == '__main__':
     ####################################
     ### SINGLE SERIES ANALYSIS ########
     ################################
-    for series in ['//JUL25_PKTS_5HE_PC//', 'JUL25_PKTS_15HE_PC']:
+    for series in ['JUL25_20HE_RUN4CHECK']:
         
-        series_dir = '{}/runs//{}//'.format(drive, series)
+        series_dir = f'{drive}/runs//{series}//'
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [13]
+            runs_to_do = [18]
         
         # Extract all summary files and plot field stuff (quick)
         if True:

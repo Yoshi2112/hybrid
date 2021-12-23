@@ -1667,7 +1667,6 @@ def push_B(B, E, curlE, DT, qq, damping_array, retarding_array, half_flag=1):
     subtracted from the "full" timestep time
     '''
     get_curl_E_4thOrder(E, curlE)
-    #get_curl_E(E, curlE)
     if field_periodic == 0:
         for ii in nb.prange(1, B.shape[1]):              
             curlE[:, ii] *= retarding_array              # Apply retarding, skipping x-axis
