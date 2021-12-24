@@ -22,13 +22,13 @@ cold_va             = False
 Fu_override         = False     # Override to allow density to be calculated as a ratio of frequencies
 do_parallel         = True      # Flag to use available threads to parallelize particle functions
 adaptive_timestep   = True      # Disable adaptive timestep to keep it the same as initial
-print_timings       = True      # Diagnostic outputs timing each major segment (for efficiency examination)
+print_timings       = False     # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True      # Flag to print runtime every 50 iterations 
 
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-#nb.set_num_threads(6)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(16)         # Uncomment to manually set number of threads, otherwise will use all available
 
 #%% --- FUNCTIONS ---
 ### ##
