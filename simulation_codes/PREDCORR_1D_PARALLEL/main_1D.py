@@ -28,7 +28,7 @@ print_runtime       = True      # Flag to print runtime every 50 iterations
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-nb.set_num_threads(16)         # Uncomment to manually set number of threads, otherwise will use all available
+#nb.set_num_threads(16)         # Uncomment to manually set number of threads, otherwise will use all available
 
 #%% --- FUNCTIONS ---
 ### ##
@@ -1971,7 +1971,7 @@ def get_max_vx(vel):
 #@nb.njit()
 def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ji_in, Ve_in, rho_in,\
                      qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter,
-                     idx, damping_array, mp_flux, resistive_array):
+                     idx, damping_array, mp_flux, resistive_array, old_particles):
     '''
     Evaluates all the things that could cause a violation of the timestep:
         - Magnetic field dispersion (switchable in param file since this can be tiny)
@@ -2013,9 +2013,13 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ji_i
     DT_part         = min(Eacc_ts, vel_ts, ion_ts)                           # Smallest of the allowable timesteps
     
     if DT_part < 0.9*DT:
-        # Re-sync vel/pos
+        print('Timestep halved. Syncing particle velocity...')
+        
+        # Re-sync vel/pos: Advance velocity half a step
+        old_particles[0] = pos[:]
         parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve_in, rho_in, 0.5*DT,
-           resistive_array)           
+           resistive_array)
+        pos[:] = old_particles[0]
 
         DT         *= 0.5
         max_inc    *= 2
@@ -2025,10 +2029,12 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ji_i
         part_save_iter  *= 2
         loop_save_iter  *= 2
         
-        # De-sync vel/pos
+        # De-sync vel/pos: Retard velocity half a step
+        old_particles[0] = pos[:]
         parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve_in, rho_in, -0.5*DT,
-           resistive_array)    
-        print('Timestep halved. Syncing particle velocity...')
+           resistive_array)
+        pos[:] = old_particles[0]   
+        
     return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, damping_array
 
 
@@ -2422,7 +2428,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, damping_array \
         = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, B_cent, Ji_int, Ve_int, q_dens,
                          qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter,
-                         idx, mp_flux, B_damping_array, resistive_array)    
+                         idx, mp_flux, B_damping_array, resistive_array, old_particles)    
     check_time = round(timer() - check_start, 3)
     
     # Move particles, collect moments, deal with particle boundaries
