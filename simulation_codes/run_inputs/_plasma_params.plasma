@@ -1,9 +1,9 @@
-LABEL          cold_$H^{+}$   hot_$H^{+}$
+LABEL          cold_$H^{+}$   hot_$He^{+}$
 COLOUR         b              r   
 TEMP_FLAG      0              1
 DIST_FLAG      0              0
 NSP_PPC        512            2048
-MASS_PROTON    1.0            1.0
+MASS_PROTON    1.0            16.0
 CHARGE_ELEM    1.0            1.0
 DRIFT_VA       0.0            0.0
 DENSITY_CM3    180.           20.

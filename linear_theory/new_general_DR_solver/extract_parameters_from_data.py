@@ -652,8 +652,8 @@ def generate_script_file(run_dir, run_series, hybrid_method='PREDCORR'):
             with open(script_filename, 'w') as f:
                 # PBS Inputs
                 print('#!/bin/bash', file=f)
-                print('#PBS -l select=1:ncpus=32:mem=10GB', file=f)
-                print('#PBS -l walltime=150:00:00 ', file=f)
+                print('#PBS -l select=1:ncpus=16:mem=10GB', file=f)
+                print('#PBS -l walltime=100:00:00 ', file=f)
                 print('#PBS -k oe', file=f)
                 print('#PBS -m ae', file=f)
                 print('#PBS -M joshua.s.williams@uon.edu.au', file=f)
@@ -673,7 +673,7 @@ def generate_hybrid_files_from_cutoffs(he_conc=0.05, hybrid_method='PREDCORR'):
     run_dir     = 'D://NEW_HYBRID_RUNFILES//'
     
     # July 25 event
-    if True:
+    if False:
         cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
         run_series_name = f'JUL25_PKTS_{he_conc*100:.0f}HE_{hybrid_method}'
         generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=he_conc)
