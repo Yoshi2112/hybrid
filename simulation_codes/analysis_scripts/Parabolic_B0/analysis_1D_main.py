@@ -4670,7 +4670,7 @@ def plot_density_change(ppd=False, it_max=None, save=True, overwrite_moments=Fal
 if __name__ == '__main__':
     # TODO: Function to calculate number density of species at gridpoints, 
     # and save this to a file
-    drive       = 'D:'
+    drive       = 'F:'
     
     #############################
     ### MULTI-SERIES ROUTINES ###
@@ -4686,13 +4686,13 @@ if __name__ == '__main__':
     ####################################
     ### SINGLE SERIES ANALYSIS ########
     ################################
-    for series in ['JUL25_20HE_RUN4CHECK']:
+    for series in ['JUL25_PKTS_5HE_PC', 'JUL25_PKTS_15HE_PC', 'JUL25_PKTS_30HE_PC']:
         
         series_dir = f'{drive}/runs//{series}//'
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
             runs_to_do = [18]

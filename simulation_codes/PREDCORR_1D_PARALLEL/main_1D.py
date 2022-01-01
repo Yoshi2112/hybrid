@@ -18,7 +18,7 @@ RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
-cold_va             = False
+cold_va             = True
 Fu_override         = False     # Override to allow density to be calculated as a ratio of frequencies
 do_parallel         = True      # Flag to use available threads to parallelize particle functions
 adaptive_timestep   = True      # Disable adaptive timestep to keep it the same as initial
@@ -28,7 +28,7 @@ print_runtime       = True      # Flag to print runtime every 50 iterations
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-#nb.set_num_threads(16)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(32)         # Uncomment to manually set number of threads, otherwise will use all available
 
 #%% --- FUNCTIONS ---
 ### ##
@@ -206,7 +206,7 @@ def uniform_bimaxwellian():
 
 
 
-def initialize_particles(B, E, _mp_flux, Ji_in, Ve_in, rho_in):
+def initialize_particles(B, E, _mp_flux, Ji_in, Ve_in, rho_in, old_particles):
     '''
     Initializes particle arrays. Selects which velocity/position function to
     use for intialization, runs equilibrium loop if required, and calculates
@@ -236,8 +236,8 @@ def initialize_particles(B, E, _mp_flux, Ji_in, Ve_in, rho_in):
     
     if homogenous == False:
         run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
-                              Ji_in, Ve_in, rho_in,
-                          _mp_flux, hot_only=True, psave=True)
+                              Ji_in, Ve_in, rho_in, _mp_flux,
+                              old_particles, psave=True)
     
     assign_weighting_TSC(pos, Ie, W_elec)
     assign_weighting_TSC(pos, Ib, W_mag)
@@ -401,7 +401,7 @@ def initialize_tertiary_arrays():
 
 
 def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in, Ve_in, rho_in,
-                          _mp_flux, frev=1000, hot_only=True, psave=True):
+                          _mp_flux, old_particles, frev=1000, psave=True):
     '''
     Still need to test this. Put it just after the initialization of the particles.
     Actually might want to use the real mp_flux since that'll continue once the
@@ -429,14 +429,18 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
         -- Don't need vel_ts since cell size doesn't matter (especially for very small dx)
         
     Note:
+        Pushes all particles, but resets the position of the cold particles to 
+        keep the homogeneous-ish condition. Also because over runtime the 
+        cold particles don't go out of homogeneity that much.
+        Storage requires pos, vel only since weighting/fields not used for 
+        particle-only push.
     '''
-    sys.exit('This configuration is disabled until you fix hot_only injection and push')
     psave = save_particles
     
     print('Letting particle distribution relax into static field configuration')
     #max_vx   = np.max(np.abs(vel[0, :]))
-    ion_ts   = 0.1 * 2 * np.pi / gyfreq_xmax
     #vel_ts   = 0.5*dx / max_vx
+    ion_ts   = 0.1 * 2 * np.pi / gyfreq_xmax
     pdt      = ion_ts
     ptime    = frev / gyfreq_eq
     psteps   = int(ptime / pdt) + 1
@@ -460,13 +464,21 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
             os.makedirs(pdata_path)
         pnum = 0
         
+    # Store old values
+    old_particles[0, :] = pos[:]
+    old_particles[1, :] = vel[0, :]
+    old_particles[2, :] = vel[1, :]
+    old_particles[3, :] = vel[2, :]
+        
     # Desync (retard) velocity here
+    old_pos = pos.copy()
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, -0.5*pdt,
            eta_arr)
+    pos[:] = old_pos
     
     # Apply BCs to particles
     if particle_open == 1:
-        inject_particles(pos, vel, idx, _mp_flux, pdt, hot_only=hot_only)
+        inject_particles(pos, vel, idx, _mp_flux, pdt)
     elif particle_reinit == 1:
         if particle_reinit == 1:
             reinit_count_flux(pos, idx, _mp_flux)
@@ -493,7 +505,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
             
             # Apply BCs to particles
             if particle_open == 1:
-                inject_particles(pos, vel, idx, _mp_flux, pdt, hot_only=hot_only)
+                inject_particles(pos, vel, idx, _mp_flux, pdt)
             elif particle_reinit == 1:
                 if particle_reinit == 1:
                     reinit_count_flux(pos, idx, _mp_flux)
@@ -516,12 +528,14 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
         psim_time += pdt
     
     # Resync (advance) velocity here
+    old_pos = pos.copy()
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, 0.5*pdt,
            eta_arr)
-    
+    pos[:] = old_pos
+
     # Apply BCs to particles
     if particle_open == 1:
-        inject_particles(pos, vel, idx, _mp_flux, pdt, hot_only=hot_only)
+        inject_particles(pos, vel, idx, _mp_flux, pdt)
     elif particle_reinit == 1:
         if particle_reinit == 1:
             reinit_count_flux(pos, idx, _mp_flux)
@@ -530,6 +544,15 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
         periodic_BC(pos, idx)
     else:
         reflective_BC(pos, vel, idx)
+    
+    # Restore cold initial values
+    for jj in range(Nj):
+        if temp_type[jj] == 0:
+            _st, _en = idx_start[jj], idx_end[jj]
+            pos[_st:_en]    = old_particles[0, _st:_en]
+            vel[0, _st:_en] = old_particles[1, _st:_en]
+            vel[1, _st:_en] = old_particles[2, _st:_en]
+            vel[2, _st:_en] = old_particles[3, _st:_en]
     
     # Dump indicator file
     if save_fields == 1 or save_particles == 1:
@@ -572,6 +595,7 @@ def set_timestep(vel):
                         
     What would sub-stepping involve? Running the field computations without a particle
     push in between? What's the point of the two copies of the B-field like in the CL method?
+    Set dispersion timestep limit to 150% of what it should be, just to save time.
     '''
     if disable_waves == 0:
         # dxm factor to account for B-field dispersion scaling with dx
@@ -580,9 +604,9 @@ def set_timestep(vel):
         ion_ts = 0.25 / gyfreq_xmax                   # If no waves, 20 points per revolution (~4 per wcinv)
         
     vel_ts = 0.5 * dx / np.max(np.abs(vel[0, :]))     # Timestep to satisfy particle CFL: <0.5dx per timestep
-    dis_ts = 1./(k_max**2 * B_xmax / (mu0 * ECHARGE * ne)) # Dispersion timestep: Probably requires subcycling
+    dis_ts = 1.5/(k_max**2 * B_xmax / (mu0 * ECHARGE * ne)) # Dispersion timestep: Probably requires subcycling
     
-    DT       = min(ion_ts, vel_ts)                    # Timestep as smallest of options
+    DT       = min(ion_ts, vel_ts, dis_ts)            # Timestep as smallest of options
     max_time = max_wcinv / gyfreq_eq                  # Total runtime in seconds
     max_inc  = int(max_time / DT) + 1                 # Total number of time steps
     
@@ -1134,7 +1158,7 @@ def inject_particles_1sp(pos, vel, idx, _mp_flux, dt, jj):
 
 
 @nb.njit()
-def inject_particles(pos, vel, idx, _mp_flux, DT, hot_only=False):        
+def inject_particles(pos, vel, idx, _mp_flux, DT):        
     '''
     How to create new particles in parallel? Just test serial for now, but this
     might become my most expensive function for large N.
@@ -1147,12 +1171,13 @@ def inject_particles(pos, vel, idx, _mp_flux, DT, hot_only=False):
     # Add flux at each boundary if 'open' flux boundaries
     if particle_open == 1:
         for kk in range(2):
-            if not hot_only:
-                _mp_flux[kk, :] += inject_rate*DT
-            else:
-                for jj in range(Nj):
-                    if temp_type[jj] == 1:
-                        _mp_flux[kk, jj] += inject_rate[jj]*DT
+            _mp_flux[kk, :] += inject_rate*DT
+# =============================================================================
+#             else:
+#                 for jj in range(Nj):
+#                     if temp_type[jj] == 1:
+#                         _mp_flux[kk, jj] += inject_rate[jj]*DT
+# =============================================================================
             
     
     # acc used only as placeholder to mark place in array. How to do efficiently? 
@@ -2009,8 +2034,9 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ji_i
     else:
         Eacc_ts  = ion_ts
     
-    vel_ts          = 0.60 * dx / max_V                                      # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
-    DT_part         = min(Eacc_ts, vel_ts, ion_ts)                           # Smallest of the allowable timesteps
+    dis_ts  = 1.5/(k_max**2 * B_magnitude.max() / (mu0 * q_dens.min()))   # Dispersion timestep: Probably requires subcycling
+    vel_ts  = 0.60 * dx / max_V                                           # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
+    DT_part = min(Eacc_ts, vel_ts, ion_ts, dis_ts)                        # Smallest of the allowable timesteps
     
     if DT_part < 0.9*DT:
         print('Timestep halved. Syncing particle velocity...')
@@ -2943,7 +2969,8 @@ if __name__ == '__main__':
     old_particles, old_fields, temp3De, temp3Db, temp1D,\
                                                mp_flux  = initialize_tertiary_arrays()
     pos, vel, Ie, W_elec, Ib, W_mag, idx                = initialize_particles(B, E_int, mp_flux,
-                                                                               Ji_int, Ve_int, q_dens)
+                                                                               Ji_int, Ve_int, q_dens,
+                                                                               old_particles)
 
     # Collect initial moments and save initial state
     get_B_cent(B, B_cent)
