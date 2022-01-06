@@ -1476,12 +1476,12 @@ def just_random():
 
 if __name__ == '__main__': 
     #plot_omura2010_figs34()
-    #plot_shoji2013_fig7()
+    plot_shoji2013_fig7()
     #plot_shoji2012_2D()
     
     #plot_check_CPDR()
-    plot_ohja2021_fig8()
-    plot_ohja2021_fig9()
+    #plot_ohja2021_fig8()
+    #plot_ohja2021_fig9()
     
     #plot_nakamura2016_fig11()
     

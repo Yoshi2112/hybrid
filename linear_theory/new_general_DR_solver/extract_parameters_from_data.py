@@ -489,6 +489,17 @@ def read_cutoff_file(_filename):
     return cutoff_dict
 
 
+def read_target_file(_filename):
+    '''
+    Files should literally just be a list of datetimes in string format
+    '''
+    target_times = []
+    with open(_filename, 'r') as f:
+        for line in f:
+            target_times.append(np.datetime64(line))
+    return np.asarray(target_times)
+
+
 def calculate_o_from_he_and_cutoff(co_freq_norm, he_val):
     '''
     For each possible fractional value of He, calculate the possible values
@@ -509,7 +520,8 @@ def calculate_o_from_he_and_cutoff(co_freq_norm, he_val):
     return o_val[0]
 
 
-def generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=0.05):
+def generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=0.05,
+                        target_filename=None):
     # Read cutoff textfile
     # Use cutoff data to set cold composition (function)
     # Interpolate cold composition to packet_start time
@@ -523,8 +535,13 @@ def generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=0.05)
     o_concs = np.zeros(n_vals)
     for ii in range(n_vals):
         o_concs[ii] = calculate_o_from_he_and_cutoff(cutoff_dict['CUTOFF_NORM'][ii], he_conc)
-
-    o_concs = np.interp(cutoff_dict['PACKET_START'].astype(np.int64),
+        
+    if target_filename is None:
+        target_times = cutoff_dict['PACKET_START']
+    else:
+        target_times = read_target_file(target_filename)
+    
+    o_concs = np.interp(target_times.astype(np.int64),
                         cutoff_dict['CUTOFF_TIME'].astype(np.int64),
                         o_concs)
 
@@ -544,13 +561,13 @@ def generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=0.05)
     times, B0, cold_dens, hope_dens, hope_temp, hope_anis, spice_dens, spice_temp, spice_anis =\
         load_and_interpolate_plasma_params(data_start, data_end, 'a',
                                            rbsp_path=_rbsp_path, HM_filter_mhz=30.0, nsec=None,
-                                           time_array=cutoff_dict['PACKET_START'])
+                                           time_array=target_times)
 
     # CALCULATE VALUES FOR HYBRID RUNS
     cold_dens /= 1e6  ; hope_dens /= 1e6; spice_dens /= 1e6   # Cast densities from /m to /cm
     cold_temp  = 0.1
     
-    Nt    = cutoff_dict['CUTOFF_TIME'].shape[0]
+    Nt    = target_times.shape[0]
     dens  = np.zeros((6, Nt), dtype=float)
     Tperp = np.zeros((6, Nt), dtype=float)
     A     = np.zeros((6, Nt), dtype=float)
@@ -641,6 +658,138 @@ def generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=0.05)
     print('Plasmafiles created.')
     return
 
+def generate_plasmafile_noheavyions(cutoff_filename, run_dir, run_series_name, he_conc=0.05,
+                        target_filename=None):
+    '''
+    No hot, heavy ions (density folded into cold component)
+    '''
+    # Read cutoff textfile
+    # Use cutoff data to set cold composition (function)
+    # Interpolate cold composition to packet_start time
+    # Read data
+    # Have variable for He_percent, since this is unknown
+    
+    # READ CUTOFF FILE AND CALCULATE/INTERPOLATE COMPOSITIONS
+    cutoff_dict = read_cutoff_file(cutoff_filename)
+    
+    n_vals  = cutoff_dict['CUTOFF_NORM'].shape[0]
+    o_concs = np.zeros(n_vals)
+    for ii in range(n_vals):
+        o_concs[ii] = calculate_o_from_he_and_cutoff(cutoff_dict['CUTOFF_NORM'][ii], he_conc)
+        
+    if target_filename is None:
+        target_times = cutoff_dict['PACKET_START']
+    else:
+        target_times = read_target_file(target_filename)
+    
+    o_concs = np.interp(target_times.astype(np.int64),
+                        cutoff_dict['CUTOFF_TIME'].astype(np.int64),
+                        o_concs)
+
+    # CREATE NEW DIRECTORY FOR RUNFILES
+    run_dir +=  run_series_name + '/'        
+
+    if os.path.exists(run_dir) == False: os.makedirs(run_dir)
+    
+    # Pad times and round to nearest second
+    data_start = cutoff_dict['CUTOFF_TIME'][ 0] - np.timedelta64(300, 's')
+    data_end   = cutoff_dict['CUTOFF_TIME'][-1] + np.timedelta64(300, 's')
+    
+    data_start = data_start.astype('datetime64[s]').astype('<M8[us]')
+    data_end   = data_end.astype('datetime64[s]').astype('<M8[us]')
+    
+    # LOAD THE INTERPOLATED DATA
+    times, B0, cold_dens, hope_dens, hope_temp, hope_anis, spice_dens, spice_temp, spice_anis =\
+        load_and_interpolate_plasma_params(data_start, data_end, 'a',
+                                           rbsp_path=_rbsp_path, HM_filter_mhz=30.0, nsec=None,
+                                           time_array=target_times)
+
+    # CALCULATE VALUES FOR HYBRID RUNS
+    cold_dens /= 1e6  ; hope_dens /= 1e6; spice_dens /= 1e6   # Cast densities from /m to /cm
+    cold_temp  = 0.1
+    
+    Nt    = target_times.shape[0]
+    dens  = np.zeros((4, Nt), dtype=float)
+    Tperp = np.zeros((4, Nt), dtype=float)
+    A     = np.zeros((4, Nt), dtype=float)
+    
+    names    = np.array(['cold_$H^{+}$', 'cold_$He^{+}$', 'cold_$O^{+}$',
+                         'warm_$H^{+}$'])
+    
+    colors   = np.array(['b'      , 'm'     , 'g',
+                        'r'])
+    
+    temp_flag = np.array([0,     0,    0,   1])
+    dist_flag = np.array([0,     0,    0,   0])
+    mass      = np.array([1.0, 4.0, 16.0, 1.0])
+    charge    = np.array([1.0, 1.0,  1.0, 1.0])
+    drift     = np.array([0.0, 0.0,  0.0, 0.0])
+    
+    nsp_ppc   = np.array([512, 512, 512, 8192])
+    
+    # Set cold plasma temperature values
+    Tperp[0] = cold_temp; A[0]  = 0.0
+    Tperp[1] = cold_temp; A[1]  = 0.0
+    Tperp[2] = cold_temp; A[2]  = 0.0
+    
+    # Set warm plasma values from HOPE
+    Tperp[3] = np.round(hope_temp[0], 3)
+    A[3]     = np.round(hope_anis[0], 3)
+    dens[3]  = np.round(hope_dens[0], 3)
+    
+    # Number of rows with species-specific stuff
+    N_rows    = 11
+    N_species = 4
+    
+    row_labels = ['LABEL', 'COLOUR', 'TEMP_FLAG', 'DIST_FLAG', 'NSP_PPC', 'MASS_PROTON', 
+                  'CHARGE_ELEM', 'DRIFT_VA', 'DENSITY_CM3', 'ANISOTROPY', 'ENERGY_PERP', 
+                  'ELECTRON_EV', 'BETA_FLAG', 'L', 'B_EQ']
+    
+    row_params = [names, colors, temp_flag, dist_flag, nsp_ppc, mass, charge, drift, 
+                  dens, A, Tperp]
+
+    electron_ev = cold_temp
+    beta_flag   = 0
+    L           = 5.35
+    
+    
+    for ii in range(Nt):
+        h_conc = 1. - he_conc - o_concs
+        
+        # Calculate cold plasma composition for this time
+        dens[0] = np.round(cold_dens * h_conc, 3)
+        dens[1] = np.round(cold_dens * he_conc + hope_dens[1] , 3)
+        dens[2] = np.round(cold_dens * o_concs[ii] + hope_dens[2], 3)
+        b_eq    = np.round(B0[ii]*1e9, 2)
+        
+        suffix = times[ii].astype(object).strftime('_%Y%m%d_%H%M%S_') + run_series_name
+        
+        run_file = run_dir + 'plasma_params' + suffix + '.plasma'
+        
+        with open(run_file, 'w') as f:
+            
+            # Print the row label for each row, and then entries for each species
+            for jj in range(N_rows):
+                print('{0: <15}'.format(row_labels[jj]), file=f, end='')
+                
+                # Loop through species to print that row's stuff (separated by spaces)
+                for kk in range(N_species):
+                    
+                    if dens[kk, ii] != 0.0:
+                        if jj > 7: 
+                            print('{0: <15}'.format(round(row_params[jj][kk, ii], 9)), file=f, end='')
+                        else:
+                            print('{0: <15}'.format(row_params[jj][kk]), file=f, end='')
+                print('', file=f)
+            # Single print specific stuff
+            print('ELECTRON_EV    {}'.format(electron_ev), file=f)
+            print('BETA_FLAG      {}'.format(beta_flag)  , file=f)
+            print('L              {}'.format(L)          , file=f)
+            print('B_EQ           {}e-9'.format(b_eq)       , file=f)  
+            print('B_XMAX         -'                     , file=f) 
+    print('Plasmafiles created.')
+    return
+
 def generate_script_file(run_dir, run_series, hybrid_method='PREDCORR'):
     run_dir +=  run_series + '/'
     filedir  = f'/batch_runs/{run_series}/'
@@ -680,10 +829,36 @@ def generate_hybrid_files_from_cutoffs(he_conc=0.05, hybrid_method='PREDCORR'):
         generate_script_file(run_dir, run_series_name, hybrid_method=hybrid_method)
     
     # Jan 16 event
-    if True:
+    if False:
         cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//pearl_times.txt'
         run_series_name = f'JAN16_PKTS_{he_conc*100:.0f}HE_{hybrid_method}'
         generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=he_conc)
+        generate_script_file(run_dir, run_series_name, hybrid_method=hybrid_method)
+        
+    # July 25, peaks
+    if False:
+        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
+        target_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//packet_centers.txt'
+        run_series_name = f'JUL25_PC1PEAKS_{he_conc*100:.0f}HE_{hybrid_method}'
+        generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=he_conc,
+                            target_filename=target_filename)
+        generate_script_file(run_dir, run_series_name, hybrid_method=hybrid_method)
+        
+    # July 25, Proxy peaks
+    if False:
+        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
+        target_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//instability_peaks_HOPE.txt'
+        run_series_name = f'JUL25_PROXY_{he_conc*100:.0f}HE_{hybrid_method}'
+        generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=he_conc,
+                            target_filename=target_filename)
+        generate_script_file(run_dir, run_series_name, hybrid_method=hybrid_method)
+        
+    if True:
+        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
+        target_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//instability_peaks_HOPE.txt'
+        run_series_name = f'JUL25_PROXYHONLY_{he_conc*100:.0f}HE_{hybrid_method}'
+        generate_plasmafile_noheavyions(cutoff_filename, run_dir, run_series_name, he_conc=he_conc,
+                            target_filename=target_filename)
         generate_script_file(run_dir, run_series_name, hybrid_method=hybrid_method)
     return
 
@@ -700,7 +875,7 @@ if __name__ == '__main__':
     _test_file_mom = 'F://DATA//RBSP//ECT//HOPE//L3//MOMENTS//rbspa_rel04_ect-hope-MOM-L3_20150116_v7.1.0.cdf'
     
     generate_hybrid_files_from_cutoffs(he_conc=0.05)
-    generate_hybrid_files_from_cutoffs(he_conc=0.15)
+    #generate_hybrid_files_from_cutoffs(he_conc=0.15)
     generate_hybrid_files_from_cutoffs(he_conc=0.30)
     
     #integrate_HOPE_moments(_time_start, _time_end, _probe, _pad, rbsp_path=_rbsp_path)

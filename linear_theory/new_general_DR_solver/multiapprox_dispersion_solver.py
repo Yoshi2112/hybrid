@@ -162,7 +162,7 @@ def create_species_array(B0, name, mass, charge, density, tper, ani,
     For each ion species, total density is collated and an entry for 'electrons' added (treated as cold)
     Also output a PlasmaParameters dict containing things like alfven speed, density, hydrogen gyrofrequency, etc.
     
-    Inputs must be in SI units: nT, kg, C, /m3, eV, etc.
+    Inputs must be in SI units: T, kg, C, /m3, eV, etc.
     Outputs are in SI units, with frequencies being angular frequencies
     
     -- NOTE --:: if pcyc_rad is defined (as it might be for some paper validations, normalization

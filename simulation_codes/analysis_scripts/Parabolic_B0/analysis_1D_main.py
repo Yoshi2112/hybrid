@@ -1917,7 +1917,8 @@ def summary_plots(save=True, histogram=True, skip=1, ylim=True):
     return
 
 
-def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, tx_only=False, tmax=None, remove_ND=False):
+def standard_analysis_package(disp_overlay=False, pcyc_mult=1.25,
+                              tx_only=False, tmax=None, remove_ND=False):
     '''
     Need a high-pass option for the wk? Or will it do all of it?
     It should do all of it (show the Pc4 branch and the Pc1 branch)
@@ -1925,23 +1926,21 @@ def standard_analysis_package(thesis=True, disp_overlay=False, pcyc_mult=1.25, t
     
     Actually, Pc5 is only in bx... affects By/Bz? Echo in other components?
     '''
-    if thesis == False:
-        disp_folder = 'dispersion_plots/'
-    else:
-        disp_folder = 'dispersion_plots_thesis/'
+    disp_folder = 'dispersion_plots/'
         
     if os.path.exists(cf.anal_dir + disp_folder) == False:
         os.makedirs(cf.anal_dir + disp_folder)
     
     #plot_wk_polished(component='by', saveas=disp_folder + 'wk_plot', save=False, dispersion_overlay=True, pcyc_mult=1.25)
-
-    plot_wk(saveas='wk_plot_zc', dispersion_overlay=disp_overlay, save=True,
-                     pcyc_mult=pcyc_mult, xmax=None, zero_cold=True,
-                     linear_only=True, normalize_axes=False)
+    
+    if disp_overlay: 
+        plot_wk(saveas='wk_plot_zc', dispersion_overlay=disp_overlay, save=True,
+                         pcyc_mult=pcyc_mult, xmax=None, zero_cold=True,
+                         linear_only=True, normalize_axes=False)
                 
     plot_wk(saveas='wk_plot', dispersion_overlay=disp_overlay, save=True,
          pcyc_mult=pcyc_mult, xmax=None, zero_cold=False,
-         linear_only=True, normalize_axes=False)
+         linear_only=False, normalize_axes=False)
 
     if True:    
         for comp in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
@@ -4313,7 +4312,7 @@ def multiplot_saturation_amplitudes(save=True):
     'time' (which probably has to be hardcoded)
     '''
     print('Plotting saturation amplitudes for multiple series...')
-    #all_series  = ['//JAN16_PKTS_5HE//', '//JAN16_PKTS_10HE//', '//JAN16_PKTS_20HE//',
+    #all_series  = ['//JAN16_PKTS_5HE_PC//', '//JAN16_PKTS_15HE_PC//', '//JAN16_PKTS_30HE_PC//',
     jan_times = ['2015-01-16T04:29:15.000000',
         '2015-01-16T04:31:45.000000',
         '2015-01-16T04:34:55.000000',
@@ -4328,7 +4327,7 @@ def multiplot_saturation_amplitudes(save=True):
         '2015-01-16T05:04:30.000000',
         '2015-01-16T05:07:30.000000']
     
-    all_series  = ['//JUL25_PKTS_5HE//', '//JUL25_PKTS_10HE//', '//JUL25_PKTS_20HE//']
+    all_series  = ['//JUL25_PKTS_5HE_PC//', '//JUL25_PKTS_15HE_PC//', '//JUL25_PKTS_30HE_PC//']
     jul_times = ['2013-07-25T21:27:54.000000',
                 '2013-07-25T21:28:40.000000',
                 '2013-07-25T21:29:32.000000',
@@ -4429,7 +4428,7 @@ def multiplot_saturation_amplitudes(save=True):
     
     # Hybrid Results
     clrs = ['blue', 'green', 'red']
-    for ii, lbl in zip(range(len(all_series)), ['5% He', '10% He', '20% He']):
+    for ii, lbl in zip(range(len(all_series)), ['5% He', '15% He', '30% He']):
         axes[2, 0].scatter(timebase, sat_amp[ii], c=clrs[ii], label=lbl)
     axes[2, 1].set_visible(False)
     axes[2, 0].set_xlim(time_start, time_end)
@@ -4675,18 +4674,18 @@ if __name__ == '__main__':
     #############################
     ### MULTI-SERIES ROUTINES ###
     #############################
-    if False:
+    if True:
         #multiplot_mag_energy(save=True)
         #multiplot_fluxes(series)
         #multiplot_parallel_scaling()
-        #multiplot_saturation_amplitudes(save=True)
-        #print('Exiting multiplot routines successfully.')
+        multiplot_saturation_amplitudes(save=True)
+        print('Exiting multiplot routines successfully.')
         sys.exit()
 
     ####################################
     ### SINGLE SERIES ANALYSIS ########
     ################################
-    for series in ['JUL25_PKTS_5HE_PC', 'JUL25_PKTS_15HE_PC', 'JUL25_PKTS_30HE_PC']:
+    for series in ['JAN16_PKTS_5HE_PC', 'JAN16_PKTS_15HE_PC', 'JAN16_PKTS_30HE_PC']:
         
         series_dir = f'{drive}/runs//{series}//'
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
@@ -4702,17 +4701,27 @@ if __name__ == '__main__':
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
-                cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
+                try:
+                    cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
+                    standard_analysis_package(disp_overlay=False, pcyc_mult=1.1,
+                                  tx_only=False, tmax=None, remove_ND=False)
+                    #check_fields(save=True, ylim=False, skip=50)
+                except:
+                    continue
+                
+# =============================================================================
+#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
+#                            B0_lim=None, remove_ND=False)
+#                 plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
+#                 
+#                 plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
+#                      pcyc_mult=1.5, xmax=1.5, zero_cold=True,
+#                      linear_only=False, normalize_axes=True, centre_only=False)
+# =============================================================================
+                
+                
 
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
-                           B0_lim=None, remove_ND=False)
-                plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
                 
-                plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
-                     pcyc_mult=1.5, xmax=1.5, zero_cold=True,
-                     linear_only=False, normalize_axes=True, centre_only=False)
-                
-                #check_fields(save=True, ylim=False, skip=25)
 
 
                 #plot_total_density_with_time()
