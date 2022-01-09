@@ -18,6 +18,7 @@ import matplotlib.gridspec as gspec
 import matplotlib.cm     as cm
 import multiprocessing
 import multiprocessing.sharedctypes
+from   matplotlib.ticker       import MaxNLocator
 from   scipy.interpolate       import splrep, splev
 from   matplotlib.lines        import Line2D
 from   scipy.optimize          import fsolve
@@ -3159,6 +3160,9 @@ def plot_normalized_pc1(_time_start, _time_end, _probe, save=True, save_interpol
     Does that make it an IPDP? Rather than a real pearl? Am I barking up the
     wrong tree?
     '''  
+    pc1_save_dir= '{}//NORMALIZED_PC1//EVENT_{}//'.format(ext_drive, date_string)
+    if not os.path.exists(pc1_save_dir): os.makedirs(pc1_save_dir)
+    
     plot_factor   = 0.3
     pc1_res       = 35.0                         # FFT resolution
     norm_freq     = np.arange(0.0, 1.2, 0.005)   # Normalized frequency grid
@@ -3481,17 +3485,14 @@ def thesis_plot_summaries(_rbsp_path, _time_start, _time_end, _probe):
     He vs O concentration. This can go in a folder somewhere. Not sure how to
     turn that into a timeseries.
     '''    
-    plot_dir = save_dir + '//LT_SUMMARIES//'
-    if not os.path.exists(plot_dir): os.makedirs(plot_dir)
-    
     nsec = 5
     save_string = _time_start.astype(object).strftime('%Y%m%d_%H%M_') \
                 + _time_end.astype(object).strftime('%H%M')
     
-    he_pcen = np.arange(0.0, 30.5, 1.0)
-    o_pcen  = np.arange(0.0, 10.5, 0.5)
+    he_pcen = np.arange(1.0, 30.5, 1.0)
+    o_pcen  = np.arange(0.5, 10.5, 0.5)
     _cmp    = np.array([100. - he_pcen[1] - o_pcen[1], he_pcen[1], o_pcen[1]], dtype=float)
-
+    
     # Load sample (first) DR to get times
     k_np,  WPDR_out, wCGR_out, wVg_out, times, B0, name, mass, charge, density,\
         tper, ani, cold_dens, _cmp =  get_all_DRs_warm_only(save_dir, _time_start,
@@ -3502,7 +3503,6 @@ def thesis_plot_summaries(_rbsp_path, _time_start, _time_end, _probe):
     # Values are 0: Max growth rate, 1: k at max growth, 2: frequency at max growth
     Nt      = times.shape[0]
     max_TGR = np.zeros((Nt, 3, 3), dtype=np.float64)
-    max_CGR = np.zeros((Nt, 3, 3), dtype=np.float64)
     
     # Collect max value timeseries, plot each line as its collected
     # Currently set to have 21 oxygen bins and 31 helium bins
@@ -3512,13 +3512,15 @@ def thesis_plot_summaries(_rbsp_path, _time_start, _time_end, _probe):
     norm   = mpl.colors.Normalize(vmin=he_pcen[0], vmax=he_pcen[-1])
     mapper = cm.ScalarMappable(norm=norm, cmap=cm.jet)
     
+    fsize=10
+    
     print('Plotting summaries...')
     # Each axes corresponds to a new oxygen concentration
     for mm in range(n_figs):
         
         # Colorbar to show He percentage
-        fig = plt.figure(figsize=(11.69, 8.27))
-        gs  = gspec.GridSpec(7, 2, figure=fig, width_ratios=[1, 0.01], hspace=0.0)
+        fig = plt.figure(figsize=(8.00, 0.5*11.00))
+        gs  = gspec.GridSpec(7, 2, figure=fig, width_ratios=[1, 0.01], hspace=0.0, wspace=0.05)
         cax = fig.add_subplot(gs[:, 1])
         
         for nn in range(n_axes):
@@ -3527,20 +3529,25 @@ def thesis_plot_summaries(_rbsp_path, _time_start, _time_end, _probe):
             
             # Set axes values
             ax = fig.add_subplot(gs[nn, 0])
-            ax.set_ylabel(f'{o_comp}% O+\n($\gamma \\times 10^3 s^{-1}$)', rotation=0, labelpad=45, fontsize=12)
+            
+            ax.set_ylabel(f'{o_comp}% $O^+$', rotation=0, labelpad=25,
+                          fontsize=fsize)#\n($\gamma \\times 10^3 s^{-1}$)
             ax.set_xlim(_time_start, _time_end)
             if nn == n_axes - 1:
-                ax.set_xlabel('Time (UT)', fontsize=12)
+                ax.set_xlabel('Time (UT)', fontsize=fsize)
                 ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
             elif nn == 0:
-                ax.set_title(f'Max. Temporal Growth Rate :: {date_string} :: Heavy Ion Parameter Search')
+                ax.set_title(f'Max. $\gamma$ :: {title_string} :: Heavy Ion Parameter Search',
+                             fontsize=fsize+2)
                 ax.set_xticklabels([])
             else:
                 ax.set_xticklabels([])
             cbar = fig.colorbar(mapper, cax=cax, orientation='vertical')
             cbar.set_label(label='$He^{+}(\%)$', size='large', weight='bold',
-                           rotation=0, labelpad=30)
+                           rotation=90, labelpad=10, fontsize=fsize+2)
             
+            ax.axvline(time_start, c='k', ls='--', alpha=0.5)
+            ax.axvline(time_end  , c='k', ls='--', alpha=0.5)
             
             for he_comp in he_pcen:
                 h_comp = 100. - o_comp - he_comp
@@ -3562,18 +3569,15 @@ def thesis_plot_summaries(_rbsp_path, _time_start, _time_end, _probe):
         
                 # Remove nan's at start of arrays (Just copy for now, do smarter later)
                 WPDR[:, 0, :] = WPDR[:, 1, :]
-                CGR[ :, 0, :] = CGR[ :, 1, :]
                 Vg[  :, 0, :] = Vg[  :, 1, :]
                 
                 # Scale values for plotting/interpolating
                 k_vals  *= 1e6
                 TGR      = WPDR.imag*1e3
-                CGR      = CGR*1e9
                 freqs    = WPDR.real / (2*np.pi)    # Frequencies in Hz
                 
                 # Filter growth rates
                 TGR[np.isnan(TGR) == True] = 0.0
-                CGR[np.isnan(CGR) == True] = 0.0
                 freqs[np.isnan(freqs) == True] = 0.0
                 
                 for ii in range(Nt):
@@ -3582,23 +3586,21 @@ def thesis_plot_summaries(_rbsp_path, _time_start, _time_end, _probe):
                         max_TGR[ii, sp, 0] = TGR[ii, :, sp].max()       # Maximum growth rate
                         max_TGR[ii, sp, 1] = k_vals[ii, max_idx_TGR]    # Wavenumber at maximum GR
                         max_TGR[ii, sp, 2] = freqs[ii, max_idx_TGR, sp] # Frequency  at maximum GR
-                        
-                        max_idx_CGR        = CGR[ii, :, sp].argmax()
-                        max_CGR[ii, sp, 0] = CGR[ii, :, sp].max()
-                        max_CGR[ii, sp, 1] = k_vals[ii, max_idx_CGR]    # Wavenumber at maximum GR
-                        max_CGR[ii, sp, 2] = freqs[ii, max_idx_CGR, sp] # Frequency  at maximum GR
-
+                
                 # Add this line
-                #pdb.set_trace()
                 clr = mapper.to_rgba(he_comp)
                 ax.plot(times, max_TGR[:, 1, 0], c=clr)
-            ax.set_ylim(0.0, 28.0)
+            ax.set_ylim(0.0, glim)
                 
         # Save Figure
-        fig_name = f'TGR_SUMMARIES_{save_string}_fig{mm}'
-        fig.savefig(plot_dir + fig_name)
+        fig.tight_layout()
+        fig.align_ylabels()
+        
+        fig_name = f'TGR_SUMMARIES_{save_string}_fig{mm}.png'
+        fig.savefig(plot_path + fig_name, dpi=1200)
         plt.close('all')
         print('Plot saved:', fig_name)
+        break
     return
 
 
@@ -3620,8 +3622,8 @@ def thesis_plot_2D_growth_rates_with_time(_rbsp_path, _plot_start, _plot_end, _p
         - Plot with time
         - Maybe overlay contour spectra above some power (that shows the packeting)
     '''
-    #plot_dir = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//2D_GROWTH_RATES//'
-    plot_dir = 'E://2D_LINEAR_THEORY//NEW_2D_GROWTH_RATES//'
+    plot_dir = plot_path
+    #plot_dir = 'E://2D_LINEAR_THEORY//NEW_2D_GROWTH_RATES//'
 
     if not os.path.exists(plot_dir): os.makedirs(plot_dir)
     
@@ -3638,6 +3640,11 @@ def thesis_plot_2D_growth_rates_with_time(_rbsp_path, _plot_start, _plot_end, _p
     # Load/Calculate each growth rate in sweep
     for he_comp in np.arange(1.0, 30.5, 1.0):
         for o_comp in np.arange(0.5, 10.5, 0.5):
+            
+            if he_comp == 30.0 and o_comp == 6.0:
+                pass
+            else:
+                continue
             h_comp = 100. - o_comp - he_comp
             print('Composition: {}/{}/{}'.format(h_comp, he_comp, o_comp))
             comp = np.array([h_comp, he_comp, o_comp], dtype=float)
@@ -3645,7 +3652,7 @@ def thesis_plot_2D_growth_rates_with_time(_rbsp_path, _plot_start, _plot_end, _p
             save_string = _plot_start.astype(object).strftime('%Y%m%d_%H%M_') \
                         + _plot_end.astype(object).strftime('%H%M')
 
-            DR_path = get_DR_filepath(save_dir, _time_start, _time_end, comp, nsec)
+            DR_path = get_DR_filepath(save_dir, _plot_start, _plot_end, comp, nsec)
             
             if os.path.exists(DR_path):
                 k_vals,  WPDR, CGR, Vg, times, B0, name, mass, charge, density,\
@@ -3722,40 +3729,121 @@ def thesis_plot_2D_growth_rates_with_time(_rbsp_path, _plot_start, _plot_end, _p
             
             # Set limits        
             kmin     = 0.0
-            kmax     = 40.0#k_vals.max()
+            kmax     = 35.0#k_vals.max()
         
             TGR_max  = TGR[np.isnan(TGR) == False].max()
-            CGR_max  = CGR[np.isnan(CGR) == False].max()
+            #CGR_max  = CGR[np.isnan(CGR) == False].max()
             #TGR_min  = None
             
             ##########
             ## PLOT ##
             ##########
             plt.ioff()
+            fsize = 10; X=-0.10; Y=0.00
+            ## TEMPORAL GROWTH RATE ##
+            fig1, axes1 = plt.subplots(5, 2, figsize=(8.0, 0.5*11.0), 
+                                       gridspec_kw={'width_ratios':[1, 0.01]})
             
+            axes1[0, 0].set_title('Temporal Growth Rate :: {} :: Ion Composition {}/{}/{}'.format(
+                                        title_string, (cmp[0]), (cmp[1]),
+                                          (cmp[2])), fontsize=fsize)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                
+                # Pc1 Spectra
+                im1a = axes1[0, 0].pcolormesh(pc1_xtimes, pc1_xfreq, pc1_power,
+                                           norm=colors.LogNorm(vmin=1e-4, vmax=1e1),
+                                           cmap='jet')
+                axes1[0, 0].set_ylabel('f\n(Hz)', fontsize=fsize, rotation=0)
+                axes1[0, 0].yaxis.set_label_coords(X, 0.4)
+                cbar1a = fig1.colorbar(im1a, cax=axes1[0, 1], orientation='vertical')
+                cbar1a.set_label(label='$P_\perp$\n$(nT^2/Hz)$', rotation=0, 
+                               labelpad=20, fontsize=fsize)
+                #cbar1a.ax.yaxis.set_major_locator(MaxNLocator(prune='lower'))
+                
+                # H+ Growth Rate
+                im2a = axes1[1, 0].pcolormesh(time_2D, k_vals, TGR[:, :, 0], cmap='viridis', vmin=0.0)
+                axes1[1, 0].set_ylabel('$H^+ k_\parallel$\n($10^6$/m)\n', fontsize=fsize, rotation=0)
+                axes1[1, 0].yaxis.set_label_coords(X, Y)
+                cbar2a = fig1.colorbar(im2a, cax=axes1[1, 1], orientation='vertical')
+                cbar2a.set_label(label='$\gamma$\n$(\\times 10^3 s^{-1})$', rotation=0,
+                                 labelpad=20, fontsize=fsize)
+                
+                # He+ Growth Rate
+                im3a = axes1[2, 0].pcolormesh(time_2D, k_vals, TGR[:, :, 1], cmap='viridis', vmin=0.0)
+                axes1[2, 0].set_ylabel('$He^+ k_\parallel$\n($10^6$/m)\n', fontsize=fsize, rotation=0)
+                axes1[2, 0].yaxis.set_label_coords(X, Y)
+                cbar3a = fig1.colorbar(im3a, cax=axes1[2, 1], orientation='vertical')
+                cbar3a.set_label(label='$\gamma$\n$(\\times 10^3 s^{-1})$', rotation=0,
+                                 labelpad=20, fontsize=fsize)
+                
+                # O+ Growth Rate
+                im4a = axes1[3, 0].pcolormesh(time_2D, k_vals, TGR[:, :, 2], cmap='viridis', vmin=0.0)
+                axes1[3, 0].set_ylabel('$O^+ k_\parallel$\n($10^6$/m)\n', fontsize=fsize, rotation=0)
+                axes1[3, 0].yaxis.set_label_coords(X, Y)
+                cbar4a = fig1.colorbar(im4a, cax=axes1[3, 1], orientation='vertical')
+                cbar4a.set_label(label='$\gamma$\n$(\\times 10^3 s^{-1})$', rotation=0,
+                                 labelpad=20, fontsize=fsize)
+                
+                im5a = axes1[4, 0].pcolormesh(times, freq_interp, TGRi, cmap='viridis', vmin=0.0, vmax=TGR_max)
+                axes1[4, 0].set_ylabel('f\n(Hz)', fontsize=fsize, rotation=0)
+                axes1[4, 0].yaxis.set_label_coords(X, 0.4)
+                cbar5a = fig1.colorbar(im5a, cax=axes1[4, 1], orientation='vertical')
+                cbar5a.set_label(label='$\gamma$\n$(\\times 10^3 s^{-1})$', rotation=0,
+                                 labelpad=20, fontsize=fsize)
+                
+            for ax in axes1[:, 0]:                   
+                ax.set_xlim(_time_start, _time_end)
+                
+                if ax != axes1[-1, 0]:
+                    ax.set_xticklabels([])
+                else:
+                    ax.set_xlabel('Time (UT)')
+                    ax.xaxis.set_major_locator(mdates.MinuteLocator(interval=3))
+                    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+                
+                if ax == axes1[0, 0] or ax == axes1[-1, 0]:
+                    ax.set_ylim(0.0, f_max)
+                else:
+                    ax.set_ylim(kmin, kmax)
+                    
+            fig1.tight_layout()
+            fig1.align_ylabels()
+            fig1.subplots_adjust(hspace=0.15, wspace=0.05)
+        
+            if save==False:
+                plt.show()
+            else:
+                fig1.savefig(plot_dir + 'TGR_{}_cc_{:03}_{:03}_{:03}_{}sec.png'.format(
+                             save_string, int(10*cmp[0]), int(10*cmp[1]),
+                                          int(10*cmp[2]), nsec), dpi=1200)
+                print('Plot saved.')
+                plt.close('all')
+                
+                
 # =============================================================================
-#             ## TEMPORAL GROWTH RATE ##
-#             fig1, axes1 = plt.subplots(5, figsize=(16, 10))
+#             ## CONVECTIVE GROWTH RATE ##
+#             fig2, axes2 = plt.subplots(5, figsize=(16, 10))
 #             
-#             axes1[0].set_title('Temporal Growth Rate :: RBSP-{} :: {} :: Cold Composition {}/{}/{}'.format(
+#             axes2[0].set_title('Convective Growth Rate :: RBSP-{} :: {} :: Cold Composition {}/{}/{}'.format(
 #                                         probe.upper(), date_string, (cmp[0]), (cmp[1]),
 #                                           (cmp[2])))
 #             with warnings.catch_warnings():
 #                 warnings.simplefilter("ignore")
 #                 if plot_mag == True:
-#                     im1a = axes1[0].pcolormesh(pc1_xtimes, pc1_xfreq, pc1_power,
+#                     im1b = axes2[0].pcolormesh(pc1_xtimes, pc1_xfreq, pc1_power,
 #                                                norm=colors.LogNorm(vmin=1e-7, vmax=1e1),
 #                                                cmap='jet')
 #                 
-#                 im2a = axes1[1].pcolormesh(time_2D, k_vals, TGR[:, :, 0], cmap='viridis', vmin=0.0)
+#                 im2b = axes2[1].pcolormesh(time_2D, k_vals, CGR[:, :, 0], cmap='viridis', vmin=0.0)
 #                                            #vmin=TGR_min, vmax=TGR_max, )
-#                 im3a = axes1[2].pcolormesh(time_2D, k_vals, TGR[:, :, 1], cmap='viridis', vmin=0.0)
+#                 im3b = axes2[2].pcolormesh(time_2D, k_vals, CGR[:, :, 1], cmap='viridis', vmin=0.0)
 #                                            #vmin=TGR_min, vmax=TGR_max, )
-#                 im4a = axes1[3].pcolormesh(time_2D, k_vals, TGR[:, :, 2], cmap='viridis', vmin=0.0)
+#                 im4b = axes2[3].pcolormesh(time_2D, k_vals, CGR[:, :, 2], cmap='viridis', vmin=0.0)
 #                                            #vmin=TGR_min, vmax=TGR_max, )
 #                 
 #                 try:
-#                     im5a = axes1[4].pcolormesh(times, freq_interp, TGRi, cmap='viridis', vmin=0.0, vmax=TGR_max)
+#                     im5b = axes2[4].pcolormesh(times, freq_interp, CGRi, cmap='viridis', vmin=0.0, vmax=CGR_max)
 #                                                #vmin=TGR_min, vmax=TGR_max, )
 #                 except:
 #                     pass
@@ -3766,117 +3854,45 @@ def thesis_plot_2D_growth_rates_with_time(_rbsp_path, _plot_start, _plot_end, _p
 #                       'k ($10^6$/m)\n$O^+$',
 #                       'f (Hz)']
 #             
-#             for ax, im, lbl in zip(axes1, [im1a, im2a, im3a, im4a, im5a], labels):
-#                 if ax is axes1[0]:
+#             for ax, im, lbl in zip(axes2, [im1b, im2b, im3b, im4b, im5b], labels):
+#                 if ax is axes2[0]:
 #                     clabel = '$P_\perp$ $(nT^2/Hz)$'
 #                 else:
-#                     clabel = r'$\gamma \times 10^3 s^{-1}$'
+#                     clabel = r'$\S \times 10^9 m^{-1}$'
 #                     
 #                 try:
 #                     ax.set_xlim(_time_start, _time_end)
 #                     
 #                     divider = make_axes_locatable(ax)
 #                     cax     = divider.append_axes("right", size="2%", pad=0.5)
-#                     fig1.colorbar(im, cax=cax, label=clabel, orientation='vertical', extend='both')
+#                     fig2.colorbar(im, cax=cax, label=clabel, orientation='vertical', extend='both')
 #                     ax.set_ylabel(lbl, rotation=0, labelpad=30)
 #                     
-#                     if ax != axes1[-1]:
+#                     if ax != axes2[-1]:
 #                         ax.set_xticklabels([])
 #                     else:
 #                         ax.set_xlabel('Time (UT)')
 #                         #ax.xaxis.set_major_locator(mdates.MinuteLocator(interval=10))
 #                         ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
 #                         
-#                     if ax == axes1[0] or ax == axes1[-1]:
+#                     if ax == axes2[0] or ax == axes2[-1]:
 #                         ax.set_ylim(0.0, f_max)
 #                     else:
 #                         ax.set_ylim(kmin, kmax)
 #                 except:
 #                     pass
 #             
-#             fig1.subplots_adjust(hspace=0.10)
+#             fig2.subplots_adjust(hspace=0.10)
 #         
 #             if save==False:
 #                 plt.show()
 #             else:
-#                 fig1.savefig(plot_dir + 'TGR_{}_cc_{:03}_{:03}_{:03}_{}sec.png'.format(
+#                 fig2.savefig(plot_dir + 'CGR_{}_cc_{:03}_{:03}_{:03}_{}sec.png'.format(
 #                              save_string, int(10*cmp[0]), int(10*cmp[1]),
 #                                           int(10*cmp[2]), nsec))
 #                 print('Plot saved.')
 #                 plt.close('all')
 # =============================================================================
-                
-                
-            ## CONVECTIVE GROWTH RATE ##
-            fig2, axes2 = plt.subplots(5, figsize=(16, 10))
-            
-            axes2[0].set_title('Convective Growth Rate :: RBSP-{} :: {} :: Cold Composition {}/{}/{}'.format(
-                                        probe.upper(), date_string, (cmp[0]), (cmp[1]),
-                                          (cmp[2])))
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                if plot_mag == True:
-                    im1b = axes2[0].pcolormesh(pc1_xtimes, pc1_xfreq, pc1_power,
-                                               norm=colors.LogNorm(vmin=1e-7, vmax=1e1),
-                                               cmap='jet')
-                
-                im2b = axes2[1].pcolormesh(time_2D, k_vals, CGR[:, :, 0], cmap='viridis', vmin=0.0)
-                                           #vmin=TGR_min, vmax=TGR_max, )
-                im3b = axes2[2].pcolormesh(time_2D, k_vals, CGR[:, :, 1], cmap='viridis', vmin=0.0)
-                                           #vmin=TGR_min, vmax=TGR_max, )
-                im4b = axes2[3].pcolormesh(time_2D, k_vals, CGR[:, :, 2], cmap='viridis', vmin=0.0)
-                                           #vmin=TGR_min, vmax=TGR_max, )
-                
-                try:
-                    im5b = axes2[4].pcolormesh(times, freq_interp, CGRi, cmap='viridis', vmin=0.0, vmax=CGR_max)
-                                               #vmin=TGR_min, vmax=TGR_max, )
-                except:
-                    pass
-            
-            labels = ['f (Hz)',
-                      'k ($10^6$/m)\n$H^+$',
-                      'k ($10^6$/m)\n$He^+$',
-                      'k ($10^6$/m)\n$O^+$',
-                      'f (Hz)']
-            
-            for ax, im, lbl in zip(axes2, [im1b, im2b, im3b, im4b, im5b], labels):
-                if ax is axes2[0]:
-                    clabel = '$P_\perp$ $(nT^2/Hz)$'
-                else:
-                    clabel = r'$\S \times 10^9 m^{-1}$'
-                    
-                try:
-                    ax.set_xlim(_time_start, _time_end)
-                    
-                    divider = make_axes_locatable(ax)
-                    cax     = divider.append_axes("right", size="2%", pad=0.5)
-                    fig2.colorbar(im, cax=cax, label=clabel, orientation='vertical', extend='both')
-                    ax.set_ylabel(lbl, rotation=0, labelpad=30)
-                    
-                    if ax != axes2[-1]:
-                        ax.set_xticklabels([])
-                    else:
-                        ax.set_xlabel('Time (UT)')
-                        #ax.xaxis.set_major_locator(mdates.MinuteLocator(interval=10))
-                        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-                        
-                    if ax == axes2[0] or ax == axes2[-1]:
-                        ax.set_ylim(0.0, f_max)
-                    else:
-                        ax.set_ylim(kmin, kmax)
-                except:
-                    pass
-            
-            fig2.subplots_adjust(hspace=0.10)
-        
-            if save==False:
-                plt.show()
-            else:
-                fig2.savefig(plot_dir + 'CGR_{}_cc_{:03}_{:03}_{:03}_{}sec.png'.format(
-                             save_string, int(10*cmp[0]), int(10*cmp[1]),
-                                          int(10*cmp[2]), nsec))
-                print('Plot saved.')
-                plt.close('all')
     return
 
 
@@ -3934,11 +3950,11 @@ if __name__ == '__main__':
     ext_drive = 'E:'
     #validation_plots_fraser_1996()
     #validation_plots_omura2010()
-    validation_plots_wang_2016()
+    #validation_plots_wang_2016()
     #hybrid_test_plot()
 
     #power_spectrum_CGR_comparison()
-    sys.exit()
+    #sys.exit()
     
     #### Read in command-line arguments, if present
     import argparse as ap
@@ -3951,42 +3967,39 @@ if __name__ == '__main__':
     rbsp_path   = '%s//DATA//RBSP//' % ext_drive
     probe       = 'a'
     
-    if True:
+    if False:
         time_start  = np.datetime64('2013-07-25T21:25:00')
         time_end    = np.datetime64('2013-07-25T21:47:00')
         plot_start  = np.datetime64('2013-07-25T21:00:00')
         plot_end    = np.datetime64('2013-07-25T22:00:00')
         f_max       = 1.2
-    elif False:
-        time_start  = np.datetime64('2015-01-16T04:05:00')
-        time_end    = np.datetime64('2015-01-16T05:15:00')
+        glim        = 28
+    else:
+        time_start  = np.datetime64('2015-01-16T04:25:00')
+        time_end    = np.datetime64('2015-01-16T05:10:00')
         plot_start  = np.datetime64('2015-01-16T04:05:00')
         plot_end    = np.datetime64('2015-01-16T05:15:00')
-        f_max       = 1.0
+        f_max       = 0.5
+        glim        = 75
         
     #check_concentration_files(time_start)
-
+    title_string= time_start.astype(object).strftime('%Y-%m-%d')
     date_string = time_start.astype(object).strftime('%Y%m%d')
     save_dir    = '{}//2D_LINEAR_THEORY//EVENT_{}//'.format(ext_drive, date_string)
+    plot_path   = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//'
     
-    pc1_save_dir= '{}//NORMALIZED_PC1//EVENT_{}//'.format(ext_drive, date_string)
-    if not os.path.exists(pc1_save_dir): os.makedirs(pc1_save_dir)
-
     #thesis_plot_summaries(rbsp_path, plot_start, plot_end, probe)
     
     #plot_cold_ion_via_cutoff([0.05, 0.055, 0.06, 0.065, 0.07, 0.075, 0.08, 0.085, 0.09], title_suff=' :: 25/07/2013 Event')
-    plot_normalized_pc1(time_start, time_end, probe)
+    #plot_normalized_pc1(time_start, time_end, probe)
     
 # =============================================================================
 #     calculate_warm_sweep(rbsp_path, save_dir, plot_start, plot_end, probe,
 #                           _nsec=5, N_procs=n_processes)
 # =============================================================================
-        
-# =============================================================================
-#     thesis_plot_2D_growth_rates_with_time(rbsp_path, plot_start, plot_end, probe,
-#                              approx='warm', save=True, nsec=5, log=False,
-#                              _time_start=time_start, _time_end=time_end)
-# =============================================================================
+    thesis_plot_2D_growth_rates_with_time(rbsp_path, plot_start, plot_end, probe,
+                             approx='warm', save=True, nsec=5, log=False,
+                             _time_start=time_start, _time_end=time_end)
     
     
     
