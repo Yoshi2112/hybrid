@@ -479,8 +479,8 @@ def read_cutoff_file(_filename):
                     cutoff_dict[header_names[jj]].append(values[jj])
             ii += 1
     cutoff_dict['CUTOFF_TIME']   = [np.datetime64(this) for this in cutoff_dict['CUTOFF_TIME']]
-    cutoff_dict['PACKET_CENTER'] = [np.datetime64(this) for this in cutoff_dict['PACKET_CENTER']]
-    cutoff_dict['PACKET_START']  = [np.datetime64(this) for this in cutoff_dict['PACKET_START']]
+    #cutoff_dict['PACKET_CENTER'] = [np.datetime64(this) for this in cutoff_dict['PACKET_CENTER']]
+    #cutoff_dict['PACKET_START']  = [np.datetime64(this) for this in cutoff_dict['PACKET_START']]
     cutoff_dict['CUTOFF_HZ']     = [float(this)         for this in cutoff_dict['CUTOFF_HZ']]
     cutoff_dict['CUTOFF_NORM']   = [float(this)         for this in cutoff_dict['CUTOFF_NORM']]
     

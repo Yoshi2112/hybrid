@@ -515,19 +515,11 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
     mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower = \
             load_EMIC_IMFs_and_dynspec(time_start, time_end)
     spower = spower.sum(axis=0)
-    
-    # Specify color values for time
-    time0  = time[ 0].astype(np.int64)
-    time1  = time[-1].astype(np.int64)
-    norm   = mpl.colors.LogNorm(vmin=time0, vmax=time1, clip=False)
-    mapper = cm.ScalarMappable(norm=norm, cmap=cm.jet)
-    
+
     # Replace this with just the index in the loop later
     # And an updated axvline
     #this_time = np.datetime64('2013-07-25T21:29:40')
     #time_idx  = np.where(abs(time - this_time) == np.min(abs(time - this_time)))[0][0]        
-    
-    lpad = 20
     
     # Get velocity/energy data for time
     plt.ioff()
@@ -617,8 +609,8 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
         
         # Energies
         ELAND, ECYCL = nls.get_energies(w_vals, k_vals, PP['pcyc_rad'], PMASS)
-        axes[3, 0].semilogy(f_vals, ECYCL*1e-3, c='b', label='$E_R$ Cyclotron')
-        axes[3, 0].semilogy(f_vals, ELAND*1e-3, c='r', label='$E_R$ Landau')
+        axes[3, 0].semilogy(f_vals, ELAND*1e-3, c='r', label='$E_0$')
+        axes[3, 0].semilogy(f_vals, ECYCL*1e-3, c='b', label='$E_1$')
         axes[3, 0].set_ylim(1e-1, 1e3)
         axes[3, 0].set_ylabel('$E_R$ [keV]')
         axes[3, 0].set_xlabel('Freq [Hz]', rotation=0)
@@ -628,19 +620,24 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
         num_landau    = ELAND[fidx]*1e-3
         num_cyclotron = ECYCL[fidx]*1e-3
         
-        axes[3, 0].text(0.8, 0.9, f'$E_0 =$ {num_landau:.1f} keV', horizontalalignment='left',
+        axes[3, 0].text(0.8, 0.9, f'$E_0(f) =$ {num_landau:.1f} keV', horizontalalignment='left',
                         verticalalignment='center', transform=axes[3, 0].transAxes)
-        axes[3, 0].text(0.8, 0.8, f'$E_1 =$ {num_cyclotron:.1f} keV', horizontalalignment='left',
+        axes[3, 0].text(0.8, 0.8, f'$E_1(f) =$ {num_cyclotron:.1f} keV', horizontalalignment='left',
                         verticalalignment='center', transform=axes[3, 0].transAxes)
         
+        axes[0, 0].set_xticklabels([])
+        axes[1, 0].set_yticks(np.array([0, 500, 1000, 1500]))
         for ax in axes[1:, 0]:
             ax.set_xlim(_band_start, 0.7)
             ax.axvline(freq, color='k', alpha=0.5, ls='--')
+            if ax != axes[-1, 0]:
+                ax.set_xticklabels([])
         
         axes[1, 1].set_visible(False)
         axes[2, 1].set_visible(False)
         axes[3, 1].set_visible(False)
         
+        #fig.tight_layout(rect=[0, 0, 0.95, 1])
         fig.tight_layout()
         fig.subplots_adjust(wspace=0.05, hspace=0)
         fig.align_ylabels()
@@ -683,7 +680,6 @@ def plot_HM_and_energy(time_start, time_end, probe):
     f_vals = np.linspace(f_min, f_max, Nf)
     w_vals = 2*np.pi*f_vals
     
-            
     all_CR = np.zeros((time.shape[0], Nf), dtype=np.float64)
     all_LR = np.zeros((time.shape[0], Nf), dtype=np.float64)
     all_VP = np.zeros((time.shape[0], Nf), dtype=np.float64)
@@ -792,19 +788,21 @@ if __name__ == '__main__':
     _crres_path = 'E://DATA//CRRES//'
     _plot_path  = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//' 
     if not os.path.exists(_plot_path): os.makedirs(_plot_path)
-    save_plot   = False
+    save_plot   = True
     
     _probe = 'a'
-    pc1_res    = 20.0
+    pc1_res = 35.0
     if True:
         _time_start = np.datetime64('2013-07-25T21:25:00')
         _time_end   = np.datetime64('2013-07-25T21:47:00')
-        _band_start = 0.20     # 1st, second section and overall
-        #_band_start = 0.43     # 1st, 2nd section
-        #_band_end   = 0.47     # 1st section top limit
-        _band_end   = 0.80      # 3rd section and overall
+        _band_start = 0.21     # 1st, second section and overall
+        _band_end   = 0.43     # 1st, 2nd section
+        
+        _band_start = 0.43     # Single packet later on
+        _band_end   = 0.76
+
         _npeaks     = 22
-        fmax        = 1.2
+        fmax        = 1.0
     else:
         _time_start = np.datetime64('2015-01-16T04:05:00')
         _time_end   = np.datetime64('2015-01-16T05:15:00')
@@ -816,18 +814,18 @@ if __name__ == '__main__':
     #calculate_all_NL_amplitudes()
     #plot_velocities_and_energies_single(_time_start, _time_end, probe=_probe)
     #plot_HM_and_energy(_time_start, _time_end, _probe)
-
+    #sys.exit()
+    
     time_start = _time_start
     time_end   = _time_end
     probe      = 'a'
     pad        = 0
     
-         
     plot_start = time_start - np.timedelta64(int(pad), 's')
     plot_end   = time_end   + np.timedelta64(int(pad), 's')
     
-    #%% Energy and velocity colorplots/lineplot
-    if True:
+    #%% Energy and velocity colorplots
+    if False:
         # Import cutoff-derived composition information
         cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
         cutoff_dict     = epd.read_cutoff_file(cutoff_filename)
@@ -851,7 +849,6 @@ if __name__ == '__main__':
         f_vals = np.linspace(f_min, f_max, Nf)
         w_vals = 2*np.pi*f_vals
         
-                
         all_CR = np.zeros((time.shape[0], Nf), dtype=np.float64)
         all_LR = np.zeros((time.shape[0], Nf), dtype=np.float64)
         all_VP = np.zeros((time.shape[0], Nf), dtype=np.float64)
@@ -886,7 +883,7 @@ if __name__ == '__main__':
             k_vals = nls.get_k_cold(w_vals, Species)
             all_VG[ii], all_VP[ii], all_VR[ii] = nls.get_velocities(w_vals, Species, PP)
             all_LR[ii], all_CR[ii] = nls.get_energies(w_vals, k_vals, PP['pcyc_rad'], PMASS)
-            
+        
         # Select central frequencies
         low_f  = 0.32
         high_f = 0.5
@@ -896,7 +893,7 @@ if __name__ == '__main__':
         fig, axes = plt.subplots(nrows=5, ncols=2, figsize=(8.0, 1.0*11.00),
                                      gridspec_kw={'width_ratios':[1, 0.01]
                                                   })
-    
+        
         # To plot: Spectra, velocities (Vg, Vr) and energies (cyclotron, landau resonances)
         # HM/|B| overlay
         with warnings.catch_warnings():
@@ -962,10 +959,7 @@ if __name__ == '__main__':
         else:
             plt.show()
             
-        #%% Energy and velocity line plots
-        
-        
-        
+        #%% Energy and velocity timeseries
         fig, axes = plt.subplots(nrows=4, figsize=(8.0, 1.0*11.00))
         
         axes[0].set_title('Velocities and Energies :: Upper/Lower frequency limits')
@@ -997,13 +991,12 @@ if __name__ == '__main__':
         
         plt.show()
 
-        
-    
     
     #%% Non-linear trace plots
-    if False:
+    if True:
         # Import cutoff-derived composition information
-        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
+        #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
+        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//cutoffs_only.txt'
         cutoff_dict     = epd.read_cutoff_file(cutoff_filename)
         
         #plot_amplitudes_from_data(_time_start, _time_end, probe=_probe, pad=600)
@@ -1015,9 +1008,17 @@ if __name__ == '__main__':
                                            time_array=None, check_interp=False)
         
         # Plot sample time Jul25 21:33:53 UT
-        parameter_time = np.datetime64('2013-07-25T21:29:40')
-        packet_start   = np.datetime64('2013-07-25T21:27:30')
-        packet_end     = np.datetime64('2013-07-25T21:32:15')
+        if False:
+            # Section 1
+            parameter_time = np.datetime64('2013-07-25T21:29:40')
+            packet_start   = np.datetime64('2013-07-25T21:27:30')
+            packet_end     = np.datetime64('2013-07-25T21:32:15')
+        else:
+            # Single Packet
+            parameter_time = np.datetime64('2013-07-25T21:42:12')
+            packet_start   = np.datetime64('2013-07-25T21:42:12')
+            packet_end     = np.datetime64('2013-07-25T21:42:45')
+            
         time_idx       = np.where(abs(time - parameter_time) == np.min(abs(time - parameter_time)))[0][0]
         
         # Get oxygen concentration from cutoffs
@@ -1099,72 +1100,72 @@ if __name__ == '__main__':
         # -- Maybe try a plot for linear/nonlinear growth rates vs. frequency?
         # -- Also should look at velocities/energies so we can see what sort of values are resonant
         #       (Do this separately)
-        lpad = 20
-        fig, axes = plt.subplots(nrows=4, ncols=2, figsize=(8.27, 11.69),
+        
+        # Filter IF/IA if outside bandpassed frequencies
+        if True:
+            for ii in range(IF[0].shape[0]):
+                for jj in [0, 1]:
+                    if IF[jj][ii, 0] > _band_end or IF[jj][ii, 0] < _band_start:
+                        IF[jj][ii, 0] = np.nan
+            
+        lpad = 20; fsize=12
+        fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(8.00, 0.5*11.00),
                                      gridspec_kw={'width_ratios':[1, 0.01],
-                                                  'height_ratios':[1, 1, 0.5, 2]
+                                                  'height_ratios':[1, 0.3, 2]
                                                   })
         
         # Spectra/IP
         im0 = axes[0, 0].pcolormesh(stime, sfreq, spower.sum(axis=0).T, cmap='jet',
                              norm=colors.LogNorm(vmin=1e-4, vmax=1e1))
         axes[0, 0].set_ylim(0, fmax)
-        axes[0, 0].set_ylabel('$f$\n(Hz)', rotation=0, labelpad=lpad, fontsize=12)
+        axes[0, 0].set_ylabel('$f$\n(Hz)', rotation=0, labelpad=lpad, fontsize=fsize)
         fig.colorbar(im0, cax=axes[0, 1], extend='both').set_label(
-                    r'$\frac{nT^2}{Hz}$', fontsize=16, rotation=0, labelpad=20)
+                    r'$\frac{nT^2}{Hz}$', fontsize=fsize+2, rotation=0, labelpad=20)
         
         axes[0, 0].plot(imf_time, IF[0][:, 0], c='k', lw=0.75)
         axes[0, 0].plot(imf_time, IF[1][:, 0], c='k', lw=0.75, alpha=0.8)
         #axes[0, 0].plot(imf_time, IF[2][:, 0], c='k', lw=0.75, alpha=0.6)
         axes[0, 0].axvline(parameter_time, color='white', ls='-' , alpha=0.7)
         axes[0, 0].set_xlim(plot_start, plot_end)
-        axes[0, 0].set_xticklabels([])
         
-        axes[0, 0].axhline(_band_start  , color='white', ls='--')
-        axes[0, 0].axhline(_band_end    , color='white', ls='--')
-        
-        # mag_time, pc1_mags, IA, IF, IP, stime, sfreq, spower
-        # Timeseries for comparison
-        axes[1, 0].plot(mag_time, pc1_mags[:, 0], c='b', label='$\delta B_\\nu$')
-        axes[1, 0].plot(mag_time, pc1_mags[:, 1], c='r', label='$\delta B_\phi$', alpha=0.5)
-        #axes[1, 0].plot(mag_time, pc1_mags[:, 2], c='k', label='$\delta B_\mu$', alpha=0.25)
-        axes[1, 0].set_ylabel('nT', rotation=0, labelpad=lpad)
-        axes[1, 0].set_xlim(plot_start, plot_end)
-        axes[1, 0].legend()
-        axes[1, 0].set_xlabel('Time [UT]')
-        axes[1, 0].set_xlim(plot_start, plot_end)
-        
+        axes[0, 0].axhline(_band_start, color='white', ls='--')
+        axes[0, 0].axhline(_band_end  , color='white', ls='--')
+
         # Bth, Bopt, Inst. Amplitudes
-        axes[3, 0].plot(f_vals, B_th*B0*1e9, c='k', ls='--', label=r'$B_{th}$')
-        axes[3, 0].plot(f_vals, B_opt*B0*1e9, c='k', ls='-', label=r'$B_{opt}$')
-        axes[3, 0].set_ylabel('$B$ [nT]', rotation=0, labelpad=20, fontsize=16)
-        axes[3, 0].set_xlabel('$f$ [Hz]', fontsize=16)
-        axes[3, 0].set_ylim(0, 17)
-        #axes[2, 0].set_ylim(1e-3*B0*1e9, 1e-1*PP['B0'])
-        axes[3, 0].set_xlim(f_vals[0], f_vals[-1])
-        axes[3, 0].tick_params(top=True, right=True)
-        axes[3, 0].legend(loc='upper right')   
+        axes[2, 0].plot(f_vals, B_th*B0*1e9, c='k', ls='--', label=r'$B_{th}$')
+        axes[2, 0].plot(f_vals, B_opt*B0*1e9, c='k', ls='-', label=r'$B_{opt}$')
+        axes[2, 0].set_ylabel('$B$\n(nT)', rotation=0, labelpad=20, fontsize=fsize)
+        axes[2, 0].set_xlabel('$f$ (Hz)]', fontsize=fsize)
+        axes[2, 0].set_ylim(0, 17)
+        axes[2, 0].set_xlim(f_vals[0], f_vals[-1])
+        axes[2, 0].tick_params(top=True, right=True)
+           
     
         m_size = 1
-        axes[3, 0].scatter(IF[0][:, 0], IA[0][:, 0], c='b', s=m_size)
-        axes[3, 0].scatter(IF[1][:, 0], IA[1][:, 0], c='r', s=m_size)
+        axes[2, 0].scatter(IF[0][:, 0], IA[0][:, 0], c='b', s=m_size, marker='.', label='$B_\\nu$')
+        axes[2, 0].scatter(IF[1][:, 0], IA[1][:, 0], c='r', s=m_size, marker='.', label='$B_\phi$')
         #axes[3, 0].scatter(IF[2][:, 0], IA[2][:, 0], c='k', s=m_size)
         
         # Start/Stop
-        axes[3, 0].scatter(IF[0][0, 0], IA[0][0, 0], c='b', s=40, marker='o')
-        axes[3, 0].scatter(IF[1][0, 0], IA[1][0, 0], c='r', s=40, marker='o')    
-        axes[3, 0].scatter(IF[0][-1, 0], IA[0][-1, 0], c='b', s=40, marker='x')
-        axes[3, 0].scatter(IF[1][-1, 0], IA[1][-1, 0], c='r', s=40, marker='x')  
+        axes[2, 0].scatter(IF[0][0, 0], IA[0][0, 0], c='b', s=40, marker='o')
+        axes[2, 0].scatter(IF[1][0, 0], IA[1][0, 0], c='r', s=40, marker='o')    
+        axes[2, 0].scatter(IF[0][-1, 0], IA[0][-1, 0], c='b', s=40, marker='x')
+        axes[2, 0].scatter(IF[1][-1, 0], IA[1][-1, 0], c='r', s=40, marker='x')  
+        axes[2, 0].legend(loc='upper right')
         
+        axes[1, 0].set_visible(False)
         axes[1, 1].set_visible(False)
-        axes[2, 0].set_visible(False)
         axes[2, 1].set_visible(False)
-        axes[3, 1].set_visible(False)
-        axes[0, 0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
-        axes[1, 0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+        axes[0, 0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
         
         fig.tight_layout()
         fig.subplots_adjust(wspace=0.05, hspace=0)
         fig.align_ylabels()
-            
-        plt.show()        
+        
+        if save_plot == True:
+            save_string = parameter_time.astype(object).strftime('%Y%m%d_%H%M%S')
+            print('Saving plot...')
+            fig.savefig(_plot_path + 'NONLINEAR_TRACE_' + save_string + '.png', dpi=1200)
+            plt.close('all')
+        else:
+            plt.show() 
