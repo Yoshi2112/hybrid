@@ -9,6 +9,7 @@ dispersion/growth rates since the 'omura play' source script isn't a final
 product
 """
 import warnings, pdb, sys, os, time
+sys.path.append('../')
 import numpy             as np
 import matplotlib        as mpl
 import matplotlib.pyplot as plt
@@ -1293,6 +1294,32 @@ def calculate_warm_sweep(_rbsp_path, _save_dir, _time_start, _time_end, _probe, 
                 kmin=0.0, kmax=1.5, Nk=1000, knorm=True,
                 _nsec=_nsec, HM_filter_mhz=50., N_procs=N_procs,
                 suff='', data_path=_rbsp_path, output=False, approx=approx)
+    return
+
+
+def calculate_warm_allDRs_with_cutoffs(_rbsp_path, _save_dir, _time_start, _time_end, _probe, _nsec=5, N_procs=7):
+    '''
+    Combination of warm sweep and get_all_DRs_warm_only() because each time requires a different
+    oxygen percentage based off the value of He used.
+    '''     
+    import extract_parameters_from_data as epd
+    
+    he_comp = 30.0           
+    for o_comp in np.arange(0.0, 10.5, 0.5):
+            
+            h_comp  = 100. - o_comp - he_comp
+            _cmp    = np.array([h_comp, he_comp, o_comp], dtype=float)
+            
+            if any(cc == 0 for cc in _cmp):
+                approx='hot'
+            else:
+                approx='warm'
+
+            print('Calculating timeseries growth rate for {}/{}/{} cold composition'.format(h_comp, he_comp, o_comp))
+            get_all_DRs_warm_only(_save_dir, _time_start, _time_end, _probe, _cmp, 
+                kmin=0.0, kmax=1.5, Nk=1000, knorm=True,
+                _nsec=_nsec, HM_filter_mhz=50., N_procs=N_procs,
+                suff='_cutoff', data_path=_rbsp_path, output=False, approx=approx)
     return
            
 

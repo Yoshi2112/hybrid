@@ -503,7 +503,6 @@ def calculate_all_NL_amplitudes():
 
 def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
     # Import cutoff-derived composition information
-    cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
     cutoff_dict     = epd.read_cutoff_file(cutoff_filename)
         
     time, mag, edens, cold_dens, hope_dens, hope_tpar, hope_tperp, hope_anis, L_vals =\
@@ -628,7 +627,7 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
         axes[0, 0].set_xticklabels([])
         axes[1, 0].set_yticks(np.array([0, 500, 1000, 1500]))
         for ax in axes[1:, 0]:
-            ax.set_xlim(_band_start, 0.7)
+            ax.set_xlim(_band_start, _band_end)
             ax.axvline(freq, color='k', alpha=0.5, ls='--')
             if ax != axes[-1, 0]:
                 ax.set_xticklabels([])
@@ -644,7 +643,7 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
         
         if save_plot == True:
             print('Saving plot...')
-            fig.savefig(_plot_path + 'VELENG_FROMDATA_' + save_string + '.png')
+            fig.savefig(_plot_path + 'VELENG_FROMDATA_' + save_string + '.png', dpi=dpi)
             plt.close('all')
         else:
             plt.show()
@@ -791,30 +790,37 @@ if __name__ == '__main__':
     save_plot   = True
     
     _probe = 'a'
-    pc1_res = 35.0
-    if True:
+    pc1_res = 15.0
+    dpi = 300
+    if False:
         _time_start = np.datetime64('2013-07-25T21:25:00')
         _time_end   = np.datetime64('2013-07-25T21:47:00')
-        _band_start = 0.21     # 1st, second section and overall
-        _band_end   = 0.43     # 1st, 2nd section
-        
-        _band_start = 0.43     # Single packet later on
-        _band_end   = 0.76
+        _band_start = 0.20
+        _band_end   = 0.80
 
         _npeaks     = 22
         fmax        = 1.0
+        
+        #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
+        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//cutoffs_only.txt'
     else:
-        _time_start = np.datetime64('2015-01-16T04:05:00')
+        _time_start = np.datetime64('2015-01-16T04:25:00')
         _time_end   = np.datetime64('2015-01-16T05:15:00')
         _band_start = 0.1
         _band_end   = 0.4
         _npeaks     = 22
         fmax        = 0.5
+        
+        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only.txt'
+        #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only_10mHz.txt'
+        #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//pearl_times.txt'
     
-    #calculate_all_NL_amplitudes()
-    #plot_velocities_and_energies_single(_time_start, _time_end, probe=_probe)
-    #plot_HM_and_energy(_time_start, _time_end, _probe)
-    #sys.exit()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        calculate_all_NL_amplitudes()
+        #plot_velocities_and_energies_single(_time_start, _time_end, probe=_probe)
+        #plot_HM_and_energy(_time_start, _time_end, _probe)
+        sys.exit()
     
     time_start = _time_start
     time_end   = _time_end
@@ -827,7 +833,6 @@ if __name__ == '__main__':
     #%% Energy and velocity colorplots
     if False:
         # Import cutoff-derived composition information
-        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
         cutoff_dict     = epd.read_cutoff_file(cutoff_filename)
             
         time, mag, edens, cold_dens, hope_dens, hope_tpar, hope_tperp, hope_anis, L_vals =\
@@ -994,30 +999,74 @@ if __name__ == '__main__':
     
     #%% Non-linear trace plots
     if True:
-        # Import cutoff-derived composition information
-        #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
-        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//cutoffs_only.txt'
-        cutoff_dict     = epd.read_cutoff_file(cutoff_filename)
         
-        #plot_amplitudes_from_data(_time_start, _time_end, probe=_probe, pad=600)
+        # Plot sample time Jul25 21:33:53 UT
+        if False:
+            # Section 1 (Whole)
+            parameter_time = np.datetime64('2013-07-25T21:29:40')
+            packet_start   = np.datetime64('2013-07-25T21:27:30')
+            packet_end     = np.datetime64('2013-07-25T21:32:15')
+            
+            _band_start = 0.21
+            _band_end   = 0.43
+        elif False:
+            # Single Packet near  end
+            parameter_time = np.datetime64('2013-07-25T21:42:12')
+            packet_start   = np.datetime64('2013-07-25T21:42:12')
+            packet_end     = np.datetime64('2013-07-25T21:42:45')
+            
+            _band_start = 0.43
+            _band_end   = 0.76
+            
+        elif False:
+            # Single Packet
+            parameter_time = np.datetime64('2015-01-16T04:32:04')
+            packet_start   = np.datetime64('2015-01-16T04:27:00')
+            packet_end     = np.datetime64('2015-01-16T05:08:30')
+            
+            _band_start = 0.12
+            _band_end   = 0.18
+            
+        elif False:
+            # Single Packet 1
+            packet_start   = np.datetime64('2015-01-16T04:32:17')
+            packet_end     = np.datetime64('2015-01-16T04:33:31')
+            parameter_time = np.datetime64('2015-01-16T04:32:34')
+            
+            _band_start = 0.12
+            _band_end   = 0.18
+            
+        elif False:
+            # Single Packet 2
+            packet_start   = np.datetime64('2015-01-16T04:35:03')
+            packet_end     = np.datetime64('2015-01-16T04:36:01')
+            parameter_time = np.datetime64('2015-01-16T04:35:18')
+            
+            _band_start = 0.12
+            _band_end   = 0.18
+            
+        elif True:
+            # Single Packet 2
+            packet_start   = np.datetime64('2015-01-16T04:47:24')
+            packet_end     = np.datetime64('2015-01-16T04:48:50')
+            parameter_time = np.datetime64('2015-01-16T04:47:31')
+            
+            _band_start = 0.12
+            _band_end   = 0.18
+            
+            
+        # L-shell for field curvature (Jul 25: 4.7, Jan 16: 5.73)
+        L     = 5.73
+        B_max = 6.00
+        
+        # Import cutoff-derived composition information
+        cutoff_dict     = epd.read_cutoff_file(cutoff_filename)
         
         time, mag, edens, cold_dens, hope_dens, hope_tpar, hope_tperp, hope_anis, L_vals, =\
                                            load_and_interpolate_plasma_params(
                                            plot_start, plot_end, probe, nsec=None, 
                                            rbsp_path='E://DATA//RBSP//', HM_filter_mhz=50.0,
                                            time_array=None, check_interp=False)
-        
-        # Plot sample time Jul25 21:33:53 UT
-        if False:
-            # Section 1
-            parameter_time = np.datetime64('2013-07-25T21:29:40')
-            packet_start   = np.datetime64('2013-07-25T21:27:30')
-            packet_end     = np.datetime64('2013-07-25T21:32:15')
-        else:
-            # Single Packet
-            parameter_time = np.datetime64('2013-07-25T21:42:12')
-            packet_start   = np.datetime64('2013-07-25T21:42:12')
-            packet_end     = np.datetime64('2013-07-25T21:42:45')
             
         time_idx       = np.where(abs(time - parameter_time) == np.min(abs(time - parameter_time)))[0][0]
         
@@ -1048,9 +1097,8 @@ if __name__ == '__main__':
         w_vals = 2*np.pi*f_vals
         k_vals = nls.get_k_cold(w_vals, Species)
         
-        # Define hot proton parameters (velocities normalized c) : Check, is vth = sqrt(kT/m)?
+        # Define hot proton parameters (velocities normalized c) : vth = sqrt(kT/m)?
         # Remember: temperatures originally in eV
-        # Thermal velocities - CHECK: Are they on the order of the Shoji ones?
         nh = hope_dens[0][time_idx]
         wph2 = nh * PCHARGE ** 2 / (PMASS * EPS0) 
         Vth_para = np.sqrt(KB * hope_tpar[0][time_idx]*(PCHARGE/KB)  / PMASS) / SPLIGHT
@@ -1058,7 +1106,6 @@ if __name__ == '__main__':
         Q = 0.5
         
         # Curvature parameters (this has the most wiggle room)
-        L  = 4.7
         a  = 4.5 / (L*RE)**2
         a  = a*(SPLIGHT**2/PP['pcyc_rad']**2)
         
@@ -1107,7 +1154,9 @@ if __name__ == '__main__':
                 for jj in [0, 1]:
                     if IF[jj][ii, 0] > _band_end or IF[jj][ii, 0] < _band_start:
                         IF[jj][ii, 0] = np.nan
-            
+                        
+        # Maybe add extra filter for amplitude lower than a certain fraction (e.g. <0.1 nT)
+        plt.ioff()
         lpad = 20; fsize=12
         fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(8.00, 0.5*11.00),
                                      gridspec_kw={'width_ratios':[1, 0.01],
@@ -1136,7 +1185,7 @@ if __name__ == '__main__':
         axes[2, 0].plot(f_vals, B_opt*B0*1e9, c='k', ls='-', label=r'$B_{opt}$')
         axes[2, 0].set_ylabel('$B$\n(nT)', rotation=0, labelpad=20, fontsize=fsize)
         axes[2, 0].set_xlabel('$f$ (Hz)]', fontsize=fsize)
-        axes[2, 0].set_ylim(0, 17)
+        axes[2, 0].set_ylim(0, B_max)
         axes[2, 0].set_xlim(f_vals[0], f_vals[-1])
         axes[2, 0].tick_params(top=True, right=True)
            
@@ -1156,7 +1205,7 @@ if __name__ == '__main__':
         axes[1, 0].set_visible(False)
         axes[1, 1].set_visible(False)
         axes[2, 1].set_visible(False)
-        axes[0, 0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        axes[0, 0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
         
         fig.tight_layout()
         fig.subplots_adjust(wspace=0.05, hspace=0)

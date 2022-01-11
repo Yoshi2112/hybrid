@@ -508,6 +508,9 @@ def calculate_o_from_he_and_cutoff(co_freq_norm, he_val):
     Solution seems fine for a hydrogen cutoff. Validated with
         Omura (2010) :: co_freqs_norm = 0.3514 (pcyc = 3.7Hz)
         Ohja (2021)  :: co_freqs_norm = 0.3084 (pcyc = 1.3Hz)
+        
+    Put catch in to zero oxygen concentrations less than zero (e.g. when the
+    cutoff is below the oxygen cyclotron frequency, w_norm=1/16.)
     '''
     def cfunc(nO, nHe, w):
         t1 = (1. - nHe - nO) / (1 - w)
@@ -517,7 +520,11 @@ def calculate_o_from_he_and_cutoff(co_freq_norm, he_val):
     
     o_val = fsolve(cfunc, x0=0.0, args=(he_val, co_freq_norm),
                         xtol=1e-10, maxfev=1000000, full_output=False)
-    return o_val[0]
+    if o_val[0] < 0:
+        o_out = 0.0
+    else:
+        o_out = o_val[0]
+    return o_out
 
 
 def generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=0.05,
@@ -535,7 +542,8 @@ def generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=0.05,
     o_concs = np.zeros(n_vals)
     for ii in range(n_vals):
         o_concs[ii] = calculate_o_from_he_and_cutoff(cutoff_dict['CUTOFF_NORM'][ii], he_conc)
-        
+    pdb.set_trace()
+    
     if target_filename is None:
         target_times = cutoff_dict['PACKET_START']
     else:
@@ -676,7 +684,8 @@ def generate_plasmafile_noheavyions(cutoff_filename, run_dir, run_series_name, h
     o_concs = np.zeros(n_vals)
     for ii in range(n_vals):
         o_concs[ii] = calculate_o_from_he_and_cutoff(cutoff_dict['CUTOFF_NORM'][ii], he_conc)
-        
+    pdb.set_trace()
+    
     if target_filename is None:
         target_times = cutoff_dict['PACKET_START']
     else:
@@ -845,15 +854,16 @@ def generate_hybrid_files_from_cutoffs(he_conc=0.05, hybrid_method='PREDCORR'):
         generate_script_file(run_dir, run_series_name, hybrid_method=hybrid_method)
         
     # July 25, Proxy peaks
-    if False:
-        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
+    if True:
+        #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
+        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//cutoffs_only.txt'
         target_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//instability_peaks_HOPE.txt'
         run_series_name = f'JUL25_PROXY_{he_conc*100:.0f}HE_{hybrid_method}'
         generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=he_conc,
                             target_filename=target_filename)
         generate_script_file(run_dir, run_series_name, hybrid_method=hybrid_method)
         
-    if True:
+    if False:
         cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
         target_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//instability_peaks_HOPE.txt'
         run_series_name = f'JUL25_PROXYHONLY_{he_conc*100:.0f}HE_{hybrid_method}'
