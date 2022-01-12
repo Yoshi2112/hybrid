@@ -349,7 +349,7 @@ def load_CRRES_data(time_start, time_end, crres_path='G://DATA//CRRES//', nsec=N
         B_mag    = np.sqrt(B[:, 0] ** 2 + B[:, 1] ** 2 + B[:, 2] ** 2)
         B_interp = np.interp(den_times.astype(np.int64), times.astype(np.int64), B_mag) 
         
-        return den_times, B_interp, edens
+        return den_times, B_interp*1e-9, edens*1e6
 
 
     else:
@@ -572,8 +572,9 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
                                            rbsp_path='E://DATA//RBSP//', HM_filter_mhz=50.0,
                                            time_array=None, check_interp=False)
     else:
-        load_CRRES_data(time_start, time_end, crres_path='E://DATA//CRRES//', nsec=None)
-                  
+        time, mag, edens = load_CRRES_data(time_start, time_end, nsec=None,
+                                            crres_path='E://DATA//CRRES//')
+
     mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower = \
             load_EMIC_IMFs_and_dynspec(time_start, time_end)
     spower = spower.sum(axis=0)
@@ -611,7 +612,7 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
         # Spectra/IP
         im0 = axes[0, 0].pcolormesh(stime, sfreq, spower.T, cmap='jet',
                              norm=colors.LogNorm(vmin=1e-4, vmax=1e1))
-        axes[0, 0].set_ylim(0, fmax)
+        axes[0, 0].set_ylim(0, _band_end)
         axes[0, 0].set_ylabel('$f$ [Hz]', rotation=90)
         fig.colorbar(im0, cax=axes[0, 1], extend='both').set_label(
                     r'$\frac{nT^2}{Hz}$', fontsize=16, rotation=0, labelpad=15)
@@ -625,7 +626,7 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
         axes[0, 0].set_title(f'Velocities and Energies :: {this_time}')
         
         # Get oxygen concentration from cutoffs
-        he_conc = 30.0
+        
         cutoff  = np.interp(this_time.astype(np.int64),
                             cutoff_dict['CUTOFF_TIME'].astype(np.int64),
                             cutoff_dict['CUTOFF_NORM'])
@@ -852,8 +853,7 @@ if __name__ == '__main__':
     if not os.path.exists(_plot_path): os.makedirs(_plot_path)
     save_plot   = True
     
-    
-    pc1_res = 15.0
+    pc1_res = 20.0
     dpi = 300
     if False:
         _probe = 'a'
@@ -864,6 +864,8 @@ if __name__ == '__main__':
 
         _npeaks     = 22
         fmax        = 1.0
+        
+        he_conc = 30.0
         
         #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
         cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//cutoffs_only.txt'
@@ -876,17 +878,35 @@ if __name__ == '__main__':
         _npeaks     = 22
         fmax        = 0.5
         
+        he_conc = 30.0
+        
         #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only.txt'
         #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only_10mHz.txt'
         cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//pearl_times.txt'
     elif False:
-        _time_start = np.datetime64('1991-07-17T20:15:00')
-        _time_end   = np.datetime64('1991-07-17T21:00:00')
+        _time_start  = np.datetime64('1991-07-17T20:15:00')
+        _time_end    = np.datetime64('1991-07-17T21:00:00')
         _probe       = 'crres'
-        _band_start = 0.10
-        _band_end   = 0.30
-        clims      = [1e-4, 1e1]
-        pc1_res    = 10.0
+        _band_start  = 0.10
+        _band_end    = 0.30
+        clims        = [1e-4, 1e1]
+        pc1_res      = 10.0
+        fmax         = 0.5
+        he_conc      = 10.0
+        
+        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//19910717_CRRES//cutoffs_only.txt'
+    elif True:
+        _time_start = np.datetime64('1991-08-12T22:10:00')
+        _time_end   = np.datetime64('1991-08-12T23:15:00')
+        _probe      = 'crres'
+        _band_start = 0.20
+        _band_end   = 0.60
+        clims       = [1e-4, 1e1]
+        pc1_res     = 10.0
+        fmax        = 0.7
+        he_conc     = 10.0
+        
+        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//19910812_CRRES//cutoffs_only.txt'
     else:
         raise IOError('Event must be selected')
     
