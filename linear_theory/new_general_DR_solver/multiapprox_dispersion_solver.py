@@ -1339,7 +1339,7 @@ def convective_growth_rate_kozyra(field, ndensc, ndensw, ANI, temperp,
         
     OPTIONAL:
         norm_ampl -- Flag to normalize growth rate to max value (0: No, 1: Yes). Default 0
-        norm_ampl -- Flag to normalize frequency to proton cyclotron units. Default 0
+        norm_freq -- Flag to normalize frequency to proton cyclotron units. Default 0
         NPTS      -- Number of sample points up to maxfreq. Default 500
         maxfreq   -- Maximum frequency to calculate for in proton cyclotron units. Default 1.0
     '''
@@ -3972,6 +3972,64 @@ def check_concentration_files(_date):
     return
 
 
+def plot_single_kCGR():
+    '''
+    Remember units are nT, /cm3, eV for this function
+    
+    Lower energy gives higher peak frequency
+    '''
+    B0         = 249.6
+    ndensc     = np.array([184.142 , 88.038 , 14.673])
+    ndensw     = np.array([6.607   , 0.0    , 0.0   ])
+    anisotropy = np.array([0.351   , 0.0    , 0.0   ])
+    tperp      = np.array([11.457  , 0.0    , 0.0   ])*1e3
+    
+    plt.ioff()
+    plt.figure()
+    
+    freq, growth, stop = convective_growth_rate_kozyra(B0, ndensc, ndensw, anisotropy, temperp=tperp,
+                                                       norm_ampl=0, NPTS=1000, maxfreq=0.5)
+    
+    plt.plot(freq, growth)
+    plt.xlabel('Frequency (Hz)')
+    plt.ylabel('S (/cm)')
+    plt.xlim(0.0, None)
+    plt.show()
+    return
+
+
+def plot_parameter_sweep_kCGR():
+    '''
+    Remember units are nT, /cm3, eV for this function
+    
+    Lower energy gives higher peak frequency
+    '''
+    B0         = 249.6
+    ndensc     = np.array([184.142 , 88.038 , 14.673])
+    ndensw     = np.array([6.607   , 0.0    , 0.0   ])
+    anisotropy = np.array([0.351   , 0.0    , 0.0   ])
+    tperp      = np.array([11.457  , 0.0    , 0.0   ])*1e3
+    
+    plt.ioff()
+    fig, ax = plt.subplots(figsize=(8.0, 0.5*11.00))
+    
+    for factor in [1.0, 1.1, 1.2, 1.5, 2.0, 2.5, 3.0]:
+        tp = tperp*factor
+        
+        freq, growth, stop = convective_growth_rate_kozyra(B0, ndensc, ndensw, anisotropy, temperp=tp,
+                                                           norm_ampl=0, NPTS=1000, maxfreq=0.5)
+    
+        ax.plot(freq, growth, label=f'{tp[0]*1e-3:.2f} keV')
+    
+    ax.set_title('Convective Growth Rate :: Varying hot proton $T_\perp$')
+    ax.legend()
+    ax.set_xlabel('Frequency (Hz)')
+    ax.set_ylabel('S (/cm)')
+    ax.set_xlim(0.0, None)
+    
+    fig.show()
+    return
+
 #%% -- MAIN --
 if __name__ == '__main__':
     ext_drive = 'E:'
@@ -3979,9 +4037,11 @@ if __name__ == '__main__':
     #validation_plots_omura2010()
     #validation_plots_wang_2016()
     #hybrid_test_plot()
-
     #power_spectrum_CGR_comparison()
-    #sys.exit()
+    
+    plot_parameter_sweep_kCGR()
+    
+    sys.exit()
     
     #### Read in command-line arguments, if present
     import argparse as ap
