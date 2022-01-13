@@ -11,6 +11,8 @@ product
 import warnings, pdb, sys, os, time
 sys.path.append('../')
 import numpy             as np
+import numba             as nb
+import pandas            as pd
 import matplotlib        as mpl
 import matplotlib.pyplot as plt
 import matplotlib.dates  as mdates
@@ -1324,6 +1326,7 @@ def calculate_warm_allDRs_with_cutoffs(_rbsp_path, _save_dir, _time_start, _time
            
 
 #%% KOZYRA FUNCTIONS
+@nb.njit()
 def convective_growth_rate_kozyra(field, ndensc, ndensw, ANI, temperp,
                                   norm_ampl=0, norm_freq=0, NPTS=1000, maxfreq=1.0):
     '''
@@ -3353,7 +3356,7 @@ def power_spectrum_CGR_comparison():
         Cold helium: 0-30%
         Cold oxygen: 0-10%  # Use cutoff to work out what these values should be
     '''
-    import pandas as pd
+    
     
     if True:
         _crres_path = '%s//DATA//CRRES//' % ext_drive
@@ -3487,6 +3490,129 @@ def power_spectrum_CGR_comparison():
                     plt.close('all')
                     #plt.show()
                     count += 1
+    return
+
+
+def parameter_search_2D():
+    '''
+    Create two plots:
+        -- Find major frequency from data (spectrogram plus FFT over whole event time)
+        -- 2D plot over (T, A) space, since hot ion density makes little difference except growth rate
+    Assume some small fraction of RC - i.e. 1-5%
+    '''
+    if True:
+        _crres_path = '%s//DATA//CRRES//' % ext_drive
+        _time_start = np.datetime64('1991-07-17T20:15:00.000000')
+        _time_end   = np.datetime64('1991-07-17T21:00:00.000000')
+        f_event     = 0.165     # Event mean/strongest frequency
+        f_max       = 0.4
+        
+        # Note: These values vary wildly
+        const_ne = 40.0 # Cold electron density (/cc)
+        const_B0 = 65.0 # nT
+        
+        ER_lims    = [2.5, 25]    # Resonant energy limits (keV), equivalent to E_para (keV)
+    else:
+        _crres_path = '%s//DATA//CRRES//' % ext_drive
+        _time_start = np.datetime64('1991-08-12T22:10:00.000000')
+        _time_end   = np.datetime64('1991-08-12T23:15:00.000000')
+        
+    # Load CRRES data
+    den_times, den_dict = cfr.get_crres_density(_crres_path, _time_start, _time_end, pad=0)
+    times, B0, HM, dB, E0, HMe, dE, S, B, E = cfr.get_crres_fields(_crres_path,
+                  _time_start, _time_end, pad=0, E_ratio=5.0, rotation_method='vector', 
+                  output_raw_B=True, interpolate_nan=None, B0_LP=1.0,
+                  Pc1_LP=5000, Pc1_HP=100, Pc5_LP=30, Pc5_HP=None, dEx_LP=None)
+    
+# =============================================================================
+#     if False:
+#         B_total = np.sqrt(B[:, 0]**2 + B[:, 1]**2 + B[:, 2]**2)
+#         plt.plot(times, B_total)
+#         plt.xlim(_time_start, _time_end)
+#         plt.show()
+#         sys.exit()
+# =============================================================================
+        
+    # Calculate power spectrum
+    mag_freq, mag_power_x = get_power_spectrum(times, dB[:, 0])
+    mag_freq, mag_power_y = get_power_spectrum(times, dB[:, 1])
+    mag_freq, mag_power_z = get_power_spectrum(times, dB[:, 2])
+    mag_power = (mag_power_x + mag_power_y + mag_power_z)
+    smoothed_power = pd.DataFrame(mag_power).rolling(11).mean()
+    
+    # Heavy ion fractions
+    nc_He = 0.1
+    nc_O  = 0.05
+    nc_H  = 1. - nc_He - nc_O
+    nc_RC = 0.01
+    
+    # Gyrofrequencies
+    gyfreq = qp * B0*1e-9 / (2*np.pi*mp * np.array([1.0, 4.0, 16.0]))
+    
+    # Set arrays
+    ndensc = np.array([nc_H*(1-nc_RC) , nc_He , nc_O])*const_ne
+    ndensw = np.array([nc_H*   nc_RC  , 0.0   , 0.0 ])*const_ne
+    ANI    = np.array([0.0            , 0.0   , 0.0 ])
+    tperp  = np.array([0.0            , 0.0   , 0.0 ])
+    
+    # Do parameter search in (T_para, A) space
+    nE = 500; Epara_axis = np.linspace(ER_lims[0], ER_lims[1], nE)*1e3
+    nA = 500; anis_axis  = np.linspace(0.0, 2.0, nE)
+    max_freq   = np.zeros((nE, nA), dtype=np.float64)
+    max_growth = np.zeros((nE, nA), dtype=np.float64)
+    
+    for ii in range(nE):
+        print('Energy:', Epara_axis[ii], 'keV')
+        for jj in range(nA):
+            
+            # Set parameters for this loop
+            ANI[0]   = anis_axis[jj]
+            tpara    = Epara_axis[ii]
+            tperp[0] = tpara * (anis_axis[jj]+1)
+            
+            # Calculate growth rate
+            freq, growth, stop = convective_growth_rate_kozyra(
+                const_B0, ndensc, ndensw, ANI, tperp,
+                norm_ampl=0, norm_freq=0, NPTS=1000, maxfreq=1.0)
+            
+            he_low_idx, he_hi_idx = ascr.boundary_idx64(freq, gyfreq[2], gyfreq[1]) 
+            peak_idx  = growth[he_low_idx: he_hi_idx].argmax() + he_low_idx
+
+            max_freq[ii, jj] = freq[peak_idx]
+            max_growth[ii, jj] = growth[peak_idx]
+            
+            pdb.set_trace()
+    
+    # Plot results:
+    fig, axes = plt.subplots(nrows=2, ncols=3, gridspec_kw={
+                 'width_ratios':[1, 0.01],
+                 'height_ratios':[1, 3]})
+    
+    axes[0, 0].plot(mag_freq, mag_power,      c='k', lw=0.75, alpha=0.75)
+    axes[0, 0].plot(mag_freq, smoothed_power, c='k', lw=1.5)
+    axes[0, 0].set_ylabel('Power\n$(nT^2/Hz)$', rotation=0, labelpad=20)
+    axes[0, 0].set_xlim(0.0, f_max)
+    axes[0, 0].axvline(f_event, c='k', ls='--', alpha=0.5)
+    axes[0, 1].set_visible(False)
+    
+    im = axes[1, 0].pcolormesh(Epara_axis, anis_axis, max_freq.T, shading='auto', 
+                          norm=colors.Normalize(vmin=0.0, vmax=0.7), cmap='jet')
+    fig.colorbar(im, cax=axes[1, 1], extend='both').set_label(
+            'Frequency of max S', fontsize=10, rotation=0, labelpad=30)
+    
+    im = axes[2, 0].pcolormesh(Epara_axis, anis_axis, max_growth.T, shading='auto', 
+                          norm=colors.Normalize(), cmap='jet')
+    fig.colorbar(im, cax=axes[2, 1], extend='both').set_label(
+            'Growth Rate at max Frequency', fontsize=10, rotation=0, labelpad=30)
+    
+    for ax in axes[1:, 0]:
+        ax.set_xlim(None, None)
+        ax.set_ylim(None, None)
+        
+    if False:
+        pass
+    else:
+        plt.show()
     return
 
 
@@ -4003,25 +4129,36 @@ def plot_parameter_sweep_kCGR():
     Remember units are nT, /cm3, eV for this function
     
     Lower energy gives higher peak frequency
+    
+    For varying density:
+        -- Increase hot protons, keep cold constant
+        -- Increase hot ion fraction of H+
     '''
-    B0         = 249.6
+    B0         = 250
+    nH         = 190.49
     ndensc     = np.array([184.142 , 88.038 , 14.673])
     ndensw     = np.array([6.607   , 0.0    , 0.0   ])
-    anisotropy = np.array([0.351   , 0.0    , 0.0   ])
-    tperp      = np.array([11.457  , 0.0    , 0.0   ])*1e3
+    anisotropy = np.array([0.35    , 0.0    , 0.0   ])
+    tperp      = np.array([11.5    , 0.0    , 0.0   ])*1e3
     
     plt.ioff()
     fig, ax = plt.subplots(figsize=(8.0, 0.5*11.00))
     
-    for factor in [1.0, 1.1, 1.2, 1.5, 2.0, 2.5, 3.0]:
-        tp = tperp*factor
+    gyfreq = qp * B0*1e-9 / (2*np.pi*mp * np.array([1.0, 4.0, 16.0]))
+    for factor in [3.5, 5.0, 7.0, 10.0, 15.0, 25.0, 50.0]:
+        ndensw[0]  = nH*factor*1e-2
+        ndensc[0] = nH - ndensw[0]
         
-        freq, growth, stop = convective_growth_rate_kozyra(B0, ndensc, ndensw, anisotropy, temperp=tp,
+        freq, growth, stop = convective_growth_rate_kozyra(B0, ndensc, ndensw, anisotropy, temperp=tperp,
                                                            norm_ampl=0, NPTS=1000, maxfreq=0.5)
+        he_low_idx, he_hi_idx = ascr.boundary_idx64(freq, gyfreq[2], gyfreq[1]) 
+        peak_idx  = growth[he_low_idx: he_hi_idx].argmax() + he_low_idx
+        peak_freq = freq[peak_idx]
+
+        ax.plot(freq, growth, label='%.1f%% $n_{H^+, h}$'%factor)
+        ax.axvline(peak_freq, c='k', ls='--', alpha=0.5)
     
-        ax.plot(freq, growth, label=f'{tp[0]*1e-3:.2f} keV')
-    
-    ax.set_title('Convective Growth Rate :: Varying hot proton $T_\perp$')
+    ax.set_title('Convective Growth Rate :: Varying hot proton fraction')
     ax.legend()
     ax.set_xlabel('Frequency (Hz)')
     ax.set_ylabel('S (/cm)')
@@ -4039,8 +4176,8 @@ if __name__ == '__main__':
     #hybrid_test_plot()
     #power_spectrum_CGR_comparison()
     
-    plot_parameter_sweep_kCGR()
-    
+    #plot_parameter_sweep_kCGR()
+    parameter_search_2D()
     sys.exit()
     
     #### Read in command-line arguments, if present

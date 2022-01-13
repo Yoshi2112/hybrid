@@ -4674,7 +4674,7 @@ if __name__ == '__main__':
     #############################
     ### MULTI-SERIES ROUTINES ###
     #############################
-    if True:
+    if False:
         #multiplot_mag_energy(save=True)
         #multiplot_fluxes(series)
         #multiplot_parallel_scaling()
@@ -4685,7 +4685,7 @@ if __name__ == '__main__':
     ####################################
     ### SINGLE SERIES ANALYSIS ########
     ################################
-    for series in ['JAN16_PKTS_5HE_PC', 'JAN16_PKTS_15HE_PC', 'JAN16_PKTS_30HE_PC']:
+    for series in ['JUL25_CLEANPEAK_MULTIPOP_PC']:
         
         series_dir = f'{drive}/runs//{series}//'
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
@@ -4701,29 +4701,20 @@ if __name__ == '__main__':
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
-                try:
-                    cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
-                    standard_analysis_package(disp_overlay=False, pcyc_mult=1.1,
-                                  tx_only=False, tmax=None, remove_ND=False)
-                    #check_fields(save=True, ylim=False, skip=50)
-                except:
-                    continue
-                
-# =============================================================================
-#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
-#                            B0_lim=None, remove_ND=False)
-#                 plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
-#                 
-#                 plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
-#                      pcyc_mult=1.5, xmax=1.5, zero_cold=True,
-#                      linear_only=False, normalize_axes=True, centre_only=False)
-# =============================================================================
-                
-                
 
+                cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
+                standard_analysis_package(disp_overlay=False, pcyc_mult=1.1,
+                              tx_only=False, tmax=None, remove_ND=False)
+                #check_fields(save=True, ylim=False, skip=50)
                 
-
-
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
+                           B0_lim=None, remove_ND=False)
+                plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
+                
+                plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
+                     pcyc_mult=1.5, xmax=1.5, zero_cold=True,
+                     linear_only=False, normalize_axes=True, centre_only=False)
+                
                 #plot_total_density_with_time()
                 #plot_max_velocity()
                 #check_fields(save=True, ylim=True, skip=25)
