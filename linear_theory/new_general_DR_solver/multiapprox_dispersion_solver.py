@@ -35,7 +35,7 @@ import rbsp_fields_loader as rfl
 import rbsp_file_readers  as rfr
 import fast_scripts       as fscr
 import analysis_scripts   as ascr
-import extract_parameters_from_data   as data
+import extract_parameters_from_data as data
 from   emperics          import geomagnetic_magnitude, sheely_plasmasphere
 
 
@@ -1345,6 +1345,13 @@ def convective_growth_rate_kozyra(field, ndensc, ndensw, ANI, temperp,
         norm_freq -- Flag to normalize frequency to proton cyclotron units. Default 0
         NPTS      -- Number of sample points up to maxfreq. Default 500
         maxfreq   -- Maximum frequency to calculate for in proton cyclotron units. Default 1.0
+        
+    Blows up for unknown reasons sometimes (div0 error in numba):
+    B0         = 161.0
+    ndensc     = np.array([70.0, 0.0, 0.0])
+    ndensw     = np.array([0.7, 0.0, 0.0])
+    anisotropy = np.array([0.5, 0.0, 0.0])
+    tperp      = np.array([20., 0.0, 0.0])
     '''
     # Perform input checks 
     N = ndensc.shape[0]
@@ -1402,7 +1409,7 @@ def convective_growth_rate_kozyra(field, ndensc, ndensw, ANI, temperp,
                
                sum1    += prod
                denom[i] = temp
-          
+
           sum2 = 0.0
           arg4 = prod2 / sum1
     
@@ -2977,6 +2984,9 @@ def plot_dispersion_and_growth(ax_disp, ax_growth, k_vals, CPDR, WPDR, HPDR, w_c
     return
 
 
+
+
+
 def plot_all_DRs(all_k, all_CPDR, all_WPDR, all_HPDR, times, B, name, mi, qi, ni, t_perp, A, ne,
                  suff='', HM_filter_mhz=50, overwrite=False, save=True, figtext=True):
     '''
@@ -3972,80 +3982,6 @@ def thesis_plot_2D_growth_rates_with_time(_rbsp_path, _plot_start, _plot_end, _p
                                           int(10*cmp[2]), nsec), dpi=1200)
                 print('Plot saved.')
                 plt.close('all')
-                
-                
-# =============================================================================
-#             ## CONVECTIVE GROWTH RATE ##
-#             fig2, axes2 = plt.subplots(5, figsize=(16, 10))
-#             
-#             axes2[0].set_title('Convective Growth Rate :: RBSP-{} :: {} :: Cold Composition {}/{}/{}'.format(
-#                                         probe.upper(), date_string, (cmp[0]), (cmp[1]),
-#                                           (cmp[2])))
-#             with warnings.catch_warnings():
-#                 warnings.simplefilter("ignore")
-#                 if plot_mag == True:
-#                     im1b = axes2[0].pcolormesh(pc1_xtimes, pc1_xfreq, pc1_power,
-#                                                norm=colors.LogNorm(vmin=1e-7, vmax=1e1),
-#                                                cmap='jet')
-#                 
-#                 im2b = axes2[1].pcolormesh(time_2D, k_vals, CGR[:, :, 0], cmap='viridis', vmin=0.0)
-#                                            #vmin=TGR_min, vmax=TGR_max, )
-#                 im3b = axes2[2].pcolormesh(time_2D, k_vals, CGR[:, :, 1], cmap='viridis', vmin=0.0)
-#                                            #vmin=TGR_min, vmax=TGR_max, )
-#                 im4b = axes2[3].pcolormesh(time_2D, k_vals, CGR[:, :, 2], cmap='viridis', vmin=0.0)
-#                                            #vmin=TGR_min, vmax=TGR_max, )
-#                 
-#                 try:
-#                     im5b = axes2[4].pcolormesh(times, freq_interp, CGRi, cmap='viridis', vmin=0.0, vmax=CGR_max)
-#                                                #vmin=TGR_min, vmax=TGR_max, )
-#                 except:
-#                     pass
-#             
-#             labels = ['f (Hz)',
-#                       'k ($10^6$/m)\n$H^+$',
-#                       'k ($10^6$/m)\n$He^+$',
-#                       'k ($10^6$/m)\n$O^+$',
-#                       'f (Hz)']
-#             
-#             for ax, im, lbl in zip(axes2, [im1b, im2b, im3b, im4b, im5b], labels):
-#                 if ax is axes2[0]:
-#                     clabel = '$P_\perp$ $(nT^2/Hz)$'
-#                 else:
-#                     clabel = r'$\S \times 10^9 m^{-1}$'
-#                     
-#                 try:
-#                     ax.set_xlim(_time_start, _time_end)
-#                     
-#                     divider = make_axes_locatable(ax)
-#                     cax     = divider.append_axes("right", size="2%", pad=0.5)
-#                     fig2.colorbar(im, cax=cax, label=clabel, orientation='vertical', extend='both')
-#                     ax.set_ylabel(lbl, rotation=0, labelpad=30)
-#                     
-#                     if ax != axes2[-1]:
-#                         ax.set_xticklabels([])
-#                     else:
-#                         ax.set_xlabel('Time (UT)')
-#                         #ax.xaxis.set_major_locator(mdates.MinuteLocator(interval=10))
-#                         ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-#                         
-#                     if ax == axes2[0] or ax == axes2[-1]:
-#                         ax.set_ylim(0.0, f_max)
-#                     else:
-#                         ax.set_ylim(kmin, kmax)
-#                 except:
-#                     pass
-#             
-#             fig2.subplots_adjust(hspace=0.10)
-#         
-#             if save==False:
-#                 plt.show()
-#             else:
-#                 fig2.savefig(plot_dir + 'CGR_{}_cc_{:03}_{:03}_{:03}_{}sec.png'.format(
-#                              save_string, int(10*cmp[0]), int(10*cmp[1]),
-#                                           int(10*cmp[2]), nsec))
-#                 print('Plot saved.')
-#                 plt.close('all')
-# =============================================================================
     return
 
 
@@ -4104,11 +4040,11 @@ def plot_single_kCGR():
     
     Lower energy gives higher peak frequency
     '''
-    B0         = 249.6
-    ndensc     = np.array([184.142 , 88.038 , 14.673])
-    ndensw     = np.array([6.607   , 0.0    , 0.0   ])
-    anisotropy = np.array([0.351   , 0.0    , 0.0   ])
-    tperp      = np.array([11.457  , 0.0    , 0.0   ])*1e3
+    B0         = 161.0
+    ndensc     = np.array([70.0, 0.0, 0.0])
+    ndensw     = np.array([0.7, 0.0, 0.0])
+    anisotropy = np.array([0.5, 0.0, 0.0])
+    tperp      = np.array([20., 0.0, 0.0])
     
     plt.ioff()
     plt.figure()
@@ -4121,10 +4057,11 @@ def plot_single_kCGR():
     plt.ylabel('S (/cm)')
     plt.xlim(0.0, None)
     plt.show()
+    sys.exit()
     return
 
 
-def plot_parameter_sweep_kCGR():
+def plot_density_sweep_kCGR():
     '''
     Remember units are nT, /cm3, eV for this function
     
@@ -4134,8 +4071,79 @@ def plot_parameter_sweep_kCGR():
         -- Increase hot protons, keep cold constant
         -- Increase hot ion fraction of H+
     '''
+    # Starting parameters
     B0         = 250
     nH         = 190.49
+    ndensc     = np.array([184.142 , 88.038 , 14.673])
+    ndensw     = np.array([6.607   , 0.0    , 0.0   ])
+    anisotropy = np.array([0.35    , 0.0    , 0.0   ])
+    tperp      = np.array([11.5    , 0.0    , 0.0   ])*1e3
+    
+    wdens_abs  = ndensw.copy()
+    wdens_frac = ndensw.copy()
+    cdens_frac = ndensc.copy()
+    
+    plt.ioff()
+    fig, axes = plt.subplots(2, figsize=(8.0, 0.5*11.00))
+    
+    gyfreq = qp * B0*1e-9 / (2*np.pi*mp * np.array([1.0, 4.0, 16.0]))
+    for factor in [3.5, 5.0, 7.0, 10.0, 15.0, 25.0, 50.0]:
+        
+        # Fractional variation
+        wdens_frac[0] = nH*factor*1e-2
+        cdens_frac[0] = nH - wdens_frac[0]
+        
+        freq, growth, stop = convective_growth_rate_kozyra(B0, ndensc, wdens_frac, anisotropy, temperp=tperp,
+                                                           norm_ampl=0, NPTS=1000, maxfreq=0.5)
+        axes[0].plot(freq, growth, label='%.1f%% $n_{H^+, h}$'%factor)
+        
+        # Add line to follow frequency
+        he_low_idx, he_hi_idx = ascr.boundary_idx64(freq, gyfreq[2], gyfreq[1]) 
+        peak_idx  = growth[he_low_idx: he_hi_idx].argmax() + he_low_idx
+        peak_freq = freq[peak_idx]
+        axes[0].axvline(peak_freq, c='k', ls='--', alpha=0.5)
+        
+    axes[0].set_title('Convective Growth Rate :: Varying hot proton fraction')
+    axes[0].legend()
+    
+
+
+    for factor in [0.1, 0.25, 0.5, 1.0, 1.2, 1.5, 2.0, 3.0, 5.0, 10.0]:
+        # Absolute variation
+        wdens_abs[0] = ndensw[0]*factor
+        freq, growth, stop = convective_growth_rate_kozyra(B0, ndensc, wdens_abs, anisotropy, temperp=tperp,
+                                                           norm_ampl=0, NPTS=1000, maxfreq=0.5)
+        axes[1].plot(freq, growth, label='$n_{H^+, h} = %.2f cc$'%wdens_abs[0])
+        
+        # Add line to follow frequency
+        he_low_idx, he_hi_idx = ascr.boundary_idx64(freq, gyfreq[2], gyfreq[1]) 
+        peak_idx  = growth[he_low_idx: he_hi_idx].argmax() + he_low_idx
+        peak_freq = freq[peak_idx]
+        axes[1].axvline(peak_freq, c='k', ls='--', alpha=0.5)
+        
+    axes[1].set_title('Convective Growth Rate :: Varying hot proton density') 
+    axes[1].legend()
+    
+    for ax in axes:
+        ax.set_xlabel('Frequency (Hz)')
+        ax.set_ylabel('S (/cm)')
+        ax.set_xlim(0.0, None)
+    
+    fig.show()
+    return
+
+
+def plot_temperature_sweep_kCGR():
+    '''
+    Remember units are nT, /cm3, eV for this function
+    
+    Lower energy gives higher peak frequency
+    
+    For varying density:
+        -- Increase hot protons, keep cold constant
+        -- Increase hot ion fraction of H+
+    '''
+    B0         = 249.6
     ndensc     = np.array([184.142 , 88.038 , 14.673])
     ndensw     = np.array([6.607   , 0.0    , 0.0   ])
     anisotropy = np.array([0.35    , 0.0    , 0.0   ])
@@ -4145,16 +4153,14 @@ def plot_parameter_sweep_kCGR():
     fig, ax = plt.subplots(figsize=(8.0, 0.5*11.00))
     
     gyfreq = qp * B0*1e-9 / (2*np.pi*mp * np.array([1.0, 4.0, 16.0]))
-    for factor in [3.5, 5.0, 7.0, 10.0, 15.0, 25.0, 50.0]:
-        ndensw[0]  = nH*factor*1e-2
-        ndensc[0] = nH - ndensw[0]
-        
-        freq, growth, stop = convective_growth_rate_kozyra(B0, ndensc, ndensw, anisotropy, temperp=tperp,
+    for factor in [0.5, 0.75, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 7.5, 10.0]:  
+        tp = tperp*factor
+        freq, growth, stop = convective_growth_rate_kozyra(B0, ndensc, ndensw, anisotropy, temperp=tp,
                                                            norm_ampl=0, NPTS=1000, maxfreq=0.5)
         he_low_idx, he_hi_idx = ascr.boundary_idx64(freq, gyfreq[2], gyfreq[1]) 
         peak_idx  = growth[he_low_idx: he_hi_idx].argmax() + he_low_idx
         peak_freq = freq[peak_idx]
-
+        
         ax.plot(freq, growth, label='%.1f%% $n_{H^+, h}$'%factor)
         ax.axvline(peak_freq, c='k', ls='--', alpha=0.5)
     
@@ -4167,8 +4173,273 @@ def plot_parameter_sweep_kCGR():
     fig.show()
     return
 
+
+def investigate_anisotropy():
+    '''
+    To look at the amount of variation in the growth rate from small changes
+    in the anisotropy.
+    Use both Kozyra and multiapprox methods to look at both the temporal and
+    convective changes.
+    
+    Except it's not just the change in the anisotropy, but also the change in |B|.
+    
+    Test: 
+        -- Do a sweep, just changing A
+        -- Do another sweep, but change B also
+        -- Is there an appreciable difference? How much to change B by?
+        
+    16/1 Average Parameters:
+        |B| ~ 90 nT
+        ne  ~ 140 cc (150-120cc)
+        nh  ~ 1.2, 0.07, 0.35 (H, He, O)
+        Th  ~ 7.8, 7.2, 4.8 keV
+        Ah  ~ 0.38, 0.35, 0.0
+        
+    Try A 0.6 -> 0.5, B 86 - 92
+    
+    DO LATER
+    '''
+    n_cold     = 138.38
+    B0         = 90.0
+    ndensc     = np.array([0.65 , 0.30 , 0.05]) * n_cold
+    ndensw     = np.array([1.2  , 0.07 , 0.35])
+    anisotropy = np.array([ 0.38,  0.35, 0.0 ])
+    tperp      = np.array([  7.8,   7.2, 4.8 ])*1e3
+    
+    plt.ioff()
+    fig, ax = plt.subplots(figsize=(8.0, 0.5*11.00))
+    
+    # Dropping anisotropy, 
+    A_vals = np.array([0.51, 0.52, 0.53, 0.54, 0.55, 0.56, 0.57, 0.58, 0.59 ,0.60])
+    B_vals = None
+    
+    gyfreq = qp * B0*1e-9 / (2*np.pi*mp * np.array([1.0, 4.0, 16.0]))
+    for anis in [0.25, 0.30, 0.35, 0.40, 0.45, 0.50]: 
+        anisotropy[0] = anis
+        freq, growth, stop = convective_growth_rate_kozyra(B0, ndensc, ndensw, anisotropy, temperp=tperp,
+                                                           norm_ampl=0, NPTS=1000, maxfreq=0.5)
+        he_low_idx, he_hi_idx = ascr.boundary_idx64(freq, gyfreq[2], gyfreq[1]) 
+        peak_idx  = growth[he_low_idx: he_hi_idx].argmax() + he_low_idx
+        peak_freq = freq[peak_idx]
+        
+        ax.plot(freq, growth, label='A = {}'.format(anis))
+        ax.axvline(peak_freq, c='k', ls='--', alpha=0.5)
+    
+    ax.set_title('Convective Growth Rate :: Anisotropy Search')
+    ax.legend()
+    ax.set_xlabel('Frequency (Hz)')
+    ax.set_ylabel('S (/cm)')
+    ax.set_xlim(0.0, None)
+    
+    fig.show()
+    return
+
+
+def get_CRRES_kCGR_timeseries():
+    '''
+    To do: 
+        -- Incorporate cutoffs for variable cold plasma composition
+    
+    Normalize for now, but use the same tactic as for variable k (using time_2D)
+    '''
+    _crres_path = '%s//DATA//CRRES//' % ext_drive
+    if False:
+        _time_start = np.datetime64('1991-07-17T20:15:00.000000')
+        _time_end   = np.datetime64('1991-07-17T21:00:00.000000')
+        f_event     = 0.165     # Event mean/strongest frequency
+        f_max       = 0.40
+    else:
+        # Hot proton fluxes at 15-20keV on E_perp flux plot (90 deg PA bin)
+        _time_start = np.datetime64('1991-08-12T22:10:00.000000')
+        _time_end   = np.datetime64('1991-08-12T23:15:00.000000')
+    title_string= _time_start.astype(object).strftime('%Y-%m-%d')
+    #date_string = _time_start.astype(object).strftime('%Y%m%d')
+    #save_dir    = '{}//2D_LINEAR_THEORY//EVENT_{}//'.format(ext_drive, date_string)
+    #plot_path   = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//'
+    
+    # Load CRRES data
+    times, B0, ne = data.load_CRRES_data(_time_start, _time_end, crres_path=_crres_path)
+
+    mag_times, _B0, HM, dB, E0, HMe, dE, S, B, E = cfr.get_crres_fields(_crres_path,
+                  _time_start, _time_end, pad=0, E_ratio=5.0, rotation_method='vector', 
+                  output_raw_B=True, interpolate_nan=None, B0_LP=1.0,
+                  Pc1_LP=5000, Pc1_HP=100, Pc5_LP=30, Pc5_HP=None, dEx_LP=None)
+
+    ntimes   = times.shape[0]
+    npts     = 1000
+    all_f    = np.zeros((ntimes, npts), dtype=np.float64)
+    all_CGR  = np.zeros((ntimes, npts), dtype=np.float64)
+    all_stop = np.zeros((ntimes, npts), dtype=np.float64)
+    
+    for ii in range(ntimes): 
+        print('Calculating time', times[ii])
+        ndensc     = np.array([0.88, 0.10, 0.01]) * ne[ii]
+        ndensw     = np.array([0.01,  0.0,  0.0]) * ne[ii]
+        anisotropy = np.array([0.70,  0.0,  0.0])
+        tperp      = np.array([20.0,  0.0,  0.0]) * 1e3
+    
+        all_f[ii], all_CGR[ii], all_stop[ii] = convective_growth_rate_kozyra(
+                            B0[ii], ndensc, ndensw, anisotropy, temperp=tperp,
+                            norm_ampl=0, norm_freq=0, NPTS=npts, maxfreq=1.0)
+    
+    ###
+    ### DO PLOT 
+    ###
+    time_2D = np.zeros((ntimes, npts), dtype=times.dtype)
+    for ii in range(npts):
+        time_2D[:, ii] = times[:]
+    
+    plt.ioff()
+    fig, axes = plt.subplots(nrows=3, figsize=(16, 10), sharex=True) 
+                               #gridspec_kw={'width_ratios':[2, 0.05]})
+    
+    axes[0].set_title('Convective Growth Rate :: CRRES :: {}'.format(title_string))
+
+# =============================================================================
+#     im1a = axes[0].pcolormesh(times, pc1_xfreq, pc1_perp_power,
+#                                vmin=-5, vmax=0, cmap='jet', shading='auto')
+# =============================================================================
+# =============================================================================
+#     im2 = axes[1].pcolormesh(times, all_f[0], all_CGR.T,
+#                     cmap='jet')
+# =============================================================================
+    
+    im2 = axes[1].pcolormesh(time_2D, all_f, all_CGR, cmap='viridis')
+# =============================================================================
+#     cbar = fig.colorbar(im2, cax=axes[1, 1], extend='both').set_label(
+#             'Growth Rate', fontsize=10, rotation=0, labelpad=30)
+# =============================================================================
+    pdb.set_trace()
+    axes[2].plot(times, ne, c='k')
+    axes[2].set_ylabel('cc')
+    ax3 = axes[2].twinx()
+    ax3.plot(times, B0, c='b')
+    ax3.set_ylabel('nT', color='b')
+    plt.show()
+    return
+
+
+def plot_CGR_heavyions_search(B0, ne, rc_tperp, rc_anis, rc_frac=0.01, band=None,
+                              he_min=0.0, he_max=50.0, nHe=500,
+                              o_min=0.0, o_max=30.0, nO=500,
+                              f_max=0.7, target_freqs=None, save=False):
+    '''
+    Band either 1, 2, 3 (for H, He, O band) or None for absolute max
+    
+    RC currently fraction of ne. Should be fraction of nH but that's harder.
+    Add option later
+    
+    Aug12
+    |B| = 161 \pm ~1nT for whole event
+    ne  = 20-100cc (big variation). Doesn't seem to change frequency. Set at ~70cc
+    Tperp ~ 15-20 keV
+    A ~ 0.5
+    ni ~ 1% or so
+    '''    
+    # Gyrofrequencies
+    gyfreq = qp * B0*1e-9 / (2*np.pi*mp * np.array([1.0, 4.0, 16.0]))
+    
+    # Do parameter search in heavy ion space
+    nHe_axis = np.linspace(he_min, he_max, nHe)*1e-2
+    nO_axis  = np.linspace( o_min,  o_max, nO)*1e-2
+    max_freq   = np.zeros((nHe, nO), dtype=np.float64)
+    max_growth = np.zeros((nHe, nO), dtype=np.float64)
+    
+    ANI    = np.array([rc_anis, 0.0, 0.0])
+    tperp  = np.array([rc_tperp, 0.0, 0.0])
+    ndensw = np.array([rc_frac, 0.0   , 0.0 ])*ne
+            
+    for ii in range(nHe):
+        #print(f'Calculating for {nHe_axis[ii]}% He')
+        for jj in range(nO):
+            cHe = nHe_axis[ii]
+            cO  = nO_axis[jj]
+            cH  = 1. - cHe - cO - rc_frac
+            ndensc = np.array([cH, cHe, cO])*ne
+
+            # Calculate growth rate
+            try:
+                freq, growth, stop = convective_growth_rate_kozyra(
+                    B0, ndensc, ndensw, ANI, tperp,
+                    norm_ampl=0, norm_freq=0, NPTS=1000, maxfreq=1.0)
+                
+                he_low_idx, he_hi_idx = ascr.boundary_idx64(freq, gyfreq[2], gyfreq[1]) 
+                peak_idx  = growth[he_low_idx: he_hi_idx].argmax() + he_low_idx
+    
+                max_freq[ii, jj] = freq[peak_idx]
+                max_growth[ii, jj] = growth[peak_idx]
+                    
+            except:
+                print(f'ERROR: {cHe*100.}% He, {cO*100.}% O')
+                max_freq[ii, jj] = np.nan
+                max_growth[ii, jj] = np.nan
+            
+    
+    # Plot results:
+    plt.ioff()
+    fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(8.0, 11.0),
+                 gridspec_kw={
+                 'width_ratios':[1, 0.01, 0.4],
+                 'height_ratios':[1, 1]})
+    
+    axes[0, 0].set_title('Heavy Ion Parameter Search :: Aug 12 1991')
+    
+    im = axes[0, 0].pcolormesh(nHe_axis, nO_axis, max_freq.T, shading='auto', 
+                          norm=colors.Normalize(vmin=0.0, vmax=f_max), cmap='jet')
+    fig.colorbar(im, cax=axes[0, 1], extend='both').set_label(
+            'Frequency of max S')
+    
+    if target_freqs is not None:
+        cs1 = axes[0, 0].contour(nHe_axis, nO_axis, max_freq.T, target_freqs, colors='k')
+        cs2 = axes[1, 0].contour(nHe_axis, nO_axis, max_freq.T, target_freqs, colors='k')
+    
+        axes[0, 0].clabel(cs1, inline=True)
+        axes[1, 0].clabel(cs2, inline=True)
+    
+    im = axes[1, 0].pcolormesh(nHe_axis, nO_axis, max_growth.T, shading='auto', 
+                          norm=colors.Normalize(), cmap='jet')
+    fig.colorbar(im, cax=axes[1, 1], extend='both').set_label(
+            'Growth Rate at max Frequency')
+    
+    axes[0, 2].set_visible(False)
+    axes[1, 2].set_visible(False)
+    
+    # Figure text for parameters
+    Lx = 0.84; Ly = 0.95; dy = 0.02
+    fig.text(Lx, Ly - 0*dy, '$B_0$ = %.1f nT'%B0)    
+    fig.text(Lx, Ly - 1*dy, '$n_e$ = %.1f cc'%ne)    
+    
+    fig.text(Lx, Ly - 2*dy, '$n_h$ = %.2f ne'%rc_frac)    
+    fig.text(Lx, Ly - 3*dy, '$T_h$ = %.2f keV'%(rc_tperp*1e-3))    
+    fig.text(Lx, Ly - 4*dy, '$A_h$ = %.2f'%rc_anis)
+    
+    fig.tight_layout()
+    fig.subplots_adjust(wspace=0.01)
+    
+    for ax in axes[:, 0]:
+        ax.set_xlim(nHe_axis[0], nHe_axis[-1])
+        ax.set_ylim(nO_axis[0], nO_axis[-1])
+
+    if save:
+        save_path = plot_path + '//CRRES_HEAVYION_19910812//'
+        if not os.path.exists(save_path): os.makedirs(save_path)
+        n_plot = len(os.listdir(save_path))
+        
+        save_name = save_path + '//CRRES_HEAVYION_PLOT{:03}.png'.format(n_plot)
+        print('Saving {}'.format(save_name))
+        fig.savefig(save_name)
+        plt.close('all')
+    else:
+        # Only shows the first one
+        figManager = plt.get_current_fig_manager()
+        figManager.window.showMaximized()
+    return
+
+
 #%% -- MAIN --
 if __name__ == '__main__':
+    plot_path   = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plot_DUMP//'
+    
     ext_drive = 'E:'
     #validation_plots_fraser_1996()
     #validation_plots_omura2010()
@@ -4176,8 +4447,29 @@ if __name__ == '__main__':
     #hybrid_test_plot()
     #power_spectrum_CGR_comparison()
     
+    #plot_single_kCGR()
     #plot_parameter_sweep_kCGR()
-    parameter_search_2D()
+    #plot_density_sweep_kCGR()
+    #investigate_anisotropy()
+    #plot_temperature_sweep_kCGR()
+    #parameter_search_2D()
+    
+    #get_CRRES_kCGR_timeseries()
+    for _mag in [159.0, 161.0, 163.0]:
+        for _dens in [50.0, 60.0, 70.0, 80.0, 90.0, 100., 110.]:
+            for _eV in [15e3, 20e3, 25e3, 30e3, 40e3, 60e3, 80e3, 100e3]:
+                for _anis in [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
+                    plot_CGR_heavyions_search(_mag, _dens, _eV, _anis, rc_frac=0.01, band=None,
+                                    he_min=0.0, he_max=50.0, nHe=500,
+                                    o_min=0.0, o_max=30.0, nO=500,
+                                    f_max=0.7, target_freqs=[0.20, 0.4, 0.6], save=True)
+    
+# =============================================================================
+#     plot_CGR_heavyions_search(161.0, 70.0, 30e3, 0.5, rc_frac=0.01, band=None,
+#                     he_min=0.0, he_max=50.0, nHe=500,
+#                     o_min=0.0, o_max=30.0, nO=500,
+#                     f_max=0.7, target_freqs=[0.20, 0.4, 0.6], save=True)
+# =============================================================================
     sys.exit()
     
     #### Read in command-line arguments, if present
@@ -4210,7 +4502,7 @@ if __name__ == '__main__':
     title_string= time_start.astype(object).strftime('%Y-%m-%d')
     date_string = time_start.astype(object).strftime('%Y%m%d')
     save_dir    = '{}//2D_LINEAR_THEORY//EVENT_{}//'.format(ext_drive, date_string)
-    plot_path   = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//'
+    
     
     #thesis_plot_summaries(rbsp_path, plot_start, plot_end, probe)
     

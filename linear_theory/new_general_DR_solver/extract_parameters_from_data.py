@@ -873,6 +873,29 @@ def generate_hybrid_files_from_cutoffs(he_conc=0.05, hybrid_method='PREDCORR'):
     return
 
 
+def calculate_anisotropy():
+    dt    = 1/32.
+    t_max = 600.
+    t     = np.arange(0.0, t_max, dt)
+    
+    f0  = 7.0  # Perturbation frequency (Hz)
+    A0  = 0.01 # Perturbation amplitude (nT)
+    B0  = 100. # Background amplitude   (nT)
+    mag = A0*np.sin(2*np.pi*f0*t) + B0
+    
+    A = np.zeros(t.shape[0])
+    A[0] = 0.3 # Guess
+    A[1] = 0.3
+    for ii in range(1, t.shape[0]-1):
+        A[ii+1] = (A[ii] + 1) * (mag[ii+1] - mag[ii-1]) / mag[ii]
+        
+    fig, ax = plt.subplots(nrows=2)
+    ax[0].plot(t, mag)
+    ax[1].plot(t, A)
+    plt.show()
+    return
+
+
 #%% MAIN FUNCTION :: JUST CHECKING THINGS
 if __name__ == '__main__':
     _rbsp_path  = 'E://DATA//RBSP//'
@@ -884,9 +907,12 @@ if __name__ == '__main__':
     _test_file_pa  = 'F://DATA//RBSP//ECT//HOPE//L3//PITCHANGLE//rbspa_rel04_ect-hope-PA-L3_20150116_v7.1.0.cdf'
     _test_file_mom = 'F://DATA//RBSP//ECT//HOPE//L3//MOMENTS//rbspa_rel04_ect-hope-MOM-L3_20150116_v7.1.0.cdf'
     
-    generate_hybrid_files_from_cutoffs(he_conc=0.05)
+    calculate_anisotropy()
+    sys.exit()
+    
+    #generate_hybrid_files_from_cutoffs(he_conc=0.05)
     #generate_hybrid_files_from_cutoffs(he_conc=0.15)
-    generate_hybrid_files_from_cutoffs(he_conc=0.30)
+    #generate_hybrid_files_from_cutoffs(he_conc=0.30)
     
     #integrate_HOPE_moments(_time_start, _time_end, _probe, _pad, rbsp_path=_rbsp_path)
     if False:

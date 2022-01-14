@@ -458,7 +458,6 @@ def calculate_all_NL_amplitudes():
         print('Doing time:', this_time)
         
         # Get oxygen concentration from cutoffs
-        he_conc = 30.0
         cutoff  = np.interp(this_time.astype(np.int64),
                             cutoff_dict['CUTOFF_TIME'].astype(np.int64),
                             cutoff_dict['CUTOFF_NORM'])
@@ -625,7 +624,6 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
         axes[0, 0].set_title(f'Velocities and Energies :: {this_time}')
         
         # Get oxygen concentration from cutoffs
-        he_conc = 30.0
         cutoff  = np.interp(this_time.astype(np.int64),
                             cutoff_dict['CUTOFF_TIME'].astype(np.int64),
                             cutoff_dict['CUTOFF_NORM'])
@@ -754,7 +752,6 @@ def plot_HM_and_energy(time_start, time_end, probe):
         print('Doing time:', this_time)
            
         # Get oxygen concentration from cutoffs
-        he_conc = 30.0
         cutoff  = np.interp(this_time.astype(np.int64),
                             cutoff_dict['CUTOFF_TIME'].astype(np.int64),
                             cutoff_dict['CUTOFF_NORM'])
@@ -852,7 +849,7 @@ if __name__ == '__main__':
     if not os.path.exists(_plot_path): os.makedirs(_plot_path)
     save_plot   = True
     
-    
+    # TODO: Put all important event-specific variables in the switch
     pc1_res = 15.0
     dpi = 300
     if False:
@@ -864,6 +861,7 @@ if __name__ == '__main__':
 
         _npeaks     = 22
         fmax        = 1.0
+        he_conc     = 30.0
         
         #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
         cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//cutoffs_only.txt'
@@ -875,6 +873,7 @@ if __name__ == '__main__':
         _band_end   = 0.4
         _npeaks     = 22
         fmax        = 0.5
+        he_conc     = 30.0
         
         #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only.txt'
         #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only_10mHz.txt'
@@ -941,7 +940,7 @@ if __name__ == '__main__':
             print('Doing time:', this_time)
                
             # Get oxygen concentration from cutoffs
-            he_conc = 30.0
+            
             cutoff  = np.interp(this_time.astype(np.int64),
                                 cutoff_dict['CUTOFF_TIME'].astype(np.int64),
                                 cutoff_dict['CUTOFF_NORM'])
@@ -1145,7 +1144,6 @@ if __name__ == '__main__':
         time_idx       = np.where(abs(time - parameter_time) == np.min(abs(time - parameter_time)))[0][0]
         
         # Get oxygen concentration from cutoffs
-        he_conc = 30.0
         cutoff  = np.interp(parameter_time.astype(np.int64),
                             cutoff_dict['CUTOFF_TIME'].astype(np.int64),
                             cutoff_dict['CUTOFF_NORM'])
@@ -1263,7 +1261,6 @@ if __name__ == '__main__':
         axes[2, 0].set_xlim(f_vals[0], f_vals[-1])
         axes[2, 0].tick_params(top=True, right=True)
            
-    
         m_size = 1
         axes[2, 0].scatter(IF[0][:, 0], IA[0][:, 0], c='b', s=m_size, marker='.', label='$B_\\nu$')
         axes[2, 0].scatter(IF[1][:, 0], IA[1][:, 0], c='r', s=m_size, marker='.', label='$B_\phi$')

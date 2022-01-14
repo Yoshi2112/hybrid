@@ -635,8 +635,10 @@ def define_kim2016_parameters(Nc=5, include_energetic=False):
     Ah     = 0.7
     Eh     = 33e3 # eV
     
-    E_para = Eh / (2*Ah + 3)
-    E_perp = E_para * (Ah + 1)
+    # Transform to (T_perp, T_para) from (T, A)
+    E_para = Eh / (Ah + 2)
+    E_perp = Eh * (Ah + 1) / (Ah + 2)
+    
     T_perp = E_perp * 11603. # K
     
     Nc *= 1e6
@@ -1476,7 +1478,7 @@ def just_random():
 
 if __name__ == '__main__': 
     #plot_omura2010_figs34()
-    plot_shoji2013_fig7()
+    #plot_shoji2013_fig7()
     #plot_shoji2012_2D()
     
     #plot_check_CPDR()
@@ -1485,6 +1487,7 @@ if __name__ == '__main__':
     
     #plot_nakamura2016_fig11()
     
+    plot_kim2016_fig16()
     #plot_kim2016_fig16_alternative()
         
 # =============================================================================

@@ -458,7 +458,6 @@ def calculate_all_NL_amplitudes():
         print('Doing time:', this_time)
         
         # Get oxygen concentration from cutoffs
-        he_conc = 30.0
         cutoff  = np.interp(this_time.astype(np.int64),
                             cutoff_dict['CUTOFF_TIME'].astype(np.int64),
                             cutoff_dict['CUTOFF_NORM'])
@@ -755,7 +754,6 @@ def plot_HM_and_energy(time_start, time_end, probe):
         print('Doing time:', this_time)
            
         # Get oxygen concentration from cutoffs
-        he_conc = 30.0
         cutoff  = np.interp(this_time.astype(np.int64),
                             cutoff_dict['CUTOFF_TIME'].astype(np.int64),
                             cutoff_dict['CUTOFF_NORM'])
@@ -853,37 +851,9 @@ if __name__ == '__main__':
     if not os.path.exists(_plot_path): os.makedirs(_plot_path)
     save_plot   = True
     
-    pc1_res = 20.0
+    pc1_res = 15.0
     dpi = 300
     if False:
-        _probe = 'a'
-        _time_start = np.datetime64('2013-07-25T21:25:00')
-        _time_end   = np.datetime64('2013-07-25T21:47:00')
-        _band_start = 0.20
-        _band_end   = 0.80
-
-        _npeaks     = 22
-        fmax        = 1.0
-        
-        he_conc = 30.0
-        
-        #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
-        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//cutoffs_only.txt'
-    elif False:
-        _probe = 'a'
-        _time_start = np.datetime64('2015-01-16T04:25:00')
-        _time_end   = np.datetime64('2015-01-16T05:15:00')
-        _band_start = 0.1
-        _band_end   = 0.4
-        _npeaks     = 22
-        fmax        = 0.5
-        
-        he_conc = 30.0
-        
-        #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only.txt'
-        #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only_10mHz.txt'
-        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//pearl_times.txt'
-    elif False:
         _time_start  = np.datetime64('1991-07-17T20:15:00')
         _time_end    = np.datetime64('1991-07-17T21:00:00')
         _probe       = 'crres'
@@ -961,7 +931,6 @@ if __name__ == '__main__':
             print('Doing time:', this_time)
                
             # Get oxygen concentration from cutoffs
-            he_conc = 30.0
             cutoff  = np.interp(this_time.astype(np.int64),
                                 cutoff_dict['CUTOFF_TIME'].astype(np.int64),
                                 cutoff_dict['CUTOFF_NORM'])
@@ -1165,7 +1134,6 @@ if __name__ == '__main__':
         time_idx       = np.where(abs(time - parameter_time) == np.min(abs(time - parameter_time)))[0][0]
         
         # Get oxygen concentration from cutoffs
-        he_conc = 30.0
         cutoff  = np.interp(parameter_time.astype(np.int64),
                             cutoff_dict['CUTOFF_TIME'].astype(np.int64),
                             cutoff_dict['CUTOFF_NORM'])
