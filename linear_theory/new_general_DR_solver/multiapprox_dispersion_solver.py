@@ -4436,6 +4436,120 @@ def plot_CGR_heavyions_search(B0, ne, rc_tperp, rc_anis, rc_frac=0.01, band=None
     return
 
 
+def search_TA_space(B0, ne, cHe, cO, rc_frac=0.01, band=None,
+                    T_min=0.0, T_max=50.0, nT=100,
+                    A_min=0.0, A_max=2.00, nA=100,
+                    f_max=0.7, target_freqs=None, save=False):
+    '''
+    For some combination of cHe+ and cO+ heavy ions, calculate the max frequency
+    and growth rate in the He band for T between 1keV-50keV and A - 0.0, 2.0
+    
+    Concentrations in fractions
+    Temperature in keV
+    B0 in nT
+    ne in cc
+    '''    
+    # Gyrofrequencies
+    gyfreq = qp * B0*1e-9 / (2*np.pi*mp * np.array([1.0, 4.0, 16.0]))
+    
+    # Do parameter search in heavy ion space
+    T_axis = np.linspace(T_min, T_max, nT)*1e3
+    A_axis = np.linspace(A_min, A_max, nA)
+    max_freq   = np.zeros((nT, nA), dtype=np.float64)
+    max_growth = np.zeros((nT, nA), dtype=np.float64)
+    
+    cH     = 1. - cHe - cO
+    ndensc = np.array([cH*(1 - rc_frac), cHe, cO ])*ne
+    ndensw = np.array([cH*     rc_frac , 0.0, 0.0])*ne
+    
+    print('Calculating...')
+    for ii in range(nT):
+        for jj in range(nA):
+            tperp = np.array([T_axis[ii], 0.0, 0.0])
+            ANI   = np.array([A_axis[jj], 0.0, 0.0])
+
+            # Calculate growth rate
+            try:
+                freq, growth, stop = convective_growth_rate_kozyra(
+                    B0, ndensc, ndensw, ANI, tperp,
+                    norm_ampl=0, norm_freq=0, NPTS=1000, maxfreq=1.0)
+                
+                he_low_idx, he_hi_idx = ascr.boundary_idx64(freq, gyfreq[2], gyfreq[1]) 
+                peak_idx  = growth[he_low_idx: he_hi_idx].argmax() + he_low_idx
+    
+                max_freq[ii, jj] = freq[peak_idx]
+                max_growth[ii, jj] = growth[peak_idx]
+                    
+            except:
+                #print(f'ERROR: T = {tperp[0]*1e-3} keV, A = {ANI[0]}')
+                max_freq[ii, jj] = np.nan
+                max_growth[ii, jj] = np.nan
+    
+    print('Plotting')
+    # Plot results:
+    plt.ioff()
+    fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(8.0, 11.0),
+                 gridspec_kw={
+                 'width_ratios':[1, 0.01, 0.4],
+                 'height_ratios':[1, 1]})
+    
+    axes[0, 0].set_title('$(T_\perp, A)$ Parameter Search')
+    
+    im = axes[0, 0].pcolormesh(T_axis*1e-3, A_axis, max_freq.T, shading='auto', 
+                          norm=colors.Normalize(vmin=0.0, vmax=f_max), cmap='jet')
+    
+    fig.colorbar(im, cax=axes[0, 1], extend='both').set_label(
+            'Frequency of max S')
+    
+    if target_freqs is not None:
+        cs1 = axes[0, 0].contour(T_axis*1e-3, A_axis, max_freq.T, target_freqs, colors='k', linewidths=0.75)
+        cs2 = axes[1, 0].contour(T_axis*1e-3, A_axis, max_freq.T, target_freqs, colors='k', linewidths=0.75)
+    
+        axes[0, 0].clabel(cs1, inline=True)
+        axes[1, 0].clabel(cs2, inline=True)
+    
+    im = axes[1, 0].pcolormesh(T_axis*1e-3, A_axis, max_growth.T, shading='auto', 
+                          norm=colors.Normalize(), cmap='jet')
+    fig.colorbar(im, cax=axes[1, 1], extend='both').set_label(
+            'Growth Rate at max Frequency')
+    
+    axes[0, 2].set_visible(False)
+    axes[1, 2].set_visible(False)
+    
+    # Figure text for parameters
+    Lx = 0.84; Ly = 0.95; dy = 0.02
+    fig.text(Lx, Ly - 0*dy, '$B_0$ = %.1f nT'%B0)    
+    fig.text(Lx, Ly - 1*dy, '$n_e$ = %.1f cc'%ne)    
+    
+    fig.text(Lx, Ly - 2*dy, '$H^+$  = %.1f %%' % (cH*100.))    
+    fig.text(Lx, Ly - 3*dy, '$He^+$ = %.1f %%' % (cHe*100.))
+    fig.text(Lx, Ly - 4*dy, '$O^+$  = %.1f %%' % (cO*100.))
+    fig.text(Lx, Ly - 5*dy, '$n_h$  = %.1f %%' % (rc_frac*100.))
+        
+    fig.tight_layout(rect=[0.02, 0.02, 1.0, 1.0])
+    fig.subplots_adjust(wspace=0.03, hspace=0.15)
+    
+    for ax in axes[:, 0]:
+        ax.set_xlim(T_axis[0]*1e-3, T_axis[-1]*1e-3)
+        ax.set_ylim(A_axis[0], A_axis[-1])
+        
+        ax.set_xlabel('$T_\perp$ (keV)')
+        ax.set_ylabel('A', rotation=0)
+
+    if save:
+        save_path = plot_path + '//CRRES_TA_SEARCH//'
+        if not os.path.exists(save_path): os.makedirs(save_path)
+        n_plot = len(os.listdir(save_path))
+        
+        save_name = save_path + '//CRRES_TA_SEARCH{:03}.png'.format(n_plot)
+        print('Saving {}'.format(save_name))
+        fig.savefig(save_name)
+        plt.close('all')
+    else:
+        plt.show()
+    return
+
+
 #%% -- MAIN --
 if __name__ == '__main__':
     plot_path   = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plot_DUMP//'
@@ -4455,14 +4569,30 @@ if __name__ == '__main__':
     #parameter_search_2D()
     
     #get_CRRES_kCGR_timeseries()
-    for _mag in [159.0, 161.0, 163.0]:
-        for _dens in [50.0, 60.0, 70.0, 80.0, 90.0, 100., 110.]:
-            for _eV in [15e3, 20e3, 25e3, 30e3, 40e3, 60e3, 80e3, 100e3]:
-                for _anis in [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
-                    plot_CGR_heavyions_search(_mag, _dens, _eV, _anis, rc_frac=0.01, band=None,
-                                    he_min=0.0, he_max=50.0, nHe=500,
-                                    o_min=0.0, o_max=30.0, nO=500,
-                                    f_max=0.7, target_freqs=[0.20, 0.4, 0.6], save=True)
+    
+    for _mag in [159.0]: # 17/7 (50, 85) :: 8/12 (159-163)
+        for _dens in [80.0, 90.0, 100., 110.]: # 17/7 (10, 60) :: 8/12 (20, 100)
+            for _nHe in [0.0, 0.01, 0.02, 0.03, 0.04, 0.05]:
+                for _nO in [0.0, 0.01, 0.02, 0.03, 0.04, 0.05]:
+                    try:
+                        search_TA_space(_mag, _dens, _nHe, _nO, rc_frac=0.05, band=None,
+                                            T_min=0.0, T_max=50.0, nT=200,
+                                            A_min=0.0, A_max=2.00, nA=200,
+                                            f_max=0.7, target_freqs=[0.15, 0.20, 0.25, 0.30, 0.35, 0.40],
+                                            save=True)
+                    except:
+                        continue
+    
+# =============================================================================
+#     for _mag in [159.0, 161.0, 163.0]:
+#         for _dens in [50.0, 60.0, 70.0, 80.0, 90.0, 100., 110.]:
+#             for _eV in [15e3, 20e3, 25e3, 30e3, 40e3, 60e3, 80e3, 100e3]:
+#                 for _anis in [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
+#                     plot_CGR_heavyions_search(_mag, _dens, _eV, _anis, rc_frac=0.01, band=None,
+#                                     he_min=0.0, he_max=50.0, nHe=500,
+#                                     o_min=0.0, o_max=30.0, nO=500,
+#                                     f_max=0.7, target_freqs=[0.20, 0.4, 0.6], save=True)
+# =============================================================================
     
 # =============================================================================
 #     plot_CGR_heavyions_search(161.0, 70.0, 30e3, 0.5, rc_frac=0.01, band=None,
