@@ -349,7 +349,7 @@ def load_CRRES_data(time_start, time_end, crres_path='G://DATA//CRRES//', nsec=N
         B_mag    = np.sqrt(B[:, 0] ** 2 + B[:, 1] ** 2 + B[:, 2] ** 2)
         B_interp = np.interp(den_times.astype(np.int64), times.astype(np.int64), B_mag) 
         
-        return den_times, B_interp*1e-9, edens*1e6
+        return den_times, B_interp, edens
 
 
     else:
@@ -386,179 +386,6 @@ def add_custom_legend(_ax, _labels, _linestyles, _alpha, _color):
     return new_legend
 
 
-def calculate_all_NL_amplitudes():
-    # Import cutoff-derived composition information
-    cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
-    cutoff_dict     = epd.read_cutoff_file(cutoff_filename)
-    
-    #plot_amplitudes_from_data(_time_start, _time_end, probe=_probe, pad=600)
-    time_start = _time_start
-    time_end   = _time_end
-    probe      = 'a'
-    pad        = 0
-    
-    plot_start = time_start - np.timedelta64(int(pad), 's')
-    plot_end   = time_end   + np.timedelta64(int(pad), 's')
-    
-    time, mag, edens, cold_dens, hope_dens, hope_tpar, hope_tperp, hope_anis, L_vals =\
-                                       load_and_interpolate_plasma_params(
-                                       plot_start, plot_end, probe, nsec=None, 
-                                       rbsp_path='E://DATA//RBSP//', HM_filter_mhz=50.0,
-                                       time_array=None, check_interp=False)
-                  
-    mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower = \
-            load_EMIC_IMFs_and_dynspec(plot_start, plot_end)
-    
-    # Specify color values for time
-    time0  = time[ 0].astype(np.int64)
-    time1  = time[-1].astype(np.int64)
-    norm   = mpl.colors.LogNorm(vmin=time0, vmax=time1, clip=False)
-    mapper = cm.ScalarMappable(norm=norm, cmap=cm.jet)
-        
-    lpad = 20
-    fig, axes = plt.subplots(nrows=4, ncols=2, figsize=(8.27, 11.69),
-                                 gridspec_kw={'width_ratios':[1, 0.01],
-                                              'height_ratios':[1, 1, 0.5, 2]
-                                              })
-    
-    # Spectra/IP
-    im0 = axes[0, 0].pcolormesh(stime, sfreq, spower.sum(axis=0).T, cmap='jet',
-                         norm=colors.LogNorm(vmin=1e-4, vmax=1e1))
-    axes[0, 0].set_ylim(0, fmax)
-    axes[0, 0].set_ylabel('$f$\n(Hz)', rotation=0, labelpad=lpad, fontsize=12)
-    fig.colorbar(im0, cax=axes[0, 1], extend='both').set_label(
-                r'$\frac{nT^2}{Hz}$', fontsize=16, rotation=0, labelpad=5)
-    
-    axes[0, 0].plot(imf_time, IF[0][:, 0], c='k', lw=0.75)
-    axes[0, 0].plot(imf_time, IF[1][:, 0], c='k', lw=0.75, alpha=0.8)
-    #axes[0, 0].plot(imf_time, IF[2][:, 0], c='k', lw=0.75, alpha=0.6)
-    #axes[0, 0].axvline(this_time, color='white', ls='-' , alpha=0.7)
-    axes[0, 0].set_xlim(plot_start, plot_end)
-    axes[0, 0].set_xticklabels([])
-    
-    axes[0, 0].axhline(_band_start  , color='white', ls='--')
-    axes[0, 0].axhline(_band_end    , color='white', ls='--')
-    
-    # mag_time, pc1_mags, IA, IF, IP, stime, sfreq, spower
-    # Timeseries for comparison
-    axes[1, 0].plot(mag_time, pc1_mags[:, 0], c='b', label='$\delta B_\\nu$')
-    axes[1, 0].plot(mag_time, pc1_mags[:, 1], c='r', label='$\delta B_\phi$', alpha=0.5)
-    #axes[1, 0].plot(mag_time, pc1_mags[:, 2], c='k', label='$\delta B_\mu$', alpha=0.25)
-    axes[1, 0].set_ylabel('nT', rotation=0, labelpad=lpad)
-    axes[1, 0].set_xlim(plot_start, plot_end)
-    axes[1, 0].set_xlabel('Time [UT]')
-    axes[1, 0].set_xlim(plot_start, plot_end)
-    
-    # CALCULATE PLASMA PARAMETERS AND AMPLITUDES FOR ALL TIMES
-    # Plot all on same graph, use colorbar to discern time
-    # Maybe do for cutoff times/packet times
-    for ii in range(0, time.shape[0], 4):
-        this_time = time[ii]
-        clr = mapper.to_rgba(time[ii].astype(np.int64))
-        print('Doing time:', this_time)
-        
-        # Get oxygen concentration from cutoffs
-        cutoff  = np.interp(this_time.astype(np.int64),
-                            cutoff_dict['CUTOFF_TIME'].astype(np.int64),
-                            cutoff_dict['CUTOFF_NORM'])
-        o_frac = epd.calculate_o_from_he_and_cutoff(cutoff, he_frac)
-        h_frac = 1. - he_frac - o_frac
-        
-        # Cold plasma params, SI units
-        B0      = mag[ii]
-        name    = np.array(['H'   , 'He'   , 'O'    ])
-        mass    = np.array([1.0   , 4.0    , 16.0   ]) * PMASS
-        charge  = np.array([1.0   , 1.0    , 1.0    ]) * PCHARGE
-        density = np.array([h_frac, he_frac, o_frac ]) * edens[ii]
-        ani     = np.array([0.0   , 0.0    , 0.0    ])
-        tpar    = np.array([0.0   , 0.0    , 0.0    ])
-        tper    = (ani + 1) * tpar
-        Species, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
-        
-        # Frequencies to evaluate, calculate wavenumber (cold approximation)
-        f_min  = 0.07*PP['pcyc_rad'] / (2*np.pi)
-        f_max  = 0.24*PP['pcyc_rad'] / (2*np.pi)
-        Nf     = 10000
-        f_vals = np.linspace(f_min, f_max, Nf)
-        w_vals = 2*np.pi*f_vals
-        k_vals = nls.get_k_cold(w_vals, Species)
-        
-        # Define hot proton parameters (velocities normalized c)
-        # Remember: temperatures originally in eV
-        nh = hope_dens[0][ii]
-        wph2 = nh * PCHARGE ** 2 / (PMASS * EPS0) 
-        Vth_para = np.sqrt(KB * hope_tpar[0][ii]*(PCHARGE/KB)  / PMASS) / SPLIGHT
-        Vth_perp = np.sqrt(KB * hope_tperp[0][ii]*(PCHARGE/KB) / PMASS) / SPLIGHT
-        Q = 0.5
-        
-        # Curvature parameters (this has the most wiggle room)
-        L  = 4.7#L_vals[ii]
-        a  = 4.5 / (L*RE)**2
-        a  = a*(SPLIGHT**2/PP['pcyc_rad']**2)
-        
-        Vg, Vp, Vr = nls.get_velocities(w_vals, Species, PP, normalize=True)
-        s0, s1, s2 = nls.get_inhomogeneity_terms(w_vals, Species, PP, Vth_perp, normalize_vel=True)
-        
-        # Normalize input parameters
-        wph = np.sqrt(wph2) / PP['pcyc_rad']
-        w   = w_vals / PP['pcyc_rad']
-        
-        # DO THE ACTUAL CALCULATION (All hands off from here, using existing code/proforma)
-        tau   = 1.00
-        B_th  = nls.get_threshold_amplitude(w, wph, Q, s2, a, Vp, Vr, Vth_para, Vth_perp)
-        B_opt = nls.get_optimum_amplitude(w, wph, Q, tau, s0, s1, Vg, Vr, Vth_para, Vth_perp)
-        T_tr  = nls.get_nonlinear_trapping_period(k_vals, Vth_perp*SPLIGHT, B_opt*PP['B0'])
-        T_N   = tau*T_tr*PP['pcyc_rad']
-        
-        # Filter zeros and infs:
-        B_th[B_th == np.inf] = np.nan
-        B_th[B_th == 0]      = np.nan
-        
-        B_opt[B_opt == np.inf] = np.nan
-        B_opt[B_opt == 0]      = np.nan
-        
-        T_N[T_N == np.inf] = np.nan
-        T_N[T_N == 0]      = np.nan
-        
-        ################
-        ### PLOTTING ###
-        ################
-        # Bth, Bopt, Inst. Amplitudes
-        axes[3, 0].plot(f_vals, B_th*B0*1e9,  c=clr, ls='--', label=r'$B_{th}$')
-        axes[3, 0].plot(f_vals, B_opt*B0*1e9, c=clr, ls='-' , label=r'$B_{opt}$')
-        
-    axes[3, 0].set_ylabel('$B$ [nT]', rotation=0, labelpad=20, fontsize=16)
-    axes[3, 0].set_xlabel('$f$ [Hz]', fontsize=16)
-    axes[3, 0].set_ylim(0, 17)
-    axes[3, 0].set_xlim(f_vals[0], f_vals[-1])
-    axes[3, 0].tick_params(top=True, right=True)
-    add_custom_legend(axes[3, 0], [r'$B_{th}$', r'$B_{opt}$'],
-                                  ['--', '-'],
-                                  [1.0, 1.0], 
-                                  ['k', 'k'])
-
-    label_every = 15
-    cbar    = fig.colorbar(mapper, cax=axes[3, 1], label='Time', orientation='vertical',
-                               ticks=time[::label_every].astype(np.int64))
-    for label in cbar.ax.get_yminorticklabels():
-        label.set_visible(False)
-
-    cbar.ax.set_yticklabels(time[::label_every].astype('datetime64[m]'))
-    
-    axes[1, 1].set_visible(False)
-    axes[2, 0].set_visible(False)
-    axes[2, 1].set_visible(False)
-    axes[0, 0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
-    axes[1, 0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
-    
-    fig.tight_layout()
-    fig.subplots_adjust(wspace=0.05, hspace=0)
-    fig.align_ylabels()
-    
-    plt.show()
-    return
-
-
 def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
     # Import cutoff-derived composition information
     cutoff_dict = epd.read_cutoff_file(cutoff_filename)
@@ -571,9 +398,8 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
                                            rbsp_path='E://DATA//RBSP//', HM_filter_mhz=50.0,
                                            time_array=None, check_interp=False)
     else:
-        time, mag, edens = load_CRRES_data(time_start, time_end, nsec=None,
-                                            crres_path='E://DATA//CRRES//')
-
+        load_CRRES_data(time_start, time_end, crres_path='E://DATA//CRRES//', nsec=None)
+                  
     mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower = \
             load_EMIC_IMFs_and_dynspec(time_start, time_end)
     spower = spower.sum(axis=0)
@@ -581,7 +407,7 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
     cutoff  = np.interp(time.astype(np.int64),
                         cutoff_dict['CUTOFF_TIME'].astype(np.int64),
                         cutoff_dict['CUTOFF_NORM'])
-    o_fracs = epd.calculate_o_from_he_and_cutoff(cutoff, he_frac)        
+    o_frac = epd.calculate_o_from_he_and_cutoff(cutoff, he_frac)      
     
     # Get velocity/energy data for time
     plt.ioff()
@@ -611,7 +437,7 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
         # Spectra/IP
         im0 = axes[0, 0].pcolormesh(stime, sfreq, spower.T, cmap='jet',
                              norm=colors.LogNorm(vmin=1e-4, vmax=1e1))
-        axes[0, 0].set_ylim(0, _band_end)
+        axes[0, 0].set_ylim(0, fmax)
         axes[0, 0].set_ylabel('$f$ [Hz]', rotation=90)
         fig.colorbar(im0, cax=axes[0, 1], extend='both').set_label(
                     r'$\frac{nT^2}{Hz}$', fontsize=16, rotation=0, labelpad=15)
@@ -623,17 +449,18 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
         axes[0, 0].axvline(this_time,   color='white', ls='-', alpha=0.75)
         axes[0, 0].axhline(maxpwr_freq, color='white', ls='-', alpha=0.75)
         axes[0, 0].set_title(f'Velocities and Energies :: {this_time}')
-
-        h_frac = 1. - he_frac - o_fracs[ii]
         
+        # Get oxygen concentration from cutoffs
+        h_frac = 1. - he_frac - o_frac[ii]
+
         # Cold plasma params, SI units
         B0      = mag[ii]
-        name    = np.array(['H'   , 'He'   , 'O'    ])
-        mass    = np.array([1.0   , 4.0    , 16.0   ]) * PMASS
-        charge  = np.array([1.0   , 1.0    , 1.0    ]) * PCHARGE
-        density = np.array([h_frac, he_frac, o_fracs[ii] ]) * edens[ii]
-        ani     = np.array([0.0   , 0.0    , 0.0    ])
-        tpar    = np.array([0.0   , 0.0    , 0.0    ])
+        name    = np.array(['H'   , 'He'   , 'O'        ])
+        mass    = np.array([1.0   , 4.0    , 16.0       ]) * PMASS
+        charge  = np.array([1.0   , 1.0    , 1.0        ]) * PCHARGE
+        density = np.array([h_frac, he_frac, o_frac[ii] ]) * edens[ii]
+        ani     = np.array([0.0   , 0.0    , 0.0        ])
+        tpar    = np.array([0.0   , 0.0    , 0.0        ])
         tper    = (ani + 1) * tpar
         Species, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
         
@@ -845,38 +672,49 @@ if __name__ == '__main__':
     if not os.path.exists(_plot_path): os.makedirs(_plot_path)
     save_plot   = True
     
+    # TODO: Put all important event-specific variables in the switch
     pc1_res = 15.0
     dpi = 200
-
     if True:
-        _time_start  = np.datetime64('1991-07-17T20:15:00')
-        _time_end    = np.datetime64('1991-07-17T21:00:00')
-        _probe       = 'crres'
-        _band_start  = 0.10
-        _band_end    = 0.30
-        clims        = [1e-4, 1e1]
-        fmax         = 0.5
-        he_frac      = 0.10
-        
-        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//19910717_CRRES//cutoffs_only.txt'
-    else:
-        _time_start = np.datetime64('1991-08-12T22:10:00')
-        _time_end   = np.datetime64('1991-08-12T23:15:00')
-        _probe      = 'crres'
+        _probe = 'a'
+        _time_start = np.datetime64('2013-07-25T21:25:00')
+        _time_end   = np.datetime64('2013-07-25T21:47:00')
         _band_start = 0.20
-        _band_end   = 0.60
-        clims       = [1e-4, 1e1]
-        fmax        = 0.7
-        he_frac     = 0.10
-        
-        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//19910812_CRRES//cutoffs_only.txt'
+        _band_end   = 0.80
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        #calculate_all_NL_amplitudes()
-        plot_velocities_and_energies_single(_time_start, _time_end, probe=_probe)
-        #plot_HM_and_energy(_time_start, _time_end, _probe)
-        sys.exit()
+        _npeaks     = 22
+        fmax        = 1.0
+        he_frac     = 0.30
+        
+        L     = 4.70
+        B_max = 17.0
+        
+        #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
+        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//cutoffs_only.txt'
+    else:
+        _probe = 'a'
+        _time_start = np.datetime64('2015-01-16T04:25:00')
+        _time_end   = np.datetime64('2015-01-16T05:15:00')
+        _band_start = 0.10
+        _band_end   = 0.20
+        _npeaks     = 22
+        fmax        = 0.5
+        he_frac     = 0.30
+        
+        L     = 5.73
+        B_max = 6.00
+        
+        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only.txt'
+        #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only_10mHz.txt'
+        #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//pearl_times.txt'
+    
+    if False:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            #calculate_all_NL_amplitudes()
+            plot_velocities_and_energies_single(_time_start, _time_end, probe=_probe)
+            #plot_HM_and_energy(_time_start, _time_end, _probe)
+    #sys.exit()
     
     time_start = _time_start
     time_end   = _time_end
@@ -889,7 +727,7 @@ if __name__ == '__main__':
     #%% Stuff requiring all the data
     # Import cutoff-derived composition information
     if False:
-        cutoff_dict = epd.read_cutoff_file(cutoff_filename)
+        cutoff_dict     = epd.read_cutoff_file(cutoff_filename)
             
         time, mag, edens, cold_dens, hope_dens, hope_tpar, hope_tperp, hope_anis, L_vals =\
                                            load_and_interpolate_plasma_params(
@@ -973,6 +811,74 @@ if __name__ == '__main__':
             line_VP[ii] = all_VP[ii, fidx]
             line_VG[ii] = all_VG[ii, fidx]
             line_VR[ii] = all_VR[ii, fidx]
+        
+           
+        #%% PLOT PART        
+# =============================================================================
+#         fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(8.0, 0.5*11.00),
+#                                      gridspec_kw={'width_ratios':[1, 0.02]
+#                                                   })
+#         
+#         # To plot: Spectra, velocities (Vg, Vr) and energies (cyclotron, landau resonances)
+#         # HM/|B| overlay
+#         clpad = 40; cfont=10
+#         with warnings.catch_warnings():
+#             warnings.simplefilter("ignore")
+#             axes[0, 0].set_title('Velocities and Energies')
+#             
+#             # Spectra
+#             im0 = axes[0, 0].pcolormesh(stime, sfreq, spower.sum(axis=0).T, cmap='jet',
+#                                  norm=colors.LogNorm(vmin=1e-4, vmax=1e1))
+#             axes[0, 0].set_ylim(0, fmax)
+#             axes[0, 0].set_ylabel('$f$ [Hz]', rotation=90)
+#             fig.colorbar(im0, cax=axes[0, 1], extend='both').set_label(
+#                         r'$\frac{nT^2}{Hz}$', fontsize=cfont, rotation=0, labelpad=clpad)
+#             
+#             axes[0, 0].axhline(f_vals[fst], c='white', ls='--')
+#             axes[0, 0].axhline(f_vals[fen], c='white', ls='--')
+#             
+#             ax2 = axes[0, 0].twinx()
+#             ax2.plot(mag_time, HM_mags[:, 2], c='k', lw=0.75)
+#                 
+#             
+#             # E_RES_CYCLOTRON
+#             im1 = axes[1, 0].pcolormesh(time, f_vals, all_CR.T*1e-3, cmap='jet',
+#                                  norm=colors.LogNorm(vmin=1e-1, vmax=1e3))
+#             axes[1, 0].set_ylabel('$f$ [Hz]', rotation=90)
+#             fig.colorbar(im1, cax=axes[1, 1], extend='both').set_label(
+#                         '$E_R$ Cyclotron\n[keV]', fontsize=cfont, rotation=0, labelpad=clpad)
+#             
+#             ax3 = axes[1, 0].twinx()
+#             ax3.plot(time, HM_mags[:, 2], c='k', lw=0.75)
+#             
+#             # VG
+#             im4 = axes[2, 0].pcolormesh(time, f_vals, all_VG.T*1e-3, cmap='jet',
+#                                  norm=colors.LogNorm(vmin=1e1, vmax=1e3))
+#             axes[2, 0].set_ylabel('$f$ [Hz]', rotation=90)
+#             fig.colorbar(im4, cax=axes[2, 1], extend='both').set_label(
+#                         '$V_G$\n[$km/s$]', fontsize=cfont, rotation=0, labelpad=clpad)
+#             
+#             for ax in axes[:, 0]:
+#                 ax.set_xlim(time_start, time_end)
+#                 ax.set_ylim(_band_start, _band_end)
+#                 
+#                 
+#                     
+#         fig.tight_layout()
+#         fig.subplots_adjust(wspace=0.15, hspace=0)
+#         fig.align_ylabels()
+#         
+#         if save_plot == True:
+#             save_string = time_start.astype(object).strftime('%Y%m%d_%H%M')
+#             
+#             print('Saving plot...')
+#             fig.savefig(_plot_path + 'VELENG_FROMDATA_PCOLOR_' + save_string + '.png')
+#             plt.close('all')
+#         else:
+#             plt.show()
+#         print('Finished')
+# =============================================================================
+    
         
         #%% Energy and velocity timeseries
         ## Plot Spectra, resonant energy, 3x velocity

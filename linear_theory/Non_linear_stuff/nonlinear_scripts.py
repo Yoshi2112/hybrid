@@ -130,8 +130,8 @@ def get_energies(w_vals, k_vals, cyc, mass):
         mass   -- Particle mass (kg)
         
     Returns:
-        E_landau    -- Landau resonant energy (eV)
-        E_cyclotron -- Cyclotron resonant energy (eV)
+        E_landau    -- Landau resonant energy (eV) (based on phase velocity)
+        E_cyclotron -- Cyclotron resonant energy (eV) (based on resonance velocity)
     '''
     v_para_landau = (w_vals - 0*np.abs(cyc)) / k_vals
     E_landau = 0.5*mass*v_para_landau**2 / PCHARGE
@@ -139,6 +139,14 @@ def get_energies(w_vals, k_vals, cyc, mass):
     v_para_cyclotron = (w_vals - 1*np.abs(cyc)) / k_vals
     E_cyclotron = 0.5*mass*v_para_cyclotron**2 / PCHARGE
     return E_landau, E_cyclotron
+
+
+def get_Eres_hu(w_vals, Vp, h_cyc, mass):
+    '''
+    Literally exactly the same as E_cyclotron from get_energies()
+    '''
+    Eres = 0.5 * mass * Vp**2 * (1 - h_cyc/w_vals)**2
+    return Eres / PCHARGE
     
     
 def get_inhomogeneity_terms(w, Species, PP, Vth_perp, normalize_vel=True):
@@ -1311,7 +1319,7 @@ def plot_ohja2021_fig8(crosscheck_CPDR=False):
     NOTE: Some discrepancies in the calculated wavelengths and velocities.
         Doesn't seem to be a mistake, since my Omura values are spot on.
     '''
-    fig, axes = plt.subplots(nrows=3)
+    
     
     # Cold dispersion from get_k_cold()
     Spec4, PP4 = define_ohja2021_parameters(4, include_energetic=False)
@@ -1336,6 +1344,19 @@ def plot_ohja2021_fig8(crosscheck_CPDR=False):
     wlen6   = 1e-3 * 2*np.pi / k_vals6
     wlen8   = 1e-3 * 2*np.pi / k_vals8
     
+    # DIAG #
+    if True:
+        Vg, Vp, Vr = get_velocities(w_vals, Spec6, PP6)
+        ELAND, ECYCL = get_energies(w_vals, k_vals6, PP6['pcyc_rad'], PMASS)
+        Eres = get_Eres_hu(w_vals, Vp, PP6['pcyc_rad'], PMASS)
+        
+        fig, ax = plt.subplots()
+        ax.semilogy(w_vals, ECYCL, c='k', lw=1.5)
+        ax.semilogy(w_vals, Eres, c='r', lw=0.75)
+        sys.exit()
+    
+    ## PLOT ##
+    fig, axes = plt.subplots(nrows=3)
     axes[0].plot(f_vals, wlen4, c='lime', label='4 cc') 
     axes[0].plot(f_vals, wlen6, c='k'   , label='6 cc')
     axes[0].plot(f_vals, wlen8, c='r'   , label='8 cc')
@@ -1482,12 +1503,12 @@ if __name__ == '__main__':
     #plot_shoji2012_2D()
     
     #plot_check_CPDR()
-    #plot_ohja2021_fig8()
+    plot_ohja2021_fig8()
     #plot_ohja2021_fig9()
     
     #plot_nakamura2016_fig11()
     
-    plot_kim2016_fig16()
+    #plot_kim2016_fig16()
     #plot_kim2016_fig16_alternative()
         
 # =============================================================================

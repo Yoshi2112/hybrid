@@ -4444,6 +4444,142 @@ def multiplot_saturation_amplitudes(save=True):
     return
 
 
+def multiplot_RMS_jul25():
+    '''    
+    Collect maximum amplitude and RMS, just because maximum can be sullied by
+    peaks in the waveform that are unphysical/numerical noise/issues
+    
+    TODO: Need some sort of spatial filter
+    '''
+    print('Plotting saturation amplitudes for multiple series...')
+
+    all_series = ['JUL25_PROXYHONLY_30HE_PREDCORR']
+    jul_times  = ['2013-07-25T21:25:29.000000',
+                 '2013-07-25T21:26:15.000000',
+                 '2013-07-25T21:27:27.000000',
+                 '2013-07-25T21:29:38.000000',
+                 '2013-07-25T21:30:50.000000',
+                 '2013-07-25T21:31:55.000000',
+                 '2013-07-25T21:32:41.000000',
+                 '2013-07-25T21:33:53.000000',
+                 '2013-07-25T21:36:30.000000',
+                 '2013-07-25T21:37:42.000000',
+                 '2013-07-25T21:39:07.000000',
+                 '2013-07-25T21:40:13.000000',
+                 '2013-07-25T21:41:05.000000',
+                 '2013-07-25T21:42:11.000000',
+                 '2013-07-25T21:43:16.000000',
+                 '2013-07-25T21:44:02.000000',
+                 '2013-07-25T21:45:33.000000',]
+    timebase = np.array([np.datetime64(this_time) for this_time in jul_times])
+    
+    # Get number of runs (assume same for each series) to set array
+    test_dir  = '{}/runs//{}//'.format(drive, all_series[0])
+    num_runs  = len([name for name in os.listdir(test_dir) if 'run_' in name])
+    rms_amp   = np.zeros(num_runs, dtype=np.float64)
+    sat_amp   = np.zeros(num_runs, dtype=np.float64)
+    
+    print('Collecting RMS amplitudes')
+    for jj in range(len(all_series)):
+        series      = all_series[jj]
+        series_dir  = '{}/runs//{}//'.format(drive, series)
+        num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+        print('{} runs in series {}'.format(num_runs, series))
+    
+        runs_to_do = range(num_runs)                
+        for ii in runs_to_do:
+            print('\nRun {}'.format(ii))
+            cf.load_run(drive, series, ii, extract_arrays=True)
+            
+            ty, by   = cf.get_array('By') 
+            tz, bz   = cf.get_array('Bz')
+            env_amps = np.sqrt(by ** 2 + bz ** 2)
+            
+            # For each time, get the RMS amplitude in space
+            # Can we take the RMS values for each time and just pythag them?
+            by_rms = np.zeros(by.shape[0], dtype=float)
+            bz_rms = np.zeros(by.shape[0], dtype=float)
+            for tt in range(by.shape[0]):
+                by_rms[]
+            
+            rms_amps = np.sqrt(by ** 2 + bz ** 2)
+            rms_amp[jj, ii] = env_amps.max() * 1e9
+    
+    if False:
+        # Load comparison data
+        data_scripts_dir = 'D://Google Drive//Uni//PhD 2017//Data//Scripts//'
+        sys.path.append(data_scripts_dir)
+        import rbsp_fields_loader as rfl
+        import fast_scripts as fscr
+        import analysis_scripts as ascr
+        
+        rbsp_path  = 'E://DATA//RBSP//'
+        time_start = np.datetime64('2013-07-25T21:25:00.000000')
+        time_end   = np.datetime64('2013-07-25T21:47:00.000000')
+        probe       = 'a'
+        
+        dat_times, pc1_mags, HM_mags, delt = \
+             rfl.load_decomposed_magnetic_field(rbsp_path, time_start, time_end, probe, 
+                                        pad=600, LP_B0=1.0, LP_HM=30.0, 
+                                        get_gyfreqs=False, return_B0=False)
+             
+        spec_time, spec_freq, spec_power = fscr.get_pc1_tracepower_spectra(dat_times, pc1_mags,
+                                 time_start, time_end, 
+                                  _dt=delt, _olap=0.95, _res=35.0,
+                                  window_data=True)
+            
+        fst, fen = ascr.boundary_idx64(spec_freq, 0.2, 0.8)
+        pc1_int_power = spec_power[fst:fen, :].sum(axis=0)
+        
+        # Plot result -- 3 plots: spectra, envelope (or integrated power? both?)
+        #                then scatterplot with each run type in different color (for he concentration)
+        plt.ioff()
+        fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(16, 9),
+                                 gridspec_kw={'width_ratios':[1, 0.01]})
+        
+        # Pc1 Spectra
+        axes[0, 0].set_title('Data/Simulation Comparison :: July 25, 2013')
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            im = axes[0, 0].pcolormesh(spec_time, spec_freq, spec_power,
+                           norm=colors.LogNorm(vmin=1e-7, vmax=1e1), cmap='jet')
+            fig.colorbar(im, cax=axes[0, 1], extend='max').set_label(
+                    '$Tr(P)$\n$nT^2/Hz$', fontsize=12, rotation=0, labelpad=30)
+            axes[0, 0].set_ylabel('Hz', rotation=0, labelpad=30)
+            axes[0, 0].set_ylim(0.0, 1.1)
+            axes[0, 0].set_xlim(time_start, time_end)
+            axes[0, 0].set_xticklabels([])
+            
+        # Integrated Power
+        axes[1, 1].set_visible(False)
+        axes[1, 0].plot(spec_time, pc1_int_power)
+        axes[1, 0].set_xlim(time_start, time_end)
+        axes[1, 0].set_xticklabels([])
+        axes[1, 0].set_ylim(0.0, None)
+        axes[1, 0].set_ylabel('Integrated Power (nT^2/Hz)', rotation=0, labelpad=30)
+        
+        for xx in range(2):
+            for this_time in timebase:
+                axes[xx, 0].axvline(this_time, c='k', ls='--', alpha=0.75)
+        
+        # Hybrid Results
+        clrs = ['blue', 'green', 'red']
+        for ii, lbl in zip(range(len(all_series)), ['5% He', '15% He', '30% He']):
+            axes[2, 0].scatter(timebase, sat_amp[ii], c=clrs[ii], label=lbl)
+        axes[2, 1].set_visible(False)
+        axes[2, 0].set_xlim(time_start, time_end)
+        axes[2, 0].set_ylim(0.0, None)
+        axes[2, 0].set_xlabel('Time (UT)')
+        axes[2, 0].set_ylabel('Saturation Amplitude (nT)')
+        axes[2, 0].legend(loc='upper right')
+        if save==True:  
+            fig.savefig(cf.base_dir + 'data_model_saturation.png', edgecolor='none')
+            plt.close('all')
+        else:
+            plt.show()
+    return
+
+
 def plot_FB_waves_winske(save=True):
     '''
     Routine that splits B-field up into its backwards/forwards propagating

@@ -7,6 +7,7 @@ Created on Mon Aug 26 15:42:27 2019
 import os, sys, pdb
 sys.path.append('D://Google Drive//Uni//PhD 2017//Data//Scripts//')
 import numpy as np
+import matplotlib.pyplot as plt
 from   scipy.optimize          import fsolve
 import rbsp_file_readers   as rfr
 import rbsp_fields_loader  as rfl
@@ -85,7 +86,7 @@ def interpolate_ne(new_time, den_time, den_array):
 
 def load_and_interpolate_plasma_params(time_start, time_end, probe, nsec=None, 
                                        rbsp_path='G://DATA//RBSP//', HM_filter_mhz=None,
-                                       HOPE_only=False, time_array=None):
+                                       HOPE_only=True, time_array=None):
     '''
     Outputs as SI units: B0 in T, densities in /m3, temperatures in eV (pseudo SI)
     
@@ -166,7 +167,8 @@ def load_and_interpolate_plasma_params(time_start, time_end, probe, nsec=None,
     
     # Subtract energetic components from total electron density (assuming each is singly charged)
     cold_dens = iedens - ihope_dens.sum(axis=0) - ispice_dens.sum(axis=0)
-    return time_array, Bi*1e-9, cold_dens*1e6, ihope_dens*1e6, ihope_temp, ihope_anis, ispice_dens*1e6, ispice_temp, ispice_anis
+    return time_array, Bi*1e-9, cold_dens*1e6, ihope_dens*1e6, ihope_temp, ihope_anis,\
+            ispice_dens*1e6, ispice_temp, ispice_anis
 
 
 def convert_data_to_hybrid_plasmafile(time_start, time_end, probe, pad, comp=None):
@@ -314,7 +316,8 @@ def get_pc1_spectra(rbsp_path, time_start, time_end, probe, pc1_res=25.0,
     return pc1_xtimes, pc1_xfreq, pc1_perp_power
 
 
-def load_CRRES_data(time_start, time_end, crres_path='G://DATA//CRRES//', nsec=None):
+def load_CRRES_data(time_start, time_end, crres_path='G://DATA//CRRES//', nsec=None,
+                    diag_plot=False):
     '''
     Since no moment data exists for CRRES, this loads only the cold electron density and
     magnetic field (with option to low-pass filter) and interpolates them to
@@ -336,6 +339,24 @@ def load_CRRES_data(time_start, time_end, crres_path='G://DATA//CRRES//', nsec=N
     den_times, den_dict = cfr.get_crres_density(crres_path, time_start, time_end, pad=600)
     
     edens = den_dict['NE_CM3']
+    
+    # Diagnostic: Plots B magntidue and density and returns nothing
+    if diag_plot:
+        for ii in range(3):
+            B[:, ii] = ascr.clw_low_pass(B[:, ii].copy(), 50.0, 1/32.0, filt_order=4)
+        B_mag = np.sqrt(B[:, 0] ** 2 + B[:, 1] ** 2 + B[:, 2] ** 2)
+        
+        plt.ioff()
+        fig, [ax, ax2] = plt.subplots(2, sharex=True)
+        ax.plot(times, B_mag, c='b')
+        ax.set_xlim(time_start, time_end)
+        ax.set_ylabel('|B|\n(nT)')
+        
+        ax2.plot(den_times, edens, c='k')
+        ax2.set_xlim(time_start, time_end)
+        ax2.set_ylabel('ne\n(cc)')
+        plt.show()
+        return
     
     # Interpolate B only
     if nsec is None:
@@ -391,7 +412,6 @@ def integrate_HOPE_moments(time_start, time_end, probe, pad, rbsp_path='E://DATA
     mp = 1.673e-27
     
     import spacepy.datamodel as dm
-    import matplotlib.pyplot as plt
     pa_data  = dm.fromCDF(_test_file_pa)
     mom_data = dm.fromCDF(_test_file_mom)
     
@@ -500,31 +520,55 @@ def read_target_file(_filename):
     return np.asarray(target_times)
 
 
-def calculate_o_from_he_and_cutoff(co_freq_norm, he_val):
-    '''
-    For each possible fractional value of He, calculate the possible values
-    of O, for a given cutoff frequency (normalized to the cyclotron frequency).
-    
-    Solution seems fine for a hydrogen cutoff. Validated with
-        Omura (2010) :: co_freqs_norm = 0.3514 (pcyc = 3.7Hz)
-        Ohja (2021)  :: co_freqs_norm = 0.3084 (pcyc = 1.3Hz)
-        
-    Put catch in to zero oxygen concentrations less than zero (e.g. when the
-    cutoff is below the oxygen cyclotron frequency, w_norm=1/16.)
-    '''
-    def cfunc(nO, nHe, w):
-        t1 = (1. - nHe - nO) / (1 - w)
-        t2 = nHe / (1 - 4*w)
-        t3 = nO  / (1 - 16*w)
-        return (t1 + t2 + t3 - 1)
-    
-    o_val = fsolve(cfunc, x0=0.0, args=(he_val, co_freq_norm),
-                        xtol=1e-10, maxfev=1000000, full_output=False)
-    if o_val[0] < 0:
-        o_out = 0.0
-    else:
-        o_out = o_val[0]
-    return o_out
+# =============================================================================
+# def calculate_o_from_he_and_cutoff(co_freq_norm, he_val):
+#     '''
+#     For each possible fractional value of He, calculate the possible values
+#     of O, for a given cutoff frequency (normalized to the cyclotron frequency).
+#     
+#     Solution seems fine for a hydrogen cutoff. Validated with
+#         Omura (2010) :: co_freqs_norm = 0.3514 (pcyc = 3.7Hz)
+#         Ohja (2021)  :: co_freqs_norm = 0.3084 (pcyc = 1.3Hz)
+#         
+#     Put catch in to zero oxygen concentrations less than zero (e.g. when the
+#     cutoff is below the oxygen cyclotron frequency, w_norm=1/16.)
+#     '''
+#     def cfunc(nO, nHe, w):
+#         t1 = (1. - nHe - nO) / (1 - w)
+#         t2 = nHe / (1 - 4*w)
+#         t3 = nO  / (1 - 16*w)
+#         return (t1 + t2 + t3 - 1)
+#     
+#     o_val = fsolve(cfunc, x0=0.0, args=(he_val, co_freq_norm),
+#                         xtol=1e-10, maxfev=1000000, full_output=False)
+#     if o_val[0] < 0:
+#         o_out = 0.0
+#     else:
+#         o_out = o_val[0]
+#     return o_out
+# =============================================================================
+
+
+def calculate_o_from_he_and_cutoff(w, nHe):
+    if nHe > 1.0:
+        sys.exit('Helium fraction must be less than 1.0')
+    t1 = (1 - w)*(1 - 16*w)*nHe / (1 - 4*w)
+    t2 = (1 - 16*w)*(1 - nHe) - (1 - 16*w)*(1 - w)
+    nO = ( t1 + t2) / (-15*w)
+
+    try:
+        nO_out = np.zeros(nO.shape[0], dtype=float)
+        for _xx in range(nO.shape[0]):
+            if nO[_xx] < 0:
+                nO_out[_xx] = 0.0
+            else:
+                nO_out[_xx] = nO[_xx]
+    except Exception as e:
+        if nO < 0.0:
+            nO_out = 0.0
+        else:
+            nO_out = nO
+    return nO_out
 
 
 def generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=0.05,
@@ -666,7 +710,7 @@ def generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=0.05,
     print('Plasmafiles created.')
     return
 
-def generate_plasmafile_noheavyions(cutoff_filename, run_dir, run_series_name, he_conc=0.05,
+def generate_plasmafile_noheavyions(cutoff_filename, run_dir, run_series_name, he_frac=0.05,
                         target_filename=None):
     '''
     No hot, heavy ions (density folded into cold component)
@@ -681,19 +725,18 @@ def generate_plasmafile_noheavyions(cutoff_filename, run_dir, run_series_name, h
     cutoff_dict = read_cutoff_file(cutoff_filename)
     
     n_vals  = cutoff_dict['CUTOFF_NORM'].shape[0]
-    o_concs = np.zeros(n_vals)
+    o_fracs = np.zeros(n_vals)
     for ii in range(n_vals):
-        o_concs[ii] = calculate_o_from_he_and_cutoff(cutoff_dict['CUTOFF_NORM'][ii], he_conc)
-    pdb.set_trace()
+        o_fracs[ii] = calculate_o_from_he_and_cutoff(cutoff_dict['CUTOFF_NORM'][ii], he_frac)
     
     if target_filename is None:
         target_times = cutoff_dict['PACKET_START']
     else:
         target_times = read_target_file(target_filename)
     
-    o_concs = np.interp(target_times.astype(np.int64),
+    o_fracs = np.interp(target_times.astype(np.int64),
                         cutoff_dict['CUTOFF_TIME'].astype(np.int64),
-                        o_concs)
+                        o_fracs)
 
     # CREATE NEW DIRECTORY FOR RUNFILES
     run_dir +=  run_series_name + '/'        
@@ -763,12 +806,12 @@ def generate_plasmafile_noheavyions(cutoff_filename, run_dir, run_series_name, h
     
     
     for ii in range(Nt):
-        h_conc = 1. - he_conc - o_concs
+        h_frac = 1. - he_frac - o_fracs
         
         # Calculate cold plasma composition for this time
-        dens[0] = np.round(cold_dens * h_conc, 3)
-        dens[1] = np.round(cold_dens * he_conc + hope_dens[1] , 3)
-        dens[2] = np.round(cold_dens * o_concs[ii] + hope_dens[2], 3)
+        dens[0] = np.round(cold_dens * h_frac, 3)
+        dens[1] = np.round(cold_dens * he_frac + hope_dens[1] , 3)
+        dens[2] = np.round(cold_dens * o_fracs[ii] + hope_dens[2], 3)
         b_eq    = np.round(B0[ii]*1e9, 2)
         
         suffix = times[ii].astype(object).strftime('_%Y%m%d_%H%M%S_') + run_series_name
@@ -827,29 +870,29 @@ def generate_script_file(run_dir, run_series, hybrid_method='PREDCORR'):
             ii += 1
     return
 
-def generate_hybrid_files_from_cutoffs(he_conc=0.05, hybrid_method='PREDCORR'):
+def generate_hybrid_files_from_cutoffs(he_frac=0.05, hybrid_method='PREDCORR'):
     run_dir     = 'D://NEW_HYBRID_RUNFILES//'
     
     # July 25 event
     if False:
         cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
-        run_series_name = f'JUL25_PKTS_{he_conc*100:.0f}HE_{hybrid_method}'
-        generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=he_conc)
+        run_series_name = f'JUL25_PKTS_{he_frac*100:.0f}HE_{hybrid_method}'
+        generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_frac=he_frac)
         generate_script_file(run_dir, run_series_name, hybrid_method=hybrid_method)
     
     # Jan 16 event
     if False:
         cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//pearl_times.txt'
-        run_series_name = f'JAN16_PKTS_{he_conc*100:.0f}HE_{hybrid_method}'
-        generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=he_conc)
+        run_series_name = f'JAN16_PKTS_{he_frac*100:.0f}HE_{hybrid_method}'
+        generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_frac=he_frac)
         generate_script_file(run_dir, run_series_name, hybrid_method=hybrid_method)
         
     # July 25, peaks
     if False:
         cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
         target_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//packet_centers.txt'
-        run_series_name = f'JUL25_PC1PEAKS_{he_conc*100:.0f}HE_{hybrid_method}'
-        generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=he_conc,
+        run_series_name = f'JUL25_PC1PEAKS_{he_frac*100:.0f}HE_{hybrid_method}'
+        generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_frac=he_frac,
                             target_filename=target_filename)
         generate_script_file(run_dir, run_series_name, hybrid_method=hybrid_method)
         
@@ -858,16 +901,16 @@ def generate_hybrid_files_from_cutoffs(he_conc=0.05, hybrid_method='PREDCORR'):
         #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
         cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//cutoffs_only.txt'
         target_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//instability_peaks_HOPE.txt'
-        run_series_name = f'JUL25_PROXY_{he_conc*100:.0f}HE_{hybrid_method}'
-        generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_conc=he_conc,
+        run_series_name = f'JUL25_PROXY_{he_frac*100:.0f}HE_{hybrid_method}'
+        generate_plasmafile(cutoff_filename, run_dir, run_series_name, he_frac=he_frac,
                             target_filename=target_filename)
         generate_script_file(run_dir, run_series_name, hybrid_method=hybrid_method)
         
     if False:
-        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
+        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//cutoffs_only.txt'
         target_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//instability_peaks_HOPE.txt'
-        run_series_name = f'JUL25_PROXYHONLY_{he_conc*100:.0f}HE_{hybrid_method}'
-        generate_plasmafile_noheavyions(cutoff_filename, run_dir, run_series_name, he_conc=he_conc,
+        run_series_name = f'JUL25_PROXYHONLY_{he_frac*100:.0f}HE_{hybrid_method}'
+        generate_plasmafile_noheavyions(cutoff_filename, run_dir, run_series_name, he_frac=he_frac,
                             target_filename=target_filename)
         generate_script_file(run_dir, run_series_name, hybrid_method=hybrid_method)
     return
@@ -900,15 +943,35 @@ def calculate_anisotropy():
 if __name__ == '__main__':
     _rbsp_path  = 'E://DATA//RBSP//'
     _crres_path = 'E://DATA//CRRES//'
-    _time_start = np.datetime64('2015-01-16T04:05:00')
-    _time_end   = np.datetime64('2015-01-16T05:15:00')
+    _time_start = np.datetime64('1991-08-12T22:10:00')
+    _time_end   = np.datetime64('1991-08-12T23:15:00')
     _probe      = 'a'
     _pad        = 0
     _test_file_pa  = 'F://DATA//RBSP//ECT//HOPE//L3//PITCHANGLE//rbspa_rel04_ect-hope-PA-L3_20150116_v7.1.0.cdf'
     _test_file_mom = 'F://DATA//RBSP//ECT//HOPE//L3//MOMENTS//rbspa_rel04_ect-hope-MOM-L3_20150116_v7.1.0.cdf'
     
-    calculate_anisotropy()
-    sys.exit()
+    #calculate_anisotropy()
+    #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//cutoffs_only.txt'
+    #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only.txt'
+    #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//19910717_CRRES//cutoffs_only.txt'
+    cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//19910812_CRRES//cutoffs_only.txt'
+    
+    load_CRRES_data(_time_start, _time_end, crres_path=_crres_path, nsec=None, diag_plot=True)
+    
+# =============================================================================
+#     cutoff_dict = read_cutoff_file(cutoff_filename)
+#     o_fracs = np.zeros(cutoff_dict['CUTOFF_NORM'].shape[0], dtype=float)
+#     #for ii in range(cutoff_dict['CUTOFF_NORM'].shape[0]):
+#     o_fracs  = calculate_o_from_he_and_cutoff(cutoff_dict['CUTOFF_NORM'], 0.05)
+# =============================================================================
+    
+# =============================================================================
+#     import matplotlib.pyplot as plt
+#     plt.figure()
+#     plt.plot(cutoff_dict['CUTOFF_TIME'], o_fracs)
+#     plt.show()
+#     sys.exit()
+# =============================================================================
     
     #generate_hybrid_files_from_cutoffs(he_conc=0.05)
     #generate_hybrid_files_from_cutoffs(he_conc=0.15)

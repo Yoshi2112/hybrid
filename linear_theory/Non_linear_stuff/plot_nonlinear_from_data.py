@@ -461,15 +461,15 @@ def calculate_all_NL_amplitudes():
         cutoff  = np.interp(this_time.astype(np.int64),
                             cutoff_dict['CUTOFF_TIME'].astype(np.int64),
                             cutoff_dict['CUTOFF_NORM'])
-        o_conc = epd.calculate_o_from_he_and_cutoff(cutoff, he_conc)
-        h_conc = 100. - he_conc - o_conc
+        o_frac = epd.calculate_o_from_he_and_cutoff(cutoff, he_frac)
+        h_frac = 1. - he_frac - o_frac
         
         # Cold plasma params, SI units
         B0      = mag[ii]
         name    = np.array(['H'   , 'He'   , 'O'    ])
         mass    = np.array([1.0   , 4.0    , 16.0   ]) * PMASS
         charge  = np.array([1.0   , 1.0    , 1.0    ]) * PCHARGE
-        density = np.array([h_conc, he_conc, o_conc ]) * edens[ii] * 1e-2
+        density = np.array([h_frac, he_frac, o_frac ]) * edens[ii]
         ani     = np.array([0.0   , 0.0    , 0.0    ])
         tpar    = np.array([0.0   , 0.0    , 0.0    ])
         tper    = (ani + 1) * tpar
@@ -559,288 +559,6 @@ def calculate_all_NL_amplitudes():
     return
 
 
-def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
-    # Import cutoff-derived composition information
-    cutoff_dict = epd.read_cutoff_file(cutoff_filename)
-        
-    # Load particle and field information
-    if probe.lower() != 'crres':
-        time, mag, edens, cold_dens, hope_dens, hope_tpar, hope_tperp, hope_anis, L_vals =\
-                                           load_and_interpolate_plasma_params(
-                                           time_start, time_end, probe, nsec=None, 
-                                           rbsp_path='E://DATA//RBSP//', HM_filter_mhz=50.0,
-                                           time_array=None, check_interp=False)
-    else:
-        load_CRRES_data(time_start, time_end, crres_path='E://DATA//CRRES//', nsec=None)
-                  
-    mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower = \
-            load_EMIC_IMFs_and_dynspec(time_start, time_end)
-    spower = spower.sum(axis=0)
-
-    # Replace this with just the index in the loop later
-    # And an updated axvline
-    #this_time = np.datetime64('2013-07-25T21:29:40')
-    #time_idx  = np.where(abs(time - this_time) == np.min(abs(time - this_time)))[0][0]        
-    
-    # Get velocity/energy data for time
-    plt.ioff()
-    for ii in range(time.shape[0]):
-        
-        # Define time, time index
-        this_time   = time[ii]
-        maxpwr_tidx = np.where(abs(stime - this_time) == np.min(abs(stime - this_time)))[0][0]
-        
-        # Find max freq and index
-        fst, fen     = ascr.boundary_idx64(sfreq, _band_start, _band_end)
-        maxpwr_fidx  = spower[maxpwr_tidx, fst:fen].argmax()
-        maxpwr_fidx += fst
-        maxpwr_freq  = sfreq[maxpwr_fidx]
-        
-        #date_string = this_time.astype(object).strftime('%Y%m%d')
-        save_string = this_time.astype(object).strftime('%Y%m%d_%H%M%S')
-    
-        #clr = mapper.to_rgba(time[ii].astype(np.int64))
-        print('Doing time:', this_time)
-        
-        fig, axes = plt.subplots(nrows=4, ncols=2, figsize=(8.0, 0.5*11.00),
-                                 gridspec_kw={'width_ratios':[1, 0.01],
-                                              'height_ratios':[1, 2, 2, 2]
-                                              })
-        
-        # Spectra/IP
-        im0 = axes[0, 0].pcolormesh(stime, sfreq, spower.T, cmap='jet',
-                             norm=colors.LogNorm(vmin=1e-4, vmax=1e1))
-        axes[0, 0].set_ylim(0, fmax)
-        axes[0, 0].set_ylabel('$f$ [Hz]', rotation=90)
-        fig.colorbar(im0, cax=axes[0, 1], extend='both').set_label(
-                    r'$\frac{nT^2}{Hz}$', fontsize=16, rotation=0, labelpad=15)
-        
-        axes[0, 0].axvline(this_time, color='white', ls='-' , alpha=0.7)
-        axes[0, 0].set_xlim(time_start, time_end)
-        axes[0, 0].set_xticklabels([])
-        
-        axes[0, 0].axvline(this_time,   color='white', ls='-', alpha=0.75)
-        axes[0, 0].axhline(maxpwr_freq, color='white', ls='-', alpha=0.75)
-        axes[0, 0].set_title(f'Velocities and Energies :: {this_time}')
-        
-        # Get oxygen concentration from cutoffs
-        cutoff  = np.interp(this_time.astype(np.int64),
-                            cutoff_dict['CUTOFF_TIME'].astype(np.int64),
-                            cutoff_dict['CUTOFF_NORM'])
-        o_conc = epd.calculate_o_from_he_and_cutoff(cutoff, he_conc)
-        h_conc = 100. - he_conc - o_conc
-        
-        # Cold plasma params, SI units
-        B0      = mag[ii]
-        name    = np.array(['H'   , 'He'   , 'O'    ])
-        mass    = np.array([1.0   , 4.0    , 16.0   ]) * PMASS
-        charge  = np.array([1.0   , 1.0    , 1.0    ]) * PCHARGE
-        density = np.array([h_conc, he_conc, o_conc ]) * edens[ii] * 1e-2
-        ani     = np.array([0.0   , 0.0    , 0.0    ])
-        tpar    = np.array([0.0   , 0.0    , 0.0    ])
-        tper    = (ani + 1) * tpar
-        Species, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
-        
-        # Frequencies to evaluate, calculate wavenumber (cold approximation)
-        f_min  = _band_start
-        f_max  = _band_end
-        Nf     = 10000
-        f_vals = np.linspace(f_min, f_max, Nf)
-        w_vals = 2*np.pi*f_vals
-        k_vals = nls.get_k_cold(w_vals, Species)
-        wv_len = 1e-3 * 2*np.pi / k_vals
-        
-        fidx = np.where(abs(f_vals - maxpwr_freq) == np.min(abs(f_vals - maxpwr_freq)))[0][0] 
-        freq = f_vals[fidx]
-        
-        axes[1, 0].plot(f_vals, wv_len, c='k')
-        axes[1, 0].set_ylabel('$\lambda_{EMIC}$ [km]')
-        axes[1, 0].set_ylim(0, 2000)
-        
-        # Velocities
-        Vg, Vp, Vr = nls.get_velocities(w_vals, Species, PP)
-    
-        axes[2, 0].semilogy(f_vals, Vg*1e-3, c='k', label='$V_g$') 
-        axes[2, 0].semilogy(f_vals, Vp*1e-3, c='r', label='$V_p$')
-        axes[2, 0].semilogy(f_vals,-Vr*1e-3, c='b', label='$-V_R$')
-        axes[2, 0].set_ylim(10, 4500)
-        axes[2, 0].set_ylabel('Velocities [km/s]')
-        axes[2, 0].legend(bbox_to_anchor=(1.0, 0), loc=3, borderaxespad=0.)
-        
-        # Energies
-        ELAND, ECYCL = nls.get_energies(w_vals, k_vals, PP['pcyc_rad'], PMASS)
-        axes[3, 0].semilogy(f_vals, ELAND*1e-3, c='r', label='$E_0$')
-        axes[3, 0].semilogy(f_vals, ECYCL*1e-3, c='b', label='$E_1$')
-        axes[3, 0].set_ylim(1e-1, 1e3)
-        axes[3, 0].set_ylabel('$E_R$ [keV]')
-        axes[3, 0].set_xlabel('Freq [Hz]', rotation=0)
-        axes[3, 0].legend(bbox_to_anchor=(1.0, 0), loc=3, borderaxespad=0.)
-        
-        # Work out what the energy is at maxpwr_freq
-        num_landau    = ELAND[fidx]*1e-3
-        num_cyclotron = ECYCL[fidx]*1e-3
-        
-        axes[3, 0].text(0.8, 0.9, f'$E_0(f) =$ {num_landau:.1f} keV', horizontalalignment='left',
-                        verticalalignment='center', transform=axes[3, 0].transAxes)
-        axes[3, 0].text(0.8, 0.8, f'$E_1(f) =$ {num_cyclotron:.1f} keV', horizontalalignment='left',
-                        verticalalignment='center', transform=axes[3, 0].transAxes)
-        
-        axes[0, 0].set_xticklabels([])
-        axes[1, 0].set_yticks(np.array([0, 500, 1000, 1500]))
-        for ax in axes[1:, 0]:
-            ax.set_xlim(_band_start, _band_end)
-            ax.axvline(freq, color='k', alpha=0.5, ls='--')
-            if ax != axes[-1, 0]:
-                ax.set_xticklabels([])
-        
-        axes[1, 1].set_visible(False)
-        axes[2, 1].set_visible(False)
-        axes[3, 1].set_visible(False)
-        
-        #fig.tight_layout(rect=[0, 0, 0.95, 1])
-        fig.tight_layout()
-        fig.subplots_adjust(wspace=0.05, hspace=0)
-        fig.align_ylabels()
-        
-        if save_plot == True:
-            print('Saving plot...')
-            fig.savefig(_plot_path + 'VELENG_FROMDATA_' + save_string + '.png', dpi=dpi)
-            plt.close('all')
-        else:
-            plt.show()
-    return
-
-
-def plot_HM_and_energy(time_start, time_end, probe):
-    '''
-    For a specific frequency, calculate what the first order cyclotron resonance
-    energy is and plot this as a timeseries. Secondary plots for the Pc1 spectra
-    and HM/|B| spectra
-    
-    Do for all frequencies and select specific frequency at end (or option to
-    show as a pcolormesh)
-    '''
-    # Import cutoff-derived composition information
-    cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
-    cutoff_dict     = epd.read_cutoff_file(cutoff_filename)
-        
-    time, mag, edens, cold_dens, hope_dens, hope_tpar, hope_tperp, hope_anis, L_vals =\
-                                       load_and_interpolate_plasma_params(
-                                       time_start, time_end, probe, nsec=None, 
-                                       rbsp_path='E://DATA//RBSP//', HM_filter_mhz=50.0,
-                                       time_array=None, check_interp=False)
-    
-    mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower = \
-            load_EMIC_IMFs_and_dynspec(time_start, time_end)
-
-    # Frequencies to evaluate, calculate wavenumber (cold approximation)
-    f_min  = _band_start
-    f_max  = _band_end
-    Nf     = 10000
-    f_vals = np.linspace(f_min, f_max, Nf)
-    w_vals = 2*np.pi*f_vals
-    
-    all_CR = np.zeros((time.shape[0], Nf), dtype=np.float64)
-    all_LR = np.zeros((time.shape[0], Nf), dtype=np.float64)
-    all_VP = np.zeros((time.shape[0], Nf), dtype=np.float64)
-    all_VG = np.zeros((time.shape[0], Nf), dtype=np.float64)
-    all_VR = np.zeros((time.shape[0], Nf), dtype=np.float64)
-    
-    # Collect info for each time
-    for ii in range(time.shape[0]):
-        this_time = time[ii]
-        print('Doing time:', this_time)
-           
-        # Get oxygen concentration from cutoffs
-        cutoff  = np.interp(this_time.astype(np.int64),
-                            cutoff_dict['CUTOFF_TIME'].astype(np.int64),
-                            cutoff_dict['CUTOFF_NORM'])
-        o_conc = epd.calculate_o_from_he_and_cutoff(cutoff, he_conc)
-        h_conc = 100. - he_conc - o_conc
-        
-        # Cold plasma params, SI units
-        B0      = mag[ii]
-        name    = np.array(['H'   , 'He'   , 'O'    ])
-        mass    = np.array([1.0   , 4.0    , 16.0   ]) * PMASS
-        charge  = np.array([1.0   , 1.0    , 1.0    ]) * PCHARGE
-        density = np.array([h_conc, he_conc, o_conc ]) * edens[ii] * 1e-2
-        ani     = np.array([0.0   , 0.0    , 0.0    ])
-        tpar    = np.array([0.0   , 0.0    , 0.0    ])
-        tper    = (ani + 1) * tpar
-        Species, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
-        
-        # Velocities and Energies
-        k_vals = nls.get_k_cold(w_vals, Species)
-        all_VG[ii], all_VP[ii], all_VR[ii] = nls.get_velocities(w_vals, Species, PP)
-        all_LR[ii], all_CR[ii] = nls.get_energies(w_vals, k_vals, PP['pcyc_rad'], PMASS)
-        
-    fig, axes = plt.subplots(nrows=5, ncols=2, figsize=(8.0, 1.0*11.00),
-                                 gridspec_kw={'width_ratios':[1, 0.01]
-                                              })
-
-    # To plot: Spectra, velocities (Vg, Vr) and energies (cyclotron, landau resonances)
-    # HM/|B| overlay
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        axes[0, 0].set_title(f'Velocities and Energies :: {this_time}')
-        
-        # Spectra
-        im0 = axes[0, 0].pcolormesh(stime, sfreq, spower.sum(axis=0).T, cmap='jet',
-                             norm=colors.LogNorm(vmin=1e-4, vmax=1e1))
-        axes[0, 0].set_ylim(0, fmax)
-        axes[0, 0].set_ylabel('$f$ [Hz]', rotation=90)
-        fig.colorbar(im0, cax=axes[0, 1], extend='both').set_label(
-                    r'$\frac{nT^2}{Hz}$', fontsize=14, rotation=0, labelpad=15)
-        
-        # E_RES_CYCLOTRON
-        im1 = axes[1, 0].pcolormesh(time, f_vals, all_CR.T*1e-3, cmap='jet',
-                             norm=colors.Normalize())
-        axes[1, 0].set_ylabel('$f$ [Hz]', rotation=90)
-        fig.colorbar(im1, cax=axes[1, 1], extend='both').set_label(
-                    '$E_R$ Cyclotron\n[keV]', fontsize=14, rotation=0, labelpad=15)
-        
-        # E_RES_LANDAU
-        im2 = axes[2, 0].pcolormesh(time, f_vals, all_LR.T*1e-3, cmap='jet',
-                             norm=colors.Normalize())
-        axes[2, 0].set_ylabel('$f$ [Hz]', rotation=90)
-        fig.colorbar(im2, cax=axes[2, 1], extend='both').set_label(
-                    '$E_R$ Landau\n[keV]', fontsize=14, rotation=0, labelpad=15)
-        
-        # VR
-        im3 = axes[3, 0].pcolormesh(time, f_vals, all_VR.T*1e-3, cmap='jet',
-                             norm=colors.Normalize())
-        axes[3, 0].set_ylabel('$f$ [Hz]', rotation=90)
-        fig.colorbar(im3, cax=axes[3, 1], extend='both').set_label(
-                    '$V_R$\n[$km/s$]', fontsize=14, rotation=0, labelpad=15)
-        
-        # VG
-        im4 = axes[4, 0].pcolormesh(time, f_vals, all_VG.T*1e-3, cmap='jet',
-                             norm=colors.Normalize())
-        axes[4, 0].set_ylabel('$f$ [Hz]', rotation=90)
-        fig.colorbar(im4, cax=axes[4, 1], extend='both').set_label(
-                    '$V_G$\n[$km/s$]', fontsize=14, rotation=0, labelpad=15)
-        
-        for ax in axes[:, 0]:
-            ax.set_xlim(time_start, time_end)
-            ax.set_ylim(_band_start, _band_end)
-            
-            ax2 = ax.twinx()
-            ax2.plot(mag_time, HM_mags[:, 2], c='k', lw=0.75)
-                
-    fig.tight_layout()
-    fig.subplots_adjust(wspace=0.05, hspace=0)
-    fig.align_ylabels()
-    
-    if save_plot == True:
-        save_string = time_start.astype(object).strftime('%Y%m%d_%H%M')
-        
-        print('Saving plot...')
-        fig.savefig(_plot_path + 'VELENG_FROMDATA_PCOLOR_' + save_string + '.png')
-        plt.close('all')
-    else:
-        plt.show()
-    return
-
 #%% MAIN
 if __name__ == '__main__':
     _rbsp_path  = 'E://DATA//RBSP//'
@@ -851,7 +569,7 @@ if __name__ == '__main__':
     
     # TODO: Put all important event-specific variables in the switch
     pc1_res = 15.0
-    dpi = 300
+    dpi = 200
     if False:
         _probe = 'a'
         _time_start = np.datetime64('2013-07-25T21:25:00')
@@ -861,40 +579,29 @@ if __name__ == '__main__':
 
         _npeaks     = 22
         fmax        = 1.0
-        he_conc     = 30.0
+        he_frac     = 0.30
+        
+        L     = 4.70
+        B_max = 17.0
         
         #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
         cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//cutoffs_only.txt'
-    elif False:
+    else:
         _probe = 'a'
         _time_start = np.datetime64('2015-01-16T04:25:00')
         _time_end   = np.datetime64('2015-01-16T05:15:00')
-        _band_start = 0.1
-        _band_end   = 0.4
+        _band_start = 0.10
+        _band_end   = 0.20
         _npeaks     = 22
         fmax        = 0.5
-        he_conc     = 30.0
+        he_frac     = 0.30
         
-        #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only.txt'
+        L     = 5.73
+        B_max = 6.00
+        
+        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only.txt'
         #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only_10mHz.txt'
-        cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//pearl_times.txt'
-    elif False:
-        _time_start = np.datetime64('1991-07-17T20:15:00')
-        _time_end   = np.datetime64('1991-07-17T21:00:00')
-        _probe       = 'crres'
-        _band_start = 0.10
-        _band_end   = 0.30
-        clims      = [1e-4, 1e1]
-        pc1_res    = 10.0
-    else:
-        raise IOError('Event must be selected')
-    
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        #calculate_all_NL_amplitudes()
-        plot_velocities_and_energies_single(_time_start, _time_end, probe=_probe)
-        #plot_HM_and_energy(_time_start, _time_end, _probe)
-        sys.exit()
+        #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//pearl_times.txt'
     
     time_start = _time_start
     time_end   = _time_end
@@ -903,389 +610,225 @@ if __name__ == '__main__':
     
     plot_start = time_start - np.timedelta64(int(pad), 's')
     plot_end   = time_end   + np.timedelta64(int(pad), 's')
+
     
-    #%% Energy and velocity colorplots
-    if False:
-        # Import cutoff-derived composition information
-        cutoff_dict     = epd.read_cutoff_file(cutoff_filename)
+    #%% Non-linear trace plots
+    if True:
+        for case in [2]:
+            if case == 0:
+                # Section 1 (Whole)
+                parameter_time = np.datetime64('2013-07-25T21:29:40')
+                packet_start   = np.datetime64('2013-07-25T21:27:30')
+                packet_end     = np.datetime64('2013-07-25T21:32:15')
+                cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//cutoffs_only.txt'
+
+                _band_start = 0.21
+                _band_end   = 0.43
+            elif case == 1:
+                # Single Packet near  end
+                parameter_time = np.datetime64('2013-07-25T21:42:12')
+                packet_start   = np.datetime64('2013-07-25T21:42:12')
+                packet_end     = np.datetime64('2013-07-25T21:42:45')
+                cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//cutoffs_only.txt'
+                
+                _band_start = 0.43
+                _band_end   = 0.76
+                
+            elif case == 2:
+                # Single Packet
+                parameter_time = np.datetime64('2015-01-16T04:32:04')
+                packet_start   = np.datetime64('2015-01-16T04:27:00')
+                packet_end     = np.datetime64('2015-01-16T05:08:30')
+                cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only.txt'
+                
+                _band_start = 0.12
+                _band_end   = 0.35
+                
+            elif case == 3:
+                # Single Packet 1
+                packet_start   = np.datetime64('2015-01-16T04:32:17')
+                packet_end     = np.datetime64('2015-01-16T04:33:31')
+                parameter_time = np.datetime64('2015-01-16T04:32:34')
+                cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only.txt'
+                
+                _band_start = 0.12
+                _band_end   = 0.18
+                
+            elif case == 4:
+                # Single Packet 2
+                packet_start   = np.datetime64('2015-01-16T04:35:03')
+                packet_end     = np.datetime64('2015-01-16T04:36:01')
+                parameter_time = np.datetime64('2015-01-16T04:35:18')
+                cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only.txt'
+                
+                _band_start = 0.12
+                _band_end   = 0.18
+                
+            elif case == 5:
+                # Single Packet 2
+                packet_start   = np.datetime64('2015-01-16T04:47:24')
+                packet_end     = np.datetime64('2015-01-16T04:48:50')
+                parameter_time = np.datetime64('2015-01-16T04:47:31')
+                cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only.txt'
+                
+                _band_start = 0.12
+                _band_end   = 0.18
+                
+                
+            # Import cutoff-derived composition information
+            cutoff_dict = epd.read_cutoff_file(cutoff_filename)
             
-        time, mag, edens, cold_dens, hope_dens, hope_tpar, hope_tperp, hope_anis, L_vals =\
-                                           load_and_interpolate_plasma_params(
-                                           time_start, time_end, probe, nsec=None, 
-                                           rbsp_path='E://DATA//RBSP//', HM_filter_mhz=50.0,
-                                           time_array=None, check_interp=False)
-        
-        hope_dens[1] *= 0
-        hope_dens[2] *= 0
-        
-        mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower = \
-                load_EMIC_IMFs_and_dynspec(time_start, time_end)
-    
-        # Frequencies to evaluate, calculate wavenumber (cold approximation)
-        f_min  = _band_start
-        f_max  = _band_end
-        Nf     = 10000
-        f_vals = np.linspace(f_min, f_max, Nf)
-        w_vals = 2*np.pi*f_vals
-        
-        all_CR = np.zeros((time.shape[0], Nf), dtype=np.float64)
-        all_LR = np.zeros((time.shape[0], Nf), dtype=np.float64)
-        all_VP = np.zeros((time.shape[0], Nf), dtype=np.float64)
-        all_VG = np.zeros((time.shape[0], Nf), dtype=np.float64)
-        all_VR = np.zeros((time.shape[0], Nf), dtype=np.float64)
-        
-        # Collect info for each time
-        for ii in range(time.shape[0]):
-            this_time = time[ii]
-            print('Doing time:', this_time)
-               
+            time, mag, edens, cold_dens, hope_dens, hope_tpar, hope_tperp, hope_anis, L_vals, =\
+                                               load_and_interpolate_plasma_params(
+                                               plot_start, plot_end, probe, nsec=None, 
+                                               rbsp_path='E://DATA//RBSP//', HM_filter_mhz=50.0,
+                                               time_array=None, check_interp=False)
+                
+            time_idx       = np.where(abs(time - parameter_time) == np.min(abs(time - parameter_time)))[0][0]
+            
             # Get oxygen concentration from cutoffs
-            
-            cutoff  = np.interp(this_time.astype(np.int64),
+            cutoff  = np.interp(parameter_time.astype(np.int64),
                                 cutoff_dict['CUTOFF_TIME'].astype(np.int64),
                                 cutoff_dict['CUTOFF_NORM'])
-            o_conc = 0.02#epd.calculate_o_from_he_and_cutoff(cutoff, he_conc)
-            h_conc = 100. - he_conc - o_conc
+            o_frac = epd.calculate_o_from_he_and_cutoff(cutoff, he_frac)
+            h_frac = 1. - he_frac - o_frac
             
             # Cold plasma params, SI units
-            B0      = mag[ii]
+            B0      = mag[time_idx]
             name    = np.array(['H'   , 'He'   , 'O'    ])
             mass    = np.array([1.0   , 4.0    , 16.0   ]) * PMASS
             charge  = np.array([1.0   , 1.0    , 1.0    ]) * PCHARGE
-            density = np.array([h_conc, he_conc, o_conc ]) * edens[ii] * 1e-2
+            density = np.array([h_frac, he_frac, o_frac ]) * edens[time_idx]
             ani     = np.array([0.0   , 0.0    , 0.0    ])
             tpar    = np.array([0.0   , 0.0    , 0.0    ])
             tper    = (ani + 1) * tpar
             Species, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
             
-            # Velocities and Energies
+            # Frequencies to evaluate, calculate wavenumber (cold approximation)
+            f_min  = 0.07*PP['pcyc_rad'] / (2*np.pi)
+            f_max  = 0.24*PP['pcyc_rad'] / (2*np.pi)
+            Nf     = 10000
+            f_vals = np.linspace(f_min, f_max, Nf)
+            w_vals = 2*np.pi*f_vals
             k_vals = nls.get_k_cold(w_vals, Species)
-            all_VG[ii], all_VP[ii], all_VR[ii] = nls.get_velocities(w_vals, Species, PP)
-            all_LR[ii], all_CR[ii] = nls.get_energies(w_vals, k_vals, PP['pcyc_rad'], PMASS)
-        
-        # Select central frequencies
-        low_f  = 0.32
-        high_f = 0.5
-        fst, fen = ascr.boundary_idx64(f_vals, _band_start, _band_end)
-           
-        #%% PLOT PART        
-        fig, axes = plt.subplots(nrows=5, ncols=2, figsize=(8.0, 1.0*11.00),
-                                     gridspec_kw={'width_ratios':[1, 0.01]
-                                                  })
-        
-        # To plot: Spectra, velocities (Vg, Vr) and energies (cyclotron, landau resonances)
-        # HM/|B| overlay
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            axes[0, 0].set_title(f'Velocities and Energies :: {this_time}')
             
-            # Spectra
+            # Define hot proton parameters (velocities normalized c) : vth = sqrt(kT/m)?
+            # Remember: temperatures originally in eV
+            nh = hope_dens[0][time_idx]
+            wph2 = nh * PCHARGE ** 2 / (PMASS * EPS0) 
+            Vth_para = np.sqrt(KB * hope_tpar[0][time_idx]*(PCHARGE/KB)  / PMASS) / SPLIGHT
+            Vth_perp = np.sqrt(KB * hope_tperp[0][time_idx]*(PCHARGE/KB) / PMASS) / SPLIGHT
+            Q = 0.5
+            
+            # Curvature parameters (this has the most wiggle room)
+            a  = 4.5 / (L*RE)**2
+            a  = a*(SPLIGHT**2/PP['pcyc_rad']**2)
+            
+            Vg, Vp, Vr = nls.get_velocities(w_vals, Species, PP, normalize=True)
+            s0, s1, s2 = nls.get_inhomogeneity_terms(w_vals, Species, PP, Vth_perp, normalize_vel=True)
+            
+            # Normalize input parameters
+            wph = np.sqrt(wph2) / PP['pcyc_rad']
+            w   = w_vals / PP['pcyc_rad']
+            
+            # DO THE ACTUAL CALCULATION (All hands off from here, using existing code/proforma)
+            tau   = 1.00
+            B_th  = nls.get_threshold_amplitude(w, wph, Q, s2, a, Vp, Vr, Vth_para, Vth_perp)
+            B_opt = nls.get_optimum_amplitude(w, wph, Q, tau, s0, s1, Vg, Vr, Vth_para, Vth_perp)
+            T_tr  = nls.get_nonlinear_trapping_period(k_vals, Vth_perp*SPLIGHT, B_opt*PP['B0'])
+            T_N   = tau*T_tr*PP['pcyc_rad']
+            
+            # Filter zeros and infs:
+            B_th[B_th == np.inf] = np.nan
+            B_th[B_th == 0]      = np.nan
+            
+            B_opt[B_opt == np.inf] = np.nan
+            B_opt[B_opt == 0]      = np.nan
+            
+            T_N[T_N == np.inf] = np.nan
+            T_N[T_N == 0]      = np.nan
+        
+            # Load EMIC data IMF values
+            mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower = \
+                load_EMIC_IMFs_and_dynspec(packet_start, packet_end)
+            
+            #%% PLOT: NaN's and inf's in arrays: How to filter to plot? Set to all NaN's
+            #       Also semilogy doesn't like zero: Set to NaN
+            #
+            # Plot axes:
+            # -- Dynamic spectra for context, /w label for parameter time and packet times. Maybe IF?
+            # -- Plot IMF just for check? 
+            # -- Large bottom plot: IF vs. IA
+            # -- Maybe try a plot for linear/nonlinear growth rates vs. frequency?
+            # -- Also should look at velocities/energies so we can see what sort of values are resonant
+            #       (Do this separately)
+            
+            # Filter IF/IA if outside bandpassed frequencies
+            if True:
+                for ii in range(IF[0].shape[0]):
+                    for jj in [0, 1]:
+                        if IF[jj][ii, 0] > _band_end or IF[jj][ii, 0] < _band_start:
+                            IF[jj][ii, 0] = np.nan
+                            
+            # Maybe add extra filter for amplitude lower than a certain fraction (e.g. <0.1 nT)
+            plt.ioff()
+            lpad = 20; fsize=12
+            fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(8.00, 0.5*11.00),
+                                         gridspec_kw={'width_ratios':[1, 0.01],
+                                                      'height_ratios':[1, 0.3, 2]
+                                                      })
+            
+            # Spectra/IP
             im0 = axes[0, 0].pcolormesh(stime, sfreq, spower.sum(axis=0).T, cmap='jet',
                                  norm=colors.LogNorm(vmin=1e-4, vmax=1e1))
             axes[0, 0].set_ylim(0, fmax)
-            axes[0, 0].set_ylabel('$f$ [Hz]', rotation=90)
+            axes[0, 0].set_ylabel('$f$\n(Hz)', rotation=0, labelpad=lpad, fontsize=fsize)
             fig.colorbar(im0, cax=axes[0, 1], extend='both').set_label(
-                        r'$\frac{nT^2}{Hz}$', fontsize=14, rotation=0, labelpad=15)
+                        r'$\frac{nT^2}{Hz}$', fontsize=fsize+2, rotation=0, labelpad=20)
             
-            axes[0, 0].axhline(f_vals[fst], c='white', ls='--')
-            axes[0, 0].axhline(f_vals[fen], c='white', ls='--')
+            axes[0, 0].plot(imf_time, IF[0][:, 0], c='k', lw=0.75)
+            axes[0, 0].plot(imf_time, IF[1][:, 0], c='k', lw=0.75, alpha=0.8)
+            #axes[0, 0].plot(imf_time, IF[2][:, 0], c='k', lw=0.75, alpha=0.6)
+            axes[0, 0].axvline(parameter_time, color='white', ls='-' , alpha=0.7)
+            axes[0, 0].set_xlim(plot_start, plot_end)
             
-            # E_RES_CYCLOTRON
-            im1 = axes[1, 0].pcolormesh(time, f_vals, all_CR.T*1e-3, cmap='jet',
-                                 norm=colors.LogNorm(vmin=1e-1, vmax=1e3))
-            axes[1, 0].set_ylabel('$f$ [Hz]', rotation=90)
-            fig.colorbar(im1, cax=axes[1, 1], extend='both')#.set_label(
-                        #'$E_R$ Cyclotron\n[keV]', fontsize=14, rotation=0, labelpad=15)
-            
-            # E_RES_LANDAU
-            im2 = axes[2, 0].pcolormesh(time, f_vals, all_LR.T*1e-3, cmap='jet',
-                                 norm=colors.LogNorm(vmin=1e-2, vmax=1e0))
-            axes[2, 0].set_ylabel('$f$ [Hz]', rotation=90)
-            fig.colorbar(im2, cax=axes[2, 1], extend='both').set_label(
-                        '$E_R$ Landau\n[keV]', fontsize=14, rotation=0, labelpad=15)
-            
-            # VR
-            im3 = axes[3, 0].pcolormesh(time, f_vals, -all_VR.T*1e-3, cmap='jet',
-                                 norm=colors.LogNorm(vmin=1e1, vmax=1e4))
-            axes[3, 0].set_ylabel('$f$ [Hz]', rotation=90)
-            fig.colorbar(im3, cax=axes[3, 1], extend='both').set_label(
-                        '$V_R$\n[$km/s$]', fontsize=14, rotation=0, labelpad=15)
-            
-            # VG
-            im4 = axes[4, 0].pcolormesh(time, f_vals, all_VG.T*1e-3, cmap='jet',
-                                 norm=colors.LogNorm(vmin=1e0, vmax=1e3))
-            axes[4, 0].set_ylabel('$f$ [Hz]', rotation=90)
-            fig.colorbar(im4, cax=axes[4, 1], extend='both').set_label(
-                        '$V_G$\n[$km/s$]', fontsize=14, rotation=0, labelpad=15)
-            
-            for ax in axes[:, 0]:
-                ax.set_xlim(time_start, time_end)
-                ax.set_ylim(_band_start, _band_end)
-                
-                ax2 = ax.twinx()
-                ax2.plot(mag_time, HM_mags[:, 2], c='k', lw=0.75)
-                    
-        fig.tight_layout()
-        fig.subplots_adjust(wspace=0.05, hspace=0)
-        fig.align_ylabels()
-        
-        if save_plot == True:
-            save_string = time_start.astype(object).strftime('%Y%m%d_%H%M')
-            
-            print('Saving plot...')
-            fig.savefig(_plot_path + 'VELENG_FROMDATA_PCOLOR_' + save_string + '.png')
-            plt.close('all')
-        else:
-            plt.show()
-            
-        #%% Energy and velocity timeseries
-        fig, axes = plt.subplots(nrows=4, figsize=(8.0, 1.0*11.00))
-        
-        axes[0].set_title('Velocities and Energies :: Upper/Lower frequency limits')
-        
-        # Line plot for lower/upper frequency bin (c_res, l_res, vr, vg)
-        axes[0].semilogy(time, all_CR[:, fst]*1e-3, c='b')
-        axes[0].semilogy(time, all_CR[:, fen]*1e-3, c='r')
-        axes[0].set_ylabel('Cyclotron Res. (keV)')
-        
-        axes[1].semilogy(time, all_LR[:, fst]*1e-3, c='b')
-        axes[1].semilogy(time, all_LR[:, fen]*1e-3, c='r')
-        axes[1].set_ylabel('Landau Res. (keV)')
-        
-        axes[2].semilogy(time, all_VG[:, fst], c='b')
-        axes[2].semilogy(time, all_VG[:, fen], c='r')
-        axes[2].set_ylabel('Group Velocity (km/s)')
-        
-        axes[3].semilogy(time,-all_VR[:, fst], c='b')
-        axes[3].semilogy(time,-all_VR[:, fen], c='r')
-        axes[3].set_ylabel('Resonance Velocity (km/s)')   
-        axes[3].set_xlabel('Time (UT)')
-        
-        for ax in axes:
-            ax.set_xlim(time_start, time_end)
-        
-        fig.tight_layout()
-        fig.subplots_adjust(wspace=0.05, hspace=0)
-        fig.align_ylabels()
-        
-        plt.show()
-
+            axes[0, 0].axhline(_band_start, color='white', ls='--')
+            axes[0, 0].axhline(_band_end  , color='white', ls='--')
     
-    #%% Non-linear trace plots
-    if False:
-        # Plot sample time Jul25 21:33:53 UT
-        if False:
-            # Section 1 (Whole)
-            parameter_time = np.datetime64('2013-07-25T21:29:40')
-            packet_start   = np.datetime64('2013-07-25T21:27:30')
-            packet_end     = np.datetime64('2013-07-25T21:32:15')
+            # Bth, Bopt, Inst. Amplitudes
+            axes[2, 0].plot(f_vals, B_th*B0*1e9, c='k', ls='--', label=r'$B_{th}$')
+            axes[2, 0].plot(f_vals, B_opt*B0*1e9, c='k', ls='-', label=r'$B_{opt}$')
+            axes[2, 0].set_ylabel('$B$\n(nT)', rotation=0, labelpad=20, fontsize=fsize)
+            axes[2, 0].set_xlabel('$f$ (Hz)]', fontsize=fsize)
+            axes[2, 0].set_ylim(0, B_max)
+            axes[2, 0].set_xlim(f_vals[0], f_vals[-1])
+            axes[2, 0].tick_params(top=True, right=True)
+               
+            m_size = 1
+            axes[2, 0].scatter(IF[0][:, 0], IA[0][:, 0], c='b', s=m_size, marker='.', label='$B_\\nu$')
+            axes[2, 0].scatter(IF[1][:, 0], IA[1][:, 0], c='r', s=m_size, marker='.', label='$B_\phi$')
+            #axes[3, 0].scatter(IF[2][:, 0], IA[2][:, 0], c='k', s=m_size)
             
-            _band_start = 0.21
-            _band_end   = 0.43
-        elif False:
-            # Single Packet near  end
-            parameter_time = np.datetime64('2013-07-25T21:42:12')
-            packet_start   = np.datetime64('2013-07-25T21:42:12')
-            packet_end     = np.datetime64('2013-07-25T21:42:45')
+            # Start/Stop
+            axes[2, 0].scatter(IF[0][0, 0], IA[0][0, 0], c='b', s=40, marker='o')
+            axes[2, 0].scatter(IF[1][0, 0], IA[1][0, 0], c='r', s=40, marker='o')    
+            axes[2, 0].scatter(IF[0][-1, 0], IA[0][-1, 0], c='b', s=40, marker='x')
+            axes[2, 0].scatter(IF[1][-1, 0], IA[1][-1, 0], c='r', s=40, marker='x')  
+            axes[2, 0].legend(loc='upper right')
             
-            _band_start = 0.43
-            _band_end   = 0.76
+            axes[1, 0].set_visible(False)
+            axes[1, 1].set_visible(False)
+            axes[2, 1].set_visible(False)
+            axes[0, 0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
             
-        elif False:
-            # Single Packet
-            parameter_time = np.datetime64('2015-01-16T04:32:04')
-            packet_start   = np.datetime64('2015-01-16T04:27:00')
-            packet_end     = np.datetime64('2015-01-16T05:08:30')
+            fig.tight_layout()
+            fig.subplots_adjust(wspace=0.05, hspace=0)
+            fig.align_ylabels()
             
-            _band_start = 0.12
-            _band_end   = 0.18
-            
-        elif False:
-            # Single Packet 1
-            packet_start   = np.datetime64('2015-01-16T04:32:17')
-            packet_end     = np.datetime64('2015-01-16T04:33:31')
-            parameter_time = np.datetime64('2015-01-16T04:32:34')
-            
-            _band_start = 0.12
-            _band_end   = 0.18
-            
-        elif False:
-            # Single Packet 2
-            packet_start   = np.datetime64('2015-01-16T04:35:03')
-            packet_end     = np.datetime64('2015-01-16T04:36:01')
-            parameter_time = np.datetime64('2015-01-16T04:35:18')
-            
-            _band_start = 0.12
-            _band_end   = 0.18
-            
-        elif True:
-            # Single Packet 2
-            packet_start   = np.datetime64('2015-01-16T04:47:24')
-            packet_end     = np.datetime64('2015-01-16T04:48:50')
-            parameter_time = np.datetime64('2015-01-16T04:47:31')
-            
-            _band_start = 0.12
-            _band_end   = 0.18
-            
-            
-        # L-shell for field curvature (Jul 25: 4.7, Jan 16: 5.73)
-        L     = 5.73
-        B_max = 6.00
-        
-        # Import cutoff-derived composition information
-        cutoff_dict     = epd.read_cutoff_file(cutoff_filename)
-        
-        time, mag, edens, cold_dens, hope_dens, hope_tpar, hope_tperp, hope_anis, L_vals, =\
-                                           load_and_interpolate_plasma_params(
-                                           plot_start, plot_end, probe, nsec=None, 
-                                           rbsp_path='E://DATA//RBSP//', HM_filter_mhz=50.0,
-                                           time_array=None, check_interp=False)
-            
-        time_idx       = np.where(abs(time - parameter_time) == np.min(abs(time - parameter_time)))[0][0]
-        
-        # Get oxygen concentration from cutoffs
-        cutoff  = np.interp(parameter_time.astype(np.int64),
-                            cutoff_dict['CUTOFF_TIME'].astype(np.int64),
-                            cutoff_dict['CUTOFF_NORM'])
-        o_conc = epd.calculate_o_from_he_and_cutoff(cutoff, he_conc)
-        h_conc = 100. - he_conc - o_conc
-        
-        # Cold plasma params, SI units
-        B0      = mag[time_idx]
-        name    = np.array(['H'   , 'He'   , 'O'    ])
-        mass    = np.array([1.0   , 4.0    , 16.0   ]) * PMASS
-        charge  = np.array([1.0   , 1.0    , 1.0    ]) * PCHARGE
-        density = np.array([h_conc, he_conc, o_conc ]) * edens[time_idx] * 1e-2
-        ani     = np.array([0.0   , 0.0    , 0.0    ])
-        tpar    = np.array([0.0   , 0.0    , 0.0    ])
-        tper    = (ani + 1) * tpar
-        Species, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
-        
-        # Frequencies to evaluate, calculate wavenumber (cold approximation)
-        f_min  = 0.07*PP['pcyc_rad'] / (2*np.pi)
-        f_max  = 0.24*PP['pcyc_rad'] / (2*np.pi)
-        Nf     = 10000
-        f_vals = np.linspace(f_min, f_max, Nf)
-        w_vals = 2*np.pi*f_vals
-        k_vals = nls.get_k_cold(w_vals, Species)
-        
-        # Define hot proton parameters (velocities normalized c) : vth = sqrt(kT/m)?
-        # Remember: temperatures originally in eV
-        nh = hope_dens[0][time_idx]
-        wph2 = nh * PCHARGE ** 2 / (PMASS * EPS0) 
-        Vth_para = np.sqrt(KB * hope_tpar[0][time_idx]*(PCHARGE/KB)  / PMASS) / SPLIGHT
-        Vth_perp = np.sqrt(KB * hope_tperp[0][time_idx]*(PCHARGE/KB) / PMASS) / SPLIGHT
-        Q = 0.5
-        
-        # Curvature parameters (this has the most wiggle room)
-        a  = 4.5 / (L*RE)**2
-        a  = a*(SPLIGHT**2/PP['pcyc_rad']**2)
-        
-        Vg, Vp, Vr = nls.get_velocities(w_vals, Species, PP, normalize=True)
-        s0, s1, s2 = nls.get_inhomogeneity_terms(w_vals, Species, PP, Vth_perp, normalize_vel=True)
-        
-        # Normalize input parameters
-        wph = np.sqrt(wph2) / PP['pcyc_rad']
-        w   = w_vals / PP['pcyc_rad']
-        
-        # DO THE ACTUAL CALCULATION (All hands off from here, using existing code/proforma)
-        tau   = 1.00
-        B_th  = nls.get_threshold_amplitude(w, wph, Q, s2, a, Vp, Vr, Vth_para, Vth_perp)
-        B_opt = nls.get_optimum_amplitude(w, wph, Q, tau, s0, s1, Vg, Vr, Vth_para, Vth_perp)
-        T_tr  = nls.get_nonlinear_trapping_period(k_vals, Vth_perp*SPLIGHT, B_opt*PP['B0'])
-        T_N   = tau*T_tr*PP['pcyc_rad']
-        
-        # Filter zeros and infs:
-        B_th[B_th == np.inf] = np.nan
-        B_th[B_th == 0]      = np.nan
-        
-        B_opt[B_opt == np.inf] = np.nan
-        B_opt[B_opt == 0]      = np.nan
-        
-        T_N[T_N == np.inf] = np.nan
-        T_N[T_N == 0]      = np.nan
-    
-        # Load EMIC data IMF values
-        mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower = \
-            load_EMIC_IMFs_and_dynspec(packet_start, packet_end)
-        
-        #%% PLOT: NaN's and inf's in arrays: How to filter to plot? Set to all NaN's
-        #       Also semilogy doesn't like zero: Set to NaN
-        #
-        # Plot axes:
-        # -- Dynamic spectra for context, /w label for parameter time and packet times. Maybe IF?
-        # -- Plot IMF just for check? 
-        # -- Large bottom plot: IF vs. IA
-        # -- Maybe try a plot for linear/nonlinear growth rates vs. frequency?
-        # -- Also should look at velocities/energies so we can see what sort of values are resonant
-        #       (Do this separately)
-        
-        # Filter IF/IA if outside bandpassed frequencies
-        if True:
-            for ii in range(IF[0].shape[0]):
-                for jj in [0, 1]:
-                    if IF[jj][ii, 0] > _band_end or IF[jj][ii, 0] < _band_start:
-                        IF[jj][ii, 0] = np.nan
-                        
-        # Maybe add extra filter for amplitude lower than a certain fraction (e.g. <0.1 nT)
-        plt.ioff()
-        lpad = 20; fsize=12
-        fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(8.00, 0.5*11.00),
-                                     gridspec_kw={'width_ratios':[1, 0.01],
-                                                  'height_ratios':[1, 0.3, 2]
-                                                  })
-        
-        # Spectra/IP
-        im0 = axes[0, 0].pcolormesh(stime, sfreq, spower.sum(axis=0).T, cmap='jet',
-                             norm=colors.LogNorm(vmin=1e-4, vmax=1e1))
-        axes[0, 0].set_ylim(0, fmax)
-        axes[0, 0].set_ylabel('$f$\n(Hz)', rotation=0, labelpad=lpad, fontsize=fsize)
-        fig.colorbar(im0, cax=axes[0, 1], extend='both').set_label(
-                    r'$\frac{nT^2}{Hz}$', fontsize=fsize+2, rotation=0, labelpad=20)
-        
-        axes[0, 0].plot(imf_time, IF[0][:, 0], c='k', lw=0.75)
-        axes[0, 0].plot(imf_time, IF[1][:, 0], c='k', lw=0.75, alpha=0.8)
-        #axes[0, 0].plot(imf_time, IF[2][:, 0], c='k', lw=0.75, alpha=0.6)
-        axes[0, 0].axvline(parameter_time, color='white', ls='-' , alpha=0.7)
-        axes[0, 0].set_xlim(plot_start, plot_end)
-        
-        axes[0, 0].axhline(_band_start, color='white', ls='--')
-        axes[0, 0].axhline(_band_end  , color='white', ls='--')
-
-        # Bth, Bopt, Inst. Amplitudes
-        axes[2, 0].plot(f_vals, B_th*B0*1e9, c='k', ls='--', label=r'$B_{th}$')
-        axes[2, 0].plot(f_vals, B_opt*B0*1e9, c='k', ls='-', label=r'$B_{opt}$')
-        axes[2, 0].set_ylabel('$B$\n(nT)', rotation=0, labelpad=20, fontsize=fsize)
-        axes[2, 0].set_xlabel('$f$ (Hz)]', fontsize=fsize)
-        axes[2, 0].set_ylim(0, B_max)
-        axes[2, 0].set_xlim(f_vals[0], f_vals[-1])
-        axes[2, 0].tick_params(top=True, right=True)
-           
-        m_size = 1
-        axes[2, 0].scatter(IF[0][:, 0], IA[0][:, 0], c='b', s=m_size, marker='.', label='$B_\\nu$')
-        axes[2, 0].scatter(IF[1][:, 0], IA[1][:, 0], c='r', s=m_size, marker='.', label='$B_\phi$')
-        #axes[3, 0].scatter(IF[2][:, 0], IA[2][:, 0], c='k', s=m_size)
-        
-        # Start/Stop
-        axes[2, 0].scatter(IF[0][0, 0], IA[0][0, 0], c='b', s=40, marker='o')
-        axes[2, 0].scatter(IF[1][0, 0], IA[1][0, 0], c='r', s=40, marker='o')    
-        axes[2, 0].scatter(IF[0][-1, 0], IA[0][-1, 0], c='b', s=40, marker='x')
-        axes[2, 0].scatter(IF[1][-1, 0], IA[1][-1, 0], c='r', s=40, marker='x')  
-        axes[2, 0].legend(loc='upper right')
-        
-        axes[1, 0].set_visible(False)
-        axes[1, 1].set_visible(False)
-        axes[2, 1].set_visible(False)
-        axes[0, 0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
-        
-        fig.tight_layout()
-        fig.subplots_adjust(wspace=0.05, hspace=0)
-        fig.align_ylabels()
-        
-        if save_plot == True:
-            save_string = parameter_time.astype(object).strftime('%Y%m%d_%H%M%S')
-            print('Saving plot...')
-            fig.savefig(_plot_path + 'NONLINEAR_TRACE_' + save_string + '.png', dpi=1200)
-            plt.close('all')
-        else:
-            plt.show() 
+            if save_plot == True:
+                save_string = parameter_time.astype(object).strftime('%Y%m%d_%H%M%S')
+                print('Saving plot...')
+                fig.savefig(_plot_path + 'NONLINEAR_TRACE_' + save_string + '.png', dpi=dpi)
+                plt.close('all')
+            else:
+                plt.show() 
