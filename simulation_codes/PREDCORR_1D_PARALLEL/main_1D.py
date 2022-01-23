@@ -24,6 +24,7 @@ do_parallel         = True      # Flag to use available threads to parallelize p
 adaptive_timestep   = True      # Disable adaptive timestep to keep it the same as initial
 print_timings       = False     # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True      # Flag to print runtime every 50 iterations 
+do_dispersion       = False     # Account for dispersion effects in dt calculation
 
 if not do_parallel:
     do_parallel = True
@@ -604,7 +605,11 @@ def set_timestep(vel):
         ion_ts = 0.25 / gyfreq_xmax                   # If no waves, 20 points per revolution (~4 per wcinv)
         
     vel_ts = 0.5 * dx / np.max(np.abs(vel[0, :]))     # Timestep to satisfy particle CFL: <0.5dx per timestep
-    dis_ts = 1.5/(k_max**2 * B_xmax / (mu0 * ECHARGE * ne)) # Dispersion timestep: Probably requires subcycling
+    
+    if do_dispersion:
+        dis_ts = 1.5/(k_max**2 * B_xmax / (mu0 * ECHARGE * ne)) # Dispersion timestep: Probably requires subcycling
+    else:
+        dis_ts = vel_ts
     
     DT       = min(ion_ts, vel_ts, dis_ts)            # Timestep as smallest of options
     max_time = max_wcinv / gyfreq_eq                  # Total runtime in seconds
@@ -2034,7 +2039,10 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ji_i
     else:
         Eacc_ts  = ion_ts
     
-    dis_ts  = 1.5/(k_max**2 * B_magnitude.max() / (mu0 * q_dens.min()))   # Dispersion timestep: Probably requires subcycling
+    if do_dispersion:
+        dis_ts = 1.5/(k_max**2 * B_magnitude.max() / (mu0 * q_dens.min()))   # Dispersion timestep: Probably requires subcycling
+    else:
+        dis_ts = ion_ts
     vel_ts  = 0.60 * dx / max_V                                           # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than 'half' a cell in one time step
     DT_part = min(Eacc_ts, vel_ts, ion_ts, dis_ts)                        # Smallest of the allowable timesteps
     
