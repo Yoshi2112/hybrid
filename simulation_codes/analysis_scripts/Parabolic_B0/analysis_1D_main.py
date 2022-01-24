@@ -4449,34 +4449,37 @@ def multiplot_RMS_jul25():
     Collect maximum amplitude and RMS, just because maximum can be sullied by
     peaks in the waveform that are unphysical/numerical noise/issues
     
-    TODO: Need some sort of spatial filter
+    TODO: Need some sort of spatial filter based on dx?
+    
+    Only collect for one series at first
     '''
     print('Plotting saturation amplitudes for multiple series...')
 
     all_series = ['JUL25_PROXYHONLY_30HE_PREDCORR']
     jul_times  = ['2013-07-25T21:25:29.000000',
-                 '2013-07-25T21:26:15.000000',
-                 '2013-07-25T21:27:27.000000',
-                 '2013-07-25T21:29:38.000000',
-                 '2013-07-25T21:30:50.000000',
-                 '2013-07-25T21:31:55.000000',
-                 '2013-07-25T21:32:41.000000',
-                 '2013-07-25T21:33:53.000000',
-                 '2013-07-25T21:36:30.000000',
-                 '2013-07-25T21:37:42.000000',
-                 '2013-07-25T21:39:07.000000',
-                 '2013-07-25T21:40:13.000000',
-                 '2013-07-25T21:41:05.000000',
-                 '2013-07-25T21:42:11.000000',
-                 '2013-07-25T21:43:16.000000',
-                 '2013-07-25T21:44:02.000000',
-                 '2013-07-25T21:45:33.000000',]
+                  '2013-07-25T21:26:15.000000',
+                  '2013-07-25T21:27:27.000000',
+                  '2013-07-25T21:29:38.000000',
+                  '2013-07-25T21:30:50.000000',
+                  '2013-07-25T21:31:55.000000',
+                  '2013-07-25T21:32:41.000000',
+                  '2013-07-25T21:33:53.000000',
+                  '2013-07-25T21:36:30.000000',
+                  '2013-07-25T21:37:42.000000',
+                  '2013-07-25T21:39:07.000000',
+                  '2013-07-25T21:40:13.000000',
+                  '2013-07-25T21:41:05.000000',
+                  '2013-07-25T21:42:11.000000',
+                  '2013-07-25T21:43:16.000000',
+                  '2013-07-25T21:44:02.000000',
+                  '2013-07-25T21:45:33.000000',]
     timebase = np.array([np.datetime64(this_time) for this_time in jul_times])
     
     # Get number of runs (assume same for each series) to set array
     test_dir  = '{}/runs//{}//'.format(drive, all_series[0])
     num_runs  = len([name for name in os.listdir(test_dir) if 'run_' in name])
-    rms_amp   = np.zeros(num_runs, dtype=np.float64)
+    max_rms   = np.zeros(num_runs, dtype=np.float64)
+    max_env   = np.zeros(num_runs, dtype=np.float64)
     sat_amp   = np.zeros(num_runs, dtype=np.float64)
     
     print('Collecting RMS amplitudes')
@@ -4485,25 +4488,35 @@ def multiplot_RMS_jul25():
         series_dir  = '{}/runs//{}//'.format(drive, series)
         num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
-    
+        
         runs_to_do = range(num_runs)                
         for ii in runs_to_do:
             print('\nRun {}'.format(ii))
             cf.load_run(drive, series, ii, extract_arrays=True)
             
-            ty, by   = cf.get_array('By') 
-            tz, bz   = cf.get_array('Bz')
+            times, by   = cf.get_array('By') 
+            times, bz   = cf.get_array('Bz')
             env_amps = np.sqrt(by ** 2 + bz ** 2)
             
             # For each time, get the RMS amplitude in space
             # Can we take the RMS values for each time and just pythag them?
-            by_rms = np.zeros(by.shape[0], dtype=float)
-            bz_rms = np.zeros(by.shape[0], dtype=float)
-            for tt in range(by.shape[0]):
-                by_rms[]
+            by_rms = np.zeros(times.shape[0], dtype=float)
+            bz_rms = np.zeros(times.shape[0], dtype=float)
+            for tt in range(times.shape[0]):
+                by_rms[tt] = np.sqrt(np.square(by[tt]).mean())
+                bz_rms[tt] = np.sqrt(np.square(bz[tt]).mean())
             
-            rms_amps = np.sqrt(by ** 2 + bz ** 2)
-            rms_amp[jj, ii] = env_amps.max() * 1e9
+            rms_amps = np.sqrt(by_rms ** 2 + bz_rms ** 2)
+            max_rms[ii] = rms_amps.max() * 1e9
+            
+            env_amps = np.sqrt(by**2 + bz**2)
+            max_env[ii] = env_amps.max() * 1e9
+    
+    plt.figure()
+    plt.scatter(timebase, max_env,            c='k', label='max env')
+    plt.scatter(timebase, max_rms*np.sqrt(2), c='b', label='max RMS*sqrt(2)')
+    plt.legend()
+    plt.show()
     
     if False:
         # Load comparison data
@@ -4572,11 +4585,13 @@ def multiplot_RMS_jul25():
         axes[2, 0].set_xlabel('Time (UT)')
         axes[2, 0].set_ylabel('Saturation Amplitude (nT)')
         axes[2, 0].legend(loc='upper right')
-        if save==True:  
-            fig.savefig(cf.base_dir + 'data_model_saturation.png', edgecolor='none')
-            plt.close('all')
-        else:
-            plt.show()
+# =============================================================================
+#         if save==True:  
+#             fig.savefig(cf.base_dir + 'data_model_saturation.png', edgecolor='none')
+#             plt.close('all')
+#         else:
+#             plt.show()
+# =============================================================================
     return
 
 
@@ -4814,14 +4829,17 @@ if __name__ == '__main__':
         #multiplot_mag_energy(save=True)
         #multiplot_fluxes(series)
         #multiplot_parallel_scaling()
-        multiplot_saturation_amplitudes(save=True)
+        #multiplot_saturation_amplitudes(save=True)
+        multiplot_RMS_jul25()
         print('Exiting multiplot routines successfully.')
         sys.exit()
 
     ####################################
     ### SINGLE SERIES ANALYSIS ########
     ################################
-    for series in ['JUL25_CLEANPEAK_MULTIPOP_PC']:
+    for series in ['AUG12_PC1_PEAKS_CAVRCVO_5HE', 
+                   'JUL17_PC1PEAKS_CO',
+                   'JUL17_PC1PEAKS_VO']:
         
         series_dir = f'{drive}/runs//{series}//'
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
@@ -4839,10 +4857,10 @@ if __name__ == '__main__':
                 #cf.delete_analysis_folders(drive, series, run_num)
 
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
-                standard_analysis_package(disp_overlay=False, pcyc_mult=1.1,
-                              tx_only=False, tmax=None, remove_ND=False)
+                #standard_analysis_package(disp_overlay=False, pcyc_mult=1.1,
+                #              tx_only=False, tmax=None, remove_ND=False)
                 #check_fields(save=True, ylim=False, skip=50)
-                
+
                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
                            B0_lim=None, remove_ND=False)
                 plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
@@ -4850,7 +4868,7 @@ if __name__ == '__main__':
                 plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
                      pcyc_mult=1.5, xmax=1.5, zero_cold=True,
                      linear_only=False, normalize_axes=True, centre_only=False)
-                
+
                 #plot_total_density_with_time()
                 #plot_max_velocity()
                 #check_fields(save=True, ylim=True, skip=25)
