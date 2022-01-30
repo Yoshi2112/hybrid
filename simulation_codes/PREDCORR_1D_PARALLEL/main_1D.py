@@ -25,7 +25,8 @@ adaptive_timestep   = True      # Disable adaptive timestep to keep it the same 
 print_timings       = False     # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True      # Flag to print runtime every 50 iterations 
 do_dispersion       = False     # Account for dispersion effects in dt calculation
-fourth_order        = True
+fourth_order        = True      # Flag to choose between 4th or 2nd order solutions
+logistic_B          = True      # Flag for B0 to change after a time to a different value as a logistic function
 
 if not do_parallel:
     do_parallel = True
@@ -599,6 +600,8 @@ def set_timestep(vel):
     push in between? What's the point of the two copies of the B-field like in the CL method?
     Set dispersion timestep limit to 150% of what it should be, just to save time.
     '''
+    global max_time
+    
     if disable_waves == 0:
         # dxm factor to account for B-field dispersion scaling with dx
         ion_ts = dxm * orbit_res / gyfreq_xmax        # Timestep to highest resolve gyromotion
@@ -2080,6 +2083,33 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ji_i
     return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, damping_array
 
 
+def update_Beq(t):
+    '''
+    Change global B_eq based on its initial value (B0) and a few hard-coded 
+    rates in here
+    
+    Values in SI units
+    t_mid as a function of max simulation time so that it works regardless
+    of chosen parameters. For a quiet start, something like 0.25 should
+    be fine.Can also be overridden with a value in seconds
+    
+    g_rate chosen to give the logistic function a gradient during change equal
+    to that of a 20mHz signal of the same amplitude
+    
+    B_ULF given a fairly average value of 5nT, can be changed
+    '''
+    global B_eq
+    
+    if logistic_B:
+        B_ULF  = 5e-9
+        g_rate = 0.5
+        t_mid  = 0.2*max_time
+        
+        arg  = -g_rate*(t - t_mid)
+        B_eq = B0 + B_ULF / (1 + np.exp(arg))
+    return 
+
+
 ### ##
 #%% SAVE ROUTINES 
 ### ##
@@ -2463,7 +2493,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
               qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter):
     '''
     Main loop separated from __main__ function, since this is the actual computation bit.
-    '''
+    '''    
     # Check timestep (Maybe only check every few. Set in main body)
     check_start = timer()
     if adaptive_timestep == True and qq%1 == 0 and disable_waves == 0:
@@ -2489,6 +2519,8 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         # Push B from N to N + 1/2 and calculate E(N + 1/2)
         push_B(B, E_int, temp3Db, DT, qq, B_damping_array, retarding_array, half_flag=1)
         get_B_cent(B, B_cent)
+        update_Beq((qq+0.5)*DT)
+        
         calculate_E(B, B_cent, Ji_half, J_ext, q_dens, E_half, Ve_half, Te,
                     temp3De, temp3Db, temp1D, E_damping_array, resistive_array)
         field_time = round(timer() - field_start, 3)
@@ -2509,6 +2541,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         Ve_int *= -1.0; Ve_int +=  2.0 * Ve_half
         
         push_B(B, E_int, temp3Db, DT, qq, B_damping_array, retarding_array, half_flag=0)
+        update_Beq((qq+1.0)*DT)
         predict_time = round(timer() - predict_start, 3)
         
         # Advance particles to obtain source terms at N + 3/2
@@ -2524,6 +2557,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         # Compute predicted fields at N + 3/2, advance J_ext too
         push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, retarding_array, half_flag=1)
         get_B_cent(B, B_cent)
+        update_Beq((qq+1.5)*DT)
         calculate_E(B, B_cent, Ji_half, J_ext, q_dens, E_int, Ve_half, Te,
                     temp3De, temp3Db, temp1D, E_damping_array, resistive_array)
         
@@ -2548,6 +2582,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
     
         push_B(B, E_int, temp3Db, DT, qq, B_damping_array, retarding_array, half_flag=0)   # Advance the original B
         get_B_cent(B, B_cent)
+        update_Beq((qq+1.0)*DT)
         
         q_dens[:] = q_dens_adv
         mp_flux   = mp_flux_old.copy()
@@ -2679,7 +2714,7 @@ def load_plasma_params():
         qm_ratios, N, idx_start, idx_end, Nj, N_species, B_eq, ne, density, \
         E_par, Te0_scalar, vth_perp, vth_par, T_par, T_perp, vth_e, vei,\
         wpi, wpe, va, gyfreq_eq, egyfreq_eq, dx, n_contr, min_dens, xmax, xmin,\
-            inject_rate, k_max
+            inject_rate, k_max, B0
         
     print('LOADING PLASMA: {}'.format(plasma_input))
     with open(plasma_input, 'r') as f:
@@ -2709,6 +2744,7 @@ def load_plasma_params():
         B_eq = (B_surf / (L ** 3))                           # Magnetic field at equator, based on L value
     else:
         B_eq = float(B_eq)
+    B0 = B_eq
     
     ### -- Normalization of density override (e.g. Fu, Winkse)
     if Fu_override == True:
@@ -2929,7 +2965,12 @@ def print_summary_and_checks():
     if particle_periodic + particle_reflect + particle_reinit > 1:
         print('ABORT : ONLY ONE PARTICLE BOUNDARY CONDITION ALLOWED')
         sys.exit()
-            
+        
+    if logistic_B:
+        print('---------------------------------------------')
+        print('WARNING: B_EQ SET TO CHANGE DURING SIMULATION')
+        print('---------------------------------------------')
+        
     if  os.name != 'posix':
         os.system("title Hybrid Simulation :: {} :: Run {}".format(save_path.split('//')[-1], run))
     return
