@@ -5216,7 +5216,7 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [9]
+            runs_to_do = [8, 9]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -5232,7 +5232,7 @@ if __name__ == '__main__':
                 #standard_analysis_package(disp_overlay=False, pcyc_mult=1.1,
                 #              tx_only=False, tmax=None, remove_ND=False)
 
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=50, normalize=False,
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=300, normalize=False,
                            B0_lim=25, remove_ND=False)
                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
                            B0_lim=25, remove_ND=False)

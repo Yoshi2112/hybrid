@@ -2248,15 +2248,16 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
     return
 
 
-def save_field_data(sim_time, dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns,
+def save_field_data(sim_time, dt, field_save_iter, qq, Ji, E, B, B_cent, Ve, Te, dns,
                     damping_array, E_damping_array, resistive_array):
     d_path   = '%s/%s/run_%d/data/fields/' % (drive, save_path, run)
     r        = qq / field_save_iter
-
+    
     d_fullpath = d_path + 'data%05d' % r
     
     np.savez(d_fullpath, E = E[:, 0:3], B = B[:, 0:3],   Ji = Ji[:, 0:3],
                        dns = dns,      Ve = Ve[:, 0:3], Te = Te,
+                       B_cent=B_cent,
                        sim_time = sim_time,
                        damping_array = damping_array,
                        E_damping_array=E_damping_array, 
@@ -3077,8 +3078,8 @@ if __name__ == '__main__':
                                     vel, idx)
             
         if qq%field_save_iter == 0 and save_fields == 1:
-            save_field_data(time_sec, DT, field_save_iter, qq, Ji_half, E_int, B, Ve_half, Te, q_dens,
-                            B_damping_array, E_damping_array, resistive_array)
+            save_field_data(time_sec, DT, field_save_iter, qq, Ji_half, E_int, B, B_cent,
+                            Ve_half, Te, q_dens, B_damping_array, E_damping_array, resistive_array)
         
         if qq%100 == 0 and print_runtime == True:            
             running_time = int(timer() - start_time)
