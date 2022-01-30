@@ -25,11 +25,12 @@ adaptive_timestep   = True      # Disable adaptive timestep to keep it the same 
 print_timings       = False     # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True      # Flag to print runtime every 50 iterations 
 do_dispersion       = False     # Account for dispersion effects in dt calculation
+fourth_order        = True
 
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-nb.set_num_threads(16)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
 
 #%% --- FUNCTIONS ---
 ### ##
@@ -1696,7 +1697,11 @@ def push_B(B, E, curlE, DT, qq, damping_array, retarding_array, half_flag=1):
     The half_flag can be thought of as 'not having done the full timestep yet' for N + 1/2, so 0.5*DT is
     subtracted from the "full" timestep time
     '''
-    get_curl_E_4thOrder(E, curlE)
+    if fourth_order == 1:
+        get_curl_E_4thOrder(E, curlE)
+    else:
+        get_curl_E(E, curlE)
+    
     if field_periodic == 0:
         for ii in nb.prange(1, B.shape[1]):              
             curlE[:, ii] *= retarding_array              # Apply retarding, skipping x-axis
@@ -1840,9 +1845,12 @@ def calculate_E(B, B_center, Ji, J_ext, q_dens, E, Ve, Te, temp3De, temp3Db, gra
     
     arr3D, arr1D are tertiary arrays used for intermediary computations
     '''
-    get_curl_B_4thOrder(B, temp3De)
-    #curl_B_term(B, temp3De)                                   # temp3De is now curl B term
-
+    # temp3De is now curl B term
+    if fourth_order == 1:
+        get_curl_B_4thOrder(B, temp3De)
+    else:
+        curl_B_term(B, temp3De) 
+        
     # Calculate Ve
     Ve[:, 0] = (Ji[:, 0] + J_ext[:, 0] - temp3De[:, 0]) / q_dens
     Ve[:, 1] = (Ji[:, 1] + J_ext[:, 1] - temp3De[:, 1]) / q_dens
