@@ -719,6 +719,10 @@ def get_DR_filepath(_save_dir, _time_start, _time_end, _cmp, _nsec):
     save_string = _time_start.astype(object).strftime('%Y%m%d_%H%M_') \
                 + _time_end.astype(object).strftime('%H%M')
     
+    h_pcen  = int(round(1e3*_cmp[0], 2))
+    he_pcen = int(round(1e3*_cmp[1], 2))
+    o_pcen  = int(round(1e3*_cmp[2], 2))
+    
     # Assume that the 100% cold composition is hydrogen (for now)
     if any(cc == 100.0 for cc in _cmp):
        if _nsec is None:
@@ -728,10 +732,10 @@ def get_DR_filepath(_save_dir, _time_start, _time_end, _cmp, _nsec):
     else:
         if _nsec is None:
             DR_path = _save_dir + 'DISPw_{}_cc_{:03}_{:03}_{:03}.npz'.format(save_string,
-                                                    int(10*_cmp[0]), int(10*_cmp[1]), int(10*_cmp[2]))
+                                                    h_pcen, he_pcen, o_pcen)
         else:
             DR_path = _save_dir + 'DISPw_{}_cc_{:03}_{:03}_{:03}_{}sec.npz'.format(save_string,
-                                                    int(10*_cmp[0]), int(10*_cmp[1]), int(10*_cmp[2]), _nsec)
+                                                    h_pcen, he_pcen, o_pcen, _nsec)
     return DR_path
 
 
@@ -1147,8 +1151,9 @@ def get_all_DRs_warm_only(_save_dir, _time_start, _time_end, _probe, _cmp,
     Maybe put xxx if 100% (since this will happen only for 0% He and 0% Oxygen)
     So it should really only be the one file, so if h_comp == 100.0...
     '''
+    
     DR_path = get_DR_filepath(_save_dir, _time_start, _time_end, _cmp, _nsec)
-
+    
     if os.path.exists(DR_path) == False:
         if load_only == True:
             print('No DR exists, returning null')
@@ -3777,15 +3782,15 @@ def thesis_plot_summaries(_rbsp_path, _time_start, _time_end, _probe):
     save_string = _time_start.astype(object).strftime('%Y%m%d_%H%M_') \
                 + _time_end.astype(object).strftime('%H%M')
     
-    he_pcen = np.arange(1.0, 30.5, 1.0)
-    o_pcen  = np.arange(0.5, 10.5, 0.5)
-    _cmp    = np.array([100. - he_pcen[1] - o_pcen[1], he_pcen[1], o_pcen[1]], dtype=float)
+    he_frac = np.arange(1.0, 30.5, 1.0)*1e-2
+    o_frac  = np.arange(0.5, 10.5, 0.5)*1e-2
+    _cmp    = np.array([1. - he_frac[1] - o_frac[1], he_frac[1], o_frac[1]], dtype=float)
     
     # Load sample (first) DR to get times
     k_np,  WPDR_out, wCGR_out, wVg_out, times, B0, name, mass, charge, density,\
-        tper, ani, cold_dens, _cmp =  get_all_DRs_warm_only(save_dir, _time_start,
+        tper, ani, cold_dens, _cmp = get_all_DRs_warm_only(save_dir, _time_start,
         _time_end, _probe, _cmp, _nsec=5, HM_filter_mhz=50., N_procs=7, suff='',
-        data_path=_rbsp_path)
+        data_path=_rbsp_path, load_only=True)
     
     # Initialize empty arrays for GR returns (Times, species, value)
     # Values are 0: Max growth rate, 1: k at max growth, 2: frequency at max growth
@@ -3797,7 +3802,7 @@ def thesis_plot_summaries(_rbsp_path, _time_start, _time_end, _probe):
     # So plot 31 lines on each oxygen plot, with 7 axes in each of 3 figs
     plt.ioff()
     n_figs = 3 ; n_axes = 7
-    norm   = mpl.colors.Normalize(vmin=he_pcen[0], vmax=he_pcen[-1])
+    norm   = mpl.colors.Normalize(vmin=he_frac[0]*100., vmax=he_frac[-1]*100.)
     mapper = cm.ScalarMappable(norm=norm, cmap=cm.jet)
     
     fsize=10
@@ -3813,12 +3818,13 @@ def thesis_plot_summaries(_rbsp_path, _time_start, _time_end, _probe):
         
         for nn in range(n_axes):
             oxy_idx = mm*n_axes + nn
-            o_comp  = o_pcen[oxy_idx]
+            o_comp  = o_frac[oxy_idx]
             
             # Set axes values
             ax = fig.add_subplot(gs[nn, 0])
             
-            ax.set_ylabel(f'{o_comp}% $O^+$', rotation=0, labelpad=25,
+            o_lbl = round(o_comp*1e2, 1)
+            ax.set_ylabel(f'{o_lbl:.1f}% $O^+$', rotation=0, labelpad=25,
                           fontsize=fsize)#\n($\gamma \\times 10^3 s^{-1}$)
             ax.set_xlim(_time_start, _time_end)
             if nn == n_axes - 1:
@@ -3837,12 +3843,12 @@ def thesis_plot_summaries(_rbsp_path, _time_start, _time_end, _probe):
             ax.axvline(time_start, c='k', ls='--', alpha=0.5)
             ax.axvline(time_end  , c='k', ls='--', alpha=0.5)
             
-            for he_comp in he_pcen:
+            for he_comp in he_frac:
                 h_comp = 1. - o_comp - he_comp
                 _cmp   = np.array([h_comp, he_comp, o_comp], dtype=float)
                 
                 DR_path = get_DR_filepath(save_dir, _time_start, _time_end, _cmp, nsec)
-
+                
                 # Reminder: DRs are (time, wavenumber, band)
                 if os.path.exists(DR_path):
                     k_vals,  WPDR, CGR, Vg, times, B0, name, mass, charge, density,\
@@ -3850,7 +3856,7 @@ def thesis_plot_summaries(_rbsp_path, _time_start, _time_end, _probe):
                           _time_start, _time_end, probe, _cmp, 
                         kmin=0.0, kmax=1.5, Nk=1000, knorm=True,
                         _nsec=nsec, HM_filter_mhz=50, N_procs=1,
-                        suff='', data_path=rbsp_path)
+                        suff='', data_path=rbsp_path, load_only=True)
                 else:
                     print('No growth rate file for composition {}/{}/{}'.format(h_comp, he_comp, o_comp))
                     continue
@@ -3876,7 +3882,7 @@ def thesis_plot_summaries(_rbsp_path, _time_start, _time_end, _probe):
                         max_TGR[ii, sp, 2] = freqs[ii, max_idx_TGR, sp] # Frequency  at maximum GR
                 
                 # Add this line
-                clr = mapper.to_rgba(he_comp)
+                clr = mapper.to_rgba(he_comp*100.)
                 ax.plot(times, max_TGR[:, 1, 0], c=clr)
             ax.set_ylim(0.0, glim)
                 
@@ -3885,7 +3891,7 @@ def thesis_plot_summaries(_rbsp_path, _time_start, _time_end, _probe):
         fig.align_ylabels()
         
         fig_name = f'TGR_SUMMARIES_{save_string}_fig{mm}.png'
-        fig.savefig(plot_path + fig_name, dpi=1200)
+        fig.savefig(plot_path + fig_name, dpi=200)
         plt.close('all')
         print('Plot saved:', fig_name)
         break
@@ -3926,14 +3932,14 @@ def thesis_plot_2D_growth_rates_with_time(_rbsp_path, _plot_start, _plot_end, _p
                      transverse_only=False)
     
     # Load/Calculate each growth rate in sweep
-    for he_comp in np.arange(1.0, 30.5, 1.0):
-        for o_comp in np.arange(0.5, 10.5, 0.5):
-            
-            if he_comp == 30.0 and o_comp == 6.0:
+    for he_comp in np.arange(1.0, 30.5, 1.0)*1e-2:
+        for o_comp in np.arange(0.5, 10.5, 0.5)*1e-2:
+            print('Loading...')
+            if he_comp == 0.30 and o_comp == 0.06:
                 pass
             else:
                 continue
-            h_comp = 100. - o_comp - he_comp
+            h_comp = 1. - o_comp - he_comp
             print('Composition: {}/{}/{}'.format(h_comp, he_comp, o_comp))
             comp = np.array([h_comp, he_comp, o_comp], dtype=float)
             
@@ -4104,7 +4110,7 @@ def thesis_plot_2D_growth_rates_with_time(_rbsp_path, _plot_start, _plot_end, _p
             else:
                 fig1.savefig(plot_dir + 'TGR_{}_cc_{:03}_{:03}_{:03}_{}sec.png'.format(
                              save_string, int(10*cmp[0]), int(10*cmp[1]),
-                                          int(10*cmp[2]), nsec), dpi=1200)
+                                          int(10*cmp[2]), nsec), dpi=200)
                 print('Plot saved.')
                 plt.close('all')
     return
@@ -4884,7 +4890,7 @@ if __name__ == '__main__':
     #plot_single_kCGR()
     #plot_parameter_sweep_kCGR()
     #plot_density_sweep_kCGR()
-    investigate_anisotropy()
+    #investigate_anisotropy()
     #plot_temperature_sweep_kCGR()
     #parameter_search_2D()
     
@@ -4938,7 +4944,7 @@ if __name__ == '__main__':
 #                     o_min=0.0, o_max=30.0, nO=500,
 #                     f_max=0.7, target_freqs=[0.20, 0.4, 0.6], save=True)
 # =============================================================================
-    sys.exit()
+    #sys.exit()
     
     #### Read in command-line arguments, if present
     import argparse as ap
@@ -4971,7 +4977,6 @@ if __name__ == '__main__':
     date_string = time_start.astype(object).strftime('%Y%m%d')
     save_dir    = '{}//2D_LINEAR_THEORY//EVENT_{}//'.format(ext_drive, date_string)
     
-    
     #thesis_plot_summaries(rbsp_path, plot_start, plot_end, probe)
     
     #plot_cold_ion_via_cutoff([0.05, 0.055, 0.06, 0.065, 0.07, 0.075, 0.08, 0.085, 0.09], title_suff=' :: 25/07/2013 Event')
@@ -4981,6 +4986,7 @@ if __name__ == '__main__':
 #     calculate_warm_sweep(rbsp_path, save_dir, plot_start, plot_end, probe,
 #                           _nsec=5, N_procs=n_processes)
 # =============================================================================
+
     thesis_plot_2D_growth_rates_with_time(rbsp_path, plot_start, plot_end, probe,
                              approx='warm', save=True, nsec=5, log=False,
                              _time_start=time_start, _time_end=time_end)

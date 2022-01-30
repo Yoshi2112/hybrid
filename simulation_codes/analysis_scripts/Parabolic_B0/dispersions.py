@@ -98,10 +98,11 @@ def get_linear_dispersion_from_sim(k, zero_cold=True, Nk=1000):
     return k_vals, CPDR_solns, WPDR_solns, HPDR_solns
 
 
-def get_wx(component):
+def get_wx(component, fac=1.0, normalize=True):
     ftime, arr = cf.get_array(component)
+    arr *= fac
     
-    if component[0] == 'B':
+    if component[0].upper() == 'B':
         ncells = cf.NC + 1
     else:
         ncells = cf.NC
@@ -114,6 +115,9 @@ def get_wx(component):
     for ii in range(arr.shape[1]):
         fft_matrix[:, ii] = np.fft.rfft(arr[:, ii] - arr[:, ii].mean())
     
+    if normalize:
+        fft_matrix *= 2.0 / ftime.shape[0]
+        
     wx = (fft_matrix * np.conj(fft_matrix)).real
     return ftime, wx
 

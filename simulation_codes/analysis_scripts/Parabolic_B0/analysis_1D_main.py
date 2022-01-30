@@ -10,6 +10,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 from   matplotlib.gridspec import GridSpec
+import matplotlib.dates    as mdates
 from   mpl_toolkits.axes_grid1 import make_axes_locatable
 import os
 import sys
@@ -285,7 +286,8 @@ def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None, 
     return
 
 
-def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, save=False, pcyc_mult=None, remove_ND=False):
+def plot_wx(component='By', saveas='wx_plot', linear_overlay=False, 
+            save=False, pcyc_mult=None, remove_ND=False):
     plt.ioff()
     ftime, wx = disp.get_wx(component)
     
@@ -505,7 +507,7 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
         log       -- Plot colorbar on log scale
         tmax      -- Maximum time (y axis limit) to plot to
         normalize -- Normalize B_tranverse by equatorial B0 (True) or plot in nT (False)
-        B0_lim    -- Colorbar limit (in multiples of B0). If None, plot up to maximum value.
+        B0_lim    -- Colorbar limit (in multiples of B0 OR nT). If None, plot up to maximum value.
     '''
     plt.ioff()
 
@@ -528,7 +530,7 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
         clabel = '$\\frac{|B_\perp|}{B_{eq}}$'
         suff   = '_norm' 
         
-    x    = cf.B_nodes / cf.dx
+    x = cf.B_nodes / cf.dx
         
     if tmax is None:
         lbl = 'full'
@@ -548,7 +550,7 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
     if B0_lim is None:
         vmax = bt.max()
     else:
-        if normalize == False:
+        if normalize == True:
             vmax = cf.B_eq * B0_lim * 1e9
         else:
             vmax = B0_lim
@@ -698,11 +700,15 @@ def plot_dynamic_spectra(component='By', saveas='power_spectra', save=False, yma
     return
 
 
-def SWSP_dynamic_spectra(nx=None, overlap=0.5, f_res=50):
+def SWSP_dynamic_spectra(nx=None, overlap=0.5, f_res_mHz=50, fmax=1.0):
     '''
     Frequency resolution in fraction of gyfreq (defaults to 1/50th)
     '''
+    analysis_scripts_dir = 'D://Google Drive//Uni//PhD 2017//Data//Scripts//'
+    sys.path.append(analysis_scripts_dir)
+    
     import scipy.signal as sig
+    import fast_scripts as fscr
     
     dynspec_folderpath = cf.anal_dir + '//Bfield_SWSP_dynspec//'
     if not os.path.exists(dynspec_folderpath): os.makedirs(dynspec_folderpath)
@@ -710,59 +716,75 @@ def SWSP_dynamic_spectra(nx=None, overlap=0.5, f_res=50):
     if nx is None:
         nx = cf.NC // 2
     
-    
     # (time, space)
+    ftime, By = cf.get_array('By')
+    ftime, Bz = cf.get_array('Bz')
     ftime, B_fwd, B_bwd, B_raw = bk.get_FB_waves(overwrite=False, field='B')  
     
-    fmax = cf.gyfreq / (2*np.pi)    # Gyfreq in Hz
+    
     _dt  = ftime[1] - ftime[0]
-    _df  = (1. / f_res) * fmax
-    Nwin = int(1. / (_df*_dt))
-    olap = int(overlap*Nwin)
 
     fwd_tseries = B_fwd[:, nx]
     bwd_tseries = B_bwd[:, nx]
     
-    # Calculate spectra of each y, z component (real, imag part of helical timeseries) then add
-    fwd_f, fwd_t, fwd_Syy = sig.spectrogram(fwd_tseries.real, fs=1./_dt, window='hann', detrend=False,
-                                            nperseg=Nwin, noverlap=olap)
-    fwd_f, fwd_t, fwd_Szz = sig.spectrogram(fwd_tseries.imag, fs=1./_dt, window='hann', detrend=False,
-                                            nperseg=Nwin, noverlap=olap)
-    fwd_Stt = fwd_Syy + fwd_Szz
-    
-    bwd_f, bwd_t, bwd_Syy = sig.spectrogram(bwd_tseries.real, fs=1./_dt, window='hann', detrend=False,
-                                            nperseg=Nwin, noverlap=olap)
-    bwd_f, bwd_t, bwd_Szz = sig.spectrogram(bwd_tseries.imag, fs=1./_dt, window='hann', detrend=False,
-                                            nperseg=Nwin, noverlap=olap)
-    bwd_Stt = bwd_Syy + bwd_Szz
+    ypow, ytime, yfreq = fscr.autopower_spectrum_all(ftime, By[:, nx]*1e9, _dt, overlap=overlap,
+                                                     df=f_res_mHz, window_data=True)
+    zpow, ztime, zfreq = fscr.autopower_spectrum_all(ftime, Bz[:, nx]*1e9, _dt, overlap=overlap,
+                                                     df=f_res_mHz, window_data=True)
+    spow = ypow + zpow
+#fmax = cf.gyfreq / (2*np.pi)    # Gyfreq in Hz
+# =============================================================================
+#     _df  = (1. / f_res_mHz) * fmax
+#     Nwin = int(1. / (_df*_dt))
+#     olap = int(overlap*Nwin)
+# =============================================================================
+# =============================================================================
+#     # Calculate spectra of each y, z component (real, imag part of helical timeseries) then add
+#     fwd_f, fwd_t, fwd_Syy = sig.spectrogram(fwd_tseries.real, fs=1./_dt, window='hann', detrend=False,
+#                                             nperseg=Nwin, noverlap=olap)
+#     fwd_f, fwd_t, fwd_Szz = sig.spectrogram(fwd_tseries.imag, fs=1./_dt, window='hann', detrend=False,
+#                                             nperseg=Nwin, noverlap=olap)
+#     fwd_Stt = fwd_Syy + fwd_Szz
+#     
+#     bwd_f, bwd_t, bwd_Syy = sig.spectrogram(bwd_tseries.real, fs=1./_dt, window='hann', detrend=False,
+#                                             nperseg=Nwin, noverlap=olap)
+#     bwd_f, bwd_t, bwd_Szz = sig.spectrogram(bwd_tseries.imag, fs=1./_dt, window='hann', detrend=False,
+#                                             nperseg=Nwin, noverlap=olap)
+#     bwd_Stt = bwd_Syy + bwd_Szz
+# =============================================================================
     
     ## PLOT ##
     plt.ioff()
-    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(16,9),
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(6.0, 3.0),
                              gridspec_kw={'width_ratios':[1, 0.01]})
     
-    axes[0, 0].set_title('FWD/BWD Propagating Waves at node {}'.format(nx))
+    #axes[0].set_title('FWD/BWD Propagating Waves at node {}'.format(nx))
     
-    im1 = axes[0, 0].pcolormesh(fwd_t, fwd_f, fwd_Stt,
-                   norm=colors.LogNorm(), cmap='jet')
-    
-    im2 = axes[1, 0].pcolormesh(bwd_t, bwd_f, bwd_Stt,
-                   norm=colors.LogNorm(), cmap='jet')
-    
-    fig.colorbar(im1, cax=axes[0, 1], extend='max').set_label(
+    im1 = axes[0].pcolormesh(ytime, yfreq, spow.T,
+                   norm=colors.LogNorm(vmin=1e-5, vmax=1e0), cmap='jet')
+    fig.colorbar(im1, cax=axes[1], extend='max').set_label(
             '$|P|$\n$nT^2/Hz$', fontsize=12, rotation=0, labelpad=30)
+    axes[0].set_ylabel('Hz', rotation=0, labelpad=30)
+    axes[0].set_ylim(0, fmax)
+    axes[0].set_xlim(0, ftime[-1])
+    axes[0].set_xlabel('Time (s)')
+# =============================================================================
+#     im2 = axes[1, 0].pcolormesh(ztime, zfreq, zpow.T,
+#                    norm=colors.LogNorm(vmin=1e-5, vmax=1e0), cmap='jet')
+#     fig.colorbar(im2, cax=axes[1, 1], extend='max').set_label(
+#             '$|P|$\n$nT^2/Hz$', fontsize=12, rotation=0, labelpad=30)
+#     
+#     for ax in axes[:, 0]:
+#         ax.set_ylabel('Hz', rotation=0, labelpad=30)
+#         ax.set_ylim(0, fmax)
+#         ax.set_xlim(0, ftime[-1])
+#     axes[1, 0].set_xlabel('Time (s)')
+# =============================================================================
     
-    fig.colorbar(im2, cax=axes[1, 1], extend='max').set_label(
-            '$|P|$\n$nT^2/Hz$', fontsize=12, rotation=0, labelpad=30)
-    
-    for ax in axes[:, 0]:
-        ax.set_ylabel('Hz', rotation=0, labelpad=30)
-        ax.set_ylim(0, fmax)
-        ax.set_xlim(0, fwd_t[-1])
-    axes[1, 0].set_xlabel('Time (s)')
-
+    fig.tight_layout()
+    fig.subplots_adjust(wspace=0.05)
     fig.savefig(dynspec_folderpath + 'SP_spectra_nx{:04}.png'.format(nx), 
-                facecolor=fig.get_facecolor(), edgecolor='none')
+                facecolor=fig.get_facecolor(), edgecolor='none', dpi=200)
     
     plt.close('all')
     print('Energy plot saved')
@@ -4306,70 +4328,65 @@ def multiplot_parallel_scaling():
     return
 
 
-def multiplot_saturation_amplitudes(save=True):
+def multiplot_saturation_amplitudes_jan16(save=True):
     '''
     Plots the saturation (maximum) amplitude of each run series as a function of
     'time' (which probably has to be hardcoded)
     '''
-    print('Plotting saturation amplitudes for multiple series...')
-    #all_series  = ['//JAN16_PKTS_5HE_PC//', '//JAN16_PKTS_15HE_PC//', '//JAN16_PKTS_30HE_PC//',
     jan_times = ['2015-01-16T04:29:15.000000',
-        '2015-01-16T04:31:45.000000',
-        '2015-01-16T04:34:55.000000',
-        '2015-01-16T04:38:45.000000',
-        '2015-01-16T04:41:50.000000',
-        '2015-01-16T04:43:30.000000',
-        '2015-01-16T04:47:10.000000',
-        '2015-01-16T04:50:35.000000',
-        '2015-01-16T04:53:00.000000',
-        '2015-01-16T05:00:30.000000',
-        '2015-01-16T05:03:10.000000',
-        '2015-01-16T05:04:30.000000',
-        '2015-01-16T05:07:30.000000']
+            '2015-01-16T04:31:45.000000',
+            '2015-01-16T04:34:55.000000',
+            '2015-01-16T04:38:45.000000',
+            '2015-01-16T04:41:50.000000',
+            '2015-01-16T04:43:30.000000',
+            '2015-01-16T04:47:10.000000',
+            '2015-01-16T04:50:35.000000',
+            '2015-01-16T04:53:00.000000',
+            '2015-01-16T05:00:30.000000',
+            '2015-01-16T05:03:10.000000',
+            '2015-01-16T05:04:30.000000',
+            '2015-01-16T05:07:30.000000']
     
-    all_series  = ['//JUL25_PKTS_5HE_PC//', '//JUL25_PKTS_15HE_PC//', '//JUL25_PKTS_30HE_PC//']
-    jul_times = ['2013-07-25T21:27:54.000000',
-                '2013-07-25T21:28:40.000000',
-                '2013-07-25T21:29:32.000000',
-                '2013-07-25T21:30:27.000000',
-                '2013-07-25T21:33:35.000000',
-                '2013-07-25T21:34:24.000000',
-                '2013-07-25T21:35:20.000000',
-                '2013-07-25T21:36:21.000000',
-                '2013-07-25T21:37:45.000000',
-                '2013-07-25T21:38:45.000000',
-                '2013-07-25T21:39:30.000000',
-                '2013-07-25T21:40:25.000000',
-                '2013-07-25T21:42:02.000000']
+    savefile  = 'F://runs//JAN16_PKTS_30HE_PC//' + 'sat_amps_jan16.npz'
+    fieldfile = 'F://runs//JAN16_PKTS_30HE_PC//' + 'field_vals_jan16.npz'
+    all_series  = ['//JAN16_PKTS_5HE_PC//', '//JAN16_PKTS_15HE_PC//', '//JAN16_PKTS_30HE_PC//',]
     
-    # Get number of runs (assume same for each series) to set array
-    test_dir  = '{}/runs//{}//'.format(drive, all_series[0])
-    num_runs  = len([name for name in os.listdir(test_dir) if 'run_' in name])
-    sat_amp     = np.zeros((len(all_series), num_runs), dtype=np.float64)
-    
-    print('Collecting saturation amplitudes')
-    for jj in range(len(all_series)):
-        series      = all_series[jj]
-        series_dir  = '{}/runs//{}//'.format(drive, series)
-        num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
-        print('{} runs in series {}'.format(num_runs, series))
-    
-        runs_to_do = range(num_runs)                
-        for ii in runs_to_do:
-            print('\nRun {}'.format(ii))
-            cf.load_run(drive, series, ii, extract_arrays=True)
-            
-            ty, by = cf.get_array('By') 
-            tz, bz = cf.get_array('Bz')
-            
-            env_amps = np.sqrt(by ** 2 + bz ** 2)
-            sat_amp[jj, ii] = env_amps.max() * 1e9
-            
-    if 'JAN' in series:
-        timebase = np.array([np.datetime64(this_time) for this_time in jan_times])
+    if os.path.exists(savefile):
+        print('Loading saturation amplitudes from file...')
+        DR_file   = np.load(savefile)
+        sat_amp   = DR_file['sat_amp']
     else:
-        timebase = np.array([np.datetime64(this_time) for this_time in jul_times])
+        print('Plotting saturation amplitudes for multiple series...')
+        # Get number of runs (assume same for each series) to set array
+        num_runs  = 13 #len([name for name in os.listdir(test_dir) if 'run_' in name])
+        sat_amp   = np.zeros((len(all_series), num_runs), dtype=np.float64)
         
+        print('Collecting saturation amplitudes')
+        for jj in range(len(all_series)):
+            series      = all_series[jj]
+            series_dir  = '{}/runs//{}//'.format(drive, series)
+            num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+            print('{} runs in series {}'.format(num_runs, series))
+        
+            runs_to_do = range(num_runs)                
+            for ii in runs_to_do:
+                print('\nRun {}'.format(ii))
+                try:
+                    cf.load_run(drive, series, ii, extract_arrays=True)
+                    
+                    ty, by = cf.get_array('By') 
+                    tz, bz = cf.get_array('Bz')
+                    
+                    env_amps = np.sqrt(by ** 2 + bz ** 2)
+                    sat_amp[jj, ii] = env_amps.max() * 1e9
+                except:
+                    print(f'Something wrong with run {ii}')
+                    sat_amp[jj, ii] = np.nan
+        print('Saving saturation amplitudes to file...')
+        np.savez(savefile, sat_amp=sat_amp)
+    
+    timebase = np.array([np.datetime64(this_time) for this_time in jan_times])
+    
     # Load comparison data
     data_scripts_dir = 'D://Google Drive//Uni//PhD 2017//Data//Scripts//'
     sys.path.append(data_scripts_dir)
@@ -4378,66 +4395,351 @@ def multiplot_saturation_amplitudes(save=True):
     import analysis_scripts as ascr
     
     rbsp_path  = 'E://DATA//RBSP//'
-    time_start = np.datetime64('2013-07-25T21:25:00.000000')
-    time_end   = np.datetime64('2013-07-25T21:47:00.000000')
+    time_start = np.datetime64('2015-01-16T04:25:00.000000')
+    time_end   = np.datetime64('2015-01-16T05:10:00.000000')
     probe       = 'a'
     
-    dat_times, pc1_mags, HM_mags, delt = \
-         rfl.load_decomposed_magnetic_field(rbsp_path, time_start, time_end, probe, 
-                                    pad=600, LP_B0=1.0, LP_HM=30.0, 
-                                    get_gyfreqs=False, return_B0=False)
-         
-    spec_time, spec_freq, spec_power = fscr.get_pc1_tracepower_spectra(dat_times, pc1_mags,
-                             time_start, time_end, 
-                              _dt=delt, _olap=0.95, _res=35.0,
-                              window_data=True)
+    if not os.path.exists(fieldfile):
+        dat_times, pc1_mags, HM_mags, delt = \
+             rfl.load_decomposed_magnetic_field(rbsp_path, time_start, time_end, probe, 
+                                        pad=600, LP_B0=1.0, LP_HM=30.0, 
+                                        get_gyfreqs=False, return_B0=False)
+             
+        spec_time, spec_freq, spec_power = fscr.get_pc1_tracepower_spectra(dat_times, pc1_mags,
+                                 time_start, time_end, 
+                                  _dt=delt, _olap=0.95, _res=15.0,
+                                  window_data=True)
+            
+        fst, fen = ascr.boundary_idx64(spec_freq, 0.1, 0.3)
+        pc1_int_power = spec_power[fst:fen, :].sum(axis=0)
         
-    fst, fen = ascr.boundary_idx64(spec_freq, 0.2, 0.8)
-    pc1_int_power = spec_power[fst:fen, :].sum(axis=0)
+        pc1_env = ascr.extract_envelope(dat_times, pc1_mags, delt, 100., 300., include_z=False)
+        
+        np.savez(fieldfile, spec_time=spec_time, spec_freq=spec_freq, spec_power=spec_power,
+                            pc1_int_power=pc1_int_power, dat_times=dat_times, pc1_env=pc1_env)
+    else:
+        print('Loading field values from file...')
+        FLD_file     = np.load(fieldfile)
+        spec_time    = FLD_file['spec_time']
+        spec_freq    = FLD_file['spec_freq']
+        spec_power   = FLD_file['spec_power']
+        pc1_int_power= FLD_file['pc1_int_power']
+        dat_times    = FLD_file['dat_times']
+        pc1_env      = FLD_file['pc1_env']
     
     # Plot result -- 3 plots: spectra, envelope (or integrated power? both?)
     #                then scatterplot with each run type in different color (for he concentration)
     plt.ioff()
-    fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(16, 9),
-                             gridspec_kw={'width_ratios':[1, 0.01]})
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(6.0, 0.7*3.71),
+                             gridspec_kw={'width_ratios':[1, 0.3]})
     
-    # Pc1 Spectra
-    axes[0, 0].set_title('Data/Simulation Comparison :: July 25, 2013')
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        im = axes[0, 0].pcolormesh(spec_time, spec_freq, spec_power,
-                       norm=colors.LogNorm(vmin=1e-7, vmax=1e1), cmap='jet')
-        fig.colorbar(im, cax=axes[0, 1], extend='max').set_label(
-                '$Tr(P)$\n$nT^2/Hz$', fontsize=12, rotation=0, labelpad=30)
-        axes[0, 0].set_ylabel('Hz', rotation=0, labelpad=30)
-        axes[0, 0].set_ylim(0.0, 1.1)
-        axes[0, 0].set_xlim(time_start, time_end)
-        axes[0, 0].set_xticklabels([])
-        
-    # Integrated Power
-    axes[1, 1].set_visible(False)
-    axes[1, 0].plot(spec_time, pc1_int_power)
-    axes[1, 0].set_xlim(time_start, time_end)
-    axes[1, 0].set_xticklabels([])
-    axes[1, 0].set_ylim(0.0, None)
-    axes[1, 0].set_ylabel('Integrated Power (nT^2/Hz)', rotation=0, labelpad=30)
+# =============================================================================
+#     # Pc1 Spectra
+#     
+#     with warnings.catch_warnings():
+#         warnings.simplefilter("ignore")
+#         im = axes[0, 0].pcolormesh(spec_time, spec_freq, spec_power,
+#                        norm=colors.LogNorm(vmin=1e-5, vmax=1e0), cmap='jet',
+#                        shading='auto')
+#         fig.colorbar(im, cax=axes[0, 1], extend='max').set_label(
+#                 '$Tr(P)$\n$nT^2/Hz$', fontsize=12, rotation=0, labelpad=30)
+#         axes[0, 0].set_ylabel('f\nHz', rotation=0, labelpad=20)
+#         axes[0, 0].set_ylim(0.0, 0.6)
+#         axes[0, 0].set_xlim(time_start, time_end)
+#         axes[0, 0].set_xticklabels([])
+#             
+#     
+# =============================================================================
+    
+    # Hybrid Results
+    axes[0].set_title('Saturation Amplitudes :: Jan 16, 2015')
+    axes[0].plot(dat_times, pc1_env, c='k', lw=0.75, alpha=0.75)
+    
+    clrs = ['blue', 'green', 'red']
+    for ii, lbl in zip(range(len(all_series)), ['5% He', '15% He', '30% He']):
+        axes[0].scatter(timebase, sat_amp[ii], c=clrs[ii], label=lbl)
+    axes[0].set_xlim(time_start, time_end)
+    axes[0].set_ylim(0.0, None)
+    axes[0].set_xlabel('Time (UT)')
+    axes[0].set_ylabel('$|B_w|$\n(nT)', rotation=0, labelpad=20)
+    axes[0].legend(loc='upper right')
+    leg = axes[0].legend(bbox_to_anchor=(1.0, 0.0), loc=3, borderaxespad=0., prop={'size': 12})
+    leg.get_frame().set_linewidth(0.0)
     
     for xx in range(2):
         for this_time in timebase:
-            axes[xx, 0].axvline(this_time, c='k', ls='--', alpha=0.75)
+            axes[xx].axvline(this_time, c='k', ls='--', alpha=0.75)
     
+    #axes[0, 0].set_xticklabels([])
+    axes[0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    axes[0].xaxis.set_major_locator(mdates.MinuteLocator(interval=10))
+    axes[1].set_visible(False)
+    
+    fig.tight_layout()
+    fig.align_ylabels()
+    fig.subplots_adjust(hspace=0.0, wspace=0.01)
+                            
+    if save==True:  
+        fig.savefig('F://runs//JAN16_PKTS_30HE_PC//' + 'data_model_saturation.png',
+                    edgecolor='none', dpi=200)
+        plt.close('all')
+    else:
+        plt.show()
+    return
+
+
+def multiplot_saturation_amplitudes_jul17(save=True):
+    '''
+    Plots the saturation (maximum) amplitude of each run series as a function of
+    'time' (which probably has to be hardcoded)
+    '''
+    jul_times = ['1991-07-17T20:22:11.000000',
+     '1991-07-17T20:26:30.000000',
+     '1991-07-17T20:37:43.000000',
+     '1991-07-17T20:42:16.000000',
+     '1991-07-17T20:47:41.000000',
+     '1991-07-17T20:50:55.000000',
+     '1991-07-17T20:54:19.000000']
+    
+    tlim = [None, 220., 270., 360., 300., 280., 260.]
+    savefile  = 'F://runs//JUL17_PC1PEAKS_VO_1pc//' + 'sat_amps_jul16.npz'
+    fieldfile = 'F://runs//JUL17_PC1PEAKS_VO_1pc//' + 'field_vals_jul16.npz'
+    all_series  = ['//JUL17_PC1PEAKS_VO_1pc//']
+    
+    if os.path.exists(savefile) and False:
+        print('Loading saturation amplitudes from file...')
+        DR_file   = np.load(savefile)
+        sat_amp   = DR_file['sat_amp']
+    else:
+        print('Plotting saturation amplitudes for multiple series...')
+        # Get number of runs (assume same for each series) to set array
+        num_runs  = 7 #len([name for name in os.listdir(test_dir) if 'run_' in name])
+        sat_amp   = np.zeros((len(all_series), num_runs), dtype=np.float64)
+        
+        print('Collecting saturation amplitudes')
+        for jj in range(len(all_series)):
+            series      = all_series[jj]
+            series_dir  = '{}/runs//{}//'.format(drive, series)
+            num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+            print('{} runs in series {}'.format(num_runs, series))
+        
+            runs_to_do = range(num_runs)                
+            for ii in runs_to_do:
+                    print('\nRun {}'.format(ii))
+                #try:
+                    cf.load_run(drive, series, ii, extract_arrays=True)
+                    
+                    ty, by = cf.get_array('By') 
+                    tz, bz = cf.get_array('Bz')
+
+                    if tlim[ii] is not None:
+                        tmax_idx = np.where(np.abs(ty - tlim[ii]) == np.abs(ty - tlim[ii]).min())[0][0]
+                    else:
+                        tmax_idx = None
+                    
+                    env_amps = np.sqrt(by[:tmax_idx] ** 2 + bz[:tmax_idx] ** 2)
+                    sat_amp[jj, ii] = env_amps.max() * 1e9
+                #except:
+                 #   print(f'Something wrong with run {ii}')
+                  #  sat_amp[jj, ii] = np.nan
+        print('Saving saturation amplitudes to file...')
+        np.savez(savefile, sat_amp=sat_amp)
+    
+    timebase = np.array([np.datetime64(this_time) for this_time in jul_times])
+    
+    # Load comparison data
+    data_scripts_dir = 'D://Google Drive//Uni//PhD 2017//Data//Scripts//'
+    sys.path.append(data_scripts_dir)
+    import crres_file_readers as cfr
+    import fast_scripts as fscr
+    import analysis_scripts as ascr
+    
+    crres_path  = 'E://DATA//CRRES//'
+    time_start = np.datetime64('1991-07-17T20:15:00.000000')
+    time_end   = np.datetime64('1991-07-17T21:00:00.000000')
+    
+    if not os.path.exists(fieldfile):
+        dat_times, B0, HM_mags, pc1_mags, \
+        E0, HM_elec, pc1_elec, S, B, E = cfr.get_crres_fields(crres_path, time_start, time_end,
+                                        pad=1800, output_raw_B=True, Pc5_LP=30.0, B0_LP=1.0,
+                                        Pc5_HP=None, dEx_LP=None, interpolate_nan=True)
+        delt = 1/32.
+        
+        pc1_env = ascr.extract_envelope(dat_times, pc1_mags, delt, 100., 300., include_z=False)
+        
+        np.savez(fieldfile, dat_times=dat_times, pc1_env=pc1_env)
+    else:
+        print('Loading field values from file...')
+        FLD_file     = np.load(fieldfile)
+        dat_times    = FLD_file['dat_times']
+        pc1_env      = FLD_file['pc1_env']
+    
+    # Plot result -- 3 plots: spectra, envelope (or integrated power? both?)
+    #                then scatterplot with each run type in different color (for he concentration)
+    plt.ioff()
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(6.0, 0.7*3.71),
+                             gridspec_kw={'width_ratios':[1, 0.3]})
+
     # Hybrid Results
+    axes[0].set_title('Saturation Amplitudes :: Jan 16, 2015')
+    axes[0].plot(dat_times, pc1_env, c='k', lw=0.75, alpha=0.75)
+    
+    clrs = ['blue', 'green', 'red']
+    for ii, lbl in zip(range(len(all_series)), ['1% He']):
+        axes[0].scatter(timebase, sat_amp[ii], c=clrs[ii], label=lbl)
+    axes[0].set_xlim(time_start, time_end)
+    axes[0].set_ylim(0.0, None)
+    axes[0].set_xlabel('Time (UT)')
+    axes[0].set_ylabel('$|B_w|$\n(nT)', rotation=0, labelpad=20)
+    axes[0].legend(loc='upper right')
+    leg = axes[0].legend(bbox_to_anchor=(1.0, 0.0), loc=3, borderaxespad=0., prop={'size': 12})
+    leg.get_frame().set_linewidth(0.0)
+    
+    for xx in range(2):
+        for this_time in timebase:
+            axes[xx].axvline(this_time, c='k', ls='--', alpha=0.50, lw=0.75)
+    
+    #axes[0, 0].set_xticklabels([])
+    axes[0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    axes[0].xaxis.set_major_locator(mdates.MinuteLocator(interval=10))
+    axes[1].set_visible(False)
+    
+    fig.tight_layout()
+    fig.align_ylabels()
+    fig.subplots_adjust(hspace=0.0, wspace=0.01)
+                            
+    if save==True:  
+        fig.savefig('F://runs//JUL17_PC1PEAKS_VO_1pc//' + 'data_model_saturation.png',
+                    edgecolor='none', dpi=200)
+        plt.close('all')
+    else:
+        plt.show()
+    return
+
+
+def multiplot_saturation_amplitudes_aug12(save=True):
+    '''
+    Plots the saturation (maximum) amplitude of each run series as a function of
+    'time' (which probably has to be hardcoded)
+    '''
+    jul_times = ['1991-07-17T20:22:11.000000',
+     '1991-07-17T20:26:30.000000',
+     '1991-07-17T20:37:43.000000',
+     '1991-07-17T20:42:16.000000',
+     '1991-07-17T20:47:41.000000',
+     '1991-07-17T20:50:55.000000',
+     '1991-07-17T20:54:19.000000']
+    
+    tlim = [None, 220., 270., 360., 300., 280., 260.]
+    savefile  = 'F://runs//JUL17_PC1PEAKS_VO_1pc//' + 'sat_amps_jul16.npz'
+    fieldfile = 'F://runs//JUL17_PC1PEAKS_VO_1pc//' + 'field_vals_jul16.npz'
+    all_series  = ['//JUL17_PC1PEAKS_VO_1pc//']
+    
+    if os.path.exists(savefile) and False:
+        print('Loading saturation amplitudes from file...')
+        DR_file   = np.load(savefile)
+        sat_amp   = DR_file['sat_amp']
+    else:
+        print('Plotting saturation amplitudes for multiple series...')
+        # Get number of runs (assume same for each series) to set array
+        num_runs  = 7 #len([name for name in os.listdir(test_dir) if 'run_' in name])
+        sat_amp   = np.zeros((len(all_series), num_runs), dtype=np.float64)
+        
+        print('Collecting saturation amplitudes')
+        for jj in range(len(all_series)):
+            series      = all_series[jj]
+            series_dir  = '{}/runs//{}//'.format(drive, series)
+            num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
+            print('{} runs in series {}'.format(num_runs, series))
+        
+            runs_to_do = range(num_runs)                
+            for ii in runs_to_do:
+                    print('\nRun {}'.format(ii))
+                #try:
+                    cf.load_run(drive, series, ii, extract_arrays=True)
+                    
+                    ty, by = cf.get_array('By') 
+                    tz, bz = cf.get_array('Bz')
+
+                    if tlim[ii] is not None:
+                        tmax_idx = np.where(np.abs(ty - tlim[ii]) == np.abs(ty - tlim[ii]).min())[0][0]
+                    else:
+                        tmax_idx = None
+                    
+                    env_amps = np.sqrt(by[:tmax_idx] ** 2 + bz[:tmax_idx] ** 2)
+                    sat_amp[jj, ii] = env_amps.max() * 1e9
+                #except:
+                 #   print(f'Something wrong with run {ii}')
+                  #  sat_amp[jj, ii] = np.nan
+        print('Saving saturation amplitudes to file...')
+        np.savez(savefile, sat_amp=sat_amp)
+    
+    timebase = np.array([np.datetime64(this_time) for this_time in jul_times])
+    
+    # Load comparison data
+    data_scripts_dir = 'D://Google Drive//Uni//PhD 2017//Data//Scripts//'
+    sys.path.append(data_scripts_dir)
+    import crres_file_readers as cfr
+    import fast_scripts as fscr
+    import analysis_scripts as ascr
+    
+    crres_path  = 'E://DATA//CRRES//'
+    time_start = np.datetime64('1991-07-17T20:15:00.000000')
+    time_end   = np.datetime64('1991-07-17T21:00:00.000000')
+    
+    if not os.path.exists(fieldfile):
+        dat_times, B0, HM_mags, pc1_mags, \
+        E0, HM_elec, pc1_elec, S, B, E = cfr.get_crres_fields(crres_path, time_start, time_end,
+                                        pad=1800, output_raw_B=True, Pc5_LP=30.0, B0_LP=1.0,
+                                        Pc5_HP=None, dEx_LP=None, interpolate_nan=True)
+        delt = 1/32.
+        
+        pc1_env = ascr.extract_envelope(dat_times, pc1_mags, delt, 100., 300., include_z=False)
+        
+        np.savez(fieldfile, dat_times=dat_times, pc1_env=pc1_env)
+    else:
+        print('Loading field values from file...')
+        FLD_file     = np.load(fieldfile)
+        dat_times    = FLD_file['dat_times']
+        pc1_env      = FLD_file['pc1_env']
+    
+    # Plot result -- 3 plots: spectra, envelope (or integrated power? both?)
+    #                then scatterplot with each run type in different color (for he concentration)
+    plt.ioff()
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(6.0, 0.7*3.71),
+                             gridspec_kw={'width_ratios':[1, 0.3]})
+
+    # Hybrid Results
+    axes[0].set_title('Saturation Amplitudes :: Jan 16, 2015')
+    axes[0].plot(dat_times, pc1_env, c='k', lw=0.75, alpha=0.75)
+    
     clrs = ['blue', 'green', 'red']
     for ii, lbl in zip(range(len(all_series)), ['5% He', '15% He', '30% He']):
-        axes[2, 0].scatter(timebase, sat_amp[ii], c=clrs[ii], label=lbl)
-    axes[2, 1].set_visible(False)
-    axes[2, 0].set_xlim(time_start, time_end)
-    axes[2, 0].set_ylim(0.0, None)
-    axes[2, 0].set_xlabel('Time (UT)')
-    axes[2, 0].set_ylabel('Saturation Amplitude (nT)')
-    axes[2, 0].legend(loc='upper right')
+        axes[0].scatter(timebase, sat_amp[ii], c=clrs[ii], label=lbl)
+    axes[0].set_xlim(time_start, time_end)
+    axes[0].set_ylim(0.0, None)
+    axes[0].set_xlabel('Time (UT)')
+    axes[0].set_ylabel('$|B_w|$\n(nT)', rotation=0, labelpad=20)
+    axes[0].legend(loc='upper right')
+    leg = axes[0].legend(bbox_to_anchor=(1.0, 0.0), loc=3, borderaxespad=0., prop={'size': 12})
+    leg.get_frame().set_linewidth(0.0)
+    
+    for xx in range(2):
+        for this_time in timebase:
+            axes[xx].axvline(this_time, c='k', ls='--', alpha=0.75)
+    
+    #axes[0, 0].set_xticklabels([])
+    axes[0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    axes[0].xaxis.set_major_locator(mdates.MinuteLocator(interval=10))
+    axes[1].set_visible(False)
+    
+    fig.tight_layout()
+    fig.align_ylabels()
+    fig.subplots_adjust(hspace=0.0, wspace=0.01)
+                            
     if save==True:  
-        fig.savefig(cf.base_dir + 'data_model_saturation.png', edgecolor='none')
+        fig.savefig('F://runs//JUL17_PC1PEAKS_VO_1pc//' + 'data_model_saturation.png',
+                    edgecolor='none', dpi=200)
         plt.close('all')
     else:
         plt.show()
@@ -4816,11 +5118,76 @@ def plot_density_change(ppd=False, it_max=None, save=True, overwrite_moments=Fal
     return
 
 
+def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None):
+    '''
+    Stackplot of xt and wx plot. Try next to each other and stacked vertically.
+     -- Total xt
+     -- Total wx (add powers)
+    '''
+    # Get wx data and axes
+    ftime, by_wx = disp.get_wx('By', fac=1e9)
+    ftime, bz_wx = disp.get_wx('Bz', fac=1e9)
+    wx = by_wx + bz_wx
+    
+    freqs = np.fft.rfftfreq(ftime.shape[0], d=cf.dt_field)
+    x_arr = cf.B_nodes * 1e-6
+    x_lim = np.array([cf.xmin, cf.xmax]) * 1e-6
+
+    # Get xt
+    ftime, By_raw = cf.get_array('by')
+    ftime, Bz_raw = cf.get_array('bz')
+    B_wave = np.sqrt(By_raw**2 + Bz_raw**2)*1e9
+    
+    ffamily = 'monospace'
+    fsize   = 12
+    lpad    = 10
+    cpad    = 30
+    
+    ## PLOT
+    plt.ioff()
+    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(6.0, 9.0), 
+                             gridspec_kw={'width_ratios':[1, 0.01]})
+    
+    # XT WAVE PLOT
+    im1   = axes[0, 0].pcolormesh(x_arr, ftime, B_wave, cmap='jet', vmin=0.0, vmax=10.0)
+    cbar1 = fig.colorbar(im1, cax=axes[0, 1], extend='max')
+    cbar1.set_label('nT', rotation=0,
+                    family=ffamily, fontsize=fsize, labelpad=cpad-10)
+
+    axes[0, 0].set_ylabel('t\n(s)', rotation=0, labelpad=lpad, fontsize=fsize, family=ffamily)
+    axes[0, 0].set_xlabel('x (Mm)', fontsize=fsize, family=ffamily)
+    axes[0, 0].set_ylim(0, tmax)
+    axes[0, 0].set_xlim(x_lim[0], x_lim[1])    
+    axes[0, 0].set_xticklabels([])
+    
+    # WX DISPERSION PLOT
+    im2 = axes[1, 0].pcolormesh(x_arr, freqs, wx, cmap='nipy_spectral')
+    cbar2 = fig.colorbar(im2, cax=axes[1, 1], extend='max')
+    cbar2.set_label('$\\frac{nT^2}{Hz}$', rotation=0,
+                    family=ffamily, fontsize=fsize+2, labelpad=cpad)
+    
+    axes[1, 0].set_ylabel('f\n(Hz)', rotation=0, labelpad=lpad, fontsize=fsize, family=ffamily)
+    axes[1, 0].set_xlabel('x (Mm)', fontsize=fsize, family=ffamily)
+    axes[1, 0].set_ylim(0, fmax)
+    axes[1, 0].set_xlim(x_lim[0], x_lim[1])
+
+    fig.tight_layout()
+    fig.align_ylabels()
+    fig.subplots_adjust(hspace=0.00, wspace=0.05)
+                            
+    if save:
+        fullpath = cf.anal_dir + 'dispersion_stackplot.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(),
+                    edgecolor='none', bbox_inches='tight', dpi=200)
+        print('Dispersion stackplot saved')
+        plt.close('all')
+    return
+
 #%% MAIN
 if __name__ == '__main__':
     # TODO: Function to calculate number density of species at gridpoints, 
     # and save this to a file
-    drive       = 'F:'
+    drive       = 'D:'
     
     #############################
     ### MULTI-SERIES ROUTINES ###
@@ -4830,25 +5197,26 @@ if __name__ == '__main__':
         #multiplot_fluxes(series)
         #multiplot_parallel_scaling()
         #multiplot_saturation_amplitudes(save=True)
-        multiplot_RMS_jul25()
+        #multiplot_RMS_jul25()
+        
+        #multiplot_saturation_amplitudes_jan16(save=True)
+        multiplot_saturation_amplitudes_jul17(save=True)
         print('Exiting multiplot routines successfully.')
         sys.exit()
 
     ####################################
     ### SINGLE SERIES ANALYSIS ########
     ################################
-    for series in ['AUG12_PC1_PEAKS_CAVRCVO_5HE', 
-                   'JUL17_PC1PEAKS_CO',
-                   'JUL17_PC1PEAKS_VO']:
-        
+    for series in ['//winske_resonant_test_orders//']:
+
         series_dir = f'{drive}/runs//{series}//'
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [18]
+            runs_to_do = [5]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -4857,17 +5225,23 @@ if __name__ == '__main__':
                 #cf.delete_analysis_folders(drive, series, run_num)
 
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
+                
+                #thesis_plot_dispersion(save=True, fmax=1.0, tmax=None)
+                #SWSP_dynamic_spectra(nx=514, overlap=0.95, f_res_mHz=25)
+                
                 #standard_analysis_package(disp_overlay=False, pcyc_mult=1.1,
                 #              tx_only=False, tmax=None, remove_ND=False)
-                #check_fields(save=True, ylim=False, skip=50)
 
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
-                           B0_lim=None, remove_ND=False)
-                plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
-                
-                plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
-                     pcyc_mult=1.5, xmax=1.5, zero_cold=True,
-                     linear_only=False, normalize_axes=True, centre_only=False)
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=50, normalize=False,
+                           B0_lim=25, remove_ND=False)
+                #check_fields(save=True, ylim=False, skip=5)
+# =============================================================================
+#                 plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
+#                 
+#                 plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
+#                      pcyc_mult=1.5, xmax=1.5, zero_cold=True,
+#                      linear_only=False, normalize_axes=True, centre_only=False)
+# =============================================================================
 
                 #plot_total_density_with_time()
                 #plot_max_velocity()
