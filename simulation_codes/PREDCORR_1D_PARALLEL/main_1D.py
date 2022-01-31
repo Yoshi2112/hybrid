@@ -26,12 +26,12 @@ print_timings       = False     # Diagnostic outputs timing each major segment (
 print_runtime       = True      # Flag to print runtime every 50 iterations 
 do_dispersion       = False     # Account for dispersion effects in dt calculation
 fourth_order        = True      # Flag to choose between 4th or 2nd order solutions
-logistic_B          = True      # Flag for B0 to change after a time to a different value as a logistic function
+logistic_B          = False     # Flag for B0 to change after a time to a different value as a logistic function
 
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)
-nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
 
 #%% --- FUNCTIONS ---
 ### ##
@@ -2109,6 +2109,8 @@ def update_Beq(t):
         
         arg  = -g_rate*(t - t_mid)
         B_eq = B0 + B_ULF / (1 + np.exp(arg))
+    else:
+        B_eq = B0
     return B_eq
 
 

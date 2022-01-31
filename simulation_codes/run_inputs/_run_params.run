@@ -24,4 +24,4 @@ GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02
 PARTICLE_DUMP_FREQ		5.0
 FIELD_DUMP_FREQ			0.4
-Winske resonant test, with a logistic function variation of 5nT after 20% of the total run_time (approx 100s). Now with saving the B_cent variable so I can track the change.
+Jul 25 HOPE PROXYHONLY Run 13 recreation (the 'clean packet'). Less particles and everything for home run. Control for dropping B0.
