@@ -416,8 +416,13 @@ def load_fields(ii):
         tdamping_array = data['damping_array']
     except:
         tdamping_array = None
+        
+    try:
+        tB_cent = data['B_cent']
+    except:
+        tB_cent = None
 
-    return tB, tE, tVe, tTe, tJ, tdns, tsim_time, tdamping_array
+    return tB, tB_cent, tE, tVe, tTe, tJ, tdns, tsim_time, tdamping_array
 
 
 def load_particles(ii, shuffled_idx=False, preparticledata=False):  
@@ -545,9 +550,10 @@ def extract_all_arrays():
         num_field_steps    = len(os.listdir(field_dir)) 
         
         # Load to specify arrays
-        zB, zE, zVe, zTe, zJ, zq_dns, zsim_time, zdamp = load_fields(0)
+        zB, zB_cent, zE, zVe, zTe, zJ, zq_dns, zsim_time, zdamp = load_fields(0)
 
         bx_arr, by_arr, bz_arr, damping_array = [np.zeros((num_field_steps, zB.shape[0])) for _ in range(4)]
+        bxc_arr, byc_arr, bzc_arr = [np.zeros((num_field_steps, zB_cent.shape[0])) for _ in range(3)]
         
         ex_arr,ey_arr,ez_arr,vex_arr,jx_arr,vey_arr,jy_arr,vez_arr,jz_arr,te_arr,qdns_arr\
         = [np.zeros((num_field_steps, zE.shape[0])) for _ in range(11)]
@@ -559,11 +565,16 @@ def extract_all_arrays():
             sys.stdout.write('\rExtracting field timestep {}'.format(ii))
             sys.stdout.flush()
             
-            B, E, Ve, Te, J, q_dns, sim_time, damp = load_fields(ii)
+            B, B_cent, E, Ve, Te, J, q_dns, sim_time, damp = load_fields(ii)
 
             bx_arr[ii, :] = B[:, 0]
             by_arr[ii, :] = B[:, 1]
             bz_arr[ii, :] = B[:, 2]
+            
+            if B_cent is not None:
+                bxc_arr[ii, :] = B_cent[:, 0]
+                byc_arr[ii, :] = B_cent[:, 1]
+                bzc_arr[ii, :] = B_cent[:, 2]
             
             ex_arr[ii, :] = E[:, 0]
             ey_arr[ii, :] = E[:, 1]
@@ -586,6 +597,10 @@ def extract_all_arrays():
         np.save(temp_dir + 'bx' +'_array.npy', bx_arr)
         np.save(temp_dir + 'by' +'_array.npy', by_arr)
         np.save(temp_dir + 'bz' +'_array.npy', bz_arr)
+        
+        np.save(temp_dir + 'bxc' +'_array.npy', bxc_arr)
+        np.save(temp_dir + 'byc' +'_array.npy', byc_arr)
+        np.save(temp_dir + 'bzc' +'_array.npy', bzc_arr)
         
         np.save(temp_dir + 'ex' +'_array.npy', ex_arr)
         np.save(temp_dir + 'ey' +'_array.npy', ey_arr)

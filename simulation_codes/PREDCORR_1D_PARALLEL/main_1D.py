@@ -20,7 +20,7 @@ B_surf  = 3.12e-5                            # Magnetic field strength at Earth 
 # A few internal flags
 cold_va             = False
 Fu_override         = False     # Override to allow density to be calculated as a ratio of frequencies
-do_parallel         = True      # Flag to use available threads to parallelize particle functions
+do_parallel         = True     # Flag to use available threads to parallelize particle functions
 adaptive_timestep   = True      # Disable adaptive timestep to keep it the same as initial
 print_timings       = False     # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True      # Flag to print runtime every 50 iterations 
@@ -30,8 +30,8 @@ logistic_B          = True      # Flag for B0 to change after a time to a differ
 
 if not do_parallel:
     do_parallel = True
-    nb.set_num_threads(1)          
-nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
+    nb.set_num_threads(1)
+nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
 
 #%% --- FUNCTIONS ---
 ### ##
@@ -476,7 +476,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
     # Desync (retard) velocity here
     old_pos = pos.copy()
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, -0.5*pdt,
-           eta_arr)
+           eta_arr, B0)
     pos[:] = old_pos
     
     # Apply BCs to particles
@@ -504,7 +504,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
         
         for jj in range(Nj):
             parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, pdt,
-            eta_arr)
+            eta_arr, B0)
             
             # Apply BCs to particles
             if particle_open == 1:
@@ -533,7 +533,7 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int, Ji_in,
     # Resync (advance) velocity here
     old_pos = pos.copy()
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_in, Ve_in, rho_in, 0.5*pdt,
-           eta_arr)
+           eta_arr, B0)
     pos[:] = old_pos
 
     # Apply BCs to particles
@@ -669,7 +669,7 @@ def set_timestep(vel):
 ### ##
 def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                   B, E, DT, rho_in, rho_out, Ji_in, Ji_out, J_ext, Ve,
-                                  _mp_flux, resistive_array, qq, pc=0):
+                                  _mp_flux, resistive_array, qq, B_eq, pc=0):
     '''
     Helper function to group the particle advance and moment collection functions
     
@@ -678,7 +678,7 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     '''
     parmov_start = timer()
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve, rho_in, DT,
-           resistive_array)
+           resistive_array, B_eq)
     #parmov.parallel_diagnostics(level=4)
     #sys.exit()
     parmov_time = round(timer() - parmov_start, 3)
@@ -878,7 +878,7 @@ def assign_weighting_CIC(pos, I, W, E_nodes=True):
 
 @nb.njit(parallel=do_parallel)
 def parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji, Ve, q_dens, DT,
-           resistive_array):
+           resistive_array, B_eq):
     '''
     updates velocities using a Boris particle pusher.
     Based on Birdsall & Langdon (1985), pp. 59-63.
@@ -1587,11 +1587,11 @@ def get_J_ext_pol(J_ext, sim_time):
 ### ##
 
 @nb.njit()
-def eval_B0x(x):
+def eval_B0x(x, B_eq):
     return B_eq * (1. + a * x**2)
 
 
-def get_B_cent(_B, _B_cent):
+def get_B_cent(_B, _B_cent, B_eq):
     '''
     Quick and easy function to calculate B on the E-grid using scipy's cubic
     spline interpolation (mine seems to be broken). Could probably make this 
@@ -1600,7 +1600,7 @@ def get_B_cent(_B, _B_cent):
     for jj in range(1, 3):
         coeffs         = splrep(B_nodes_loc, _B[:, jj])
         _B_cent[:, jj] = splev( E_nodes_loc, coeffs)
-    _B_cent[:, 0] = eval_B0x(E_nodes_loc)
+    _B_cent[:, 0] = eval_B0x(E_nodes_loc, B_eq)
     return
 
 
@@ -2059,11 +2059,12 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ji_i
     
     if DT_part < 0.9*DT:
         print('Timestep halved. Syncing particle velocity...')
+        B_eq = update_Beq(qq*DT)
         
         # Re-sync vel/pos: Advance velocity half a step
         old_particles[0] = pos[:]
         parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve_in, rho_in, 0.5*DT,
-           resistive_array)
+           resistive_array, B_eq)
         pos[:] = old_particles[0]
 
         DT         *= 0.5
@@ -2077,7 +2078,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ji_i
         # De-sync vel/pos: Retard velocity half a step
         old_particles[0] = pos[:]
         parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, Ji_in, Ve_in, rho_in, -0.5*DT,
-           resistive_array)
+           resistive_array, B_eq)
         pos[:] = old_particles[0]   
         
     return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, damping_array
@@ -2097,17 +2098,18 @@ def update_Beq(t):
     to that of a 20mHz signal of the same amplitude
     
     B_ULF given a fairly average value of 5nT, can be changed
-    '''
-    global B_eq
     
+    Note: Changed to make B_eq an output. Numba jitted functions don't update
+    with changing globals, they treat them as runtime constants.
+    '''    
     if logistic_B:
-        B_ULF  = 5e-9
+        B_ULF  = -10e-9
         g_rate = 0.5
-        t_mid  = 0.2*max_time
+        t_mid  = 0.3*max_time
         
         arg  = -g_rate*(t - t_mid)
         B_eq = B0 + B_ULF / (1 + np.exp(arg))
-    return 
+    return B_eq
 
 
 ### ##
@@ -2150,7 +2152,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
             os.makedirs(folder)
     
     Bc       = np.zeros((NC + 1, 3), dtype=np.float64)
-    Bc[:, 0] = B_eq * (1 + a * B_nodes_loc**2)
+    Bc[:, 0] = B0 * (1 + a * B_nodes_loc**2)
 
     # Single parameters
     params = dict([('seed', seed),
@@ -2165,7 +2167,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('dxm', dxm),
                    ('dx', dx),
                    ('L', L), 
-                   ('B_eq', B_eq),
+                   ('B_eq', B0),
                    ('xmax', xmax),
                    ('xmin', xmin),
                    ('B_xmax', B_xmax),
@@ -2327,86 +2329,6 @@ def dump_to_file(pos, vel, E_int, Ve, Te, B, Ji, q_dens, qq, folder='parallel', 
     return
 
 
-def diagnostic_field_plot(B, E_half, q_dens, Ji, Ve, Te,
-                          B_damping_array, qq, DT, sim_time):
-    '''
-    Check field grid arrays, probably at every timestep
-    '''
-    import matplotlib.pyplot as plt
-    print('Generating diagnostic plot for timestep', qq)
-    # Check dir
-    diagnostic_path = drive + save_path + 'run_{}/diagnostic_plots/'.format(run)
-    if os.path.exists(diagnostic_path) == False:                                   # Create data directory
-        os.makedirs(diagnostic_path)
-    
-    ## Initialize plots and prepare plotspace
-    plt.ioff()
-    fontsize = 14; fsize = 12; lpad = 20
-    fig, axes = plt.subplots(5, ncols=3, figsize=(20,10), sharex=True)
-    fig.patch.set_facecolor('w')   
-    axes[0, 0].set_title('Diagnostics :: Grid Ouputs ::: {}[{}] :: {:.4f}s'.format(save_path.split('/')[2], run, round(sim_time, 4)),
-                         fontsize=fontsize+4, family='monospace')
-
-    background_B = eval_B0x(E_nodes_loc)
-    
-    axes[0, 0].plot(B_nodes_loc / dx, B_damping_array, color='k', label=r'$r_D(x)$') 
-    axes[1, 0].plot(B_nodes_loc / dx, B[:, 1]*1e9,     color='b', label=r'$B_y$') 
-    axes[2, 0].plot(B_nodes_loc / dx, B[:, 2]*1e9,     color='g', label=r'$B_z$')
-    axes[3, 0].plot(E_nodes_loc / dx, E_int[:, 1]*1e3, color='b', label=r'$E_y$')
-    axes[4, 0].plot(E_nodes_loc / dx, E_int[:, 2]*1e3, color='g', label=r'$E_z$')
-
-    axes[0, 1].plot(E_nodes_loc / dx, q_dens,   color='k', label=r'$n_e$')
-    axes[1, 1].plot(E_nodes_loc / dx, Ve[:, 1], color='b', label=r'$V_{ey}$')
-    axes[2, 1].plot(E_nodes_loc / dx, Ve[:, 2], color='g', label=r'$V_{ez}$')
-    axes[3, 1].plot(E_nodes_loc / dx, Ji[:, 1], color='b', label=r'$J_{iy}$' )
-    axes[4, 1].plot(E_nodes_loc / dx, Ji[:, 2], color='g', label=r'$J_{iz}$' )
-    
-    axes[0, 2].axhline(Te0_scalar, c='k', alpha=0.5, ls='--')
-    axes[0, 2].plot(E_nodes_loc / dx, Te, color='r',          label=r'$T_e$')
-    axes[1, 2].plot(E_nodes_loc / dx, Ve[:, 0], color='r',    label=r'$V_{ex}$')
-    axes[2, 2].plot(E_nodes_loc / dx, Ji[:, 0], color='r',    label=r'$J_{ix}$' )
-    axes[3, 2].plot(E_nodes_loc / dx, E_int[:, 0]*1e3, color='r', label=r'$E_x$')
-    axes[4, 2].plot(B_nodes_loc / dx, B[:, 0]*1e9, color='r',     label=r'$B_{wx}$')
-    axes[4, 2].plot(E_nodes_loc / dx, background_B, color='k', ls='--',    label=r'$B_{0x}$')
-    
-
-    axes[0, 0].set_ylabel('$r_D(x)$'     , rotation=0, labelpad=lpad, fontsize=fsize)
-    axes[1, 0].set_ylabel('$B_y$\n(nT)'  , rotation=0, labelpad=lpad, fontsize=fsize)
-    axes[2, 0].set_ylabel('$B_z$\n(nT)'  , rotation=0, labelpad=lpad, fontsize=fsize)
-    axes[3, 0].set_ylabel('$E_y$\n(mV/m)', rotation=0, labelpad=lpad, fontsize=fsize)
-    axes[4, 0].set_ylabel('$E_z$\n(mV/m)', rotation=0, labelpad=lpad, fontsize=fsize)
-    
-    axes[0, 1].set_ylabel('$n_e$\n$(cm^{-1})$', fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[1, 1].set_ylabel('$V_{ey}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[2, 1].set_ylabel('$V_{ez}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[3, 1].set_ylabel('$J_{iy}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[4, 1].set_ylabel('$J_{iz}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
-    
-    axes[0, 2].set_ylabel('$T_e$\n(eV)'     , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[1, 2].set_ylabel('$V_{ex}$\n(m/s)' , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[2, 2].set_ylabel('$J_{ix}$'        , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[3, 2].set_ylabel('$E_x$\n(mV/m)'   , fontsize=fsize, rotation=0, labelpad=lpad)
-    axes[4, 2].set_ylabel('$B_x$\n(nT)'     , fontsize=fsize, rotation=0, labelpad=lpad)
-    
-    fig.align_labels()
-            
-    for ii in range(3):
-        axes[4, ii].set_xlabel('Position (m/dx)')
-        for jj in range(5):
-            axes[jj, ii].set_xlim(B_nodes_loc[0] / dx, B_nodes_loc[-1] / dx)
-            axes[jj, ii].axvline(-NX//2, c='k', ls=':', alpha=0.5)
-            axes[jj, ii].axvline( NX//2, c='k', ls=':', alpha=0.5)
-            axes[jj, ii].ticklabel_format(axis='y', useOffset=False)
-            axes[jj, ii].grid()
-    
-    plt.tight_layout(pad=1.0, w_pad=1.8)
-    fig.subplots_adjust(hspace=0.125)
-    plt.savefig(diagnostic_path + 'diag_field_{:07}'.format(qq), 
-                facecolor=fig.get_facecolor(), edgecolor='none')
-    plt.close('all')
-    return
-
-
 ### ##
 #%% MAIN FUNCTIONS
 ### ##
@@ -2495,6 +2417,8 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
     '''
     Main loop separated from __main__ function, since this is the actual computation bit.
     '''    
+    B_eq = update_Beq(qq*DT)
+    
     # Check timestep (Maybe only check every few. Set in main body)
     check_start = timer()
     if adaptive_timestep == True and qq%1 == 0 and disable_waves == 0:
@@ -2509,7 +2433,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
     part1_start = timer()
     advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                   B, E_int, DT, q_dens, q_dens_adv, Ji_int, Ji_half, J_ext, Ve_half,
-                                  mp_flux, resistive_array, qq, pc=0)
+                                  mp_flux, resistive_array, qq, B_eq, pc=0)
     part1_time = round(timer() - part1_start, 3)
     
     # Average N, N + 1 densities (q_dens at N + 1/2)
@@ -2519,8 +2443,8 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
     if disable_waves == 0:   
         # Push B from N to N + 1/2 and calculate E(N + 1/2)
         push_B(B, E_int, temp3Db, DT, qq, B_damping_array, retarding_array, half_flag=1)
-        get_B_cent(B, B_cent)
-        update_Beq((qq+0.5)*DT)
+        get_B_cent(B, B_cent, B_eq)
+        B_eq = update_Beq((qq+0.5)*DT)
         
         calculate_E(B, B_cent, Ji_half, J_ext, q_dens, E_half, Ve_half, Te,
                     temp3De, temp3Db, temp1D, E_damping_array, resistive_array)
@@ -2549,7 +2473,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         part2_start = timer()
         advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                       B, E_int, DT, q_dens_adv, q_dens, Ji_int, Ji_half, J_ext, Ve_half,
-                                      mp_flux, resistive_array, qq, pc=1)
+                                      mp_flux, resistive_array, qq, B_eq, pc=1)
         part2_time = round(timer() - part2_start, 3)
             
         correct_start = timer()
@@ -2557,8 +2481,8 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
     
         # Compute predicted fields at N + 3/2, advance J_ext too
         push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, retarding_array, half_flag=1)
-        get_B_cent(B, B_cent)
-        update_Beq((qq+1.5)*DT)
+        get_B_cent(B, B_cent, B_eq)
+        B_eq = update_Beq((qq+1.5)*DT)
         calculate_E(B, B_cent, Ji_half, J_ext, q_dens, E_int, Ve_half, Te,
                     temp3De, temp3Db, temp1D, E_damping_array, resistive_array)
         
@@ -2582,8 +2506,8 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         Ve_int *= 0.5; Ve_int += 0.5*Ve_half 
     
         push_B(B, E_int, temp3Db, DT, qq, B_damping_array, retarding_array, half_flag=0)   # Advance the original B
-        get_B_cent(B, B_cent)
-        update_Beq((qq+1.0)*DT)
+        get_B_cent(B, B_cent, B_eq)
+        B_eq = update_Beq((qq+1.0)*DT)
         
         q_dens[:] = q_dens_adv
         mp_flux   = mp_flux_old.copy()
@@ -2711,8 +2635,8 @@ def load_run_params():
 
 def load_plasma_params():
     global species_lbl, temp_color, temp_type, dist_type, nsp_ppc, mass, charge, \
-        drift_v, density, anisotropy, E_perp, E_e, beta_flag, L, B_eq, B_xmax_ovr,\
-        qm_ratios, N, idx_start, idx_end, Nj, N_species, B_eq, ne, density, \
+        drift_v, density, anisotropy, E_perp, E_e, beta_flag, L, B_xmax_ovr,\
+        qm_ratios, N, idx_start, idx_end, Nj, N_species, ne, density, \
         E_par, Te0_scalar, vth_perp, vth_par, T_par, T_perp, vth_e, vei,\
         wpi, wpe, va, gyfreq_eq, egyfreq_eq, dx, n_contr, min_dens, xmax, xmin,\
             inject_rate, k_max, B0
@@ -2823,7 +2747,7 @@ def load_plasma_params():
     
     idx_start  = np.asarray([np.sum(N_species[0:ii]    )     for ii in range(0, Nj)])    # Start index values for each species in order
     idx_end    = np.asarray([np.sum(N_species[0:ii + 1])     for ii in range(0, Nj)])    # End   index values for each species in order
-    return
+    return B_eq
 
 
 def load_wave_driver_params():
@@ -2843,7 +2767,7 @@ def load_wave_driver_params():
     pulse_width = pulse_cycle*wave_period
     
     species_plasfreq_sq   = (density * charge ** 2) / (mass * e0)
-    species_gyrofrequency = np.divide(charge, mass) * B_eq
+    species_gyrofrequency = np.divide(charge, mass) * B0
     
     # Looks right!
     driven_rad = driven_freq * 2 * np.pi
@@ -2858,7 +2782,7 @@ def calculate_background_magnetic_field():
         B_A, r_A, lat_A, B_nodes_loc, E_nodes_loc
     if homogenous == 1:
         a      = 0
-        B_xmax = B_eq
+        B_xmax = B0
         
         # Also need to set any numeric values
         B_A            = 0.0
@@ -2872,19 +2796,19 @@ def calculate_background_magnetic_field():
         a          = 4.5 / (L*RE)**2
         r_A        = 120e3
         lat_A      = np.arccos(np.sqrt((RE + r_A)/(RE*L)))       # Anchor latitude in radians
-        B_A        = B_eq * np.sqrt(4 - 3*np.cos(lat_A) ** 2)\
+        B_A        = B0 * np.sqrt(4 - 3*np.cos(lat_A) ** 2)\
                     / (np.cos(lat_A) ** 6)                        # Magnetic field at anchor point
                     
         # GENERAL PARABOLIC FIELD
         if B_xmax_ovr == '-':
             a      = 4.5 / (L*RE)**2
-            B_xmax = B_eq * (1 + a*xmax**2)
+            B_xmax = B0 * (1 + a*xmax**2)
         else:
             B_xmax = float(B_xmax_ovr)
-            a      = (B_xmax / B_eq - 1) / xmax**2
+            a      = (B_xmax / B0 - 1) / xmax**2
             
         lambda_L       = np.arccos(np.sqrt(1.0 / L))                    # MLAT of anchor point
-        loss_cone_eq   = np.arcsin(np.sqrt(B_eq   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
+        loss_cone_eq   = np.arcsin(np.sqrt(B0   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
         loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
         theta_xmax     = 0.0                                            # NOT REALLY ANY WAY TO TELL MLAT WITH THIS METHOD
        
@@ -2943,7 +2867,7 @@ def print_summary_and_checks():
     
     print('Sim domain length  : {:5.2f}R_E'.format(2 * xmax / RE))
     print('Density            : {:5.2f}cc'.format(ne / 1e6))
-    print('Equatorial B-field : {:5.2f}nT'.format(B_eq*1e9))
+    print('Equatorial B-field : {:5.2f}nT'.format(B0*1e9))
     print('Boundary   B-field : {:5.2f}nT'.format(B_xmax*1e9))
     print('Iono.      B-field : {:5.2f}mT'.format(B_A*1e6))
     print('Equat. Loss cone   : {:<5.2f} degrees  '.format(loss_cone_eq))
@@ -3006,7 +2930,7 @@ if Fu_override == True:
 load_run_params()
 if __name__ == '__main__':
     manage_directories()
-load_plasma_params()
+_BEQ = load_plasma_params()
 load_wave_driver_params()
 calculate_background_magnetic_field()
 get_thread_values()
@@ -3031,7 +2955,7 @@ if __name__ == '__main__':
                                                                                old_particles)
 
     # Collect initial moments and save initial state
-    get_B_cent(B, B_cent)
+    get_B_cent(B, B_cent, _BEQ)
     collect_moments(vel, Ie, W_elec, idx, q_dens, Ji_int, J_ext, 0.0) 
 
     DT, max_inc, part_save_iter, field_save_iter, B_damping_array, E_damping_array,\
@@ -3044,7 +2968,7 @@ if __name__ == '__main__':
         save_particle_data(0, DT, part_save_iter, 0, pos, vel, idx)
         
     if save_fields == 1:
-        save_field_data(0, DT, field_save_iter, 0, Ji_int, E_int, B, Ve_int, Te, q_dens,
+        save_field_data(0, DT, field_save_iter, 0, Ji_int, E_int, B, B_cent, Ve_int, Te, q_dens,
                         B_damping_array, E_damping_array, resistive_array)
 
     loop_times = np.zeros(max_inc-1, dtype=float)
@@ -3054,7 +2978,7 @@ if __name__ == '__main__':
     print('Retarding velocity...')
     old_particles[0] = pos[:]
     parmov(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E_int, Ji_int, Ve_int, q_dens,
-           -0.5*DT, resistive_array)
+           -0.5*DT, resistive_array, _BEQ)
     pos[:] = old_particles[0]
     
     qq       = 1;    time_sec = DT
@@ -3091,8 +3015,7 @@ if __name__ == '__main__':
             
             pcent = round(float(qq) / float(max_inc) * 100., 2)
             
-            print('{:5.2f}% :: Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(
-                                                   pcent, qq, max_inc, hrs, mins, sec))
+            print(f'{pcent:5.2f}% :: Step {qq} of {max_inc} :: Current runtime {hrs:02}:{mins:02}:{sec:02}')
 
         if qq%loop_save_iter == 0:
             loop_time = round(timer() - loop_start, 4)
@@ -3100,7 +3023,7 @@ if __name__ == '__main__':
             loop_times[loop_idx-1] = loop_time
 
             if print_timings == True:
-                print('Loop {}  time: {}s\n'.format(qq, loop_time))
+                print(f'Loop {qq}  time: {loop_time}s\n')
         
         if qq == 1:
             print('First loop complete.')

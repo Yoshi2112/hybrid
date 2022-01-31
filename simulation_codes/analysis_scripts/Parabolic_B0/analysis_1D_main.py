@@ -583,6 +583,85 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
     return
 
 
+def plot_abs_T_w_Bx(saveas='abs_plot', save=False, tmax=None,
+                    B0_lim=None, remove_ND=False):
+    '''
+    Plot pcolormesh of tranverse magnetic field in space (x) and time (y).
+    
+    kwargs:
+        saveas    -- Filename (without suffixes) to save as
+        save      -- Save (True) or show (False)
+        log       -- Plot colorbar on log scale
+        tmax      -- Maximum time (y axis limit) to plot to
+        normalize -- Normalize B_tranverse by equatorial B0 (True) or plot in nT (False)
+        B0_lim    -- Colorbar limit (in multiples of B0 OR nT). If None, plot up to maximum value.
+    '''
+    plt.ioff()
+
+    t, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens, field_sim_time, damping_array\
+        = cf.get_array(get_all=True)
+    t, bxc = cf.get_array(component='bxc', get_all=False, timebase=None)
+
+    bxc = bxc[:, cf.NX//2]*1e9
+    
+    fontsize = 18
+    font     = 'monospace'
+    
+    tick_label_size = 14
+    mpl.rcParams['xtick.labelsize'] = tick_label_size 
+    mpl.rcParams['ytick.labelsize'] = tick_label_size 
+    
+    bt = np.sqrt(by ** 2 + bz ** 2) * 1e9
+    x  = cf.B_nodes / cf.dx
+        
+    if tmax is None:
+        lbl = 'full'
+    else:
+        lbl = '{:04}'.format(tmax)
+        
+    if remove_ND == True:
+        xlim = [cf.xmin/cf.dx, cf.xmax/cf.dx]
+    else:
+        xlim = [x[0], x[-1]]
+    
+    ## PLOT IT
+    plt.ioff()
+    fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(15, 10), gridspec_kw={'width_ratios':[0.2, 1.0, 0.02]})
+
+    if B0_lim is None:
+        vmax = bt.max()
+    else:
+        vmax = B0_lim
+    
+    axes[0].plot(bxc, t, c='b')
+    axes[0].set_ylabel('t (s)', rotation=0, labelpad=30, fontsize=fontsize, family=font)
+    axes[0].set_ylim(0, tmax)
+    axes[0].set_xlabel('$B_0 (nT)$', fontsize=fontsize, family=font)    
+    im1 = axes[1].pcolormesh(x, t, bt, cmap='jet', vmin=0.0, vmax=vmax)
+    cb  = fig.colorbar(im1, cax=axes[2])
+    cb.set_label('$|B_\perp|$\nnT', rotation=0, family=font, fontsize=fontsize, labelpad=30)
+
+    
+    axes[1].set_xlabel('x ($\Delta x$)', fontsize=fontsize, family=font)
+    axes[1].set_ylim(0, tmax)
+    axes[1].set_yticklabels([])
+    
+    axes[1].axvline(cf.xmin / cf.dx, c='w', ls=':', alpha=1.0)
+    axes[1].axvline(cf.xmax / cf.dx, c='w', ls=':', alpha=1.0)
+    axes[1].axvline(0.0                , c='w', ls=':', alpha=0.75)   
+    axes[1].set_xlim(xlim[0], xlim[1])    
+    
+    fig.subplots_adjust(wspace=0.0)
+    if save == True:
+        fullpath = cf.anal_dir + saveas + '_BPERP_{}'.format(lbl) + '.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        print('B abs(t-x) Plot saved')
+        plt.close('all')
+    else:
+        plt.show()
+    return
+
+
 def plot_abs_J(saveas='abs_plot', save=False, log=False, tmax=None, remove_ND=False):
     '''
     Plot pcolormesh of tranverse magnetic field in space (x) and time (y).
@@ -5216,7 +5295,7 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [8, 9]
+            runs_to_do = [5]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -5232,10 +5311,17 @@ if __name__ == '__main__':
                 #standard_analysis_package(disp_overlay=False, pcyc_mult=1.1,
                 #              tx_only=False, tmax=None, remove_ND=False)
 
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=300, normalize=False,
-                           B0_lim=25, remove_ND=False)
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
-                           B0_lim=25, remove_ND=False)
+# =============================================================================
+#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=300, normalize=False,
+#                            B0_lim=25, remove_ND=False)
+#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
+#                            B0_lim=25, remove_ND=False)
+#                 plot_abs_T_w_Bx(saveas='abs_plot_bx', save=False, tmax=300,
+#                     B0_lim=None, remove_ND=False)
+# =============================================================================
+                plot_abs_T_w_Bx(saveas='abs_plot_bx', save=True, tmax=None,
+                    B0_lim=None, remove_ND=False)
+                
                 #check_fields(save=True, ylim=False, skip=5)
 # =============================================================================
 #                 plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
