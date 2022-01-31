@@ -616,6 +616,7 @@ def plot_abs_T_w_Bx(saveas='abs_plot', save=False, tmax=None,
         
     if tmax is None:
         lbl = 'full'
+        tmax = t[-1]
     else:
         lbl = '{:04}'.format(tmax)
         
@@ -5286,13 +5287,13 @@ if __name__ == '__main__':
     ####################################
     ### SINGLE SERIES ANALYSIS ########
     ################################
-    for series in ['//winske_resonant_test_orders//']:
+    for series in ['//JUL25_HPROXY_r13_logistic//']:
 
         series_dir = f'{drive}/runs//{series}//'
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
             runs_to_do = [5]
