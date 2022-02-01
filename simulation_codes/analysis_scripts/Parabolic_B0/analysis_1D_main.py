@@ -5198,7 +5198,7 @@ def plot_density_change(ppd=False, it_max=None, save=True, overwrite_moments=Fal
     return
 
 
-def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None):
+def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=None):
     '''
     Stackplot of xt and wx plot. Try next to each other and stacked vertically.
      -- Total xt
@@ -5229,7 +5229,7 @@ def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None):
                              gridspec_kw={'width_ratios':[1, 0.01]})
     
     # XT WAVE PLOT
-    im1   = axes[0, 0].pcolormesh(x_arr, ftime, B_wave, cmap='jet', vmin=0.0, vmax=10.0)
+    im1   = axes[0, 0].pcolormesh(x_arr, ftime, B_wave, cmap='jet', vmin=0.0, vmax=Bmax)
     cbar1 = fig.colorbar(im1, cax=axes[0, 1], extend='max')
     cbar1.set_label('nT', rotation=0,
                     family=ffamily, fontsize=fsize, labelpad=cpad-10)
@@ -5241,7 +5241,7 @@ def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None):
     axes[0, 0].set_xticklabels([])
     
     # WX DISPERSION PLOT
-    im2 = axes[1, 0].pcolormesh(x_arr, freqs, wx, cmap='nipy_spectral')
+    im2 = axes[1, 0].pcolormesh(x_arr, freqs, wx, cmap='nipy_spectral', vmin=0.0, vmax=Pmax)
     cbar2 = fig.colorbar(im2, cax=axes[1, 1], extend='max')
     cbar2.set_label('$\\frac{nT^2}{Hz}$', rotation=0,
                     family=ffamily, fontsize=fsize+2, labelpad=cpad)
@@ -5287,7 +5287,7 @@ if __name__ == '__main__':
     ####################################
     ### SINGLE SERIES ANALYSIS ########
     ################################
-    for series in ['//JUL25_HPROXY_r13_logistic//']:
+    for series in ['//JUL25_HPROXY_r13_GRID//']:
 
         series_dir = f'{drive}/runs//{series}//'
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
@@ -5306,7 +5306,7 @@ if __name__ == '__main__':
 
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
                 
-                #thesis_plot_dispersion(save=True, fmax=1.0, tmax=None)
+                thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=3.0, Pmax=0.002)
                 #SWSP_dynamic_spectra(nx=514, overlap=0.95, f_res_mHz=25)
                 
                 #standard_analysis_package(disp_overlay=False, pcyc_mult=1.1,
@@ -5321,7 +5321,7 @@ if __name__ == '__main__':
 #                     B0_lim=None, remove_ND=False)
 # =============================================================================
                 plot_abs_T_w_Bx(saveas='abs_plot_bx', save=True, tmax=None,
-                    B0_lim=None, remove_ND=False)
+                    B0_lim=3.0, remove_ND=False)
                 
                 #check_fields(save=True, ylim=False, skip=5)
 # =============================================================================

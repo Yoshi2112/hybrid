@@ -4850,12 +4850,82 @@ def search_TA_space(B0, ne, cHe, cO, rc_frac=0.01, band=None,
     return
 
 
+def marginal_instability_parameter_search():
+    '''
+    Trying a parameter search for packets on Aug12
+    -- Do high/low n_e on either side?
+    '''
+    # Set plot space
+    plt.ioff()
+    fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(6, 4), gridspec_kw={'width_ratios': [1, 1, 0.02]})
+    
+    B0_arr = np.linspace(95, 145, 10)*1e-9
+    ne_arr = np.array([20, 65])*1e6
+    ii = 0
+    
+    norm    = mpl.colors.Normalize(vmin=B0_arr.min()*1e9, vmax=B0_arr.max()*1e9)
+    mapper  = cm.ScalarMappable(norm=norm, cmap=cm.jet)
+    clr_lbl = 'B0'
+        
+    for B0 in B0_arr:
+        for ii in range(2):
+            #B0       = 130.4e-9                         # Background magnetic field, T (95-145nT)
+            #ne      *= 1e6                              # Electron density (m3)        (20-65cc)
+            mp       = 1.673e-27                        # Proton mass (kg)
+            qi       = 1.602e-19                        # Elementary charge (C)
+            
+            name    = np.array(['Warm H'  , 'Cold H' , 'Cold He', 'Cold O'])
+            mass    = np.array([1.0       , 1.0      , 4.0      , 16.0    ]) * mp
+            charge  = np.array([1.0       , 1.0      , 1.0      ,  1.0    ]) * qi
+            density = np.array([0.02      , 0.88     , 0.05     ,  0.05   ])
+            tper    = np.array([25e3      , 0.0      , 0.0      ,  0.0    ])
+            ani     = np.array([0.2       , 0.0      , 0.0      ,  0.0    ])
+            
+            assert density.sum() == 1.0
+            density *= ne_arr[ii]
+            
+            Spec, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
+            
+            # Create k-array
+            knorm_fac   = PP['pcyc_rad'] / PP['va']
+            k_vals      = np.linspace(0.0, 1.0, 500, endpoint=False) * knorm_fac
+            
+            # Get frequencies, normalize output
+            DR_solns, _ = get_dispersion_relation(Spec, k_vals, approx='warm' )
+            #DR_solns   /= PP['pcyc_rad']   
+            k_vals     *= PP['va'] / PP['pcyc_rad']
+    
+            print('Plotting solutions...')
+            clr = mapper.to_rgba(B0*1e9)
+            axes[ii].plot(DR_solns[1:, 1].real/(2*np.pi), DR_solns[1:, 1].imag/PP['pcyc_rad'], c=clr)
+    
+    cbar = fig.colorbar(mapper, cax=axes[2])
+    cbar.set_label(clr_lbl)  
+    
+    # Edit after loop
+    axes[0].set_title(f'Low  Density: {ne_arr[0]*1e-6}cc')
+    axes[1].set_title(f'High Density: {ne_arr[1]*1e-6}cc')
+    for ax in axes[:-1]:
+        ax.set_xlabel(r'$\omega_r$ (Hz)')
+        ax.set_ylabel(r'$\gamma/\Omega_p$')
+        ax.set_xlim(0.0, 0.5)
+        ax.set_ylim(0.0, 0.003)
+        ax.minorticks_on()
+    
+    figManager = plt.get_current_fig_manager()
+    figManager.window.showMaximized() 
+    return
+
+
+
 #%% -- MAIN --
 if __name__ == '__main__':
     plot_path = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//'
     ext_drive = 'E:'
     rbsp_path = '%s//DATA//RBSP//' % ext_drive
     
+    marginal_instability_parameter_search()
+    sys.exit()
     # Sweeps for CRRES: 3 combinations
     # 17/7: 80nT/45cc, 70nT/20cc, 60nT/10cc 
     
