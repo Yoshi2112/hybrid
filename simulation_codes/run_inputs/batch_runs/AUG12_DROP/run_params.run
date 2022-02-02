@@ -24,4 +24,4 @@ GYROPERIOD_RESOLUTION	0.02
 FREQUENCY_RESOLUTION	0.02
 PARTICLE_DUMP_FREQ		5.0
 FIELD_DUMP_FREQ			0.25
-Event run for Aug 12, 1991 event. Using simple 90/5/5 percent mix, starting at 145nT and dropping by 50nT at some point. Two runs for low/high cold plasma density mix. Constant RC parameters. Designed to be marginally stable around 0.3Hz or so. First two runs will be with no drop (as a control and to work out where to put the drop).
+Event run for Aug 12, 1991 event. Using simple 90/5/5 percent mix, starting at 145nT and dropping by 50nT at some point. Two runs for low/high cold plasma density mix. Constant RC parameters. Designed to be marginally stable around 0.3Hz or so. Runs 2-8 are with the 50nT drop for low/high density pairs with drops between 150-250s.

@@ -5287,7 +5287,7 @@ if __name__ == '__main__':
     ####################################
     ### SINGLE SERIES ANALYSIS ########
     ################################
-    for series in ['//JUL25_HPROXY_r13_GRID//']:
+    for series in ['//AUG12_DROP//']:
 
         series_dir = f'{drive}/runs//{series}//'
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
