@@ -4850,7 +4850,7 @@ def search_TA_space(B0, ne, cHe, cO, rc_frac=0.01, band=None,
     return
 
 
-def marginal_instability_parameter_search():
+def marginal_instability_parameter_search(save=True):
     '''
     Trying a parameter search for packets on Aug12
     -- Do high/low n_e on either side?
@@ -4861,11 +4861,12 @@ def marginal_instability_parameter_search():
     
     B0_arr = np.linspace(95, 145, 10)*1e-9
     ne_arr = np.array([20, 65])*1e6
+    #A_arr  = np.arange([])
     ii = 0
     
     norm    = mpl.colors.Normalize(vmin=B0_arr.min()*1e9, vmax=B0_arr.max()*1e9)
     mapper  = cm.ScalarMappable(norm=norm, cmap=cm.jet)
-    clr_lbl = 'B0'
+    clr_lbl = '$B_0$ (nT)'
         
     for B0 in B0_arr:
         for ii in range(2):
@@ -4877,12 +4878,11 @@ def marginal_instability_parameter_search():
             name    = np.array(['Warm H'  , 'Cold H' , 'Cold He', 'Cold O'])
             mass    = np.array([1.0       , 1.0      , 4.0      , 16.0    ]) * mp
             charge  = np.array([1.0       , 1.0      , 1.0      ,  1.0    ]) * qi
-            density = np.array([0.02      , 0.88     , 0.05     ,  0.05   ])
+            density = np.array([2e5       , 0.90*ne_arr[ii]     , 0.05*ne_arr[ii]     ,  0.05*ne_arr[ii]   ])
             tper    = np.array([25e3      , 0.0      , 0.0      ,  0.0    ])
-            ani     = np.array([0.2       , 0.0      , 0.0      ,  0.0    ])
+            ani     = np.array([0.6       , 0.0      , 0.0      ,  0.0    ])
             
-            assert density.sum() == 1.0
-            density *= ne_arr[ii]
+            #density *= ne_arr[ii]
             
             Spec, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
             
@@ -4897,32 +4897,40 @@ def marginal_instability_parameter_search():
     
             print('Plotting solutions...')
             clr = mapper.to_rgba(B0*1e9)
-            axes[ii].plot(DR_solns[1:, 1].real/(2*np.pi), DR_solns[1:, 1].imag/PP['pcyc_rad'], c=clr)
+            axes[ii].plot(DR_solns[1:, 1].real/(2*np.pi), 1e3*DR_solns[1:, 1].imag/PP['pcyc_rad'], c=clr)
     
     cbar = fig.colorbar(mapper, cax=axes[2])
     cbar.set_label(clr_lbl)  
     
     # Edit after loop
-    axes[0].set_title(f'Low  Density: {ne_arr[0]*1e-6}cc')
-    axes[1].set_title(f'High Density: {ne_arr[1]*1e-6}cc')
+    axes[0].set_title(f'Cold  Density: {ne_arr[0]*1e-6}cc')
+    axes[1].set_title(f'Cold Density: {ne_arr[1]*1e-6}cc')
     for ax in axes[:-1]:
-        ax.set_xlabel(r'$\omega_r$ (Hz)')
-        ax.set_ylabel(r'$\gamma/\Omega_p$')
+        ax.set_xlabel('f (Hz)')
         ax.set_xlim(0.0, 0.5)
-        ax.set_ylim(0.0, 0.003)
+        ax.set_ylim(0.0, 3)
         ax.minorticks_on()
+    axes[0].set_ylabel(r'$\gamma/\Omega_p (\times 10^{-3})$')
+    axes[1].set_yticklabels([])
     
-    figManager = plt.get_current_fig_manager()
-    figManager.window.showMaximized() 
+    fig.tight_layout()
+    fig.subplots_adjust(wspace=0.00)
+    plt.setp(axes[1].get_xticklabels()[0], visible=False) 
+    
+    if save:
+        fig.savefig(plot_path + 'Aug12_marginal', dpi=200)
+    else:
+        plt.show()
     return
 
 
 
 #%% -- MAIN --
 if __name__ == '__main__':
-    plot_path = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//'
+    plot_path = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//NEW_CH6//'
     ext_drive = 'E:'
     rbsp_path = '%s//DATA//RBSP//' % ext_drive
+    if not os.path.exists(plot_path): os.makedirs(plot_path)
     
     marginal_instability_parameter_search()
     sys.exit()

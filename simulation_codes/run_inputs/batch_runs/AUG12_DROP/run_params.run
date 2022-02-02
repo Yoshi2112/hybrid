@@ -1,0 +1,27 @@
+DRIVE					D:/
+SAVE_PATH			    /runs/AUG12_DROP/
+RUN						-
+SAVE_PARTICLE_FLAG		0
+SAVE_FIELD_FLAG			1
+SEED					983274
+HOMOGENOUS_B0_FLAG		1
+PARTICLE_PERIODIC_FLAG	1
+PARTICLE_REFLECT_FLAG	0
+PARTICLE_REINIT_FLAG	0
+FIELD_PERIODIC			1
+NOWAVES_FLAG			0
+SOURCE_SMOOTHING_FLAG	0
+QUIET_START_FLAG		1
+E_DAMPING_FLAG			0
+DAMPING_LEN_FRACTION	0.20
+B_DAMPING_MULTIPLIER    0.05
+RESISTIVITY_MULTIPLIER  0.00
+NX 						512
+SIM_TIME				4000
+DXM						1.0
+IE						1
+GYROPERIOD_RESOLUTION	0.02
+FREQUENCY_RESOLUTION	0.02
+PARTICLE_DUMP_FREQ		5.0
+FIELD_DUMP_FREQ			0.25
+Event run for Aug 12, 1991 event. Using simple 90/5/5 percent mix, starting at 145nT and dropping by 50nT at some point. Two runs for low/high cold plasma density mix. Constant RC parameters. Designed to be marginally stable around 0.3Hz or so. First two runs will be with no drop (as a control and to work out where to put the drop).

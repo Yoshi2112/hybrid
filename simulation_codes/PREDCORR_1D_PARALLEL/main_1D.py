@@ -21,12 +21,12 @@ B_surf  = 3.12e-5                            # Magnetic field strength at Earth 
 cold_va             = False
 Fu_override         = False     # Override to allow density to be calculated as a ratio of frequencies
 do_parallel         = True      # Flag to use available threads to parallelize particle functions
-adaptive_timestep   = True      # Disable adaptive timestep to keep it the same as initial
+adaptive_timestep   = False     # Disable adaptive timestep to keep it the same as initial
 print_timings       = False     # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True      # Flag to print runtime every 50 iterations 
 do_dispersion       = False     # Account for dispersion effects in dt calculation
 fourth_order        = True      # Flag to choose between 4th or 2nd order solutions
-logistic_B          = False      # Flag for B0 to change after a time to a different value as a logistic function
+logistic_B          = False     # Flag for B0 to change after a time to a different value as a logistic function
 
 if not do_parallel:
     do_parallel = True
@@ -2103,7 +2103,7 @@ def update_Beq(t):
     with changing globals, they treat them as runtime constants.
     '''    
     if logistic_B:
-        B_ULF  = -5e-9
+        B_ULF  = -50e-9
         g_rate = 0.5
         t_mid  = 0.25*max_time
         
