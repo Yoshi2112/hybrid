@@ -5267,7 +5267,7 @@ def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=None)
 if __name__ == '__main__':
     # TODO: Function to calculate number density of species at gridpoints, 
     # and save this to a file
-    drive       = 'D:'
+    drive       = 'F:'
     
     #############################
     ### MULTI-SERIES ROUTINES ###
@@ -5287,13 +5287,13 @@ if __name__ == '__main__':
     ####################################
     ### SINGLE SERIES ANALYSIS ########
     ################################
-    for series in ['//AUG12_DROP//']:
+    for series in ['//AUG12_PC1_PEAKS_Vrc_5HE_1pc//']:
 
         series_dir = f'{drive}/runs//{series}//'
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
             runs_to_do = [2, 3, 4, 5, 6, 7, 8, 9]
@@ -5320,8 +5320,10 @@ if __name__ == '__main__':
 #                 plot_abs_T_w_Bx(saveas='abs_plot_bx', save=False, tmax=300,
 #                     B0_lim=None, remove_ND=False)
 # =============================================================================
-                plot_abs_T_w_Bx(saveas='abs_plot_bx', save=True, tmax=None,
-                    B0_lim=3.0, remove_ND=False)
+# =============================================================================
+#                 plot_abs_T_w_Bx(saveas='abs_plot_bx', save=True, tmax=None,
+#                     B0_lim=3.0, remove_ND=False)
+# =============================================================================
                 
                 #check_fields(save=True, ylim=False, skip=5)
 # =============================================================================

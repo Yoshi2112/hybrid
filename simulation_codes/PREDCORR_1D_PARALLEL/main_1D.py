@@ -26,7 +26,7 @@ print_timings       = False     # Diagnostic outputs timing each major segment (
 print_runtime       = True      # Flag to print runtime every 50 iterations 
 do_dispersion       = False     # Account for dispersion effects in dt calculation
 fourth_order        = True      # Flag to choose between 4th or 2nd order solutions
-logistic_B          = False     # Flag for B0 to change after a time to a different value as a logistic function
+logistic_B          = False      # Flag for B0 to change after a time to a different value as a logistic function
 
 if not do_parallel:
     do_parallel = True

@@ -553,7 +553,9 @@ def extract_all_arrays():
         zB, zB_cent, zE, zVe, zTe, zJ, zq_dns, zsim_time, zdamp = load_fields(0)
 
         bx_arr, by_arr, bz_arr, damping_array = [np.zeros((num_field_steps, zB.shape[0])) for _ in range(4)]
-        bxc_arr, byc_arr, bzc_arr = [np.zeros((num_field_steps, zB_cent.shape[0])) for _ in range(3)]
+        
+        if zB_cent is not None:
+            bxc_arr, byc_arr, bzc_arr = [np.zeros((num_field_steps, zB_cent.shape[0])) for _ in range(3)]
         
         ex_arr,ey_arr,ez_arr,vex_arr,jx_arr,vey_arr,jy_arr,vez_arr,jz_arr,te_arr,qdns_arr\
         = [np.zeros((num_field_steps, zE.shape[0])) for _ in range(11)]
@@ -598,9 +600,10 @@ def extract_all_arrays():
         np.save(temp_dir + 'by' +'_array.npy', by_arr)
         np.save(temp_dir + 'bz' +'_array.npy', bz_arr)
         
-        np.save(temp_dir + 'bxc' +'_array.npy', bxc_arr)
-        np.save(temp_dir + 'byc' +'_array.npy', byc_arr)
-        np.save(temp_dir + 'bzc' +'_array.npy', bzc_arr)
+        if B_cent is not None:
+            np.save(temp_dir + 'bxc' +'_array.npy', bxc_arr)
+            np.save(temp_dir + 'byc' +'_array.npy', byc_arr)
+            np.save(temp_dir + 'bzc' +'_array.npy', bzc_arr)
         
         np.save(temp_dir + 'ex' +'_array.npy', ex_arr)
         np.save(temp_dir + 'ey' +'_array.npy', ey_arr)
