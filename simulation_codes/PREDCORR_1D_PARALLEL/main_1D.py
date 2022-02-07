@@ -74,7 +74,7 @@ def LCD_by_rejection(pos, vel, sf_par, sf_per, st, en, jj):
     
     Is there a better way to do this with a Monte Carlo perhaps?
     '''
-    B0x    = eval_B0x(pos[st: en])
+    B0x    = eval_B0x(pos[st: en], B0)
     N_loss = 1
 
     while N_loss > 0:
