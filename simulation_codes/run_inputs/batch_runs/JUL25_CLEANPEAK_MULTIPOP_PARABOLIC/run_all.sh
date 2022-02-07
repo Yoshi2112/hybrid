@@ -1,5 +1,5 @@
 #!/bin/bash
-PTH=JUL25_CLEANPEAK_MULTIPOP_FIXED
+PTH=JUL25_CLEANPEAK_MULTIPOP_PARABOLIC
 echo "Submitting CLEANPEAK_MULTIPOP runs..."
 qsub ~/hybrid/simulation_codes/run_inputs/batch_runs/$PTH/run0.sh
 sleep 5

@@ -291,6 +291,8 @@ def set_damping_arrays(B_damping_array, E_damping_array, resistive_array, retard
     Retardation array of Umeda et al. (2001). rD and rR vary, might need two knobs
     for tests to see which is the best. Hardcode for now, and if it works put it
     in the input file (or replace it with the E-damping)
+    
+    TODO: Set the damping region cell size with an actual number not some weird percentage.
     '''
     # Location and thickness of damping region (in units of dx)
     damping_thickness  = damping_fraction*NC
