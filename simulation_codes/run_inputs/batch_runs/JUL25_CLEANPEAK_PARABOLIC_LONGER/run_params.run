@@ -1,0 +1,27 @@
+DRIVE					D:/
+SAVE_PATH			    /runs/JUL25_CLEANPEAK_PARABOLIC_LONGER/
+RUN						-
+SAVE_PARTICLE_FLAG		1
+SAVE_FIELD_FLAG			1
+SEED					983274
+HOMOGENOUS_B0_FLAG		0
+PARTICLE_PERIODIC_FLAG	0
+PARTICLE_REFLECT_FLAG	1
+PARTICLE_REINIT_FLAG	0
+FIELD_PERIODIC			0
+NOWAVES_FLAG			0
+SOURCE_SMOOTHING_FLAG	0
+QUIET_START_FLAG		1
+E_DAMPING_FLAG			0
+DAMPING_LEN_FRACTION	0.25
+B_DAMPING_MULTIPLIER    0.05
+RESISTIVITY_MULTIPLIER  0.00
+NX 						1024
+SIM_TIME				8000
+DXM						1.0
+IE						1
+GYROPERIOD_RESOLUTION	0.02
+FREQUENCY_RESOLUTION	0.02
+PARTICLE_DUMP_FREQ		5.0
+FIELD_DUMP_FREQ			0.25
+Using parameters from the _FIXED version, but with a parabolic background field. ABCs for the fields, reflective for the particles. Damping regions each a quarter (I think?) the size of the spatial domain, which is being kept at 512 cells with dxm=1 (since the Shoji runs seemed equivalently even smaller at dxm=0.1). Assume B_satellite is B_eq. Not entirely correct, but its just a proof of concept. Also put the quiet start back and doubled the runtime.

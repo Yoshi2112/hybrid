@@ -1,0 +1,27 @@
+DRIVE					D:/
+SAVE_PATH			    /runs/JUL25_CLEANPEAK_MULTIPOP_LONGER/
+RUN						-
+SAVE_PARTICLE_FLAG		0
+SAVE_FIELD_FLAG			1
+SEED					983274
+HOMOGENOUS_B0_FLAG		1
+PARTICLE_PERIODIC_FLAG	1
+PARTICLE_REFLECT_FLAG	0
+PARTICLE_REINIT_FLAG	0
+FIELD_PERIODIC			1
+NOWAVES_FLAG			0
+SOURCE_SMOOTHING_FLAG	0
+QUIET_START_FLAG		0
+E_DAMPING_FLAG			0
+DAMPING_LEN_FRACTION	0.20
+B_DAMPING_MULTIPLIER    0.05
+RESISTIVITY_MULTIPLIER  0.00
+NX 						512
+SIM_TIME				5000
+DXM						1.0
+IE						1
+GYROPERIOD_RESOLUTION	0.02
+FREQUENCY_RESOLUTION	0.02
+PARTICLE_DUMP_FREQ		5.0
+FIELD_DUMP_FREQ			0.25
+Single packet analysis for Jul 25 2013 event at 21:42:17 UT. 30% Helium, 5% Oxygen assumed. Running HOPE, RBSPICE, ADDED (combined density using 31.4 keV peak and ignoring tail ions), BOTH/DUAL (two proton populations), and HIGH (weighted average temp) in that order. Redone for a 67.1keV upper population with no quiet start, doubled hot ppc and half spatial domain.
