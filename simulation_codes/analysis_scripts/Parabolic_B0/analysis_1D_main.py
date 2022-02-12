@@ -5306,7 +5306,9 @@ if __name__ == '__main__':
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
                 
                 thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=None)
-                SWSP_dynamic_spectra(nx=514, overlap=0.95, f_res_mHz=25)
+                SWSP_dynamic_spectra(nx=130, overlap=0.95, f_res_mHz=25)
+                SWSP_dynamic_spectra(nx=258, overlap=0.95, f_res_mHz=25)
+                SWSP_dynamic_spectra(nx=386, overlap=0.95, f_res_mHz=25)
                 
                 standard_analysis_package(disp_overlay=False, pcyc_mult=1.1,
                               tx_only=False, tmax=None, remove_ND=False)
