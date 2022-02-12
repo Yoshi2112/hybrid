@@ -5220,12 +5220,12 @@ def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=None)
     
     ffamily = 'monospace'
     fsize   = 12
-    lpad    = 10
+    lpad    = 15
     cpad    = 30
     
     ## PLOT
     plt.ioff()
-    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(6.0, 9.0), 
+    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(6.0, 4.0), 
                              gridspec_kw={'width_ratios':[1, 0.01]})
     
     # XT WAVE PLOT
@@ -5256,7 +5256,7 @@ def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=None)
     fig.subplots_adjust(hspace=0.00, wspace=0.05)
                             
     if save:
-        fullpath = cf.anal_dir + 'dispersion_stackplot.png'
+        fullpath = cf.anal_dir + 'thesis_dispersion_stackplot.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(),
                     edgecolor='none', bbox_inches='tight', dpi=200)
         print('Dispersion stackplot saved')
@@ -5265,9 +5265,7 @@ def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=None)
 
 #%% MAIN
 if __name__ == '__main__':
-    # TODO: Function to calculate number density of species at gridpoints, 
-    # and save this to a file
-    drive       = 'D:'
+    drive       = 'F:'
     
     #############################
     ### MULTI-SERIES ROUTINES ###
@@ -5287,7 +5285,8 @@ if __name__ == '__main__':
     ####################################
     ### SINGLE SERIES ANALYSIS ########
     ################################
-    for series in ['//JUL25_CLEANPEAK_MULTIPOP_FIXED//']:
+    for series in ['//JUL25_CLEANPEAK_MULTIPOP_FIXED//',
+                   '//JUL25_CLEANPEAK_MULTIPOP_PARABOLIC//']:
 
         series_dir = f'{drive}/runs//{series}//'
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
@@ -5306,11 +5305,11 @@ if __name__ == '__main__':
 
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
                 
-                thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=3.0, Pmax=0.002)
-                #SWSP_dynamic_spectra(nx=514, overlap=0.95, f_res_mHz=25)
+                thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=None)
+                SWSP_dynamic_spectra(nx=514, overlap=0.95, f_res_mHz=25)
                 
-                #standard_analysis_package(disp_overlay=False, pcyc_mult=1.1,
-                #              tx_only=False, tmax=None, remove_ND=False)
+                standard_analysis_package(disp_overlay=False, pcyc_mult=1.1,
+                              tx_only=False, tmax=None, remove_ND=False)
 
 # =============================================================================
 #                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=300, normalize=False,
@@ -5320,8 +5319,8 @@ if __name__ == '__main__':
 #                 plot_abs_T_w_Bx(saveas='abs_plot_bx', save=False, tmax=300,
 #                     B0_lim=None, remove_ND=False)
 # =============================================================================
-                plot_abs_T_w_Bx(saveas='abs_plot_bx', save=True, tmax=None,
-                    B0_lim=3.0, remove_ND=False)
+                #plot_abs_T_w_Bx(saveas='abs_plot_bx', save=True, tmax=None,
+                #    B0_lim=3.0, remove_ND=False)
                 
                 #check_fields(save=True, ylim=False, skip=5)
 # =============================================================================
