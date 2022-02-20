@@ -4859,9 +4859,8 @@ def marginal_instability_parameter_search(save=True):
     plt.ioff()
     fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(6, 4), gridspec_kw={'width_ratios': [1, 1, 0.02]})
     
-    B0_arr = np.linspace(95, 145, 10)*1e-9
+    B0_arr = np.linspace(95, 145, 11)*1e-9
     ne_arr = np.array([20, 65])*1e6
-    #A_arr  = np.arange([])
     ii = 0
     
     norm    = mpl.colors.Normalize(vmin=B0_arr.min()*1e9, vmax=B0_arr.max()*1e9)
@@ -4878,7 +4877,7 @@ def marginal_instability_parameter_search(save=True):
             name    = np.array(['Warm H'  , 'Cold H' , 'Cold He', 'Cold O'])
             mass    = np.array([1.0       , 1.0      , 4.0      , 16.0    ]) * mp
             charge  = np.array([1.0       , 1.0      , 1.0      ,  1.0    ]) * qi
-            density = np.array([2e5       , 0.90*ne_arr[ii]     , 0.05*ne_arr[ii]     ,  0.05*ne_arr[ii]   ])
+            density = np.array([4e5       , 0.90*ne_arr[ii]     , 0.05*ne_arr[ii]     ,  0.05*ne_arr[ii]   ])
             tper    = np.array([25e3      , 0.0      , 0.0      ,  0.0    ])
             ani     = np.array([0.6       , 0.0      , 0.0      ,  0.0    ])
             
@@ -4897,18 +4896,19 @@ def marginal_instability_parameter_search(save=True):
     
             print('Plotting solutions...')
             clr = mapper.to_rgba(B0*1e9)
+            
             axes[ii].plot(DR_solns[1:, 1].real/(2*np.pi), 1e3*DR_solns[1:, 1].imag/PP['pcyc_rad'], c=clr)
     
     cbar = fig.colorbar(mapper, cax=axes[2])
     cbar.set_label(clr_lbl)  
     
     # Edit after loop
-    axes[0].set_title(f'Cold  Density: {ne_arr[0]*1e-6}cc')
-    axes[1].set_title(f'Cold Density: {ne_arr[1]*1e-6}cc')
+    #axes[0].set_title(f'Cold  Density: {ne_arr[0]*1e-6}cc')
+    #axes[1].set_title(f'Cold Density: {ne_arr[1]*1e-6}cc')
     for ax in axes[:-1]:
         ax.set_xlabel('f (Hz)')
         ax.set_xlim(0.0, 0.5)
-        ax.set_ylim(0.0, 3)
+        ax.set_ylim(0.0, 6)
         ax.minorticks_on()
     axes[0].set_ylabel(r'$\gamma/\Omega_p (\times 10^{-3})$')
     axes[1].set_yticklabels([])
@@ -4917,8 +4917,71 @@ def marginal_instability_parameter_search(save=True):
     fig.subplots_adjust(wspace=0.00)
     plt.setp(axes[1].get_xticklabels()[0], visible=False) 
     
-    if save:
+    if True:
         fig.savefig(plot_path + 'Aug12_marginal', dpi=200)
+    else:
+        plt.show()
+    return
+
+
+def growth_rate_play(save=True):
+    '''
+    Trying a parameter search for packets on Aug12
+    -- Do high/low n_e on either side?
+    '''
+    # Set plot space
+    plt.ioff()
+    fig, axes = plt.subplots(ncols=2, figsize=(6, 4), gridspec_kw={'width_ratios': [1, 0.02]})
+
+    A_arr  = np.arange(0.2, 1.1, 0.1)
+    
+    norm    = mpl.colors.Normalize(vmin=0.0, vmax=A_arr.max())
+    mapper  = cm.ScalarMappable(norm=norm, cmap=cm.jet)
+    clr_lbl = 'A'
+        
+    for A in A_arr:
+            B0       = 145e-9                         # Background magnetic field, T (95-145nT)
+            mp       = 1.673e-27                      # Proton mass (kg)
+            qi       = 1.602e-19                      # Elementary charge (C)
+            
+            name    = np.array(['Warm H'  , 'Cold H' , 'Cold He', 'Cold O'])
+            mass    = np.array([1.0       , 1.0      , 4.0      , 16.0    ]) * mp
+            charge  = np.array([1.0       , 1.0      , 1.0      ,  1.0    ]) * qi
+            density = np.array([0.4       , 18       , 1        ,  1      ]) * 1e6
+            tper    = np.array([25e3      , 0.0      , 0.0      ,  0.0    ])
+            ani     = np.array([A         , 0.0      , 0.0      ,  0.0    ])
+            
+            Spec, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
+            
+            # Create k-array
+            knorm_fac   = PP['pcyc_rad'] / PP['va']
+            k_vals      = np.linspace(0.0, 1.0, 500, endpoint=False) * knorm_fac
+            
+            # Get frequencies, normalize output
+            DR_solns, _ = get_dispersion_relation(Spec, k_vals, approx='warm' )
+            #DR_solns   /= PP['pcyc_rad']   
+            k_vals     *= PP['va'] / PP['pcyc_rad']
+    
+            print('Plotting solutions...')
+            clr = mapper.to_rgba(A)
+            axes[0].plot(DR_solns[1:, 1].real/(2*np.pi), 1e3*DR_solns[1:, 1].imag/PP['pcyc_rad'], c=clr)
+    
+    cbar = fig.colorbar(mapper, cax=axes[1])
+    cbar.set_label(clr_lbl)  
+    
+    # Edit after loop
+    axes[0].set_title('Temporal Growth Rate :: Variable Anisotropy')
+    axes[0].set_xlabel('f (Hz)')
+    axes[0].set_xlim(0.0, 1.0)
+    axes[0].set_ylim(0.0, 5)
+    axes[0].minorticks_on()
+    axes[0].set_ylabel(r'$\gamma/\Omega_p (\times 10^{-3})$')
+    
+    fig.tight_layout()
+    fig.subplots_adjust(wspace=0.00)
+    
+    if True:
+        fig.savefig(plot_path + 'Aug12_marginal_increasingA', dpi=200)
     else:
         plt.show()
     return
@@ -4933,6 +4996,7 @@ if __name__ == '__main__':
     if not os.path.exists(plot_path): os.makedirs(plot_path)
     
     marginal_instability_parameter_search()
+    #growth_rate_play()
     sys.exit()
     # Sweeps for CRRES: 3 combinations
     # 17/7: 80nT/45cc, 70nT/20cc, 60nT/10cc 

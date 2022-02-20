@@ -51,6 +51,17 @@ First cell: ND
 Last  cell: ND+NX-1
 Cell range: ND:ND+NX
 '''
+def shrink_cbar(ax, shrink=0.9):
+    b = ax.get_position()
+    new_h = b.height*shrink
+    pad = (b.height-new_h)/2.
+    new_y0 = b.y0 + pad
+    new_y1 = b.y1 - pad
+    b.y0 = new_y0
+    b.y1 = new_y1
+    ax.set_position(b)
+    return ax
+
 
 @nb.njit()
 def calc_poynting(bx, by, bz, ex, ey, ez):
@@ -497,6 +508,91 @@ def plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
     return
 
 
+def plot_abs_FB(saveas='absFB_plot', save=False, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=False):
+    '''
+    Plot pcolormesh of tranverse magnetic field in space (x) and time (y).
+    
+    kwargs:
+        saveas    -- Filename (without suffixes) to save as
+        save      -- Save (True) or show (False)
+        log       -- Plot colorbar on log scale
+        tmax      -- Maximum time (y axis limit) to plot to
+        normalize -- Normalize B_tranverse by equatorial B0 (True) or plot in nT (False)
+        B0_lim    -- Colorbar limit (in multiples of B0 OR nT). If None, plot up to maximum value.
+    '''
+    plt.ioff()
+
+    ftime, B_fwd, B_bwd, B_raw = bk.get_FB_waves(overwrite=False, field='B') 
+
+    fontsize = 18
+    font     = 'monospace'
+    
+    tick_label_size = 14
+    mpl.rcParams['xtick.labelsize'] = tick_label_size 
+    mpl.rcParams['ytick.labelsize'] = tick_label_size 
+    
+    if normalize == False:
+        bt     = np.sqrt(by ** 2 + bz ** 2) * 1e9
+        clabel = '$|B_\perp|$\nnT'
+        suff   = '' 
+    else:
+        bt     = np.sqrt(by ** 2 + bz ** 2) / cf.B_eq
+        clabel = '$\\frac{|B_\perp|}{B_{eq}}$'
+        suff   = '_norm' 
+        
+    x = cf.B_nodes / cf.dx
+        
+    if tmax is None:
+        lbl = 'full'
+    else:
+        lbl = '{:04}'.format(tmax)
+        
+    if remove_ND == True:
+        xlim = [cf.xmin/cf.dx, cf.xmax/cf.dx]
+    else:
+        xlim = [x[0], x[-1]]
+    
+    ## PLOT IT
+    fig, ax = plt.subplots(1, figsize=(15, 10))
+
+    vmin = 0.0
+    
+    if B0_lim is None:
+        vmax = bt.max()
+    else:
+        if normalize == True:
+            vmax = cf.B_eq * B0_lim * 1e9
+        else:
+            vmax = B0_lim
+
+    if log == False:
+        im1     = ax.pcolormesh(x, t, bt, cmap='jet', vmin=vmin, vmax=vmax)
+        logsuff = ''
+    else:
+        im1     = ax.pcolormesh(x, t, np.log10(bt), cmap='jet', vmin=0.0, vmax=-3)
+        logsuff = '_log'
+        
+    cb   = fig.colorbar(im1)
+    
+    cb.set_label(clabel, rotation=0, family=font, fontsize=fontsize, labelpad=30)
+
+    ax.set_ylabel('t (s)', rotation=0, labelpad=30, fontsize=fontsize, family=font)
+    ax.set_xlabel('x ($\Delta x$)', fontsize=fontsize, family=font)
+    ax.set_ylim(0, tmax)
+    
+    ax.axvline(cf.xmin     / cf.dx, c='w', ls=':', alpha=1.0)
+    ax.axvline(cf.xmax     / cf.dx, c='w', ls=':', alpha=1.0)
+    ax.axvline(0.0                , c='w', ls=':', alpha=0.75)   
+    ax.set_xlim(xlim[0], xlim[1])    
+    
+    if save == True:
+        fullpath = cf.anal_dir + saveas + '_BPERP_{}{}{}'.format(lbl, suff, logsuff) + '.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        print('B abs(t-x) Plot saved')
+        plt.close('all')
+    return
+
+
 def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=False):
     '''
     Plot pcolormesh of tranverse magnetic field in space (x) and time (y).
@@ -736,139 +832,132 @@ def plot_abs_J(saveas='abs_plot', save=False, log=False, tmax=None, remove_ND=Fa
         plt.close('all')
     return
 
-def plot_dynamic_spectra(component='By', saveas='power_spectra', save=False, ymax=None, cell=None,
-                         overlap=0.99, win_idx=None, slide_idx=None, df=50):
-    
-    if ymax is None:
-        dynspec_folderpath = cf.anal_dir + '//field_dynamic_spectra//{}//'.format(component.upper())
-    else:
-        dynspec_folderpath = cf.anal_dir + '//field_dynamic_spectra//{}_ymax{}//'.format(component.upper(), ymax)
-    
-    if os.path.exists(dynspec_folderpath) == False:
-        os.makedirs(dynspec_folderpath)
-        
-    if cell is None:
-        cell = cf.NC // 2
-        
-    plt.ioff()
-    
-    powers, times, freqs = disp.autopower_spectra(component=component, overlap=overlap, win_idx=win_idx,
-                                                  slide_idx=slide_idx, df=df, cell_idx=cell)
-    
-    fig = plt.figure(1, figsize=(15, 10))
-    ax  = fig.add_subplot(111)
 
-    im1 = ax.pcolormesh(times, freqs, powers.T,
-                          cmap='jet')
-    
-    fig.colorbar(im1)
-    ax.set_title(r'{} Dynamic Spectra :: Cell {}'.format(component.upper(), cell), fontsize=14)
-    ax.set_ylabel(r'Frequency (Hz)', rotation=90)
-    ax.set_xlabel(r'Time (s)')
-    ax.set_ylim(0, ymax)
-    
-    if save == True:
-        fullpath = cf.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
-        
-        fig.savefig(dynspec_folderpath + 'dynamic_spectra_{}_{}.png'.format(component.lower(), cell), edgecolor='none')
-        
-        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
-        plt.close('all')
-        print('Dynamic spectrum (field {}, cell {}) saved'.format(component.upper(), cell))
-    else:
-        plt.show()
-    return
-
-
-def SWSP_dynamic_spectra(nx=None, overlap=0.5, f_res_mHz=50, fmax=1.0):
+def single_point_FB(nx=None, overlap=0.5, f_res_mHz=50, fmax=1.0):
     '''
     Frequency resolution in fraction of gyfreq (defaults to 1/50th)
     '''
     analysis_scripts_dir = 'D://Google Drive//Uni//PhD 2017//Data//Scripts//'
     sys.path.append(analysis_scripts_dir)
     
-    import scipy.signal as sig
     import fast_scripts as fscr
     
-    dynspec_folderpath = cf.anal_dir + '//Bfield_SWSP_dynspec//'
+    dynspec_folderpath = cf.anal_dir + '//Bfield_FB_dynspec//'
     if not os.path.exists(dynspec_folderpath): os.makedirs(dynspec_folderpath)
     
     if nx is None:
-        nx = cf.NC // 2
+        nx = np.array([cf.NC // 2])
+    
+    # (time, space)
+    ftime, B_fwd, B_bwd, B_raw = bk.get_FB_waves(overwrite=False, field='B')  
+    _dt  = ftime[1] - ftime[0]
+    if fmax is None:
+        fmax = cf.gyfreq / (2*np.pi)    # Gyfreq in Hz
+    
+    for _NX in nx:
+        fwd_tseries = B_fwd[:, _NX]*1e9
+        bwd_tseries = B_bwd[:, _NX]*1e9
+        
+        # Forward-wave spectrum
+        fypow, fytime, fyfreq = fscr.autopower_spectrum_all(ftime, fwd_tseries, _dt, overlap=overlap,
+                                                         df=f_res_mHz, window_data=True)
+        fzpow, fztime, fzfreq = fscr.autopower_spectrum_all(ftime, fwd_tseries, _dt, overlap=overlap,
+                                                         df=f_res_mHz, window_data=True)
+        fpow = fypow + fzpow
+        
+        # Backward-wave spectrum
+        bypow, bytime, byfreq = fscr.autopower_spectrum_all(ftime, bwd_tseries, _dt, overlap=overlap,
+                                                         df=f_res_mHz, window_data=True)
+        bzpow, bztime, bzfreq = fscr.autopower_spectrum_all(ftime, bwd_tseries, _dt, overlap=overlap,
+                                                         df=f_res_mHz, window_data=True)
+        bpow = bypow + bzpow
+        
+        ## PLOT ##
+        plt.ioff()
+        fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(6.0, 3.0),
+                                 gridspec_kw={'width_ratios':[1, 0.01]})
+        
+        # Forward plot
+        im1 = axes[0, 0].pcolormesh(fytime, fyfreq, fpow.T,
+                       norm=colors.LogNorm(vmin=1e-5, vmax=1e0), cmap='jet')
+        fig.colorbar(im1, cax=axes[0, 1], extend='max').set_label(
+                '$|P_f|$\n$nT^2/Hz$', fontsize=12, rotation=0, labelpad=30)
+        
+        # Backward plot
+        im2 = axes[1, 0].pcolormesh(bytime, byfreq, bpow.T,
+                       norm=colors.LogNorm(vmin=1e-5, vmax=1e0), cmap='jet')
+        fig.colorbar(im2, cax=axes[1, 1], extend='max').set_label(
+                '$|P_b|$\n$nT^2/Hz$', fontsize=12, rotation=0, labelpad=30)
+        
+        for ax in axes[:, 0]:
+            ax.set_ylim(0, fmax)
+            ax.set_xlim(0, ftime[-1])
+            ax.set_ylabel('Hz', rotation=0, labelpad=30)
+        
+        axes[0, 0].set_xticklabels([])
+        axes[-1, 0].set_xlabel('Time (s)')
+        
+        fig.tight_layout()
+        fig.subplots_adjust(hspace=0, wspace=0.05)
+        fig.savefig(dynspec_folderpath + 'SP_spectra_nx{:04}.png'.format(_NX), 
+                    facecolor=fig.get_facecolor(), edgecolor='none', dpi=200)
+        
+        plt.close('all')
+        print(f'SP spectra for node {_NX} saved')
+    return
+
+
+def single_point_spectra(nx=None, overlap=0.5, f_res_mHz=50, fmax=1.0):
+    '''
+    Frequency resolution in fraction of gyfreq (defaults to 1/50th)
+    '''
+    analysis_scripts_dir = 'D://Google Drive//Uni//PhD 2017//Data//Scripts//'
+    sys.path.append(analysis_scripts_dir)
+    
+    import fast_scripts as fscr
+    
+    dynspec_folderpath = cf.anal_dir + '//Bfield_SP_dynspec//'
+    if not os.path.exists(dynspec_folderpath): os.makedirs(dynspec_folderpath)
+    
+    if nx is None:
+        nx = np.array([cf.NC // 2])
     
     # (time, space)
     ftime, By = cf.get_array('By')
-    ftime, Bz = cf.get_array('Bz')
-    ftime, B_fwd, B_bwd, B_raw = bk.get_FB_waves(overwrite=False, field='B')  
-    
-    
+    ftime, Bz = cf.get_array('Bz')    
     _dt  = ftime[1] - ftime[0]
+    if fmax is None:
+        fmax = cf.gyfreq / (2*np.pi)    # Gyfreq in Hz
 
-    fwd_tseries = B_fwd[:, nx]
-    bwd_tseries = B_bwd[:, nx]
-    
-    ypow, ytime, yfreq = fscr.autopower_spectrum_all(ftime, By[:, nx]*1e9, _dt, overlap=overlap,
-                                                     df=f_res_mHz, window_data=True)
-    zpow, ztime, zfreq = fscr.autopower_spectrum_all(ftime, Bz[:, nx]*1e9, _dt, overlap=overlap,
-                                                     df=f_res_mHz, window_data=True)
-    spow = ypow + zpow
-#fmax = cf.gyfreq / (2*np.pi)    # Gyfreq in Hz
-# =============================================================================
-#     _df  = (1. / f_res_mHz) * fmax
-#     Nwin = int(1. / (_df*_dt))
-#     olap = int(overlap*Nwin)
-# =============================================================================
-# =============================================================================
-#     # Calculate spectra of each y, z component (real, imag part of helical timeseries) then add
-#     fwd_f, fwd_t, fwd_Syy = sig.spectrogram(fwd_tseries.real, fs=1./_dt, window='hann', detrend=False,
-#                                             nperseg=Nwin, noverlap=olap)
-#     fwd_f, fwd_t, fwd_Szz = sig.spectrogram(fwd_tseries.imag, fs=1./_dt, window='hann', detrend=False,
-#                                             nperseg=Nwin, noverlap=olap)
-#     fwd_Stt = fwd_Syy + fwd_Szz
-#     
-#     bwd_f, bwd_t, bwd_Syy = sig.spectrogram(bwd_tseries.real, fs=1./_dt, window='hann', detrend=False,
-#                                             nperseg=Nwin, noverlap=olap)
-#     bwd_f, bwd_t, bwd_Szz = sig.spectrogram(bwd_tseries.imag, fs=1./_dt, window='hann', detrend=False,
-#                                             nperseg=Nwin, noverlap=olap)
-#     bwd_Stt = bwd_Syy + bwd_Szz
-# =============================================================================
-    
-    ## PLOT ##
-    plt.ioff()
-    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(6.0, 3.0),
-                             gridspec_kw={'width_ratios':[1, 0.01]})
-    
-    #axes[0].set_title('FWD/BWD Propagating Waves at node {}'.format(nx))
-    
-    im1 = axes[0].pcolormesh(ytime, yfreq, spow.T,
-                   norm=colors.LogNorm(vmin=1e-5, vmax=1e0), cmap='jet')
-    fig.colorbar(im1, cax=axes[1], extend='max').set_label(
-            '$|P|$\n$nT^2/Hz$', fontsize=12, rotation=0, labelpad=30)
-    axes[0].set_ylabel('Hz', rotation=0, labelpad=30)
-    axes[0].set_ylim(0, fmax)
-    axes[0].set_xlim(0, ftime[-1])
-    axes[0].set_xlabel('Time (s)')
-# =============================================================================
-#     im2 = axes[1, 0].pcolormesh(ztime, zfreq, zpow.T,
-#                    norm=colors.LogNorm(vmin=1e-5, vmax=1e0), cmap='jet')
-#     fig.colorbar(im2, cax=axes[1, 1], extend='max').set_label(
-#             '$|P|$\n$nT^2/Hz$', fontsize=12, rotation=0, labelpad=30)
-#     
-#     for ax in axes[:, 0]:
-#         ax.set_ylabel('Hz', rotation=0, labelpad=30)
-#         ax.set_ylim(0, fmax)
-#         ax.set_xlim(0, ftime[-1])
-#     axes[1, 0].set_xlabel('Time (s)')
-# =============================================================================
-    
-    fig.tight_layout()
-    fig.subplots_adjust(wspace=0.05)
-    fig.savefig(dynspec_folderpath + 'SP_spectra_nx{:04}.png'.format(nx), 
-                facecolor=fig.get_facecolor(), edgecolor='none', dpi=200)
-    
-    plt.close('all')
-    print('Energy plot saved')
-    return 
+    for _NX in nx:
+        ypow, ytime, yfreq = fscr.autopower_spectrum_all(ftime, By[:, _NX]*1e9, _dt, overlap=overlap,
+                                                         df=f_res_mHz, window_data=True)
+        zpow, ztime, zfreq = fscr.autopower_spectrum_all(ftime, Bz[:, _NX]*1e9, _dt, overlap=overlap,
+                                                         df=f_res_mHz, window_data=True)
+        spow = ypow + zpow
+        
+        ## PLOT ##
+        plt.ioff()
+        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(6.0, 3.0),
+                                 gridspec_kw={'width_ratios':[1, 0.01]})
+            
+        im1 = axes[0].pcolormesh(ytime, yfreq, spow.T,
+                       norm=colors.LogNorm(vmin=1e-5, vmax=1e1), cmap='jet')
+        fig.colorbar(im1, cax=axes[1], extend='max').set_label(
+                '$|P|$\n$nT^2/Hz$', fontsize=12, rotation=0, labelpad=30)
+        axes[0].set_ylabel('Hz', rotation=0, labelpad=30)
+        axes[0].set_ylim(0, fmax)
+        axes[0].set_xlim(0, ftime[-1])
+        axes[0].set_xlabel('Time (s)')
+        
+        fig.tight_layout()
+        fig.subplots_adjust(wspace=0.05)
+        fig.savefig(dynspec_folderpath + 'SP_spectra_nx{:04}.png'.format(_NX), 
+                    facecolor=fig.get_facecolor(), edgecolor='none', dpi=200)
+        
+        plt.close('all')
+        print(f'SP spectra for node {_NX} saved')
+    return
 
 
 def plot_energies(normalize=True, save=False):
@@ -2070,14 +2159,6 @@ def standard_analysis_package(disp_overlay=False, pcyc_mult=1.25,
                     single_point_helicity_timeseries()
                     plot_spatially_averaged_fields()
                     single_point_field_timeseries(tmax=1./cf.HM_frequency)
-    return
-
-
-def do_all_dynamic_spectra(ymax=None):
-    
-    for component in ['By', 'Bz', 'Ex', 'Ey', 'Ez']:
-        for cell in np.arange(cf.ND, cf.NX + cf.ND):
-            plot_dynamic_spectra(component=component, ymax=ymax, save=True, cell=cell)
     return
 
 
@@ -4431,7 +4512,7 @@ def multiplot_saturation_amplitudes_jan16(save=True):
     fieldfile = 'F://runs//JAN16_PKTS_30HE_PC//' + 'field_vals_jan16.npz'
     all_series  = ['//JAN16_PKTS_5HE_PC//', '//JAN16_PKTS_15HE_PC//', '//JAN16_PKTS_30HE_PC//',]
     
-    if os.path.exists(savefile):
+    if os.path.exists(savefile) and False:
         print('Loading saturation amplitudes from file...')
         DR_file   = np.load(savefile)
         sat_amp   = DR_file['sat_amp']
@@ -4451,17 +4532,17 @@ def multiplot_saturation_amplitudes_jan16(save=True):
             runs_to_do = range(num_runs)                
             for ii in runs_to_do:
                 print('\nRun {}'.format(ii))
-                try:
-                    cf.load_run(drive, series, ii, extract_arrays=True)
-                    
-                    ty, by = cf.get_array('By') 
-                    tz, bz = cf.get_array('Bz')
-                    
-                    env_amps = np.sqrt(by ** 2 + bz ** 2)
-                    sat_amp[jj, ii] = env_amps.max() * 1e9
-                except:
-                    print(f'Something wrong with run {ii}')
-                    sat_amp[jj, ii] = np.nan
+                #try:
+                cf.load_run(drive, series, ii, extract_arrays=True)
+                
+                ty, by = cf.get_array('By') 
+                tz, bz = cf.get_array('Bz')
+                
+                env_amps = np.sqrt(by ** 2 + bz ** 2)
+                sat_amp[jj, ii] = env_amps.max() * 1e9
+                #except:
+                #    print(f'Something wrong with run {ii}')
+                #    sat_amp[jj, ii] = np.nan
         print('Saving saturation amplitudes to file...')
         np.savez(savefile, sat_amp=sat_amp)
     
@@ -4532,7 +4613,7 @@ def multiplot_saturation_amplitudes_jan16(save=True):
 # =============================================================================
     
     # Hybrid Results
-    axes[0].set_title('Saturation Amplitudes :: Jan 16, 2015')
+    #axes[0].set_title('Saturation Amplitudes :: Jan 16, 2015')
     axes[0].plot(dat_times, pc1_env, c='k', lw=0.75, alpha=0.75)
     
     clrs = ['blue', 'green', 'red']
@@ -4678,135 +4759,6 @@ def multiplot_saturation_amplitudes_jul17(save=True):
     for xx in range(2):
         for this_time in timebase:
             axes[xx].axvline(this_time, c='k', ls='--', alpha=0.50, lw=0.75)
-    
-    #axes[0, 0].set_xticklabels([])
-    axes[0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-    axes[0].xaxis.set_major_locator(mdates.MinuteLocator(interval=10))
-    axes[1].set_visible(False)
-    
-    fig.tight_layout()
-    fig.align_ylabels()
-    fig.subplots_adjust(hspace=0.0, wspace=0.01)
-                            
-    if save==True:  
-        fig.savefig('F://runs//JUL17_PC1PEAKS_VO_1pc//' + 'data_model_saturation.png',
-                    edgecolor='none', dpi=200)
-        plt.close('all')
-    else:
-        plt.show()
-    return
-
-
-def multiplot_saturation_amplitudes_aug12(save=True):
-    '''
-    Plots the saturation (maximum) amplitude of each run series as a function of
-    'time' (which probably has to be hardcoded)
-    '''
-    jul_times = ['1991-07-17T20:22:11.000000',
-     '1991-07-17T20:26:30.000000',
-     '1991-07-17T20:37:43.000000',
-     '1991-07-17T20:42:16.000000',
-     '1991-07-17T20:47:41.000000',
-     '1991-07-17T20:50:55.000000',
-     '1991-07-17T20:54:19.000000']
-    
-    tlim = [None, 220., 270., 360., 300., 280., 260.]
-    savefile  = 'F://runs//JUL17_PC1PEAKS_VO_1pc//' + 'sat_amps_jul16.npz'
-    fieldfile = 'F://runs//JUL17_PC1PEAKS_VO_1pc//' + 'field_vals_jul16.npz'
-    all_series  = ['//JUL17_PC1PEAKS_VO_1pc//']
-    
-    if os.path.exists(savefile) and False:
-        print('Loading saturation amplitudes from file...')
-        DR_file   = np.load(savefile)
-        sat_amp   = DR_file['sat_amp']
-    else:
-        print('Plotting saturation amplitudes for multiple series...')
-        # Get number of runs (assume same for each series) to set array
-        num_runs  = 7 #len([name for name in os.listdir(test_dir) if 'run_' in name])
-        sat_amp   = np.zeros((len(all_series), num_runs), dtype=np.float64)
-        
-        print('Collecting saturation amplitudes')
-        for jj in range(len(all_series)):
-            series      = all_series[jj]
-            series_dir  = '{}/runs//{}//'.format(drive, series)
-            num_runs    = len([name for name in os.listdir(series_dir) if 'run_' in name])
-            print('{} runs in series {}'.format(num_runs, series))
-        
-            runs_to_do = range(num_runs)                
-            for ii in runs_to_do:
-                    print('\nRun {}'.format(ii))
-                #try:
-                    cf.load_run(drive, series, ii, extract_arrays=True)
-                    
-                    ty, by = cf.get_array('By') 
-                    tz, bz = cf.get_array('Bz')
-
-                    if tlim[ii] is not None:
-                        tmax_idx = np.where(np.abs(ty - tlim[ii]) == np.abs(ty - tlim[ii]).min())[0][0]
-                    else:
-                        tmax_idx = None
-                    
-                    env_amps = np.sqrt(by[:tmax_idx] ** 2 + bz[:tmax_idx] ** 2)
-                    sat_amp[jj, ii] = env_amps.max() * 1e9
-                #except:
-                 #   print(f'Something wrong with run {ii}')
-                  #  sat_amp[jj, ii] = np.nan
-        print('Saving saturation amplitudes to file...')
-        np.savez(savefile, sat_amp=sat_amp)
-    
-    timebase = np.array([np.datetime64(this_time) for this_time in jul_times])
-    
-    # Load comparison data
-    data_scripts_dir = 'D://Google Drive//Uni//PhD 2017//Data//Scripts//'
-    sys.path.append(data_scripts_dir)
-    import crres_file_readers as cfr
-    import fast_scripts as fscr
-    import analysis_scripts as ascr
-    
-    crres_path  = 'E://DATA//CRRES//'
-    time_start = np.datetime64('1991-07-17T20:15:00.000000')
-    time_end   = np.datetime64('1991-07-17T21:00:00.000000')
-    
-    if not os.path.exists(fieldfile):
-        dat_times, B0, HM_mags, pc1_mags, \
-        E0, HM_elec, pc1_elec, S, B, E = cfr.get_crres_fields(crres_path, time_start, time_end,
-                                        pad=1800, output_raw_B=True, Pc5_LP=30.0, B0_LP=1.0,
-                                        Pc5_HP=None, dEx_LP=None, interpolate_nan=True)
-        delt = 1/32.
-        
-        pc1_env = ascr.extract_envelope(dat_times, pc1_mags, delt, 100., 300., include_z=False)
-        
-        np.savez(fieldfile, dat_times=dat_times, pc1_env=pc1_env)
-    else:
-        print('Loading field values from file...')
-        FLD_file     = np.load(fieldfile)
-        dat_times    = FLD_file['dat_times']
-        pc1_env      = FLD_file['pc1_env']
-    
-    # Plot result -- 3 plots: spectra, envelope (or integrated power? both?)
-    #                then scatterplot with each run type in different color (for he concentration)
-    plt.ioff()
-    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(6.0, 0.7*3.71),
-                             gridspec_kw={'width_ratios':[1, 0.3]})
-
-    # Hybrid Results
-    axes[0].set_title('Saturation Amplitudes :: Jan 16, 2015')
-    axes[0].plot(dat_times, pc1_env, c='k', lw=0.75, alpha=0.75)
-    
-    clrs = ['blue', 'green', 'red']
-    for ii, lbl in zip(range(len(all_series)), ['5% He', '15% He', '30% He']):
-        axes[0].scatter(timebase, sat_amp[ii], c=clrs[ii], label=lbl)
-    axes[0].set_xlim(time_start, time_end)
-    axes[0].set_ylim(0.0, None)
-    axes[0].set_xlabel('Time (UT)')
-    axes[0].set_ylabel('$|B_w|$\n(nT)', rotation=0, labelpad=20)
-    axes[0].legend(loc='upper right')
-    leg = axes[0].legend(bbox_to_anchor=(1.0, 0.0), loc=3, borderaxespad=0., prop={'size': 12})
-    leg.get_frame().set_linewidth(0.0)
-    
-    for xx in range(2):
-        for this_time in timebase:
-            axes[xx].axvline(this_time, c='k', ls='--', alpha=0.75)
     
     #axes[0, 0].set_xticklabels([])
     axes[0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
@@ -4974,6 +4926,402 @@ def multiplot_RMS_jul25():
 #         else:
 #             plt.show()
 # =============================================================================
+    return
+
+
+def multiplot_AUG12_density(save=True, fmax=1.0):
+    '''
+    Create figure
+
+    Saturation amplitudes vs. space to show control waveforms, 2x2 /w cbar
+    Dotted line to show where ULF changes
+    Do the 5x run because has the strongest saturation amplitude (for visual)
+    '''
+    plot_dir = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//'
+    
+    series  = 'AUG12_DROP_HIGHER'
+    ffamily = 'monospace'
+    fsize   = 10
+    lpad    = 15
+    cpad    = 30
+    
+    Bmax = 5.0
+    Pmax = 1e-1
+    
+    ## PLOT
+    plt.ioff()
+    fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(6.0, 4.0), 
+                             gridspec_kw={'width_ratios':[1, 1, 0.05]})
+        
+    col = 0
+    for ii in [2, 10]:              
+        print('\nRun {}'.format(ii))
+        cf.load_run(drive, series, ii, extract_arrays=True)
+            
+        # Get wx data and axes
+        ftime, by_wx = disp.get_wx('By', fac=1e9)
+        ftime, bz_wx = disp.get_wx('Bz', fac=1e9)
+        wx = by_wx + bz_wx
+        
+        freqs = np.fft.rfftfreq(ftime.shape[0], d=cf.dt_field)
+        x_arr = cf.B_nodes * 1e-6
+        x_lim = np.array([cf.xmin, cf.xmax]) * 1e-6
+    
+        # Get xt
+        ftime, By_raw = cf.get_array('by')
+        ftime, Bz_raw = cf.get_array('bz')
+        B_wave = np.sqrt(By_raw**2 + Bz_raw**2)*1e9
+        
+        # XT WAVE PLOT
+        im1 = axes[0, col].pcolormesh(x_arr, ftime, B_wave, cmap='jet', vmin=0.0, vmax=Bmax)
+        
+        axes[0, col].set_xlabel('x (Mm)', fontsize=fsize, family=ffamily)
+        axes[0, col].set_ylim(0, ftime[-1])
+        axes[0, col].set_xlim(x_lim[0], x_lim[1])    
+        axes[0, col].set_xticklabels([])
+        
+        # WX DISPERSION PLOT
+        im2 = axes[1, col].pcolormesh(x_arr, freqs, wx, cmap='nipy_spectral', vmin=0.0, vmax=Pmax)
+        
+        axes[1, col].set_xlabel('x (Mm)', fontsize=fsize, family=ffamily)
+        axes[1, col].set_ylim(0, fmax)
+        axes[1, col].set_xlim(x_lim[0], x_lim[1])
+        col += 1
+    
+    axes[0, 0].set_ylabel('t\n(s)', rotation=0, labelpad=lpad, fontsize=fsize, family=ffamily)
+    axes[0, 0].set_yticks([50, 150, 250])
+    
+    axes[1, 0].set_ylabel('f\n(Hz)', rotation=0, labelpad=lpad, fontsize=fsize, family=ffamily)
+    axes[1, 0].set_yticks([0.0, 0.4, 0.8])
+    
+    axes[0, 1].set_yticklabels([])
+    axes[1, 1].set_yticklabels([])
+    
+    axes[0, 0].tick_params(axis='y', labelsize=8)
+    axes[1, 0].tick_params(axis='y', labelsize=8)
+    axes[1, 0].tick_params(axis='x', labelsize=8)
+    axes[1, 1].tick_params(axis='x', labelsize=8)
+    
+    # COLORBARS
+    cbar1 = fig.colorbar(im1, cax=axes[0, 2], extend='max')
+    cbar1.set_label('nT', rotation=0,
+                    family=ffamily, fontsize=fsize, labelpad=20)
+    
+    cbar2 = fig.colorbar(im2, cax=axes[1, 2], extend='max')
+    cbar2.set_label('$\\frac{nT^2}{Hz}$', rotation=0,
+                    family=ffamily, fontsize=fsize+2, labelpad=20)
+    
+    cbar1.ax.tick_params(labelsize=8) 
+    cbar2.ax.tick_params(labelsize=8) 
+        
+    fig.tight_layout()
+    fig.align_ylabels()
+    fig.subplots_adjust(hspace=0.05, wspace=0.05)
+                   
+    if save:
+        fullpath = plot_dir + 'aug12_fxt_plot.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(),
+                    edgecolor='none', bbox_inches='tight', dpi=200)
+        print('Dispersion stackplot saved')
+        plt.close('all')
+    else:
+        plt.show()       
+    return
+
+
+def multiplot_AUG12_waveform(save=True, fmax=1.0):
+    '''
+    Create figure
+
+    Saturation amplitudes vs. space to show control waveforms, 2x2 /w cbar
+    Dotted line to show where ULF changes
+    Do the 5x run because has the strongest saturation amplitude (for visual)
+    '''
+    plot_dir = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//'
+    
+    series  = 'AUG12_DROP_HIGHER'
+    ffamily = 'monospace'
+    fsize   = 10
+    lpad    = 15
+    cpad    = 30
+    
+    Bmax = 5.0
+    Pmax = 1e-1
+    
+    ## PLOT
+    plt.ioff()
+    fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(6.0, 4.0), 
+                             gridspec_kw={'width_ratios':[1, 1, 0.05]})
+        
+    col = 0
+    for ii in [2, 10]:              
+        print('\nRun {}'.format(ii))
+        cf.load_run(drive, series, ii, extract_arrays=True)
+            
+        # Get wx data and axes
+        ftime, by_wx = disp.get_wx('By', fac=1e9)
+        ftime, bz_wx = disp.get_wx('Bz', fac=1e9)
+        wx = by_wx + bz_wx
+        
+        freqs = np.fft.rfftfreq(ftime.shape[0], d=cf.dt_field)
+        x_arr = cf.B_nodes * 1e-6
+        x_lim = np.array([cf.xmin, cf.xmax]) * 1e-6
+    
+        # Get xt
+        ftime, By_raw = cf.get_array('by')
+        ftime, Bz_raw = cf.get_array('bz')
+        B_wave = np.sqrt(By_raw**2 + Bz_raw**2)*1e9
+        
+        # XT WAVE PLOT
+        im1 = axes[0, col].pcolormesh(x_arr, ftime, B_wave, cmap='jet', vmin=0.0, vmax=Bmax)
+        
+        axes[0, col].set_xlabel('x (Mm)', fontsize=fsize, family=ffamily)
+        axes[0, col].set_ylim(0, ftime[-1])
+        axes[0, col].set_xlim(x_lim[0], x_lim[1])    
+        axes[0, col].set_xticklabels([])
+        
+        # WX DISPERSION PLOT
+        im2 = axes[1, col].pcolormesh(x_arr, freqs, wx, cmap='nipy_spectral', vmin=0.0, vmax=Pmax)
+        
+        axes[1, col].set_xlabel('x (Mm)', fontsize=fsize, family=ffamily)
+        axes[1, col].set_ylim(0, fmax)
+        axes[1, col].set_xlim(x_lim[0], x_lim[1])
+        col += 1
+    
+    axes[0, 0].set_ylabel('t\n(s)', rotation=0, labelpad=lpad, fontsize=fsize, family=ffamily)
+    axes[0, 0].set_yticks([50, 150, 250])
+    
+    axes[1, 0].set_ylabel('f\n(Hz)', rotation=0, labelpad=lpad, fontsize=fsize, family=ffamily)
+    axes[1, 0].set_yticks([0.0, 0.4, 0.8])
+    
+    axes[0, 1].set_yticklabels([])
+    axes[1, 1].set_yticklabels([])
+    
+    axes[0, 0].tick_params(axis='y', labelsize=8)
+    axes[1, 0].tick_params(axis='y', labelsize=8)
+    axes[1, 0].tick_params(axis='x', labelsize=8)
+    axes[1, 1].tick_params(axis='x', labelsize=8)
+    
+    # COLORBARS
+    cbar1 = fig.colorbar(im1, cax=axes[0, 2], extend='max')
+    cbar1.set_label('nT', rotation=0,
+                    family=ffamily, fontsize=fsize, labelpad=20)
+    
+    cbar2 = fig.colorbar(im2, cax=axes[1, 2], extend='max')
+    cbar2.set_label('$\\frac{nT^2}{Hz}$', rotation=0,
+                    family=ffamily, fontsize=fsize+2, labelpad=20)
+    
+    cbar1.ax.tick_params(labelsize=8) 
+    cbar2.ax.tick_params(labelsize=8) 
+        
+    fig.tight_layout()
+    fig.align_ylabels()
+    fig.subplots_adjust(hspace=0.05, wspace=0.05)
+                   
+    if save:
+        fullpath = plot_dir + 'aug12_fxt_plot.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(),
+                    edgecolor='none', bbox_inches='tight', dpi=200)
+        print('Dispersion stackplot saved')
+        plt.close('all')
+    else:
+        plt.show()       
+    return
+
+
+def multiplot_AUG12_Benergy(save=True):
+    '''
+    Examine B energy vs. time for AUG12 runs
+    AUG12_DROP :: Runs 0 (control, x1), 8 (drop, x1)
+    AUG12_DROP_HIGHER :: Runs 0, 2 (controlx2, x5), 8, 10 (drop x2, x5)
+    
+    Load run
+    Calculate energy vs. time
+    Plot
+    Second plot will have ULF (take from last run)
+    
+    Loop through control first
+    Then through ULF
+    Use same color for each RC concentration
+    '''
+    plot_dir = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//'
+    
+    ffamily = 'monospace'
+    fsize   = 10
+    lpad    = 20
+        
+    ## PLOT
+    plt.ioff()
+    fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(6.0, 4.0), sharex=True)
+    
+    rc_clr = ['blue', 'red']
+    rc_lbl = ['$n_h = 0.2 cm^{-3}$', '$n_h = 0.4 cm^{-3}$']         # Change to cc later
+    
+    sA = 'AUG12_DROP'; sB = 'AUG12_DROP_HIGHER'
+    all_series = [sA, sB]
+    run_nums   = [0, 0]
+    
+    # Control ones: Make thicker?
+    for series, run, clr, lbl in zip(all_series, run_nums, rc_clr, rc_lbl):              
+        print('\nRun {}'.format(run))
+        cf.load_run(drive, series, run, extract_arrays=True)
+
+        # (time, space)
+        ftime, By_raw = cf.get_array('by')
+        ftime, Bz_raw = cf.get_array('bz')
+        B_wave = np.sqrt(By_raw**2 + Bz_raw**2)*1e9
+        
+        mag_energy = np.zeros(ftime.shape[0])
+        for ii in range(ftime.shape[0]):
+            #mag_energy[ii] = (0.5 / mu0) * np.square(B_wave[ii]).sum() * cf.dx
+            mag_energy[ii] = np.sqrt(np.square(B_wave[ii]).mean())
+        
+        # Energy lineplot
+        axes[0].plot(ftime, mag_energy, c=clr, label=lbl, lw=0.75, ls='--')
+    axes[0].legend()
+    
+    all_series = [sA, sB]
+    run_nums   = [8, 8]
+    # ULF ones: Can be thin?
+    for series, run, clr, lbl in zip(all_series, run_nums, rc_clr, rc_lbl):              
+        print('\nRun {}'.format(run))
+        cf.load_run(drive, series, run, extract_arrays=True)
+        
+        # (time, space)
+        ftime, By_raw = cf.get_array('by')
+        ftime, Bz_raw = cf.get_array('bz')
+        B_wave = np.sqrt(By_raw**2 + Bz_raw**2)*1e9
+        
+        mag_energy = np.zeros(ftime.shape[0])
+        for ii in range(ftime.shape[0]):
+            #mag_energy[ii] = (0.5 / mu0) * np.square(B_wave[ii]).sum() * cf.dx
+            mag_energy[ii] = np.sqrt(np.square(B_wave[ii]).mean())
+        
+        # Energy lineplot
+        axes[0].plot(ftime, mag_energy, c=clr, label=lbl, lw=0.75)
+    
+    # ULF plot
+    t, bxc = cf.get_array(component='bxc', get_all=False, timebase=None)
+    bxc = bxc[:, cf.NX//2]*1e9
+    axes[1].plot(ftime, bxc, c='b', label=lbl)
+    
+    # Set labels and limits
+    axes[0].set_ylabel('RMS($B_w$)\n(nT)', rotation=0, labelpad=lpad, fontsize=fsize, family=ffamily)
+    axes[1].set_ylabel('$B_0$\n$(nT)$', rotation=0, labelpad=lpad, fontsize=fsize, family=ffamily)
+    axes[1].set_xlabel('t (s)', fontsize=fsize, family=ffamily)
+    
+    axes[0].set_xlim(125, ftime[-1])
+    axes[1].set_xlim(125, ftime[-1])
+    #axes[0].set_xticklabels([])
+    #axes[0].set_ylim(1e-8, 1e-5)
+    axes[1].set_ylim(0.9*bxc.min(), 1.1*bxc.max())
+        
+    #axes[0, 0].tick_params(axis='y', labelsize=8)
+    #axes[1, 0].tick_params(axis='y', labelsize=8)
+    #axes[1, 0].tick_params(axis='x', labelsize=8)
+    #axes[1, 1].tick_params(axis='x', labelsize=8)
+        
+    fig.tight_layout()
+    fig.align_ylabels()
+    fig.subplots_adjust(hspace=0.05, wspace=0.05)
+                   
+    if True:
+        fullpath = plot_dir + 'aug12_Benergy_plot.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(),
+                    edgecolor='none', bbox_inches='tight', dpi=200)
+        print('Dispersion stackplot saved')
+        plt.close('all')
+    else:
+        plt.show()
+            
+    return
+
+
+def multiplot_AUG12_Benergy_times(save=True):
+    '''
+    Examine B energy vs. time for AUG12 runs
+    AUG12_DROP :: Runs 0 (control, x1), 8 (drop, x1)
+    AUG12_DROP_HIGHER :: Runs 0, 2 (controlx2, x5), 8, 10 (drop x2, x5)
+    
+    Load run
+    Calculate energy vs. time
+    Plot
+    Second plot will have ULF (take from last run)
+    
+    Loop through control first
+    Then through ULF
+    Use same color for each RC concentration
+    '''
+    plot_dir = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//'
+    
+    ffamily = 'monospace'
+    fsize   = 10
+    lpad    = 20
+        
+    ## PLOT
+    plt.ioff()
+    fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(6.0, 4.0), sharex=True)
+    
+    rc_clr = ['black', 'blue', 'red']
+    rc_lbl = ['N/A', '100s', '200s']         # Change to cc later
+    
+    run_nums   = [0, 4, 8]
+    
+    # Control ones: Make thicker?
+    for run, clr, lbl in zip(run_nums, rc_clr, rc_lbl):              
+        print('\nRun {}'.format(run))
+        cf.load_run(drive, 'AUG12_DROP_HIGHER', run, extract_arrays=True)
+
+        # (time, space)
+        ftime, By_raw = cf.get_array('by')
+        ftime, Bz_raw = cf.get_array('bz')
+        B_wave = np.sqrt(By_raw**2 + Bz_raw**2)*1e9
+        
+        mag_energy = np.zeros(ftime.shape[0])
+        for ii in range(ftime.shape[0]):
+            #mag_energy[ii] = (0.5 / mu0) * np.square(B_wave[ii]).sum() * cf.dx
+            mag_energy[ii] = np.sqrt(np.square(B_wave[ii]).mean())
+        
+        # Energy lineplot
+        axes[0].plot(ftime, mag_energy, c=clr, label=lbl, lw=0.75, ls='-')
+        
+        # ULF plot
+        t, bxc = cf.get_array(component='bxc', get_all=False, timebase=None)
+        bxc = bxc[:, cf.NX//2]*1e9
+        axes[1].plot(ftime, bxc, c=clr, label=lbl)
+    
+    #axes[0].legend()
+    
+    # Set labels and limits
+    axes[0].set_ylabel('RMS($B_w$)\n(nT)', rotation=0, labelpad=lpad, fontsize=fsize, family=ffamily)
+    axes[1].set_ylabel('$B_0$\n$(nT)$', rotation=0, labelpad=lpad, fontsize=fsize, family=ffamily)
+    axes[1].set_xlabel('t (s)', fontsize=fsize, family=ffamily)
+    
+    tlim = 0
+    axes[0].set_xlim(tlim, ftime[-1])
+    axes[1].set_xlim(tlim, ftime[-1])
+    #axes[0].set_xticklabels([])
+    #axes[0].set_ylim(1e-8, 1e-5)
+    axes[1].set_ylim(0.9*bxc.min(), 1.1*bxc.max())
+        
+    #axes[0, 0].tick_params(axis='y', labelsize=8)
+    #axes[1, 0].tick_params(axis='y', labelsize=8)
+    #axes[1, 0].tick_params(axis='x', labelsize=8)
+    #axes[1, 1].tick_params(axis='x', labelsize=8)
+        
+    fig.tight_layout()
+    fig.align_ylabels()
+    fig.subplots_adjust(hspace=0.05, wspace=0.05)
+                   
+    if True:
+        fullpath = plot_dir + 'aug12_Benergy_times_plot.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(),
+                    edgecolor='none', bbox_inches='tight', dpi=200)
+        print('Dispersion stackplot saved')
+        plt.close('all')
+    else:
+        plt.show()
+            
     return
 
 
@@ -5242,7 +5590,7 @@ def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=None)
     
     # WX DISPERSION PLOT
     im2 = axes[1, 0].pcolormesh(x_arr, freqs, wx, cmap='nipy_spectral', vmin=0.0, vmax=Pmax)
-    cbar2 = fig.colorbar(im2, cax=axes[1, 1], extend='max')
+    cbar2 = fig.colorbar(im2, cax=axes[1, 1], extend='max', ticks=[0, 1, 2, 3, 4, 5])
     cbar2.set_label('$\\frac{nT^2}{Hz}$', rotation=0,
                     family=ffamily, fontsize=fsize+2, labelpad=cpad)
     
@@ -5266,11 +5614,14 @@ def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=None)
 #%% MAIN
 if __name__ == '__main__':
     drive       = 'F:'
+    #import logging
+    #log_file = 'F://runs//_NEW_RUNS//bad_runs.log'
+    #logging.basicConfig(filename=log_file, filemode='w', level=logging.ERROR, force=True)
     
     #############################
     ### MULTI-SERIES ROUTINES ###
     #############################
-    if False:
+    if False:            
         #multiplot_mag_energy(save=True)
         #multiplot_fluxes(series)
         #multiplot_parallel_scaling()
@@ -5278,49 +5629,64 @@ if __name__ == '__main__':
         #multiplot_RMS_jul25()
         
         #multiplot_saturation_amplitudes_jan16(save=True)
-        multiplot_saturation_amplitudes_jul17(save=True)
+        #multiplot_saturation_amplitudes_jul17(save=True)
+        
+        #multiplot_AUG12_waveform(fmax=1.0)
+        #multiplot_AUG12_Benergy(save=True)
+        #multiplot_AUG12_Benergy_times(save=True)
         print('Exiting multiplot routines successfully.')
         sys.exit()
-
+    
     ####################################
     ### SINGLE SERIES ANALYSIS ########
     ################################
-    for series in ['//JUL25_CLEANPEAK_MULTIPOP_FIXED//',
-                   '//JUL25_CLEANPEAK_MULTIPOP_PARABOLIC//']:
-
+    #'//_NEW_RUNS//AUG12_PC1_PEAKS_CAVRCVO_5HE_1pc//',
+                  # '//_NEW_RUNS//AUG12_PC1_PEAKS_Vrc_5HE_1pc//',
+                  # '//_NEW_RUNS//JUL17_PC1PEAKS_VO_1pc//',
+                  # '//_NEW_RUNS//JUL25_CP_MULTIPOP_LONGER//',
+                  # '//_NEW_RUNS//JUL25_CP_PBOLIC_LONGER//'
+    for series in ['//_NEW_RUNS//JUL25_CP_PBOLIC_LONGER//']:
         series_dir = f'{drive}/runs//{series}//'
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [2, 3, 4, 5, 6, 7, 8, 9]
+            runs_to_do = [2]
         
         # Extract all summary files and plot field stuff (quick)
         if True:
             for run_num in runs_to_do:
-                print('\nRun {}'.format(run_num))
+                    print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
-
-                cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
                 
-                thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=None)
-                SWSP_dynamic_spectra(nx=130, overlap=0.95, f_res_mHz=25)
-                SWSP_dynamic_spectra(nx=258, overlap=0.95, f_res_mHz=25)
-                SWSP_dynamic_spectra(nx=386, overlap=0.95, f_res_mHz=25)
-                
-                standard_analysis_package(disp_overlay=False, pcyc_mult=1.1,
-                              tx_only=False, tmax=None, remove_ND=False)
-
+                #try:
+                    cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
+                    
+                    thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=6)
+                    
+                    #single_point_spectra(nx=[2, 130, 258, 386, 514], overlap=0.95, f_res_mHz=25, fmax=1.0)
+                    #single_point_FB(     nx=[2, 130, 258, 386, 514], overlap=0.95, f_res_mHz=25, fmax=1.0)
+                    
+                    #single_point_spectra(nx=[2, 258, 514, 770, 1026], overlap=0.95, f_res_mHz=25, fmax=1.0)
+                    #single_point_FB(     nx=[2, 258, 514, 770, 1026], overlap=0.95, f_res_mHz=25, fmax=1.0)
+    
+                    #standard_analysis_package(disp_overlay=False, pcyc_mult=1.1,
+                    #              tx_only=False, tmax=None, remove_ND=False)
+                    #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
+                    #           B0_lim=None, remove_ND=False)
+                #except:
+                #    print(f'PROBLEM WITH {series}[{run_num}], SKIPPING...')
+                #    logging.error('%s[%d]', series, run_num)
+                #    continue
 # =============================================================================
 #                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=300, normalize=False,
 #                            B0_lim=25, remove_ND=False)
-#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
-#                            B0_lim=25, remove_ND=False)
-#                 plot_abs_T_w_Bx(saveas='abs_plot_bx', save=False, tmax=300,
+#                 plot_abs_T_w_Bx(saveas='abs_plot_bx', save=False, tmax=None,
 #                     B0_lim=None, remove_ND=False)
 # =============================================================================
+                
                 #plot_abs_T_w_Bx(saveas='abs_plot_bx', save=True, tmax=None,
                 #    B0_lim=3.0, remove_ND=False)
                 
