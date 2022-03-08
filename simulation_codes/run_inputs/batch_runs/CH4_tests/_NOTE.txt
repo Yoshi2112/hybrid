@@ -1,0 +1,14 @@
+run0 :: Cold test, 100% H
+run1 :: Cold test,  80% H, 20% He
+run2 :: Cold test,  90% H, 10% O
+run3 :: Cold test,  70% H, 20% He, 10% O
+
+run4 :: Fu params, uniform B  , periodic boundaries
+run5 :: Fu params, uniform B  , open boundaries (reflective particles)
+run6 :: Fu params, parabolic B, open boundaries (reflective particles), set L = 4.5
+
+Use NX = 1024 for all (except open, use 2048)
+max_wcinv = 4000
+512 cold ppc
+8192 hot ppc
+For cold tests, 200nT field with 200cc density, 0.1 eV energy (similar to plasmasphere)
