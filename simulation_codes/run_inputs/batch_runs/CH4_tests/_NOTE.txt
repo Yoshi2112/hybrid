@@ -8,7 +8,7 @@ run5 :: Fu params, uniform B  , open boundaries (reflective particles)
 run6 :: Fu params, parabolic B, open boundaries (reflective particles), set L = 4.5
 
 Use NX = 1024 for all (except open, use 2048)
-max_wcinv = 4000
+max_wcinv = 3000
 512 cold ppc
 8192 hot ppc
 For cold tests, 200nT field with 200cc density, 0.1 eV energy (similar to plasmasphere)
