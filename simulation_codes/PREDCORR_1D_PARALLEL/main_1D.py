@@ -19,7 +19,7 @@ B_surf  = 3.12e-5                            # Magnetic field strength at Earth 
 
 # A few internal flags
 cold_va             = False
-Fu_override         = False     # Override to allow density to be calculated as a ratio of frequencies
+Fu_override         = True      # Override to allow density to be calculated as a ratio of frequencies
 do_parallel         = True      # Flag to use available threads to parallelize particle functions
 adaptive_timestep   = False     # Disable adaptive timestep to keep it the same as initial
 print_timings       = False     # Diagnostic outputs timing each major segment (for efficiency examination)
@@ -31,7 +31,7 @@ logistic_B          = False      # Flag for B0 to change after a time to a diffe
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)
-#nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(6)         # Uncomment to manually set number of threads, otherwise will use all available
 
 #%% --- FUNCTIONS ---
 ### ##
@@ -2815,7 +2815,10 @@ def calculate_background_magnetic_field():
         loss_cone_eq   = np.arcsin(np.sqrt(B0   / B_A))*180 / np.pi   # Equatorial loss cone in degrees
         loss_cone_xmax = np.arcsin(np.sqrt(B_xmax / B_A))               # Boundary loss cone in radians
         theta_xmax     = 0.0                                            # NOT REALLY ANY WAY TO TELL MLAT WITH THIS METHOD
-       
+    
+        if B_A < B_xmax:
+            raise ValueError('Maximum B higher than ionospheric B')
+    #pdb.set_trace()
     B_nodes_loc  = (np.arange(NC + 1) - NC // 2)       * dx             # B grid points position in space
     E_nodes_loc  = (np.arange(NC)     - NC // 2 + 0.5) * dx             # E grid points position in space
     gyfreq_xmax  = ECHARGE*B_xmax/ PMASS                                # Proton Gyrofrequency (rad/s) at boundary (highest)
