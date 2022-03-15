@@ -31,7 +31,7 @@ logistic_B          = False      # Flag for B0 to change after a time to a diffe
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)
-nb.set_num_threads(6)         # Uncomment to manually set number of threads, otherwise will use all available
+#nb.set_num_threads(6)         # Uncomment to manually set number of threads, otherwise will use all available
 
 #%% --- FUNCTIONS ---
 ### ##
@@ -1284,7 +1284,7 @@ def generate_vx(vth):
 ### ##
 #%% SOURCES
 ### ##
-@nb.njit(parallel=False)
+@nb.njit(parallel=True)
 def deposit_moments_to_grid(vel, Ie, W_elec, idx, ni, nu):
     '''
     Collect number and velocity moments in each cell, weighted by their distance
