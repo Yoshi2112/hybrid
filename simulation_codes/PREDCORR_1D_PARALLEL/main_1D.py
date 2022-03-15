@@ -2680,6 +2680,9 @@ def load_plasma_params():
         rat        = 5
         ne         = (rat*B_eq)**2 * e0 / EMASS
         density    = np.array([0.05, 0.94, 0.01])*ne
+        print('-- WARNING ---')
+        print(f'Rewriting density with wpi/wci ratio of {rat:.2f}')
+        print('--------------')
     ### 
     
     charge    *= ECHARGE                                     # Cast species charge to Coulomb
