@@ -19,19 +19,19 @@ B_surf  = 3.12e-5                            # Magnetic field strength at Earth 
 
 # A few internal flags
 cold_va             = False
-Fu_override         = True      # Override to allow density to be calculated as a ratio of frequencies
+Fu_override         = False     # Override to allow density to be calculated as a ratio of frequencies
 do_parallel         = True      # Flag to use available threads to parallelize particle functions
 adaptive_timestep   = False     # Disable adaptive timestep to keep it the same as initial
 print_timings       = False     # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True      # Flag to print runtime every 50 iterations 
 do_dispersion       = False     # Account for dispersion effects in dt calculation
 fourth_order        = True      # Flag to choose between 4th or 2nd order solutions
-logistic_B          = False      # Flag for B0 to change after a time to a different value as a logistic function
+logistic_B          = False     # Flag for B0 to change after a time to a different value as a logistic function
 
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)
-#nb.set_num_threads(6)         # Uncomment to manually set number of threads, otherwise will use all available
+#nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
 
 #%% --- FUNCTIONS ---
 ### ##
@@ -625,11 +625,15 @@ def set_timestep(vel):
         part_save_iter = 1
     else:
         part_save_iter = int(part_dumpf / (DT*gyfreq_eq))
+        if part_save_iter == 0:
+            part_save_iter = 1
     
     if field_dumpf == 0:
         field_save_iter = 1
     else:
         field_save_iter = int(field_dumpf / (DT*gyfreq_eq))
+        if field_save_iter == 0:
+            field_save_iter = 1
 
     if save_fields == 1 or save_particles == 1:
         store_run_parameters(DT, part_save_iter, field_save_iter, max_inc, max_time)
@@ -2279,7 +2283,7 @@ def save_particle_data(sim_time, dt, part_save_iter, qq, pos, vel, idx):
     d_fullpath = d_path + 'data%05d' % r
     
     np.savez(d_fullpath, pos = pos, vel = vel, idx=idx, sim_time = sim_time)
-    if print_runtime: print('Particle data saved')
+    #if print_runtime: print('Particle data saved')
     return
     
     

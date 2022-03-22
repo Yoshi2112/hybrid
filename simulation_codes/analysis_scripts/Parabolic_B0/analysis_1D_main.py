@@ -508,6 +508,95 @@ def plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
     return
 
 
+def plot_wk_thesis_good(saveas='wk_plot_thesis', dispersion_overlay=False, save=True,
+                     pcyc_mult=None, xmax=None, zero_cold=True,
+                     linear_only=False, normalize_axes=False,
+                     centre_only=False):
+    '''
+    Just do magnetic field, make axes big enough to see.
+    
+    Also need to put CPDR on these
+    '''
+    if normalize_axes == True:
+        xfac = c / cf.wpi
+        yfac = 2*np.pi / cf.gyfreq
+        xlab = '$\mathtt{kc/\omega_{pi}}$'
+        ylab = 'f\n$(\omega / \Omega_H)$'
+        cyc  = 1.0 / np.array([1., 4., 16.])
+    else:
+        xfac = 1e6
+        yfac = 1.0
+        xlab = '$\mathtt{k (\\times 10^{-6}m^{-1})}$'
+        ylab = 'f\n(Hz)'
+        cyc  = qi * cf.B_eq / (2 * np.pi * mp * np.array([1., 4., 16.]))
+            
+    # Calculate dispersion relations from model data
+    k, f, wk_para, tf = disp.get_wk('bx', linear_only=linear_only, norm_z=normalize_axes, centre_only=centre_only)
+    k, f, wky,     tf = disp.get_wk('by', linear_only=linear_only, norm_z=normalize_axes, centre_only=centre_only)
+    k, f, wkz,     tf = disp.get_wk('bz', linear_only=linear_only, norm_z=normalize_axes, centre_only=centre_only)
+    
+    wk_perp = wky + wkz
+    
+    clab = 'Pwr\n$\left(\\frac{nT^2}{Hz}\\right)$'
+
+    plt.ioff()
+    
+    fontsize = 10
+    font     = 'monospace'
+    mpl.rcParams['xtick.labelsize'] = 14 
+    mpl.rcParams['ytick.labelsize'] = 14 
+    cmin, cmax = 1e-5, 1e4
+    
+    fig1, [ax, cax] = plt.subplots(nrows=1, ncols=2, figsize=(6.0, 4.0), 
+                             gridspec_kw={'width_ratios':[1, 0.02]})
+    
+    im1 = ax.pcolormesh(xfac*k[1:], yfac*f[1:], wk_perp[1:, 1:].real, cmap='jet',
+                        norm=colors.LogNorm(vmin=cmin,
+                                            vmax=cmax))
+
+    cbar = fig1.colorbar(im1, ax=ax, cax=cax, extend='both')
+    cbar.set_label(clab, rotation=0, fontsize=fontsize, family=font, labelpad=30)
+    ax.set_ylabel(ylab, fontsize=fontsize, family=font, rotation=0, labelpad=30)
+    ax.set_xlabel(xlab, fontsize=fontsize, family=font)
+    
+    # Add labelled cyclotron frequencies
+    #from matplotlib.transforms import blended_transform_factory
+    #lbl  = [r'$f_{eq, H^+}$', r'$f_{eq, He^+}$', r'$f_{eq, O^+}$']
+    #trans = blended_transform_factory(ax.transAxes, ax.transData)
+    for ii in range(3):
+        if cf.species_present[ii] == True:
+            ax.axhline(cyc[ii], linestyle=':', c='k')
+            #ax.text(1.025, cyc[ii], lbl[ii], transform=trans, ha='center', 
+            #        va='center', color='k', fontsize=fontsize, family=font)
+    
+    ax.set_xlim(0, xmax)
+    if pcyc_mult is not None:
+        ax.set_ylim(0, pcyc_mult*cyc[0])
+    else:
+        ax.set_ylim(0, None)
+    
+    alpha=0.75
+    if dispersion_overlay == True:
+        k_vals, CPDR_solns, WPDR_solns, HPDR_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=zero_cold)
+        for ii in range(CPDR_solns.shape[1]):
+            ax.plot(xfac*k_vals, yfac*CPDR_solns[:, ii].real, c='k', linestyle='--', label='CPDR' if ii == 0 else '', alpha=alpha)
+
+    fig1.tight_layout()
+    fig1.subplots_adjust(wspace=0.05)
+    
+    if save == True:
+        zero_suff = '' if zero_cold is False else 'zero'
+        fullpath1  = cf.anal_dir + saveas + '_Bperp' + '_{}'.format(zero_suff)
+            
+        fig1.savefig(fullpath1, facecolor=fig1.get_facecolor(), edgecolor='none', bbox_inches='tight')
+
+        print('w-k for B-field saved')
+        plt.close('all')
+    else:
+        plt.show()
+    return
+
+
 def plot_abs_FB(saveas='absFB_plot', save=False, log=False, tmax=None, normalize=False, B0_lim=None, remove_ND=False):
     '''
     Plot pcolormesh of tranverse magnetic field in space (x) and time (y).
@@ -3135,141 +3224,80 @@ def plot_average_GC(it_max=None, save=True):
     return
 
 
-@nb.njit()
-def calc_mu(pos, vel, idx, sidx, Bp, mu_av, mu_s, ii, mass):
-    
-    lost_indices, N_lost = locate_lost_ions(idx, cf.Nj)
-    
-    bk.eval_B0_particle(pos, Bp)
+#@nb.njit()
+def calc_mu(pos, vel, idx):
+    '''
+    Do for a single particle
+    '''    
+    ms = cf.mass[idx]
+    ch = cf.charge[idx]
     v_perp2 = vel[1] ** 2 + vel[2] ** 2
+    Bp      = bk.eval_B0_particle(pos, vel, ms, ch)
     B_mag   = np.sqrt(Bp[0] ** 2 + Bp[1] ** 2 + Bp[2] ** 2)
 
-    for jj in range(pos.shape[1]):
-        if idx[jj] >= 0:
-            # Calculate mu for this particle
-            mu = 0.5 * mass[idx[jj]]  * v_perp2[jj] / B_mag[jj]
-            
-            # Add it to total mean
-            mu_av[ii] += mu / (pos.shape[1] - N_lost.sum())
-        else:
-            # If lost, mu doesn't exist
-            mu = np.nan
-        
-        # Check if this particle is to be sampled
-        for kk in range(sidx.shape[0]):
-            if sidx[kk] == jj:
-                mu_s[ii, kk]  = mu
-    return
-    
-
-def plot_average_mu(it_max=None, save=True):
-    '''
-    Calculate the average mu for every particle, as well as the total average 
-    at the end
-    
-    Probably also need to plot a random sampling of mu histories (Ns for each species?)
-    Just to check on the time variation of each one
-    
-    mu = W_perp / |B| = 0.5 * mi * v_perp ** 2 / |B|
-    
-    # What about particles that are lost? When they are lost, they have a -ve index
-    # If -ve, make mu at that point nan
-    # But won't be able to mean - will have to do that manually
-    '''
-    print('Collecting particle first invariants...')
-    if it_max is None:
-        it_max = len(os.listdir(cf.particle_dir))
-            
-    plt.ioff()
-    cf.temp_color[0] = 'c'
-    
-    # Get Ns sample indexes from each species
-    Ns    = 5  
-    sidx  = np.zeros(Ns * cf.Nj, dtype=int)
-    for ii in range(cf.Nj):
-        sidx[Ns*ii:Ns*(ii + 1)] = np.random.randint(cf.idx_start[ii], cf.idx_end[ii], Ns)
-    
-    Bp    = np.zeros((3, cf.N))                 # Temp array used for each particle
-    mu_s  = np.zeros((it_max, Ns * cf.Nj))
-    mu_av = np.zeros(it_max)
-    ptime = np.zeros(it_max)
-    
-    for ii in range(it_max):
-        pos, vel, idx, ptime[ii] = cf.load_particles(ii)
-        calc_mu(pos, vel, idx, sidx, Bp, mu_av, mu_s, ii, cf.mass)
-
-    plt.ioff()
-    fig, axes = plt.subplots(2, figsize=(15, 10), sharex=True)
-    
-    axes[0].set_title('First Adiabatic Invariant :: N-Average and Samples :: N = {} ::{}[{}]'.format(cf.N_species, series, run_num),
-                      fontsize=16)
-    axes[0].plot(ptime, mu_av*1e10)
-    axes[0].set_ylabel('$\mu_{av} \\times 10^{10}$', rotation=0, labelpad=50, fontsize=14)
-    
-    for ii in range(Ns * cf.Nj):
-        axes[1].plot(ptime, mu_s[:, ii]*1e10, label='idx {}'.format(sidx[ii]))
-    
-    axes[1].set_ylabel('$\mu \\times 10^{10}$\nsamp.', rotation=0, labelpad=50, fontsize=14)
-    axes[1].set_xlabel('Time (s)', fontsize=14)
-    axes[1].set_xlim(0, ptime[-1])
-    axes[1].legend(loc="upper left", bbox_to_anchor=(1,1))
-    
-    if save == True:
-        fpath = cf.anal_dir + 'magnetic_moment_average_and_samples.png'
-        fig.savefig(fpath)
-        plt.close('all')
-        print('1st adiabatic invariant graph saved as {}'.format(fpath))
+    if idx >= 0:
+        mu = 0.5 * cf.mass[idx] * v_perp2 / B_mag
     else:
-        plt.show()
-    return
-
+        mu = np.nan
+    return mu
+    
 
 def thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True):
     '''
     Generate publication quality plot to show average mu of particles
     as well as the individual mu and locations of sample particles.
+    
+    Limit sample search to particles that are only within 1dx of the equator
     '''
     save_data_file = cf.temp_dir + 'thesis_mu_position_data.npz'
     
     print('Collecting particle first invariants...')
     if it_max is None:
         it_max = len(os.listdir(cf.particle_dir))
-        
+    
+    # Override with specific samples if desired
+    # Good samples: 
+    Ns   = 10
+    sidx = None
+    
     ################
     ### GET DATA ###
     ################
     if os.path.exists(save_data_file) == False or save_data == False:
-        # Get Ns sample indexes from each species 
-        Ns    = 20  
-        sidx  = np.zeros(Ns * cf.Nj, dtype=int)
-        for ii in range(cf.Nj):
-            sidx[Ns*ii:Ns*(ii + 1)] = np.random.randint(cf.idx_start[ii], cf.idx_end[ii], Ns)
+        if sidx is None:
+            # Get Ns sample indexes from each species unless specified
+            sidx  = np.zeros(Ns * cf.Nj, dtype=int)
+            for ii in range(cf.Nj):
+                sidx[Ns*ii:Ns*(ii + 1)] = np.random.randint(cf.idx_start0[ii], cf.idx_end0[ii], Ns)
         
         # Define arrays
         Bp    = np.zeros((3, cf.N))
-        mu_s  = np.zeros((it_max, Ns * cf.Nj))
-        pos_s = np.zeros((it_max, 3, Ns * cf.Nj))
-        mu_av = np.zeros(it_max)
+        mu    = np.zeros((it_max, Ns * cf.Nj))
+        pos   = np.zeros((it_max, Ns * cf.Nj))
+        vel   = np.zeros((it_max, Ns * cf.Nj, 3))
         ptime = np.zeros(it_max)
         
         # Retrieve relevant data into arrays
         for ii in range(it_max):
             print('Loading particle information at timestep {}'.format(ii))
-            pos, vel, idx, ptime[ii] = cf.load_particles(ii)
-            calc_mu(pos, vel, idx, sidx, Bp, mu_av, mu_s, ii, cf.mass)
-            pos_s[ii, :, :] = pos[:, sidx]
+            this_pos, this_vel, this_idx, ptime[ii], idx_start, idx_end = cf.load_particles(ii)
+            for ss in range(sidx.shape[0]):
+                _idx           = sidx[ss] 
+                mu[ii, ss]     = calc_mu(this_pos[_idx], this_vel[:, _idx], this_idx[_idx])
+                pos[ii, ss]    = this_pos[_idx]
+                vel[ii, ss, :] = this_vel[:, _idx]
+                
+        if save_data == True and os.path.exists(save_data_file) == False:
+            np.savez(save_data_file, Bp=Bp, pos=pos, vel=vel, mu=mu, ptime=ptime, sidx=sidx)
     else:
         print('Loading from file')
         data = np.load(save_data_file)
-        Bp      = data['Bp']
-        mu_s    = data['mu_s']
-        pos_s   = data['pos_s']
-        mu_av   = data['mu_av']
-        ptime   = data['ptime']
-        sidx    = data['sidx']
-
-    if save_data == True and os.path.exists(save_data_file) == False:
-        np.savez(save_data_file, Bp=Bp, mu_s=mu_s, pos_s=pos_s, mu_av=mu_av, ptime=ptime, sidx=sidx)
+        Bp    = data['Bp']
+        mu    = data['mu_s']
+        pos   = data['pos']
+        vel   = data['vel']
+        ptime = data['ptime']
+        sidx  = data['sidx']
 
     #################
     ## Do PLOTTING ##
@@ -3278,7 +3306,6 @@ def thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True):
     ylabel_pad = 40
     fontsize   = 18
     tick_size  = 14
-    index      = 2
     
     mpl.rcParams['xtick.labelsize'] = tick_size 
     mpl.rcParams['ytick.labelsize'] = tick_size 
@@ -3286,35 +3313,32 @@ def thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True):
     cf.temp_color[0] = 'c'
 
     plt.ioff()
-    fig, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
+    fig, axes = plt.subplots(2, figsize=(15, 10), sharex=True)
     
-    axes[0].set_title('Average Magnetic Moment, Sample Moment/Particle Motion'.format(cf.N_species, series, run_num),
-                      fontsize=fontsize+2)
+    for ss in range(sidx.shape[0]):
+        axes[0].plot(ptime, pos[:, ss] / cf.dx, label=sidx[ss])
+        axes[1].plot(ptime, mu[ :, ss] / mu[0, ss])
     
-    axes[0].plot(ptime, mu_av*yfac)
-    axes[1].plot(ptime, mu_s[:,     index]*yfac)
-    axes[2].plot(ptime, pos_s[:, 0, index] / cf.dx)
-    
-    axes[0].set_ylabel('$\mu_{av}$\n$(\\times 10^{%d})$' % np.log10(yfac), rotation=0,
-                       labelpad=ylabel_pad, fontsize=fontsize)
-    
-    axes[0].set_yticks(np.arange(1.4, 1.61, 0.05))
-    axes[0].set_ylim(1.44, 1.6)
-    
-    axes[1].set_yticks(np.arange(3.45, 3.50, 0.04))
-    axes[1].set_ylim(3.43, 3.52)
-    
+    axes[0].legend(loc='upper right')
+    axes[1].set_ylabel('$\\frac{x}{\Delta x}$', rotation=0, fontsize=fontsize+6, labelpad=ylabel_pad)
     axes[1].set_ylabel('$\mu$\n$(\\times 10^{%d})$' % np.log10(yfac), rotation=0,
                        labelpad=ylabel_pad, fontsize=fontsize)
+    axes[1].set_ylim(0.99, 1.01)
     
-    axes[2].set_ylabel('$\\frac{x}{\Delta x}$', rotation=0, fontsize=fontsize+6, labelpad=ylabel_pad)
+# =============================================================================
+#     axes[0].set_yticks(np.arange(1.4, 1.61, 0.05))
+#     axes[0].set_ylim(1.44, 1.6)
+#     
+#     axes[1].set_yticks(np.arange(3.45, 3.50, 0.04))
+#     axes[1].set_ylim(3.43, 3.52)
+# =============================================================================
     
-    axes[2].set_xlabel('Time (s)', fontsize=fontsize)
-    axes[2].set_xlim(0, ptime[-1])
+    axes[1].set_xlabel('Time (s)', fontsize=fontsize)
+    axes[1].set_xlim(0, ptime[-1])
         
-    fig.subplots_adjust(hspace=0)
-    
-    if save_plot == True:
+    fig.subplots_adjust(hspace=0.1)
+    pdb.set_trace()
+    if False:#save_plot == True:
         fpath = cf.anal_dir + 'mu_position_average_and_samples.png'
         fig.savefig(fpath)
         plt.close('all')
@@ -5325,6 +5349,102 @@ def multiplot_AUG12_Benergy_times(save=True):
     return
 
 
+def multiplot_wk_thesis_good(saveas='wk_plot_thesis', save=True):
+    '''
+    Just do magnetic field, make axes big enough to see.
+    
+    Also need to put CPDR on these
+    '''
+    from matplotlib.ticker import FormatStrFormatter
+    
+    fontsize = 10
+    font     = 'monospace'
+    mpl.rcParams['xtick.labelsize'] = 8 
+    mpl.rcParams['ytick.labelsize'] = 8 
+    
+    plt.ioff()
+    fig = plt.figure(figsize=(6.0, 4.0))
+    gs  = GridSpec(2, 3, figure=fig, width_ratios=[1.0, 1.0, 0.05])
+    cax = fig.add_subplot(gs[:, 2])
+    axes = []
+    
+    # Load and Calculate dispersion relations for all runs
+    run = 0
+    for mm in range(2):
+        for nn in range(2):
+            cf.load_run('E:', 'CH4_tests_noQS_2048', run, extract_arrays=True); run += 1
+            k, f, wky,     tf = disp.get_wk('by', linear_only=False, norm_z=True, centre_only=False)
+            k, f, wkz,     tf = disp.get_wk('bz', linear_only=False, norm_z=True, centre_only=False)
+            wk_perp = wky + wkz
+            
+            k_vals, CPDR_solns, WPDR_solns, HPDR_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=True)
+
+            ax = fig.add_subplot(gs[mm, nn]) 
+            axes.append(ax)
+    
+            xfac = c / cf.wpi
+            yfac = 2*np.pi / cf.gyfreq
+            cyc  = 1.0 / np.array([1., 4., 16.])
+        
+            im = ax.pcolormesh(xfac*k[1:], yfac*f[1:], wk_perp[1:, 1:].real, cmap='jet',
+                                norm=colors.LogNorm(vmin=1e-5, vmax=1e4))
+            
+            for ii in range(3):
+                if cf.species_present[ii] == True:
+                    ax.axhline(cyc[ii], linestyle=':', c='k', alpha=0.75, lw=0.75)
+
+            for ii in range(CPDR_solns.shape[1]):
+                ax.plot(xfac*k_vals, yfac*CPDR_solns[:, ii].real, c='k', linestyle='--',
+                        label='CPDR' if ii == 0 else '', alpha=0.75, lw=0.75)
+                
+            ax.set_xlim(0, 0.8)
+            ax.set_ylim(0, 1.05)
+    
+    axes[0].set_ylabel('$\\frac{\omega}{\Omega_H}$', fontsize=fontsize+4, family=font, rotation=0, labelpad=20)
+    axes[2].set_ylabel('$\\frac{\omega}{\Omega_H}$', fontsize=fontsize+4, family=font, rotation=0, labelpad=20)
+    axes[2].set_xlabel('$\mathtt{kc/\omega_{pi}}$' , fontsize=fontsize, family=font)
+    axes[3].set_xlabel('$\mathtt{kc/\omega_{pi}}$' , fontsize=fontsize, family=font)
+    
+    axes[1].set_yticklabels([])
+    axes[3].set_yticklabels([])
+    axes[0].yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+    axes[2].yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+    
+    axes[0].set_xticklabels([])
+    axes[1].set_xticklabels([])
+    axes[2].set_xticks([0.0, 0.25, 0.5, 0.75])
+    axes[3].set_xticks([0.0, 0.25, 0.5, 0.75])
+    
+    cbar = fig.colorbar(im, cax=cax, extend='both')
+    #cbar.set_label('Pwr\n$\left(\\frac{nT^2}{Hz}\\right)$',
+    #    rotation=0, fontsize=fontsize, family=font, labelpad=30)
+    
+    fig.tight_layout()
+    fig.subplots_adjust(hspace=0.1, wspace=0.1)
+    
+    if save == True:
+        plot_dir = 'E://runs//CH4_tests_noQS_2048//'
+
+        fullpath1  = plot_dir + 'hybrid_CPDR_validation.png'
+            
+        fig.savefig(fullpath1, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight', dpi=200)
+
+        print('w-k for B-field saved')
+        plt.close('all')
+    else:
+        plt.show()
+    return
+
+
+def multiplot_ABCs_thesis():
+    '''
+    Plot the homogeneous above the parabolic, then plot each separately on a half page. Just
+    to have the pick.
+    '''
+    
+    return
+
+
 def plot_FB_waves_winske(save=True):
     '''
     Routine that splits B-field up into its backwards/forwards propagating
@@ -5613,7 +5733,7 @@ def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=None)
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'F:'
+    drive       = 'E:'
     #import logging
     #log_file = 'F://runs//_NEW_RUNS//bad_runs.log'
     #logging.basicConfig(filename=log_file, filemode='w', level=logging.ERROR, force=True)
@@ -5634,6 +5754,8 @@ if __name__ == '__main__':
         #multiplot_AUG12_waveform(fmax=1.0)
         #multiplot_AUG12_Benergy(save=True)
         #multiplot_AUG12_Benergy_times(save=True)
+        
+        multiplot_wk_thesis_good(saveas='wk_plot_thesis', save=True)
         print('Exiting multiplot routines successfully.')
         sys.exit()
     
@@ -5653,10 +5775,10 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [4,5]
+            runs_to_do = [7]
         
         # Extract all summary files and plot field stuff (quick)
-        if True:
+        if False:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
@@ -5674,15 +5796,16 @@ if __name__ == '__main__':
     
                     #standard_analysis_package(disp_overlay=False, pcyc_mult=1.1,
                     #              tx_only=False, tmax=None, remove_ND=False)
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
-                           B0_lim=None, remove_ND=False)
+                #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
+                #           B0_lim=None, remove_ND=False)
                 #except:
                 #    print(f'PROBLEM WITH {series}[{run_num}], SKIPPING...')
                 #    logging.error('%s[%d]', series, run_num)
                 #    continue
+            
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
+                           B0_lim=None, remove_ND=False)
 # =============================================================================
-#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=300, normalize=False,
-#                            B0_lim=25, remove_ND=False)
 #                 plot_abs_T_w_Bx(saveas='abs_plot_bx', save=False, tmax=None,
 #                     B0_lim=None, remove_ND=False)
 # =============================================================================
@@ -5691,10 +5814,10 @@ if __name__ == '__main__':
                 #    B0_lim=3.0, remove_ND=False)
                 
                 #check_fields(save=True, ylim=False, skip=5)
-                plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
+                #plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
                 
-                plot_wk(saveas='wk_plot', dispersion_overlay=False, save=True,
-                     pcyc_mult=1.5, xmax=1.5, zero_cold=True,
+                plot_wk_thesis_good(dispersion_overlay=True, save=True,
+                     pcyc_mult=1.1, xmax=0.8, zero_cold=True,
                      linear_only=False, normalize_axes=True, centre_only=False)
 
                 #plot_total_density_with_time()
@@ -5740,11 +5863,14 @@ if __name__ == '__main__':
 #                     pass            
 # =============================================================================
         
-        if False:
+        if True:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 cf.load_run(drive, series, run_num, extract_arrays=True)
+                                
+                thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=False)
+                
                 #cf.unwrap_particle_files()
                 #plot_particle_paths(it_max=None)
                 #plot_E_components(save=True)
@@ -5757,14 +5883,14 @@ if __name__ == '__main__':
                 
                 #summary_plots(save=True, histogram=False, skip=10, ylim=False)
                 #for sp in range(cf.Nj):
-                plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=True, skip=1, ppd=False)
+                #plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=True, skip=1, ppd=False)
                 #plot_density_change(ppd=False, it_max=None, save=True)
                 #plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=True, skip=1, ppd=True)
 
                 #analyse_particle_motion(it_max=None)
-                plot_phase_space_with_time(it_max=None, skip=1)
+                #plot_phase_space_with_time(it_max=None, skip=1)
 
-                scatterplot_velocities(skip=1)
+                #scatterplot_velocities(skip=1)
                 #check_fields(skip=25, ylim=False)
             
                 #plot_number_density(it_max=None, save=True, skip=1, ppd=False)

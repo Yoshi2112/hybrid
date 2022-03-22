@@ -168,11 +168,11 @@ def get_number_densities(pos, vel, idx):
 
 @nb.njit()
 def eval_B0x(x):
-    return cf.B_eq * (1. + cf.a * x**2)
+    return cf.B_eq * (1. + cf.a * x*x)
 
 
-@nb.njit()
-def eval_B0_particle(pos, Bp):
+#@nb.njit()
+def eval_B0_particle(pos, vel, mi, qi):
     '''
     Calculates the B0 magnetic field at the position of a particle. B0x is
     non-uniform in space, and B0r (split into y,z components) is the required
@@ -187,13 +187,14 @@ def eval_B0_particle(pos, Bp):
     Technically already vectorized but calculating rL would create a new array which
     would kill performance (and require the temp array). Bp would also need to be (3, N)
     '''
-    rL     = np.sqrt(pos[1]**2 + pos[2]**2)
-    B0_r   = - cf.a * cf.B_eq * pos[0] * rL
+    Bp = np.zeros(3, dtype=np.float64)
+    constant = cf.a * cf.B_eq
+    Bp[0]    = eval_B0x(pos)  
     
-    Bp[0]  = eval_B0x(pos[0])   
-    Bp[1] += B0_r * pos[1] / rL
-    Bp[2] += B0_r * pos[2] / rL
-    return
+    l_cyc    = qi*Bp[0]/mi
+    Bp[1]   += constant * pos * vel[2] / l_cyc
+    Bp[2]   -= constant * pos * vel[1] / l_cyc
+    return Bp
 
 
 def get_B0_particle(x, v, B, sp):

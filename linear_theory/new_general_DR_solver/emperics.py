@@ -178,18 +178,24 @@ def get_eV_from_vthc(vthc):
 
     
 if __name__ == '__main__':
-    plot_dipole_field_line(4.0, 0.0, offset=30.0)
+    _B0  = geomagnetic_magnitude(7.0, MLAT=0.0)
+    f0   = 1.602e-19 * _B0 / (2*np.pi*1.673e-27)
+    
+    print('Field  = {:.2f} nT'.format(_B0*1e9))
+    print('Gyfreq = {:.2f} Hz'.format(f0))
+    
+    #plot_dipole_field_line(4.0, 0.0, offset=30.0)
     
     #B_eq = CLW_geomagnetic_magnitude(4.27, MLAT=0.)
     #print(B_eq)
+    #_L = 5.0; _MLAT = 0.0; _MLON = 0.0
+    
+    #_X, _Y, _B = plot_field_slice(_L)
+
+    #plot_dipole_field_line(_L, _MLAT)
+    
 # =============================================================================
-#     _L = 5.0; _MLAT = 40.0; _MLON = 0.0
-#     
-#     _X, _Y, _B = plot_field_slice(_L)
-# 
-#     #plot_dipole_field_line(_L, _MLAT)
-#     
-#     if False:
+#     if True:
 #         _B0  = geomagnetic_magnitude(    _L, MLAT=_MLAT)
 #         _B02 = CLW_geomagnetic_magnitude(_L, MLAT=_MLAT)
 #         
