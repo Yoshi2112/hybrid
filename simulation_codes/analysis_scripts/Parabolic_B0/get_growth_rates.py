@@ -364,6 +364,125 @@ def straight_line_fit(save=True, normalize_output=True, normalize_time=False,
     Idea : Sliding window for growth rates, calculate with 5 points and created instantaneous GR timeseries
     Why did all the growths turn green?
     '''
+    from numpy.polynomial.polynomial import Polynomial
+    
+    if normalize_time == True:
+        tfac = cf.gyfreq
+        tlab = '$t \Omega_H$'
+    else:
+        tfac = 1.0
+        tlab = 'Time (s)'
+    
+    print('Calculating growth rate...')
+    ftime, by  = cf.get_array('By')
+    ftime, bz  = cf.get_array('Bz')
+    bt         = np.sqrt(by ** 2 + bz ** 2)
+    btn        = np.square(bt[:, :]).sum(axis=1) / cf.B_eq ** 2
+    mu0        = (4e-7) * np.pi
+    U_B        = 0.5 / mu0 * np.square(bt[:, :]).sum(axis=1) * cf.dx
+    
+    if plot_growth == True:
+        max_idx = np.argmax(U_B)
+        st = int(normfit_min * max_idx)
+        en = int(normfit_max * max_idx)
+        
+        # Data to fit straight line to 
+        linear_xvals = ftime[st:en]
+        linear_yvals = np.log(U_B[st:en])
+        
+        out = Polynomial().fit(linear_xvals, linear_yvals, 1)
+        pdb.set_trace()
+        #gradient, y_intercept = np.polyfit(linear_xvals, linear_yvals, 1)
+        
+        # Calculate growth rate and normalize H to cyclotron frequency
+        gamma         = 0.5*gradient
+        normalized_gr = gamma / cf.gyfreq
+        
+        # Create line data to plot what we fitted
+        linear_yfit = gradient * linear_xvals * tfac + y_intercept  # Returns y-values on log sscale
+        log_yfit    = np.exp(linear_yfit)                           # Convert to linear values to use with semilogy()
+    else:
+        gamma         = np.nan
+        normalized_gr = np.nan
+    
+    fontsize = 10
+    lpad     = 20
+    
+    # Plot showing magnetic field and energy with growth rate line superposed  
+    plt.ioff()  
+    fig, ax = plt.subplots(nrows=2, figsize=(6.0, 4.0), sharex=True)
+    ofs = 5
+    
+    ax[0].set_title('Growth Rate :: $\gamma / \Omega_H$ = %.4f' % normalized_gr, fontsize=fontsize)
+    ax[0].plot(ftime*tfac, btn)
+    ax[0].set_ylabel(r'$\frac{B^2}{B_0^2}$', rotation=0, labelpad=lpad, fontsize=fontsize)
+    ax[0].set_xlim(0, tfac*ftime[-1])
+    ax[0].set_ylim(btn[ofs], None)
+    
+    # Plot energy log scale
+    ax[1].plot(ftime*tfac, np.log10(btn))
+    ax[1].set_xlabel(tlab, fontsize=18)
+    ax[1].set_ylabel(r'$\log_{10} \left(\frac{B^2}{B_0^2}\right)$', rotation=0, labelpad=lpad, fontsize=fontsize)
+    ax[1].set_xlim(0, tfac*ftime[-1])
+    ax[1].set_ylim(U_B[ofs], None)
+    
+    if plot_growth == True:
+        # Mark growth rate indicators
+        ax[1].scatter(tfac*ftime[max_idx], U_B[max_idx], c='r', s=20, marker='x')
+        ax[1].scatter(tfac*ftime[st]     , U_B[st], c='r', s=20, marker='o')
+        ax[1].scatter(tfac*ftime[en]     , U_B[en], c='r', s=20, marker='o')
+        ax[1].semilogy(linear_xvals, log_yfit, c='r', ls='--', lw=2.0)
+        if save == True: fig.savefig( cf.anal_dir + 'growth_rate_energy.png')
+    
+    if plot_LT == True:
+        # Calculate linear growth rates from simulation to compare
+        # This could go into calculating gamma(k) later
+        dk = 1. / (cf.NX * cf.dx)
+        k  = np.arange(0, 1. / (2*cf.dx), dk) * 2*np.pi
+        k_vals, CPDR_solns, WPDR_solns, HPDR_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=False)
+        k_vals *= 3e8 / cf.wpi
+
+        CPDR_solns *= 2*np.pi / cf.gyfreq
+        WPDR_solns *= 2*np.pi / cf.gyfreq
+        HPDR_solns *= 2*np.pi / cf.gyfreq
+
+        # Comparison of growth rate to linear theory
+        clr = ['r', 'g', 'b']
+        fig0, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
+        axes[0].set_title('Theoretical growth rates (Dashed: Simulation GR)')
+        for ii in range(CPDR_solns.shape[1]):
+            axes[0].plot(k_vals, CPDR_solns.imag, label='Cold', c=clr[ii])
+            axes[1].plot(k_vals, WPDR_solns.imag, label='Warm', c=clr[ii])
+            axes[2].plot(k_vals, HPDR_solns.imag, label='Hot', c=clr[ii])
+        for ax in axes:
+            if np.isnan(normalized_gr) == False:
+                ax.axhline(normalized_gr, ls='--', c='k', alpha=0.5)
+            ax.set_xlim(0, klim)
+            ax.legend()
+            if growth_only == True:
+                ax.set_ylim(0, None)
+                if ax.get_ylim()[1] > glim:
+                    ax.set_ylim(0, glim)
+            ax.set_ylabel('$\gamma$', rotation=0)
+        axes[-1].set_xlabel('$kc/\omega_{pi}$')
+        if save == True: fig0.savefig(cf.anal_dir + 'growth_rate_energy_LT.png')   
+    plt.close('all')
+    return
+
+
+def straight_line_fit_old(save=True, normalize_output=True, normalize_time=False,
+                      normfit_min=0.2, normfit_max=0.6, plot_growth=True,
+                      plot_LT=True, growth_only=True, klim=None, glim=0.25):
+    '''
+    To do: Check units. Get growth rate from amplitude only? How to do across space
+    -- Is wave power averaged/summed across space analogous to a single point? Or do I have to do single point?
+    -- How to calculate growth rate of energy summed across space?
+    -- Start with the simple and go from there. Saturation amplitudes have to match too?
+    -- How do the Winske saturation amplitudes look? It might just be the Fu thing being fucky.
+    
+    Idea : Sliding window for growth rates, calculate with 5 points and created instantaneous GR timeseries
+    Why did all the growths turn green?
+    '''
     if normalize_time == True:
         tfac = cf.gyfreq
         tlab = '$t \Omega_H$'

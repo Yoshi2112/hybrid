@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os, sys, pdb
 
-data_scripts_dir = 'C://Users//Yoshi//Documents//GitHub//hybrid//linear_theory//new_general_DR_solver//'
+data_scripts_dir = os.environ['userprofile'] + '//Documents//GitHub//hybrid//linear_theory//new_general_DR_solver//'
 sys.path.append(data_scripts_dir)
 
 

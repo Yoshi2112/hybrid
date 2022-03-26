@@ -545,7 +545,8 @@ def plot_wk_thesis_good(saveas='wk_plot_thesis', dispersion_overlay=False, save=
     font     = 'monospace'
     mpl.rcParams['xtick.labelsize'] = 14 
     mpl.rcParams['ytick.labelsize'] = 14 
-    cmin, cmax = 1e-5, 1e4
+    #cmin, cmax = 1e-5, 1e4
+    cmin, cmax = None, None
     
     fig1, [ax, cax] = plt.subplots(nrows=1, ncols=2, figsize=(6.0, 4.0), 
                              gridspec_kw={'width_ratios':[1, 0.02]})
@@ -699,10 +700,10 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
     t, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens, field_sim_time, damping_array\
         = cf.get_array(get_all=True)
 
-    fontsize = 18
+    fontsize = 10
     font     = 'monospace'
     
-    tick_label_size = 14
+    tick_label_size = 8
     mpl.rcParams['xtick.labelsize'] = tick_label_size 
     mpl.rcParams['ytick.labelsize'] = tick_label_size 
     
@@ -728,7 +729,7 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
         xlim = [x[0], x[-1]]
     
     ## PLOT IT
-    fig, ax = plt.subplots(1, figsize=(15, 10))
+    fig, ax = plt.subplots(1, figsize=(6.0, 4.0))
 
     vmin = 0.0
     
@@ -762,7 +763,7 @@ def plot_abs_T(saveas='abs_plot', save=False, log=False, tmax=None, normalize=Fa
     
     if save == True:
         fullpath = cf.anal_dir + saveas + '_BPERP_{}{}{}'.format(lbl, suff, logsuff) + '.png'
-        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight', dpi=200)
         print('B abs(t-x) Plot saved')
         plt.close('all')
     return
@@ -3224,7 +3225,7 @@ def plot_average_GC(it_max=None, save=True):
     return
 
 
-#@nb.njit()
+@nb.njit()
 def calc_mu(pos, vel, idx):
     '''
     Do for a single particle
@@ -3239,7 +3240,7 @@ def calc_mu(pos, vel, idx):
         mu = 0.5 * cf.mass[idx] * v_perp2 / B_mag
     else:
         mu = np.nan
-    return mu
+    return mu, B_mag
     
 
 def thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True):
@@ -3248,33 +3249,37 @@ def thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True):
     as well as the individual mu and locations of sample particles.
     
     Limit sample search to particles that are only within 1dx of the equator
+    
+    Need function to extract particle paths?
     '''
+    import matplotlib
+    matplotlib.rcParams.update(matplotlib.rcParamsDefault)
+
+    plot_path = cf.anal_dir + '//mu_and_position_SI//'
+    if not os.path.exists(plot_path): os.makedirs(plot_path)
     save_data_file = cf.temp_dir + 'thesis_mu_position_data.npz'
     
     print('Collecting particle first invariants...')
     if it_max is None:
         it_max = len(os.listdir(cf.particle_dir))
     
-    # Override with specific samples if desired
-    # Good samples: 
-    Ns   = 10
-    sidx = None
-    
     ################
     ### GET DATA ###
     ################
     if os.path.exists(save_data_file) == False or save_data == False:
-        if sidx is None:
-            # Get Ns sample indexes from each species unless specified
-            sidx  = np.zeros(Ns * cf.Nj, dtype=int)
-            for ii in range(cf.Nj):
-                sidx[Ns*ii:Ns*(ii + 1)] = np.random.randint(cf.idx_start0[ii], cf.idx_end0[ii], Ns)
+        
+        # Initial positions and velocities (hard coded because reasons)
+        ipos, ivel, _, _, _, _ = cf.load_particles(0)
+        count = np.arange(ipos.shape[0])
+        print('Finding all particle indices within 1 cell of equator')
+        sidx = count[np.abs(ipos) < cf.dx]
+        Ns = sidx.shape[0]
         
         # Define arrays
-        Bp    = np.zeros((3, cf.N))
-        mu    = np.zeros((it_max, Ns * cf.Nj))
-        pos   = np.zeros((it_max, Ns * cf.Nj))
-        vel   = np.zeros((it_max, Ns * cf.Nj, 3))
+        Bp    = np.zeros((it_max, Ns))
+        mu    = np.zeros((it_max, Ns))
+        pos   = np.zeros((it_max, Ns))
+        vel   = np.zeros((it_max, Ns, 3))
         ptime = np.zeros(it_max)
         
         # Retrieve relevant data into arrays
@@ -3282,10 +3287,10 @@ def thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True):
             print('Loading particle information at timestep {}'.format(ii))
             this_pos, this_vel, this_idx, ptime[ii], idx_start, idx_end = cf.load_particles(ii)
             for ss in range(sidx.shape[0]):
-                _idx           = sidx[ss] 
-                mu[ii, ss]     = calc_mu(this_pos[_idx], this_vel[:, _idx], this_idx[_idx])
-                pos[ii, ss]    = this_pos[_idx]
-                vel[ii, ss, :] = this_vel[:, _idx]
+                _idx                   = sidx[ss] 
+                mu[ii, ss], Bp[ii, ss] = calc_mu(this_pos[_idx], this_vel[:, _idx], this_idx[_idx])
+                pos[ii, ss]            = this_pos[_idx]
+                vel[ii, ss, :]         = this_vel[:, _idx]
                 
         if save_data == True and os.path.exists(save_data_file) == False:
             np.savez(save_data_file, Bp=Bp, pos=pos, vel=vel, mu=mu, ptime=ptime, sidx=sidx)
@@ -3293,7 +3298,7 @@ def thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True):
         print('Loading from file')
         data = np.load(save_data_file)
         Bp    = data['Bp']
-        mu    = data['mu_s']
+        mu    = data['mu']
         pos   = data['pos']
         vel   = data['vel']
         ptime = data['ptime']
@@ -3303,9 +3308,9 @@ def thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True):
     ## Do PLOTTING ##
     #################
     yfac       = 1e8
-    ylabel_pad = 40
-    fontsize   = 18
-    tick_size  = 14
+    ylabel_pad = 20
+    fontsize   = 8
+    tick_size  = 8
     
     mpl.rcParams['xtick.labelsize'] = tick_size 
     mpl.rcParams['ytick.labelsize'] = tick_size 
@@ -3313,38 +3318,32 @@ def thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True):
     cf.temp_color[0] = 'c'
 
     plt.ioff()
-    fig, axes = plt.subplots(2, figsize=(15, 10), sharex=True)
-    
     for ss in range(sidx.shape[0]):
-        axes[0].plot(ptime, pos[:, ss] / cf.dx, label=sidx[ss])
-        axes[1].plot(ptime, mu[ :, ss] / mu[0, ss])
-    
-    axes[0].legend(loc='upper right')
-    axes[1].set_ylabel('$\\frac{x}{\Delta x}$', rotation=0, fontsize=fontsize+6, labelpad=ylabel_pad)
-    axes[1].set_ylabel('$\mu$\n$(\\times 10^{%d})$' % np.log10(yfac), rotation=0,
-                       labelpad=ylabel_pad, fontsize=fontsize)
-    axes[1].set_ylim(0.99, 1.01)
-    
-# =============================================================================
-#     axes[0].set_yticks(np.arange(1.4, 1.61, 0.05))
-#     axes[0].set_ylim(1.44, 1.6)
-#     
-#     axes[1].set_yticks(np.arange(3.45, 3.50, 0.04))
-#     axes[1].set_ylim(3.43, 3.52)
-# =============================================================================
-    
-    axes[1].set_xlabel('Time (s)', fontsize=fontsize)
-    axes[1].set_xlim(0, ptime[-1])
+        mu_av = mu[ :, ss].mean()
         
-    fig.subplots_adjust(hspace=0.1)
-    pdb.set_trace()
-    if False:#save_plot == True:
-        fpath = cf.anal_dir + 'mu_position_average_and_samples.png'
-        fig.savefig(fpath)
-        plt.close('all')
-        print('1st adiabatic invariant graph saved as {}'.format(fpath))
-    else:
-        plt.show()
+        fig, axes = plt.subplots(2, figsize=(6.0, 4.0), sharex=True)
+        
+        axes[0].plot(ptime, pos[:, ss] / cf.dx)
+        axes[1].plot(ptime, mu[ :, ss] * yfac)
+        
+        axes[0].set_ylabel('$\\frac{x}{\Delta x}$', rotation=0, fontsize=fontsize+6, labelpad=ylabel_pad)
+        axes[1].set_ylabel('$\mu$\n$(\\times 10^{%d})$' % np.log10(yfac), rotation=0,
+                           labelpad=ylabel_pad, fontsize=fontsize)
+
+        axes[1].set_xlabel('Time (s)', fontsize=fontsize)
+        axes[1].set_xlim(0, ptime[-1])
+        axes[1].set_ylim(0.9*mu_av*yfac, 1.1*mu_av*yfac)
+            
+        fig.subplots_adjust(hspace=0.1)
+        fig.align_ylabels()
+    
+        if True:
+            fpath = plot_path + f'mu_position_idx_{ss:08}.png'
+            fig.savefig(fpath, bbox_inches='tight', dpi=200)
+            plt.close('all')
+            print('1st adiabatic invariant graph for particle {} saved as {}'.format(ss, fpath))
+        else:
+            plt.show()
     return
 
 
@@ -5440,8 +5439,79 @@ def multiplot_ABCs_thesis():
     '''
     Plot the homogeneous above the parabolic, then plot each separately on a half page. Just
     to have the pick.
+    Runs 5, 6 of CH4_tests_v2 on E:
     '''
+    fontsize = 10
+    font     = 'monospace'
+    mpl.rcParams['xtick.labelsize'] = 8 
+    mpl.rcParams['ytick.labelsize'] = 8 
     
+    plt.ioff()
+    fig_all  = plt.figure(figsize=(6.0, 4.0))
+    gs_all   = GridSpec(2, 2, figure=fig_all, width_ratios=[1.0, 0.05])
+    cax_all  = fig_all.add_subplot(gs_all[:, 1])
+    
+    # Load and Calculate dispersion relations for all runs
+    _xx = 0; axes = []
+    for run in [5, 6]:
+        cf.load_run('E:', 'CH4_tests_v2', run, extract_arrays=True)
+        
+        t, by_arr = cf.get_array('by')
+        t, bz_arr = cf.get_array('bz')
+        bt_arr    = np.sqrt(by_arr ** 2 + bz_arr ** 2)*1e9
+
+        x_arr = cf.B_nodes / cf.dx
+        
+        ## PLOT IT (on its own)
+        fig, ax = plt.subplots(1, figsize=(6.0, 4.0))
+        
+        vmin = 0.0
+        vmax = bt_arr.max()
+        im1  = ax.pcolormesh(x_arr, t, bt_arr, cmap='jet', vmin=vmin, vmax=vmax)
+        
+        cb  = fig.colorbar(im1)        
+        cb.set_label('nT', rotation=0, family=font, fontsize=fontsize, labelpad=20)
+
+        ax.set_ylabel('t\n(s)', rotation=0, labelpad=20, fontsize=fontsize, family=font)
+        ax.set_xlabel('$x/\Delta x$', fontsize=fontsize, family=font)
+        ax.set_ylim(0, t.max())
+        
+        #ax.axvline(cf.xmin     / cf.dx, c='w', ls=':', alpha=1.0)
+        #ax.axvline(cf.xmax     / cf.dx, c='w', ls=':', alpha=1.0)
+        ax.axvline(0.0                , c='w', ls=':', alpha=0.75)   
+        ax.set_xlim(x_arr[0], x_arr[-1]) 
+        
+        if True:
+            fullpath = cf.anal_dir + 'bt_thesis' + '.png'
+            plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight', dpi=200)
+            print('t-x Plot saved')
+            
+        ## ADD TO COMBINED PLOT
+        this_ax = fig_all.add_subplot(gs_all[_xx, 0]); _xx += 1 
+        
+        im1a  = this_ax.pcolormesh(x_arr, t, bt_arr, cmap='jet', vmin=vmin, vmax=vmax)
+        
+        this_ax.set_ylabel('t (s)', rotation=0, labelpad=30, fontsize=fontsize, family=font)
+        this_ax.set_ylim(0, t.max())
+        this_ax.axvline(cf.xmin     / cf.dx, c='w', ls=':', alpha=1.0)
+        this_ax.axvline(cf.xmax     / cf.dx, c='w', ls=':', alpha=1.0)
+        this_ax.axvline(0.0                , c='w', ls=':', alpha=0.75)   
+        this_ax.set_xlim(x_arr[0], x_arr[-1]) 
+        
+        axes.append(this_ax)
+    
+    this_ax.set_xlabel('$x/\Delta x$', fontsize=fontsize, family=font)
+    
+    cb = fig_all.colorbar(im1a, cax=cax_all)   
+    cb.set_label('nT', rotation=0, family=font, fontsize=fontsize, labelpad=20)
+    fig_all.subplots_adjust(wspace=0.05)
+    
+    plot_dir = 'E://runs//CH4_tests_v2//'
+    fullpath = plot_dir + 'bt_thesis_combined' + '.png'
+    fig_all.savefig(fullpath, facecolor=fig_all.get_facecolor(), edgecolor='none', bbox_inches='tight', dpi=200)
+    print('t-x Plot saved')
+    
+    plt.close('all')
     return
 
 
@@ -5755,7 +5825,8 @@ if __name__ == '__main__':
         #multiplot_AUG12_Benergy(save=True)
         #multiplot_AUG12_Benergy_times(save=True)
         
-        multiplot_wk_thesis_good(saveas='wk_plot_thesis', save=True)
+        #multiplot_wk_thesis_good(saveas='wk_plot_thesis', save=True)
+        multiplot_ABCs_thesis()
         print('Exiting multiplot routines successfully.')
         sys.exit()
     
@@ -5775,10 +5846,10 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [7]
+            runs_to_do = [4]
         
         # Extract all summary files and plot field stuff (quick)
-        if False:
+        if True:
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
@@ -5851,10 +5922,8 @@ if __name__ == '__main__':
 # =============================================================================
 
                 #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
-# =============================================================================
-#                 ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=True,
-#                                       plot_LT=True, plot_growth=True, klim=1.5)
-# =============================================================================
+                ggg.straight_line_fit(save=True, normfit_min=0.4, normfit_max=0.75, normalize_time=False,
+                                      plot_LT=False, plot_growth=True, klim=1.5)
                 
                 #try:
                 #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)
@@ -5863,13 +5932,13 @@ if __name__ == '__main__':
 #                     pass            
 # =============================================================================
         
-        if True:
+        if False:
             # Do particle analyses for each run (slow)
             for run_num in runs_to_do:
                 print('\nRun {}'.format(run_num))
                 cf.load_run(drive, series, run_num, extract_arrays=True)
                                 
-                thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=False)
+                thesis_plot_mu_and_position(it_max=None, save_plot=True, save_data=True)
                 
                 #cf.unwrap_particle_files()
                 #plot_particle_paths(it_max=None)
