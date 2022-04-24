@@ -6,6 +6,7 @@ Created on Tue Apr 30 13:03:47 2019
 """
 import matplotlib.pyplot as plt
 import numpy as np
+import pdb
 
 import analysis_config  as cf
 import analysis_backend as bk
@@ -434,7 +435,7 @@ def straight_line_fit(save=True, normalize_output=True, normalize_time=False,
         k  = np.arange(0, 1. / (2*cf.dx), dk) * 2*np.pi
         k_vals, CPDR_solns, WPDR_solns, HPDR_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=False)
         k_vals *= 3e8 / cf.wpi
-
+        
         CPDR_solns *= 2*np.pi / cf.gyfreq
         WPDR_solns *= 2*np.pi / cf.gyfreq
         HPDR_solns *= 2*np.pi / cf.gyfreq
@@ -444,9 +445,9 @@ def straight_line_fit(save=True, normalize_output=True, normalize_time=False,
         fig0, axes = plt.subplots(3, figsize=(15, 10), sharex=True)
         axes[0].set_title('Theoretical growth rates (Dashed: Simulation GR)')
         for ii in range(CPDR_solns.shape[1]):
-            axes[0].plot(k_vals, CPDR_solns.imag, label='Cold', c=clr[ii])
-            axes[1].plot(k_vals, WPDR_solns.imag, label='Warm', c=clr[ii])
-            axes[2].plot(k_vals, HPDR_solns.imag, label='Hot', c=clr[ii])
+            axes[0].plot(k_vals, CPDR_solns[:, ii].imag, c=clr[ii], label='Cold')
+            axes[1].plot(k_vals, WPDR_solns[:, ii].imag, c=clr[ii], label='Warm')
+            axes[2].plot(k_vals, HPDR_solns[:, ii].imag, c=clr[ii], label='Hot')
         for ax in axes:
             if np.isnan(normalized_gr) == False:
                 ax.axhline(normalized_gr, ls='--', c='k', alpha=0.5)

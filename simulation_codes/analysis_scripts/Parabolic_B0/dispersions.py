@@ -88,9 +88,7 @@ def get_linear_dispersion_from_sim(k, zero_cold=True, Nk=1000):
     WPDR_solns,  warm_CGR = get_dispersion_relation(Species, k_vals, approx='warm')
     HPDR_solns,  hot_CGR  = get_dispersion_relation(Species, k_vals, approx='hot')
 
-    # Convert back from angular units to linear units 
-    # (Except we *don't* want k in linear) units otherwise it's beta = k / 2pi
-    #k_vals     /= 2*np.pi
+    # Convert to linear frequency
     CPDR_solns /= 2*np.pi
     WPDR_solns /= 2*np.pi
     HPDR_solns /= 2*np.pi
