@@ -171,7 +171,7 @@ def eval_B0x(x):
     return cf.B_eq * (1. + cf.a * x*x)
 
 
-#@nb.njit()
+@nb.njit()
 def eval_B0_particle(pos, vel, mi, qi):
     '''
     Calculates the B0 magnetic field at the position of a particle. B0x is
