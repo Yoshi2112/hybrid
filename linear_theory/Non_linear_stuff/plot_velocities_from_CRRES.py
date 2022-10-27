@@ -4,15 +4,18 @@ Created on Sun Jan  2 22:05:39 2022
 
 @author: Yoshi
 """
+print('Importing system packages...')
 import os, sys, warnings, pdb, emd
 sys.path.append('../../')
 import numpy as np
 import matplotlib.pyplot   as plt
 import matplotlib.colors   as colors
 import matplotlib.dates    as mdates
-import matplotlib         as mpl
-import matplotlib.cm      as cm
+import matplotlib          as mpl
+import matplotlib.cm       as cm
+from matplotlib.lines      import Line2D
 
+print('Importing custom scripts...')
 sys.path.append('D://Google Drive//Uni//PhD 2017//Data//Scripts//')
 import crres_file_readers as cfr
 import analysis_scripts   as ascr
@@ -21,7 +24,6 @@ import nonlinear_scripts  as nls
 import extract_parameters_from_data as epd
 
 sys.path.append('..//new_general_DR_solver//')
-from matplotlib.lines              import Line2D
 from multiapprox_dispersion_solver import create_species_array, get_dispersion_relation, get_cold_growth_rates
 
 
@@ -48,36 +50,55 @@ def get_mag_data(time_start, time_end, probe, low_cut=None, high_cut=None):
     E0, HM_elec, pc1_elec, S, B, E = cfr.get_crres_fields(_crres_path, time_start, time_end,
                                     pad=600, output_raw_B=True, Pc5_LP=30.0, B0_LP=1.0,
                                     Pc5_HP=None, dEx_LP=None, interpolate_nan=True)
-    dt = 1/32.
+    _dt = 1/32.
+    
+    _gyfreqs = get_gyfreqs(B, _dt, hertz=True)
     
     # Bandpass selected component and return
     if low_cut is not None:
-        dat = ascr.clw_high_pass(pc1_mags, low_cut*1000., dt, filt_order=4)
+        dat = ascr.clw_high_pass(pc1_mags, low_cut*1000., _dt, filt_order=4)
     if high_cut is not None:
-        dat = ascr.clw_low_pass(pc1_mags, high_cut*1000., dt, filt_order=4)
+        dat = ascr.clw_low_pass(pc1_mags, high_cut*1000., _dt, filt_order=4)
     
     #pc1_res = 5.0
     _xpow, _xtime, _xfreq = fscr.autopower_spectra(ti, pc1_mags[:, 0], time_start, 
-                                            time_end, dt, overlap=0.95, df=pc1_res,
+                                            time_end, _dt, overlap=0.95, df=pc1_res,
                                             window_data=True)
     
     _ypow, _xtime, _xfreq = fscr.autopower_spectra(ti, pc1_mags[:, 1], time_start, 
-                                            time_end, dt, overlap=0.95, df=pc1_res,
+                                            time_end, _dt, overlap=0.95, df=pc1_res,
                                             window_data=True)
     
     _zpow, _xtime, _xfreq = fscr.autopower_spectra(ti, pc1_mags[:, 2], time_start, 
-                                            time_end, dt, overlap=0.95, df=pc1_res,
+                                            time_end, _dt, overlap=0.95, df=pc1_res,
                                             window_data=True)
     
     _pow = np.array([_xpow, _ypow, _zpow])
-    return ti, dat, HM_mags, dt, _xtime, _xfreq, _pow
+    return ti, dat, HM_mags, _dt, _xtime, _xfreq, _pow, _gyfreqs
+
+
+def get_gyfreqs(_mags, _dt, hertz=True):
+    print('Calculating gyrofrequencies...')
+    _mp = 1.673e-27; _qp = 1.602e-19
+    
+    LP_mags = ascr.clw_low_pass(_mags, 30.0, _dt, filt_order=4)
+    b_total = np.sqrt(LP_mags[:, 0]**2+LP_mags[:, 1]**2+LP_mags[:, 2]**2)*1e-9
+    _imass  = np.array([1., 4., 16.])*_mp
+    _gfreqs = np.zeros((_mags.shape[0], 3), dtype=np.float64)
+    
+    for jj in range(_imass.shape[0]):
+        _gfreqs[:, jj] = _qp * b_total / (_imass[jj])
+    
+    if hertz == True:
+        _gfreqs /= 2*np.pi
+    return _gfreqs
 
 
 def load_EMIC_IMFs_and_dynspec(imf_start, imf_end, IA_filter=None):
     '''
     Loads IMFs and dynamic spectra
     '''
-    _ti, _dat, _HM_mags, _dt, _xtime, _xfreq, _pow = get_mag_data(_time_start, _time_end, 
+    _ti, _dat, _HM_mags, _dt, _xtime, _xfreq, _pow, _gyfreqs = get_mag_data(_time_start, _time_end, 
                                     _probe, low_cut=_band_start, high_cut=_band_end)
     sample_rate = 1./_dt
     
@@ -102,7 +123,7 @@ def load_EMIC_IMFs_and_dynspec(imf_start, imf_end, IA_filter=None):
         IAs[ii] = IAs[ii][st:en]
         IFs[ii] = IFs[ii][st:en]
         IPs[ii] = IPs[ii][st:en]
-    return _ti, _dat, _HM_mags, _imf_t, IAs, IFs, IPs, _xtime, _xfreq, _pow
+    return _ti, _dat, _HM_mags, _imf_t, IAs, IFs, IPs, _xtime, _xfreq, _pow, _gyfreqs
 
 
 def get_pc1_peaks(sfreq, spower, band_start, band_end, npeaks=None):
@@ -127,6 +148,7 @@ def load_CRRES_data(time_start, time_end, crres_path='G://DATA//CRRES//', nsec=N
     
     den_dict params: ['VTCW', 'YRDOY', 'TIMESTRING', 'FCE_KHZ', 'FUHR_KHZ', 'FPE_KHZ', 'NE_CM3', 'ID', 'M']
     '''
+    print('Loading CRRES data...')
     # Load data
     times, B0, HM, dB, E0, HMe, dE, S, B, E = cfr.get_crres_fields(crres_path,
                   time_start, time_end, pad=1800, E_ratio=5.0, rotation_method='vector', 
@@ -139,7 +161,7 @@ def load_CRRES_data(time_start, time_end, crres_path='G://DATA//CRRES//', nsec=N
     
     # Interpolate B only
     if nsec is None:
-        
+        print('Interpolating fields...')
         # Low-pass total field to avoid aliasing (Assume 8.5 second cadence)
         B_dt  = 1.0 / 32.0
         nyq   = 1.0 / (2.0 * 8.5) 
@@ -154,6 +176,7 @@ def load_CRRES_data(time_start, time_end, crres_path='G://DATA//CRRES//', nsec=N
 
 
     else:
+        print('Interpolating fields and density...')
         # Define new time array
         ntime = np.arange(time_start, time_end, np.timedelta64(nsec, 's'), dtype='datetime64[us]')
         
@@ -194,7 +217,7 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
     time, mag, edens = load_CRRES_data(time_start, time_end, nsec=None,
                                         crres_path='E://DATA//CRRES//')
 
-    mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower = \
+    mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower, gyfreqs = \
             load_EMIC_IMFs_and_dynspec(time_start, time_end)
     spower = spower.sum(axis=0)
 
@@ -329,15 +352,16 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
 
 #%% MAIN
 if __name__ == '__main__':
-    _crres_path = 'E://DATA//CRRES//'
-    _plot_path  = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//' 
+    print('Starting main...')
+    _crres_path = 'F://DATA//CRRES//'
+    _plot_path  = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//REVISION_PLOTS//' 
     if not os.path.exists(_plot_path): os.makedirs(_plot_path)
     save_plot   = True
     
     pc1_res = 15.0
     dpi = 200
     
-    if True:
+    if False:
         _time_start  = np.datetime64('1991-07-17T20:15:00')
         _time_end    = np.datetime64('1991-07-17T21:00:00')
         _probe       = 'crres'
@@ -347,6 +371,11 @@ if __name__ == '__main__':
         fmax         = 0.5
         he_fracs     = [0.05, 0.10]
         clrs         = ['k', 'b'] 
+        
+        ER_min = 0.0;   ER_max = 80.0  
+        VG_min = 50.0;  VG_max = 300. 
+        VR_min = 500;  VR_max = 4000  
+        VP_min = 0.0 ;  VP_max = 800.
         
         cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//19910717_CRRES//cutoffs_only.txt'
     else:
@@ -359,6 +388,11 @@ if __name__ == '__main__':
         fmax        = 1.0
         he_fracs    = [0.05, 0.10]
         clrs        = ['k', 'b'] 
+        
+        ER_min = 0.0;  ER_max = 475.  
+        VG_min = 0.0;  VG_max = 475. 
+        VR_min = 1e3;  VR_max = 8e3  
+        VP_min = 0.0;  VP_max = 1e3
         
         cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//19910812_CRRES//cutoffs_only.txt'
     
@@ -389,7 +423,7 @@ if __name__ == '__main__':
                        cutoff_dict['CUTOFF_TIME'].astype(np.int64),
                        cutoff_dict['CUTOFF_NORM'])
     
-    mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower = \
+    mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower, gyfreqs = \
                 load_EMIC_IMFs_and_dynspec(time_start, time_end)
     spower = spower.sum(axis=0)
     
@@ -418,7 +452,7 @@ if __name__ == '__main__':
     # Import cutoff-derived composition information
     for he_frac, clr in zip(he_fracs, clrs):
         o_frac = epd.calculate_o_from_he_and_cutoff(cutoff, he_frac)
-        o_frac[:] = he_frac
+        #o_frac[:] = he_frac
         
         # Frequencies to evaluate, calculate wavenumber (cold approximation)
         f_min  = _band_start
@@ -489,25 +523,39 @@ if __name__ == '__main__':
         axes[2, 0].plot(time, line_VG*1e-3, c=clr, lw=0.75)
         axes[3, 0].plot(time,-line_VR*1e-3, c=clr, lw=0.75)
         axes[4, 0].plot(time, line_VP*1e-3, c=clr, lw=0.75)
+        
+    axes[0, 0].plot(mag_time, gyfreqs[:, 1], c='yellow', label='$f_{cHe^+}$')
+    axes[0, 0].plot(mag_time, gyfreqs[:, 2], c='r',      label='$f_{cO^+}$')
+    axes[0, 0].legend(loc='upper left')
     
     axes[1, 0].legend(loc='upper left')
     axes[1, 0].set_ylabel('$E_R$\n(keV)', rotation=0, fontsize=fsize, labelpad=lpad)
-    axes[1, 0].set_ylim(0.0, 60)
-    #axes[1, 0].set_yticks([0, 20, 40, 60])
+    axes[1, 0].set_ylim(ER_min, ER_max)
     axes[1, 1].set_visible(False)
         
     axes[2, 0].set_ylabel('$V_G$\n(km/s)', rotation=0, fontsize=fsize, labelpad=lpad)
-    axes[2, 0].set_ylim(None, None)
+    axes[2, 0].set_ylim(VG_min, VG_max)
     axes[2, 1].set_visible(False)
         
     axes[3, 0].set_ylabel('$V_R$\n(km/s)', rotation=0, fontsize=fsize, labelpad=lpad)   
-    axes[3, 0].set_ylim(5e2, 8e3)
+    axes[3, 0].set_ylim(VR_min, VR_max)
     axes[3, 1].set_visible(False)
         
     axes[4, 0].set_ylabel('$V_P$\n(km/s)', rotation=0, fontsize=fsize, labelpad=lpad)
-    axes[4, 0].set_ylim(50, 1e3)
+    axes[4, 0].set_ylim(VP_min, VP_max)
     axes[4, 1].set_visible(False)
-        
+    
+# =============================================================================
+#     axes[1, 0].set_yticks([0, 20, 40, 60])
+#     axes[2, 0].set_yticks([100, 200])
+#     axes[3, 0].set_yticks([2000, 4000])
+#     axes[4, 0].set_yticks([250, 500, 750])
+# =============================================================================
+    axes[1, 0].set_yticks([0, 200, 400])
+    axes[2, 0].set_yticks([0, 200, 400])
+    axes[3, 0].set_yticks([0, 2000, 4000, 6000])
+    axes[4, 0].set_yticks([250, 500, 750])    
+    
     axes[-1, 0].set_xlabel('Time (UT)')
     axes[-1, 0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
     for ax in axes[:, 0]:
@@ -523,7 +571,7 @@ if __name__ == '__main__':
     if save_plot == True:
         save_string = time_start.astype(object).strftime('%Y%m%d_%H%M')
         print('Saving plot...')
-        fig.savefig(_plot_path + 'VELENG_TIMESERIES_' + save_string + '.png', dpi=dpi)
+        fig.savefig(_plot_path + 'VELENG_TIMESERIES_' + save_string + '_new.png', dpi=dpi)
         plt.close('all')
     else:
         plt.show()

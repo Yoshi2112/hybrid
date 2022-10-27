@@ -47,7 +47,7 @@ def get_mag_data(time_start, time_end, probe, low_cut=None, high_cut=None):
     Load and process data
     '''        
     if probe != 'crres':
-        ti, pc1_mags, pc1_elec, HM_mags, HM_elec, dt, e_flag, gyfreqs =\
+        ti, pc1_mags, pc1_elec, HM_mags, HM_elec, dt, e_flag, _gyfreqs =\
         rfl.load_decomposed_fields(_rbsp_path, time_start, time_end, probe, 
                                pad=600, LP_B0=1.0, LP_HM=30.0, ex_threshold=5.0, 
                                get_gyfreqs=True)
@@ -79,14 +79,14 @@ def get_mag_data(time_start, time_end, probe, low_cut=None, high_cut=None):
                                             window_data=True)
     
     _pow = np.array([_xpow, _ypow, _zpow])
-    return ti, dat, HM_mags, dt, _xtime, _xfreq, _pow
+    return ti, dat, HM_mags, dt, _xtime, _xfreq, _pow, _gyfreqs
 
 
 def load_EMIC_IMFs_and_dynspec(imf_start, imf_end, IA_filter=None):
     '''
     Loads IMFs and dynamic spectra
     '''
-    _ti, _dat, _HM_mags, _dt, _xtime, _xfreq, _pow = get_mag_data(_time_start, _time_end, 
+    _ti, _dat, _HM_mags, _dt, _xtime, _xfreq, _pow, _gyfreqs = get_mag_data(_time_start, _time_end, 
                                     _probe, low_cut=_band_start, high_cut=_band_end)
     sample_rate = 1./_dt
     
@@ -118,7 +118,7 @@ def load_EMIC_IMFs_and_dynspec(imf_start, imf_end, IA_filter=None):
         IAs[ii] = IAs[ii][st:en]
         IFs[ii] = IFs[ii][st:en]
         IPs[ii] = IPs[ii][st:en]
-    return _ti, _dat, _HM_mags, _imf_t, IAs, IFs, IPs, _xtime, _xfreq, _pow
+    return _ti, _dat, _HM_mags, _imf_t, IAs, IFs, IPs, _xtime, _xfreq, _pow, _gyfreqs
 
 
 def get_pc1_peaks(sfreq, spower, band_start, band_end, npeaks=None):
@@ -395,12 +395,12 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
         time, mag, edens, cold_dens, hope_dens, hope_tpar, hope_tperp, hope_anis, L_vals =\
                                            load_and_interpolate_plasma_params(
                                            time_start, time_end, probe, nsec=None, 
-                                           rbsp_path='E://DATA//RBSP//', HM_filter_mhz=50.0,
+                                           rbsp_path=_rbsp_path, HM_filter_mhz=50.0,
                                            time_array=None, check_interp=False)
     else:
         load_CRRES_data(time_start, time_end, crres_path='E://DATA//CRRES//', nsec=None)
                   
-    mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower = \
+    mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower, gyfreqs = \
             load_EMIC_IMFs_and_dynspec(time_start, time_end)
     spower = spower.sum(axis=0)
 
@@ -415,6 +415,8 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
         
         # Define time, time index
         this_time   = time[ii]
+        if this_time != np.datetime64('2013-07-25T21:29:51.105000'):
+            continue
         maxpwr_tidx = np.where(abs(stime - this_time) == np.min(abs(stime - this_time)))[0][0]
         
         # Find max freq and index
@@ -429,9 +431,9 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
         #clr = mapper.to_rgba(time[ii].astype(np.int64))
         print('Doing time:', this_time)
         
-        fig, axes = plt.subplots(nrows=4, ncols=2, figsize=(8.0, 0.5*11.00),
+        fig, axes = plt.subplots(nrows=5, ncols=2, figsize=(8.0, 0.5*11.00),
                                  gridspec_kw={'width_ratios':[1, 0.01],
-                                              'height_ratios':[1, 2, 2, 2]
+                                              'height_ratios':[1, 0.5, 2, 2, 2]
                                               })
         
         # Spectra/IP
@@ -444,11 +446,16 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
         
         axes[0, 0].axvline(this_time, color='white', ls='-' , alpha=0.7)
         axes[0, 0].set_xlim(time_start, time_end)
-        axes[0, 0].set_xticklabels([])
+        axes[0, 0].set_xticks([time_start, time_end])
+        axes[0, 0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
         
         axes[0, 0].axvline(this_time,   color='white', ls='-', alpha=0.75)
         axes[0, 0].axhline(maxpwr_freq, color='white', ls='-', alpha=0.75)
         axes[0, 0].set_title(f'Velocities and Energies :: {this_time}')
+        
+        axes[0, 0].plot(mag_time, gyfreqs[1], c='yellow', label='$f_{cHe^+}$')
+        axes[0, 0].plot(mag_time, gyfreqs[2], c='r',      label='$f_{cO^+}$')
+        axes[0, 0].legend(loc='center right')
         
         # Get oxygen concentration from cutoffs
         h_frac = 1. - he_frac - o_frac[ii]
@@ -476,49 +483,51 @@ def plot_velocities_and_energies_single(time_start, time_end, probe='a'):
         fidx = np.where(abs(f_vals - maxpwr_freq) == np.min(abs(f_vals - maxpwr_freq)))[0][0] 
         freq = f_vals[fidx]
         
-        axes[1, 0].plot(f_vals, wv_len, c='k')
-        axes[1, 0].set_ylabel('$\lambda_{EMIC}$ [km]')
-        axes[1, 0].set_ylim(0, 2000)
+        axes[2, 0].plot(f_vals, wv_len, c='k')
+        axes[2, 0].set_ylabel('$\lambda_{EMIC}$ [km]')
+        axes[2, 0].set_ylim(0, 2000)
         
         # Velocities
         Vg, Vp, Vr = nls.get_velocities(w_vals, Species, PP)
     
-        axes[2, 0].semilogy(f_vals, Vg*1e-3, c='k', label='$V_g$') 
-        axes[2, 0].semilogy(f_vals, Vp*1e-3, c='r', label='$V_p$')
-        axes[2, 0].semilogy(f_vals,-Vr*1e-3, c='b', label='$-V_R$')
-        axes[2, 0].set_ylim(10, 4500)
-        axes[2, 0].set_ylabel('Velocities [km/s]')
-        axes[2, 0].legend(bbox_to_anchor=(1.0, 0), loc=3, borderaxespad=0.)
+        axes[3, 0].semilogy(f_vals, Vg*1e-3, c='k', label='$V_g$') 
+        axes[3, 0].semilogy(f_vals, Vp*1e-3, c='r', label='$V_p$')
+        axes[3, 0].semilogy(f_vals,-Vr*1e-3, c='b', label='$-V_R$')
+        axes[3, 0].set_ylim(10, 4500)
+        axes[3, 0].set_ylabel('Velocities [km/s]')
+        axes[3, 0].legend(bbox_to_anchor=(1.0, 0), loc=3, borderaxespad=0.)
         
         # Energies
         ELAND, ECYCL = nls.get_energies(w_vals, k_vals, PP['pcyc_rad'], PMASS)
-        axes[3, 0].semilogy(f_vals, ELAND*1e-3, c='r', label='$E_0$')
-        axes[3, 0].semilogy(f_vals, ECYCL*1e-3, c='b', label='$E_1$')
-        axes[3, 0].set_ylim(1e-1, 1e3)
-        axes[3, 0].set_ylabel('$E_R$ [keV]')
-        axes[3, 0].set_xlabel('Freq [Hz]', rotation=0)
-        axes[3, 0].legend(bbox_to_anchor=(1.0, 0), loc=3, borderaxespad=0.)
+        axes[4, 0].semilogy(f_vals, ELAND*1e-3, c='r', label='$E_0$')
+        axes[4, 0].semilogy(f_vals, ECYCL*1e-3, c='b', label='$E_1$')
+        axes[4, 0].set_ylim(1e-1, 1e3)
+        axes[4, 0].set_ylabel('$E_R$ [keV]')
+        axes[4, 0].set_xlabel('Freq [Hz]', rotation=0)
+        axes[4, 0].legend(bbox_to_anchor=(1.0, 0), loc=3, borderaxespad=0.)
         
         # Work out what the energy is at maxpwr_freq
         num_landau    = ELAND[fidx]*1e-3
         num_cyclotron = ECYCL[fidx]*1e-3
         
-        axes[3, 0].text(0.8, 0.9, f'$E_0(f) =$ {num_landau:.1f} keV', horizontalalignment='left',
+        axes[4, 0].text(0.8, 0.9, f'$E_0(f) =$ {num_landau:.1f} keV', horizontalalignment='left',
                         verticalalignment='center', transform=axes[3, 0].transAxes)
-        axes[3, 0].text(0.8, 0.8, f'$E_1(f) =$ {num_cyclotron:.1f} keV', horizontalalignment='left',
+        axes[4, 0].text(0.8, 0.8, f'$E_1(f) =$ {num_cyclotron:.1f} keV', horizontalalignment='left',
                         verticalalignment='center', transform=axes[3, 0].transAxes)
         
-        axes[0, 0].set_xticklabels([])
-        axes[1, 0].set_yticks(np.array([0, 500, 1000, 1500]))
-        for ax in axes[1:, 0]:
+        
+        axes[2, 0].set_yticks(np.array([0, 500, 1000, 1500]))
+        for ax in axes[2:, 0]:
             ax.set_xlim(_band_start, _band_end)
             ax.axvline(freq, color='k', alpha=0.5, ls='--')
             if ax != axes[-1, 0]:
                 ax.set_xticklabels([])
         
+        axes[1, 0].set_visible(False)
         axes[1, 1].set_visible(False)
         axes[2, 1].set_visible(False)
         axes[3, 1].set_visible(False)
+        axes[4, 1].set_visible(False)
         
         #fig.tight_layout(rect=[0, 0, 0.95, 1])
         fig.tight_layout()
@@ -666,9 +675,9 @@ def plot_HM_and_energy(time_start, time_end, probe):
 
 #%% MAIN
 if __name__ == '__main__':
-    _rbsp_path  = 'E://DATA//RBSP//'
-    _crres_path = 'E://DATA//CRRES//'
-    _plot_path  = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//' 
+    _rbsp_path  = 'F://DATA//RBSP//'
+    _crres_path = 'F://DATA//CRRES//'
+    _plot_path  = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//REVISION_PLOTS//' 
     if not os.path.exists(_plot_path): os.makedirs(_plot_path)
     save_plot   = True
     
@@ -708,13 +717,13 @@ if __name__ == '__main__':
         #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only_10mHz.txt'
         #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//pearl_times.txt'
     
-    if False:
+    if True:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             #calculate_all_NL_amplitudes()
             plot_velocities_and_energies_single(_time_start, _time_end, probe=_probe)
             #plot_HM_and_energy(_time_start, _time_end, _probe)
-    #sys.exit()
+    sys.exit()
     
     time_start = _time_start
     time_end   = _time_end
@@ -726,19 +735,19 @@ if __name__ == '__main__':
     
     #%% Stuff requiring all the data
     # Import cutoff-derived composition information
-    if False:
+    if True:
         cutoff_dict     = epd.read_cutoff_file(cutoff_filename)
             
         time, mag, edens, cold_dens, hope_dens, hope_tpar, hope_tperp, hope_anis, L_vals =\
                                            load_and_interpolate_plasma_params(
                                            time_start, time_end, probe, nsec=None, 
-                                           rbsp_path='E://DATA//RBSP//', HM_filter_mhz=50.0,
+                                           rbsp_path=_rbsp_path, HM_filter_mhz=50.0,
                                            time_array=None, check_interp=False)
         
         hope_dens[1] *= 0
         hope_dens[2] *= 0
         
-        mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower = \
+        mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower, gyfreqs = \
                 load_EMIC_IMFs_and_dynspec(time_start, time_end)
         spower = spower.sum(axis=0)
         
@@ -906,12 +915,16 @@ if __name__ == '__main__':
             axes[0, 0].axhline(_band_start, c='white', ls='--')
             axes[0, 0].axhline(_band_end  , c='white', ls='--')
             axes[0, 0].scatter(time, max_freqs, c='k', marker='x', s=2)
+            
+        axes[0, 0].plot(mag_time, gyfreqs[1], c='yellow', label='$f_{cHe^+}$')
+        axes[0, 0].plot(mag_time, gyfreqs[2], c='r',      label='$f_{cO^+}$')
+        axes[0, 0].legend(loc='upper left')
                 
         # Line plot for lower/upper frequency bin (c_res, l_res, vr, vg)
         axes[1, 0].plot(time, line_CR*1e-3, c='k', lw=0.75)
         axes[1, 0].set_ylabel('$E_R$\n(keV)', rotation=0, fontsize=fsize, labelpad=lpad)
         #axes[1, 0].set_ylim(0.0, 25.0)
-        axes[1, 0].set_ylim(0.0, 65.0)
+        axes[1, 0].set_ylim(0.0, 25)
         axes[1, 1].set_visible(False)
         
         axes[2, 0].plot(time, line_VG*1e-3, c='k', lw=0.75)
@@ -922,13 +935,13 @@ if __name__ == '__main__':
         axes[3, 0].plot(time,-line_VR*1e-3, c='k', lw=0.75)
         axes[3, 0].set_ylabel('$V_R$\n(km/s)', rotation=0, fontsize=fsize, labelpad=lpad)   
         #axes[3, 0].set_ylim(5e2, 2.5e3)
-        axes[3, 0].set_ylim(5e2, 4e3)
+        axes[3, 0].set_ylim(5e2, 2.5e3)
         axes[3, 1].set_visible(False)
         
         axes[4, 0].plot(time, line_VP*1e-3, c='k', lw=0.75)
         axes[4, 0].set_ylabel('$V_P$\n(km/s)', rotation=0, fontsize=fsize, labelpad=lpad)
         #axes[4, 0].set_ylim(50, 5e2)
-        axes[4, 0].set_ylim(50, 4e2)
+        axes[4, 0].set_ylim(50, 450)
         axes[4, 1].set_visible(False)
         
         axes[-1, 0].set_xlabel('Time (UT)')

@@ -5,6 +5,7 @@ Created on Sun Jan  2 22:05:39 2022
 @author: Yoshi
 """
 import os, sys, warnings, pdb, emd
+
 sys.path.append('../../')
 import numpy as np
 import matplotlib.pyplot   as plt
@@ -47,7 +48,7 @@ def get_mag_data(time_start, time_end, probe, low_cut=None, high_cut=None):
     Load and process data
     '''        
     if probe != 'crres':
-        ti, pc1_mags, pc1_elec, HM_mags, HM_elec, dt, e_flag, gyfreqs =\
+        ti, pc1_mags, pc1_elec, HM_mags, HM_elec, dt, e_flag, gfreq =\
         rfl.load_decomposed_fields(_rbsp_path, time_start, time_end, probe, 
                                pad=600, LP_B0=1.0, LP_HM=30.0, ex_threshold=5.0, 
                                get_gyfreqs=True)
@@ -79,19 +80,19 @@ def get_mag_data(time_start, time_end, probe, low_cut=None, high_cut=None):
                                             window_data=True)
     
     _pow = np.array([_xpow, _ypow, _zpow])
-    return ti, dat, HM_mags, dt, _xtime, _xfreq, _pow
+    return ti, dat, HM_mags, dt, _xtime, _xfreq, _pow, gfreq
 
 
 def load_EMIC_IMFs_and_dynspec(imf_start, imf_end, IA_filter=None):
     '''
     Loads IMFs and dynamic spectra
     '''
-    _ti, _dat, _HM_mags, _dt, _xtime, _xfreq, _pow = get_mag_data(_time_start, _time_end, 
+    _ti, _dat, _HM_mags, _dt, _xtime, _xfreq, _pow, gfreq = get_mag_data(_time_start, _time_end, 
                                     _probe, low_cut=_band_start, high_cut=_band_end)
     sample_rate = 1./_dt
     
     # Calculate IMFs, get instantaneous phase, frequency, amplitude
-    print('Sifting IMFs and performing HHT')
+    print(f'Sifting IMFs and performing HHT between {imf_start} and {imf_end}')
     imfs, IPs, IFs, IAs = [], [], [], []
     for ii, lbl in zip(range(3), ['x', 'y', 'z']):
         imf = emd.sift.sift(_dat[:, ii], sift_thresh=1e-2)
@@ -103,7 +104,7 @@ def load_EMIC_IMFs_and_dynspec(imf_start, imf_end, IA_filter=None):
         IPs.append(IP)
         IFs.append(IF)
         IAs.append(IA)
-        
+
 # =============================================================================
 #     if IA_filter is not None:
 #         for ii in range(3):
@@ -118,7 +119,7 @@ def load_EMIC_IMFs_and_dynspec(imf_start, imf_end, IA_filter=None):
         IAs[ii] = IAs[ii][st:en]
         IFs[ii] = IFs[ii][st:en]
         IPs[ii] = IPs[ii][st:en]
-    return _ti, _dat, _HM_mags, _imf_t, IAs, IFs, IPs, _xtime, _xfreq, _pow
+    return _ti, _dat, _HM_mags, _imf_t, IAs, IFs, IPs, _xtime, _xfreq, _pow, gfreq
 
 
 def get_pc1_peaks(sfreq, spower, band_start, band_end, npeaks=None):
@@ -561,16 +562,16 @@ def calculate_all_NL_amplitudes():
 
 #%% MAIN
 if __name__ == '__main__':
-    _rbsp_path  = 'E://DATA//RBSP//'
-    _crres_path = 'E://DATA//CRRES//'
-    _plot_path  = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//' 
+    _rbsp_path  = 'F://DATA//RBSP//'
+    _crres_path = 'F://DATA//CRRES//'
+    _plot_path  = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//REVISION_PLOTS//' 
     if not os.path.exists(_plot_path): os.makedirs(_plot_path)
     save_plot   = True
     
     # TODO: Put all important event-specific variables in the switch
     pc1_res = 15.0
     dpi = 200
-    if False:
+    if True:
         _probe = 'a'
         _time_start = np.datetime64('2013-07-25T21:25:00')
         _time_end   = np.datetime64('2013-07-25T21:47:00')
@@ -586,6 +587,8 @@ if __name__ == '__main__':
         
         #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//pearl_times.txt'
         cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//cutoffs_only.txt'
+    
+        cases = [0]
     else:
         _probe = 'a'
         _time_start = np.datetime64('2015-01-16T04:25:00')
@@ -603,6 +606,8 @@ if __name__ == '__main__':
         #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//cutoffs_only_10mHz.txt'
         #cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20150116_RBSP-A//pearl_times.txt'
     
+        cases = [4, 5]
+        
     time_start = _time_start
     time_end   = _time_end
     probe      = 'a'
@@ -614,7 +619,7 @@ if __name__ == '__main__':
     
     #%% Non-linear trace plots
     if True:
-        for case in [2]:
+        for case in cases:
             if case == 0:
                 # Section 1 (Whole)
                 parameter_time = np.datetime64('2013-07-25T21:29:40')
@@ -628,7 +633,8 @@ if __name__ == '__main__':
                 # Single Packet near  end
                 parameter_time = np.datetime64('2013-07-25T21:42:12')
                 packet_start   = np.datetime64('2013-07-25T21:42:12')
-                packet_end     = np.datetime64('2013-07-25T21:42:45')
+                #packet_end     = np.datetime64('2013-07-25T21:42:45')
+                packet_end     = np.datetime64('2013-07-25T21:43:00')
                 cutoff_filename = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//20130725_RBSP-A//cutoffs_only.txt'
                 
                 _band_start = 0.43
@@ -681,7 +687,7 @@ if __name__ == '__main__':
             time, mag, edens, cold_dens, hope_dens, hope_tpar, hope_tperp, hope_anis, L_vals, =\
                                                load_and_interpolate_plasma_params(
                                                plot_start, plot_end, probe, nsec=None, 
-                                               rbsp_path='E://DATA//RBSP//', HM_filter_mhz=50.0,
+                                               rbsp_path=_rbsp_path, HM_filter_mhz=50.0,
                                                time_array=None, check_interp=False)
                 
             time_idx       = np.where(abs(time - parameter_time) == np.min(abs(time - parameter_time)))[0][0]
@@ -732,24 +738,15 @@ if __name__ == '__main__':
             w   = w_vals / PP['pcyc_rad']
             
             # DO THE ACTUAL CALCULATION (All hands off from here, using existing code/proforma)
-            tau   = 1.00
-            B_th  = nls.get_threshold_amplitude(w, wph, Q, s2, a, Vp, Vr, Vth_para, Vth_perp)
-            B_opt = nls.get_optimum_amplitude(w, wph, Q, tau, s0, s1, Vg, Vr, Vth_para, Vth_perp)
-            T_tr  = nls.get_nonlinear_trapping_period(k_vals, Vth_perp*SPLIGHT, B_opt*PP['B0'])
-            T_N   = tau*T_tr*PP['pcyc_rad']
+            tau    = 1.00
+            B_th   = nls.get_threshold_amplitude(w, wph, Q, s2, a, Vp, Vr, Vth_para, Vth_perp)
             
             # Filter zeros and infs:
             B_th[B_th == np.inf] = np.nan
             B_th[B_th == 0]      = np.nan
             
-            B_opt[B_opt == np.inf] = np.nan
-            B_opt[B_opt == 0]      = np.nan
-            
-            T_N[T_N == np.inf] = np.nan
-            T_N[T_N == 0]      = np.nan
-        
             # Load EMIC data IMF values
-            mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower = \
+            mag_time, pc1_mags, HM_mags, imf_time, IA, IF, IP, stime, sfreq, spower, gyfreqs = \
                 load_EMIC_IMFs_and_dynspec(packet_start, packet_end)
             
             #%% PLOT: NaN's and inf's in arrays: How to filter to plot? Set to all NaN's
@@ -785,6 +782,10 @@ if __name__ == '__main__':
             axes[0, 0].set_ylabel('$f$\n(Hz)', rotation=0, labelpad=lpad, fontsize=fsize)
             fig.colorbar(im0, cax=axes[0, 1], extend='both').set_label(
                         r'$\frac{nT^2}{Hz}$', fontsize=fsize+2, rotation=0, labelpad=20)
+                        
+            axes[0, 0].plot(mag_time, gyfreqs[1], c='yellow', label='$f_{cHe^+}$')
+            axes[0, 0].plot(mag_time, gyfreqs[2], c='r',      label='$f_{cO^+}$')
+            axes[0, 0].legend(loc='upper right')
             
             axes[0, 0].plot(imf_time, IF[0][:, 0], c='k', lw=0.75)
             axes[0, 0].plot(imf_time, IF[1][:, 0], c='k', lw=0.75, alpha=0.8)
@@ -797,7 +798,23 @@ if __name__ == '__main__':
     
             # Bth, Bopt, Inst. Amplitudes
             axes[2, 0].plot(f_vals, B_th*B0*1e9, c='k', ls='--', label=r'$B_{th}$')
-            axes[2, 0].plot(f_vals, B_opt*B0*1e9, c='k', ls='-', label=r'$B_{opt}$')
+            
+            for tau in [0.25, 0.5, 1.0, 2.0]:
+                B_opt  = nls.get_optimum_amplitude(w, wph, Q, tau, s0, s1, Vg, Vr, Vth_para, Vth_perp)
+                
+                B_opt[B_opt == np.inf] = np.nan
+                B_opt[B_opt == 0]      = np.nan
+                
+                tau_lbl = r'$B_{opt}$' if tau==0.25 else None
+                
+                axes[2, 0].plot(f_vals, B_opt*B0*1e9, c='k', ls='-', label=tau_lbl)
+                
+                xv = 0.50
+                yi = np.where(abs(f_vals - xv) == abs(f_vals - xv).min())[0][0]
+                yv = B_opt[yi]*B0*1e9
+                
+                axes[2, 0].text(xv, yv, f'{tau:.2f}', ha='center', bbox={'facecolor':'white', 'alpha':1.0, 'edgecolor':'white'})
+                
             axes[2, 0].set_ylabel('$B$\n(nT)', rotation=0, labelpad=20, fontsize=fsize)
             axes[2, 0].set_xlabel('$f$ (Hz)]', fontsize=fsize)
             axes[2, 0].set_ylim(0, B_max)

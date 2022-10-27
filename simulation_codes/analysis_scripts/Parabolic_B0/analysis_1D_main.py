@@ -1035,6 +1035,19 @@ def single_point_spectra(nx=None, overlap=0.5, f_res_mHz=50, fmax=1.0):
                        norm=colors.LogNorm(vmin=1e-5, vmax=1e1), cmap='jet')
         fig.colorbar(im1, cax=axes[1], extend='max').set_label(
                 '$|P|$\n$nT^2/Hz$', fontsize=12, rotation=0, labelpad=30)
+        
+        
+        B_NX  = cf.B_eq * (1 + cf.a * cf.B_nodes[_NX]**2)
+        gy_H  = qi * B_NX / (2 * np.pi * mp) 
+        gy_He = 0.2500 * gy_H
+        gy_O  = 0.0625 * gy_H 
+        
+        #axes[0].axhline(gy_H , c='w', label='$f_{cH^+}$')
+        axes[0].axhline(gy_He, c='yellow', label='$f_{cHe^+}$')
+        axes[0].axhline(gy_O , c='r', label='$f_{cO^+}$')
+        
+        axes[0].legend(loc='upper left', ncol=2)
+        
         axes[0].set_ylabel('Hz', rotation=0, labelpad=30)
         axes[0].set_ylim(0, fmax)
         axes[0].set_xlim(0, ftime[-1])
@@ -1042,11 +1055,11 @@ def single_point_spectra(nx=None, overlap=0.5, f_res_mHz=50, fmax=1.0):
         
         fig.tight_layout()
         fig.subplots_adjust(wspace=0.05)
-        fig.savefig(dynspec_folderpath + 'SP_spectra_nx{:04}.png'.format(_NX), 
+        fig.savefig(dynspec_folderpath + 'SP_spectra_nx{:04}_revised.png'.format(_NX), 
                     facecolor=fig.get_facecolor(), edgecolor='none', dpi=200)
         
         plt.close('all')
-        print(f'SP spectra for node {_NX} saved')
+        print(f'SP spectra for node {_NX} at {cf.B_nodes[_NX]*1e-6}Mm saved')
     return
 
 
@@ -4960,7 +4973,7 @@ def multiplot_AUG12_density(save=True, fmax=1.0):
     Dotted line to show where ULF changes
     Do the 5x run because has the strongest saturation amplitude (for visual)
     '''
-    plot_dir = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//'
+    plot_dir = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//REVISION_PLOTS//Model Output'
     
     series  = 'AUG12_DROP_HIGHER'
     ffamily = 'monospace'
@@ -5060,7 +5073,7 @@ def multiplot_AUG12_waveform(save=True, fmax=1.0):
     Dotted line to show where ULF changes
     Do the 5x run because has the strongest saturation amplitude (for visual)
     '''
-    plot_dir = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//'
+    plot_dir = 'D://Google Drive//Uni//PhD 2017//Josh PhD Share Folder//Thesis//Data_Plots//REVISION_PLOTS//Model Output//'
     
     series  = 'AUG12_DROP_HIGHER'
     ffamily = 'monospace'
@@ -5070,6 +5083,9 @@ def multiplot_AUG12_waveform(save=True, fmax=1.0):
     
     Bmax = 5.0
     Pmax = 1e-1
+    
+    B0 = 145.00e-9; gy0 = qi * B0 / (2*np.pi*mp)
+    B1 =  95.00e-9; gy1 = qi * B1 / (2*np.pi*mp)
     
     ## PLOT
     plt.ioff()
@@ -5109,7 +5125,21 @@ def multiplot_AUG12_waveform(save=True, fmax=1.0):
         axes[1, col].set_xlabel('x (Mm)', fontsize=fsize, family=ffamily)
         axes[1, col].set_ylim(0, fmax)
         axes[1, col].set_xlim(x_lim[0], x_lim[1])
+        
+        if ii == 2:
+            axes[1, col].axhline(0.2500*gy0, lw=0.75, c='yellow', label='$f_{cHe^+}$')
+            axes[1, col].axhline(0.0625*gy0, lw=0.75, c='r', label='$f_{cO^+}$')
+           
+        else:
+            axes[1, col].axhline(0.2500*gy0, lw=0.75, ls='--', c='yellow', label='$f_{cHe^+}$')
+            axes[1, col].axhline(0.0625*gy0, lw=0.75, ls='--', c='r', label='$f_{cO^+}$')
+            
+            axes[1, col].axhline(0.2500*gy1, lw=0.75, c='yellow', label='$f_{cHe^+}$')
+            axes[1, col].axhline(0.0625*gy1, lw=0.75, c='r', label='$f_{cO^+}$')
+        
         col += 1
+    
+    axes[1, 0].legend(loc='upper left', ncol=2)
     
     axes[0, 0].set_ylabel('t\n(s)', rotation=0, labelpad=lpad, fontsize=fsize, family=ffamily)
     axes[0, 0].set_yticks([50, 150, 250])
@@ -5145,7 +5175,7 @@ def multiplot_AUG12_waveform(save=True, fmax=1.0):
         fullpath = plot_dir + 'aug12_fxt_plot.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(),
                     edgecolor='none', bbox_inches='tight', dpi=200)
-        print('Dispersion stackplot saved')
+        print(f'AUG12 dispersion stackplot saved in {fullpath}')
         plt.close('all')
     else:
         plt.show()       
@@ -5766,6 +5796,15 @@ def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=None)
     fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(6.0, 4.0), 
                              gridspec_kw={'width_ratios':[1, 0.01]})
     
+    # Gyrofrequencies
+    gy_x  = np.linspace(cf.xmin, cf.xmax, 1000)
+    gy_bx = cf.B_eq * (1. + cf.a * gy_x**2)
+    
+    gy_H  = qi * gy_bx / (2 * np.pi * mp) 
+    gy_He = 0.2500 * gy_H
+    gy_O  = 0.0625 * gy_H 
+    print(gy_He.min(), gy_He.max())
+    
     # XT WAVE PLOT
     im1   = axes[0, 0].pcolormesh(x_arr, ftime, B_wave, cmap='jet', vmin=0.0, vmax=Bmax)
     cbar1 = fig.colorbar(im1, cax=axes[0, 1], extend='max')
@@ -5780,21 +5819,27 @@ def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=None)
     
     # WX DISPERSION PLOT
     im2 = axes[1, 0].pcolormesh(x_arr, freqs, wx, cmap='nipy_spectral', vmin=0.0, vmax=Pmax)
-    cbar2 = fig.colorbar(im2, cax=axes[1, 1], extend='max', ticks=[0, 1, 2, 3, 4, 5])
+    cbar2 = fig.colorbar(im2, cax=axes[1, 1], extend='max') #, ticks=[0, 1, 2, 3, 4, 5]
     cbar2.set_label('$\\frac{nT^2}{Hz}$', rotation=0,
                     family=ffamily, fontsize=fsize+2, labelpad=cpad)
     
     axes[1, 0].set_ylabel('f\n(Hz)', rotation=0, labelpad=lpad, fontsize=fsize, family=ffamily)
     axes[1, 0].set_xlabel('x (Mm)', fontsize=fsize, family=ffamily)
-    axes[1, 0].set_ylim(0, fmax)
+    axes[1, 0].set_ylim(0.0, fmax)
+    #axes[1, 0].set_yticks([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])
     axes[1, 0].set_xlim(x_lim[0], x_lim[1])
-
+    
+    #axes[1, 0].plot(gy_x*1e-6, gy_H , c='w',      label='$f_{cH^+}$')
+    axes[1, 0].plot(gy_x*1e-6, gy_He, c='yellow', label='$f_{cHe^+}$')
+    axes[1, 0].plot(gy_x*1e-6, gy_O , c='r',      label='$f_{cO^+}$')
+    axes[1, 0].legend(loc='upper left', ncol=2)
+    
     fig.tight_layout()
     fig.align_ylabels()
     fig.subplots_adjust(hspace=0.00, wspace=0.05)
                             
     if save:
-        fullpath = cf.anal_dir + 'thesis_dispersion_stackplot.png'
+        fullpath = cf.anal_dir + 'thesis_dispersion_stackplot_revised.png'
         plt.savefig(fullpath, facecolor=fig.get_facecolor(),
                     edgecolor='none', bbox_inches='tight', dpi=200)
         print('Dispersion stackplot saved')
@@ -5803,7 +5848,7 @@ def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=None)
 
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'D:'
+    drive       = 'H:'
     #import logging
     #log_file = 'F://runs//_NEW_RUNS//bad_runs.log'
     #logging.basicConfig(filename=log_file, filemode='w', level=logging.ERROR, force=True)
@@ -5821,12 +5866,12 @@ if __name__ == '__main__':
         #multiplot_saturation_amplitudes_jan16(save=True)
         #multiplot_saturation_amplitudes_jul17(save=True)
         
-        #multiplot_AUG12_waveform(fmax=1.0)
+        multiplot_AUG12_waveform(fmax=1.0)
         #multiplot_AUG12_Benergy(save=True)
         #multiplot_AUG12_Benergy_times(save=True)
         
         #multiplot_wk_thesis_good(saveas='wk_plot_thesis', save=True)
-        multiplot_ABCs_thesis()
+        #multiplot_ABCs_thesis()
         print('Exiting multiplot routines successfully.')
         sys.exit()
     
@@ -5838,7 +5883,7 @@ if __name__ == '__main__':
                   # '//_NEW_RUNS//JUL17_PC1PEAKS_VO_1pc//',
                   # '//_NEW_RUNS//JUL25_CP_MULTIPOP_LONGER//',
                   # '//_NEW_RUNS//JUL25_CP_PBOLIC_LONGER//'
-    for series in ['//CH4_tests_FuDoubleCheck//']:
+    for series in ['//JUL17_PC1PEAKS_VO_1pc//']:
         series_dir = f'{drive}/runs//{series}//'
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -5846,7 +5891,7 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [2]
+            runs_to_do = [0]
 
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -5857,12 +5902,12 @@ if __name__ == '__main__':
                 #try:
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
                     
-                    #thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=6)
+                #thesis_plot_dispersion(save=True, fmax=1.1, tmax=None, Bmax=None, Pmax=None)
                     
-                    #single_point_spectra(nx=[2, 130, 258, 386, 514], overlap=0.95, f_res_mHz=25, fmax=1.0)
+                single_point_spectra(nx=[2, 130, 258, 386, 514], overlap=0.95, f_res_mHz=25, fmax=1.0)
                     #single_point_FB(     nx=[2, 130, 258, 386, 514], overlap=0.95, f_res_mHz=25, fmax=1.0)
                     
-                    #single_point_spectra(nx=[2, 258, 514, 770, 1026], overlap=0.95, f_res_mHz=25, fmax=1.0)
+                single_point_spectra(nx=[2, 258, 514, 770, 1026], overlap=0.95, f_res_mHz=25, fmax=1.0)
                     #single_point_FB(     nx=[2, 258, 514, 770, 1026], overlap=0.95, f_res_mHz=25, fmax=1.0)
     
                     #standard_analysis_package(disp_overlay=False, pcyc_mult=1.1,
@@ -5874,8 +5919,8 @@ if __name__ == '__main__':
                 #    logging.error('%s[%d]', series, run_num)
                 #    continue
             
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
-                           B0_lim=None, remove_ND=False)
+                #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
+                #           B0_lim=None, remove_ND=False)
 # =============================================================================
 #                 plot_abs_T_w_Bx(saveas='abs_plot_bx', save=False, tmax=None,
 #                     B0_lim=None, remove_ND=False)
@@ -5887,9 +5932,9 @@ if __name__ == '__main__':
                 #check_fields(save=True, ylim=False, skip=5)
                 #plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
                 
-                plot_wk_thesis_good(dispersion_overlay=True, save=True,
-                     pcyc_mult=1.1, xmax=0.8, zero_cold=True,
-                     linear_only=False, normalize_axes=True, centre_only=False)
+                #plot_wk_thesis_good(dispersion_overlay=True, save=True,
+                #     pcyc_mult=1.1, xmax=0.8, zero_cold=True,
+                #     linear_only=False, normalize_axes=True, centre_only=False)
 
                 #plot_total_density_with_time()
                 #plot_max_velocity()
@@ -5922,8 +5967,8 @@ if __name__ == '__main__':
 # =============================================================================
 
                 #field_energy_vs_time(save=True, saveas='mag_energy_reflection', tmax=None)
-                ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=True,
-                                      plot_LT=True, plot_growth=True, klim=1.5)
+                #ggg.straight_line_fit(save=True, normfit_min=0.3, normfit_max=0.7, normalize_time=True,
+                #                      plot_LT=True, plot_growth=True, klim=1.5)
                 
                 #try:
                 #standard_analysis_package(thesis=False, tx_only=False, disp_overlay=True, remove_ND=False)

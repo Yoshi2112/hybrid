@@ -215,6 +215,10 @@ def get_optimum_amplitude(w, wph, Q, tau, s0, s1, Vg, Vr, Vth_para, Vth_perp):
 def get_nonlinear_trapping_period(k, Vth_perp, Bw):
     '''
     QUESTION: Is Bw a single value? Or is it a function of frequency/k?
+    
+    Nonlinear trapping period determines the nonlinear transition time T_N by a factor tau
+    T_tr   = nls.get_nonlinear_trapping_period(k_vals, Vth_perp*SPLIGHT, B_opt*PP['B0'])
+    T_N    = tau*T_tr*PP['pcyc_rad']
     '''
     bottom  = k * Vth_perp * PCHARGE * Bw
     bracket = np.sqrt(PMASS / bottom) 
