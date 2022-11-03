@@ -10,6 +10,7 @@ runs the same as the Predictor/Corrector code does.
 
 Keep stripping until we have a MWE of the CAM_CL. Do periodic runs just to check.
 '''
+
 ## PHYSICAL CONSTANTS ##
 ECHARGE = 1.602177e-19                       # Elementary charge (C)
 SPLIGHT = 2.998925e+08                       # Speed of light (m/s)
@@ -40,21 +41,26 @@ def quiet_start_bimaxwellian():
     pos = np.zeros(N, dtype=np.float64)
     vel = np.zeros((3, N), dtype=np.float64)
     idx = np.ones(N,       dtype=np.int8) * Nj
-    
+
     for jj in range(Nj):
         idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle idx        
         half_n = nsp_ppc[jj] // 2                     # Half particles per cell - doubled later
         
         # Load particles in each applicable cell
-        acc = 0
-        for ii in range(NX):            
+        acc = 0; offset  = 0
+        for ii in range(NX):
+            # Add particle if last cell (for symmetry, but only with open field boundaries)
+            if ii == NX - 1 and field_periodic == 0:
+                half_n += 1
+                offset  = 1
+                
             # Particle index ranges
             st = idx_start[jj] + acc
             en = idx_start[jj] + acc + half_n
             
             # Set position for half: Analytically uniform
             for kk in range(half_n):
-                pos[st + kk] = dx*(float(kk) / half_n + ii)
+                pos[st + kk] = dx*(float(kk) / (half_n - offset) + ii)
             
             # Turn [0, NC] distro into +/- NC/2 distro
             pos[st: en] -= 0.5*NX*dx              
@@ -192,16 +198,37 @@ def assign_weighting_CIC(pos, I, W, E_nodes=True):
     else:
         grid_offset   = 0.0
     
-    particle_transform = xmax + (ND - grid_offset)*dx  + epsil  # Offset to account for E/B grid and damping nodes
+    particle_transform = xmax + (ND - grid_offset)*dx  + epsil      # Offset to account for E/B grid and damping nodes
     
-    for ii in nb.prange(Np):
-        xp          = (pos[ii] + particle_transform) / dx       # Shift particle position >= 0
-        I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node (Vectorize?)
-        delta_left  = I[ii] - xp                                # Distance from left node in grid units
+    if field_periodic == 0:
+        for ii in nb.prange(Np):
+            xp          = (pos[ii] + particle_transform) / dx       # Shift particle position >= 0
+            I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node (Vectorize?)
+            delta_left  = I[ii] - xp                                # Distance from left node in grid units
+            
+            if abs(pos[ii] - xmin) < 1e-10:
+                I[ii]    = ND - 1
+                W[0, ii] = 0.0
+                W[1, ii] = 0.5
+                W[2, ii] = 0.0
+            elif abs(pos[ii] - xmax) < 1e-10:
+                I[ii]    = ND + NX - 1
+                W[0, ii] = 0.5
+                W[1, ii] = 0.0
+                W[2, ii] = 0.0
+            else:
+                W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))  # Get weighting factors
+                W[1, ii] = 0.75 - np.square(delta_left + 1.)
+                W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
+    else:
+        for ii in nb.prange(Np):
+            xp          = (pos[ii] + particle_transform) / dx       # Shift particle position >= 0
+            I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node (Vectorize?)
+            delta_left  = I[ii] - xp                                # Distance from left node in grid units
 
-        W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))      # Get weighting factors
-        W[1, ii] = 0.75 - np.square(delta_left + 1.)
-        W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
+            W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))  # Get weighting factors
+            W[1, ii] = 0.75 - np.square(delta_left + 1.)
+            W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
     return
 
 
@@ -215,14 +242,14 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
     else:
         grid_offset   = 0.0
     
-    particle_transform = xmax + (ND - grid_offset)*dx  + epsil  # Offset to account for E/B grid and damping nodes
-
+    particle_transform = xmax + (ND - grid_offset)*dx  + epsil      # Offset to account for E/B grid and damping nodes
+    
     for ii in nb.prange(Np):
         xp          = (pos[ii] + particle_transform) / dx       # Shift particle position >= 0
         I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node (Vectorize?)
         delta_left  = I[ii] - xp                                # Distance from left node in grid units
 
-        W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))      # Get weighting factors
+        W[0, ii] = 0.5  * np.square(1.5 - abs(delta_left))  # Get weighting factors
         W[1, ii] = 0.75 - np.square(delta_left + 1.)
         W[2, ii] = 1.0  - W[0, ii] - W[1, ii]
     return
@@ -275,6 +302,8 @@ def velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E,
 def position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, dt):
     for ii in nb.prange(pos.shape[0]):
         pos[ii] += vel[0, ii] * dt
+        
+        # Check if particle has left simulation and apply boundary conditions
         if (pos[ii] < xmin or pos[ii] > xmax):
             idx[ii] += Nj                            
     
@@ -297,6 +326,18 @@ def periodic_BC(pos, idx):
             idx[ii] -= Nj
     return
 
+
+@nb.njit(parallel=do_parallel)
+def get_max_vx(vel):
+    return np.abs(vel[0]).max()
+
+
+@nb.njit(parallel=do_parallel)
+def get_max_v(vel):
+    max_vx = np.abs(vel[0]).max()
+    max_vy = np.abs(vel[1]).max()
+    max_vz = np.abs(vel[2]).max()
+    return max_vx, max_vy, max_vz
 
 #%% SOURCES
 @nb.njit()
@@ -380,7 +421,7 @@ def init_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, rho_0, rho, J_ini
     J_plus  *= 0.0
     L       *= 0.0
     G       *= 0.0
-    
+                         
     deposit_moments(vel, Ie, W_elec, idx, ni_init, nu_init)
     position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, dt)
     deposit_moments(vel, Ie, W_elec, idx, ni, nu_plus)
@@ -421,7 +462,7 @@ def advance_particles_and_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, 
     G         *= 0.0   
     
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt)
-    deposit_moments(vel, Ie, W_elec, idx, ni, nu_plus)
+    deposit_moments(vel, Ie, W_elec, idx, ni, nu_minus)
     position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, dt)
     deposit_moments(vel, Ie, W_elec, idx, ni, nu_plus)
     
@@ -440,7 +481,10 @@ def advance_particles_and_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, 
         manage_source_term_boundaries(Ji_minus[:, ii])
         manage_source_term_boundaries(Ji_plus[:, ii])
         manage_source_term_boundaries(G[:, ii])
- 
+        
+    for ii in range(rho_half.shape[0]):
+        if rho_half[ii] < min_dens * ne * ECHARGE:
+            rho_half[ii] = min_dens * ne * ECHARGE  
             
     rho_int += rho_half
     rho_int /= 2.0
@@ -800,7 +844,7 @@ def load_run_params():
         particle_reflect, particle_reinit, field_periodic, disable_waves, source_smoothing, quiet_start,\
         NX, max_wcinv, dxm, ie, E_damping, damping_fraction, resis_multiplier, \
             orbit_res, freq_res, part_dumpf, field_dumpf, run_description, particle_open, ND, NC,\
-                lo1, lo2, ro1, ro2, li1, li2, ri1, ri2, damping_multiplier
+                lo1, lo2, ro1, ro2, li1, li2, ri1, ri2
             
     print('LOADING RUNFILE: {}'.format(run_input))
     with open(run_input, 'r') as f:
@@ -878,9 +922,9 @@ def load_plasma_params():
     global species_lbl, temp_color, temp_type, dist_type, nsp_ppc, mass, charge, \
         drift_v, density, anisotropy, E_perp, E_e, beta_flag, L_val, B_eq, B_xmax_ovr,\
         qm_ratios, N, idx_start, idx_end, Nj, N_species, B_eq, ne, density, \
-        E_par, Te0_scalar, vth_perp, vth_par, T_par, T_perp, \
-        wpi, wpe, va, gyfreq_eq, egyfreq_eq, dx, n_contr, xmax, xmin,\
-            k_max
+        E_par, Te0_scalar, vth_perp, vth_par, T_par, T_perp, vth_e, vei,\
+        wpi, wpe, va, gyfreq_eq, egyfreq_eq, dx, n_contr, min_dens, xmax, xmin,\
+            k_max, inv_dx, inv_mu0
         
     print('LOADING PLASMA: {}'.format(plasma_input))
     with open(plasma_input, 'r') as f:
@@ -928,9 +972,14 @@ def load_plasma_params():
     egyfreq_eq = ECHARGE*B_eq  / EMASS                       # Electron Gyrofrequency (rad/s) at equator (slowest)
     dx         = dxm * va / gyfreq_eq                        # Alternate method of calculating dx (better for multicomponent plasmas)
     n_contr    = density / nsp_ppc                           # Species density contribution: Each macroparticle contributes this SI density to a cell
+    min_dens   = 0.05                                        # Minimum charge density in a cell
     xmax       = NX / 2 * dx                                 # Maximum simulation length, +/-ve on each side
     xmin       =-NX / 2 * dx
     k_max      = np.pi / dx                                  # Maximum permissible wavenumber in system (SI???)
+
+    # Inverse values so that I can avoid divisions
+    inv_dx  = 1./dx
+    inv_mu0 = 1./mu0 
 
     E_par       = E_perp / (anisotropy + 1)     # Parallel species energy
     if beta_flag == 0:
@@ -949,6 +998,10 @@ def load_plasma_params():
         vth_par    = np.sqrt(kbt_par /  mass)                # Parallel thermal velocities
         T_par      = kbt_par / kB
         T_perp     = kbt_per / kB
+    
+    # This will change with Te0 which means the resistance will change. Complicated!
+    vth_e      = np.sqrt(kB*Te0_scalar/EMASS)
+    vei        = np.sqrt(2.) * wpe**4 / (64.*np.pi*ne*vth_e**3) # Ion-Electron collision frequency
 
     # Number of sim particles for each species, total
     Nj        = len(mass)                                    # Number of species
@@ -1036,6 +1089,8 @@ parser.add_argument('-p', '--plasmafile'  , default='_plasma_params.plasma', typ
 parser.add_argument('-d', '--driverfile'  , default='_driver_params.txt'   , type=str)
 parser.add_argument('-n', '--run_num'     , default=-1, type=int)
 parser.add_argument('-s', '--subcycle'    , default=32, type=int)
+parser.add_argument('-m', '--max_subcycle', default=256, type=int)
+parser.add_argument('-M', '--init_max_subcycle', default=32, type=int)
 args = vars(parser.parse_args())
 
 # Check root directory (change if on RCG)
@@ -1051,6 +1106,8 @@ driver_input = root_dir +  '/run_inputs/' + args['driverfile']
 
 # Set anything else useful before file input load
 default_subcycles = args['subcycle']
+max_subcycles     = args['max_subcycle']
+init_max_subcycle = args['init_max_subcycle']
 
 load_run_params()
 if __name__ == '__main__':

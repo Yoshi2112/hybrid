@@ -5928,7 +5928,7 @@ if __name__ == '__main__':
         if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [7,8]
+            runs_to_do = [13]
 
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -5938,7 +5938,7 @@ if __name__ == '__main__':
                 
                 #try:
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
-                plot_stability_check()
+                #plot_stability_check()
                 #thesis_plot_dispersion(save=True, fmax=1.1, tmax=None, Bmax=None, Pmax=None)
                     
                 #single_point_spectra(nx=[2, 130, 258, 386, 514], overlap=0.95, f_res_mHz=25, fmax=1.0)
@@ -5955,7 +5955,6 @@ if __name__ == '__main__':
                 #    print(f'PROBLEM WITH {series}[{run_num}], SKIPPING...')
                 #    logging.error('%s[%d]', series, run_num)
                 #    continue
-            
                 
 # =============================================================================
 #                 plot_abs_T_w_Bx(saveas='abs_plot_bx', save=False, tmax=None,
@@ -5966,16 +5965,14 @@ if __name__ == '__main__':
                 #    B0_lim=3.0, remove_ND=False)
                 #check_fields(save=True, ylim=False, skip=5)
                 
-# =============================================================================
-#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
-#                            B0_lim=10, remove_ND=False)
-#                 
-#                 plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
-#                 
-#                 plot_wk_thesis_good(dispersion_overlay=True, save=True,
-#                      pcyc_mult=1.1, xmax=0.8, zero_cold=True,
-#                      linear_only=False, normalize_axes=True, centre_only=False)
-# =============================================================================
+                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
+                           B0_lim=10, remove_ND=False)
+                
+                plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
+                
+                plot_wk_thesis_good(dispersion_overlay=True, save=True,
+                     pcyc_mult=1.1, xmax=0.8, zero_cold=True,
+                     linear_only=False, normalize_axes=True, centre_only=False)
 
                 #plot_total_density_with_time()
                 #plot_max_velocity()
