@@ -19,13 +19,13 @@ B_surf  = 3.12e-5                            # Magnetic field strength at Earth 
 
 # A few internal flags
 cold_va             = False
-Fu_override         = True      # Override to allow density to be calculated as a ratio of frequencies
+Fu_override         = False     # Override to allow density to be calculated as a ratio of frequencies
 do_parallel         = True      # Flag to use available threads to parallelize particle functions
 adaptive_timestep   = False     # Disable adaptive timestep to keep it the same as initial
 print_timings       = False     # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True      # Flag to print runtime every 50 iterations 
 do_dispersion       = False     # Account for dispersion effects in dt calculation
-fourth_order        = False     # Flag to choose between 4th or 2nd order solutions
+fourth_order        = True      # Flag to choose between 4th or 2nd order solutions
 logistic_B          = False     # Flag for B0 to change after a time to a different value as a logistic function
 
 if not do_parallel:
@@ -829,16 +829,7 @@ def assign_weighting_CIC(pos, I, W, E_nodes=True):
            be valid/not cause issues, but considering the scale of normal particle runs (speeds
            on the order of va) it should be plenty fine.
     
-    QUESTION :: Why do particles on the boundary only give 0.5 weighting? 
-    ANSWER   :: It seems legit and prevents double counting of a particle on the boundary. Since it
-                is a B-field node, there should be 0.5 weighted to both nearby E-nodes. In this case,
-                reflection doesn't make sense because there cannot be another particle there - there is 
-                only one midpoint position (c.f. mirroring contributions of all other particles due to 
-                pretending there's another identical particle on the other side of the simulation boundary).
-    
-    UPDATE :: Periodic fields don't require weightings of 0.5 on the boundaries. Loop was copied without
-               this option below because it prevents needing to evaluating field_periodic for every
-               particle.
+    TODO: Haven't actually done this yet.
     '''
     Np         = pos.shape[0]
     epsil      = 1e-15
@@ -1357,7 +1348,6 @@ def deposit_moments_to_grid_parallel(vel, Ie, W_elec, idx, ni, nu):
             if idx[ii] < Nj:
                 
                 # Calculation of retard(x) would happen here.
-                
                 
                 for kk in nb.prange(3):
                     nu_threads[tt, Ie[ii],     idx[ii], kk] += W_elec[0, ii] * vel[kk, ii]
@@ -2042,6 +2032,7 @@ def check_timestep(pos, vel, B, E, q_dens, Ie, W_elec, Ib, W_mag, B_center, Ji_i
     
     TODO: 
         - Re-evaluate damping array when timestep changes
+    TODO: Check: Does B_center include wave and B0 fields? Both are needed for dispersion ts
     '''
     B_magnitude = np.sqrt(B_center[ND:ND+NX+1, 0] ** 2 +
                           B_center[ND:ND+NX+1, 1] ** 2 +

@@ -24,11 +24,11 @@ script is shorter and less painful to work with
 If a method requires more than a few functions, it will be split into its own 
 module, i.e. get_growth_rates
 '''
-qi  = 1.602e-19               # Elementary charge (C)
+qp  = 1.602e-19               # Elementary charge (C)
 c   = 3e8                     # Speed of light (m/s)
 me  = 9.11e-31                # Mass of electron (kg)
 mp  = 1.67e-27                # Mass of proton (kg)
-e   = -qi                     # Electron charge (C)
+e   = -qp                     # Electron charge (C)
 mu0 = (4e-7) * np.pi          # Magnetic Permeability of Free Space (SI units)
 kB  = 1.38065e-23             # Boltzmann's Constant (J/K)
 e0  = 8.854e-12               # Epsilon naught - permittivity of free space
@@ -49,7 +49,7 @@ def assign_weighting_TSC(pos, I, W, E_nodes=True):
     
     particle_transform = xmax + (ND - grid_offset)*dx  + epsil      # Offset to account for E/B grid and damping nodes
     
-    if field_periodic == 0:
+    if cf.field_periodic == 0:
         for ii in nb.prange(Np):
             xp          = (pos[ii] + particle_transform) / dx       # Shift particle position >= 0
             I[ii]       = int(round(xp) - 1.0)                      # Get leftmost to nearest node (Vectorize?)
@@ -303,7 +303,7 @@ def get_electron_temp(qn):
             Te[ii, :] = np.ones(qn.shape[0]) * cf.Te0
         elif cf.ie == 1:
             gamma_e = 5./3. - 1.
-            Te[ii, :] = cf.Te0 * np.power(qn[ii, :] / (qi * cf.ne), gamma_e)
+            Te[ii, :] = cf.Te0 * np.power(qn[ii, :] / (qp * cf.ne), gamma_e)
     return Te
 
 
@@ -324,7 +324,7 @@ def get_grad_P(qn, te):
     
     qn, te :: (time, space)
     '''
-    Pe     = qn * kB * te / qi       # Store Pe in grad_P array for calculation
+    Pe     = qn * kB * te / qp       # Store Pe in grad_P array for calculation
 
     # Central differencing, internal points
     grad_P = np.zeros(qn.shape)
@@ -425,7 +425,106 @@ def calculate_E_components(bx, by, bz, jx, jy, jz, q_dens):
     #     hall, amb   , conv
 
 
+@nb.njit(parallel=True)
+def get_Ev_ratio(vel, Ie, W_elec, ex, ey, ez, ti):
+    wE = np.zeros(Ie.shape[0], dtype=nb.float32)
+    for pp in nb.prange(cf.N):   
+        Epx = 0.0; Epy = 0.0; Epz = 0.0
+        for jj in range(3):        
+            Epx += ex[ti, Ie[pp] + jj] * W_elec[jj, pp]
+            Epy += ey[ti, Ie[pp] + jj] * W_elec[jj, pp]
+            Epz += ez[ti, Ie[pp] + jj] * W_elec[jj, pp]
+        Ep  = np.sqrt(Epx**2 + Epy**2 + Epz**2)
+        vt  = np.sqrt(vel[0, pp] ** 2 + vel[1, pp] **2 + vel[2, pp] ** 2)
+        
+        # Redo to prevent race condition
+        # Do single variables lead to race conditions? Or is it only arrays?
+        wE[pp] = np.abs(Ep / vt)
+    return wE.max() * qp/mp
+    
 
+def get_stability_criteria(overwrite=False):
+    '''
+    -- Resolution criteria:
+        -- Fastest particle, wL = k*v = pi*v/dx     (Particle data only)
+        -- Electric field,   wE = qs*E / ms*v       (Particle and field data)
+        -- Gyrofrequency,    wG = qs*B / ms         (Field only)
+        -- Dispersion,       wD = k^2*B / mu0*pc    (Field only)
+    -- Stability criteria:
+        -- Phase speed? Compare this to c or vA? Does it even apply to hybrids? E/H?
+        
+    For particle criteria, need to fetch fields at particle position, calculate
+    wG and wE for each particle, and take the max value. For wL, wD, just take the 
+    max value for the particle and field quantities, respectively.
+    '''
+    stab_path = cf.temp_dir + 'stability_criteria.npz'
+    if os.path.exists(stab_path) and not overwrite:
+        print('Loading stability criteria from file')
+        data = np.load(stab_path)
+        ftimes = data['ftimes']
+        ptimes = data['ptimes']
+        wL_max = data['wL_max']
+        wE_max = data['wE_max']
+        wG_max = data['wG_max']
+        wD_max = data['wD_max']
+        vdt_max= data['vdt_max']
+    else:    
+        global xmin, xmax, dx, ND, NX
+        xmax = cf.xmax  
+        xmin = cf.xmin
+        dx   = cf.dx
+        ND   = cf.ND
+        NX   = cf.NX
+        
+        print('Calculating stability criteria for fields...')
+        k = np.pi / dx
+        
+        # Load all fields (time, space)
+        ftimes, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens, field_sim_time, damping_array\
+            = cf.get_array(get_all=True)
+        bt = np.sqrt(bx ** 2 + by **2 + bz ** 2) + cf.Bc[:, 0]
+        
+        # Calculate max dispersion frequency
+        wD = k**2 * 0.5*(bt[:, 1:] + bt[:, :-1]) / (mu0 * qdens)
+        wD_max = wD.max(axis=1)
+        
+        # Calculate max gyrofrequency
+        wG_max = qp * (bt.max(axis=1)) / mp
+    
+        num_particle_steps = len(os.listdir(cf.particle_dir))
+        ptimes = np.zeros(num_particle_steps)
+        wL_max = np.zeros(num_particle_steps)
+        wE_max = np.zeros(num_particle_steps)
+        vdt_max= np.zeros(num_particle_steps)
+    
+        print('Calculating stability criteria for particles...')
+        for ii in range(num_particle_steps):
+            print('\r {:.0f} percent'.format(ii/num_particle_steps*100), end="")
+            pos, vel, idx, ptimes[ii], idx_start, idx_end = cf.load_particles(ii)
+            max_V = np.abs(vel[0]).max()
+            # Calculate fastest particle and corresponding 'frequency'
+            wL_max[ii] = np.pi*max_V/cf.dx
+            
+            # Also calculate timestep required for dt = 0.5*dx/max_V
+            vdt_max[ii] = 0.5*cf.dx/max_V
+            
+            # Find field time closest to current particle time
+            diff = np.abs(ptimes[ii] - ftimes)
+            ti = np.where(diff == diff.min())[0][0]
+            
+            # Weight fields to particle position as they would have been in the code
+            Ie     = np.zeros(    cf.N,  dtype=int)
+            W_elec = np.zeros((3, cf.N), dtype=float)
+            assign_weighting_TSC(pos, Ie, W_elec, E_nodes=True)
+            
+            # Calculate largest E/v ratio
+            wE_max[ii] = get_Ev_ratio(vel, Ie, W_elec, ex, ey, ez, ti)
+            
+        print('Saving...')
+        np.savez(stab_path, ftimes=ftimes, ptimes=ptimes, wL_max=wL_max,
+                           wE_max=wE_max, wG_max=wG_max, wD_max=wD_max,
+                           vdt_max=vdt_max)
+    return ftimes, ptimes, wL_max, wE_max, wG_max, wD_max, vdt_max
 
 
 def get_energies(): 
@@ -695,21 +794,23 @@ def get_derivative(arr):
 # =============================================================================
 
 
-if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-    
-    f0    = 0.4 # Hz
-    t_max = 10000
-    dt    = 0.1
-    t     = np.arange(0, t_max, dt)
-    
-    signal = np.sin(2 * np.pi * f0 * t)
-    sfft   = 2 / t.shape[0] * np.fft.rfft(signal)
-    freqs  = np.fft.rfftfreq(t.shape[0], d=dt)
-    
-    plt.plot(freqs, sfft.real)
-    plt.plot(freqs, sfft.imag)
-    #plt.xlim(0, 0.5)
+# =============================================================================
+# if __name__ == '__main__':
+#     import matplotlib.pyplot as plt
+#     
+#     f0    = 0.4 # Hz
+#     t_max = 10000
+#     dt    = 0.1
+#     t     = np.arange(0, t_max, dt)
+#     
+#     signal = np.sin(2 * np.pi * f0 * t)
+#     sfft   = 2 / t.shape[0] * np.fft.rfft(signal)
+#     freqs  = np.fft.rfftfreq(t.shape[0], d=dt)
+#     
+#     plt.plot(freqs, sfft.real)
+#     plt.plot(freqs, sfft.imag)
+#     #plt.xlim(0, 0.5)
+# =============================================================================
     
     
     

@@ -688,7 +688,7 @@ def get_array(component='by', get_all=False, timebase=None):
             ftime = ftime_sec * gyfreq 
         else:
             ftime = ftime_sec
-
+        
         return ftime, bx, by, bz, ex, ey, ez, vex, vey, vez, te, jx, jy, jz, qdens, field_sim_time, damping_array
 
 
