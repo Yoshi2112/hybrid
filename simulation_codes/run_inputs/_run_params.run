@@ -24,4 +24,4 @@ GYROPERIOD_RESOLUTION	0.10
 FREQUENCY_RESOLUTION	0.05
 PARTICLE_DUMP_FREQ		0.20
 FIELD_DUMP_FREQ			0.20
-CAM_CL instability check. Stable, removed deposit_velocity_moments() function.
+CAM_CL instability check. Stable, removed a bunch more things.
