@@ -1532,7 +1532,7 @@ def get_B_cent(_B, _B_cent, B_eq):
 
 
 @nb.njit()
-def get_curl_E(E, dE):
+def get_curl_E_2nd_order(E, dE):
     ''' Returns a vector quantity for the curl of a field valid at the
     positions between its gridpoints (i.e. curl(E) -> B-grid, etc.)
     
@@ -1573,7 +1573,7 @@ def get_curl_E(E, dE):
 
 
 @nb.njit()
-def get_curl_E_4thOrder(E, dE):
+def get_curl_E(E, dE):
     ''' 
     Same as normal function, but 4th order solution for bulk. Gets dumped on B-grid.
     
@@ -1613,7 +1613,7 @@ def get_curl_E_4thOrder(E, dE):
 
 
 @nb.njit()
-def push_B(B, E, curlE, DT, qq, damping_array, retarding_array, half_flag=1):
+def push_B(B, E, curlE, DT, qq, damping_array, half_flag=1):
     '''
     Used as part of predictor corrector for predicing B based on an approximated
     value of E (rather than cycling with the source terms)
@@ -1628,9 +1628,9 @@ def push_B(B, E, curlE, DT, qq, damping_array, retarding_array, half_flag=1):
     subtracted from the "full" timestep time
     '''
     if fourth_order == 1:
-        get_curl_E_4thOrder(E, curlE)
-    else:
         get_curl_E(E, curlE)
+    else:
+        get_curl_E_2nd_order(E, curlE)
     
     if field_periodic == 0:
         for ii in nb.prange(1, B.shape[1]):              
@@ -1641,12 +1641,6 @@ def push_B(B, E, curlE, DT, qq, damping_array, retarding_array, half_flag=1):
     if field_periodic == 0:
         for ii in nb.prange(1, B.shape[1]):              # Apply damping, skipping x-axis
             B[:, ii] *= damping_array                    # Not sure if this needs to modified for half steps?
-    
-# =============================================================================
-#         # PMC boundary
-#         B[:ND+1,    ii] *= 0.0
-#         B[ND + NX:, ii] *= 0.0
-# =============================================================================
     else:
         for ii in nb.prange(1, B.shape[1]):
             # Boundary value (should be equal)
@@ -2372,7 +2366,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
     
     if disable_waves == 0:   
         # Push B from N to N + 1/2 and calculate E(N + 1/2)
-        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, retarding_array, half_flag=1)
+        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
         get_B_cent(B, B_cent, B_eq)
         B_eq = update_Beq((qq+0.5)*DT)
         
@@ -2395,7 +2389,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         Ji_int *= -1.0; Ji_int +=  2.0 * Ji_half
         Ve_int *= -1.0; Ve_int +=  2.0 * Ve_half
         
-        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, retarding_array, half_flag=0)
+        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
         update_Beq((qq+1.0)*DT)
         predict_time = round(timer() - predict_start, 3)
         
@@ -2410,7 +2404,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         q_dens *= 0.5; q_dens += 0.5 * q_dens_adv
     
         # Compute predicted fields at N + 3/2, advance J_ext too
-        push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, retarding_array, half_flag=1)
+        push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
         get_B_cent(B, B_cent, B_eq)
         B_eq = update_Beq((qq+1.5)*DT)
         calculate_E(B, B_cent, Ji_half, J_ext, q_dens, E_int, Ve_half, Te,
@@ -2435,7 +2429,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         Ji_int *= 0.5; Ji_int += 0.5*Ji_half
         Ve_int *= 0.5; Ve_int += 0.5*Ve_half 
     
-        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, retarding_array, half_flag=0)   # Advance the original B
+        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
         get_B_cent(B, B_cent, B_eq)
         B_eq = update_Beq((qq+1.0)*DT)
         
