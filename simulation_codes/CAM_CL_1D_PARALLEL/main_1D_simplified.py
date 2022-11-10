@@ -2,14 +2,7 @@
 from timeit import default_timer as timer
 import numpy as np
 import numba as nb
-import sys, os
-'''
-CAM_CL version of the code where everything's stripped down to its basics until
-it becomes stable. It should be able to recreate the run4 of the 20% He data
-runs the same as the Predictor/Corrector code does.
-
-Keep stripping until we have a MWE of the CAM_CL. Do periodic runs just to check.
-'''
+import sys, os, pdb
 
 ## PHYSICAL CONSTANTS ##
 ECHARGE = 1.602177e-19                       # Elementary charge (C)
@@ -156,6 +149,12 @@ def set_timestep(vel):
     DT        = min(ion_ts, vel_ts)               # Set global timestep as smallest of these
     max_time  = max_wcinv / gyfreq_eq             # Total runtime in seconds
     subcycles = default_subcycles                 # Number of subcycles per particle step
+    
+    # Could put a check in here to make sure the interplay between
+    # timestep and subcycle satisfies everything.
+    
+    while subcycles%4 != 0:                       # Force subcycle count to be a factor of 4
+        subcycles += 1
     
     if part_dumpf == 0:
         part_save_iter = 1
@@ -323,6 +322,7 @@ def deposit_moments(vel, Ie, W_elec, idx, ni, nu):
 
 @nb.njit()
 def manage_source_term_boundaries(arr):
+    '''Will only ever get 1D arrays of length NC'''
     # If periodic, move contributions
     arr[li1] += arr[ro1]
     arr[li2] += arr[ro2]
@@ -336,6 +336,7 @@ def manage_source_term_boundaries(arr):
     arr[lo2] = arr[ri2]
     
     # ...and Fill remaining ghost cells
+    # TODO: Does this cause any issues if there are only exactly 2 ghost cells?
     arr[:lo2] = arr[lo2]
     arr[ro2:] = arr[ro2]
     return
@@ -460,93 +461,59 @@ def get_grad_P(qn, te):
     return grad_pe
 
 
-@nb.njit(parallel=False)
-def apply_boundary(B):
-    for ii in nb.prange(1, B.shape[1]):
-        # Boundary value (should be equal)
-        end_bit = 0.5 * (B[ND, ii] + B[ND + NX, ii])
-
-        B[ND,      ii] = end_bit
-        B[ND + NX, ii] = end_bit
-        
-        B[ND - 1, ii]  = B[ND + NX - 1, ii]
-        B[ND - 2, ii]  = B[ND + NX - 2, ii]
-        
-        B[ND + NX + 1, ii] = B[ND + 1, ii]
-        B[ND + NX + 2, ii] = B[ND + 2, ii]
-    return
-
-
-@nb.njit()
+#@nb.njit()
 def cyclic_leapfrog(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
-                    sim_time):
+                    sim_time, half_step):
     '''
-    TODO: Force subcycle number to be even. This should simplify and clarify
-    this algorithm here if I can always expect B1(?) to have been the last
-    updated. Also means I always return the same one as well.
-    '''
-    H     = 0.5 * dt
-    dh    = H / subcycles
+    Subcycles are defined per particle step, so only half are used per
+    field push (since they are only half timestep pushes)
     
+    B2 is always the first pushed, and B1 is always the output
+    (Subcycles will always land with B1 being the final updated)
+    '''
+    shalf = subcycles // 2
+    H     = 0.5 * dt
+    dh    = H / shalf
     curl  = np.zeros((NC + 1, 3), dtype=np.float64)
-    B2[:] = B1[:]
-
-    ## DESYNC SECOND FIELD COPY - PUSH BY DH ##
-    ## COUNTS AS ONE SUBCYCLE ##
-    calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
-    get_curl_E(E, curl) 
-    B2       -= dh * curl
-    apply_boundary(B2)
-    get_B_cent(B2, B_center)
-    sim_time += dh
-
-    ## RETURN IF NO SUBCYCLES REQUIRED ##
-    if subcycles == 1:
-        B1[:] = B2[:]
-        return sim_time+H
     
     ## MAIN SUBCYCLE LOOP ##
-    ii = 1
-    while ii < subcycles:
-        if ii%2 == 1:
+    for ii in range(shalf):
+        if ii%2 == 0:
+            calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
+            get_curl_E(E, curl) 
+            B2  -= (2 - half_step) * dh * curl
+            get_B_cent(B2, B_center)
+            print('Pushing B2, sum:', B2.sum())
+        else:
             calculate_E(B2, B_center, Ji, rho, E, Ve, Te, sim_time)
             get_curl_E(E, curl) 
             B1  -= 2 * dh * curl
-            apply_boundary(B1)
             get_B_cent(B1, B_center)
-            sim_time += dh
-        else:
-            calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
-            get_curl_E(E, curl) 
-            B2  -= 2 * dh * curl
-            apply_boundary(B2)
-            get_B_cent(B2, B_center)
-            sim_time += dh
+            print('Pushing B1, sum:', B1.sum())
             
-        ii += 1
+        sim_time += dh
 
-    ## RESYNC FIELD COPIES ##
-    ## DOESN'T COUNT AS A SUBCYCLE ##
-    if ii%2 == 0:
-        calculate_E(B2, B_center, Ji, rho, E, Ve, Te, sim_time)
-        get_curl_E(E, curl) 
-        B2  -= dh * curl
-        apply_boundary(B2)
-        get_B_cent(B2, B_center)
-    else:
-        calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
-        get_curl_E(E, curl) 
-        B1  -= dh * curl
-        apply_boundary(B1)
-        get_B_cent(B1, B_center)
-    
-    ## AVERAGE FOR OUTPUT ##
-    B1 += B2; B1 /= 2.0
+    ## ERROR CHECK ## 
+    if True:
+        print('Error checking...')
+        E_temp = E.copy()
+        calculate_E(B1, B_center, Ji, rho, E_temp, Ve, Te, sim_time)
+        get_curl_E(E_temp, curl) 
+        B_temp = B2 - dh * curl
+        print(B_temp)
+        error = (2.*np.abs(B_temp - B1) / (B_temp + B1)).sum()
+        print('Error is', error)
+        pdb.set_trace()
+        if error > 1e-4:
+            B1 += B_temp; B1 /= 2.0     # Average fields
+            B2[:] = B1[:]               # Set them equal
+            half_step = 1               # Flag for a desync at the next push 
+            print('Averaged and flagged')
     
     # Calculate final values
     get_B_cent(B1, B_center)
     calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
-    return sim_time
+    return sim_time, half_step
 
 
 @nb.njit()
@@ -1006,13 +973,14 @@ def get_thread_values():
 #################################
 
 #### Read in command-line arguments, if present
+## NOTE: Subcycles defined per particle step, but pushes are half-timestep
 import argparse as ap
 parser = ap.ArgumentParser()
 parser.add_argument('-r', '--runfile'     , default='_run_params.run', type=str)
 parser.add_argument('-p', '--plasmafile'  , default='_plasma_params.plasma', type=str)
 parser.add_argument('-d', '--driverfile'  , default='_driver_params.txt'   , type=str)
 parser.add_argument('-n', '--run_num'     , default=-1, type=int)
-parser.add_argument('-s', '--subcycle'    , default=32, type=int)
+parser.add_argument('-s', '--subcycle'    , default=8, type=int)
 args = vars(parser.parse_args())
 
 # Check root directory (change if on RCG)
@@ -1072,7 +1040,7 @@ if __name__ == '__main__':
     _LOOP_TIMES     = np.zeros(_MAX_INC-1, dtype=float)
     _LOOP_SAVE_ITER = 1
 
-    _QQ = 1; _SIM_TIME = 0.0
+    _QQ = 1; _SIM_TIME = 0.0; _DESYNC_B = 1; _HALF=1
     print('Starting loop...')
     while _QQ < _MAX_INC:
         
@@ -1081,8 +1049,8 @@ if __name__ == '__main__':
         #######################
         
         # First field advance to N + 1/2
-        _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
-                                    _DT, _SUBCYCLES, _SIM_TIME)
+        _SIM_TIME, _HALF = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
+                                    _DT, _SUBCYCLES, _SIM_TIME, _HALF)
 
         # CAM part
         push_current(_Ji_PLUS, _Ji, _E, _B_CENT, _L, _G, _DT)
@@ -1095,8 +1063,8 @@ if __name__ == '__main__':
                                               _Ji_MINUS, _Ji_PLUS, _L, _G, _DT)
         
         # Second field advance to N + 1
-        _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
-                                    _DT, _SUBCYCLES, _SIM_TIME)
+        _SIM_TIME, _HALF = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
+                                    _DT, _SUBCYCLES, _SIM_TIME, _HALF)
         
         ########################
         ##### OUTPUT DATA  #####
@@ -1122,6 +1090,7 @@ if __name__ == '__main__':
                                                    pcent, _QQ, _MAX_INC, hrs, mins, sec))
             
         _QQ += 1
+        break
         
     runtime = round(timer() - start_time,2) 
     print('Run complete : {} s'.format(runtime))
