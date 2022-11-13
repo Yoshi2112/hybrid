@@ -2,7 +2,7 @@ DRIVE					D:/
 SAVE_PATH			    /runs/CAMCL_stability_tests/
 RUN						-
 SAVE_PARTICLE_FLAG		0
-SAVE_FIELD_FLAG			0
+SAVE_FIELD_FLAG			1
 SEED					983274
 HOMOGENOUS_B0_FLAG		1
 PARTICLE_PERIODIC_FLAG	1
@@ -24,4 +24,4 @@ GYROPERIOD_RESOLUTION	0.10
 FREQUENCY_RESOLUTION	0.05
 PARTICLE_DUMP_FREQ		0.20
 FIELD_DUMP_FREQ			0.20
-CAM_CL instability check. Stable, removed a bunch more things.
+CAM_CL instability check. Checking against old CL code because the new one blew up. 32 subcycles.

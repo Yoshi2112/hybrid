@@ -14,7 +14,6 @@ mu0     = (4e-7) * np.pi                     # Magnetic Permeability of Free Spa
 RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
-# A few internal flags
 do_parallel         = True
 print_timings       = False      # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True       # Flag to print runtime every 50 iterations 
@@ -22,10 +21,7 @@ print_runtime       = True       # Flag to print runtime every 50 iterations
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-#nb.set_num_threads(6)
 
-
-#%% --- FUNCTIONS ---
 #%% INITIALIZATION
 @nb.njit()
 def quiet_start_bimaxwellian():
@@ -98,7 +94,7 @@ def uniform_bimaxwellian():
     return pos, vel, idx
 
 
-def initialize_particles(B, E):
+def initialize_particles():
     if quiet_start == 1:
         pos, vel, idx = quiet_start_bimaxwellian()
     else:
@@ -139,7 +135,6 @@ def initialize_source_arrays():
     L        = np.zeros( NC,     dtype=np.float64)
     G        = np.zeros((NC, 3), dtype=np.float64)
     return rho_half, rho_int, Ji, Ji_plus, Ji_minus, L, G
-
 
 
 def set_timestep(vel):
@@ -336,9 +331,9 @@ def manage_source_term_boundaries(arr):
     arr[lo2] = arr[ri2]
     
     # ...and Fill remaining ghost cells
-    # TODO: Does this cause any issues if there are only exactly 2 ghost cells?
-    arr[:lo2] = arr[lo2]
-    arr[ro2:] = arr[ro2]
+    if ND > 2:
+        arr[:lo2] = arr[lo2]
+        arr[ro2:] = arr[ro2]
     return
 
 
@@ -461,6 +456,23 @@ def get_grad_P(qn, te):
     return grad_pe
 
 
+@nb.njit()
+def apply_boundary(B):
+    for ii in nb.prange(1, B.shape[1]):
+        # Boundary value (should be equal)
+        end_bit = 0.5 * (B[ND, ii] + B[ND + NX, ii])
+
+        B[ND,      ii] = end_bit
+        B[ND + NX, ii] = end_bit
+        
+        B[ND - 1, ii]  = B[ND + NX - 1, ii]
+        B[ND - 2, ii]  = B[ND + NX - 2, ii]
+        
+        B[ND + NX + 1, ii] = B[ND + 1, ii]
+        B[ND + NX + 2, ii] = B[ND + 2, ii]
+    return
+
+
 #@nb.njit()
 def cyclic_leapfrog(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
                     sim_time, half_step):
@@ -470,6 +482,16 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
     
     B2 is always the first pushed, and B1 is always the output
     (Subcycles will always land with B1 being the final updated)
+    
+    Error checking criteria: Matthews (1994) defines B in terms of B0 and
+        averages if the (maximum at any gridpoint?) difference between 
+        solutions (B1, B2*) is >1e4, i.e. more than 0.1% of B0
+        
+    TODO: Split this function up into a CL call and put the error
+        check outside it. Should have some ability to modify the
+        subcycle period. Maybe check that in check_timestep().
+        
+    Why doesn't this work?
     '''
     shalf = subcycles // 2
     H     = 0.5 * dt
@@ -482,33 +504,136 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
             calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
             get_curl_E(E, curl) 
             B2  -= (2 - half_step) * dh * curl
+            apply_boundary(B2)
             get_B_cent(B2, B_center)
-            print('Pushing B2, sum:', B2.sum())
+            #print('Pushing B2, sum:', B2.sum())
         else:
             calculate_E(B2, B_center, Ji, rho, E, Ve, Te, sim_time)
             get_curl_E(E, curl) 
             B1  -= 2 * dh * curl
+            apply_boundary(B1)
             get_B_cent(B1, B_center)
-            print('Pushing B1, sum:', B1.sum())
+            #print('Pushing B1, sum:', B1.sum())
             
         sim_time += dh
 
     ## ERROR CHECK ## 
-    if True:
-        print('Error checking...')
+    if _QQ%5 == 0:
+        #print('Error checking...')
+        # Advance B2 half a step to check error
         E_temp = E.copy()
         calculate_E(B1, B_center, Ji, rho, E_temp, Ve, Te, sim_time)
         get_curl_E(E_temp, curl) 
         B_temp = B2 - dh * curl
-        print(B_temp)
-        error = (2.*np.abs(B_temp - B1) / (B_temp + B1)).sum()
-        print('Error is', error)
-        pdb.set_trace()
-        if error > 1e-4:
+        apply_boundary(B_temp)
+        
+        max_error = np.abs(B1 - B_temp).max() / B_eq
+        
+        # If error, average copies and set flag for half-step next round
+        if max_error > 1e-4:
             B1 += B_temp; B1 /= 2.0     # Average fields
             B2[:] = B1[:]               # Set them equal
+            get_B_cent(B1, B_center)    # Get new B center values
             half_step = 1               # Flag for a desync at the next push 
-            print('Averaged and flagged')
+            print('Averaging. Error is', max_error)
+    
+    # Calculate final values
+    calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
+    return sim_time, half_step
+
+
+def cyclic_leapfrog_old(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
+                    sim_time, half_step):
+    '''
+    Solves for the magnetic field push by keeping two copies and subcycling between them,
+    averaging them at the end of the cycle as per Matthews (1994). The source terms are
+    unchanged during the subcycle step. This method damps the high frequency dispersion 
+    inherent in explicit hybrid simulations.
+    
+    INPUT:
+        B1    -- Magnetic field to update (return value comes through here)
+        B2    -- Empty array for second copy
+        rho_i -- Total ion charge density
+        J_i   -- Total ionic current density
+        DT    -- Master simulation timestep. This function advances the field by 0.5*DT
+        subcycles -- The number of subcycle steps to be performed. 
+        
+    22/02/2021 :: Applied damping field to each subcycle. Does this damping array
+            need to account for subcycling in the DX/DT bit? Test later.
+            
+    28/02/2021 :: Added advancement of sim_time within this function. The global
+            "clock" now follows the development of the magnetic field.
+            Resync doesn't require a sim_time increment since the field solution
+            is already at 0.5*DT and this solution is used to advance the second
+            field copy for averaging.
+            
+    TO DO: Need to perform checks every few subcycles for divergence? Or every 
+    few calls? Work out what needs to be done here.
+    
+    Note: Average error divergence calculated by summing the absolute difference
+    and weighting by dxm - number of inertial lengths per dx. This empirically
+    gives an initial 'quiet' error on the order of 1e-8. The question is, how does 
+    this inform the maximum acceptable error.
+    
+    Actually, need to normalise/multiply by dxm*NX, since there's a sum there.
+    Do that later. For now, just average every 32s/c or so.
+    
+    Works for even s/c av,
+    
+    '''
+    H     = 0.5 * dt
+    dh    = H / subcycles    
+    curl  = np.zeros((NC + 1, 3), dtype=np.float64)
+    B2[:] = B1[:]
+
+    ## DESYNC SECOND FIELD COPY - PUSH BY DH ##
+    ## COUNTS AS ONE SUBCYCLE ##
+    calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
+    get_curl_E(E, curl) 
+    B2       -= dh * curl
+    apply_boundary(B2)
+    get_B_cent(B2, B_center)
+    sim_time += dh
+
+    
+    ## MAIN SUBCYCLE LOOP ##
+    ii = 1
+    while ii < subcycles:
+        if ii%2 == 1:
+            calculate_E(B2, B_center, Ji, rho, E, Ve, Te, sim_time)
+            get_curl_E(E, curl) 
+            B1  -= 2 * dh * curl
+            apply_boundary(B1)
+            get_B_cent(B1, B_center)
+            sim_time += dh
+            #print('Push B1')
+        else:
+            calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
+            get_curl_E(E, curl) 
+            B2  -= 2 * dh * curl
+            apply_boundary(B2)
+            get_B_cent(B2, B_center)
+            sim_time += dh
+
+        ii += 1
+
+    ## RESYNC FIELD COPIES ##
+    ## DOESN'T COUNT AS A SUBCYCLE ##
+    if ii%2 == 0:
+        calculate_E(B2, B_center, Ji, rho, E, Ve, Te, sim_time)
+        get_curl_E(E, curl) 
+        B2  -= dh * curl
+        apply_boundary(B2)
+        get_B_cent(B2, B_center)
+    else:
+        calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
+        get_curl_E(E, curl) 
+        B1  -= dh * curl
+        apply_boundary(B1)
+        get_B_cent(B1, B_center)
+    
+    ## AVERAGE FOR OUTPUT ##
+    B1 += B2; B1 /= 2.0
     
     # Calculate final values
     get_B_cent(B1, B_center)
@@ -525,7 +650,6 @@ def calculate_E(B, B_center, Ji, qn, E, Ve, Te, sim_time):
     Ve[:, 1] = (Ji[:, 1] - curlB[:, 1]) / qn
     Ve[:, 2] = (Ji[:, 2] - curlB[:, 2]) / qn
     
-    Te
     del_p = get_grad_P(qn, Te)
     
     VexB     = np.zeros((NC, 3), dtype=np.float64)  
@@ -550,7 +674,6 @@ def calculate_E(B, B_center, Ji, qn, E, Ve, Te, sim_time):
     return
 
 
-#%% AUXILLIARY FUNCTIONS
 @nb.njit(parallel=False)
 def get_B_cent(B, _B_cent):
     _B_cent[:, 1] = 0.5*(B[:-1, 1] + B[1:, 1])
@@ -980,7 +1103,7 @@ parser.add_argument('-r', '--runfile'     , default='_run_params.run', type=str)
 parser.add_argument('-p', '--plasmafile'  , default='_plasma_params.plasma', type=str)
 parser.add_argument('-d', '--driverfile'  , default='_driver_params.txt'   , type=str)
 parser.add_argument('-n', '--run_num'     , default=-1, type=int)
-parser.add_argument('-s', '--subcycle'    , default=8, type=int)
+parser.add_argument('-s', '--subcycle'    , default=32, type=int)
 args = vars(parser.parse_args())
 
 # Check root directory (change if on RCG)
@@ -997,18 +1120,17 @@ driver_input = root_dir +  '/run_inputs/' + args['driverfile']
 # Set anything else useful before file input load
 default_subcycles = args['subcycle']
 
-load_run_params()
-if __name__ == '__main__':
-    manage_directories()
-load_plasma_params()
-get_thread_values()
-
 
 
 #%%#####################
 ### START SIMULATION ###
 ########################
 if __name__ == '__main__':
+    load_run_params()
+    load_plasma_params()
+    get_thread_values()
+    manage_directories()
+    
     print_summary_and_checks()
 
     start_time = timer()
@@ -1018,7 +1140,7 @@ if __name__ == '__main__':
     _Ji_PLUS, _Ji_MINUS,    \
     _L, _G               = initialize_source_arrays()
     _POS, _VEL, _IE, _W_ELEC, _IB, \
-    _W_MAG, _IDX                   = initialize_particles(_B, _E)
+    _W_MAG, _IDX                   = initialize_particles()
     _DT, _MAX_INC, _PART_SAVE_ITER,\
     _FIELD_SAVE_ITER, _SUBCYCLES   = set_timestep(_VEL)    
         
@@ -1040,7 +1162,7 @@ if __name__ == '__main__':
     _LOOP_TIMES     = np.zeros(_MAX_INC-1, dtype=float)
     _LOOP_SAVE_ITER = 1
 
-    _QQ = 1; _SIM_TIME = 0.0; _DESYNC_B = 1; _HALF=1
+    _QQ = 1; _SIM_TIME = 0.0; _HALF=1
     print('Starting loop...')
     while _QQ < _MAX_INC:
         
@@ -1049,8 +1171,12 @@ if __name__ == '__main__':
         #######################
         
         # First field advance to N + 1/2
-        _SIM_TIME, _HALF = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
+        _SIM_TIME, _HALF = cyclic_leapfrog_old(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
                                     _DT, _SUBCYCLES, _SIM_TIME, _HALF)
+# =============================================================================
+#         _SIM_TIME, _HALF = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
+#                                     _DT, _SUBCYCLES, _SIM_TIME, _HALF)
+# =============================================================================
 
         # CAM part
         push_current(_Ji_PLUS, _Ji, _E, _B_CENT, _L, _G, _DT)
@@ -1063,8 +1189,12 @@ if __name__ == '__main__':
                                               _Ji_MINUS, _Ji_PLUS, _L, _G, _DT)
         
         # Second field advance to N + 1
-        _SIM_TIME, _HALF = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
+        _SIM_TIME, _HALF = cyclic_leapfrog_old(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
                                     _DT, _SUBCYCLES, _SIM_TIME, _HALF)
+# =============================================================================
+#         _SIM_TIME, _HALF = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
+#                                     _DT, _SUBCYCLES, _SIM_TIME, _HALF)
+# =============================================================================
         
         ########################
         ##### OUTPUT DATA  #####
@@ -1090,7 +1220,6 @@ if __name__ == '__main__':
                                                    pcent, _QQ, _MAX_INC, hrs, mins, sec))
             
         _QQ += 1
-        break
         
     runtime = round(timer() - start_time,2) 
     print('Run complete : {} s'.format(runtime))

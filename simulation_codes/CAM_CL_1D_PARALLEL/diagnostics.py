@@ -12,6 +12,7 @@ from matplotlib import animation
 from timeit import default_timer as timer
 
 import main_1D
+import main_1D_simplified as m1ds
 
 
 
@@ -2029,10 +2030,44 @@ def check_velocity_space_init():
     return
 
 
+def test_simplified_source_deposition():
+    m1ds.load_run_params()
+    m1ds.load_plasma_params()
+    m1ds.get_thread_values()
+    
+    B, B2, B_cent, E, Ve, Te                        = m1ds.initialize_fields()
+    rho_half, rho_int, Ji, Ji_plus, Ji_minus, L, G  = m1ds.initialize_source_arrays()
+    pos, vel, Ie, W_elec, Ib, W_mag, idx            = m1ds.initialize_particles()
+    
+    ni  = np.zeros((m1ds.NC, m1ds.Nj), dtype=np.float64)
+    nu  = np.zeros((m1ds.NC, m1ds.Nj, 3), dtype=np.float64)
+    
+    m1ds.deposit_moments(vel, Ie, W_elec, idx, ni, nu)
+    
+    for jj in range(m1ds.Nj):
+        rho_half += ni[:, jj] * m1ds.n_contr[jj] * m1ds.charge[jj]
+        
+        for kk in range(3):
+            Ji_minus[:, kk] += nu[:, jj, kk] * m1ds.n_contr[jj] * m1ds.charge[jj]
+    
+    m1ds.manage_source_term_boundaries(rho_half)
+
+    fig, axes = plt.subplots(2)
+    axes[0].plot(rho_half, label='rho')
+    axes[1].plot(Ji_minus[:, 0], label='Jx')
+    axes[1].plot(Ji_minus[:, 1], label='Jy')
+    #axes[1].plot(Ji_minus[:, 2], label='Jz')
+    axes[0].legend()
+    axes[1].legend()
+    return
+
+
 #%% --MAIN-- 
 if __name__ == '__main__':
+    test_simplified_source_deposition()
+    
     #test_curl_orders()
-    test_interpolation()
+    #test_interpolation()
     
     #animate_moving_weight()
     
