@@ -312,7 +312,32 @@ def deposit_moments(vel, Ie, W_elec, idx, ni, nu):
                 ni_threads[tt, Ie[ii] + 2, idx[ii]] += W_elec[2, ii]
     ni[:, :]    = ni_threads.sum(axis=0)
     nu[:, :, :] = nu_threads.sum(axis=0)
+    
     return
+
+
+@nb.njit()
+def smooth(function):
+    '''
+    Smoothing function: Applies Gaussian smoothing routine across adjacent cells. 
+    Assummes no contribution from ghost cells.
+    '''
+    size         = function.shape[0]
+    new_function = np.zeros(size, dtype=np.float64)
+
+    for ii in np.arange(1, size - 1):
+        new_function[ii - 1] = 0.25*function[ii] + new_function[ii - 1]
+        new_function[ii]     = 0.50*function[ii] + new_function[ii]
+        new_function[ii + 1] = 0.25*function[ii] + new_function[ii + 1]
+
+    # Move Ghost Cell Contributions: Periodic Boundary Condition
+    new_function[1]        += new_function[size - 1]
+    new_function[size - 2] += new_function[0]
+
+    # Set ghost cell values to mirror corresponding real cell
+    new_function[0]        = new_function[size - 2]
+    new_function[size - 1] = new_function[1]
+    return new_function
 
 
 @nb.njit()
@@ -353,8 +378,20 @@ def init_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, rho_0, rho, J_ini
     G       *= 0.0
                          
     deposit_moments(vel, Ie, W_elec, idx, ni_init, nu_init)
+    if source_smoothing:
+        for jj in range(Nj):
+            ni_init[:, jj] = smooth(ni_init[:, jj])
+            for kk in range(3):
+                nu_init[:, jj, kk] = smooth(nu_init[:, jj, kk])
+                
     position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, dt)
+    
     deposit_moments(vel, Ie, W_elec, idx, ni, nu_plus)
+    if source_smoothing:
+        for jj in range(Nj):
+            ni[:, jj] = smooth(ni[:, jj])
+            for kk in range(3):
+                nu_plus[:, jj, kk] = smooth(nu_plus[:, jj, kk])
     
     # Sum contributions across species
     for jj in range(Nj):
@@ -393,8 +430,19 @@ def advance_particles_and_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, 
     
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt)
     deposit_moments(vel, Ie, W_elec, idx, ni, nu_minus)
+    if source_smoothing:
+        for jj in range(Nj):
+            ni[:, jj] = smooth(ni[:, jj])
+            for kk in range(3):
+                nu_minus[:, jj, kk] = smooth(nu_minus[:, jj, kk])
+                
     position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, dt)
     deposit_moments(vel, Ie, W_elec, idx, ni, nu_plus)
+    if source_smoothing:
+        for jj in range(Nj):
+            ni[:, jj] = smooth(ni[:, jj])
+            for kk in range(3):
+                nu_plus[:, jj, kk] = smooth(nu_plus[:, jj, kk])
     
     for jj in range(Nj):
         rho_half += ni[:, jj] * n_contr[jj] * charge[jj]
@@ -435,7 +483,6 @@ def get_curl_E(E, dE):
     for ii in nb.prange(1, E.shape[0]):
         dE[ii, 1] = - (E[ii, 2] - E[ii - 1, 2])
         dE[ii, 2] =    E[ii, 1] - E[ii - 1, 1]
-
     dE /= dx
     return
 
@@ -556,33 +603,13 @@ def cyclic_leapfrog_old(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
         rho_i -- Total ion charge density
         J_i   -- Total ionic current density
         DT    -- Master simulation timestep. This function advances the field by 0.5*DT
-        subcycles -- The number of subcycle steps to be performed. 
+        subcycles -- The number of subcycle steps to be performed per whole step (halved here)
         
     22/02/2021 :: Applied damping field to each subcycle. Does this damping array
             need to account for subcycling in the DX/DT bit? Test later.
-            
-    28/02/2021 :: Added advancement of sim_time within this function. The global
-            "clock" now follows the development of the magnetic field.
-            Resync doesn't require a sim_time increment since the field solution
-            is already at 0.5*DT and this solution is used to advance the second
-            field copy for averaging.
-            
-    TO DO: Need to perform checks every few subcycles for divergence? Or every 
-    few calls? Work out what needs to be done here.
-    
-    Note: Average error divergence calculated by summing the absolute difference
-    and weighting by dxm - number of inertial lengths per dx. This empirically
-    gives an initial 'quiet' error on the order of 1e-8. The question is, how does 
-    this inform the maximum acceptable error.
-    
-    Actually, need to normalise/multiply by dxm*NX, since there's a sum there.
-    Do that later. For now, just average every 32s/c or so.
-    
-    Works for even s/c av,
-    
     '''
     H     = 0.5 * dt
-    dh    = H / subcycles    
+    dh    = H / (subcycles//2)
     curl  = np.zeros((NC + 1, 3), dtype=np.float64)
     B2[:] = B1[:]
 
@@ -598,7 +625,7 @@ def cyclic_leapfrog_old(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
     
     ## MAIN SUBCYCLE LOOP ##
     ii = 1
-    while ii < subcycles:
+    while ii < (subcycles//2):
         if ii%2 == 1:
             calculate_E(B2, B_center, Ji, rho, E, Ve, Te, sim_time)
             get_curl_E(E, curl) 
@@ -1103,7 +1130,7 @@ parser.add_argument('-r', '--runfile'     , default='_run_params.run', type=str)
 parser.add_argument('-p', '--plasmafile'  , default='_plasma_params.plasma', type=str)
 parser.add_argument('-d', '--driverfile'  , default='_driver_params.txt'   , type=str)
 parser.add_argument('-n', '--run_num'     , default=-1, type=int)
-parser.add_argument('-s', '--subcycle'    , default=32, type=int)
+parser.add_argument('-s', '--subcycle'    , default=16, type=int)
 args = vars(parser.parse_args())
 
 # Check root directory (change if on RCG)
