@@ -16,12 +16,12 @@ E_DAMPING_FLAG			0
 DAMPING_LEN_FRACTION	0.20
 B_DAMPING_MULTIPLIER    0.05
 RESISTIVITY_MULTIPLIER  0.00
-NX 						256
-SIM_TIME				3000
+NX 						1024
+SIM_TIME				4000
 DXM						1.0
 IE						1
 GYROPERIOD_RESOLUTION	0.10
 FREQUENCY_RESOLUTION	0.05
 PARTICLE_DUMP_FREQ		0.20
 FIELD_DUMP_FREQ			0.20
-CAM_CL instability check. Running old code but halving subcycles by defining them as total per step, not half-step. 16 s/c. Smoothing. x4 particles.
+CAM_CL test after fixing. 4 subcycles. High resolution for proper check of test code.

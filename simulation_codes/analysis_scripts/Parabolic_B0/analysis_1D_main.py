@@ -5920,12 +5920,12 @@ if __name__ == '__main__':
                   # '//_NEW_RUNS//JUL17_PC1PEAKS_VO_1pc//',
                   # '//_NEW_RUNS//JUL25_CP_MULTIPOP_LONGER//',
                   # '//_NEW_RUNS//JUL25_CP_PBOLIC_LONGER//'
-    for series in ['//CAMCL_stability_tests//']:
+    for series in ['//CAMCL_stability_tests_CLonly//']:
         series_dir = f'{drive}/runs//{series}//'
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if False:
+        if True:
             runs_to_do = range(num_runs)
         else:
             runs_to_do = [14]

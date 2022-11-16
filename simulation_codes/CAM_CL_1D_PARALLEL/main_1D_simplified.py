@@ -608,10 +608,11 @@ def cyclic_leapfrog_old(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
     22/02/2021 :: Applied damping field to each subcycle. Does this damping array
             need to account for subcycling in the DX/DT bit? Test later.
     '''
-    H     = 0.5 * dt
-    dh    = H / (subcycles//2)
-    curl  = np.zeros((NC + 1, 3), dtype=np.float64)
-    B2[:] = B1[:]
+    half_sc = subcycles//2
+    H       = 0.5 * dt
+    dh      = H / half_sc
+    curl    = np.zeros((NC + 1, 3), dtype=np.float64)
+    B2[:]   = B1[:]
 
     ## DESYNC SECOND FIELD COPY - PUSH BY DH ##
     ## COUNTS AS ONE SUBCYCLE ##
@@ -625,23 +626,21 @@ def cyclic_leapfrog_old(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
     
     ## MAIN SUBCYCLE LOOP ##
     ii = 1
-    while ii < (subcycles//2):
+    while ii < half_sc:
         if ii%2 == 1:
             calculate_E(B2, B_center, Ji, rho, E, Ve, Te, sim_time)
             get_curl_E(E, curl) 
             B1  -= 2 * dh * curl
             apply_boundary(B1)
             get_B_cent(B1, B_center)
-            sim_time += dh
-            #print('Push B1')
         else:
             calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
             get_curl_E(E, curl) 
             B2  -= 2 * dh * curl
             apply_boundary(B2)
             get_B_cent(B2, B_center)
-            sim_time += dh
-
+            
+        sim_time += dh
         ii += 1
 
     ## RESYNC FIELD COPIES ##
@@ -654,6 +653,70 @@ def cyclic_leapfrog_old(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
         get_B_cent(B2, B_center)
     else:
         calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
+        get_curl_E(E, curl) 
+        B1  -= dh * curl
+        apply_boundary(B1)
+        get_B_cent(B1, B_center)
+    
+    ## AVERAGE FOR OUTPUT ##
+    B1 += B2; B1 /= 2.0
+    
+    # Calculate final values
+    get_B_cent(B1, B_center)
+    calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
+    return sim_time, half_step
+
+
+def cyclic_leapfrog_older(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
+                    sim_time, half_step):
+    '''
+    Backup of original function
+    '''
+    half_sc = subcycles//2
+    H       = 0.5 * dt
+    dh      = H / half_sc
+    curl    = np.zeros((NC + 1, 3), dtype=np.float64)
+    B2[:]   = B1[:]
+
+    ## DESYNC SECOND FIELD COPY - PUSH BY DH ##
+    ## COUNTS AS ONE SUBCYCLE ##
+    calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
+    get_curl_E(E, curl) 
+    B2       -= dh * curl
+    apply_boundary(B2)
+    get_B_cent(B2, B_center)
+    sim_time += dh
+
+    
+    ## MAIN SUBCYCLE LOOP ##
+    ii = 1
+    while ii < half_sc:
+        if ii%2 == 1:
+            calculate_E(B2, B_center, Ji, rho, E, Ve, Te, sim_time)
+            get_curl_E(E, curl) 
+            B1  -= 2 * dh * curl
+            apply_boundary(B1)
+            get_B_cent(B1, B_center)
+        else:
+            calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
+            get_curl_E(E, curl) 
+            B2  -= 2 * dh * curl
+            apply_boundary(B2)
+            get_B_cent(B2, B_center)
+
+        sim_time += dh
+        ii += 1
+
+    ## RESYNC FIELD COPIES ##
+    ## DOESN'T COUNT AS A SUBCYCLE ##
+    if ii%2 == 0:
+        calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
+        get_curl_E(E, curl) 
+        B2  -= dh * curl
+        apply_boundary(B2)
+        get_B_cent(B2, B_center)
+    else:
+        calculate_E(B2, B_center, Ji, rho, E, Ve, Te, sim_time)
         get_curl_E(E, curl) 
         B1  -= dh * curl
         apply_boundary(B1)
@@ -1130,7 +1193,7 @@ parser.add_argument('-r', '--runfile'     , default='_run_params.run', type=str)
 parser.add_argument('-p', '--plasmafile'  , default='_plasma_params.plasma', type=str)
 parser.add_argument('-d', '--driverfile'  , default='_driver_params.txt'   , type=str)
 parser.add_argument('-n', '--run_num'     , default=-1, type=int)
-parser.add_argument('-s', '--subcycle'    , default=16, type=int)
+parser.add_argument('-s', '--subcycle'    , default=4, type=int)
 args = vars(parser.parse_args())
 
 # Check root directory (change if on RCG)
@@ -1198,7 +1261,7 @@ if __name__ == '__main__':
         #######################
         
         # First field advance to N + 1/2
-        _SIM_TIME, _HALF = cyclic_leapfrog_old(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
+        _SIM_TIME, _HALF = cyclic_leapfrog_older(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
                                     _DT, _SUBCYCLES, _SIM_TIME, _HALF)
 # =============================================================================
 #         _SIM_TIME, _HALF = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
@@ -1216,7 +1279,7 @@ if __name__ == '__main__':
                                               _Ji_MINUS, _Ji_PLUS, _L, _G, _DT)
         
         # Second field advance to N + 1
-        _SIM_TIME, _HALF = cyclic_leapfrog_old(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
+        _SIM_TIME, _HALF = cyclic_leapfrog_older(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
                                     _DT, _SUBCYCLES, _SIM_TIME, _HALF)
 # =============================================================================
 #         _SIM_TIME, _HALF = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
