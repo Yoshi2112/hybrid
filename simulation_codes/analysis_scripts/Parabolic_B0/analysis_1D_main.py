@@ -223,7 +223,8 @@ def plot_spatial_poynting_helical(saveas='poynting_helical_plot', save=False, lo
                 plt.close('all')
     return
 
-def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None, remove_ND=False, normalize=False):
+def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None, remove_ND=False, normalize=False,
+            bmax=None):
     plt.ioff()
 
     t, arr = cf.get_array(component)
@@ -263,8 +264,12 @@ def plot_tx(component='By', saveas='tx_plot', save=False, log=False, tmax=None, 
                        norm=colors.LogNorm(vmin=1e-3, vmax=None), cmap='nipy_spectral')
         suffix = '_log'
     else:
-        vmin = arr.min()
-        vmax = arr.max()
+        if bmax is None:
+            vmin = arr.min()
+            vmax = arr.max()
+        else:
+            vmin = -bmax
+            vmax =  bmax
         im1 = ax.pcolormesh(x, t, arr, cmap='nipy_spectral', vmin=vmin, vmax=vmax)
         suffix = ''
     
@@ -5920,7 +5925,7 @@ if __name__ == '__main__':
                   # '//_NEW_RUNS//JUL17_PC1PEAKS_VO_1pc//',
                   # '//_NEW_RUNS//JUL25_CP_MULTIPOP_LONGER//',
                   # '//_NEW_RUNS//JUL25_CP_PBOLIC_LONGER//'
-    for series in ['//CAMCL_stability_tests_CLonly//']:
+    for series in ['//CAMCL_subcycle_test//']:
         series_dir = f'{drive}/runs//{series}//'
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -5928,7 +5933,7 @@ if __name__ == '__main__':
         if True:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [14]
+            runs_to_do = [6, 7, 8]
 
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -5966,13 +5971,16 @@ if __name__ == '__main__':
                 #check_fields(save=True, ylim=False, skip=5)
                 
                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
-                           B0_lim=10, remove_ND=False)
+                           B0_lim=100.0, remove_ND=False)
                 
                 plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
                 
                 plot_wk_thesis_good(dispersion_overlay=True, save=True,
                      pcyc_mult=1.1, xmax=0.8, zero_cold=True,
                      linear_only=False, normalize_axes=True, centre_only=False)
+                
+                plot_tx(component='By', saveas='tx_plot', save=True, log=False, tmax=None, 
+                        remove_ND=False, normalize=False, bmax=40)
 
                 #plot_total_density_with_time()
                 #plot_max_velocity()

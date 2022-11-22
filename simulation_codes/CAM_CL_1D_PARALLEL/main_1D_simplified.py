@@ -521,7 +521,7 @@ def apply_boundary(B):
 
 
 #@nb.njit()
-def cyclic_leapfrog(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
+def cyclic_leapfrog_test(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
                     sim_time, half_step):
     '''
     Subcycles are defined per particle step, so only half are used per
@@ -589,25 +589,9 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
     return sim_time, half_step
 
 
-def cyclic_leapfrog_old(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
+def cyclic_leapfrog(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
                     sim_time, half_step):
-    '''
-    Solves for the magnetic field push by keeping two copies and subcycling between them,
-    averaging them at the end of the cycle as per Matthews (1994). The source terms are
-    unchanged during the subcycle step. This method damps the high frequency dispersion 
-    inherent in explicit hybrid simulations.
     
-    INPUT:
-        B1    -- Magnetic field to update (return value comes through here)
-        B2    -- Empty array for second copy
-        rho_i -- Total ion charge density
-        J_i   -- Total ionic current density
-        DT    -- Master simulation timestep. This function advances the field by 0.5*DT
-        subcycles -- The number of subcycle steps to be performed per whole step (halved here)
-        
-    22/02/2021 :: Applied damping field to each subcycle. Does this damping array
-            need to account for subcycling in the DX/DT bit? Test later.
-    '''
     half_sc = subcycles//2
     H       = 0.5 * dt
     dh      = H / half_sc
@@ -615,7 +599,7 @@ def cyclic_leapfrog_old(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
     B2[:]   = B1[:]
 
     ## DESYNC SECOND FIELD COPY - PUSH BY DH ##
-    ## COUNTS AS ONE SUBCYCLE ##
+    ## COUNTS AS FIRST SUBCYCLE ##
     calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
     get_curl_E(E, curl) 
     B2       -= dh * curl
@@ -623,104 +607,31 @@ def cyclic_leapfrog_old(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
     get_B_cent(B2, B_center)
     sim_time += dh
 
-    
     ## MAIN SUBCYCLE LOOP ##
     ii = 1
     while ii < half_sc:
         if ii%2 == 1:
-            calculate_E(B2, B_center, Ji, rho, E, Ve, Te, sim_time)
+            calculate_E(B2, B_center, Ji, rho, E, Ve, Te, sim_time)     # Odd solutions (B1 advance)
             get_curl_E(E, curl) 
             B1  -= 2 * dh * curl
             apply_boundary(B1)
             get_B_cent(B1, B_center)
         else:
-            calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
+            calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)     # Even solutions (B2 advance)
             get_curl_E(E, curl) 
             B2  -= 2 * dh * curl
             apply_boundary(B2)
             get_B_cent(B2, B_center)
-            
         sim_time += dh
         ii += 1
 
     ## RESYNC FIELD COPIES ##
     ## DOESN'T COUNT AS A SUBCYCLE ##
-    if ii%2 == 0:
-        calculate_E(B2, B_center, Ji, rho, E, Ve, Te, sim_time)
-        get_curl_E(E, curl) 
-        B2  -= dh * curl
-        apply_boundary(B2)
-        get_B_cent(B2, B_center)
-    else:
-        calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
-        get_curl_E(E, curl) 
-        B1  -= dh * curl
-        apply_boundary(B1)
-        get_B_cent(B1, B_center)
-    
-    ## AVERAGE FOR OUTPUT ##
-    B1 += B2; B1 /= 2.0
-    
-    # Calculate final values
-    get_B_cent(B1, B_center)
-    calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
-    return sim_time, half_step
-
-
-def cyclic_leapfrog_older(B1, B2, B_center, rho, Ji, E, Ve, Te, dt, subcycles,
-                    sim_time, half_step):
-    '''
-    Backup of original function
-    '''
-    half_sc = subcycles//2
-    H       = 0.5 * dt
-    dh      = H / half_sc
-    curl    = np.zeros((NC + 1, 3), dtype=np.float64)
-    B2[:]   = B1[:]
-
-    ## DESYNC SECOND FIELD COPY - PUSH BY DH ##
-    ## COUNTS AS ONE SUBCYCLE ##
     calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
     get_curl_E(E, curl) 
-    B2       -= dh * curl
+    B2  -= dh * curl
     apply_boundary(B2)
     get_B_cent(B2, B_center)
-    sim_time += dh
-
-    
-    ## MAIN SUBCYCLE LOOP ##
-    ii = 1
-    while ii < half_sc:
-        if ii%2 == 1:
-            calculate_E(B2, B_center, Ji, rho, E, Ve, Te, sim_time)
-            get_curl_E(E, curl) 
-            B1  -= 2 * dh * curl
-            apply_boundary(B1)
-            get_B_cent(B1, B_center)
-        else:
-            calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
-            get_curl_E(E, curl) 
-            B2  -= 2 * dh * curl
-            apply_boundary(B2)
-            get_B_cent(B2, B_center)
-
-        sim_time += dh
-        ii += 1
-
-    ## RESYNC FIELD COPIES ##
-    ## DOESN'T COUNT AS A SUBCYCLE ##
-    if ii%2 == 0:
-        calculate_E(B1, B_center, Ji, rho, E, Ve, Te, sim_time)
-        get_curl_E(E, curl) 
-        B2  -= dh * curl
-        apply_boundary(B2)
-        get_B_cent(B2, B_center)
-    else:
-        calculate_E(B2, B_center, Ji, rho, E, Ve, Te, sim_time)
-        get_curl_E(E, curl) 
-        B1  -= dh * curl
-        apply_boundary(B1)
-        get_B_cent(B1, B_center)
     
     ## AVERAGE FOR OUTPUT ##
     B1 += B2; B1 /= 2.0
@@ -1261,12 +1172,8 @@ if __name__ == '__main__':
         #######################
         
         # First field advance to N + 1/2
-        _SIM_TIME, _HALF = cyclic_leapfrog_older(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
+        _SIM_TIME, _HALF = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
                                     _DT, _SUBCYCLES, _SIM_TIME, _HALF)
-# =============================================================================
-#         _SIM_TIME, _HALF = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
-#                                     _DT, _SUBCYCLES, _SIM_TIME, _HALF)
-# =============================================================================
 
         # CAM part
         push_current(_Ji_PLUS, _Ji, _E, _B_CENT, _L, _G, _DT)
@@ -1279,12 +1186,8 @@ if __name__ == '__main__':
                                               _Ji_MINUS, _Ji_PLUS, _L, _G, _DT)
         
         # Second field advance to N + 1
-        _SIM_TIME, _HALF = cyclic_leapfrog_older(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
+        _SIM_TIME, _HALF = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
                                     _DT, _SUBCYCLES, _SIM_TIME, _HALF)
-# =============================================================================
-#         _SIM_TIME, _HALF = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _E, _VE, _TE,
-#                                     _DT, _SUBCYCLES, _SIM_TIME, _HALF)
-# =============================================================================
         
         ########################
         ##### OUTPUT DATA  #####

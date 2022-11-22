@@ -2,7 +2,7 @@
 from timeit import default_timer as timer
 import numpy as np
 import numba as nb
-import sys, os
+import sys, os, pdb
 import diagnostics as diag
 from scipy.interpolate import splrep, splev
 
@@ -20,17 +20,17 @@ B_surf  = 3.12e-5                            # Magnetic field strength at Earth 
 
 # A few internal flags
 cold_va             = False
-Fu_override         = False       # Note this HAS to be disabled for grid runs.
-do_parallel         = False
-adaptive_timestep   = True       # Disable adaptive timestep to keep it the same as initial
+Fu_override         = False      # Note this HAS to be disabled for grid runs.
+do_parallel         = True
+adaptive_timestep   = False      # Disable adaptive timestep to keep it the same as initial
 print_timings       = False      # Diagnostic outputs timing each major segment (for efficiency examination)
-print_runtime       = True       # Flag to print runtime every 50 iterations 
-adaptive_subcycling = True       # Flag (True/False) to adaptively change number of subcycles during run to account for high-frequency dispersion
+print_runtime       = True       # Flag to print runtime every 50 iterations
+max_cell_traverse   = 0.75       # Maximum portion of a cell that we want a particle to travel in one timestep
 
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-#nb.set_num_threads(6)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(16)         # Uncomment to manually set number of threads, otherwise will use all available
 
 
 #%% --- FUNCTIONS ---
@@ -495,7 +495,6 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, -0.5*pdt,
                     hot_only=hot_only)
     
-    # TODO: NOTE: Even this doesn't have 100% CPU usage. Why not?
     for pp in range(psteps):
         # Save first and last only
         #if psave == True and pp%dump_iter == 0:
@@ -543,30 +542,38 @@ def set_timestep(vel):
         -- Resolve ion gyromotion (controlled by orbit_res)
         -- Resolve ion velocity (<0.5dx per timestep, varies with particle temperature)
         -- Resolve B-field solution on grid (controlled by subcycling and freq_res)
-        -- E-field acceleration? (not implemented)
+        -- E-field acceleration? (Not relevant at t=0)
         
     Problems:
         -- Reducing dx means that the timestep will be shortened by same vx
         -- Reducing dx also increases dispersion. Is there a maximum number of s/c?
         
-    To do: 
-        -- After initial calculation of DT, calculate number of required subcycles.
-        -- If greater than some preset value, change timestep instead.
+    Field limitations are most likely. Use the smallest number of subcycles possible.
+        --> If particle-limited (i.e. dt for particles means dt/4 satisfies field)
+            --> Use default number of subcycles (4/8)
+        --> If field-limited (i.e. dt/4 is too big) 
+            --> Reduce dt so that dt/max_sc satisfies the field condition
+    Set default for 4, max for 12
     '''
     max_vx   = np.max(np.abs(vel[0, :]))
     ion_ts   = orbit_res / gyfreq_eq              # Timestep to resolve gyromotion
-    vel_ts   = 0.5*dx / max_vx                    # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
-
-    DT       = min(ion_ts, vel_ts)
+    vel_ts   = max_cell_traverse*dx / max_vx      # Timestep to satisfy CFL condition: Fastest particle doesn't traverse more than half a cell in one time step
+    
+    limiting_ts = ''
+    if ion_ts < vel_ts:    
+        DT = ion_ts
+        limiting_ts = 'gyroperiod'
+    else:
+        DT = vel_ts
+        limiting_ts = 'particle cell traverse'
     max_time = max_wcinv / gyfreq_eq              # Total runtime in seconds
     
-    if adaptive_subcycling == True:
+    if adaptive_timestep:
         # b1 factor accounts for increase in total field due to wave growth
         # Without this, s/c count doubles as soon as waves start to grow
         # which unneccessarily slows the simulation
-        b1_fac     = 1.2
-        k_max      = np.pi / dx
-        dispfreq   = (k_max ** 2) * B_eq*b1_fac / (mu0 * ne * ECHARGE)
+        b1_fac     = 1.05
+        dispfreq   = (np.pi / dx) ** 2 * B_eq*b1_fac / (mu0 * ne * ECHARGE)
         dt_sc      = freq_res / dispfreq
         subcycles  = int(DT / dt_sc + 1)
         
@@ -577,10 +584,14 @@ def set_timestep(vel):
             print('Resetting timestep to match subcycle loop size')
             DT = init_max_subcycle * dt_sc
             subcycles = init_max_subcycle
-            
+            limiting_ts = 'subcycle requirement'
     else:
         subcycles = default_subcycles
         print('Number of subcycles set at default: {}'.format(subcycles))
+    
+    # Force subcycle count to be a factor of 4
+    while subcycles%4 != 0:                       
+        subcycles += 1
     
     if part_dumpf == 0:
         part_save_iter = 1
@@ -619,11 +630,13 @@ def set_timestep(vel):
         plt.show()
         sys.exit()
     
+    print('\nTimestep limited by', limiting_ts)
     if DT < 1e-2:
         print('Timestep: %.3es with %d subcycles' % (DT, subcycles))
     else:
         print('Timestep: %.3fs with %d subcycles' % (DT, subcycles))
     print(f'{max_inc} iterations total\n')
+
     return DT, max_inc, part_save_iter, field_save_iter, subcycles,\
              B_damping_array, resistive_array
 
@@ -1682,9 +1695,9 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
     Works for even s/c av,
     
     '''
-    #sc_av = 16
+    half_sc = subcycles//2
     H     = 0.5 * dt
-    dh    = H / subcycles
+    dh    = H / half_sc
     
     if disable_waves:
         return sim_time+H
@@ -1700,106 +1713,39 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
     apply_boundary(B2, B_damp)
     get_B_cent(B2, B_center)
     sim_time += dh
-    #print('Desync B2')
-
-    ## RETURN IF NO SUBCYCLES REQUIRED ##
-    if subcycles == 1:
-        B1[:] = B2[:]
-        return sim_time+H
     
     ## MAIN SUBCYCLE LOOP ##
     ii = 1
-    while ii < subcycles:
+    while ii < half_sc:
         if ii%2 == 1:
             calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
             get_curl_E_4thOrder(E, curl) 
             B1  -= 2 * dh * curl
             apply_boundary(B1, B_damp)
             get_B_cent(B1, B_center)
-            sim_time += dh
-            #print('Push B1')
         else:
             calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
             get_curl_E_4thOrder(E, curl) 
             B2  -= 2 * dh * curl
             apply_boundary(B2, B_damp)
             get_B_cent(B2, B_center)
-            sim_time += dh
-            #print('Push B2')
-            
-# =============================================================================
-#         ## Check for error divergence or just average every so often ##
-#         ## Could do error check here and double s/c count if needed  ##
-#         if ii%sc_av == 0: 
-#             #print('Averaging for convergence')
-#             ## RESYNC BEFORE AVERAGE ##
-#             if ii%2 == 1:
-#                 calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-#                 get_curl_E_4thOrder(E, curl) 
-#                 B2  -= dh * curl
-#                 apply_boundary(B2, B_damp)
-#                 get_B_cent(B2, B_center)
-#                 #print('Resync B2')
-#             else:
-#                 calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-#                 get_curl_E_4thOrder(E, curl) 
-#                 B1  -= dh * curl
-#                 apply_boundary(B1, B_damp)
-#                 get_B_cent(B1, B_center)
-#                 #print('Resync B1')
-#         
-#             ## AVERAGE AND COPY ##
-#             B1 += B2; B1 /= 2.0
-#             B2[:] = B1[:]
-#             
-#             ## DESYNC ONE FIELD COPY - PUSH BY DH ##
-#             ## THE ONE DESYNCED HAS TO BE THE NEXT ONE PUSHED ##
-#             if ii%2 == 1:
-#                 calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-#                 get_curl_E_4thOrder(E, curl) 
-#                 B2       -= dh * curl
-#                 apply_boundary(B2, B_damp)
-#                 get_B_cent(B2, B_center)
-#                 sim_time += dh;  ii += 1
-#                 #print('Desync B2')
-#             else:
-#                 calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-#                 get_curl_E_4thOrder(E, curl) 
-#                 B1       -= dh * curl
-#                 apply_boundary(B1, B_damp)
-#                 get_B_cent(B1, B_center)
-#                 sim_time += dh;  ii += 1
-#                 #print('Desync B1')
-# =============================================================================
+        sim_time += dh
         ii += 1
 
     ## RESYNC FIELD COPIES ##
     ## DOESN'T COUNT AS A SUBCYCLE ##
-    if ii%2 == 0:
-        calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-        get_curl_E_4thOrder(E, curl) 
-        B2  -= dh * curl
-        apply_boundary(B2, B_damp)
-        get_B_cent(B2, B_center)
-        #print('Resync B2')
-    else:
-        calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-        get_curl_E_4thOrder(E, curl) 
-        B1  -= dh * curl
-        apply_boundary(B1, B_damp)
-        get_B_cent(B1, B_center)
-        #print('Resync B1')
+    calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+    get_curl_E_4thOrder(E, curl) 
+    B2  -= dh * curl
+    apply_boundary(B2, B_damp)
+    get_B_cent(B2, B_center)
     
     ## AVERAGE FOR OUTPUT ##
-    #print('Averaging for output')
     B1 += B2; B1 /= 2.0
     
     # Calculate final values
     get_B_cent(B1, B_center)
     calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
-    #print('Half timestep:', H)
-    #print('Simulation  T:', sim_time)
-    #sys.exit()
     return sim_time
 
 
@@ -1983,31 +1929,15 @@ def interpolate_cell_centre_4thOrder(edge_arr, interp):
 #@nb.njit()
 def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, B, B_center, E, dns, 
                    max_inc, part_save_iter, field_save_iter, loop_save_iter,
-                   subcycles, B_damping_array, resistive_array, manual_trip=0):
+                   subcycles, B_damping_array, resistive_array):
     '''
     Check that simulation quantities still obey timestep limitations. Reduce
     timestep for particle violations or increase subcycling for field violations.
     
-    To Do:
-        -- How many subcycles should be allowed to occur before the timestep itself
-            is shorted? Maybe once subcycle > 100, trip timestep and half subcycles.
-            Would need to make sure they didn't autochange back. Think about this.
-            
-    manual_trip :: Diagnostic flag to manually increase/decrease timestep/subcycle
-       -1  :: Disables all timestep checks
-        0  :: Normal (Auto)
-        1  :: Halve timestep
-        2  :: Double timestep
-        3  :: Double subcycles
-        4  :: Half subcycles
-    
     To do:
         -- Calculate number of required subcycles first. If greater than some
             predetermined limit, half timestep instead
-    '''
-    if manual_trip < 0: # Return without change or check
-        return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, 0, subcycles
-    
+    '''    
     max_vx, max_vy, max_vz = get_max_v(vel)
     max_V = max(max_vx, max_vy, max_vz)
     
@@ -2023,22 +1953,23 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, B, B_c
     else:
         freq_ts     = ion_ts
     
-    vel_ts          = 0.75*dx / max_vx
+    # A little more play allowed for the check to prevent fast particles instantly tripping the adaption
+    vel_ts          = (4./3.)*max_cell_traverse*dx / max_vx
     DT_part         = min(freq_ts, vel_ts, ion_ts)
     
     # Check subcycles to see if DT_part needs to be changed instead
-    if adaptive_subcycling == 1:
+    if True:
         k_max           = np.pi / dx
         dispfreq        = (k_max ** 2) * (B_tot / (mu0 * dns)).max()             # Dispersion frequency
         dt_sc           = freq_res / dispfreq
         new_subcycles   = int(DT / dt_sc + 1)
         ch_sc = 0
         
-        if (subcycles < 0.75*new_subcycles and manual_trip == 0) or manual_trip == 3:                                       
+        if subcycles < 0.75*new_subcycles:                                       
             subcycles *= 2; ch_sc = 1
             print('Number of subcycles per timestep doubled to', subcycles)
             
-        if (subcycles > 3.0*new_subcycles and subcycles%2 == 0 and manual_trip == 0) or manual_trip == 4:                                      
+        if subcycles > 3.0*new_subcycles and subcycles%4 == 0:                                      
             subcycles //= 2; ch_sc = 1
             print('Number of subcycles per timestep halved to', subcycles)
             
@@ -2054,7 +1985,7 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, B, B_c
     
     # Reduce timestep
     change_flag       = 0
-    if (DT_part < 0.9*DT and manual_trip == 0) or manual_trip == 1:
+    if DT_part < 0.9*DT:
         #(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt, hot_only=False)
         position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, -0.5*DT)
         
@@ -2069,24 +2000,7 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, B, B_c
             print('Timestep halved to: %.3es with %d subcycles' % (DT, subcycles))
         else:
             print('Timestep halved to: %.3fs with %d subcycles' % (DT, subcycles))
-    
-    # Increase timestep
-    # DISABLED until I work out how to do the injection for half a timestep when this changes
-    # Idea: Maybe implement time_change on next iteration? Or is it possible to push velocity
-    # by half a timestep to sync that way?
-    elif False:#(DT_part >= 4.0*DT and qq%2 == 0 and part_save_iter%2 == 0 and field_save_iter%2 == 0 and max_inc%2 == 0 and manual_trip == 0)\
-        #or manual_trip == 2:
-        position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, -0.5*DT)
-        
-        change_flag       = 1
-        DT               *= 2.0
-        max_inc         //= 2
-        qq              //= 2
-        part_save_iter  //= 2
-        field_save_iter //= 2
-        loop_save_iter  //= 2
-        
-        print('Timestep doubled. Syncing particle velocity/position with DT =', DT)
+
     return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, change_flag, subcycles
 
 
@@ -2397,7 +2311,7 @@ def load_run_params():
         E_damping, damping_fraction, damping_multiplier, resis_multiplier, NX, max_wcinv, dxm, ie,\
             orbit_res, freq_res, part_dumpf, field_dumpf, run_description, particle_open, ND, NC,\
                 lo1, lo2, ro1, ro2, li1, li2, ri1, ri2,\
-                adaptive_timestep, adaptive_subcycling, default_subcycles
+                adaptive_timestep, default_subcycles
             
     print('LOADING RUNFILE: {}'.format(run_input))
     with open(run_input, 'r') as f:
@@ -2482,7 +2396,7 @@ def load_run_params():
         
     if disable_waves == True:
         print('-- Wave solutions disabled, removing subcycles --')
-        adaptive_timestep = adaptive_subcycling = 0
+        adaptive_timestep = 0
         default_subcycles = 1
     return
 
@@ -2580,7 +2494,7 @@ def load_plasma_params():
         vth_par    = np.sqrt(kbt_par /  mass)                # Parallel thermal velocities
         T_par      = kbt_par / kB
         T_perp     = kbt_per / kB
-    
+
     # This will change with Te0 which means the resistance will change. Complicated!
     vth_e      = np.sqrt(kB*Te0_scalar/EMASS)
     vei        = np.sqrt(2.) * wpe**4 / (64.*np.pi*ne*vth_e**3) # Ion-Electron collision frequency
@@ -2767,9 +2681,9 @@ parser.add_argument('-r', '--runfile'     , default='_run_params.run', type=str)
 parser.add_argument('-p', '--plasmafile'  , default='_plasma_params.plasma', type=str)
 parser.add_argument('-d', '--driverfile'  , default='_driver_params.txt'   , type=str)
 parser.add_argument('-n', '--run_num'     , default=-1, type=int)
-parser.add_argument('-s', '--subcycle'    , default=16, type=int)
-parser.add_argument('-m', '--max_subcycle', default=256, type=int)
+parser.add_argument('-m', '--max_subcycle', default=48, type=int)
 parser.add_argument('-M', '--init_max_subcycle', default=16, type=int)
+parser.add_argument('-s', '--subcycle'    , default=8, type=int)
 args = vars(parser.parse_args())
 
 # Check root directory (change if on RCG)
@@ -2786,17 +2700,11 @@ if Fu_override == True:
     plasma_input = root_dir +  '/run_inputs/' + '_Fu_test.plasma'
 
 # Set anything else useful before file input load
-default_subcycles = args['subcycle']
-max_subcycles     = args['max_subcycle']
-init_max_subcycle = args['init_max_subcycle']
+default_subcycles = args['subcycle']                # Number of subcycles if particles are limiting factor
+max_subcycles     = args['max_subcycle']            # Max allowable subcycles for adaptive timestep
+init_max_subcycle = args['init_max_subcycle']       # Max allowable subcycles at run start
 
-load_run_params()
-if __name__ == '__main__':
-    manage_directories()
-load_plasma_params()
-load_wave_driver_params()
-calculate_background_magnetic_field()
-get_thread_values()
+
 
 
 
@@ -2804,6 +2712,13 @@ get_thread_values()
 ### START SIMULATION ###
 ########################
 if __name__ == '__main__':
+    load_run_params()
+    load_plasma_params()
+    load_wave_driver_params()
+    calculate_background_magnetic_field()
+    get_thread_values()
+    manage_directories()
+    
     print_summary_and_checks()
 
     start_time = timer()
@@ -2817,15 +2732,6 @@ if __name__ == '__main__':
     _DT, _MAX_INC, _PART_SAVE_ITER,\
     _FIELD_SAVE_ITER, _SUBCYCLES,  \
     _B_DAMP, _RESIS_ARR            = set_timestep(_VEL)    
-
-
-    ### DIAGNOSTICS ###
-    if False:
-        diag.check_position_distribution(_POS)
-        diag.check_velocity_distribution(_VEL)
-        diag.check_velocity_components_vs_space(_POS, _VEL)
-        diag.check_velocity_distribution_2D(_POS, _VEL)
-        sys.exit()
         
     print('Loading initial state...')
     init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, _RHO_INT, _RHO_HALF,
@@ -2845,12 +2751,6 @@ if __name__ == '__main__':
     _LOOP_TIMES     = np.zeros(_MAX_INC-1, dtype=float)
     _LOOP_SAVE_ITER = 1
 
-    # WARNING  :: Accruing sim_time like this leads to numerical error accumulation at the LSB.
-    # QUESTION :: IS IT VALID TO START FIRST LOOP WITH QQ=1 and SIM_TIME=DT? ARE THE TIME 
-    #             VALUES FOR THE START OR END OF THE STEP? OR THE MIDDLE?
-    # ANSWER   :: QQ IS JUST A COUNTER, SET AS 1 SO IT DOESN'T OVERWRITE INITIAL FILES
-    #             SIM_TIME SET AS ZERO BECAUSE IT IS INCREMENTED IN THE LOOP
-    #             BY THE END OF THE FIRST LOOP, THE VALUES WILL BE AT DT
     _QQ = 1; _SIM_TIME = 0.0
     print('Starting loop...')
     while _QQ < _MAX_INC:

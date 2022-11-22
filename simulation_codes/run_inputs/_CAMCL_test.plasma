@@ -2,7 +2,7 @@ LABEL          cold_$H^{+}$   cold_$He^{+}$  cold_$O^{+}$   warm_$H^{+}$
 COLOUR         b              m              g              r     
 TEMP_FLAG      0              0              0              1            
 DIST_FLAG      0              0              0              0          
-NSP_PPC        1024           1024           1024           4096        
+NSP_PPC        256            256            256            512        
 MASS_PROTON    1.0            4.0            16.0           1.0       
 CHARGE_ELEM    1.0            1.0            1.0            1.0
 DRIFT_VA       0.0            0.0            0.0            0.0     
