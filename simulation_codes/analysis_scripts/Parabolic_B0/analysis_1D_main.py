@@ -581,7 +581,7 @@ def plot_wk_thesis_good(saveas='wk_plot_thesis', dispersion_overlay=False, save=
     else:
         ax.set_ylim(0, None)
     
-    alpha=0.75
+    alpha=0.25
     if dispersion_overlay == True:
         k_vals, CPDR_solns, WPDR_solns, HPDR_solns = disp.get_linear_dispersion_from_sim(k, zero_cold=zero_cold)
         for ii in range(CPDR_solns.shape[1]):
@@ -5891,9 +5891,6 @@ def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=None)
 #%% MAIN
 if __name__ == '__main__':
     drive       = 'D:'
-    #import logging
-    #log_file = 'F://runs//_NEW_RUNS//bad_runs.log'
-    #logging.basicConfig(filename=log_file, filemode='w', level=logging.ERROR, force=True)
     
     #############################
     ### MULTI-SERIES ROUTINES ###
@@ -5925,7 +5922,7 @@ if __name__ == '__main__':
                   # '//_NEW_RUNS//JUL17_PC1PEAKS_VO_1pc//',
                   # '//_NEW_RUNS//JUL25_CP_MULTIPOP_LONGER//',
                   # '//_NEW_RUNS//JUL25_CP_PBOLIC_LONGER//'
-    for series in ['//CAMCL_subcycle_test//']:
+    for series in ['//CAMCL_ABC_test//']:
         series_dir = f'{drive}/runs//{series}//'
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
@@ -5941,7 +5938,6 @@ if __name__ == '__main__':
                 print('\nRun {}'.format(run_num))
                 #cf.delete_analysis_folders(drive, series, run_num)
                 
-                #try:
                 cf.load_run(drive, series, run_num, extract_arrays=True, overwrite_summary=True)
                 #plot_stability_check()
                 #thesis_plot_dispersion(save=True, fmax=1.1, tmax=None, Bmax=None, Pmax=None)
@@ -5954,34 +5950,25 @@ if __name__ == '__main__':
     
                     #standard_analysis_package(disp_overlay=False, pcyc_mult=1.1,
                     #              tx_only=False, tmax=None, remove_ND=False)
-                #plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
-                #           B0_lim=None, remove_ND=False)
-                #except:
-                #    print(f'PROBLEM WITH {series}[{run_num}], SKIPPING...')
-                #    logging.error('%s[%d]', series, run_num)
-                #    continue
+                
+                plot_abs_T(saveas='abs_plot', save=True, log=True, tmax=None, normalize=False,
+                           B0_lim=20.0, remove_ND=False)
                 
 # =============================================================================
-#                 plot_abs_T_w_Bx(saveas='abs_plot_bx', save=False, tmax=None,
-#                     B0_lim=None, remove_ND=False)
+#                 plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
+#                 
+#                 plot_wk_thesis_good(dispersion_overlay=True, save=True,
+#                      pcyc_mult=1.1, xmax=0.8, zero_cold=True,
+#                      linear_only=False, normalize_axes=True, centre_only=False)
+#                 
+#                 plot_tx(component='By', saveas='tx_plot', save=True, log=False, tmax=None, 
+#                         remove_ND=False, normalize=False, bmax=40)
 # =============================================================================
                 
                 #plot_abs_T_w_Bx(saveas='abs_plot_bx', save=True, tmax=None,
-                #    B0_lim=3.0, remove_ND=False)
-                #check_fields(save=True, ylim=False, skip=5)
-                
-                plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
-                           B0_lim=100.0, remove_ND=False)
-                
-                plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
-                
-                plot_wk_thesis_good(dispersion_overlay=True, save=True,
-                     pcyc_mult=1.1, xmax=0.8, zero_cold=True,
-                     linear_only=False, normalize_axes=True, centre_only=False)
-                
-                plot_tx(component='By', saveas='tx_plot', save=True, log=False, tmax=None, 
-                        remove_ND=False, normalize=False, bmax=40)
+                #    B0_lim=None, remove_ND=False)
 
+                #check_fields(save=True, ylim=False, skip=5)
                 #plot_total_density_with_time()
                 #plot_max_velocity()
                 #check_fields(save=True, ylim=True, skip=25)
