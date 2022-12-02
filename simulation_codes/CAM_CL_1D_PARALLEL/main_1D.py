@@ -112,68 +112,12 @@ def LCD_by_elimination(pos, vel, sf_par, sf_per, st, en, jj):
     return
 
 
-@nb.njit()
-def uniform_random_bimaxwellian():
-    '''Initializes position, velocity, and index arrays. Position analytically
-    uniform, velocity randomly sampled normal distributions using perp/para 
-    scale factors. Quiet start initialized as per Birdsall and Langdon (1985).
-
-    OUTPUT:
-        pos -- 1xN array of particle positions in meters
-        vel -- 3xN array of particle velocities in m/s
-        idx -- N   array of particle indexes, indicating population types 
-    '''
-    np.random.seed(seed)
-    pos = np.zeros(N, dtype=np.float64)
-    vel = np.zeros((3, N), dtype=np.float64)
-    idx = np.ones(N,       dtype=np.int8) * Nj
-
-    for jj in range(Nj):
-        idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle idx        
-        n_init = nsp_ppc[jj] // 2                     # Half particles per cell - doubled later
-        
-        # Load particles in each applicable cell
-        acc = 0; offset  = 0
-        for ii in range(NX):
-            # Add particle if last cell (for symmetry, but only with open field boundaries)
-            if ii == NX - 1 and field_periodic == 0:
-                n_init += 1
-                offset  = 1
-            
-            # Particle index ranges
-            st = idx_start[jj] + acc
-            en = idx_start[jj] + acc + n_init
-            
-            # Set position for half: Analytically uniform
-            for kk in range(n_init):
-                pos[st + kk] = dx*(float(kk) / (n_init - offset) + ii)
-            
-            # Turn [0, NC] distro into +/- NC/2 distro
-            pos[st: en] -= 0.5*NX*dx              
-            
-            # Set velocity for half: Randomly Maxwellian
-            vel[0, st: en] = np.random.normal(0, vth_para[jj], n_init)  
-            vel[1, st: en] = np.random.normal(0, vth_perp[jj], n_init)
-            vel[2, st: en] = np.random.normal(0, vth_perp[jj], n_init)
-                
-            # Quiet start : Initialize second half
-            if quiet_start == 1:
-                pos[en: en + n_init]    = pos[st: en]                   # Other half, same position
-                vel[0, en: en + n_init] = vel[0, st: en] *  1.0         # Set parallel
-                vel[1, en: en + n_init] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
-                vel[2, en: en + n_init] = vel[2, st: en] * -1.0
-                
-                vel[0, st: en + n_init] += drift_v[jj] * va             # Add drift offset
-                
-                acc                     += n_init * 2
-    return pos, vel, idx
-
-
 def LCD_by_MonteCarlo():
     '''
     This would only be called for a non-homogeneous open-boundary simulation
     since homogenous = no loss cone and periodic = no field gradient.
     '''
+    print('Initialising loss-cone distribution')
     def PFLCD(x, y, jj):
         '''
         Partially-filled loss-cone distribution as per eqns 6.41-6.42 of
@@ -219,18 +163,22 @@ def LCD_by_MonteCarlo():
         '''
         xmin, xmax = -n_vtherm*vth_para[jj], n_vtherm*vth_para[jj]
         ymin, ymax = -n_vtherm*vth_perp[jj], n_vtherm*vth_perp[jj]
+        
+        print('Checking distribution max value...')
         test_n = 1000
         test_x = np.linspace(xmin, xmax, test_n)
         test_y = np.linspace(ymin, ymax, test_n)
         P_max = 0.0
-        for ii in range(test_n):
-            for jj in range(test_n):
-                test_P = PFLCD(test_x[ii], test_y[jj])
+        for mm in range(test_n):
+            for nn in range(test_n):
+                test_P = PFLCD(test_x[mm], test_y[nn], jj)
                 if test_P > P_max: P_max = test_P
         P_max *= 1.005   # Pad a little to make up for inaccuracy in test sampling
-
+        
+        print('Creating LCD distribution...')
         n_batch = 5*n_samples
-        distro = np.zeros((n_samples, 2))
+        dist_x = np.zeros(n_samples, dtype=np.float32)
+        dist_y = np.zeros(n_samples, dtype=np.float32)
         acc = 0
         while acc < n_samples:
             cx = np.random.uniform(xmin, xmax, n_batch)     # Sample
@@ -241,71 +189,47 @@ def LCD_by_MonteCarlo():
             # If z < P(x,y) then accept sample, otherwise reject
             for ii in range(n_batch):
                 if z[ii] < cP[ii]:
-                    distro[acc] = cx[ii], cy[ii]
+                    dist_x[acc] = cx[ii]
+                    dist_y[acc] = cy[ii]
                     acc += 1
                     
                     if acc == n_samples:
-                        return distro
+                        print('Finished.')
+                        return dist_x, dist_y
                     
         raise Exception('You should never get here')
         
-        
     np.random.seed(seed)
-    pos = np.zeros(N, dtype=np.float64)
     vel = np.zeros((3, N), dtype=np.float64)
-    idx = np.ones(N,       dtype=np.int8) * Nj
-
-    for jj in range(Nj):
-        idx[idx_start[jj]: idx_end[jj]] = jj          # Set particle index   
+    for jj in range(Nj): 
         
+        n_init = N_species[jj]
         if quiet_start == 1:                          # Determine how many particles are initialized randomly
-            n_init = nsp_ppc[jj] // 2                 # For quiet start, half are copies with -v_perp
+            n_init //= 2                              # For quiet start, half are copies with -v_perp
+            
+        # Particle index ranges
+        st = idx_start[jj]
+        en = idx_start[jj] + n_init
+          
+        # Set Loss Cone Distribution for hot particles, Maxwellian for cold
+        if temp_type[jj] == 1:
+            vpara, vperp = generate_PFLCD_distribution(jj, n_samples=n_init)
+            gyangles = np.random.uniform(0.0, 2*np.pi, n_init)
+            
+            vel[0, st: en] = vpara + drift_v[jj]*va
+            vel[1, st: en] = vperp * np.sin(gyangles)
+            vel[2, st: en] = vperp * np.cos(gyangles)
         else:
-            n_init = nsp_ppc[jj]
-
-        # Load particles in each applicable cell
-        acc = 0; offset  = 0
-        for ii in range(NX):
-            # Add particle for the last cell (for symmetry, but only with open field boundaries)
-            if ii == NX - 1 and field_periodic == 0:
-                n_init += 1
-                offset  = 1
-                
-            # Particle index ranges
-            st = idx_start[jj] + acc
-            en = idx_start[jj] + acc + n_init
+            vel[0, st: en] = np.random.normal(0, vth_para[jj], n_init) + drift_v[jj]*va
+            vel[1, st: en] = np.random.normal(0, vth_perp[jj], n_init)
+            vel[2, st: en] = np.random.normal(0, vth_perp[jj], n_init)
             
-            # Set position: Analytically uniform
-            for kk in range(n_init):
-                pos[st + kk] = dx*(float(kk) / (n_init - offset) + ii)
-            
-            # Turn [0, NX] distro into [-NX/2, NX/2] distro
-            pos[st: en] -= 0.5*NX*dx              
-            
-            # Set Loss Cone Distribution for hot particles, Maxwellian for cold
-            if temp_type[jj] == 1:
-                vpara, vperp = generate_PFLCD_distribution(jj, n_samples=n_init)
-                gyangles = np.random.uniform(0.0, 2*np.pi, n_init)
-                
-                vel[0, st: en] = vpara  
-                vel[1, st: en] = vperp * np.sin(gyangles)
-                vel[2, st: en] = vperp * np.cos(gyangles)
-            else:
-                vel[0, st: en] = np.random.normal(0, vth_para[jj], n_init)  
-                vel[1, st: en] = np.random.normal(0, vth_perp[jj], n_init)
-                vel[2, st: en] = np.random.normal(0, vth_perp[jj], n_init)
-                
-            # Quiet start : Initialize second half
-            if quiet_start == 1:
-                pos[en: en + n_init]    = pos[st: en]                   # Other half, same position
-                vel[0, en: en + n_init] = vel[0, st: en] *  1.0         # Set parallel
-                vel[1, en: en + n_init] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
-                vel[2, en: en + n_init] = vel[2, st: en] * -1.0
-                
-                vel[0, st: en + n_init] += drift_v[jj] * va             # Add drift offset
-                
-                acc                     += n_init * 2
-    return
+        # Quiet start : Initialize second half
+        if quiet_start == 1:
+            vel[0, en: en + n_init] = vel[0, st: en]                # Set parallel
+            vel[1, en: en + n_init] = vel[1, st: en] * -1.0         # Invert perp velocities (v2 = -v1)
+            vel[2, en: en + n_init] = vel[2, st: en] * -1.0
+    return vel
 
 
 # =============================================================================
@@ -398,7 +322,7 @@ def LCD_by_MonteCarlo():
 # =============================================================================
 
 @nb.njit()
-def uniform_bimaxwellian():
+def initialize_velocity_bimaxwellian():
     '''Initializes position, velocity, and index arrays. Positions and velocities
     both initialized using appropriate numpy random distributions, cell by cell.
 
@@ -409,44 +333,83 @@ def uniform_bimaxwellian():
     '''
     # Set and initialize seed
     np.random.seed(seed)
-    pos   = np.zeros(N)
-    vel   = np.zeros((3, N))
-    idx   = np.ones(N, dtype=np.int8) * Nj
+    vel   = np.zeros((3, N), dtype=np.float64)
 
     # Initialize unformly in space, gaussian in 3-velocity
     for jj in range(Nj):
-        acc = 0
+        n_init = N_species[jj]
+        if quiet_start == 1:
+            n_init //= 2
+        
+        st = idx_start[jj]
+        en = idx_start[jj] + n_init
+                  
+        vel[0, st: en] = np.random.normal(0, vth_para[jj], n_init) + drift_v[jj] * va
+        vel[1, st: en] = np.random.normal(0, vth_perp[jj], n_init)
+        vel[2, st: en] = np.random.normal(0, vth_perp[jj], n_init)
+        
+        if quiet_start == 1:
+            vel[0, en: en + n_init] =      vel[0, st: en]
+            vel[1, en: en + n_init] = -1.0*vel[1, st: en]
+            vel[2, en: en + n_init] = -1.0*vel[2, st: en]
+    return vel
+
+
+def initialise_position_uniform():
+    '''
+    Initializes an analytically uniform distribution per cell (for better
+    consistency). Considerations:
+        -- For the quiet start, only half are initialized and half are copies
+        -- For open boundary conditions, an extra particle (2 for quiet) is placed
+           at xmax. This is because for periodic, xmin=xmax represents the same
+           location.
+    '''
+    print('Initializing uniform distribution')
+    pos = np.zeros(N, dtype=np.float64)
+    idx = np.ones( N, dtype=np.int8) * Nj
+
+    for jj in range(Nj):
         idx[idx_start[jj]: idx_end[jj]] = jj
         
+        n_init = nsp_ppc[jj]
+        if quiet_start == 1:
+            n_init //= 2
+
+        acc = 0; offset  = 0
         for ii in range(NX):
-            n_particles = nsp_ppc[jj]
-
-            for kk in range(n_particles):
-                pos[idx_start[jj] + acc + kk] = dx*(float(kk) / n_particles + ii)
-              
-            vel[0, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, vth_para[jj], n_particles) + drift_v[jj] * va
-            vel[1, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, vth_perp[jj], n_particles)
-            vel[2, (idx_start[jj] + acc): ( idx_start[jj] + acc + n_particles)] = np.random.normal(0, vth_perp[jj], n_particles)
-                        
-            acc += n_particles
+            if ii == NX - 1 and field_periodic == 0:
+                n_init += 1
+                offset  = 1
+            
+            st = idx_start[jj] + acc
+            en = idx_start[jj] + acc + n_init
+            
+            for kk in range(n_init):
+                pos[st + kk] = dx*(float(kk) / (n_init - offset) + ii)
+            pos[st: en] -= 0.5*NX*dx              
+            
+            acc += n_init
     
-    pos -= 0.5*NX*dx
-    return pos, vel, idx
+    if quiet_start == 1:
+        st = idx_start[jj]
+        en = idx_start[jj] + acc
+        
+        pos[en: en+acc] = pos[st:en]               
+    return pos, idx
 
 
-def initialize_particles(B, E, mp_flux):
+def initialize_particles():
+    pos, idx = initialise_position_uniform()
+    
     if homogenous == 1:
-        pos, vel, idx = uniform_random_bimaxwellian()
+        vel = initialize_velocity_bimaxwellian()
     else:
-        pos, vel, idx = LCD_by_MonteCarlo()
+        vel = LCD_by_MonteCarlo()
         
     Ie         = np.zeros(N,      dtype=np.uint16)
     Ib         = np.zeros(N,      dtype=np.uint16)
     W_elec     = np.zeros((3, N), dtype=np.float64)
     W_mag      = np.zeros((3, N), dtype=np.float64)
-        
-    if homogenous == False:
-        run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E, mp_flux)
     
     assign_weighting_TSC(pos, Ie, W_elec)
     assign_weighting_TSC(pos, Ib, W_mag)
@@ -663,6 +626,9 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
     # Resync (advance) velocity here
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, 0.5*pdt,
                     hot_only=hot_only)
+    
+    assign_weighting_TSC(pos, Ie, W_elec)
+    assign_weighting_TSC(pos, Ib, W_mag)
     
     # Dump indicator file
     if save_fields == 1 or save_particles == 1:
@@ -2634,8 +2600,13 @@ def load_plasma_params():
     # Number of sim particles for each species, total
     Nj        = len(mass)                                    # Number of species
     N_species = nsp_ppc * NX
+
+    # Add extra particle if open, two if open and quiet
     if field_periodic == 0:
-        N_species += 2   
+        if quiet_start == 0:
+            N_species += 1 
+        else:
+            N_species += 2   
     
     # Add number of spare particles proportional to percentage of total (50% standard, high but safe)
     if particle_open == 1:
@@ -2878,7 +2849,11 @@ if __name__ == '__main__':
     _Ji_PLUS, _Ji_MINUS, _J_EXT,   \
     _L, _G, _MP_FLUX               = initialize_source_arrays()
     _POS, _VEL, _IE, _W_ELEC, _IB, \
-    _W_MAG, _IDX                   = initialize_particles(_B, _E, _MP_FLUX)
+    _W_MAG, _IDX                   = initialize_particles()
+    
+    if homogenous == False:
+        run_until_equilibrium(_POS, _VEL, _IDX, _IE, _W_ELEC, _IB, _W_MAG, _B, _E, _MP_FLUX)
+        
     _DT, _MAX_INC, _PART_SAVE_ITER,\
     _FIELD_SAVE_ITER, _SUBCYCLES,  \
     _B_DAMP, _RESIS_ARR            = set_timestep(_VEL)    

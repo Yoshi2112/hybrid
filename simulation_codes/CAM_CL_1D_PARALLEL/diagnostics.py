@@ -16,30 +16,11 @@ import main_1D_simplified as m1ds
 
 
 
-
-@nb.njit()
-def roundup(x, nearest=10.):
-    '''
-    Rounds up x to the nearest multiple specified by 'nearest'
-    Returns float
-    '''
-    return int(math.ceil(x / nearest)) * nearest
-
-
 def boundary_idx64(time_arr, start, end):
     '''Returns index values corresponding to the locations of the start/end times in a numpy time array, if specified times are np.datetime64'''
     idx1 = np.where(abs(time_arr - start) == np.min(abs(time_arr - start)))[0][0] 
     idx2 = np.where(abs(time_arr - end)   == np.min(abs(time_arr - end)))[0][0]
     return idx1, idx2
-
-
-def r_squared(data, model):                  
-    '''Calculates a simple R^2 value for the fit of model against data. Accepts single dimensional
-    arrays only.'''
-    SS_tot = np.sum(np.square(data - data.mean()))              # Total      sum of squares
-    SS_res = np.sum(np.square(data - model))                    # Residuals  sum of squares
-    r_sq   = 1 - (SS_res / SS_tot)                              # R^2 calculation (most general)
-    return r_sq
 
 
 def collect_macroparticle_moments(pos, vel, idx): #
@@ -182,30 +163,6 @@ def check_cell_velocity_distribution_2D(pos, vel, node_number, jj=0, show_cone=F
     return
 
 
-def check_position_distribution(pos, num_bins=None):
-    '''Checks the spatial distribution of a particle species j within the spatial domain
-    
-    Called by main_1D()
-    '''
-    for j in range(main_1D.Nj):
-        fig = plt.figure(figsize=(12,10))
-        fig.suptitle('Configuration space distribution of {}'.format(main_1D.species_lbl[j]))
-        fig.patch.set_facecolor('w')
-        
-        if num_bins is None:
-            num_bins = main_1D.NX
-    
-        ax_x = plt.subplot()
-    
-        xs, BinEdgesx = np.histogram(pos[main_1D.idx_start[j]: main_1D.idx_end[j]]/main_1D.dx, bins=num_bins)
-        bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
-        ax_x.plot(bx, xs, '-', c=main_1D.temp_color[main_1D.temp_type[j]], drawstyle='steps')
-        ax_x.set_xlabel(r'$x_p (dx)$')
-        ax_x.set_xlim(main_1D.xmin/main_1D.dx, main_1D.xmax/main_1D.dx)
-
-    plt.show()
-    return
-
 def check_velocity_distribution(vel):
     '''
     Checks the velocity distribution of an all species across the simulation domain
@@ -339,51 +296,6 @@ def check_velocity_components_vs_space(pos, vel):
         plt.show()
         
         print('\n')
-    return
-
-
-def plot_temperature_extremes():
-    '''
-    Calculate what the max/min temperatures for the distribution are at eq/boundary
-    For each species, plot these two distributions
-    
-    Two positions: eq/xmax, Two components, par/per, multiple species Nj
-    '''
-    vlim = 10
-    jj   = 1
-    
-    from scipy.stats import norm
-    
-    T_eq_par = main_1D.beta_par[jj] * main_1D.B_eq ** 2 / (2 * main_1D.mu0 * main_1D.ne * main_1D.kB)
-    T_eq_per = main_1D.beta_per[jj] * main_1D.B_eq ** 2 / (2 * main_1D.mu0 * main_1D.ne * main_1D.kB)
-    
-    T_xmax_par = main_1D.beta_par[jj] * main_1D.B_xmax ** 2 / (2 * main_1D.mu0 * main_1D.ne * main_1D.kB)
-    T_xmax_per = main_1D.beta_per[jj] * main_1D.B_xmax ** 2 / (2 * main_1D.mu0 * main_1D.ne * main_1D.kB)
-    
-    sf_eq_par = np.sqrt(main_1D.kB *  T_eq_par /  main_1D.mass[jj])
-    sf_eq_per = np.sqrt(main_1D.kB *  T_eq_per /  main_1D.mass[jj])
-    
-    sf_xmax_par = np.sqrt(main_1D.kB *  T_xmax_par /  main_1D.mass[jj])
-    sf_xmax_per = np.sqrt(main_1D.kB *  T_xmax_per /  main_1D.mass[jj])
-    
-    x = np.linspace(-vlim*main_1D.va, vlim*main_1D.va, 100)
-    
-    prob_eq_par   = norm.pdf(x, 0.0, sf_eq_par)
-    prob_eq_per   = norm.pdf(x, 0.0, sf_eq_per)
-    
-    prob_xmax_par = norm.pdf(x, 0.0, sf_xmax_par)
-    prob_xmax_per = norm.pdf(x, 0.0, sf_xmax_per)
-    
-    plt.ioff()
-    fig, ax = plt.subplots(2, sharex=True)
-    ax[0].plot(x, prob_eq_par  , c='b')
-    ax[0].plot(x, prob_xmax_par, c='r')
-    ax[0].set_xlabel('$v_\parallel$')
-    
-    ax[1].plot(x, prob_eq_per, c='b')
-    ax[1].plot(x, prob_xmax_per, c='r')
-    ax[1].set_xlabel('$v_\perp$')
-    plt.show()
     return
 
 
@@ -1710,29 +1622,6 @@ def test_boris():
     return
 
 
-def get_atan(y, x):
-    
-    if x > 0:
-        v=np.arctan(y/x)
-
-    if y >= 0 and x < 0:
-        v = np.pi + np.arctan(y/x)
-
-    if y < 0 and x < 0:
-        v = -np.pi + np.arctan(y/x)
-
-    if y > 0 and x == 0:
-        v = np.pi/2
-
-    if y < 0 and x == 0:
-        v = -np.pi/2
-
-    if v < 0:
-        v = v + 2*np.pi
-
-    return v
-
-
 def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
     '''
     Contains full particle pusher including timestep checker to simulate the motion
@@ -1740,7 +1629,6 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
     fields present.
     '''    
     # Initialize arrays (W/I dummy - not used)
-    
     # Particle index 12804 :: lval 40
     # Init position: [-1020214.38977955,  -100874.673573  ,        0.        ]
     # Init velocity: [ -170840.94864185, -8695629.67092295,  3474619.54765129]
@@ -1832,13 +1720,7 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
 
     tt = 0; t_total = 0
     start_time = timer()
-    while tt < max_inc - 1:
-# =============================================================================
-#         pos_gphase[tt] = get_atan(pos[2,0], pos[1,0]) * 180. / np.pi
-#         vel_gphase[tt] = (get_atan(vel[2,0], vel[1,0]) * 180. / np.pi + 90.)%360.
-#         print('P/V Gyrophase :: {:.2f}, {:.2f}'.format(pos_gphase[tt], vel_gphase[tt]))
-# =============================================================================
-        
+    while tt < max_inc - 1:        
         # Increment so first loop is at t = 1*DT
         tt      += 1
         t_total += DT
@@ -1854,18 +1736,6 @@ def do_particle_run(max_rev=50, v_mag=1.0, pitch=45.0, dt_mult=1.0):
     runtime = timer() - start_time
     print('Particle push time : {}s'.format(runtime))
     return init_pos, init_vel, time, pos_history, vel_history, mag_history, DT, max_t, pos_gphase, vel_gphase
-
-
-def straighten_out_soln(approx, exact):
-    '''
-    Use the sign of the approximation to work out what the sign of the exact value should be.
-    Used on timeseries
-    '''
-    for jj in range(3):
-        for ii in range(approx.shape[0]):
-            if approx[ii, jj] < 0:
-                exact[ii, jj] *= -1.0
-    return
 
 
 def velocity_update(pos, vel, dt):  
@@ -1897,35 +1767,6 @@ def velocity_update(pos, vel, dt):
     return B_p, B_p
 
 
-def test_CAM_CL():
-    
-    grids  = [16, 32, 64, 128, 256, 512, 1024]
-    errors = np.zeros(len(grids))
-    
-    NX   = 32      #const.NX
-    xmin = 0.0     #const.xmin
-    xmax = 2*np.pi #const.xmax
-    k    = 1.0
-    marker_size = 20
-    
-    #for NX, ii in zip(grids, range(len(grids))):
-    dx      = xmax / NX
-    x       = np.arange(xmin, xmax, dx/100.)
-    E_nodes = (np.arange(NX + 3) - 0.5) * dx
-    B_nodes = (np.arange(NX + 3) - 1.0) * dx
-        
-    B       = np.zeros((NX + 3, 3))
-    n_i     = np.ones((NX + 3)) 
-    J_i     = np.ones((NX + 3, 3))
-    
-    DT        = 1.0
-    subcycles = 25
-    
-    new_B = main_1D.cyclic_leapfrog(B, n_i, J_i, DT, subcycles)
-    
-    return
-
-
 def test_current_push():
     NX   = 32      #const.NX
     xmin = 0.0     #const.xmin
@@ -1934,7 +1775,6 @@ def test_current_push():
     marker_size = 20
     
     dx      = xmax / NX
-    x       = np.arange(xmin, xmax, dx/100.)
     E_nodes = (np.arange(NX + 3) - 0.5) * dx
     B_nodes = (np.arange(NX + 3) - 1.0) * dx
         
@@ -1988,83 +1828,125 @@ def check_velocity_space_init():
     '''
     New figure for each species. Plots in v_perp/v_parallel space
     '''
-    pos, vel, idx = main_1D.init_quiet_start()
-    
-    vel /= main_1D.va
+    main_1D.load_run_params()
+    main_1D.load_plasma_params()
+    main_1D.calculate_background_magnetic_field()
+
+    pos, vel, Ie, W_elec, Ib, W_mag, idx = main_1D.initialize_particles()
+
+    vel   /= main_1D.va
     v_para = vel[0]
     v_perp = np.sqrt(vel[1] ** 2 + vel[2] ** 2) * np.sign(vel[2])
     
+    print('Plotting velocity distributions...')
     plt.ioff()
     for jj in range(main_1D.Nj):
-        if main_1D.temp_type[jj] == 1:
-            st, en = main_1D.idx_start[jj], main_1D.idx_end[jj]
-            
-            fig, ax = plt.subplots()
-            
-            ax.scatter(v_perp[st:en], v_para[st:en], c=main_1D.temp_color[jj], s=1)
-            
-            ax.set_title(r'Total Velocity Distribution Functions (%s) :: $\alpha_L$ = %.1f$^\circ$' %\
+        st, en = main_1D.idx_start[jj], main_1D.idx_end[jj]
+        
+        if True:
+            # Plot scatter graphs
+            fig, axes1 = plt.subplots(ncols=2, nrows=2)
+            axes1[0, 0].set_title(r'Total Velocity Distribution Functions (%s) :: $\alpha_L$ = %.1f$^\circ$' %\
                          (main_1D.species_lbl[jj], main_1D.loss_cone_eq * 180./np.pi))
-                
-            ax.set_xlabel('$v_\parallel / v_A$')
-            ax.set_ylabel('$v_\perp / v_A$')
-            ax.axis('equal')
+            
+            axes1[0, 0].scatter(vel[0, st:en], vel[1, st:en], c=main_1D.temp_color[jj], s=1)
+            axes1[0, 0].set_xlabel('$v_x$')
+            axes1[0, 0].set_ylabel('$v_y$')
+            
+            axes1[0, 1].scatter(vel[0, st:en], vel[2, st:en], c=main_1D.temp_color[jj], s=1)
+            axes1[0, 1].set_xlabel('$v_x$')
+            axes1[0, 1].set_ylabel('$v_z$')
+            
+            axes1[1, 0].scatter(vel[1, st:en], vel[2, st:en], c=main_1D.temp_color[jj], s=1)
+            axes1[1, 0].set_xlabel('$v_y$')
+            axes1[1, 0].set_ylabel('$v_z$')
+            
+            axes1[1, 1].scatter(v_perp[st:en], v_para[st:en], c=main_1D.temp_color[jj], s=1)
+            axes1[1, 1].set_xlabel('$v_\parallel$')
+            axes1[1, 1].set_ylabel('$v_\perp$')
+                            
+            for ii in range(2):
+                for jj in range(2):
+                    axes1[ii, jj].axis('equal')
             
             if main_1D.homogenous == False:
                 # How to plot loss cones?
                 gradient   = np.tan(np.pi/2 - main_1D.loss_cone_xmax)
-                lmin, lmax = ax.get_xlim()
+                lmin, lmax = axes1[1, 1].get_xlim()
                 #Put some ylims in here too
         
                 lcx        = np.linspace(lmin, lmax, 100, endpoint=True)
                 lcy1       =  gradient * lcx
                 lcy2       = -gradient * lcx
     
-                ax.plot(lcx, lcy1, c='k', alpha=0.5, ls=':')
-                ax.plot(lcx, lcy2, c='k', alpha=0.5, ls=':')
+                axes1[1, 1].plot(lcx, lcy1, c='k', alpha=0.5, ls=':')
+                axes1[1, 1].plot(lcx, lcy2, c='k', alpha=0.5, ls=':')
                      
-                ax.axvline(0, c='k')
-                ax.axhline(0, c='k')
+                axes1[1, 1].axvline(0, c='k')
+                axes1[1, 1].axhline(0, c='k')
+        
+        # Plot histograms
+        fig, axes2 = plt.subplots(ncols=2, nrows=2)
+        
+        n_bins = 100
+        hist00, xedges00, yedges00, image00 = plt.hist2d(vel[0, st:en], vel[1, st:en], bins=n_bins)
+        hist01, xedges01, yedges01, image01 = plt.hist2d(vel[0, st:en], vel[2, st:en], bins=n_bins)
+        hist10, xedges10, yedges10, image10 = plt.hist2d(vel[1, st:en], vel[2, st:en], bins=n_bins)
+        hist11, xedges11, yedges11, image11 = plt.hist2d(v_perp[st:en], v_para[st:en], bins=n_bins)
+        
+        axes2[0, 0].pcolormesh(yedges00, xedges00, hist00.T)
+        axes2[0, 1].pcolormesh(yedges01, xedges01, hist01.T)
+        axes2[1, 0].pcolormesh(yedges10, xedges10, hist10.T)
+        axes2[1, 1].pcolormesh(yedges11, xedges11, hist11.T)
 
     plt.show()
     return
 
 
-def test_simplified_source_deposition():
-    m1ds.load_run_params()
-    m1ds.load_plasma_params()
-    m1ds.get_thread_values()
+def check_position_distribution(num_bins=None, show_particles=False):
+    '''Checks the spatial distribution of a particle species j within the spatial domain
     
-    B, B2, B_cent, E, Ve, Te                        = m1ds.initialize_fields()
-    rho_half, rho_int, Ji, Ji_plus, Ji_minus, L, G  = m1ds.initialize_source_arrays()
-    pos, vel, Ie, W_elec, Ib, W_mag, idx            = m1ds.initialize_particles()
+    Called by main_1D()
+    '''
+    main_1D.load_run_params()
+    main_1D.load_plasma_params()
+    pos, vel, Ie, W_elec, Ib, W_mag, idx = main_1D.initialize_particles()
+    #deposit_both_moments(vel, Ie, W_elec, idx, ni, nu)
     
-    ni  = np.zeros((m1ds.NC, m1ds.Nj), dtype=np.float64)
-    nu  = np.zeros((m1ds.NC, m1ds.Nj, 3), dtype=np.float64)
-    
-    m1ds.deposit_moments(vel, Ie, W_elec, idx, ni, nu)
-    
-    for jj in range(m1ds.Nj):
-        rho_half += ni[:, jj] * m1ds.n_contr[jj] * m1ds.charge[jj]
+    print('Number of particles:', main_1D.N)
+    print('Particles per species:', main_1D.N_species)
+    #pdb.set_trace()
+    for jj in range(main_1D.Nj):
+        print('Checking distribution', jj)
+        fig = plt.figure(figsize=(12,10))
+        fig.suptitle('Configuration space distribution of {}'.format(main_1D.species_lbl[jj]))
+        fig.patch.set_facecolor('w')
         
-        for kk in range(3):
-            Ji_minus[:, kk] += nu[:, jj, kk] * m1ds.n_contr[jj] * m1ds.charge[jj]
+        if num_bins is None:
+            num_bins = main_1D.NX
     
-    m1ds.manage_source_term_boundaries(rho_half)
+        ax_x = plt.subplot()
 
-    fig, axes = plt.subplots(2)
-    axes[0].plot(rho_half, label='rho')
-    axes[1].plot(Ji_minus[:, 0], label='Jx')
-    axes[1].plot(Ji_minus[:, 1], label='Jy')
-    #axes[1].plot(Ji_minus[:, 2], label='Jz')
-    axes[0].legend()
-    axes[1].legend()
+        xs, BinEdgesx = np.histogram(pos[main_1D.idx_start[jj]: main_1D.idx_end[jj]]/main_1D.dx, bins=num_bins)
+        bx = 0.5 * (BinEdgesx[1:] + BinEdgesx[:-1])
+        ax_x.plot(bx, xs, '-', c=main_1D.temp_color[jj], drawstyle='steps')
+        ax_x.set_xlabel(r'$x_p (dx)$')
+        ax_x.set_xlim(main_1D.xmin/main_1D.dx, main_1D.xmax/main_1D.dx)
+        
+        if show_particles == True:
+            dots = np.ones(pos.shape[0]) * xs.mean()
+            
+            ax_x.scatter(pos/main_1D.dx, dots, c='k')
+
+    plt.show()
     return
+
 
 
 #%% --MAIN-- 
 if __name__ == '__main__':
-    test_simplified_source_deposition()
+    check_velocity_space_init()
+    #check_position_distribution(show_particles=(True))
     
     #test_curl_orders()
     #test_interpolation()
@@ -2081,16 +1963,11 @@ if __name__ == '__main__':
     #test_E_convective_exelectron()
     #test_weight_shape_and_alignment()
     
-    # 23/02/2021
     #test_particle_orbit()
     #test_curl_E()
     #test_curl_B()
     #test_grad_P()
     #test_E2C_interpolation()
+        
     
-    # 25/02/2021
-    #check_velocity_space_init()
-    
-    # Tests 28/02/2021
-    #check_particle_position_individual_incl_density()
     
