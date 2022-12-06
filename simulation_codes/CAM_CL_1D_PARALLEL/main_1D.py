@@ -7,6 +7,7 @@ import diagnostics as diag
 from scipy.interpolate import splrep, splev
 '''
 TODO: Outstanding issues
+ -- Work out dynamic max_subcycle based on the ratio of particles to field nodes
  -- Boundary conditions for E, B field in damping region (clean up)
  -- Interpolation for B_cent: Make 2nd order (currently 1st order)
  -- Make subcycle averaging independent of the function like Matthews (1994)
@@ -28,6 +29,7 @@ RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
+pequil_saveall      = True
 cold_va             = False
 Fu_override         = False      # Note this HAS to be disabled for grid runs.
 do_parallel         = True
@@ -39,7 +41,7 @@ max_cell_traverse   = 0.75       # Maximum portion of a cell that we want a part
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-nb.set_num_threads(16)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(18)         # Uncomment to manually set number of threads, otherwise will use all available
 
 
 #%% --- FUNCTIONS ---
@@ -73,7 +75,7 @@ def calc_losses(v_para, v_perp, B0x, st=0):
 
 
 @nb.njit()
-def LCD_by_elimination(pos, vel, sf_par, sf_per, st, en, jj):
+def initialize_velocity_LCD_elimination(pos, vel, sf_par, sf_per, st, en, jj):
     '''
     Takes in a Maxwellian or pseudo-maxwellian distribution. Removes any particles
     inside the loss cone and reinitializes them using the given scale factors 
@@ -112,7 +114,7 @@ def LCD_by_elimination(pos, vel, sf_par, sf_per, st, en, jj):
     return
 
 
-def LCD_by_MonteCarlo():
+def initialize_velocity_LCD_MonteCarlo():
     '''
     This would only be called for a non-homogeneous open-boundary simulation
     since homogenous = no loss cone and periodic = no field gradient.
@@ -196,7 +198,6 @@ def LCD_by_MonteCarlo():
                     if acc == n_samples:
                         print('Finished.')
                         return dist_x, dist_y
-                    
         raise Exception('You should never get here')
         
     np.random.seed(seed)
@@ -321,6 +322,7 @@ def LCD_by_MonteCarlo():
 #     return pos, vel, idx
 # =============================================================================
 
+
 @nb.njit()
 def initialize_velocity_bimaxwellian():
     '''Initializes position, velocity, and index arrays. Positions and velocities
@@ -390,11 +392,12 @@ def initialise_position_uniform():
             
             acc += n_init
     
-    if quiet_start == 1:
-        st = idx_start[jj]
-        en = idx_start[jj] + acc
-        
-        pos[en: en+acc] = pos[st:en]               
+        if quiet_start == 1:
+            st = idx_start[jj]
+            en = idx_start[jj] + acc
+            
+            pos[en: en+acc] = pos[st:en]  
+            
     return pos, idx
 
 
@@ -404,7 +407,7 @@ def initialize_particles():
     if homogenous == 1:
         vel = initialize_velocity_bimaxwellian()
     else:
-        vel = LCD_by_MonteCarlo()
+        vel = initialize_velocity_LCD_MonteCarlo()
         
     Ie         = np.zeros(N,      dtype=np.uint16)
     Ib         = np.zeros(N,      dtype=np.uint16)
@@ -413,6 +416,18 @@ def initialize_particles():
     
     assign_weighting_TSC(pos, Ie, W_elec)
     assign_weighting_TSC(pos, Ib, W_mag)
+    
+    # Calculate memory used:
+    nbytes = 0
+    nbytes += pos.nbytes
+    nbytes += vel.nbytes
+    nbytes += Ie.nbytes
+    nbytes += W_elec.nbytes
+    nbytes += Ib.nbytes
+    nbytes += W_mag.nbytes
+    nbytes += idx.nbytes
+    ngbytes = nbytes / 1024 / 1024 / 1024
+    print(f'Memory used by particle arrays: {ngbytes:.3f} GB')
     return pos, vel, Ie, W_elec, Ib, W_mag, idx
 
 
@@ -563,10 +578,14 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
         -- Put some kind of limit on dB/dx
         -- Don't need vel_ts since cell size doesn't matter (especially for very small dx)
     '''
+    equil_time = timer()
     psave = save_particles
     
     print('Letting particle distribution relax into static field configuration')
     # 20 solutions per gyroperiod (at highest B)
+    #max_vx   = np.max(np.abs(vel[0, :]))
+    #vel_ts   = max_cell_traverse*dx / max_vx
+    
     ion_ts    = 0.05 * 2 * np.pi / gyfreq_eq
     pdt       = ion_ts
     ptime     = frev / gyfreq_eq
@@ -574,8 +593,8 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
     psim_time = 0.0
     dump_iter = int(part_dumpf / (pdt*gyfreq_eq))
 
-    print('Particle-only timesteps: ', psteps)
-    print('Particle-push in seconds:', pdt)
+    print(f'Particle-only timesteps: {psteps}')
+    print(f'Particle-push in seconds: {pdt:.4e}')
     
     if psave == True:
         print('Generating data for particle equilibrium pushes')
@@ -596,15 +615,12 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
     
     for pp in range(psteps):
         # Save first and last only
-        #if psave == True and pp%dump_iter == 0:
-        if psave == True and (pp == 0 or pp == psteps - 1):
-            p_fullpath = pdata_path + 'data%05d' % pnum
-            np.savez(p_fullpath, pos=pos, vel=vel, idx=idx, sim_time=psim_time)
-            pnum += 1
-            print('pre-Particle data saved')
-            
-        if pp%50 == 0:
-            print('Step', pp)
+        if psave == True:
+            if (pp == 0 or pp == psteps - 1) or (pequil_saveall == True and pp%50==0):
+                p_fullpath = pdata_path + 'data%05d' % pnum
+                np.savez(p_fullpath, pos=pos, vel=vel, idx=idx, sim_time=psim_time)
+                pnum += 1
+                print('pre-Particle data saved')
         
         velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, pdt,
                         hot_only=hot_only)
@@ -620,8 +636,20 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
                     # Change this to dynamically expand particle arrays later on (adding more particles)
                     # Can do it by cell lots (i.e. add a cell's worth each time)
                     raise Exception('WARNING :: No spare particles remaining. Exiting simulation.')
-                
+        
         psim_time += pdt
+        
+        if pp%50 == 0:
+            running_time = int(timer() - equil_time)
+            hrs          = running_time // 3600
+            rem          = running_time %  3600
+            
+            mins         = rem // 60
+            sec          = rem %  60
+            
+            pcent = round(float(pp) / float(psteps) * 100., 2)
+            print('{:5.2f}% :: Step {} of {} :: Current runtime {:02}:{:02}:{:02}'.format(
+                                                   pcent, pp, psteps, hrs, mins, sec))
     
     # Resync (advance) velocity here
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, 0.5*pdt,
@@ -635,10 +663,11 @@ def run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
         efin_path = '%s/%s/run_%d/equil_finished.txt' % (drive, save_path, run_num)
         open_file = open(efin_path, 'w')
         open_file.close()
+    print('Particle equilibrium established.')
     return
 
 
-def set_timestep(vel):
+def set_timestep(vel, rho_int):
     '''
     Timestep limitations:
         -- Resolve ion gyromotion (controlled by orbit_res)
@@ -674,8 +703,8 @@ def set_timestep(vel):
         # b1 factor accounts for increase in total field due to wave growth
         # Without this, s/c count doubles as soon as waves start to grow
         # which unneccessarily slows the simulation
-        b1_fac     = 1.05
-        dispfreq   = (np.pi / dx) ** 2 * B_eq*b1_fac / (mu0 * ne * ECHARGE)
+        b1_fac     = 1.1
+        dispfreq   = (np.pi / dx) ** 2 * B_eq*b1_fac / (mu0 * rho_int.max())
         dt_sc      = freq_res / dispfreq
         subcycles  = int(DT / dt_sc + 1)
         
@@ -732,9 +761,10 @@ def set_timestep(vel):
         plt.show()
         sys.exit()
     
+    dt_pinv = DT * gyfreq_eq
     print('\nTimestep limited by', limiting_ts)
     if DT < 1e-2:
-        print('Timestep: %.3es with %d subcycles' % (DT, subcycles))
+        print('Timestep: %.3e s (%.3f pinv) with %d subcycles' % (DT, dt_pinv, subcycles))
     else:
         print('Timestep: %.3fs with %d subcycles' % (DT, subcycles))
     print(f'{max_inc} iterations total\n')
@@ -1016,6 +1046,8 @@ def inject_particles_all_species(pos, vel, idx, _mp_flux, dt):
     Control function for injection that does all species.
     This is so the actual injection function can be per-species (in case
     I want to inject just one species, such as for the equilibrium stuff)
+    
+    UNUSED :: OLD
     '''
     for jj in range(Nj):
         inject_particles_1sp(pos, vel, idx, _mp_flux, dt, jj)
@@ -1032,6 +1064,8 @@ def inject_particles_1sp(pos, vel, idx, _mp_flux, dt, jj):
     in calling function: advance_particles_and_moments())
     
     NOTE: How does this work for -0.5*DT ?? Might have to double check
+    
+    UNUSED :: OLD
     '''
     # Add flux at each boundary 
     if particle_open == 1:
@@ -1981,7 +2015,7 @@ def calculate_E(B, B_center, Ji, J_ext, qn, E, Ve, Te, resistive_array, sim_time
 
 
 #%% AUXILLIARY FUNCTIONS
-#@nb.njit(parallel=False)
+@nb.njit()
 def get_B_cent(B, _B_cent):
     '''
     Quick and dirty linear interpolation so I have a working code
@@ -2649,7 +2683,7 @@ def load_wave_driver_params():
     driven_rad = driven_freq * 2 * np.pi
     driven_k   = (driven_rad / SPLIGHT) ** 2
     driven_k  *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyrofrequency))).sum()
-    driven_k   = np.sqrt(driven_k)
+    driven_k   = 0.0#np.sqrt(driven_k)
     return
 
 
@@ -2802,9 +2836,9 @@ parser.add_argument('-r', '--runfile'     , default='_run_params.run', type=str)
 parser.add_argument('-p', '--plasmafile'  , default='_plasma_params.plasma', type=str)
 parser.add_argument('-d', '--driverfile'  , default='_driver_params.txt'   , type=str)
 parser.add_argument('-n', '--run_num'     , default=-1, type=int)
-parser.add_argument('-m', '--max_subcycle', default=128, type=int)
-parser.add_argument('-M', '--init_max_subcycle', default=32, type=int)
-parser.add_argument('-s', '--subcycle'    , default=8, type=int)
+parser.add_argument('-m', '--max_subcycle', default=256, type=int)
+parser.add_argument('-M', '--init_max_subcycle', default=64, type=int)
+parser.add_argument('-s', '--subcycle'    , default=16, type=int)
 args = vars(parser.parse_args())
 
 # Check root directory (change if on RCG)
@@ -2842,8 +2876,6 @@ if __name__ == '__main__':
     
     print_summary_and_checks()
 
-    start_time = timer()
-    
     _B, _B2, _B_CENT, _E, _VE, _TE = initialize_fields()
     _RHO_HALF, _RHO_INT, _Ji,      \
     _Ji_PLUS, _Ji_MINUS, _J_EXT,   \
@@ -2853,10 +2885,14 @@ if __name__ == '__main__':
     
     if homogenous == False:
         run_until_equilibrium(_POS, _VEL, _IDX, _IE, _W_ELEC, _IB, _W_MAG, _B, _E, _MP_FLUX)
-        
+    
+    # Collect density so subcycling is calculated correctly
+    init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, _RHO_INT, _RHO_HALF,
+                         _Ji, _Ji_PLUS, _L, _G, _MP_FLUX, 0.0)
+    
     _DT, _MAX_INC, _PART_SAVE_ITER,\
     _FIELD_SAVE_ITER, _SUBCYCLES,  \
-    _B_DAMP, _RESIS_ARR            = set_timestep(_VEL)    
+    _B_DAMP, _RESIS_ARR            = set_timestep(_VEL, _RHO_INT)    
         
     print('Loading initial state...')
     init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, _RHO_INT, _RHO_HALF,
@@ -2876,7 +2912,7 @@ if __name__ == '__main__':
     _LOOP_TIMES     = np.zeros(_MAX_INC-1, dtype=float)
     _LOOP_SAVE_ITER = 1
 
-    _QQ = 1; _SIM_TIME = 0.0
+    _QQ = 1; _SIM_TIME = 0.0; start_time = timer()
     print('Starting loop...')
     while _QQ < _MAX_INC:
         loop_start = timer()

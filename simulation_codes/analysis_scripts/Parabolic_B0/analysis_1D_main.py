@@ -3783,7 +3783,7 @@ def plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=False, skip=1, pp
                 # Do the calculations and plotting
                 cfac = 10  if cf.temp_type[jj] == 1 else 5
                 vlim = 5*cf.vth_perp[jj]/cf.va
-                #pdb.set_trace()
+
                 # Manually specify bin edges for histogram
                 vbins = np.linspace(-vlim, vlim, 101, endpoint=True)
                 
@@ -5888,9 +5888,201 @@ def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=None)
         plt.close('all')
     return
 
+
+def plot_equilibrium_distribution(saveas='eqdist', histogram=True):
+    '''
+    Plots the initial and final 'relaxed' particle distributions to show how
+    the particles were initially loaded and what their state is before the
+    beginning of the simulation
+    
+    Plot x vs. vx, vy, vz and
+    vx/vz, vy/vz, vx/vy, v_para/v_perp
+    
+    '''
+    if cf.particle_open == 1:
+        shuffled_idx = True
+    else:
+        shuffled_idx = False
+        
+    if os.path.exists(cf.data_dir + '//equil_particles//') == False:
+        print('No equilibrium data to plot. Aborting.')
+        return
+    n_equil = len(os.listdir(cf.data_dir + '//equil_particles//'))
+    
+    filepath = cf.anal_dir + '//equilibrium_distributions//'
+    filename = filepath + saveas
+    if not os.path.exists(filepath): os.makedirs(filepath)
+        
+    print('Loading particles...')
+    pos1, vel1, idx1, ptime1, idx_start1, idx_end1 =\
+        cf.load_particles(0, shuffled_idx=shuffled_idx, preparticledata=True)
+    
+    pos2, vel2, idx2, ptime2, idx_start2, idx_end2 =\
+        cf.load_particles(n_equil-1, shuffled_idx=shuffled_idx, preparticledata=True)
+        
+    vel1 /= cf.va; vel2 /= cf.va
+    pos1 /= cf.dx; pos2 /= cf.dx
+        
+    v_perp1 = np.sqrt(vel1[1] ** 2 + vel1[2] ** 2) * np.sign(vel1[2])
+    v_perp2 = np.sqrt(vel2[1] ** 2 + vel2[2] ** 2) * np.sign(vel2[2])
+    
+    xbins = np.linspace(cf.xmin/cf.dx, cf.xmax/cf.dx, cf.NX + 1, endpoint=True)
+    
+    plt.ioff()
+    for jj in range(cf.Nj):
+        
+        # Do the calculations and plotting
+        cfac  = 10  if cf.temp_type[jj] == 1 else 10
+        vlim  = 5*cf.vth_perp[jj]/cf.va
+        vbins = np.linspace(-vlim, vlim, 501, endpoint=True)
+        print('\nGenerating plots for species', jj)
+        
+        if True:
+            pfac = 3
+            
+            # Plot Spatial (vx, vy, vz, vperp) for before and after
+            fig1, axes1 = plt.subplots(nrows=4, ncols=2, figsize=(16, 9))
+            fig1.suptitle(cf.species_lbl[jj])
+            axes1[0, 0].set_title('At initialization')
+            st1 = idx_start1[jj]; en1 = idx_end1[jj]
+            
+            counts, xedges, yedges, im1a = axes1[0, 0].hist2d(pos1[st1:en1], vel1[0, st1:en1], 
+                                                    bins=[xbins, vbins], vmin=0, vmax=cf.nsp_ppc[jj]/cfac/pfac)
+            cb = fig1.colorbar(im1a, ax=axes1[0, 0], pad=0.015)
+            cb.set_label('Counts')
+            axes1[0, 0].set_ylabel('$v_x$', rotation=0)
+            
+            counts, xedges, yedges, im2a = axes1[1, 0].hist2d(pos1[st1:en1], vel1[1, st1:en1], 
+                                                    bins=[xbins, vbins], vmin=0, vmax=cf.nsp_ppc[jj]/cfac/pfac)
+            cb = fig1.colorbar(im2a, ax=axes1[1, 0], pad=0.015)
+            cb.set_label('Counts')
+            axes1[1, 0].set_ylabel('$v_y$', rotation=0)
+            
+            counts, xedges, yedges, im3a = axes1[2, 0].hist2d(pos1[st1:en1], vel1[2, st1:en1], 
+                                                    bins=[xbins, vbins], vmin=0, vmax=cf.nsp_ppc[jj]/cfac/pfac)
+            cb = fig1.colorbar(im3a, ax=axes1[2, 0], pad=0.015)
+            cb.set_label('Counts')
+            axes1[2, 0].set_ylabel('$v_z$', rotation=0)
+            
+            counts, xedges, yedges, im4a = axes1[3, 0].hist2d(pos1[st1:en1], v_perp1[st1:en1], 
+                                                    bins=[xbins, vbins], vmin=0, vmax=cf.nsp_ppc[jj]/cfac/pfac)
+            cb = fig1.colorbar(im4a, ax=axes1[3, 0], pad=0.015)
+            cb.set_label('Counts')
+            axes1[3, 0].set_ylabel('$v_\perp$', rotation=0)
+            
+            
+            axes1[0, 1].set_title('After relaxation')
+            st2 = idx_start2[jj]; en2 = idx_end2[jj]
+            
+            counts, xedges, yedges, im1b = axes1[0, 1].hist2d(pos2[st2:en2], vel2[0, st2:en2], 
+                                                    bins=[xbins, vbins], vmin=0, vmax=cf.nsp_ppc[jj]/cfac/pfac)
+            cb = fig1.colorbar(im1b, ax=axes1[0, 1], pad=0.015)
+            cb.set_label('Counts')
+            axes1[0, 1].set_ylabel('$v_x$', rotation=0)
+            
+            counts, xedges, yedges, im2b = axes1[1, 1].hist2d(pos2[st2:en2], vel2[1, st2:en2], 
+                                                    bins=[xbins, vbins], vmin=0, vmax=cf.nsp_ppc[jj]/cfac/pfac)
+            cb = fig1.colorbar(im2b, ax=axes1[1, 1], pad=0.015)
+            cb.set_label('Counts')
+            axes1[1, 1].set_ylabel('$v_y$', rotation=0)
+            
+            counts, xedges, yedges, im3b = axes1[2, 1].hist2d(pos2[st2:en2], vel2[2, st2:en2], 
+                                                    bins=[xbins, vbins], vmin=0, vmax=cf.nsp_ppc[jj]/cfac/pfac)
+            cb = fig1.colorbar(im3b, ax=axes1[2, 1], pad=0.015)
+            cb.set_label('Counts')
+            axes1[2, 1].set_ylabel('$v_z$', rotation=0)
+            
+            counts, xedges, yedges, im4b = axes1[3, 1].hist2d(pos2[st2:en2], v_perp2[st2:en2], 
+                                                    bins=[xbins, vbins], vmin=0, vmax=cf.nsp_ppc[jj]/cfac/pfac)
+            cb = fig1.colorbar(im4b, ax=axes1[3, 1], pad=0.015)
+            cb.set_label('Counts')
+            axes1[3, 1].set_ylabel('$v_\perp$', rotation=0)
+           
+            for mm in range(4):
+                for nn in range(2):
+                    axes1[mm, nn].set_xlim(cf.xmin/cf.dx, cf.xmax/cf.dx)
+                    axes1[mm, nn].set_ylim(-vlim, vlim)
+                    
+            fig1.subplots_adjust()
+            fig1.savefig(filename + f'_spatial_sp{jj}.png')
+            print('Plot saved as', filename + f'_spatial_sp{jj}.png')
+        
+        
+        if True:
+            vfac=6
+            
+            # Plot phase space (vx/vy, vx/vz, vy/vz, v_perp/v_para)
+            fig2, axes2 = plt.subplots(nrows=4, ncols=2, figsize=(16, 9))
+            fig2.suptitle(cf.species_lbl[jj])
+            
+            axes2[0, 0].set_title('At initialization')
+            st1 = idx_start1[jj]; en1 = idx_end1[jj]
+            
+            counts, xedges, yedges, im1c = axes2[0, 0].hist2d(vel1[0, st1:en1], vel1[1, st1:en1], 
+                                                    bins=[vbins, vbins], vmin=0, vmax=cf.nsp_ppc[jj]/cfac*vfac)
+            cb = fig2.colorbar(im1c, ax=axes2[0, 0], pad=0.015)
+            cb.set_label('Counts')
+            axes2[0, 0].set_ylabel('$v_x$', rotation=0)
+            
+            counts, xedges, yedges, im2c = axes2[1, 0].hist2d(vel1[0, st1:en1], vel1[2, st1:en1], 
+                                                    bins=[vbins, vbins], vmin=0, vmax=cf.nsp_ppc[jj]/cfac*vfac)
+            cb = fig2.colorbar(im2c, ax=axes2[1, 0], pad=0.015)
+            cb.set_label('Counts')
+            axes2[1, 0].set_ylabel('$v_y$', rotation=0)
+            
+            counts, xedges, yedges, im3c = axes2[2, 0].hist2d(vel1[1, st1:en1], vel1[2, st1:en1], 
+                                                    bins=[vbins, vbins], vmin=0, vmax=cf.nsp_ppc[jj]/cfac*vfac)
+            cb = fig2.colorbar(im3c, ax=axes2[2, 0], pad=0.015)
+            cb.set_label('Counts')
+            axes2[2, 0].set_ylabel('$v_z$', rotation=0)
+            
+            counts, xedges, yedges, im4c = axes2[3, 0].hist2d(vel1[0, st1:en1], v_perp1[st1:en1], 
+                                                    bins=[vbins, vbins], vmin=0, vmax=cf.nsp_ppc[jj]/cfac*vfac)
+            cb = fig2.colorbar(im4c, ax=axes2[3, 0], pad=0.015)
+            cb.set_label('Counts')
+            axes2[3, 0].set_ylabel('$v_\perp$', rotation=0)
+            
+            
+            axes2[0, 1].set_title('After relaxation')
+            st2 = idx_start2[jj]; en2 = idx_end2[jj]
+            
+            counts, xedges, yedges, im1d = axes2[0, 1].hist2d(vel2[0, st2:en2], vel2[1, st2:en2], 
+                                                    bins=[vbins, vbins], vmin=0, vmax=cf.nsp_ppc[jj]/cfac*vfac)
+            cb = fig2.colorbar(im1d, ax=axes2[0, 1], pad=0.015)
+            cb.set_label('Counts')
+            axes2[0, 1].set_ylabel('$v_x$', rotation=0)
+            
+            counts, xedges, yedges, im2d = axes2[1, 1].hist2d(vel2[0, st2:en2], vel2[2, st2:en2], 
+                                                    bins=[vbins, vbins], vmin=0, vmax=cf.nsp_ppc[jj]/cfac*vfac)
+            cb = fig2.colorbar(im2d, ax=axes2[1, 1], pad=0.015)
+            cb.set_label('Counts')
+            axes2[1, 1].set_ylabel('$v_y$', rotation=0)
+            
+            counts, xedges, yedges, im3d = axes2[2, 1].hist2d(vel2[1, st2:en2], vel2[2, st2:en2], 
+                                                    bins=[vbins, vbins], vmin=0, vmax=cf.nsp_ppc[jj]/cfac*vfac)
+            cb = fig2.colorbar(im3d, ax=axes2[2, 1], pad=0.015)
+            cb.set_label('Counts')
+            axes2[2, 1].set_ylabel('$v_z$', rotation=0)
+            
+            counts, xedges, yedges, im4d = axes2[3, 1].hist2d(vel2[0, st2:en2], v_perp2[st2:en2], 
+                                                    bins=[vbins, vbins], vmin=0, vmax=cf.nsp_ppc[jj]/cfac*vfac)
+            cb = fig2.colorbar(im4d, ax=axes2[3, 1], pad=0.015)
+            cb.set_label('Counts')
+            axes2[3, 1].set_ylabel('$v_\perp$', rotation=0)
+            
+            for mm in range(4):
+                for nn in range(2):
+                    axes2[mm, nn].axis('equal')
+                    
+            fig2.subplots_adjust()
+            fig2.savefig(filename + f'_phase_sp{jj}.png')
+            print('Plot saved as', filename + f'_phase_sp{jj}.png')
+            plt.close('all')
+        
+    return
 #%% MAIN
 if __name__ == '__main__':
-    drive       = 'D:'
+    drive       = 'E:'
     
     #############################
     ### MULTI-SERIES ROUTINES ###
@@ -5922,15 +6114,15 @@ if __name__ == '__main__':
                   # '//_NEW_RUNS//JUL17_PC1PEAKS_VO_1pc//',
                   # '//_NEW_RUNS//JUL25_CP_MULTIPOP_LONGER//',
                   # '//_NEW_RUNS//JUL25_CP_PBOLIC_LONGER//'
-    for series in ['//CAMCL_ABC_test//']:
+    for series in ['//CAMCL_Shoji_loltest//']:
         series_dir = f'{drive}/runs//{series}//'
         num_runs   = len([name for name in os.listdir(series_dir) if 'run_' in name])
         print('{} runs in series {}'.format(num_runs, series))
         
-        if True:
+        if False:
             runs_to_do = range(num_runs)
         else:
-            runs_to_do = [6, 7, 8]
+            runs_to_do = [1]
 
         # Extract all summary files and plot field stuff (quick)
         if True:
@@ -5951,10 +6143,13 @@ if __name__ == '__main__':
                     #standard_analysis_package(disp_overlay=False, pcyc_mult=1.1,
                     #              tx_only=False, tmax=None, remove_ND=False)
                 
-                plot_abs_T(saveas='abs_plot', save=True, log=True, tmax=None, normalize=False,
-                           B0_lim=20.0, remove_ND=False)
+                plot_equilibrium_distribution(saveas='eqdist', histogram=True)
+                plot_vi_vs_x(it_max=None, sp=None, save=True, shuffled_idx=False, skip=1, ppd=True)
                 
 # =============================================================================
+#                 plot_abs_T(saveas='abs_plot', save=True, log=False, tmax=None, normalize=False,
+#                            B0_lim=20.0, remove_ND=False)
+#                 
 #                 plot_abs_J(saveas='abs_plot', save=True, log=False, tmax=None, remove_ND=False)
 #                 
 #                 plot_wk_thesis_good(dispersion_overlay=True, save=True,

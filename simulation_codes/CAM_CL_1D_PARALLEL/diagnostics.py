@@ -451,40 +451,6 @@ def check_source_term_boundaries(qn, ji):
     return
 
 
-def test_density_and_velocity_deposition():
-    # Change dx to 1 and NX/ND/ppc to something reasonable to make this nice
-    # Use the sim_params with only one species
-    POS, VEL, IE, W_ELEC, IB, W_MAG, IDX  = main_1D.initialize_particles()
-    Q_DENS, Q_DENS_ADV, JI, NI, NU        = main_1D.initialize_source_arrays()
-    temp1D                                = np.zeros(main_1D.NC, dtype=np.float64) 
-    
-    main_1D.collect_moments(VEL, IE, W_ELEC, IDX, Q_DENS, JI, NI, NU, temp1D) 
-    
-    if False:
-        # Two species
-        ypos = np.ones(POS.shape[1] // 2)
-        
-        plt.scatter(POS[0, :POS.shape[1] // 2 ], ypos + 0.1, c='r')
-        plt.scatter(POS[0,  POS.shape[1] // 2:], ypos + 0.2, c='b')
-    else:
-        # One species
-        ypos = np.ones(POS.shape[1])
-        plt.scatter(POS[0], ypos + 0.1, c='b')
-        
-    # Plot charge density
-    plt.plot(main_1D.E_nodes, Q_DENS / Q_DENS.max(), marker='o')
-        
-    for ii in range(main_1D.E_nodes.shape[0]):
-        plt.axvline(main_1D.E_nodes[ii], linestyle='--', c='r', alpha=0.2)
-        plt.axvline(main_1D.B_nodes[ii], linestyle='--', c='b', alpha=0.2)
-     
-    plt.axvline(main_1D.xmin, color='k')
-    plt.axvline(main_1D.xmax, color='k')
-    plt.axvline(main_1D.B_nodes[ 0], linestyle='-', c='darkblue', alpha=1.0)
-    plt.axvline(main_1D.B_nodes[-1], linestyle='-', c='darkblue', alpha=1.0)
-    return
-
-
 def test_velocity_deposition():
     E_nodes = (np.arange(main_1D.NX + 3) - 0.5) #* main_1D.dx
     B_nodes = (np.arange(main_1D.NX + 3) - 1.0) #* main_1D.dx
@@ -1828,8 +1794,6 @@ def check_velocity_space_init():
     '''
     New figure for each species. Plots in v_perp/v_parallel space
     '''
-    main_1D.load_run_params()
-    main_1D.load_plasma_params()
     main_1D.calculate_background_magnetic_field()
 
     pos, vel, Ie, W_elec, Ib, W_mag, idx = main_1D.initialize_particles()
@@ -1908,10 +1872,7 @@ def check_position_distribution(num_bins=None, show_particles=False):
     
     Called by main_1D()
     '''
-    main_1D.load_run_params()
-    main_1D.load_plasma_params()
     pos, vel, Ie, W_elec, Ib, W_mag, idx = main_1D.initialize_particles()
-    #deposit_both_moments(vel, Ie, W_elec, idx, ni, nu)
     
     print('Number of particles:', main_1D.N)
     print('Particles per species:', main_1D.N_species)
@@ -1942,10 +1903,61 @@ def check_position_distribution(num_bins=None, show_particles=False):
     return
 
 
+def test_density_and_velocity_deposition():
+    main_1D.get_thread_values()
+    main_1D.calculate_background_magnetic_field()
+    
+    pos, vel, Ie, W_elec, Ib, W_mag, idx = main_1D.initialize_particles()
+    rho_half, rho_int, Ji, Ji_plus, \
+        Ji_minus, J_ext, L, G, mp_flux   = main_1D.initialize_source_arrays()
+    B, B2, B_cent, E, Ve, Te = main_1D.initialize_fields()
+    
+
+    main_1D.init_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, rho_half, rho_int, Ji_minus, Ji_plus,
+                             L, G, mp_flux, 0.0) 
+   
+    if True:
+        main_1D.advance_particles_and_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E,
+                            rho_int, rho_half, Ji, Ji_minus, Ji_plus, L, G, mp_flux, 0.0)
+    
+    # Plot charge density
+    fig, axes = plt.subplots(4)
+    
+    axes[0].plot(main_1D.E_nodes_loc, rho_half / main_1D.ECHARGE, marker='o')
+    axes[0].plot(main_1D.E_nodes_loc, rho_int / main_1D.ECHARGE, marker='x', c='r')
+    axes[0].set_ylabel('$\\rho$')
+    
+    axes[1].plot(main_1D.E_nodes_loc, Ji_minus[:, 0], marker='o')
+    axes[1].plot(main_1D.E_nodes_loc, Ji_plus[:, 0], marker='x', c='r')
+    axes[1].set_ylabel('$J_x$')
+    
+    axes[2].plot(main_1D.E_nodes_loc, Ji_minus[:, 1], marker='o')
+    axes[2].plot(main_1D.E_nodes_loc, Ji_plus[:, 1], marker='x', c='r')
+    axes[2].set_ylabel('$J_y$')
+    
+    axes[3].plot(main_1D.E_nodes_loc, Ji_minus[:, 2], marker='o')
+    axes[3].plot(main_1D.E_nodes_loc, Ji_plus[:, 2], marker='x', c='r')
+    axes[3].set_ylabel('$J_z$')
+        
+    for ax in axes:
+        for ii in range(main_1D.E_nodes_loc.shape[0]):
+            ax.axvline(main_1D.E_nodes_loc[ii], linestyle='--', c='r', alpha=0.2)
+            ax.axvline(main_1D.B_nodes_loc[ii], linestyle='--', c='b', alpha=0.2)
+         
+        ax.axvline(main_1D.xmin, color='k')
+        ax.axvline(main_1D.xmax, color='k')        
+        ax.set_xlim(main_1D.B_nodes_loc[0], main_1D.B_nodes_loc[-1])
+    return
+
+
 
 #%% --MAIN-- 
 if __name__ == '__main__':
-    check_velocity_space_init()
+    main_1D.load_run_params()
+    main_1D.load_plasma_params()
+    
+    test_density_and_velocity_deposition()
+    #check_velocity_space_init()
     #check_position_distribution(show_particles=(True))
     
     #test_curl_orders()
