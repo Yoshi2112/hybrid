@@ -31,7 +31,7 @@ logistic_B          = False     # Flag for B0 to change after a time to a differ
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)
-#nb.set_num_threads(4)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(18)         # Uncomment to manually set number of threads, otherwise will use all available
 
 #%% --- FUNCTIONS ---
 ### ##
@@ -236,11 +236,18 @@ def initialize_particles(B, E, _mp_flux, Ji_in, Ve_in, rho_in, old_particles):
     Ib         = np.zeros(N,      dtype=np.uint16)
     W_elec     = np.zeros((3, N), dtype=np.float64)
     W_mag      = np.zeros((3, N), dtype=np.float64)
-    
-    if homogenous == False:
-        run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E,
-                              Ji_in, Ve_in, rho_in, _mp_flux,
-                              old_particles, psave=True)
+        
+    # Calculate memory used:
+    nbytes = 0
+    nbytes += pos.nbytes
+    nbytes += vel.nbytes
+    nbytes += Ie.nbytes
+    nbytes += W_elec.nbytes
+    nbytes += Ib.nbytes
+    nbytes += W_mag.nbytes
+    nbytes += idx.nbytes
+    ngbytes = nbytes / 1024 / 1024 / 1024
+    print(f'Memory used by particle arrays: {ngbytes:.3f} GB')
     
     assign_weighting_TSC(pos, Ie, W_elec)
     assign_weighting_TSC(pos, Ib, W_mag)
@@ -2813,6 +2820,24 @@ def print_summary_and_checks():
     print('{} cells total'.format(NC))
     print('{} particles total\n'.format(N))
     
+    if pol_wave > 0:
+        # Print warning to state whether there's a driver and what the parameters
+        # are for that driver
+        print('WARNING :: EXTERNAL CURRENT ENABLED')
+        print('DRIVEN WAVE PARAMETERS')
+        if pol_wave == 1:
+            print('Driver type        : Single point')
+        elif pol_wave == 2:
+            print('Driver type        : Polarised (4 point)')
+        else:
+            print('Driver type        : UNDEFINED')
+        print('Wave frequency     : {:5.2f} Hz'.format(driven_freq))
+        print('Wavenumber         : {:5.2f} /m'.format(driven_k))
+        print('Wavelength         : {:5.2f} dx'.format(2 * np.pi / driven_k))
+        print('Current amplitude  : {:5.2f} A/m'.format(driven_ampl))
+        print('Pulse width        : {:5.2f} s'.format(pulse_width))
+        print('Pulse offset       : {:5.2f} s'.format(pulse_offset))
+    
     if theta_xmax > lambda_L:
         print('ABORT : SIMULATION DOMAIN LONGER THAN FIELD LINE')
         sys.exit()
@@ -2883,6 +2908,14 @@ if __name__ == '__main__':
     pos, vel, Ie, W_elec, Ib, W_mag, idx                = initialize_particles(B, E_int, mp_flux,
                                                                                Ji_int, Ve_int, q_dens,
                                                                                old_particles)
+    
+    # Relax particles into non-homogeneous field
+    if homogenous == False:
+        run_until_equilibrium(pos, vel, idx, Ie, W_elec, Ib, W_mag, B, E_int,
+                              Ji_int, Ve_int, q_dens, mp_flux,
+                              old_particles, psave=True)
+        assign_weighting_TSC(pos, Ie, W_elec)
+        assign_weighting_TSC(pos, Ib, W_mag)
 
     # Collect initial moments and save initial state
     get_B_cent(B, B_cent, _BEQ)

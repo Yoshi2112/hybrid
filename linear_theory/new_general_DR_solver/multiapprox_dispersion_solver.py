@@ -1994,17 +1994,17 @@ def hybrid_test_plot():
     # Actually no, it's just not as well behaved if I don't set tper as 
     #    zero for the cold populations
     '''
-    B0      = 100e-9                           # Background magnetic field, T
+    B0      = 200e-9                           # Background magnetic field, T
     mp      = 1.673e-27                        # Proton mass (kg)
     qi      = 1.602e-19                        # Elementary charge (C)
     #kB      = 1.380649e-23
     
-    name    = np.array(['Warm H' , 'Cold H'  ])
-    mass    = np.array([1.0      , 1.0       ]) * mp
-    charge  = np.array([1.0      , 1.0       ]) * qi
-    density = np.array([5.      , 195.      ]) * 1e6
-    tper    = np.array([50e3     , 0.0       ])
-    ani     = np.array([0.5      , 0.0       ])
+    name    = np.array(['Warm H' , 'Cold H', 'Cold He'  ])
+    mass    = np.array([1.0      , 1.0, 4.0       ]) * mp
+    charge  = np.array([1.0      , 1.0, 1.0       ]) * qi
+    density = np.array([10.      , 160., 30.      ]) * 1e6
+    tper    = np.array([5e3     , 0.0, 0.0       ])
+    ani     = np.array([2.0      , 0.0, 0.0       ])
 
     Spec, PP = create_species_array(B0, name, mass, charge, density, tper, ani)
     

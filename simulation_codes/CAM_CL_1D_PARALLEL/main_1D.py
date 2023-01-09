@@ -15,6 +15,7 @@ TODO: Outstanding issues
  -- Fix 5-point polarised driven current
  -- Clean up particle injection (why do I need two functions?)
  -- Put __main__ bit into a main() function
+ -- Work out the ratio of time spent doing fields and particles
 '''
 
 ## PHYSICAL CONSTANTS ##
@@ -29,14 +30,14 @@ RE      = 6.371e6                            # Earth radius in metres
 B_surf  = 3.12e-5                            # Magnetic field strength at Earth surface (equatorial)
 
 # A few internal flags
-pequil_saveall      = True
+pequil_saveall      = False
 cold_va             = False
 Fu_override         = False      # Note this HAS to be disabled for grid runs.
 do_parallel         = True
 adaptive_timestep   = True       # Disable adaptive timestep to keep it the same as initial
 print_timings       = False      # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True       # Flag to print runtime every 50 iterations
-max_cell_traverse   = 0.75       # Maximum portion of a cell that we want a particle to travel in one timestep
+max_cell_traverse   = 0.50       # Maximum portion of a cell that we want a particle to travel in one timestep
 
 if not do_parallel:
     do_parallel = True
@@ -82,8 +83,6 @@ def initialize_velocity_LCD_elimination(pos, vel, sf_par, sf_per, st, en, jj):
     sf_par, sf_per (the thermal velocities).
     
     Is there a better way to do this with a Monte Carlo perhaps?
-    
-    TODO: Check that this still works.
     '''
     B0x    = eval_B0x(pos[st: en])
     N_loss = 1
@@ -236,7 +235,7 @@ def initialize_velocity_LCD_MonteCarlo():
 # =============================================================================
 # def reverse_radix_quiet_start_uniform():
 #     '''
-#     TODO: Need to make this faster
+#     Need to make this faster
 #     
 #     Creates an N-sampled normal distribution in 3D velocity space that is 
 #     uniform in a 1D configuration space. Function uses analytic sampling of
@@ -1828,8 +1827,12 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
     Actually, need to normalise/multiply by dxm*NX, since there's a sum there.
     Do that later. For now, just average every 32s/c or so.
     
-    Works for even s/c av,
-    
+    NOTE: No initial half-push necessary, since the initial transverse E field
+    is zero everywhere, and so curl_E at the very first subcycle will be zero.
+    Therefore B(t0) = B(t0 + dh). If the averaging only 
+    happens in here, we don't have to worry about a case where B1 and B2 are
+    given to the function synchronously (i.e. they are always offset, or will
+    be offset in here.)    
     '''
     half_sc = subcycles//2
     H     = 0.5 * dt
@@ -1956,6 +1959,8 @@ def calculate_E(B, B_center, Ji, J_ext, qn, E, Ve, Te, resistive_array, sim_time
         qn  -- Charge density. Source term, based on particle positions
     OUTPUT:
         E_out -- Updated electric field array
+        
+    TODO: Why are the edge fields not uniform for open BC's?
     '''
     # Calculate J_ext at same instance as Ji
     if pol_wave == 0:
@@ -2285,25 +2290,17 @@ def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, sim_time,
                          sim_time=sim_time,
                          damping_array=damping_array,
                          resistive_array=resistive_array)
-    
-    #if print_runtime: print('Field data saved')
     return
     
 
 def save_particle_data(dt, part_save_iter, qq, sim_time, 
-                       pos, vel, idx, Ji, E, B, Ve, Te, dns, 
-                       damping_array, resistive_array):
+                       pos, vel, idx):
     d_path = '%s/%s/run_%d/data/particles/' % (drive, save_path, run_num)
     r      = qq / part_save_iter
 
     d_filename = 'data%05d' % r
     d_fullpath = os.path.join(d_path, d_filename)
-    np.savez(d_fullpath, pos=pos, vel=vel, idx=idx, sim_time=sim_time,
-             E=E, B=B, Ji=Ji, dns=dns, Ve=Ve, Te=Te,
-             damping_array=damping_array,
-             resistive_array=resistive_array)
-    
-    #if print_runtime == True: print('Particle data saved')
+    np.savez(d_fullpath, pos=pos, vel=vel, idx=idx, sim_time=sim_time)
     return
 
 
@@ -2683,7 +2680,7 @@ def load_wave_driver_params():
     driven_rad = driven_freq * 2 * np.pi
     driven_k   = (driven_rad / SPLIGHT) ** 2
     driven_k  *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyrofrequency))).sum()
-    driven_k   = 0.0#np.sqrt(driven_k)
+    driven_k   = np.sqrt(driven_k)
     return
 
 
@@ -2851,8 +2848,6 @@ else:
 run_input    = root_dir +  '/run_inputs/' + args['runfile']
 plasma_input = root_dir +  '/run_inputs/' + args['plasmafile']
 driver_input = root_dir +  '/run_inputs/' + args['driverfile']
-if Fu_override == True:
-    plasma_input = root_dir +  '/run_inputs/' + '_Fu_test.plasma'
 
 # Set anything else useful before file input load
 default_subcycles = args['subcycle']                # Number of subcycles if particles are limiting factor
@@ -2899,11 +2894,10 @@ if __name__ == '__main__':
                          _Ji, _Ji_PLUS, _L, _G, _MP_FLUX, 0.5*_DT)
     get_B_cent(_B, _B_CENT)
     calculate_E(_B, _B_CENT, _Ji, _J_EXT, _RHO_HALF, _E, _VE, _TE, _RESIS_ARR, 0.0)
-    
+
     print('Saving initial state...\n')
     if save_particles == 1:
-        save_particle_data(_DT, _PART_SAVE_ITER, 0, 0.0, _POS, _VEL, _IDX,
-                           _Ji, _E, _B, _VE, _TE, _RHO_INT, _B_DAMP, _RESIS_ARR)
+        save_particle_data(_DT, _PART_SAVE_ITER, 0, 0.0, _POS, _VEL, _IDX)
 
     if save_fields == 1:
         save_field_data(_DT, _FIELD_SAVE_ITER, 0, _Ji, _E, _B, _VE, _TE,
@@ -2986,8 +2980,7 @@ if __name__ == '__main__':
         ##### OUTPUT DATA  #####
         ########################
         if _QQ%_PART_SAVE_ITER == 0 and save_particles == 1:
-            save_particle_data(_DT, _PART_SAVE_ITER, _QQ, _SIM_TIME, _POS, _VEL, _IDX,
-                               _Ji, _E, _B, _VE, _TE, _RHO_INT, _B_DAMP, _RESIS_ARR)
+            save_particle_data(_DT, _PART_SAVE_ITER, _QQ, _SIM_TIME, _POS, _VEL, _IDX)
 
         if _QQ%_FIELD_SAVE_ITER == 0 and save_fields == 1:
             save_field_data(_DT, _FIELD_SAVE_ITER, _QQ, _Ji, _E, _B, _VE, _TE,
