@@ -738,7 +738,6 @@ class HybridSimulationRun:
         else:
             print('Loading energies from file...')
             energies        = np.load(energy_file) 
-            particle_times  = energies['particle_times']
             mag_energy      = energies['mag_energy']
             electron_energy = energies['electron_energy']
             particle_energy = energies['particle_energy']
