@@ -4,19 +4,33 @@ Created on Mon Dec 19 20:52:23 2022
 
 @author: Yoshi
 """
-
 from SimulationClass import HybridSimulationRun
 from standardFieldOuput import plotFieldDiagnostics
 from standardEnergyOutput import plotEnergies
-
+from timesliceOutputs import winskeSummaryPlots, summaryPlots
+from multiplotEnergy import compareEnergy
 
 
 if __name__ == '__main__':
-
-    _name = 'energy_conservation_resonant'
-    _num  = 0
+    drive = 'F:'
     
-    sim1 = HybridSimulationRun(_name, _num)
-    
-    #plotFieldDiagnostics(sim1)
-    plotEnergies(sim1)
+    if True:
+        name = 'energy_conservation_resonant'
+        num  = 1
+        sim1 = HybridSimulationRun(name, num, home_dir=f'{drive}/runs/')
+        
+        #plotFieldDiagnostics(sim1)
+        #plotEnergies(sim1)
+        #winskeSummaryPlots(sim1, save=True, skip=1)
+        #summaryPlots(sim1, save=True, histogram=False, skip=1, ylim=True)
+    else:
+        name = 'energy_conservation_resonant'
+        num = 0
+        simList = []
+        while True:
+            try:
+                simList.append(HybridSimulationRun(name, num, home_dir=f'{drive}/runs/'))
+                num += 1
+            except OSError:
+                break
+        #compareEnergy(simList, normalize=False, save2root=True, save_dir=None)

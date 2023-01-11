@@ -2278,7 +2278,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time,
     return
 
 
-def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, sim_time,
+def save_field_data(dt, field_save_iter, qq, Ji, E, B, B_cent, Ve, Te, dns, sim_time,
                     damping_array, resistive_array):
 
     d_path = '%s/%s/run_%d/data/fields/' % (drive, save_path, run_num)
@@ -2286,7 +2286,7 @@ def save_field_data(dt, field_save_iter, qq, Ji, E, B, Ve, Te, dns, sim_time,
 
     d_fullpath = d_path + 'data%05d' % r
     
-    np.savez(d_fullpath, E=E, B=B, Ji=Ji, dns=dns, Ve=Ve, Te=Te,
+    np.savez(d_fullpath, E=E, B=B, Ji=Ji, dns=dns, Ve=Ve, Te=Te, B_cent=B_cent,
                          sim_time=sim_time,
                          damping_array=damping_array,
                          resistive_array=resistive_array)
@@ -2900,7 +2900,7 @@ if __name__ == '__main__':
         save_particle_data(_DT, _PART_SAVE_ITER, 0, 0.0, _POS, _VEL, _IDX)
 
     if save_fields == 1:
-        save_field_data(_DT, _FIELD_SAVE_ITER, 0, _Ji, _E, _B, _VE, _TE,
+        save_field_data(_DT, _FIELD_SAVE_ITER, 0, _Ji, _E, _B, _B_CENT, _VE, _TE,
                         _RHO_INT, 0.0, _B_DAMP, _RESIS_ARR)
 
     _LOOP_TIMES     = np.zeros(_MAX_INC-1, dtype=float)
@@ -2983,7 +2983,7 @@ if __name__ == '__main__':
             save_particle_data(_DT, _PART_SAVE_ITER, _QQ, _SIM_TIME, _POS, _VEL, _IDX)
 
         if _QQ%_FIELD_SAVE_ITER == 0 and save_fields == 1:
-            save_field_data(_DT, _FIELD_SAVE_ITER, _QQ, _Ji, _E, _B, _VE, _TE,
+            save_field_data(_DT, _FIELD_SAVE_ITER, _QQ, _Ji, _E, _B, _B_CENT, _VE, _TE,
                             _RHO_INT, _SIM_TIME, _B_DAMP, _RESIS_ARR)
         
         if _QQ%100 == 0 and print_runtime:

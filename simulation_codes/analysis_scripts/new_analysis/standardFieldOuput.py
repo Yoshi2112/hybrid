@@ -12,8 +12,8 @@ import os
 import sys
 
 import doSpectra as ds
-from SimulationClass import MAGN_PERMEABILITY, ELEC_PERMITTIVITY, UNIT_CHARGE,\
-                            PROTON_MASS, LIGHT_SPEED
+from _constants import UNIT_CHARGE, PROTON_MASS, ELECTRON_MASS, ELEC_PERMITTIVITY, MAGN_PERMEABILITY, BOLTZMANN_CONSTANT, LIGHT_SPEED
+
 
 # Ignore common warnings. If shit goes funky, turn them back on by replacing 'ignore' with 'default'
 import warnings

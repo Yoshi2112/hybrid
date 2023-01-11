@@ -7,7 +7,7 @@ Created on Sat Dec 10 20:52:11 2022
 import os, sys, pickle, shutil
 import numpy as np   
 import numba as nb
-
+from _constants import UNIT_CHARGE, PROTON_MASS, ELECTRON_MASS, ELEC_PERMITTIVITY, MAGN_PERMEABILITY, BOLTZMANN_CONSTANT, LIGHT_SPEED
 '''
 Refactored version of the analysis software used for the hybrid simulation.
 Main difference is changing the focus from using global variables to using 
@@ -28,16 +28,6 @@ TODO:
 Maybe even make a SummaryPlot or StandardAnalysisOutput class that calls some
 plot routines from another script (after they're rewritten to accept an instance)
 '''
-# Constants
-UNIT_CHARGE        = 1.602e-19               # Elementary charge (C)
-PROTON_MASS        = 1.673e-27               # Mass of proton (kg)
-ELECTRON_MASS      = 9.109e-31               # Mass of electron (kg)
-ELEC_PERMITTIVITY  = 8.854e-12               # Electric permittivity of free space (SI units)
-MAGN_PERMEABILITY  = (4e-7) * np.pi          # Magnetic permeability of Free Space (SI units)
-BOLTZMANN_CONSTANT = 1.381e-23               # Boltmann's constant in J/K
-LIGHT_SPEED        = 3e8
-
-
 class HybridSimulationRun:
     '''
     Represents a single run of the hybrid code. Contains parameters, paths, 
@@ -45,10 +35,11 @@ class HybridSimulationRun:
     
     Store parameters as attributes
     '''
-    home_dir = 'E:/runs/'   # Contains drive information. Is this the correct way to use this?
-                            # E.g. class attribute vs. instance attribute?
     
-    def __init__(self, series_name, run_num, extract_arrays=True, overwrite_summary=False):
+    def __init__(self, series_name, run_num, home_dir='E:/runs/', extract_arrays=True, overwrite_summary=False):
+        
+        # Set directory paths and attributes for this run
+        self.home_dir = home_dir                            # Directory containing run series. Usually some %DRIVE%/runs/
         self.series_name = series_name
         self.run_num = run_num
         self.base_dir = self.home_dir + series_name + '/'   # Main series directory, containing runs
@@ -258,12 +249,15 @@ class HybridSimulationRun:
         print('Defining working variables...')
         self.wpp        = np.sqrt(self.ne * UNIT_CHARGE ** 2 / (PROTON_MASS * ELEC_PERMITTIVITY))               # Proton plasma frequency
         self.wpi        = np.sqrt((self.density * self.charge ** 2 / (self.mass * ELEC_PERMITTIVITY)).sum())    # Ion plasma frequency
-        self.gyfreq     = UNIT_CHARGE * self.B_eq   / PROTON_MASS                             # Proton gyrofrequency (rad/s) (compatibility)
         self.gyfreq_eq  = UNIT_CHARGE * self.B_eq   / PROTON_MASS                             # Proton gyrofrequency (rad/s) (equator)
         self.gyfreq_xmax= UNIT_CHARGE * self.B_xmax / PROTON_MASS                             # Proton gyrofrequency (rad/s) (boundary)
-        self.gyperiod   = (PROTON_MASS * 2 * np.pi) / (UNIT_CHARGE * self.B_eq)               # Proton gyroperiod (s)
+        self.gyperiod_eq= (PROTON_MASS * 2 * np.pi) / (UNIT_CHARGE * self.B_eq)               # Proton gyroperiod (s)
         self.va_proton  = self.B_eq / np.sqrt(MAGN_PERMEABILITY*self.ne*PROTON_MASS)          # Alfven speed: Assuming pure proton plasma
         self.va         = self.B_eq / np.sqrt(MAGN_PERMEABILITY*self.rho_mass)                # Alfven speed: Accounting for actual mass density
+        
+        # Redundant, but keep
+        self.gyfreq = self.gyfreq_eq
+        self.gyperiod = self.gyperiod_eq
         return
     
     
@@ -436,24 +430,21 @@ class HybridSimulationRun:
         if comps_missing == 0:
             print('Field components already extracted.')
             return
-        else:
-            num_field_steps = len(os.listdir(self.field_dir)) 
-            
+        else:            
             # Load to specify arrays
             zB, zB_cent, zE, zVe, zTe, zJ, zq_dns, zsim_time, zdamp = self.load_fields(0)
 
-            bx_arr, by_arr, bz_arr, damping_array = [np.zeros((num_field_steps, zB.shape[0])) for _ in range(4)]
-            
-            if zB_cent is not None:
-                bxc_arr, byc_arr, bzc_arr = [np.zeros((num_field_steps, zB_cent.shape[0])) for _ in range(3)]
+            bx_arr, by_arr, bz_arr, damping_array = [np.zeros((self.num_field_steps, zB.shape[0])) for _ in range(4)]
+
+            bxc_arr, byc_arr, bzc_arr = [np.zeros((self.num_field_steps, self.NC)) for _ in range(3)]
             
             ex_arr,ey_arr,ez_arr,vex_arr,jx_arr,vey_arr,jy_arr,vez_arr,jz_arr,te_arr,qdns_arr\
-            = [np.zeros((num_field_steps, zE.shape[0])) for _ in range(11)]
+            = [np.zeros((self.num_field_steps, zE.shape[0])) for _ in range(11)]
         
-            field_sim_time = np.zeros(num_field_steps)
+            field_sim_time = np.zeros(self.num_field_steps)
         
             print('Extracting fields...')
-            for ii in range(num_field_steps):
+            for ii in range(self.num_field_steps):
                 sys.stdout.write('\rExtracting field timestep {}'.format(ii))
                 sys.stdout.flush()
                 
@@ -467,6 +458,10 @@ class HybridSimulationRun:
                     bxc_arr[ii, :] = B_cent[:, 0]
                     byc_arr[ii, :] = B_cent[:, 1]
                     bzc_arr[ii, :] = B_cent[:, 2]
+                else:
+                    bxc_arr[ii, :] = np.nan*np.zeros(self.NC)
+                    byc_arr[ii, :] = np.nan*np.zeros(self.NC)
+                    bzc_arr[ii, :] = np.nan*np.zeros(self.NC)
                 
                 ex_arr[ii, :] = E[:, 0]
                 ey_arr[ii, :] = E[:, 1]
@@ -490,10 +485,9 @@ class HybridSimulationRun:
             np.save(self.temp_dir + 'by' +'_array.npy', by_arr)
             np.save(self.temp_dir + 'bz' +'_array.npy', bz_arr)
             
-            if B_cent is not None:
-                np.save(self.temp_dir + 'bxc' +'_array.npy', bxc_arr)
-                np.save(self.temp_dir + 'byc' +'_array.npy', byc_arr)
-                np.save(self.temp_dir + 'bzc' +'_array.npy', bzc_arr)
+            np.save(self.temp_dir + 'bxc' +'_array.npy', bxc_arr)
+            np.save(self.temp_dir + 'byc' +'_array.npy', byc_arr)
+            np.save(self.temp_dir + 'bzc' +'_array.npy', bzc_arr)
             
             np.save(self.temp_dir + 'ex' +'_array.npy', ex_arr)
             np.save(self.temp_dir + 'ey' +'_array.npy', ey_arr)
@@ -632,32 +626,50 @@ class HybridSimulationRun:
         return
     
     
-    def _interpolateFields2ParticleTimes(self):
+    def interpolateFields2ParticleTimes(self):
         '''
         For each particle timestep, interpolate field values. Arrays are (time, space)
-        '''        
-        pbx, pby, pbz = [np.zeros((self.num_particle_steps, self.NC + 1)) for _ in range(3)]
-        
-        for ii in range(self.NC + 1):
-            pbx[:, ii] = np.interp(self.particle_sim_time, self.field_sim_time, self.bx[:, ii])
-            pby[:, ii] = np.interp(self.particle_sim_time, self.field_sim_time, self.by[:, ii])
-            pbz[:, ii] = np.interp(self.particle_sim_time, self.field_sim_time, self.bz[:, ii])
-        
-        pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens = [np.zeros((self.num_particle_steps, self.NC)) for _ in range(11)]
-        
-        for ii in range(self.NC):
-            pex[:, ii]    = np.interp(self.particle_sim_time, self.field_sim_time, self.ex[:, ii])
-            pey[:, ii]    = np.interp(self.particle_sim_time, self.field_sim_time, self.ey[:, ii])
-            pez[:, ii]    = np.interp(self.particle_sim_time, self.field_sim_time, self.ez[:, ii])
-            pvex[:, ii]   = np.interp(self.particle_sim_time, self.field_sim_time, self.vex[:, ii])
-            pvey[:, ii]   = np.interp(self.particle_sim_time, self.field_sim_time, self.vey[:, ii])
-            pvez[:, ii]   = np.interp(self.particle_sim_time, self.field_sim_time, self.vez[:, ii])
-            pte[:, ii]    = np.interp(self.particle_sim_time, self.field_sim_time, self.te[:, ii])
-            pjx[:, ii]    = np.interp(self.particle_sim_time, self.field_sim_time, self.jx[:, ii])
-            pjy[:, ii]    = np.interp(self.particle_sim_time, self.field_sim_time, self.jy[:, ii])
-            pjz[:, ii]    = np.interp(self.particle_sim_time, self.field_sim_time, self.jz[:, ii])
-            pqdens[:, ii] = np.interp(self.particle_sim_time, self.field_sim_time, self.qdens[:, ii])
-
+        '''      
+        pfield_file = self.temp_dir + 'fields_for_particle_times.npz'
+        if not os.path.exists(pfield_file):
+            print('Interpolating fields to particle times...')
+            pbx, pby, pbz = [np.zeros((self.num_particle_steps, self.NC + 1)) for _ in range(3)]
+            
+            for ii in range(self.NC + 1):
+                pbx[:, ii] = np.interp(self.particle_sim_time, self.field_sim_time, self.bx[:, ii])
+                pby[:, ii] = np.interp(self.particle_sim_time, self.field_sim_time, self.by[:, ii])
+                pbz[:, ii] = np.interp(self.particle_sim_time, self.field_sim_time, self.bz[:, ii])
+            
+            pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens = [np.zeros((self.num_particle_steps, self.NC)) for _ in range(11)]
+            
+            for ii in range(self.NC):
+                pex[:, ii]    = np.interp(self.particle_sim_time, self.field_sim_time, self.ex[:, ii])
+                pey[:, ii]    = np.interp(self.particle_sim_time, self.field_sim_time, self.ey[:, ii])
+                pez[:, ii]    = np.interp(self.particle_sim_time, self.field_sim_time, self.ez[:, ii])
+                pvex[:, ii]   = np.interp(self.particle_sim_time, self.field_sim_time, self.vex[:, ii])
+                pvey[:, ii]   = np.interp(self.particle_sim_time, self.field_sim_time, self.vey[:, ii])
+                pvez[:, ii]   = np.interp(self.particle_sim_time, self.field_sim_time, self.vez[:, ii])
+                pte[:, ii]    = np.interp(self.particle_sim_time, self.field_sim_time, self.te[:, ii])
+                pjx[:, ii]    = np.interp(self.particle_sim_time, self.field_sim_time, self.jx[:, ii])
+                pjy[:, ii]    = np.interp(self.particle_sim_time, self.field_sim_time, self.jy[:, ii])
+                pjz[:, ii]    = np.interp(self.particle_sim_time, self.field_sim_time, self.jz[:, ii])
+                pqdens[:, ii] = np.interp(self.particle_sim_time, self.field_sim_time, self.qdens[:, ii])
+            print('Saving to file.')
+            np.savez(pfield_file, 
+                     pbx=pbx, pby=pby, pbz=pbz,
+                     pex=pex, pey=pey, pez=pez,
+                     pvex=pvex, pvey=pvey, pvez=pvez,
+                     pjx=pjx, pjy=pjy, pjz=pjz,
+                     pte=pte, pqdens=pqdens)
+        else:
+            print('Loading particle-interpolated fields from file...')
+            pfile = np.load(pfield_file)
+            
+            pex  = pfile['pex']; pey  = pfile['pey']; pez  = pfile['pez']
+            pbx  = pfile['pbx']; pby  = pfile['pby']; pbz  = pfile['pbz']
+            pvex  = pfile['pvex']; pvey  = pfile['pvey']; pvez  = pfile['pvez']
+            pjx  = pfile['pjx']; pjy  = pfile['pjy']; pjz  = pfile['pjz']
+            pte  = pfile['pte']; pqdens  = pfile['pqdens']
         return pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens
     
     
@@ -670,7 +682,6 @@ class HybridSimulationRun:
             print('Extracting particle times...')
             particle_times  = np.zeros((self.num_particle_steps))
             for ii in range(self.num_particle_steps):
-                print('Loading particle file {}'.format(ii))
                 data = np.load(self.particle_dir + f'data{ii:05d}.npz', mmap_mode='r')
                 particle_times[ii] = data['sim_time']
             np.save(ptime_file, particle_times)
@@ -687,11 +698,7 @@ class HybridSimulationRun:
         
         TO DO: Use particle-interpolated fields rather than raw field files.
         OR    Use these interpolated fields ONLY for the total energy, would be slower.
-        
-        Also TODO:
-            -- Calculate energies and save as file. Then delete array and use mmap instead? 
-                Is this actually more memory efficient or am I just wasting time?
-                
+
         Note: Electric field energy not calculated because reasons. Something to do about it
             already being included in the electron temperature?
         '''
@@ -719,7 +726,7 @@ class HybridSimulationRun:
             
             # Calculate total energy
             pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens = \
-            self._interpolateFields2ParticleTimes()
+            self.interpolateFields2ParticleTimes()
             
             pmag_energy      = (0.5 / MAGN_PERMEABILITY) * (np.square(pbx) + np.square(pby) + np.square(pbz)).sum(axis=1) * self.NX * self.dx
             pelectron_energy = 1.5 * (BOLTZMANN_CONSTANT * pte * pqdens / UNIT_CHARGE).sum(axis=1) * self.NX * self.dx
