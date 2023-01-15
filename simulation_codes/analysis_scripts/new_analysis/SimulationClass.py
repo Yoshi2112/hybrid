@@ -692,7 +692,7 @@ class HybridSimulationRun:
         return
     
     
-    def get_energies(self): 
+    def get_energies(self, units=None): 
         '''
         Computes and saves field and particle energies at each field/particle timestep.
         
@@ -749,4 +749,11 @@ class HybridSimulationRun:
             electron_energy = energies['electron_energy']
             particle_energy = energies['particle_energy']
             total_energy    = energies['total_energy']
+        
+        if units is not None:
+            if units == 'eV':
+                mag_energy      /= UNIT_CHARGE
+                electron_energy /= UNIT_CHARGE
+                particle_energy /= UNIT_CHARGE
+                total_energy    /= UNIT_CHARGE
         return mag_energy, electron_energy, particle_energy, total_energy

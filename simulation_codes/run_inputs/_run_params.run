@@ -1,5 +1,5 @@
 DRIVE                   E:/
-SAVE_PATH               /runs/energy_conservation_resonant/
+SAVE_PATH               /runs/energyConservationParticlesOnly/
 RUN                     -
 SAVE_PARTICLE_FLAG      1
 SAVE_FIELD_FLAG         1
@@ -9,7 +9,7 @@ PARTICLE_PERIODIC_FLAG  1
 PARTICLE_REFLECT_FLAG   0
 PARTICLE_REINIT_FLAG    0
 FIELD_PERIODIC          1
-NOWAVES_FLAG            0
+NOWAVES_FLAG            1
 SOURCE_SMOOTHING_FLAG   0
 QUIET_START_FLAG        1
 E_DAMPING_FLAG          0
@@ -24,4 +24,4 @@ GYROPERIOD_RESOLUTION   0.05
 FREQUENCY_RESOLUTION    0.05
 PARTICLE_DUMP_FREQ      50.0
 FIELD_DUMP_FREQ         0.25
-Testing energy conservation with a proton-proton resonant instability for both P/C and CAM_CL.
+Testing energy conservation with particles only (disabled fields) for both P/C and CAM_CL.

@@ -346,3 +346,125 @@ def summaryPlots(Sim, save=True, histogram=True, skip=1, ylim=True):
             plt.close('all')
     print('\n')
     return
+
+
+def check_fields(Sim, save=True, ylim=True, skip=1):
+    '''
+    Plot summary plot of raw values for each field timestep
+    Field values are interpolated to this point
+    '''    
+    if ylim == True:
+        path = Sim.anal_dir + '/field_plots_all_ylim/'
+    else:
+        path = Sim.anal_dir + '/field_plots_all/'
+        
+    if os.path.exists(path) == False:                                   # Create data directory
+        os.makedirs(path)
+        
+    plt.ioff()
+    
+    # Convert to plot units
+    Sim.bx *= 1e9; Sim.by *= 1e9; Sim.bz *= 1e9
+    Sim.ex *= 1e3; Sim.ey *= 1e3; Sim.ez *= 1e3
+    Sim.qdens *= 1e-6/UNIT_CHARGE;    Sim.te /= 11603.
+    
+    ## Initialize plots and prepare plotspace
+    fontsize = 14; fsize = 12; lpad = 20
+
+    ## Do actual plotting and saving of data
+    for ii in range(bx.shape[0]):
+        if ii%skip == 0:
+            
+            filename = 'summ%05d.png' % ii
+            fullpath = path + filename
+            
+            if os.path.exists(fullpath):
+                continue
+            
+            fig, axes = plt.subplots(5, ncols=3, figsize=(20,10), sharex=True)
+            fig.patch.set_facecolor('w') 
+    
+            axes[0, 1].set_title('Time :: {:<7.4f}s'.format(ftime[ii]), fontsize=fontsize+4, family='monospace')
+    
+            sys.stdout.write('\rCreating summary field plots [{}]{}'.format(run_num, ii))
+            sys.stdout.flush()
+            
+            # Wave Fields (Plots, Labels, Lims)
+            axes[0, 0].plot(cf.B_nodes / cf.dx, rD[ii], color='k', label=r'$r_D(x)$') 
+            axes[1, 0].plot(cf.B_nodes / cf.dx, by[ii], color='b', label=r'$B_y$') 
+            axes[2, 0].plot(cf.B_nodes / cf.dx, bz[ii], color='g', label=r'$B_z$')
+            axes[3, 0].plot(cf.E_nodes / cf.dx, ey[ii], color='b', label=r'$E_y$')
+            axes[4, 0].plot(cf.E_nodes / cf.dx, ez[ii], color='g', label=r'$E_z$')
+            
+            # Transverse Electric Field Variables (Plots, Labels, Lims)
+            axes[0, 1].plot(cf.E_nodes / cf.dx, qdens[ii], color='k', label=r'$n_e$')
+            axes[1, 1].plot(cf.E_nodes / cf.dx, vey[ii], color='b', label=r'$V_{ey}$')
+            axes[2, 1].plot(cf.E_nodes / cf.dx, vez[ii], color='g', label=r'$V_{ez}$')
+            axes[3, 1].plot(cf.E_nodes / cf.dx, jy[ii], color='b', label=r'$J_{iy}$' )
+            axes[4, 1].plot(cf.E_nodes / cf.dx, jz[ii], color='g', label=r'$J_{iz}$' )
+            
+            # Parallel Variables (Plots, Labels, Lims)
+            axes[0, 2].plot(cf.E_nodes / cf.dx, te[ii], color='k', label=r'$T_e$')
+            axes[1, 2].plot(cf.E_nodes / cf.dx, vex[ii], color='r', label=r'$V_{ex}$')
+            axes[2, 2].plot(cf.E_nodes / cf.dx, jx[ii], color='r', label=r'$J_{ix}$' )
+            axes[3, 2].plot(cf.E_nodes / cf.dx, ex[ii], color='r', label=r'$E_x$')
+            axes[4, 2].plot(cf.B_nodes / cf.dx, bx[ii], color='r', label=r'$B_{0x}$')
+            
+            axes[0, 0].set_title('Field outputs: {}[{}]'.format(series, run_num), fontsize=fontsize+4, family='monospace')
+
+            axes[0, 0].set_ylabel('$r_D(x)$'     , rotation=0, labelpad=lpad, fontsize=fsize)
+            axes[1, 0].set_ylabel('$B_y$\n(nT)'  , rotation=0, labelpad=lpad, fontsize=fsize)
+            axes[2, 0].set_ylabel('$B_z$\n(nT)'  , rotation=0, labelpad=lpad, fontsize=fsize)
+            axes[3, 0].set_ylabel('$E_y$\n(mV/m)', rotation=0, labelpad=lpad, fontsize=fsize)
+            axes[4, 0].set_ylabel('$E_z$\n(mV/m)', rotation=0, labelpad=lpad, fontsize=fsize)
+        
+            axes[0, 1].set_ylabel('$n_e$\n$(cm^{-1})$', fontsize=fsize, rotation=0, labelpad=lpad)
+            axes[1, 1].set_ylabel('$V_{ey}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
+            axes[2, 1].set_ylabel('$V_{ez}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
+            axes[3, 1].set_ylabel('$J_{iy}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
+            axes[4, 1].set_ylabel('$J_{iz}$'          , fontsize=fsize, rotation=0, labelpad=lpad)
+            
+            axes[0, 2].set_ylabel('$T_e$\n(eV)'     , fontsize=fsize, rotation=0, labelpad=lpad)
+            axes[1, 2].set_ylabel('$V_{ex}$\n(m/s)' , fontsize=fsize, rotation=0, labelpad=lpad)
+            axes[2, 2].set_ylabel('$J_{ix}$'        , fontsize=fsize, rotation=0, labelpad=lpad)
+            axes[3, 2].set_ylabel('$E_x$\n(mV/m)'   , fontsize=fsize, rotation=0, labelpad=lpad)
+            axes[4, 2].set_ylabel('$B_x$\n(nT)'     , fontsize=fsize, rotation=0, labelpad=lpad)
+            fig.align_labels()
+            
+            for ii in range(3):
+                axes[4, ii].set_xlabel('Position (m/dx)')
+                for jj in range(5):
+                    axes[jj, ii].set_xlim(cf.B_nodes[0] / cf.dx, cf.B_nodes[-1] / cf.dx)
+                    axes[jj, ii].axvline(-cf.NX//2, c='k', ls=':', alpha=0.5)
+                    axes[jj, ii].axvline( cf.NX//2, c='k', ls=':', alpha=0.5)
+                    axes[jj, ii].grid()
+            
+            if ylim == True:
+                try:
+                    axes[0, 0].set_ylim(rD.min(), rD.max())
+                    axes[1, 0].set_ylim(by.min(), by.max())
+                    axes[2, 0].set_ylim(bz.min(), bz.max())
+                    axes[3, 0].set_ylim(ey.min(), ey.max())
+                    axes[4, 0].set_ylim(ez.min(), ez.max())
+                    
+                    axes[0, 1].set_ylim(qdens.min(), qdens.max())
+                    axes[1, 1].set_ylim(vey.min(), vey.max())
+                    axes[2, 1].set_ylim(vez.min(), vez.max())
+                    axes[3, 1].set_ylim(jy.min() , jy.max())
+                    axes[4, 1].set_ylim(jz.min() , jz.max())
+                    
+                    axes[0, 2].set_ylim(te.min(), te.max())
+                    axes[1, 2].set_ylim(vex.min(), vex.max())
+                    axes[2, 2].set_ylim(jx.min(), jx.max())
+                    axes[3, 2].set_ylim(ex.min(), ex.max())
+                except:
+                    pass
+            
+            plt.tight_layout(pad=1.0, w_pad=1.8)
+            fig.subplots_adjust(hspace=0.125)
+    
+            if save == True:
+                plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
+                plt.close('all')
+    print('\n')
+    return

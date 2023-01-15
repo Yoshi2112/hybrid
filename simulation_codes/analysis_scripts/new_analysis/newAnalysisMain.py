@@ -8,15 +8,15 @@ from SimulationClass import HybridSimulationRun
 from standardFieldOuput import plotFieldDiagnostics
 from standardEnergyOutput import plotEnergies
 from timesliceOutputs import winskeSummaryPlots, summaryPlots
-from multiplotEnergy import compareEnergy
+from multiplotEnergy import compareEnergy, plotIonEnergy
 
 
 if __name__ == '__main__':
-    drive = 'F:'
+    drive = 'E:'
     
-    if True:
+    if False:
         name = 'energy_conservation_resonant'
-        num  = 1
+        num  = 0
         sim1 = HybridSimulationRun(name, num, home_dir=f'{drive}/runs/')
         
         #plotFieldDiagnostics(sim1)
@@ -24,7 +24,7 @@ if __name__ == '__main__':
         #winskeSummaryPlots(sim1, save=True, skip=1)
         #summaryPlots(sim1, save=True, histogram=False, skip=1, ylim=True)
     else:
-        name = 'energy_conservation_resonant'
+        name = 'energyConservationParticlesOnly'
         num = 0
         simList = []
         while True:
@@ -34,3 +34,4 @@ if __name__ == '__main__':
             except OSError:
                 break
         #compareEnergy(simList, normalize=False, save2root=True, save_dir=None)
+        plotIonEnergy(simList, normalize=False, save2root=True, save_dir=None)

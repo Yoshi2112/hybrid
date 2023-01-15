@@ -7,7 +7,8 @@ Created on Wed Jan 11 14:19:01 2023
 import SimulationClass
 import matplotlib.pyplot as plt
 
-def compareEnergy(runList, normalize=False, save2root=True, save_dir=None):
+def compareEnergy(runList, normalize=False, save2root=True, save_dir=None, 
+                  orientation='portrait', time_unts=None):
     '''
     Plots a timeseries of energies for a list of runs containing SimulationClass instances.
     Different runs denoted by different color. Set somewhere?
@@ -40,12 +41,22 @@ def compareEnergy(runList, normalize=False, save2root=True, save_dir=None):
             return
         else:
             filepath = save_dir + 'compareEnergies.png'
+            
+    if orientation == 'portrait':
+        figdim = (8.27, 11.69)
+    elif orientation == 'landscape':
+        figdim = (11.69, 8.27)
+    else:
+        print(f'Orientation kwarg \'{orientation}\' not recognized, defaulting to portrait.')
+        figdim = (8.27, 11.69)
     
-    fig, axes = plt.subplots(figsize=(16, 9), nrows=6, sharex=True)
+    plt.ioff()
+    fig, axes = plt.subplots(figsize=figdim, nrows=6, sharex=True)
+    axes[0].set_title('Energy Comparison (eV) for Hybrid Runs')
     
     for ii, sim in enumerate(runList):
         # Type check
-        if not isinstance(sim, SimulationClass.HybridSimulation):
+        if not isinstance(sim, SimulationClass.HybridSimulationRun):
             print('List contains bad runs. Aborting.')
             return
         
@@ -54,18 +65,87 @@ def compareEnergy(runList, normalize=False, save2root=True, save_dir=None):
         particle_total = particle_energy.sum(axis=2)
         
         # Do the plotting
-        axes[0].plot(sim.particle_sim_time, total_energy, label=f'{sim.series_name[ii]}[{sim.run_num}]')
-        axes[1].plot(sim.field_sim_time, mag_energy)
-        axes[2].plot(sim.field_sim_time, electron_energy)
+        axes[0].plot(sim.particle_sim_time, total_energy, label=sim.series_name+f'[{sim.run_num}]')
+        axes[0].set_ylabel('Total')
         
-        for jj in sim.Nj:
-            axes[3].plot(sim.particle_sim_time, particle_total, c=sim.temp_color[jj], ls=run_styles[ii], label=sim.species_lbl[jj])
+        axes[1].plot(sim.field_sim_time, mag_energy)
+        axes[1].set_ylabel('Magnetic')
+        
+        axes[2].plot(sim.field_sim_time, electron_energy)
+        axes[2].set_ylabel('Electron Energy')
+        
+        for jj in range(sim.Nj):
+            axes[3].plot(sim.particle_sim_time, particle_total[:, jj], c=sim.temp_color[jj], ls=run_styles[ii], label=sim.species_lbl[jj])
             axes[4].plot(sim.particle_sim_time, particle_energy[:, jj, 0], c=sim.temp_color[jj], ls=run_styles[ii])
             axes[5].plot(sim.particle_sim_time, particle_energy[:, jj, 1], c=sim.temp_color[jj], ls=run_styles[ii])
+        axes[3].set_ylabel('Ions')
+        axes[4].set_ylabel('Ions $\parallel$')
+        axes[5].set_ylabel('Ions $\perp$')
             
-        axes[0].legend()
-        axes[2].legend()
+    axes[0].legend(loc='center left', bbox_to_anchor=(1.04, 0.5))
+    axes[3].legend(loc='center left', bbox_to_anchor=(1.04, 0.0))
+    
+    for ax in axes:
+        ax.set_xlim(0.0, sim.particle_sim_time[-1])
+    axes[-1].set_xlabel('Time (s)')
+    
+    fig.savefig(filepath, bbox_inches='tight')
+    plt.close('all')
+    return
+
+
+def plotIonEnergy(runList, normalize=False, save2root=True, save_dir=None, 
+                  orientation='portrait', time_unts=None):
+    '''
+    Designed for simulation runs with identical lists of species/particles
+    -- Total ion energy
+    -- 1 plot per species after that (color based on run?)
+    TODO: New plot to show the parallel/perp energy breakdown per species
+    '''        
+    if save2root:
+        filepath = runList[0].base_dir + 'compareIonEnergies.png'
+    else:
+        if save_dir is None:
+            print('save_dir must be specified if save2root is False. Aborting.')
+            return
+        else:
+            filepath = save_dir + 'compareEnergies.png'
+            
+    if orientation == 'portrait':
+        figdim = (8.27, 11.69)
+    elif orientation == 'landscape':
+        figdim = (11.69, 8.27)
+    else:
+        print(f'Orientation kwarg \'{orientation}\' not recognized, defaulting to portrait.')
+        figdim = (8.27, 11.69)
+    
+    plt.ioff()
+    Nj = runList[0].Nj
+    fig, axes = plt.subplots(figsize=figdim, nrows=Nj+1, sharex=True)
+    axes[0].set_title('Ion Energy Comparison (eV) for Hybrid Runs')
+    
+    for ii, sim in enumerate(runList):
+        # Type check
+        print(ii)
+        if not isinstance(sim, SimulationClass.HybridSimulationRun):
+            print('List contains bad runs. Aborting.')
+            return
         
+        # Retrieve energies
+        mag_energy, electron_energy, particle_energy, total_energy = sim.get_energies()
+        particle_total = particle_energy.sum(axis=2)
+        
+        axes[0].plot(sim.particle_sim_time, particle_total.sum(axis=1), label=sim.series_name+f'[{sim.run_num}]')
+        for jj in range(sim.Nj):
+            axes[jj+1].plot(sim.particle_sim_time, particle_total[:, jj], label=sim.species_lbl[jj] if ii==0 else None)
+            if ii==0: axes[jj+1].legend(loc='center left', bbox_to_anchor=(1.04, 0.5), labelcolor=sim.temp_color[jj])
+    axes[0].legend(loc='center left', bbox_to_anchor=(1.04, 0.5))
+    
+    for ax in axes:
+        ax.set_xlim(0.0, sim.particle_sim_time[-1])
+        ax.set_ylabel('Energy (J)')
+    axes[-1].set_xlabel('Time (s)')
+    
     fig.savefig(filepath, bbox_inches='tight')
     plt.close('all')
     return

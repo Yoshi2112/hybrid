@@ -740,6 +740,87 @@ def plot_abs_J(Sim, saveas='abs_plot', save=False, log=False, tmax=None,
     return
 
 
+def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=None):
+    '''
+    Stackplot of xt and wx plot. Try next to each other and stacked vertically.
+     -- Total xt
+     -- Total wx (add powers)
+    '''
+    # Get wx data and axes
+    ftime, by_wx = disp.get_wx('By', fac=1e9)
+    ftime, bz_wx = disp.get_wx('Bz', fac=1e9)
+    wx = by_wx + bz_wx
+    
+    freqs = np.fft.rfftfreq(ftime.shape[0], d=cf.dt_field)
+    x_arr = cf.B_nodes * 1e-6
+    x_lim = np.array([cf.xmin, cf.xmax]) * 1e-6
+
+    # Get xt
+    ftime, By_raw = cf.get_array('by')
+    ftime, Bz_raw = cf.get_array('bz')
+    B_wave = np.sqrt(By_raw**2 + Bz_raw**2)*1e9
+    
+    ffamily = 'monospace'
+    fsize   = 12
+    lpad    = 15
+    cpad    = 30
+    
+    ## PLOT
+    plt.ioff()
+    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(6.0, 4.0), 
+                             gridspec_kw={'width_ratios':[1, 0.01]})
+    
+    # Gyrofrequencies
+    gy_x  = np.linspace(cf.xmin, cf.xmax, 1000)
+    gy_bx = cf.B_eq * (1. + cf.a * gy_x**2)
+    
+    gy_H  = qi * gy_bx / (2 * np.pi * mp) 
+    gy_He = 0.2500 * gy_H
+    gy_O  = 0.0625 * gy_H 
+    print(gy_He.min(), gy_He.max())
+    
+    # XT WAVE PLOT
+    im1   = axes[0, 0].pcolormesh(x_arr, ftime, B_wave, cmap='jet', vmin=0.0, vmax=Bmax)
+    cbar1 = fig.colorbar(im1, cax=axes[0, 1], extend='max')
+    cbar1.set_label('nT', rotation=0,
+                    family=ffamily, fontsize=fsize, labelpad=cpad-10)
+
+    axes[0, 0].set_ylabel('t\n(s)', rotation=0, labelpad=lpad, fontsize=fsize, family=ffamily)
+    axes[0, 0].set_xlabel('x (Mm)', fontsize=fsize, family=ffamily)
+    axes[0, 0].set_ylim(0, tmax)
+    axes[0, 0].set_xlim(x_lim[0], x_lim[1])    
+    axes[0, 0].set_xticklabels([])
+    
+    # WX DISPERSION PLOT
+    im2 = axes[1, 0].pcolormesh(x_arr, freqs, wx, cmap='nipy_spectral', vmin=0.0, vmax=Pmax)
+    cbar2 = fig.colorbar(im2, cax=axes[1, 1], extend='max') #, ticks=[0, 1, 2, 3, 4, 5]
+    cbar2.set_label('$\\frac{nT^2}{Hz}$', rotation=0,
+                    family=ffamily, fontsize=fsize+2, labelpad=cpad)
+    
+    axes[1, 0].set_ylabel('f\n(Hz)', rotation=0, labelpad=lpad, fontsize=fsize, family=ffamily)
+    axes[1, 0].set_xlabel('x (Mm)', fontsize=fsize, family=ffamily)
+    axes[1, 0].set_ylim(0.0, fmax)
+    #axes[1, 0].set_yticks([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])
+    axes[1, 0].set_xlim(x_lim[0], x_lim[1])
+    
+    #axes[1, 0].plot(gy_x*1e-6, gy_H , c='w',      label='$f_{cH^+}$')
+    axes[1, 0].plot(gy_x*1e-6, gy_He, c='yellow', label='$f_{cHe^+}$')
+    axes[1, 0].plot(gy_x*1e-6, gy_O , c='r',      label='$f_{cO^+}$')
+    axes[1, 0].legend(loc='upper left', ncol=2)
+    
+    fig.tight_layout()
+    fig.align_ylabels()
+    fig.subplots_adjust(hspace=0.00, wspace=0.05)
+                            
+    if save:
+        fullpath = cf.anal_dir + 'thesis_dispersion_stackplot_revised.png'
+        plt.savefig(fullpath, facecolor=fig.get_facecolor(),
+                    edgecolor='none', bbox_inches='tight', dpi=200)
+        print('Dispersion stackplot saved')
+        plt.close('all')
+    return
+
+
 def winske_magnetic_density_plot(Sim, save=True):
     np.set_printoptions(suppress=True)
 
