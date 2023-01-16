@@ -42,7 +42,7 @@ max_cell_traverse   = 0.50       # Maximum portion of a cell that we want a part
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-nb.set_num_threads(18)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
 
 
 #%% --- FUNCTIONS ---
@@ -1790,6 +1790,69 @@ def apply_boundary(B, B_damp):
     return
 
 
+def do_subcycle():
+    return
+
+
+def new_cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
+                    B_damp, resistive_array, sim_time, 
+                    B_thresh_error=1e-4, check_error=0, half_push=0):
+    '''
+    Check:
+        B_star generated from push of own copy
+        B_center calculated correctly
+        Where to check subcycling? Also depends on dispersion limit
+            -- Both this function and the check_timestep function may alter s/c count
+        Is error the maximum difference between two points? Or the difference in the 
+            total errors? What source could I check this for? 
+            (modified midpoint method, Press et al. 1981)
+    '''
+    half_sc = subcycles//2
+    H     = 0.5 * dt
+    dh    = H / half_sc
+    
+    if disable_waves:
+        return sim_time+H
+    
+    curl  = np.zeros((NC + 1, 3), dtype=np.float64)
+    
+    ## MAIN SUBCYCLE LOOP ##
+    for ii in range(half_sc):
+        if ii%2 == 0:
+            calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+            get_curl_E_4thOrder(E, curl) 
+            B2  -= (2 - half_push) * dh * curl
+            apply_boundary(B2, B_damp)
+            get_B_cent(B2, B_center)
+            if half_push == 1: half_push = 0
+        else:
+            calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+            get_curl_E_4thOrder(E, curl) 
+            B1  -= 2 * dh * curl
+            apply_boundary(B1, B_damp)
+            get_B_cent(B1, B_center)
+        sim_time += dh
+    
+    if check_error:
+        # Advance B_star by dh from B2 to check error
+        B_star = B2.copy()
+        calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+        get_curl_E_4thOrder(E, curl) 
+        B_star  -= dh * curl
+        apply_boundary(B_star, B_damp)
+        B_error = np.abs(B_star - B1).max()     # Should this be .sum() instead?
+        
+        if B_error > B_thresh_error:
+            B1 += B_star; B1 /= 2.0     # Average B1, B2 into B1 array
+            B2[:] = B1[:]               # Copy B1 into B2 array
+            half_push = 1
+    
+            # Calculate final values
+            get_B_cent(B1, B_center)
+            calculate_E(B1, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+    return sim_time, half_push
+
+
 #@nb.njit()
 def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
                     B_damp, resistive_array, sim_time):
@@ -2906,7 +2969,7 @@ if __name__ == '__main__':
     _LOOP_TIMES     = np.zeros(_MAX_INC-1, dtype=float)
     _LOOP_SAVE_ITER = 1
 
-    _QQ = 1; _SIM_TIME = 0.0; start_time = timer()
+    _QQ = 1; _SIM_TIME = 0.0; _CHECK_ERR=0; _HALF_PUSH=1; start_time = timer()
     print('Starting loop...')
     while _QQ < _MAX_INC:
         loop_start = timer()
@@ -2935,15 +2998,20 @@ if __name__ == '__main__':
                 set_damping_arrays(_B_DAMP, _RESIS_ARR, _DT, _SUBCYCLES)
             CHNGE_time = round(timer() - CHNGE_start, 3) 
             if print_timings: print(f'CHNGE TIME: {CHNGE_time}')
-        
+        if _QQ%5 == 0: _CHECK_ERR=1
         #######################
         ###### MAIN LOOP ######
         #######################
         
         # First field advance to N + 1/2
         LEAP1_start = timer()
-        _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT, _E, _VE, _TE,
-                                    _DT, _SUBCYCLES, _B_DAMP, _RESIS_ARR, _SIM_TIME)
+# =============================================================================
+#         _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT, _E, _VE, _TE,
+#                                     _DT, _SUBCYCLES, _B_DAMP, _RESIS_ARR, _SIM_TIME)
+# =============================================================================
+        _SIM_TIME, _HALF_PUSH = new_cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT,
+                                                 _E, _VE, _TE, _DT, _SUBCYCLES, _B_DAMP,
+                                                 _RESIS_ARR, _SIM_TIME, half_push=_HALF_PUSH)
         LEAP1_time = round(timer() - LEAP1_start, 3)
 
         # CAM part
@@ -2962,8 +3030,13 @@ if __name__ == '__main__':
         
         # Second field advance to N + 1
         LEAP2_start = timer()
-        _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT, _E, _VE, _TE,
-                                    _DT, _SUBCYCLES, _B_DAMP, _RESIS_ARR, _SIM_TIME)
+# =============================================================================
+#         _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT, _E, _VE, _TE,
+#                                     _DT, _SUBCYCLES, _B_DAMP, _RESIS_ARR, _SIM_TIME)
+# =============================================================================
+        _SIM_TIME, _HALF_PUSH  = new_cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT,
+                                                  _E, _VE, _TE, _DT, _SUBCYCLES, _B_DAMP,
+                                                  _RESIS_ARR, _SIM_TIME, check_error=_CHECK_ERR)
         LEAP2_time = round(timer() - LEAP2_start, 3)
         
         loop_diag = round(timer() - loop_start, 3)

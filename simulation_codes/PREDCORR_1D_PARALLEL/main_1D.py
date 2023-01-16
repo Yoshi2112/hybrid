@@ -31,7 +31,7 @@ logistic_B          = False     # Flag for B0 to change after a time to a differ
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)
-nb.set_num_threads(18)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
 
 #%% --- FUNCTIONS ---
 ### ##

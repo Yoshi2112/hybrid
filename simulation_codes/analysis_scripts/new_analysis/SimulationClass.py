@@ -712,18 +712,16 @@ class HybridSimulationRun:
             
             particle_energy = np.zeros((self.num_particle_steps, self.Nj, 2))
             for ii in range(self.num_particle_steps):
-                print('Loading particle file {}'.format(ii))
+                sys.stdout.write('\rLoading particle file {}'.format(ii))
+                sys.stdout.flush()
                 pos, vel, idx, ptimes, idx_start, idx_end = self.load_particles(ii)
                 for jj in range(self.Nj):
-                    '''
-                    Only works properly for theta = 0 : Fix later
-                    '''
                     vpp2 = vel[0, idx_start[jj]:idx_end[jj]] ** 2
                     vpx2 = vel[1, idx_start[jj]:idx_end[jj]] ** 2 + vel[2, idx_start[jj]:idx_end[jj]] ** 2
             
                     particle_energy[ii, jj, 0] = 0.5 * self.mass[jj] * vpp2.sum() * self.n_contr[jj] * self.NX * self.dx
                     particle_energy[ii, jj, 1] = 0.5 * self.mass[jj] * vpx2.sum() * self.n_contr[jj] * self.NX * self.dx
-            
+            print('\n')
             # Calculate total energy
             pbx, pby, pbz, pex, pey, pez, pvex, pvey, pvez, pte, pjx, pjy, pjz, pqdens = \
             self.interpolateFields2ParticleTimes()

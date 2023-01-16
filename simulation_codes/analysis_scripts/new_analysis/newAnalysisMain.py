@@ -14,7 +14,7 @@ from multiplotEnergy import compareEnergy, plotIonEnergy
 if __name__ == '__main__':
     drive = 'F:'
     
-    if True:
+    if False:
         name = 'energy_conservation_resonant'
         num  = 1
         
@@ -25,7 +25,7 @@ if __name__ == '__main__':
         #summaryPlots(sim1, save=True, histogram=False, skip=1, ylim=True)
         checkFields(sim, save=True, ylim=False, skip=1, it_max=100)
     else:
-        name = 'energyConservationParticlesOnly'
+        name = 'energyConservationSmall'
         num = 0
         simList = []
         while True:
@@ -34,5 +34,5 @@ if __name__ == '__main__':
                 num += 1
             except OSError:
                 break
-        #compareEnergy(simList, normalize=False, save2root=True, save_dir=None)
-        plotIonEnergy(simList, normalize=False, save2root=True, save_dir=None)
+        compareEnergy(simList, normalize=False, save2root=True, save_dir=None)
+        #plotIonEnergy(simList, normalize=False, save2root=True, save_dir=None)
