@@ -26,7 +26,7 @@ if __name__ == '__main__':
         checkFields(sim, save=True, ylim=False, skip=1, it_max=100)
     else:
         name = 'energyConservationSmall'
-        num = 0
+        num = 1
         simList = []
         while True:
             try:

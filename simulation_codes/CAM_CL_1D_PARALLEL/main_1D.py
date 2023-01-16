@@ -2576,7 +2576,11 @@ def load_run_params():
         if os.path.exists(drive + save_path) == False:
             run_num = 0
         else:
-            run_num = len(os.listdir(drive + save_path))
+            path_list = os.listdir(drive + save_path)
+            run_num = 0
+            for obj in path_list:                                   
+                if os.path.isdir(drive+save_path+obj):
+                    run_num += 1
     
     if seed == '-':
         seed = None
