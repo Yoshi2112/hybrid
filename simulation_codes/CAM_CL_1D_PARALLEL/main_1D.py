@@ -42,7 +42,7 @@ max_cell_traverse   = 0.50       # Maximum portion of a cell that we want a part
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)          
-nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(18)         # Uncomment to manually set number of threads, otherwise will use all available
 
 
 #%% --- FUNCTIONS ---
@@ -1806,6 +1806,10 @@ def new_cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycl
         Is error the maximum difference between two points? Or the difference in the 
             total errors? What source could I check this for? 
             (modified midpoint method, Press et al. 1981)
+    To do:
+        Work out how this fits with adaptive timestep/subcycling. Do I need to 
+        average/reset the loop if the timestep changes? Or what if the check_timestep()
+        function requests more subcycles?
     '''
     half_sc = subcycles//2
     H     = 0.5 * dt
