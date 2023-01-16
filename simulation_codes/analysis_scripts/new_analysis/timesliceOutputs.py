@@ -348,11 +348,13 @@ def summaryPlots(Sim, save=True, histogram=True, skip=1, ylim=True):
     return
 
 
-def check_fields(Sim, save=True, ylim=True, skip=1):
+def checkFields(Sim, save=True, ylim=True, skip=1, it_max=None):
     '''
     Plot summary plot of raw values for each field timestep
     Field values are interpolated to this point
-    '''    
+    '''   
+    if it_max is None: it_max = Sim.num_field_steps
+    
     if ylim == True:
         path = Sim.anal_dir + '/field_plots_all_ylim/'
     else:
@@ -372,7 +374,7 @@ def check_fields(Sim, save=True, ylim=True, skip=1):
     fontsize = 14; fsize = 12; lpad = 20
 
     ## Do actual plotting and saving of data
-    for ii in range(bx.shape[0]):
+    for ii in range(it_max):
         if ii%skip == 0:
             
             filename = 'summ%05d.png' % ii
@@ -384,33 +386,33 @@ def check_fields(Sim, save=True, ylim=True, skip=1):
             fig, axes = plt.subplots(5, ncols=3, figsize=(20,10), sharex=True)
             fig.patch.set_facecolor('w') 
     
-            axes[0, 1].set_title('Time :: {:<7.4f}s'.format(ftime[ii]), fontsize=fontsize+4, family='monospace')
+            axes[0, 1].set_title('Time :: {:<7.4f}s'.format(Sim.field_sim_time[ii]), fontsize=fontsize+4, family='monospace')
     
-            sys.stdout.write('\rCreating summary field plots [{}]{}'.format(run_num, ii))
+            sys.stdout.write('\rCreating summary field plots [{}]{}'.format(Sim.run_num, ii))
             sys.stdout.flush()
             
             # Wave Fields (Plots, Labels, Lims)
-            axes[0, 0].plot(cf.B_nodes / cf.dx, rD[ii], color='k', label=r'$r_D(x)$') 
-            axes[1, 0].plot(cf.B_nodes / cf.dx, by[ii], color='b', label=r'$B_y$') 
-            axes[2, 0].plot(cf.B_nodes / cf.dx, bz[ii], color='g', label=r'$B_z$')
-            axes[3, 0].plot(cf.E_nodes / cf.dx, ey[ii], color='b', label=r'$E_y$')
-            axes[4, 0].plot(cf.E_nodes / cf.dx, ez[ii], color='g', label=r'$E_z$')
+            axes[0, 0].plot(Sim.B_nodes / Sim.dx, Sim.damping_array[ii], color='k', label=r'$r_D(x)$') 
+            axes[1, 0].plot(Sim.B_nodes / Sim.dx, Sim.by[ii], color='b', label=r'$B_y$') 
+            axes[2, 0].plot(Sim.B_nodes / Sim.dx, Sim.bz[ii], color='g', label=r'$B_z$')
+            axes[3, 0].plot(Sim.E_nodes / Sim.dx, Sim.ey[ii], color='b', label=r'$E_y$')
+            axes[4, 0].plot(Sim.E_nodes / Sim.dx, Sim.ez[ii], color='g', label=r'$E_z$')
             
             # Transverse Electric Field Variables (Plots, Labels, Lims)
-            axes[0, 1].plot(cf.E_nodes / cf.dx, qdens[ii], color='k', label=r'$n_e$')
-            axes[1, 1].plot(cf.E_nodes / cf.dx, vey[ii], color='b', label=r'$V_{ey}$')
-            axes[2, 1].plot(cf.E_nodes / cf.dx, vez[ii], color='g', label=r'$V_{ez}$')
-            axes[3, 1].plot(cf.E_nodes / cf.dx, jy[ii], color='b', label=r'$J_{iy}$' )
-            axes[4, 1].plot(cf.E_nodes / cf.dx, jz[ii], color='g', label=r'$J_{iz}$' )
+            axes[0, 1].plot(Sim.E_nodes / Sim.dx, Sim.qdens[ii], color='k', label=r'$n_e$')
+            axes[1, 1].plot(Sim.E_nodes / Sim.dx, Sim.vey[ii], color='b', label=r'$V_{ey}$')
+            axes[2, 1].plot(Sim.E_nodes / Sim.dx, Sim.vez[ii], color='g', label=r'$V_{ez}$')
+            axes[3, 1].plot(Sim.E_nodes / Sim.dx, Sim.jy[ii], color='b', label=r'$J_{iy}$' )
+            axes[4, 1].plot(Sim.E_nodes / Sim.dx, Sim.jz[ii], color='g', label=r'$J_{iz}$' )
             
             # Parallel Variables (Plots, Labels, Lims)
-            axes[0, 2].plot(cf.E_nodes / cf.dx, te[ii], color='k', label=r'$T_e$')
-            axes[1, 2].plot(cf.E_nodes / cf.dx, vex[ii], color='r', label=r'$V_{ex}$')
-            axes[2, 2].plot(cf.E_nodes / cf.dx, jx[ii], color='r', label=r'$J_{ix}$' )
-            axes[3, 2].plot(cf.E_nodes / cf.dx, ex[ii], color='r', label=r'$E_x$')
-            axes[4, 2].plot(cf.B_nodes / cf.dx, bx[ii], color='r', label=r'$B_{0x}$')
+            axes[0, 2].plot(Sim.E_nodes / Sim.dx, Sim.te[ii], color='k', label=r'$T_e$')
+            axes[1, 2].plot(Sim.E_nodes / Sim.dx, Sim.vex[ii], color='r', label=r'$V_{ex}$')
+            axes[2, 2].plot(Sim.E_nodes / Sim.dx, Sim.jx[ii], color='r', label=r'$J_{ix}$' )
+            axes[3, 2].plot(Sim.E_nodes / Sim.dx, Sim.ex[ii], color='r', label=r'$E_x$')
+            axes[4, 2].plot(Sim.B_nodes / Sim.dx, Sim.bx[ii], color='r', label=r'$B_{0x}$')
             
-            axes[0, 0].set_title('Field outputs: {}[{}]'.format(series, run_num), fontsize=fontsize+4, family='monospace')
+            axes[0, 0].set_title('Field outputs: {}[{}]'.format(Sim.series_name, Sim.run_num), fontsize=fontsize+4, family='monospace')
 
             axes[0, 0].set_ylabel('$r_D(x)$'     , rotation=0, labelpad=lpad, fontsize=fsize)
             axes[1, 0].set_ylabel('$B_y$\n(nT)'  , rotation=0, labelpad=lpad, fontsize=fsize)
@@ -434,29 +436,29 @@ def check_fields(Sim, save=True, ylim=True, skip=1):
             for ii in range(3):
                 axes[4, ii].set_xlabel('Position (m/dx)')
                 for jj in range(5):
-                    axes[jj, ii].set_xlim(cf.B_nodes[0] / cf.dx, cf.B_nodes[-1] / cf.dx)
-                    axes[jj, ii].axvline(-cf.NX//2, c='k', ls=':', alpha=0.5)
-                    axes[jj, ii].axvline( cf.NX//2, c='k', ls=':', alpha=0.5)
+                    axes[jj, ii].set_xlim(Sim.B_nodes[0] / Sim.dx, Sim.B_nodes[-1] / Sim.dx)
+                    axes[jj, ii].axvline(-Sim.NX//2, c='k', ls=':', alpha=0.5)
+                    axes[jj, ii].axvline( Sim.NX//2, c='k', ls=':', alpha=0.5)
                     axes[jj, ii].grid()
             
             if ylim == True:
                 try:
-                    axes[0, 0].set_ylim(rD.min(), rD.max())
-                    axes[1, 0].set_ylim(by.min(), by.max())
-                    axes[2, 0].set_ylim(bz.min(), bz.max())
-                    axes[3, 0].set_ylim(ey.min(), ey.max())
-                    axes[4, 0].set_ylim(ez.min(), ez.max())
+                    axes[0, 0].set_ylim(Sim.damping_array.min(), Sim.damping_array.max())
+                    axes[1, 0].set_ylim(Sim.by.min(), Sim.by.max())
+                    axes[2, 0].set_ylim(Sim.bz.min(), Sim.bz.max())
+                    axes[3, 0].set_ylim(Sim.ey.min(), Sim.ey.max())
+                    axes[4, 0].set_ylim(Sim.ez.min(), Sim.ez.max())
                     
-                    axes[0, 1].set_ylim(qdens.min(), qdens.max())
-                    axes[1, 1].set_ylim(vey.min(), vey.max())
-                    axes[2, 1].set_ylim(vez.min(), vez.max())
-                    axes[3, 1].set_ylim(jy.min() , jy.max())
-                    axes[4, 1].set_ylim(jz.min() , jz.max())
+                    axes[0, 1].set_ylim(Sim.qdens.min(), Sim.qdens.max())
+                    axes[1, 1].set_ylim(Sim.vey.min(), Sim.vey.max())
+                    axes[2, 1].set_ylim(Sim.vez.min(), Sim.vez.max())
+                    axes[3, 1].set_ylim(Sim.jy.min() , Sim.jy.max())
+                    axes[4, 1].set_ylim(Sim.jz.min() , Sim.jz.max())
                     
-                    axes[0, 2].set_ylim(te.min(), te.max())
-                    axes[1, 2].set_ylim(vex.min(), vex.max())
-                    axes[2, 2].set_ylim(jx.min(), jx.max())
-                    axes[3, 2].set_ylim(ex.min(), ex.max())
+                    axes[0, 2].set_ylim(Sim.te.min(), Sim.te.max())
+                    axes[1, 2].set_ylim(Sim.vex.min(), Sim.vex.max())
+                    axes[2, 2].set_ylim(Sim.jx.min(), Sim.jx.max())
+                    axes[3, 2].set_ylim(Sim.ex.min(), Sim.ex.max())
                 except:
                     pass
             
