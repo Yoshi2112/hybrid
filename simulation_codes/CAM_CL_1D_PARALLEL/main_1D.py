@@ -1846,7 +1846,7 @@ def new_cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycl
         apply_boundary(B_star, B_damp)
         B_error = np.abs(B_star - B1).max()     # Should this be .sum() instead?
         
-        if B_error > B_thresh_error:
+        if B_error > B_thresh_error*B_eq:
             B1 += B_star; B1 /= 2.0     # Average B1, B2 into B1 array
             B2[:] = B1[:]               # Copy B1 into B2 array
             half_push = 1

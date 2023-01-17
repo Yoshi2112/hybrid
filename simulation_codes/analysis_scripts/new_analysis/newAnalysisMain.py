@@ -12,7 +12,7 @@ from multiplotEnergy import compareEnergy, plotIonEnergy
 
 
 if __name__ == '__main__':
-    drive = 'F:'
+    drive = 'H:'
     
     if False:
         name = 'energy_conservation_resonant'
@@ -25,14 +25,14 @@ if __name__ == '__main__':
         #summaryPlots(sim1, save=True, histogram=False, skip=1, ylim=True)
         checkFields(sim, save=True, ylim=False, skip=1, it_max=100)
     else:
-        name = 'energyConservationSmall'
-        num = 1
+        
+        # Build list of runs to analyse
+        names = ['energy_conservation_resonant', 'energy_conservation_resonant']
+        nums  = [1, 2]
         simList = []
-        while True:
-            try:
-                simList.append(HybridSimulationRun(name, num, home_dir=f'{drive}/runs/'))
-                num += 1
-            except OSError:
-                break
+        for name, num in zip(names, nums):
+            simList.append(HybridSimulationRun(name, num, home_dir=f'{drive}/runs/'))
+        
+        # Send list for combined multiplot output
         compareEnergy(simList, normalize=False, save2root=True, save_dir=None)
-        #plotIonEnergy(simList, normalize=False, save2root=True, save_dir=None)
+        plotIonEnergy(simList, normalize=False, save2root=True, save_dir=None)
