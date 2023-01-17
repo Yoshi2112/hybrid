@@ -1827,6 +1827,12 @@ def new_cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycl
             that would work with the subcycling. wL, wG and wE aren't really big
             issues anyway, its just the short wavelength whistler noise that we 
             need to avoid.
+            
+    Solution: Create function syncAverage() to advance B2 by 0.5dt and average,
+                flag for a half_push, and reduce the dt. Then subcycling is
+                independent of the overall timestep (i.e. s/c and dt can change
+                 without affecting the other, as long as dispersion is handled
+                 here.)
     '''
     half_sc = subcycles//2
     H     = 0.5 * dt
