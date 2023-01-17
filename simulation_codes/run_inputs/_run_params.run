@@ -24,4 +24,4 @@ GYROPERIOD_RESOLUTION   0.05
 FREQUENCY_RESOLUTION    0.05
 PARTICLE_DUMP_FREQ      50.0
 FIELD_DUMP_FREQ         0.25
-Testing energy conservation with a proton-proton resonant instability for both P/C and CAM_CL. This is the new CAM_CL with correct subcycle averaging.
+Testing energy conservation with a proton-proton resonant instability for both P/C and CAM_CL. This is the new CAM_CL with correct subcycle averaging and now corrected divergence test.

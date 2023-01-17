@@ -1810,6 +1810,23 @@ def new_cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycl
         Work out how this fits with adaptive timestep/subcycling. Do I need to 
         average/reset the loop if the timestep changes? Or what if the check_timestep()
         function requests more subcycles?
+        
+    TODO:
+        -- Put calculation of dispersion here, that way subcycling is controlled
+            only by this. This will mean creating a function do_subcycle() that
+            then evaluates if enough subcycles have been used to attain convergence, 
+            and also a function calc_dispersion() that determines if there is
+            enough subcycles to resolve the angular dispersion.
+        -- Question: How to do this? If a new number of subcycles is needed 
+            (i.e. dh will be different) do I need to re-sync B1 and B2 at the top?
+            I think Matthews has something to say about this. Either way, need to
+            recode this better. This might be why the averaging keeps getting tripped:
+            the error checker recognizes that there's not a convergence but I keep
+            using the same number of subcycles.
+        -- Also turn off adaptive timestep because if dt changes I'm not sure how
+            that would work with the subcycling. wL, wG and wE aren't really big
+            issues anyway, its just the short wavelength whistler noise that we 
+            need to avoid.
     '''
     half_sc = subcycles//2
     H     = 0.5 * dt
@@ -1847,6 +1864,7 @@ def new_cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycl
         B_error = np.abs(B_star - B1).max()     # Should this be .sum() instead?
         
         if B_error > B_thresh_error*B_eq:
+            print('Divergence detected, averaging...')
             B1 += B_star; B1 /= 2.0     # Average B1, B2 into B1 array
             B2[:] = B1[:]               # Copy B1 into B2 array
             half_push = 1
