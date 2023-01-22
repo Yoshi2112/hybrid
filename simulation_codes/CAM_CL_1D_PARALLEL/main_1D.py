@@ -2935,7 +2935,9 @@ def get_thread_values():
 
 
 #%% --- MAIN ---
-
+# TODO: Check when E-field is evaluated: First E* needs rho_half not rho_int which is used for first cyclic leapfrog
+#       Also, does a midpoint method still work if you use parameters at 0 for half and parameters at 1 for the other half?
+#       I.e. does this count as "evaluating at the time centered 1/2" ?? Like Matthews claims. Derive. What's going on there.
 #################################
 ### FILENAMES AND DIRECTORIES ###
 #################################
