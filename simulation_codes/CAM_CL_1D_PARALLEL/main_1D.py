@@ -34,7 +34,7 @@ pequil_saveall      = False
 cold_va             = False
 Fu_override         = False      # Note this HAS to be disabled for grid runs.
 do_parallel         = True
-adaptive_timestep   = True       # Disable adaptive timestep to keep it the same as initial
+adaptive_timestep   = False      # Disable adaptive timestep to keep it the same as initial
 print_timings       = False      # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True       # Flag to print runtime every 50 iterations
 max_cell_traverse   = 0.50       # Maximum portion of a cell that we want a particle to travel in one timestep
@@ -929,11 +929,7 @@ def position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt,
                     hot_only=False):
     '''
     Updates the position of the particles using x = x0 + vt. 
-    Also updates particle nearest node and weighting, for E-nodes only since
-    these are used for source term collection (mag only used for vel push) and
-    is called much more frequently.
-    Also injects particles since this is one of the four particle boundary 
-    conditions.
+    Also updates particle nearest node and weighting.
     '''
     for ii in nb.prange(pos.shape[0]):
         if temp_type[idx[ii]] == 1 or hot_only == False:
@@ -1318,8 +1314,6 @@ def deposit_both_moments(vel, Ie, W_elec, idx, ni, nu):
         nui    -- Species velocity moment array (size, Nj)
         
     TODO:
-        -- Initialize thread arrays at runtime (preallocate memory)
-        -- Calculate N_per_thread and n_start_idxs at runtime
         -- Check if this works for non-multiples of the thread count
            i.e. N_per_thread may need to be an array with particle counts since
            we can't assume that it is constant for each thread.
@@ -3006,7 +3000,6 @@ if __name__ == '__main__':
     print('Loading initial state...')
     init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, _RHO_INT, _RHO_HALF,
                          _Ji, _Ji_PLUS, _L, _G, _MP_FLUX, 0.5*_DT)
-    get_B_cent(_B, _B_CENT)
     calculate_E(_B, _B_CENT, _Ji, _J_EXT, _RHO_HALF, _E, _VE, _TE, _RESIS_ARR, 0.0)
 
     print('Saving initial state...\n')
@@ -3058,6 +3051,7 @@ if __name__ == '__main__':
         LEAP1_start = timer()
         _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT, _E, _VE, _TE,
                                     _DT, _SUBCYCLES, _B_DAMP, _RESIS_ARR, _SIM_TIME)
+        calculate_E(_B, _B_CENT, _Ji, _J_EXT, _RHO_HALF, _E, _VE, _TE, _RESIS_ARR, _SIM_TIME)
 # =============================================================================
 #         _SIM_TIME, _NUM_AV = new_cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT,
 #                                                  _E, _VE, _TE, _DT, _SUBCYCLES, _B_DAMP,
