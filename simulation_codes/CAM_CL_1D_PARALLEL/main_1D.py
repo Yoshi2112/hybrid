@@ -34,7 +34,7 @@ pequil_saveall      = False
 cold_va             = False
 Fu_override         = False      # Note this HAS to be disabled for grid runs.
 do_parallel         = True
-adaptive_timestep   = False       # Disable adaptive timestep to keep it the same as initial
+adaptive_timestep   = True       # Disable adaptive timestep to keep it the same as initial
 print_timings       = False      # Diagnostic outputs timing each major segment (for efficiency examination)
 print_runtime       = True       # Flag to print runtime every 50 iterations
 max_cell_traverse   = 0.50       # Maximum portion of a cell that we want a particle to travel in one timestep
@@ -1442,13 +1442,12 @@ def init_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, rho_0, rho, J_ini
     G       *= 0.0
                          
     deposit_both_moments(vel, Ie, W_elec, idx, ni_init, nu_init)
-    position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt)
+    if dt != 0: position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt)
     deposit_both_moments(vel, Ie, W_elec, idx, ni, nu_plus)
 
     if source_smoothing == 1:
         for jj in range(Nj):
             ni[:, jj]  = smooth(ni[:, jj])
-        
             for kk in range(3):
                 nu_plus[:, jj, kk] = smooth(nu_plus[:,  jj, kk])
                 nu_init[:, jj, kk] = smooth(nu_init[:, jj, kk])
@@ -1458,7 +1457,6 @@ def init_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, rho_0, rho, J_ini
         rho_0   += ni_init[:, jj]   * n_contr[jj] * charge[jj]
         rho     += ni[:, jj]        * n_contr[jj] * charge[jj]
         L       += ni[:, jj]        * n_contr[jj] * charge[jj] ** 2 / mass[jj]
-        
         for kk in range(3):
             J_init[:, kk]  += nu_init[:, jj, kk] * n_contr[jj] * charge[jj]
             J_plus[ :, kk] += nu_plus[:, jj, kk] * n_contr[jj] * charge[jj]
@@ -2245,7 +2243,7 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, B1, B2
             print('Timestep halved to: %.3fs with %d subcycles' % (DT, subcycles))
 
     # Average fields if timestep changed, reset number of averages
-    if change_flag == 1 or ch_sc == 1:
+    if False and change_flag == 1 or ch_sc == 1:
         num_av = averageFields(B1, B2, num_av)
         num_av = 0
     return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, change_flag, subcycles, num_av
@@ -3004,7 +3002,7 @@ if __name__ == '__main__':
     _DT, _MAX_INC, _PART_SAVE_ITER,\
     _FIELD_SAVE_ITER, _SUBCYCLES,  \
     _B_DAMP, _RESIS_ARR            = set_timestep(_VEL, _RHO_INT)    
-        
+    
     print('Loading initial state...')
     init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX, _RHO_INT, _RHO_HALF,
                          _Ji, _Ji_PLUS, _L, _G, _MP_FLUX, 0.5*_DT)
@@ -3058,13 +3056,13 @@ if __name__ == '__main__':
         
         # First field advance to N + 1/2
         LEAP1_start = timer()
+        _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT, _E, _VE, _TE,
+                                    _DT, _SUBCYCLES, _B_DAMP, _RESIS_ARR, _SIM_TIME)
 # =============================================================================
-#         _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT, _E, _VE, _TE,
-#                                     _DT, _SUBCYCLES, _B_DAMP, _RESIS_ARR, _SIM_TIME)
+#         _SIM_TIME, _NUM_AV = new_cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT,
+#                                                  _E, _VE, _TE, _DT, _SUBCYCLES, _B_DAMP,
+#                                                  _RESIS_ARR, _SIM_TIME, half_push=1, num_av=_NUM_AV)
 # =============================================================================
-        _SIM_TIME, _NUM_AV = new_cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT,
-                                                 _E, _VE, _TE, _DT, _SUBCYCLES, _B_DAMP,
-                                                 _RESIS_ARR, _SIM_TIME, half_push=1, num_av=_NUM_AV)
         LEAP1_time = round(timer() - LEAP1_start, 3)
 
         # CAM part
@@ -3083,14 +3081,14 @@ if __name__ == '__main__':
         
         # Second field advance to N + 1
         LEAP2_start = timer()
+        _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT, _E, _VE, _TE,
+                                    _DT, _SUBCYCLES, _B_DAMP, _RESIS_ARR, _SIM_TIME)
 # =============================================================================
-#         _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT, _E, _VE, _TE,
-#                                     _DT, _SUBCYCLES, _B_DAMP, _RESIS_ARR, _SIM_TIME)
+#         _SIM_TIME, _NUM_AV  = new_cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT,
+#                                                   _E, _VE, _TE, _DT, _SUBCYCLES, _B_DAMP,
+#                                                   _RESIS_ARR, _SIM_TIME, half_push=0, num_av=_NUM_AV,
+#                                                   check_error=_CHECK_ERR)
 # =============================================================================
-        _SIM_TIME, _NUM_AV  = new_cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT,
-                                                  _E, _VE, _TE, _DT, _SUBCYCLES, _B_DAMP,
-                                                  _RESIS_ARR, _SIM_TIME, half_push=0, num_av=_NUM_AV,
-                                                  check_error=_CHECK_ERR)
         LEAP2_time = round(timer() - LEAP2_start, 3)
         
         loop_diag = round(timer() - loop_start, 3)

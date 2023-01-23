@@ -24,4 +24,4 @@ GYROPERIOD_RESOLUTION   0.05
 FREQUENCY_RESOLUTION    0.05
 PARTICLE_DUMP_FREQ      50.0
 FIELD_DUMP_FREQ         0.25
-Testing energy conservation with a proton-proton resonant instability for both P/C and CAM_CL. This is the even newer CAM_CL with the always-synced but not always-averaged B1, B2.
+Testing energy conservation with a proton-proton resonant instability for both P/C and CAM_CL. Sanity check for reset (with adaptive timestep), should be identical to run 1.

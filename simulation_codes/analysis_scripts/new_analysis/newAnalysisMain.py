@@ -14,9 +14,9 @@ from multiplotEnergy import compareEnergy, plotIonEnergy
 if __name__ == '__main__':
     drive = 'F:'
     
-    if True:
+    if False:
         name = 'energyConservationSmall'
-        num  = 3
+        num  = 4
         
         sim = HybridSimulationRun(name, num, home_dir=f'{drive}/runs/')
         #plotFieldDiagnostics(sim1)
@@ -27,8 +27,8 @@ if __name__ == '__main__':
     else:
         
         # Build list of runs to analyse
-        names = ['energy_conservation_resonant', 'energy_conservation_resonant', 'energy_conservation_resonant']
-        nums  = [1, 2, 3]
+        names = ['energyConservationSmall']*3
+        nums  = [0, 1, 5]
         simList = []
         for name, num in zip(names, nums):
             simList.append(HybridSimulationRun(name, num, home_dir=f'{drive}/runs/'))
