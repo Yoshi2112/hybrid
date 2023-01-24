@@ -65,19 +65,19 @@ def compareEnergy(runList, normalize=False, save2root=True, save_dir=None,
         particle_total = particle_energy.sum(axis=2)
         
         # Do the plotting
-        axes[0].plot(sim.particle_sim_time, total_energy, label=sim.series_name+f'[{sim.run_num}]')
+        axes[0].plot(sim.particle_sim_time, total_energy, label=sim.series_name+f'[{sim.run_num}]', lw=0.5)
         axes[0].set_ylabel('Total')
         
-        axes[1].plot(sim.field_sim_time, mag_energy)
+        axes[1].plot(sim.field_sim_time, mag_energy, lw=0.5)
         axes[1].set_ylabel('Magnetic')
         
-        axes[2].plot(sim.field_sim_time, electron_energy)
+        axes[2].plot(sim.field_sim_time, electron_energy, lw=0.5)
         axes[2].set_ylabel('Electron Energy')
         
         for jj in range(sim.Nj):
-            axes[3].plot(sim.particle_sim_time, particle_total[:, jj], c=sim.temp_color[jj], ls=run_styles[ii], label=sim.species_lbl[jj])
-            axes[4].plot(sim.particle_sim_time, particle_energy[:, jj, 0], c=sim.temp_color[jj], ls=run_styles[ii])
-            axes[5].plot(sim.particle_sim_time, particle_energy[:, jj, 1], c=sim.temp_color[jj], ls=run_styles[ii])
+            axes[3].plot(sim.particle_sim_time, particle_total[:, jj], c=sim.temp_color[jj], ls=run_styles[ii], label=sim.species_lbl[jj], lw=0.5)
+            axes[4].plot(sim.particle_sim_time, particle_energy[:, jj, 0], c=sim.temp_color[jj], ls=run_styles[ii], lw=0.5)
+            axes[5].plot(sim.particle_sim_time, particle_energy[:, jj, 1], c=sim.temp_color[jj], ls=run_styles[ii], lw=0.5)
         axes[3].set_ylabel('Ions')
         axes[4].set_ylabel('Ions $\parallel$')
         axes[5].set_ylabel('Ions $\perp$')
@@ -135,9 +135,9 @@ def plotIonEnergy(runList, normalize=False, save2root=True, save_dir=None,
         mag_energy, electron_energy, particle_energy, total_energy = sim.get_energies()
         particle_total = particle_energy.sum(axis=2)
         
-        axes[0].plot(sim.particle_sim_time, particle_total.sum(axis=1), label=sim.series_name+f'[{sim.run_num}]')
+        axes[0].plot(sim.particle_sim_time, particle_total.sum(axis=1), label=sim.series_name+f'[{sim.run_num}]', lw=0.5)
         for jj in range(sim.Nj):
-            axes[jj+1].plot(sim.particle_sim_time, particle_total[:, jj], label=sim.species_lbl[jj] if ii==0 else None)
+            axes[jj+1].plot(sim.particle_sim_time, particle_total[:, jj], label=sim.species_lbl[jj] if ii==0 else None, lw=0.5)
             if ii==0: axes[jj+1].legend(loc='center left', bbox_to_anchor=(1.04, 0.5), labelcolor=sim.temp_color[jj])
     axes[0].legend(loc='center left', bbox_to_anchor=(1.04, 0.5))
     

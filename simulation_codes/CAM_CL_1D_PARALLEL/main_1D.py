@@ -467,17 +467,9 @@ def set_damping_arrays(B_damping_array, resistive_array, DT, subcycles):
     boundaries. Based on applcation by Shoji et al. (2011) and
     Umeda et al. (2001)
     
-    Question: Which timestep to use? Subcycled one? 
-    
     Still need to implement retarding array as per Umeda and E-damping as
     per Hu & Denton (2010). Code in the PREDCORR version but doesn't work
     as yet.
-    
-    QUESTION: WHY ARE THE DAMPING VALUES ON THE ORDER OF 0.99980 OR LESS?
-              I.E. 99.98% OR MORE OF THE ORIGINAL VALUE IS KEPT
-              MOST STUFF I READ SEEMS TO SAY IT SHOULD BE A DECENT PERCENTAGE
-              I.E. A GRADIENT FROM 100% TO 0%, NOT AN INFINITESIMAL
-              IS IT BECAUSE OF MY OUTRAGEOUS NUMBER OF TIMESTEPS?
     '''
     # Location and thickness of damping region (in units of dx)
     damping_thickness  = damping_fraction*NC
@@ -527,9 +519,6 @@ def set_damping_arrays(B_damping_array, resistive_array, DT, subcycles):
 def initialize_source_arrays():
     '''
     Initializes source term ndarrays. Each term is collected on the E-field grid.
-
-    INPUT:
-        <NONE>
 
     OUTPUT:
         q_dens  -- Total ion charge  density
@@ -1000,17 +989,6 @@ def reinit_count_flux(pos, idx, _mp_flux):
 
 @nb.njit(parallel=do_parallel)
 def periodic_BC(pos, idx):
-    '''
-    Simple function to work out where to reinitialize particles (species/side)
-    Coded for serial computation since numba can't do parallel reductions with
-    arrays as a target.
-    
-    Shouldn't be any slower than requiring the source functions to be serial,
-    especially since its only an evaluation for every particle, and then a few
-    more operations for a miniscule portion of those particles.
-    
-    Note: This function may only work because xmin = -xmax. Make more generic.
-    '''
     for ii in nb.prange(idx.shape[0]):
         if idx[ii] >= Nj:
             if pos[ii] > xmax:
@@ -1497,7 +1475,6 @@ def advance_particles_and_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, 
         G       -- "Gamma"  MHD variable for current advance
         L       -- "Lambda" MHD variable for current advance    
     '''
-    START_start = timer()
     ni       = np.zeros((NC, Nj), dtype=np.float64)
     nu_plus  = np.zeros((NC, Nj, 3), dtype=np.float64)
     nu_minus = np.zeros((NC, Nj, 3), dtype=np.float64)
@@ -1507,26 +1484,13 @@ def advance_particles_and_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, 
     Ji_minus  *= 0.0
     Ji_plus   *= 0.0
     L         *= 0.0
-    G         *= 0.0
-    START_time = round(timer() - START_start, 3)     
+    G         *= 0.0  
     
-    VELAD_start = timer()
     velocity_update(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, E, dt)
-    VELAD_time = round(timer() - VELAD_start, 3)
-    
-    VLMOM_start = timer()
     deposit_velocity_moments(vel, Ie, W_elec, idx, nu_minus)
-    VLMOM_time = round(timer() - VLMOM_start, 3)
-    
-    POSAD_start = timer()
     position_update(pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, dt)
-    POSAD_time = round(timer() - POSAD_start, 3)
-    
-    MOMNT_start = timer()
     deposit_both_moments(vel, Ie, W_elec, idx, ni, nu_plus)
-    MOMNT_time = round(timer() - MOMNT_start, 3)
     
-    TREST_start = timer()
     if source_smoothing == 1:
         for jj in range(Nj):
             ni[:, jj]  = smooth(ni[:, jj])
@@ -1558,16 +1522,6 @@ def advance_particles_and_collect_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx, 
     rho_int += rho_half
     rho_int /= 2.0
     Ji[:]    = 0.5 * (Ji_plus  +  Ji_minus)
-    TREST_time = round(timer() - TREST_start, 3)
-    
-    if print_timings:
-        print('')
-        print('START TIME:', START_time)
-        print('VELAD TIME:', VELAD_time)
-        print('VLMOM TIME:', VLMOM_time)
-        print('POSAD TIME:', POSAD_time)
-        print('MOMNT TIME:', MOMNT_time)
-        print('TREST TIME:', TREST_time)
     return
 
 
@@ -1613,10 +1567,6 @@ def get_curl_B(B):
                  
     OUTPUT:
         curl  -- Finite-differenced solution for the curl of the input field.
-        
-    NOTE: This function will only work with this specific 1D hybrid code due to both 
-          E and B fields having the same number of nodes (due to TSC weighting) and
-         the lack of derivatives in y, z
     '''
     curlB = np.zeros((B.shape[0] - 1, 3), dtype=nb.float64)
     for ii in nb.prange(B.shape[0] - 1):
@@ -1904,33 +1854,6 @@ def cyclic_leapfrog(B1, B2, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
         J_i   -- Total ionic current density
         DT    -- Master simulation timestep. This function advances the field by 0.5*DT
         subcycles -- The number of subcycle steps to be performed. 
-        
-    22/02/2021 :: Applied damping field to each subcycle. Does this damping array
-            need to account for subcycling in the DX/DT bit? Test later.
-            
-    28/02/2021 :: Added advancement of sim_time within this function. The global
-            "clock" now follows the development of the magnetic field.
-            Resync doesn't require a sim_time increment since the field solution
-            is already at 0.5*DT and this solution is used to advance the second
-            field copy for averaging.
-            
-    TO DO: Need to perform checks every few subcycles for divergence? Or every 
-    few calls? Work out what needs to be done here.
-    
-    Note: Average error divergence calculated by summing the absolute difference
-    and weighting by dxm - number of inertial lengths per dx. This empirically
-    gives an initial 'quiet' error on the order of 1e-8. The question is, how does 
-    this inform the maximum acceptable error.
-    
-    Actually, need to normalise/multiply by dxm*NX, since there's a sum there.
-    Do that later. For now, just average every 32s/c or so.
-    
-    NOTE: No initial half-push necessary, since the initial transverse E field
-    is zero everywhere, and so curl_E at the very first subcycle will be zero.
-    Therefore B(t0) = B(t0 + dh). If the averaging only 
-    happens in here, we don't have to worry about a case where B1 and B2 are
-    given to the function synchronously (i.e. they are always offset, or will
-    be offset in here.)    
     '''
     half_sc = subcycles//2
     H     = 0.5 * dt
@@ -2145,9 +2068,6 @@ def interpolate_cell_centre_4thOrder(edge_arr, interp):
     
     http://coda.oc.ntu.edu.tw/coda/research/timcom/FRAME/fourth.html
     
-    Does just a 1D array. Use 4th order interpolation on bulk values. 
-    Use linear for edges (because easy)
-    
     Seems to only be second order?
     '''
     nc = edge_arr.shape[0]-1
@@ -2168,10 +2088,6 @@ def check_timestep(qq, DT, pos, vel, idx, Ie, W_elec, Ib, W_mag, mp_flux, B1, B2
     '''
     Check that simulation quantities still obey timestep limitations. Reduce
     timestep for particle violations or increase subcycling for field violations.
-    
-    To do:
-        -- Calculate number of required subcycles first. If greater than some
-            predetermined limit, half timestep instead
     '''    
     max_vx, max_vy, max_vz = get_max_v(vel)
     max_V = max(max_vx, max_vy, max_vz)
@@ -2966,7 +2882,7 @@ init_max_subcycle = args['init_max_subcycle']       # Max allowable subcycles at
 
 
 
-#%%#####################
+#%%    
 ### START SIMULATION ###
 ########################
 if __name__ == '__main__':
@@ -3022,79 +2938,43 @@ if __name__ == '__main__':
             print(f'Loop {_QQ}:')
         
         if adaptive_timestep == 1 and disable_waves == 0:  
-            CHECK_start = timer()
             _QQ, _DT, _MAX_INC, _PART_SAVE_ITER, _FIELD_SAVE_ITER, _LOOP_SAVE_ITER, _CHANGE_FLAG, _SUBCYCLES, _NUM_AV =\
                 check_timestep(_QQ, _DT, _POS, _VEL, _IDX, _IE, _W_ELEC, _IB, _W_MAG, _MP_FLUX,
                                _B, _B2, _B_CENT, _E, _RHO_INT, 
                                _MAX_INC, _PART_SAVE_ITER, _FIELD_SAVE_ITER, _LOOP_SAVE_ITER,
                                _SUBCYCLES, _B_DAMP, _RESIS_ARR, _NUM_AV)
-            CHECK_time = round(timer() - CHECK_start, 3)
-            if print_timings: print(f'CHECK TIME: {CHECK_time}')
-            
+
             # Collect new moments and desync position and velocity. Reset damping array.
-            CHNGE_start = timer()
             if _CHANGE_FLAG == 1:
                 # If timestep was doubled, do I need to consider 0.5dt's worth of
                 # new particles? Maybe just disable the doubling until I work this out
                 init_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG, _IDX,  
                          _RHO_INT, _RHO_HALF, _Ji, _Ji_PLUS, _L, _G, _MP_FLUX, 0.5*_DT)
-                
                 set_damping_arrays(_B_DAMP, _RESIS_ARR, _DT, _SUBCYCLES)
-            CHNGE_time = round(timer() - CHNGE_start, 3) 
-            if print_timings: print(f'CHNGE TIME: {CHNGE_time}')
+
         if _QQ%5 == 0: _CHECK_ERR=1
         #######################
         ###### MAIN LOOP ######
         #######################
         
         # First field advance to N + 1/2
-        LEAP1_start = timer()
         _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT, _E, _VE, _TE,
                                     _DT, _SUBCYCLES, _B_DAMP, _RESIS_ARR, _SIM_TIME)
-        calculate_E(_B, _B_CENT, _Ji, _J_EXT, _RHO_HALF, _E, _VE, _TE, _RESIS_ARR, _SIM_TIME)
-# =============================================================================
-#         _SIM_TIME, _NUM_AV = new_cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT,
-#                                                  _E, _VE, _TE, _DT, _SUBCYCLES, _B_DAMP,
-#                                                  _RESIS_ARR, _SIM_TIME, half_push=1, num_av=_NUM_AV)
-# =============================================================================
-        LEAP1_time = round(timer() - LEAP1_start, 3)
 
-        # CAM part
-        CAMEL_start = timer()
+        calculate_E(_B, _B_CENT, _Ji, _J_EXT, _RHO_HALF, _E, _VE, _TE, _RESIS_ARR, _SIM_TIME)
+
         push_current(_Ji_PLUS, _Ji, _E, _B_CENT, _L, _G, _DT)
-        calculate_E(_B, _B_CENT, _Ji, _J_EXT, _RHO_HALF,
-                    _E, _VE, _TE, _RESIS_ARR, _SIM_TIME)
-        CAMEL_time = round(timer() - CAMEL_start, 3)
         
-        # Particle advance, moment calculation
-        PTMOM_start = timer()
+        calculate_E(_B, _B_CENT, _Ji, _J_EXT, _RHO_HALF, _E, _VE, _TE, _RESIS_ARR, _SIM_TIME)
+        
         advance_particles_and_collect_moments(_POS, _VEL, _IE, _W_ELEC, _IB, _W_MAG,
                                               _IDX, _B, _E, _RHO_INT, _RHO_HALF, _Ji,
                                               _Ji_MINUS, _Ji_PLUS, _L, _G, _MP_FLUX, _DT)
-        PTMOM_time = round(timer() - PTMOM_start, 3)
         
         # Second field advance to N + 1
-        LEAP2_start = timer()
         _SIM_TIME = cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT, _E, _VE, _TE,
                                     _DT, _SUBCYCLES, _B_DAMP, _RESIS_ARR, _SIM_TIME)
-# =============================================================================
-#         _SIM_TIME, _NUM_AV  = new_cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT,
-#                                                   _E, _VE, _TE, _DT, _SUBCYCLES, _B_DAMP,
-#                                                   _RESIS_ARR, _SIM_TIME, half_push=0, num_av=_NUM_AV,
-#                                                   check_error=_CHECK_ERR)
-# =============================================================================
-        LEAP2_time = round(timer() - LEAP2_start, 3)
-        
-        loop_diag = round(timer() - loop_start, 3)
-        
-        if print_timings:
-            print('')
-            print(f'LEAP1 TIME: {LEAP1_time}')
-            print(f'CAMEL TIME: {CAMEL_time}')
-            print(f'PTMOM TIME: {PTMOM_time}')
-            print(f'LEAP2 TIME: {LEAP2_time}')
-            print(f'Total Loop: {loop_diag}')
-        
+
         ########################
         ##### OUTPUT DATA  #####
         ########################
@@ -3131,3 +3011,16 @@ if __name__ == '__main__':
         fin_path = '%s/%s/run_%d/run_finished.txt' % (drive, save_path, run_num)
         with open(fin_path, 'w') as open_file:
             pass
+        
+        
+# =============================================================================
+#         _SIM_TIME, _NUM_AV = new_cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT,
+#                                                  _E, _VE, _TE, _DT, _SUBCYCLES, _B_DAMP,
+#                                                  _RESIS_ARR, _SIM_TIME, half_push=1, num_av=_NUM_AV)
+# =============================================================================
+# =============================================================================
+#         _SIM_TIME, _NUM_AV  = new_cyclic_leapfrog(_B, _B2, _B_CENT, _RHO_INT, _Ji, _J_EXT,
+#                                                   _E, _VE, _TE, _DT, _SUBCYCLES, _B_DAMP,
+#                                                   _RESIS_ARR, _SIM_TIME, half_push=0, num_av=_NUM_AV,
+#                                                   check_error=_CHECK_ERR)
+# =============================================================================

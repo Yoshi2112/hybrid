@@ -14,21 +14,21 @@ from multiplotEnergy import compareEnergy, plotIonEnergy
 if __name__ == '__main__':
     drive = 'F:'
     
-    if False:
+    if True:
         name = 'energyConservationSmall'
-        num  = 4
+        num  = 7
         
         sim = HybridSimulationRun(name, num, home_dir=f'{drive}/runs/')
         #plotFieldDiagnostics(sim1)
         #plotEnergies(sim1)
         #winskeSummaryPlots(sim1, save=True, skip=1)
-        #summaryPlots(sim1, save=True, histogram=False, skip=1, ylim=True)
+        summaryPlots(sim, save=True, histogram=False, skip=1, ylim=True)
         checkFields(sim, save=True, ylim=False, skip=1, it_max=None)
     else:
         
         # Build list of runs to analyse
-        names = ['energyConservationSmall']*3
-        nums  = [0, 1, 5]
+        names = ['energyConservationSmall']*2
+        nums  = [0, 7]
         simList = []
         for name, num in zip(names, nums):
             simList.append(HybridSimulationRun(name, num, home_dir=f'{drive}/runs/'))

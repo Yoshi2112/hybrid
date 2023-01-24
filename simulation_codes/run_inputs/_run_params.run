@@ -22,6 +22,6 @@ DXM                     1.0
 IE                      1
 GYROPERIOD_RESOLUTION   0.05
 FREQUENCY_RESOLUTION    0.05
-PARTICLE_DUMP_FREQ      50.0
+PARTICLE_DUMP_FREQ      5.0
 FIELD_DUMP_FREQ         0.25
-Testing energy conservation with a proton-proton resonant instability for both P/C and CAM_CL. Sanity check for reset (with adaptive timestep), should be identical to run 1.
+Testing energy conservation with a proton-proton resonant instability for both P/C and CAM_CL. First run after mistake in calculating E* found. Adaptive timestep disabled.
