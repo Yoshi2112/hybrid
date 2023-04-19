@@ -8,8 +8,7 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
-import os
-import sys
+import os, sys, pdb
 
 import doSpectra as ds
 from _constants import UNIT_CHARGE, PROTON_MASS, ELECTRON_MASS, ELEC_PERMITTIVITY, MAGN_PERMEABILITY, BOLTZMANN_CONSTANT, LIGHT_SPEED
@@ -91,6 +90,7 @@ def plot_tx(Sim, component='By', save=False, log=False, tmax=None,
     ## PLOT IT
     fig, ax = plt.subplots(1, figsize=(15, 10))
     
+    
     if log == True:
         im1 = ax.pcolormesh(x, t, abs(arr),
                        norm=colors.LogNorm(vmin=1e-3, vmax=None), cmap='nipy_spectral')
@@ -116,7 +116,7 @@ def plot_tx(Sim, component='By', save=False, log=False, tmax=None,
     else:
         cb.set_label('mV/m', rotation=0, family=font, fontsize=fontsize, labelpad=30)
 
-    ax.set_title('Time-Space ($t-x$) Plot :: {} component'.format(component.upper()), fontsize=fontsize, family=font)
+    ax.set_title(f'{component} spatiotemporal :: {Sim.series_name}[{Sim.run_num}]', fontsize=fontsize, family=font)
     ax.set_ylabel('t (s)', rotation=0, labelpad=30, fontsize=fontsize, family=font)
     ax.set_xlabel('x ($\Delta x$)', fontsize=fontsize, family=font)
     ax.set_ylim(0, tmax)
@@ -131,6 +131,7 @@ def plot_tx(Sim, component='By', save=False, log=False, tmax=None,
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
         print('t-x Plot saved')
         plt.close('all')
+    pdb.set_trace()
     return
 
 
@@ -185,7 +186,7 @@ def plot_wx(Sim, component='By', saveas='wx_plot', linear_overlay=False,
 #             pass
 # =============================================================================
 
-    ax.set_title('Frequency-Space ($\omega-x$) Plot :: {} component'.format(component.upper()), fontsize=14)
+    ax.set_title(f'{component} spatiofrequency :: {Sim.series_name}[{Sim.run_num}]', fontsize=14, family='monospace')
     ax.set_ylabel(r'f (Hz)', rotation=0, labelpad=15)
     ax.set_xlabel('x (m)')
     
@@ -222,7 +223,6 @@ def plot_kt(Sim, component='By', saveas='kt_plot', save=False, normalize_x=False
     if normalize_x == False:
         im1 = ax.pcolormesh(k*1e6, ftime, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
         fig.colorbar(im1)
-        ax.set_title('Wavenumber-Time ($k-t$) Plot :: {} component'.format(component.upper()), fontsize=14)
         ax.set_ylabel(r'$\Omega_i t$', rotation=0)
         ax.set_xlabel(r'$k (m^{-1}) \times 10^6$')
         #ax.set_ylim(0, 15)
@@ -231,11 +231,11 @@ def plot_kt(Sim, component='By', saveas='kt_plot', save=False, normalize_x=False
         
         im1 = ax.pcolormesh(k_plot, ftime, kt, cmap='jet')      # Remove k[0] since FFT[0] >> FFT[1, 2, ... , k] antialiased=True
         fig.colorbar(im1)
-        ax.set_title('Wavenumber-Time ($k-t$) Plot :: {} component'.format(component.upper()), fontsize=14)
         ax.set_ylabel(r'$\Omega_i t$', rotation=0)
         ax.set_xlabel(r'$kc/\omega_{pi}$')
         #ax.set_ylim(0, 15)
         ax.set_xlim(0, xlim)
+    ax.set_title(f'{component} Wavenumber-Time :: {Sim.series_name}[{Sim.run_num}]', fontsize=14, family='monospace')
     
     if save == True:
         fullpath = Sim.anal_dir + saveas + '_{}'.format(component.lower()) + '.png'
@@ -351,7 +351,8 @@ def plot_wk(Sim, saveas='wk_plot', dispersion_overlay=False, save=True,
                                                 vmax=wk_perp[1:, 1:].real.max()))
     
         fig1.colorbar(im1, extend='both', fraction=0.05).set_label(clab, rotation=0, fontsize=fontsize, family=font, labelpad=30)
-        ax1.set_title(r'$\omega/k$ Plot :: {}_\perp :: Linear Theory up to {:.3f}s'.format(field, tf),
+
+        ax1.set_title(r'$\omega/k$ Plot :: {}_\perp :: Linear Theory up to {:.3f}s :: {}[{}]'.format(field, tf, Sim.series_name, Sim.run_num),
                      fontsize=fontsize, family=font)
             
         for ax in [ax1]:
@@ -478,6 +479,9 @@ def plot_wk_thesis_good(Sim, saveas='wk_plot_thesis', dispersion_overlay=False, 
         for ii in range(CPDR_solns.shape[1]):
             ax.plot(xfac*k_vals, yfac*CPDR_solns[:, ii].real, c='k', linestyle='--', label='CPDR' if ii == 0 else '', alpha=alpha)
 
+    ax.set_title(r'$\omega/k$ Plot :: $B_\perp$ :: Linear Theory up to {:.3f}s :: {}[{}]'.format(tf, Sim.series_name, Sim.run_num),
+                 fontsize=fontsize, family=font)
+    
     fig1.tight_layout()
     fig1.subplots_adjust(wspace=0.05)
     
@@ -544,6 +548,7 @@ def plot_abs_T(Sim, saveas='abs_plot', save=False, log=False, tmax=None,
     
     ## PLOT IT
     fig, ax = plt.subplots(1, figsize=(6.0, 4.0))
+    ax.set_title(f'|B| spatiotemporal :: {Sim.series_name}[{Sim.run_num}]')
 
     vmin = 0.0
     
@@ -641,6 +646,7 @@ def plot_abs_T_w_Bx(Sim, saveas='abs_plot', save=False, tmax=None,
     im1 = axes[1].pcolormesh(x, t, bt, cmap='jet', vmin=0.0, vmax=vmax)
     cb  = fig.colorbar(im1, cax=axes[2])
     cb.set_label('$|B_\perp|$\nnT', rotation=0, family=font, fontsize=fontsize, labelpad=30)
+    axes[0].set_title(f'|B| spatiotemporal :: {Sim.series_name}[{Sim.run_num}]')
 
     
     axes[1].set_xlabel('x ($\Delta x$)', fontsize=fontsize, family=font)
@@ -726,6 +732,7 @@ def plot_abs_J(Sim, saveas='abs_plot', save=False, log=False, tmax=None,
     ax.set_ylabel('t (s)', rotation=0, labelpad=30, fontsize=fontsize, family=font)
     ax.set_xlabel('x ($\Delta x$)', fontsize=fontsize, family=font)
     ax.set_ylim(0, tmax)
+    ax.set_title(f'|J| spatiotemporal :: {Sim.series_name}[{Sim.run_num}]')
     
     ax.axvline(Sim.xmin     / Sim.dx, c='w', ls=':', alpha=1.0)
     ax.axvline(Sim.xmax     / Sim.dx, c='w', ls=':', alpha=1.0)

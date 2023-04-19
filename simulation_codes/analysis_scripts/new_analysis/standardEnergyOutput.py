@@ -7,6 +7,7 @@ Created on Thu Jan  5 16:51:39 2023
 
 import numpy as np
 import matplotlib.pyplot as plt
+import pdb
 
 
 def plotEnergies(Sim, normalize=True, save=True):
@@ -23,6 +24,10 @@ def plotEnergies(Sim, normalize=True, save=True):
     
     TODO: Option to specify maximum time (in order to check conservation/exchange
           before things like finite grid effects take over)
+    
+    WRITE THIS NEATER!!! WHAT DO YOU WANT FROM THIS??
+    Maybe text should be 'share of energy at start and end', so  B will be 0% at
+        start and then some percentage at end.
     '''
     print('Plotting energies...')
     mag_energy, electron_energy, particle_energy, total_energy = Sim.get_energies()
@@ -58,7 +63,6 @@ def plotEnergies(Sim, normalize=True, save=True):
 
     # Calculate energy partition at start and end of simulation
     # Calculated as a percentage of the total energy at t = 0, so the percentages might not add up to 100% at the end
-    # especially if there was some energy gain/loss in the simulation
     total_ion_energy = particle_energy.sum(axis=2)
     percent_ion = np.zeros((Sim.Nj, 2))
     for jj in range(Sim.Nj):
@@ -81,7 +85,7 @@ def plotEnergies(Sim, normalize=True, save=True):
     plt.figtext(0.85, 0.80, 'ELECTRON: {:>7}%'.format(percent_elec),   fontsize=fsize,  fontname=fname)
 
     for jj in range(Sim.Nj):
-        plt.figtext(0.85, 0.76-jj*0.04, 'ION{}    : {:>7}%'.format(jj, percent_ion[jj]), fontsize=fsize,  fontname=fname)
+        plt.figtext(0.85, 0.76-jj*0.04, 'ION{}    : {:>7}%'.format(jj, percent_ion[jj, 1]), fontsize=fsize,  fontname=fname)
 
     ax.set_xlabel('Time (seconds)')
     ax.set_xlim(0, Sim.particle_sim_time[-1])
