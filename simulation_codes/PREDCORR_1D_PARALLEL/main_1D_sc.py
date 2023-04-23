@@ -1802,6 +1802,95 @@ def get_curl_E(E, dE):
     return
 
 
+def subcycle_B_RK4(B1, B_center, rho, Ji, J_ext, E, Ve, Te, dt, subcycles,
+                    B_damp, resistive_array, sim_time):
+    '''
+    Solves for the magnetic field push by keeping two copies and subcycling between them,
+    averaging them at the end of the cycle as per Matthews (1994). The source terms are
+    unchanged during the subcycle step. This method damps the high frequency dispersion 
+    inherent in explicit hybrid simulations.
+    
+    INPUT:
+        B1    -- Magnetic field to update (return value comes through here)
+        B2    -- Empty array for second copy
+        rho_i -- Total ion charge density
+        J_i   -- Total ionic current density
+        DT    -- Master simulation timestep. This function advances the field by 0.5*DT
+        subcycles -- The number of subcycle steps to be performed. 
+    
+    Note: E-field can be used as an empty mutable array as important values of E
+        are calculated as they are needed, it's an equation of state.
+        
+    Pushes B field by a whole dt, not a half. The value at N+1 is used in 
+    lieu of the "corrected" field.
+    '''
+    dh = dt / subcycles
+    
+    if disable_waves:
+        return sim_time+dt
+    
+    K1    = np.zeros((NC + 1, 3), dtype=np.float64)
+    K2    = np.zeros((NC + 1, 3), dtype=np.float64)
+    K3    = np.zeros((NC + 1, 3), dtype=np.float64)
+    K4    = np.zeros((NC + 1, 3), dtype=np.float64)
+    B2    = np.zeros((NC + 1, 3), dtype=np.float64)
+    
+    for ii in range(subcycles):
+    
+        # Calculate K1
+        B2[:] = B1[:]
+        get_B_cent(B2, B_center)
+        calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+        get_curl_E(E, K1) 
+        K1 *= - 1.0
+        
+        # Calculate K2
+        B2[:] = B1[:] + 0.5*dh*K1
+        get_B_cent(B2, B_center)
+        calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+        get_curl_E(E, K2) 
+        K2 *= - 1.0
+        
+        # Calculate K3
+        B2[:] = B1[:] + 0.5*dh*K2
+        get_B_cent(B2, B_center)
+        calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+        get_curl_E(E, K3)
+        K3 *= - 1.0
+        
+        # Calculate K4
+        B2[:] = B1[:] + dh*K3
+        get_B_cent(B2, B_center)
+        calculate_E(B2, B_center, Ji, J_ext, rho, E, Ve, Te, resistive_array, sim_time)
+        get_curl_E(E, K4)
+        K4 *= - 1.0
+        
+        # Advance magnetic field
+        B1 += (dh / 6) * (K1 + K2 + K3 + K4)
+        
+        if field_periodic == 0:
+            for ii in nb.prange(1, B.shape[1]):              # Apply damping, skipping x-axis
+                B[:, ii] *= B_damp                           # Not sure if this needs to modified for half steps?
+        else:
+            for ii in nb.prange(1, B.shape[1]):
+                # Boundary value (should be equal)
+                end_bit = 0.5 * (B[ND, ii] + B[ND + NX, ii])
+
+                B[ND,      ii] = end_bit
+                B[ND + NX, ii] = end_bit
+                
+                B[ND - 1, ii]  = B[ND + NX - 1, ii]
+                B[ND - 2, ii]  = B[ND + NX - 2, ii]
+                
+                B[ND + NX + 1, ii] = B[ND + 1, ii]
+                B[ND + NX + 2, ii] = B[ND + 2, ii]
+                
+        sim_time += dh
+    
+    get_B_cent(B1, B_center)
+    return sim_time
+
+
 @nb.njit()
 def push_B(B, E, curlE, DT, qq, damping_array, half_flag=1):
     '''
@@ -3053,6 +3142,9 @@ parser.add_argument('-r', '--runfile'   , default='_run_params.run', type=str)
 parser.add_argument('-p', '--plasmafile', default='_plasma_params.plasma', type=str)
 parser.add_argument('-d', '--driverfile', default='_driver_params.txt'   , type=str)
 parser.add_argument('-n', '--run_num'   , default=-1, type=int)
+parser.add_argument('-m', '--max_subcycle', default=48, type=int)
+parser.add_argument('-M', '--init_max_subcycle', default=12, type=int)
+parser.add_argument('-s', '--subcycle'    , default=12, type=int)
 args = vars(parser.parse_args())
 
 # Check root directory (change if on RCG)
@@ -3067,15 +3159,14 @@ plasma_input = root_dir +  '/run_inputs/' + args['plasmafile']
 driver_input = root_dir +  '/run_inputs/' + args['driverfile']
 if Fu_override == True:
     plasma_input = root_dir +  '/run_inputs/' + '_Fu_test.plasma'
+    
+# Set anything else useful before file input load
+default_subcycles = args['subcycle']                # Number of subcycles if particles are limiting factor
+max_subcycles     = args['max_subcycle']            # Max allowable subcycles for adaptive timestep
+init_max_subcycle = args['init_max_subcycle']       # Max allowable subcycles at run start
 
 # Load parameters from files
-load_run_params()
-if __name__ == '__main__':
-    manage_directories()
-_BEQ = load_plasma_params()
-load_wave_driver_params()
-calculate_background_magnetic_field()
-get_thread_values()
+
 
 
 
@@ -3083,11 +3174,19 @@ get_thread_values()
 ### START SIMULATION ###
 ########################
 if __name__ == '__main__':
+    # Load simulation variables, calculate important variables, set directory structure
+    load_run_params()
+    _BEQ = load_plasma_params()
+    load_wave_driver_params()
+    
+    calculate_background_magnetic_field()
+    get_thread_values()
+    manage_directories()
     print_summary_and_checks()
     
-    start_time = timer()
         
     # Initialize simulation: Allocate memory and set time parameters
+    start_time = timer()
     B, B_cent, E_int, E_half, Ve_int, Ve_half, Te       = initialize_fields()
     q_dens, q_dens_adv, Ji_int, Ji_half, J_ext          = initialize_source_arrays()
     old_particles, old_fields, temp3De, temp3Db, temp1D,\
