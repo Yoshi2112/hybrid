@@ -1,5 +1,5 @@
 DRIVE                   D:/
-SAVE_PATH               /runs/RK4_test/
+SAVE_PATH               /runs/PREDCORR_RK4_test/
 RUN                     -
 SAVE_PARTICLE_FLAG      1
 SAVE_FIELD_FLAG         1
@@ -24,4 +24,4 @@ GYROPERIOD_RESOLUTION   0.05
 FREQUENCY_RESOLUTION    0.05
 PARTICLE_DUMP_FREQ      5.0
 FIELD_DUMP_FREQ         0.25
-Time trial: RK4 vs CAM_CL
+Subcycle test: Standard predictor-corrector vs. the one with RK4 subcycling.
