@@ -17,11 +17,11 @@ DAMPING_LEN_FRACTION    0.20
 B_DAMPING_MULTIPLIER    0.00
 RESISTIVITY_MULTIPLIER  0.00
 NX                      256
-SIM_TIME                3000.0
+SIM_TIME                5000.0
 DXM                     1.0
 IE                      1
 GYROPERIOD_RESOLUTION   0.05
 FREQUENCY_RESOLUTION    0.05
 PARTICLE_DUMP_FREQ      5.0
 FIELD_DUMP_FREQ         0.25
-Subcycle test: Standard predictor-corrector vs. the one with RK4 subcycling.
+Subcycle test: Standard predictor-corrector vs. the one with RK4 subcycling. Two stream beaming instability with two s/c per particle loop.

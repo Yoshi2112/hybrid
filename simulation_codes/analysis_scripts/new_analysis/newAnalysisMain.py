@@ -15,14 +15,14 @@ if __name__ == '__main__':
     drive = 'D:'
     
     if True:
-        name = 'RK4_test'
+        name = 'PREDCORR_RK4_test'
         
-        #for num in range(3):
-        num  = 0
+        for num in range(3, 4):
+        #num  = 0
         
-        sim = HybridSimulationRun(name, num, home_dir=f'{drive}/runs/')
+            sim = HybridSimulationRun(name, num, home_dir=f'{drive}/runs/')
         
-        plotFieldDiagnostics(sim)
+            plotFieldDiagnostics(sim)
         #plotEnergies(sim)
         #checkFields(sim, save=True, ylim=False, skip=50, it_max=None)
         #winskeSummaryPlots(sim1, save=True, skip=1)

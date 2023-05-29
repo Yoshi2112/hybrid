@@ -31,6 +31,7 @@ Other functions TODO:
     
 TODO:
     -- Fetching should be done in calling functions, plotting by another function
+NOTE: Don't treat attr calls like copies - they're mutable, and will change in future calls
 '''
 
 def plotFieldDiagnostics(Sim, log_tx=False, remove_ND=False, normalize_B0=False, bmax=None):
@@ -131,7 +132,7 @@ def plot_tx(Sim, component='By', save=False, log=False, tmax=None,
         plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none', bbox_inches='tight')
         print('t-x Plot saved')
         plt.close('all')
-    pdb.set_trace()
+
     return
 
 

@@ -31,7 +31,7 @@ logistic_B          = False     # Flag for B0 to change after a time to a differ
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)
-nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(18)         # Uncomment to manually set number of threads, otherwise will use all available
 
 #%% --- FUNCTIONS ---
 ### ##
@@ -458,10 +458,9 @@ def initialize_fields():
     E_int   = np.zeros((NC    , 3), dtype=np.float64)
     E_half  = np.zeros((NC    , 3), dtype=np.float64)
     
-    Ve_int  = np.zeros((NC, 3), dtype=np.float64)
-    Ve_half = np.zeros((NC, 3), dtype=np.float64)
+    Ve      = np.zeros((NC, 3), dtype=np.float64)
     Te      = np.ones(  NC,     dtype=np.float64) * Te0_scalar
-    return B, B_cent, E_int, E_half, Ve_int, Ve_half, Te
+    return B, B_cent, E_int, E_half, Ve, Te
 
 
 #@nb.njit()
@@ -560,10 +559,9 @@ def initialize_source_arrays():
     '''
     q_dens  = np.zeros( NC,         dtype=np.float64)    
     q_dens2 = np.zeros( NC,         dtype=np.float64) 
-    Ji_int  = np.zeros((NC, 3),     dtype=np.float64)
-    Ji_half = np.zeros((NC, 3),     dtype=np.float64)
+    Ji      = np.zeros((NC, 3),     dtype=np.float64)
     J_ext   = np.zeros((NC, 3),     dtype=np.float64)
-    return q_dens, q_dens2, Ji_int, Ji_half, J_ext
+    return q_dens, q_dens2, Ji, J_ext
 
 
 @nb.njit()
@@ -1802,7 +1800,7 @@ def get_curl_E(E, dE):
     return
 
 
-def subcycle_B_RK4(B1, B_center, rho, Ji, J_ext, E_half, Ve, Te, temp3De, temp3Db, grad_P, 
+def subcycle_B_RK4(B1, B_center, B_eq, rho, Ji, J_ext, E_half, Ve, Te, temp3De, temp3Db, grad_P, 
                    E_damping_array, resistive_array, B_damp,
                    dt, subcycles):
     '''
@@ -1843,7 +1841,7 @@ def subcycle_B_RK4(B1, B_center, rho, Ji, J_ext, E_half, Ve, Te, temp3De, temp3D
     
         # Calculate K1
         B2[:] = B1[:]
-        get_B_cent(B2, B_center)
+        get_B_cent(B2, B_center, B_eq)
         calculate_E(B2, B_center, Ji, J_ext, rho, Esc, Ve, Te, temp3De, temp3Db, grad_P, E_damping_array, resistive_array)
         get_curl_E(Esc, K1) 
         K1 *= - 1.0
@@ -1854,21 +1852,21 @@ def subcycle_B_RK4(B1, B_center, rho, Ji, J_ext, E_half, Ve, Te, temp3De, temp3D
         
         # Calculate K2
         B2[:] = B1[:] + 0.5*dh*K1
-        get_B_cent(B2, B_center)
+        get_B_cent(B2, B_center, B_eq)
         calculate_E(B2, B_center, Ji, J_ext, rho, Esc, Ve, Te, temp3De, temp3Db, grad_P, E_damping_array, resistive_array)
         get_curl_E(Esc, K2) 
         K2 *= - 1.0
         
         # Calculate K3
         B2[:] = B1[:] + 0.5*dh*K2
-        get_B_cent(B2, B_center)
+        get_B_cent(B2, B_center, B_eq)
         calculate_E(B2, B_center, Ji, J_ext, rho, Esc, Ve, Te, temp3De, temp3Db, grad_P, E_damping_array, resistive_array)
         get_curl_E(Esc, K3)
         K3 *= - 1.0
         
         # Calculate K4
         B2[:] = B1[:] + dh*K3
-        get_B_cent(B2, B_center)
+        get_B_cent(B2, B_center, B_eq)
         calculate_E(B2, B_center, Ji, J_ext, rho, Esc, Ve, Te, temp3De, temp3Db, grad_P, E_damping_array, resistive_array)
         get_curl_E(Esc, K4)
         K4 *= - 1.0
@@ -1878,20 +1876,20 @@ def subcycle_B_RK4(B1, B_center, rho, Ji, J_ext, E_half, Ve, Te, temp3De, temp3D
         
         if field_periodic == 0:
             for ii in nb.prange(1, B.shape[1]):              # Apply damping, skipping x-axis
-                B[:, ii] *= B_damp                           # Not sure if this needs to modified for half steps?
+                B1[:, ii] *= B_damp                           # Not sure if this needs to modified for half steps?
         else:
             for ii in nb.prange(1, B.shape[1]):
                 # Boundary value (should be equal)
-                end_bit = 0.5 * (B[ND, ii] + B[ND + NX, ii])
+                end_bit = 0.5 * (B1[ND, ii] + B1[ND + NX, ii])
 
-                B[ND,      ii] = end_bit
-                B[ND + NX, ii] = end_bit
+                B1[ND,      ii] = end_bit
+                B1[ND + NX, ii] = end_bit
                 
-                B[ND - 1, ii]  = B[ND + NX - 1, ii]
-                B[ND - 2, ii]  = B[ND + NX - 2, ii]
+                B1[ND - 1, ii]  = B1[ND + NX - 1, ii]
+                B1[ND - 2, ii]  = B1[ND + NX - 2, ii]
                 
-                B[ND + NX + 1, ii] = B[ND + 1, ii]
-                B[ND + NX + 2, ii] = B[ND + 2, ii]
+                B1[ND + NX + 1, ii] = B1[ND + 1, ii]
+                B1[ND + NX + 2, ii] = B1[ND + 2, ii]
                 
         #sim_time += dh
     return #sim_time
@@ -2629,87 +2627,67 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
     B_eq = update_Beq(qq*DT)
     
     # Check timestep (Maybe only check every few. Set in main body)
-    check_start = timer()
     if adaptive_timestep == True and qq%1 == 0 and disable_waves == 0:
         qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, damping_array \
         = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, B_cent, Ji, Ve, q_dens,
                          qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter,
                          idx, mp_flux, B_damping_array, resistive_array, old_particles)    
-    check_time = round(timer() - check_start, 3)
     
     # Move particles, collect moments, deal with particle boundaries
     # Current temporal position of the velocity moment (same as J_ext)
-    part1_start = timer()
     advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                   B, E_int, DT, q_dens, q_dens_adv, Ji, J_ext, Ve,
                                   mp_flux, resistive_array, qq, B_eq, pc=0)
-    part1_time = round(timer() - part1_start, 3)
     
     # Average N, N + 1 densities (q_dens at N + 1/2)
-    field_start = timer()
     q_dens *= 0.5; q_dens += 0.5 * q_dens_adv
     
     if disable_waves == 0:   
         # Push B from N to N + 1 and output E(N + 1/2)
-        subcycle_B_RK4(B, B_cent, q_dens, Ji, J_ext, E_half, Ve, Te, temp3De, temp3Db, temp1D, 
+        subcycle_B_RK4(B, B_cent, B_eq, q_dens, Ji, J_ext, E_half, Ve, Te, temp3De, temp3Db, temp1D, 
                            E_damping_array, resistive_array, B_damping_array,
                            DT, subcycles)
         
-        # TODO: Fix/work out what to do with the B_eq calculation
-        B_eq = update_Beq((qq+0.5)*DT)
-
-        field_time = round(timer() - field_start, 3)
+        #B_eq = update_Beq((qq+0.5)*DT)
         
         ###################################
         ### PREDICTOR CORRECTOR SECTION ###
         ###################################
         # Store old values
-        store_start = timer()
         mp_flux_old = mp_flux.copy()
         store_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)
-        store_time = round(timer() - store_start, 2)
         
         # Predict E at N + 1
-        predict_start = timer()
-        E_int  *= -1.0; E_int  +=  2.0 * E_half
+        E_int *= -1.0; E_int += 2.0 * E_half
 
-        update_Beq((qq+1.0)*DT)
-        predict_time = round(timer() - predict_start, 3)
+        #B_eq = update_Beq((qq+1.0)*DT)
         
         # Advance particles to obtain source terms at N + 3/2
-        part2_start = timer()
         advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                       B, E_int, DT, q_dens_adv, q_dens, Ji, J_ext, Ve,
                                       mp_flux, resistive_array, qq, B_eq, pc=1)
         q_dens *= 0.5; q_dens += 0.5 * q_dens_adv
-        part2_time = round(timer() - part2_start, 3)
-            
-        correct_start = timer()
     
         # Compute predicted fields at N + 3/2, advance J_ext too
         push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
         get_B_cent(B, B_cent, B_eq)
-        B_eq = update_Beq((qq+1.5)*DT)
+        #B_eq = update_Beq((qq+1.5)*DT)
+        
         calculate_E(B, B_cent, Ji, J_ext, q_dens, E_int, Ve, Te,
                     temp3De, temp3Db, temp1D, E_damping_array, resistive_array)
         
         # Determine corrected E at N + 1 
         E_int  *= 0.5;    E_int  += 0.5 * E_half        
-        correct_time = round(timer() - correct_start, 3)
-
         
         # Restore old values and cleanup
-        restore_start = timer()
         restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)        
-        restore_time = round(timer() - restore_start, 3)
     
-        B_eq = update_Beq((qq+1.0)*DT)
+        #B_eq = update_Beq((qq+1.0)*DT)
         q_dens[:] = q_dens_adv
         mp_flux   = mp_flux_old.copy()
         
     # Check number of spare particles every 25 steps
     if qq%1 == 0 and particle_open == 1:
-        count_start = timer()
         num_spare = (idx >= Nj).sum()
         if num_spare < nsp_ppc.sum():
             print('WARNING :: Less than one cell of spare particles remaining.')
@@ -2719,20 +2697,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
                 print('num_spare = ', num_spare)
                 print('inject_rate = ', inject_rate.sum() * DT * 5.0)
                 raise Exception('WARNING :: No spare particles remaining. Exiting simulation.')
-        count_time = round(timer() - count_start, 3)
-    
-    if print_timings:
-        print('')
-        print(f'CHECK TIME: {check_time}')
-        print(f'PART1 TIME: {part1_time}')
-        print(f'FIELD TIME: {field_time}')
-        print(f'STORE TIME: {store_time}')
-        print(f'PDICT TIME: {predict_time}')
-        print(f'PART2 TIME: {part2_time}')
-        print(f'CRECT TIME: {correct_time}')
-        print(f'RSTRE TIME: {restore_time}')
-        if particle_open == 1:
-            print(f'COUNT TIME: {count_time}')
+
     return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter
 
 
@@ -3134,7 +3099,7 @@ parser.add_argument('-d', '--driverfile', default='_driver_params.txt'   , type=
 parser.add_argument('-n', '--run_num'   , default=-1, type=int)
 parser.add_argument('-m', '--max_subcycle', default=48, type=int)
 parser.add_argument('-M', '--init_max_subcycle', default=12, type=int)
-parser.add_argument('-s', '--subcycle'    , default=4, type=int)
+parser.add_argument('-s', '--subcycle'    , default=2, type=int)
 args = vars(parser.parse_args())
 
 # Check root directory (change if on RCG)
@@ -3178,6 +3143,7 @@ if __name__ == '__main__':
         
     # Initialize simulation: Allocate memory and set time parameters
     start_time = timer()
+    #
     B, B_cent, E_int, E_half, Ve, Te           = initialize_fields()
     q_dens, q_dens_adv, Ji, J_ext              = initialize_source_arrays()
     old_particles, old_fields, temp3De, temp3Db, temp1D,\
