@@ -17,7 +17,7 @@ if __name__ == '__main__':
     if True:
         name = 'PREDCORR_RK4_test'
         
-        for num in [6]:
+        for num in [7]:
         
             sim = HybridSimulationRun(name, num, home_dir=f'{drive}/runs/')
         

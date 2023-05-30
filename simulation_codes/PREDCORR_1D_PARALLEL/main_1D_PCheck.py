@@ -901,6 +901,9 @@ def advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
     collect_moments(vel, Ie, W_elec, idx, rho_out, Ji, J_ext, J_time)
     moment_time = round(timer() - moment_start, 3)
     
+    # Average N, N + 1 densities (q_dens at N + 1/2)
+    rho_in *= 0.5; rho_in += 0.5 * rho_out
+    
     if print_timings:
         print('')
         print(f'PARMV TIME: {parmov_time}')
@@ -1820,9 +1823,11 @@ def push_B(B, E, curlE, DT, qq, damping_array, half_flag=1):
     else:
         get_curl_E_2nd_order(E, curlE)
     
-    if field_periodic == 0:
-        for ii in nb.prange(1, B.shape[1]):              
-            curlE[:, ii] *= retarding_array              # Apply retarding, skipping x-axis
+# =============================================================================
+#     if field_periodic == 0:
+#         for ii in nb.prange(1, B.shape[1]):              
+#             curlE[:, ii] *= retarding_array              # Apply retarding, skipping x-axis
+# =============================================================================
 
     B -= 0.5 * DT * curlE                                # Advance using curl
     
@@ -2531,84 +2536,56 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
     '''    
     B_eq = update_Beq(qq*DT)
     
-    # Check timestep (Maybe only check every few. Set in main body)
-    if adaptive_timestep == True and qq%1 == 0 and disable_waves == 0:
-        qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, damping_array \
-        = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, B_cent, Ji, Ve, q_dens,
-                         qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter,
-                         idx, mp_flux, B_damping_array, resistive_array, old_particles)    
-    
     # Move particles, collect moments, deal with particle boundaries
-    # Current temporal position of the velocity moment (same as J_ext)
     advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                   B, E_int, DT, q_dens, q_dens_adv, Ji, J_ext, Ve,
                                   mp_flux, resistive_array, qq, B_eq, pc=0)
+      
+    # Push B from N to N + 1/2 and calculate E(N + 1/2)
+    push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
+    get_B_cent(B, B_cent, B_eq)
     
-    # Average N, N + 1 densities (q_dens at N + 1/2)
-    q_dens *= 0.5; q_dens += 0.5 * q_dens_adv
+    calculate_E(B, B_cent, Ji, J_ext, q_dens, E_half, Ve, Te,
+                temp3De, temp3Db, temp1D, E_damping_array, resistive_array)
     
-    if disable_waves == 0:   
-        # Push B from N to N + 1/2 and calculate E(N + 1/2)
-        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
-        get_B_cent(B, B_cent, B_eq)
-        B_eq = update_Beq((qq+0.5)*DT)
-        
-        calculate_E(B, B_cent, Ji, J_ext, q_dens, E_half, Ve, Te,
-                    temp3De, temp3Db, temp1D, E_damping_array, resistive_array)
-        
-        ###################################
-        ### PREDICTOR CORRECTOR SECTION ###
-        ###################################
-        # Store old values
-        mp_flux_old = mp_flux.copy()
-        store_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)
-        
-        # Predict fields (and moments?) at N + 1
-        E_int  *= -1.0; E_int  +=  2.0 * E_half
-        
-        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
-        update_Beq((qq+1.0)*DT)
-        
-        # Advance particles to obtain source terms at N + 3/2
-        advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
-                                      B, E_int, DT, q_dens_adv, q_dens, Ji, J_ext, Ve,
-                                      mp_flux, resistive_array, qq, B_eq, pc=1)
-        
-        q_dens *= 0.5; q_dens += 0.5 * q_dens_adv
-        
-        # Compute predicted fields at N + 3/2, advance J_ext too
-        push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
-        get_B_cent(B, B_cent, B_eq)
-        B_eq = update_Beq((qq+1.5)*DT)
-        calculate_E(B, B_cent, Ji, J_ext, q_dens, E_int, Ve, Te,
-                    temp3De, temp3Db, temp1D, E_damping_array, resistive_array)
-        
-        # Determine corrected fields at N + 1 
-        E_int  *= 0.5;    E_int  += 0.5 * E_half        
-        
-        # Restore old values and push B-field final time
-        restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)        
+    ###################################
+    ### PREDICTOR CORRECTOR SECTION ###
+    ###################################
+    # Store old values
+    mp_flux_old = mp_flux.copy()
+    store_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)
+    
+    # Predict fields (and moments?) at N + 1
+    E_int  *= -1.0; E_int  +=  2.0 * E_half
+    
+    push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
+    
+    # Advance particles to obtain source terms at N + 3/2
+    advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
+                                  B, E_int, DT, q_dens_adv, q_dens, Ji, J_ext, Ve,
+                                  mp_flux, resistive_array, qq, B_eq, pc=1)
+    
+    
+    
+    # Compute predicted fields at N + 3/2, advance J_ext too
+    push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
+    get_B_cent(B, B_cent, B_eq)
+    calculate_E(B, B_cent, Ji, J_ext, q_dens, E_int, Ve, Te,
+                temp3De, temp3Db, temp1D, E_damping_array, resistive_array)
+    
+    # Determine corrected fields at N + 1 
+    E_int  *= 0.5;    E_int  += 0.5 * E_half        
+    
+    # Restore old values and push B-field final time
+    restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)        
   
-        # Determine corrected fields at N + 1
-        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
-        get_B_cent(B, B_cent, B_eq)
-        B_eq = update_Beq((qq+1.0)*DT)
+    # Determine corrected fields at N + 1
+    push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
+    get_B_cent(B, B_cent, B_eq)
+    
+    q_dens[:] = q_dens_adv
+    mp_flux   = mp_flux_old.copy()
         
-        q_dens[:] = q_dens_adv
-        mp_flux   = mp_flux_old.copy()
-        
-    # Check number of spare particles every 25 steps
-    if qq%1 == 0 and particle_open == 1:
-        num_spare = (idx >= Nj).sum()
-        if num_spare < nsp_ppc.sum():
-            print('WARNING :: Less than one cell of spare particles remaining.')
-            if num_spare < inject_rate.sum() * DT * 5.0:
-                # Change this to dynamically expand particle arrays later on (adding more particles)
-                # Can do it by cell lots (i.e. add a cell's worth each time)
-                print('num_spare = ', num_spare)
-                print('inject_rate = ', inject_rate.sum() * DT * 5.0)
-                raise Exception('WARNING :: No spare particles remaining. Exiting simulation.')
-
     return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter
 
 
@@ -3144,3 +3121,27 @@ if __name__ == '__main__':
             pass
     print("Time to execute program: {0:.2f} seconds".format(runtime))
     print('Average loop time: {0:.4f} seconds'.format(loop_times[1:].mean()))
+    
+    
+# =============================================================================
+#     # Check timestep (Maybe only check every few. Set in main body)
+#     if adaptive_timestep == True and qq%1 == 0 and disable_waves == 0:
+#         qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, damping_array \
+#         = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, B_cent, Ji, Ve, q_dens,
+#                          qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter,
+#                          idx, mp_flux, B_damping_array, resistive_array, old_particles)    
+# =============================================================================
+
+# =============================================================================
+#     # Check number of spare particles every 25 steps
+#     if qq%1 == 0 and particle_open == 1:
+#         num_spare = (idx >= Nj).sum()
+#         if num_spare < nsp_ppc.sum():
+#             print('WARNING :: Less than one cell of spare particles remaining.')
+#             if num_spare < inject_rate.sum() * DT * 5.0:
+#                 # Change this to dynamically expand particle arrays later on (adding more particles)
+#                 # Can do it by cell lots (i.e. add a cell's worth each time)
+#                 print('num_spare = ', num_spare)
+#                 print('inject_rate = ', inject_rate.sum() * DT * 5.0)
+#                 raise Exception('WARNING :: No spare particles remaining. Exiting simulation.')
+# =============================================================================
