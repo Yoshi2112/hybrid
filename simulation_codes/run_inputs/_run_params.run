@@ -24,4 +24,4 @@ GYROPERIOD_RESOLUTION   0.05
 FREQUENCY_RESOLUTION    0.05
 PARTICLE_DUMP_FREQ      5.0
 FIELD_DUMP_FREQ         0.25
-Subcycle test: Standard predictor-corrector vs. the one with RK4 subcycling. Two stream beaming instability with two s/c per particle loop.
+Subcycle test: Standard predictor-corrector vs. the one with RK4 subcycling. Two stream beaming instability with old P/C method, removed P/C'd moments to see if this alters the frequency response.

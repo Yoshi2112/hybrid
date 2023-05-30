@@ -390,7 +390,7 @@ def initialise_position_uniform():
     return pos, idx
 
 
-def initialize_particles():
+def initialize_particles(B, E, _mp_flux, Ji_in, Ve_in, rho_in, old_particles):
     '''
     Initializes particle arrays. Selects which velocity/position function to
     use for intialization, runs equilibrium loop if required, and calculates
@@ -1800,102 +1800,6 @@ def get_curl_E(E, dE):
     return
 
 
-def subcycle_B_RK4(B1, B_center, B_eq, rho, Ji, J_ext, E_half, Ve, Te, temp3De, temp3Db, grad_P, 
-                   E_damping_array, resistive_array, B_damp,
-                   dt, subcycles):
-    '''
-    Solves for the magnetic field push by keeping two copies and subcycling between them,
-    averaging them at the end of the cycle as per Matthews (1994). The source terms are
-    unchanged during the subcycle step. This method damps the high frequency dispersion 
-    inherent in explicit hybrid simulations.
-    
-    INPUT:
-        B1    -- Magnetic field to update (return value comes through here)
-        B2    -- Empty array for second copy
-        rho_i -- Total ion charge density
-        J_i   -- Total ionic current density
-        DT    -- Master simulation timestep. This function advances the field by 0.5*DT
-        subcycles -- The number of subcycle steps to be performed. 
-    
-    Note: E-field can be used as an empty mutable array as important values of E
-        are calculated as they are needed, it's an equation of state.
-        
-    Pushes B field by a whole dt, not a half. The value at N+1 is used in 
-    lieu of the "corrected" field.
-    '''
-    dh = dt / subcycles
-    
-    #if disable_waves:
-    #    return sim_time+dt
-    
-    # Temp arrays
-    K1    = np.zeros((NC + 1, 3), dtype=np.float64)
-    K2    = np.zeros((NC + 1, 3), dtype=np.float64)
-    K3    = np.zeros((NC + 1, 3), dtype=np.float64)
-    K4    = np.zeros((NC + 1, 3), dtype=np.float64)
-    B2    = np.zeros((NC + 1, 3), dtype=np.float64)
-    Esc   = np.zeros((NC    , 3), dtype=np.float64)
-    
-
-    for ii in range(subcycles):
-    
-        # Calculate K1
-        B2[:] = B1[:]
-        get_B_cent(B2, B_center, B_eq)
-        calculate_E(B2, B_center, Ji, J_ext, rho, Esc, Ve, Te, temp3De, temp3Db, grad_P, E_damping_array, resistive_array)
-        get_curl_E(Esc, K1) 
-        K1 *= - 1.0
-        
-        # Save the halfway point. But this won't work for odd s/c (force even or have a check)
-        if ii == subcycles // 2:
-            E_half[:] = Esc[:]
-        
-        # Calculate K2
-        B2[:] = B1[:] + 0.5*dh*K1
-        get_B_cent(B2, B_center, B_eq)
-        calculate_E(B2, B_center, Ji, J_ext, rho, Esc, Ve, Te, temp3De, temp3Db, grad_P, E_damping_array, resistive_array)
-        get_curl_E(Esc, K2) 
-        K2 *= - 1.0
-        
-        # Calculate K3
-        B2[:] = B1[:] + 0.5*dh*K2
-        get_B_cent(B2, B_center, B_eq)
-        calculate_E(B2, B_center, Ji, J_ext, rho, Esc, Ve, Te, temp3De, temp3Db, grad_P, E_damping_array, resistive_array)
-        get_curl_E(Esc, K3)
-        K3 *= - 1.0
-        
-        # Calculate K4
-        B2[:] = B1[:] + dh*K3
-        get_B_cent(B2, B_center, B_eq)
-        calculate_E(B2, B_center, Ji, J_ext, rho, Esc, Ve, Te, temp3De, temp3Db, grad_P, E_damping_array, resistive_array)
-        get_curl_E(Esc, K4)
-        K4 *= - 1.0
-        
-        # Advance magnetic field
-        B1 += (dh / 6) * (K1 + K2 + K3 + K4)
-        
-        # Apply B-field boundary conditions
-        if field_periodic == 0:
-            for ii in nb.prange(1, B.shape[1]):
-                B1[:, ii] *= B_damp
-        else:
-            for ii in nb.prange(1, B.shape[1]):
-                # Boundary value (should be equal)
-                end_bit = 0.5 * (B1[ND, ii] + B1[ND + NX, ii])
-
-                B1[ND,      ii] = end_bit
-                B1[ND + NX, ii] = end_bit
-                
-                B1[ND - 1, ii]  = B1[ND + NX - 1, ii]
-                B1[ND - 2, ii]  = B1[ND + NX - 2, ii]
-                
-                B1[ND + NX + 1, ii] = B1[ND + 1, ii]
-                B1[ND + NX + 2, ii] = B1[ND + 2, ii]
-                
-        #sim_time += dh
-    return #sim_time
-
-
 @nb.njit()
 def push_B(B, E, curlE, DT, qq, damping_array, half_flag=1):
     '''
@@ -2399,7 +2303,7 @@ def store_run_parameters(dt, part_save_iter, field_save_iter, max_inc, max_time)
                    ('freq_res', freq_res),
                    ('orbit_res', orbit_res),
                    ('run_desc', run_description),
-                   ('method_type', 'PREDCORR_PARABOLIC_SUBCYCLED'),
+                   ('method_type', 'PREDCORR_PARABOLIC_PARALLEL'),
                    ('particle_shape', 'TSC'),
                    ('field_periodic', field_periodic),
                    ('run_time', None),
@@ -2644,12 +2548,13 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
     q_dens *= 0.5; q_dens += 0.5 * q_dens_adv
     
     if disable_waves == 0:   
-        # Push B from N to N + 1 and output E(N + 1/2)
-        subcycle_B_RK4(B, B_cent, B_eq, q_dens, Ji, J_ext, E_half, Ve, Te, temp3De, temp3Db, temp1D, 
-                           E_damping_array, resistive_array, B_damping_array,
-                           DT, subcycles)
+        # Push B from N to N + 1/2 and calculate E(N + 1/2)
+        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=1)
+        get_B_cent(B, B_cent, B_eq)
+        B_eq = update_Beq((qq+0.5)*DT)
         
-        #B_eq = update_Beq((qq+0.5)*DT)
+        calculate_E(B, B_cent, Ji, J_ext, q_dens, E_half, Ve, Te,
+                    temp3De, temp3Db, temp1D, E_damping_array, resistive_array)
         
         ###################################
         ### PREDICTOR CORRECTOR SECTION ###
@@ -2658,32 +2563,37 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         mp_flux_old = mp_flux.copy()
         store_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)
         
-        # Predict E at N + 1
-        E_int *= -1.0; E_int += 2.0 * E_half
-
-        #B_eq = update_Beq((qq+1.0)*DT)
+        # Predict fields (and moments?) at N + 1
+        E_int  *= -1.0; E_int  +=  2.0 * E_half
+        
+        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
+        update_Beq((qq+1.0)*DT)
         
         # Advance particles to obtain source terms at N + 3/2
         advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                       B, E_int, DT, q_dens_adv, q_dens, Ji, J_ext, Ve,
                                       mp_flux, resistive_array, qq, B_eq, pc=1)
+        
         q_dens *= 0.5; q_dens += 0.5 * q_dens_adv
-    
+        
         # Compute predicted fields at N + 3/2, advance J_ext too
         push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
         get_B_cent(B, B_cent, B_eq)
-        #B_eq = update_Beq((qq+1.5)*DT)
-        
+        B_eq = update_Beq((qq+1.5)*DT)
         calculate_E(B, B_cent, Ji, J_ext, q_dens, E_int, Ve, Te,
                     temp3De, temp3Db, temp1D, E_damping_array, resistive_array)
         
-        # Determine corrected E at N + 1 
+        # Determine corrected fields at N + 1 
         E_int  *= 0.5;    E_int  += 0.5 * E_half        
         
-        # Restore old values and cleanup
+        # Restore old values and push B-field final time
         restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)        
-    
-        #B_eq = update_Beq((qq+1.0)*DT)
+  
+        # Determine corrected fields at N + 1
+        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
+        get_B_cent(B, B_cent, B_eq)
+        B_eq = update_Beq((qq+1.0)*DT)
+        
         q_dens[:] = q_dens_adv
         mp_flux   = mp_flux_old.copy()
         
@@ -3098,9 +3008,6 @@ parser.add_argument('-r', '--runfile'   , default='_run_params.run', type=str)
 parser.add_argument('-p', '--plasmafile', default='_plasma_params.plasma', type=str)
 parser.add_argument('-d', '--driverfile', default='_driver_params.txt'   , type=str)
 parser.add_argument('-n', '--run_num'   , default=-1, type=int)
-parser.add_argument('-m', '--max_subcycle', default=48, type=int)
-parser.add_argument('-M', '--init_max_subcycle', default=12, type=int)
-parser.add_argument('-s', '--subcycle'    , default=12, type=int)
 args = vars(parser.parse_args())
 
 # Check root directory (change if on RCG)
@@ -3115,15 +3022,15 @@ plasma_input = root_dir +  '/run_inputs/' + args['plasmafile']
 driver_input = root_dir +  '/run_inputs/' + args['driverfile']
 if Fu_override == True:
     plasma_input = root_dir +  '/run_inputs/' + '_Fu_test.plasma'
-    
-# Set anything else useful before file input load
-default_subcycles = args['subcycle']                # Number of subcycles if particles are limiting factor
-max_subcycles     = args['max_subcycle']            # Max allowable subcycles for adaptive timestep
-init_max_subcycle = args['init_max_subcycle']       # Max allowable subcycles at run start
-subcycles         = args['subcycle']                # Default number of subcycles
 
 # Load parameters from files
-
+load_run_params()
+if __name__ == '__main__':
+    manage_directories()
+_BEQ = load_plasma_params()
+load_wave_driver_params()
+calculate_background_magnetic_field()
+get_thread_values()
 
 
 
@@ -3131,25 +3038,18 @@ subcycles         = args['subcycle']                # Default number of subcycle
 ### START SIMULATION ###
 ########################
 if __name__ == '__main__':
-    # Load simulation variables, calculate important variables, set directory structure
-    load_run_params()
-    _BEQ = load_plasma_params()
-    load_wave_driver_params()
-    
-    calculate_background_magnetic_field()
-    get_thread_values()
-    manage_directories()
     print_summary_and_checks()
     
+    start_time = timer()
         
     # Initialize simulation: Allocate memory and set time parameters
-    start_time = timer()
-    #
-    B, B_cent, E_int, E_half, Ve, Te           = initialize_fields()
-    q_dens, q_dens_adv, Ji, J_ext              = initialize_source_arrays()
+    B, B_cent, E_int, E_half, Ve, Te       = initialize_fields()
+    q_dens, q_dens_adv, Ji, J_ext          = initialize_source_arrays()
     old_particles, old_fields, temp3De, temp3Db, temp1D,\
                                                mp_flux  = initialize_tertiary_arrays()
-    pos, vel, Ie, W_elec, Ib, W_mag, idx                = initialize_particles()
+    pos, vel, Ie, W_elec, Ib, W_mag, idx                = initialize_particles(B, E_int, mp_flux,
+                                                                               Ji, Ve, q_dens,
+                                                                               old_particles)
     
     # Relax particles into non-homogeneous field
     if homogenous == False:
