@@ -2534,24 +2534,19 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
     B_eq = update_Beq(qq*DT)
     
     # Check timestep (Maybe only check every few. Set in main body)
-    check_start = timer()
     if adaptive_timestep == True and qq%1 == 0 and disable_waves == 0:
         qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter, damping_array \
         = check_timestep(pos, vel, B, E_int, q_dens, Ie, W_elec, Ib, W_mag, B_cent, Ji_int, Ve_int, q_dens,
                          qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter,
                          idx, mp_flux, B_damping_array, resistive_array, old_particles)    
-    check_time = round(timer() - check_start, 3)
     
     # Move particles, collect moments, deal with particle boundaries
     # Current temporal position of the velocity moment (same as J_ext)
-    part1_start = timer()
     advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                   B, E_int, DT, q_dens, q_dens_adv, Ji_int, Ji_half, J_ext, Ve_half,
                                   mp_flux, resistive_array, qq, B_eq, pc=0)
-    part1_time = round(timer() - part1_start, 3)
     
     # Average N, N + 1 densities (q_dens at N + 1/2)
-    field_start = timer()
     q_dens *= 0.5; q_dens += 0.5 * q_dens_adv
     
     if disable_waves == 0:   
@@ -2562,35 +2557,26 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         
         calculate_E(B, B_cent, Ji_half, J_ext, q_dens, E_half, Ve_half, Te,
                     temp3De, temp3Db, temp1D, E_damping_array, resistive_array)
-        field_time = round(timer() - field_start, 3)
         
         ###################################
         ### PREDICTOR CORRECTOR SECTION ###
         ###################################
         # Store old values
-        store_start = timer()
         mp_flux_old = mp_flux.copy()
         store_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji_half, Ve_half, Te, old_particles, old_fields)
-        store_time = round(timer() - store_start, 2)
         
         # Predict fields (and moments?) at N + 1
-        predict_start = timer()
         E_int  *= -1.0; E_int  +=  2.0 * E_half
         Ji_int *= -1.0; Ji_int +=  2.0 * Ji_half
         Ve_int *= -1.0; Ve_int +=  2.0 * Ve_half
         
         push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
-        update_Beq((qq+1.0)*DT)
-        predict_time = round(timer() - predict_start, 3)
+        B_eq = update_Beq((qq+1.0)*DT)
         
         # Advance particles to obtain source terms at N + 3/2
-        part2_start = timer()
         advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
                                       B, E_int, DT, q_dens_adv, q_dens, Ji_int, Ji_half, J_ext, Ve_half,
                                       mp_flux, resistive_array, qq, B_eq, pc=1)
-        part2_time = round(timer() - part2_start, 3)
-            
-        correct_start = timer()
         q_dens *= 0.5; q_dens += 0.5 * q_dens_adv
     
         # Compute predicted fields at N + 3/2, advance J_ext too
@@ -2602,20 +2588,15 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         
         # Determine corrected fields at N + 1 
         E_int  *= 0.5;    E_int  += 0.5 * E_half        
-        correct_time = round(timer() - correct_start, 3)
         
         # Store 3/2 for averaging after restore
         Ji_int[:] = Ji_half
         Ve_int[:] = Ve_half
         
         # Restore old values and push B-field final time
-        restore_start = timer()
-        restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji_half, Ve_half, Te, old_particles, old_fields)        
-        restore_time = round(timer() - restore_start, 3)
-    
+        restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji_half, Ve_half, Te, old_particles, old_fields)           
         
         # Determine corrected moments at N + 1
-        lastbit_start = timer()
         Ji_int *= 0.5; Ji_int += 0.5*Ji_half
         Ve_int *= 0.5; Ve_int += 0.5*Ve_half 
     
@@ -2625,11 +2606,9 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         
         q_dens[:] = q_dens_adv
         mp_flux   = mp_flux_old.copy()
-        lastbit_time = round(timer() - lastbit_start, 3)
         
     # Check number of spare particles every 25 steps
     if qq%1 == 0 and particle_open == 1:
-        count_start = timer()
         num_spare = (idx >= Nj).sum()
         if num_spare < nsp_ppc.sum():
             print('WARNING :: Less than one cell of spare particles remaining.')
@@ -2639,21 +2618,6 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
                 print('num_spare = ', num_spare)
                 print('inject_rate = ', inject_rate.sum() * DT * 5.0)
                 raise Exception('WARNING :: No spare particles remaining. Exiting simulation.')
-        count_time = round(timer() - count_start, 3)
-    
-    if print_timings:
-        print('')
-        print(f'CHECK TIME: {check_time}')
-        print(f'PART1 TIME: {part1_time}')
-        print(f'FIELD TIME: {field_time}')
-        print(f'STORE TIME: {store_time}')
-        print(f'PDICT TIME: {predict_time}')
-        print(f'PART2 TIME: {part2_time}')
-        print(f'CRECT TIME: {correct_time}')
-        print(f'RSTRE TIME: {restore_time}')
-        print(f'LSBIT TIME: {lastbit_time}')
-        if particle_open == 1:
-            print(f'COUNT TIME: {count_time}')
     return qq, DT, max_inc, part_save_iter, field_save_iter, loop_save_iter
 
 

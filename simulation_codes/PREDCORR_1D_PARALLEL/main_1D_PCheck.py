@@ -2565,8 +2565,6 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
                                   B, E_int, DT, q_dens_adv, q_dens, Ji, J_ext, Ve,
                                   mp_flux, resistive_array, qq, B_eq, pc=1)
     
-    
-    
     # Compute predicted fields at N + 3/2, advance J_ext too
     push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
     get_B_cent(B, B_cent, B_eq)
@@ -2576,9 +2574,9 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
     # Determine corrected fields at N + 1 
     E_int  *= 0.5;    E_int  += 0.5 * E_half        
     
-    # Restore old values and push B-field final time
+    # Restore old values
     restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)        
-  
+    
     # Determine corrected fields at N + 1
     push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)   # Advance the original B
     get_B_cent(B, B_cent, B_eq)
@@ -2819,14 +2817,17 @@ def load_wave_driver_params():
     wave_period = 1. / driven_freq
     pulse_width = pulse_cycle*wave_period
     
-    species_plasfreq_sq   = (density * charge ** 2) / (mass * e0)
-    species_gyrofrequency = np.divide(charge, mass) * B0
-    
-    # Looks right!
-    driven_rad = driven_freq * 2 * np.pi
-    driven_k   = (driven_rad / SPLIGHT) ** 2
-    driven_k  *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyrofrequency))).sum()
-    driven_k   = np.sqrt(driven_k)
+    if pol_wave > 0:
+        species_plasfreq_sq   = (density * charge ** 2) / (mass * e0)
+        species_gyrofrequency = np.divide(charge, mass) * B0
+        
+        # Looks right!
+        driven_rad = driven_freq * 2 * np.pi
+        driven_k   = (driven_rad / SPLIGHT) ** 2
+        driven_k  *= 1 - (species_plasfreq_sq / (driven_rad * (driven_rad - species_gyrofrequency))).sum()
+        driven_k   = np.sqrt(driven_k)
+    else:
+        driven_k = 0.0
     return
 
 

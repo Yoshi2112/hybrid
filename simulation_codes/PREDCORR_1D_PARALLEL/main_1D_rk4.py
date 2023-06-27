@@ -31,7 +31,7 @@ logistic_B          = False     # Flag for B0 to change after a time to a differ
 if not do_parallel:
     do_parallel = True
     nb.set_num_threads(1)
-nb.set_num_threads(18)         # Uncomment to manually set number of threads, otherwise will use all available
+nb.set_num_threads(8)         # Uncomment to manually set number of threads, otherwise will use all available
 
 #%% --- FUNCTIONS ---
 ### ##
@@ -1823,7 +1823,7 @@ def subcycle_B_RK4(B1, B_center, B_eq, rho, Ji, J_ext, E_half, Ve, Te, temp3De, 
     Pushes B field by a whole dt, not a half. The value at N+1 is used in 
     lieu of the "corrected" field.
     '''
-    dh = dt / subcycles
+    dh = 0.5 * dt / subcycles
     
     #if disable_waves:
     #    return sim_time+dt
@@ -1847,8 +1847,8 @@ def subcycle_B_RK4(B1, B_center, B_eq, rho, Ji, J_ext, E_half, Ve, Te, temp3De, 
         K1 *= - 1.0
         
         # Save the halfway point. But this won't work for odd s/c (force even or have a check)
-        if ii == subcycles // 2:
-            E_half[:] = Esc[:]
+        #if ii == subcycles // 2:
+        #    E_half[:] = Esc[:]
         
         # Calculate K2
         B2[:] = B1[:] + 0.5*dh*K1
@@ -2644,12 +2644,15 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
     q_dens *= 0.5; q_dens += 0.5 * q_dens_adv
     
     if disable_waves == 0:   
-        # Push B from N to N + 1 and output E(N + 1/2)
+        # Push B from N to N + 1/2 and output E(N + 1/2)
         subcycle_B_RK4(B, B_cent, B_eq, q_dens, Ji, J_ext, E_half, Ve, Te, temp3De, temp3Db, temp1D, 
                            E_damping_array, resistive_array, B_damping_array,
                            DT, subcycles)
+        get_B_cent(B, B_cent, B_eq)
+        B_eq = update_Beq((qq+0.5)*DT)
         
-        #B_eq = update_Beq((qq+0.5)*DT)
+        calculate_E(B, B_cent, Ji, J_ext, q_dens, E_half, Ve, Te,
+                    temp3De, temp3Db, temp1D, E_damping_array, resistive_array)
         
         ###################################
         ### PREDICTOR CORRECTOR SECTION ###
@@ -2658,10 +2661,10 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         mp_flux_old = mp_flux.copy()
         store_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)
         
-        # Predict E at N + 1
+        # Predict E at N + 1 and advance to B(N+1)
         E_int *= -1.0; E_int += 2.0 * E_half
-
-        #B_eq = update_Beq((qq+1.0)*DT)
+        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0)
+        B_eq = update_Beq((qq+1.0)*DT)
         
         # Advance particles to obtain source terms at N + 3/2
         advance_particles_and_moments(pos, vel, Ie, W_elec, Ib, W_mag, idx,\
@@ -2672,8 +2675,7 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         # Compute predicted fields at N + 3/2, advance J_ext too
         push_B(B, E_int, temp3Db, DT, qq + 1, B_damping_array, half_flag=1)
         get_B_cent(B, B_cent, B_eq)
-        #B_eq = update_Beq((qq+1.5)*DT)
-        
+        B_eq = update_Beq((qq+1.5)*DT)
         calculate_E(B, B_cent, Ji, J_ext, q_dens, E_int, Ve, Te,
                     temp3De, temp3Db, temp1D, E_damping_array, resistive_array)
         
@@ -2683,6 +2685,10 @@ def main_loop(pos, vel, idx, Ie, W_elec, Ib, W_mag,
         # Restore old values and cleanup
         restore_old(pos, vel, Ie, W_elec, Ib, W_mag, idx, B, Ji, Ve, Te, old_particles, old_fields)        
     
+        # Advance B(N+1/2) to N+1 using corrected E
+        push_B(B, E_int, temp3Db, DT, qq, B_damping_array, half_flag=0) 
+        get_B_cent(B, B_cent, B_eq)
+        
         #B_eq = update_Beq((qq+1.0)*DT)
         q_dens[:] = q_dens_adv
         mp_flux   = mp_flux_old.copy()
@@ -3100,7 +3106,7 @@ parser.add_argument('-d', '--driverfile', default='_driver_params.txt'   , type=
 parser.add_argument('-n', '--run_num'   , default=-1, type=int)
 parser.add_argument('-m', '--max_subcycle', default=48, type=int)
 parser.add_argument('-M', '--init_max_subcycle', default=12, type=int)
-parser.add_argument('-s', '--subcycle'    , default=12, type=int)
+parser.add_argument('-s', '--subcycle'    , default=8, type=int)
 args = vars(parser.parse_args())
 
 # Check root directory (change if on RCG)

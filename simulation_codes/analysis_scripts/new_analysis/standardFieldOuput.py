@@ -246,61 +246,6 @@ def plot_kt(Sim, component='By', saveas='kt_plot', save=False, normalize_x=False
     return
 
 
-def plot_kt_winske(Sim, component='by'):
-    qi     = 1.602e-19       # Elementary charge (C)
-    c      = 3e8             # Speed of light (m/s)
-    mp     = 1.67e-27        # Mass of proton (kg)
-    e0     = 8.854e-12       # Epsilon naught - permittivity of free space
-    
-    ftime = getattr(Sim, 'field_sim_time')
-    arr = getattr(Sim, component)
-    
-    radperiods = ftime * Sim.gyfreq
-    gperiods   = ftime / Sim.gyperiod
-    
-    ts_folder = Sim.anal_dir + '//winske_fourier_modes//'
-    if os.path.exists(ts_folder) == False:
-        os.makedirs(ts_folder)
-    
-    # Get first/last indices for FFT range and k-space array
-    if component[0].upper() == 'B':
-        st = Sim.x0B; en = Sim.x1B
-        k  = np.fft.fftfreq(Sim.NX, Sim.dx)
-    else:
-        st = Sim.x0E; en = Sim.x1E
-        k  = np.fft.fftfreq(Sim.NX, Sim.dx)
-    
-    # Normalize to c/wpi
-    cwpi = c/np.sqrt(Sim.ne * qi ** 2 / (mp * e0))
-    
-    k   *= cwpi
-    k    = k[k>=0]
-    kmax = k.shape[0]
-    
-    fft_matrix  = np.zeros((arr.shape[0], en-st), dtype='complex128')
-    for ii in range(arr.shape[0]): # Take spatial FFT at each time, ii
-        fft_matrix[ii, :] = np.fft.fft(arr[ii, st:en] - arr[ii, st:en].mean())
-
-    kt = (fft_matrix[:, :k.shape[0]] * np.conj(fft_matrix[:, :k.shape[0]])).real
-    
-    plt.ioff()
-
-    for ii in range(ftime.shape[0]):
-        fig, ax = plt.subplots()
-        ax.semilogy(k[1:kmax], kt[ii, 1:kmax], ds='steps-mid')
-        ax.set_title('IT={:04d} :: T={:5.2f} :: GP={:5.2f}'.format(ii, radperiods[ii], gperiods[ii]), family='monospace')
-        ax.set_xlabel('K')
-        ax.set_ylabel('BYK**2')
-        ax.set_xlim(k[1], k[kmax-1])
-        fig.savefig(ts_folder + 'winske_fourier_{}_{}.png'.format(component, ii), edgecolor='none')
-        plt.close('all') 
-        
-        sys.stdout.write('\rCreating fourier mode plot for timestep {}'.format(ii))
-        sys.stdout.flush()
-
-    print('\n')
-    return
-
 
 def plot_wk(Sim, saveas='wk_plot', dispersion_overlay=False, save=True,
                      pcyc_mult=None, xmax=None, zero_cold=True,
@@ -826,34 +771,6 @@ def thesis_plot_dispersion(save=True, fmax=1.0, tmax=None, Bmax=None, Pmax=None)
                     edgecolor='none', bbox_inches='tight', dpi=200)
         print('Dispersion stackplot saved')
         plt.close('all')
-    return
-
-
-def winske_magnetic_density_plot(Sim, save=True):
-    np.set_printoptions(suppress=True)
-
-    ftime = getattr(Sim, 'field_sim_time')
-    by  = getattr(Sim, 'by')
-    bz  = getattr(Sim, 'bz')
-    b_squared = (by ** 2 + bz ** 2).mean(axis=1) / Sim.B_eq ** 2
-
-    radperiods = ftime * Sim.gyfreq
-
-    fig, ax = plt.subplots(figsize=(20,10), sharex=True)                  # Initialize Figure Space
-
-    ax.plot(radperiods, b_squared, color='k')
-    ax.set_ylabel('B**2', labelpad=20, rotation=0)
-    ax.set_xlim(0, 100)
-    ax.set_ylim(0, 0.48)
-    ax.set_xlabel('T')
-    
-    if save == True:
-        fullpath = Sim.anal_dir + 'winske_magnetic_timeseries' + '.png'
-        plt.savefig(fullpath, facecolor=fig.get_facecolor(), edgecolor='none')
-        print('t-x Plot saved')
-        plt.close('all')
-    else:
-        plt.show()
     return
 
 

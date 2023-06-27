@@ -7,21 +7,25 @@ Created on Mon Dec 19 20:52:23 2022
 from SimulationClass import HybridSimulationRun
 from standardFieldOuput import plotFieldDiagnostics
 from standardEnergyOutput import plotEnergies
-from timesliceOutputs import winskeSummaryPlots, summaryPlots, checkFields
+from timesliceOutputs import summaryPlots, checkFields
 from multiplotEnergy import compareEnergy, plotIonEnergy
+from winskeDiagnostics import summaryPlot5Panel, energyPlot4Panel
 
 
 if __name__ == '__main__':
     drive = 'D:'
     
     if True:
-        name = 'PREDCORR_RK4_test'
+        name = 'PREDCORR_RK4_coldplasma'
         
-        for num in [7]:
+        for num in [0, 1]:
         
             sim = HybridSimulationRun(name, num, home_dir=f'{drive}/runs/')
         
-            plotFieldDiagnostics(sim)
+            summaryPlot5Panel(sim)
+            energyPlot4Panel(sim)
+            
+            #plotFieldDiagnostics(sim)
             #plotEnergies(sim)
             #checkFields(sim, save=True, ylim=False, skip=50, it_max=None)
             #winskeSummaryPlots(sim1, save=True, skip=1)
