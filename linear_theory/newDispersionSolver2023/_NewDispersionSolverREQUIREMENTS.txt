@@ -1,0 +1,7 @@
+Dispersion relation solver designed to solver the parallel dispersion relation for the left hand EMIC/Alfven/L-mode instability based on:
+ -- The cold plasma approximation from either Kozyra/Chen
+ -- The warm plasma approximation from Chen et al. (2013)
+ -- The full kinetic solution for complex frequency similar to that of Wang et al. (2016)
+
+Eventually, this should be able to solve for single plasma parameters or timeseries based on satellite data from RBSP (or CRRES)
+

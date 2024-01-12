@@ -184,7 +184,7 @@ if __name__ == '__main__':
     print('Field  = {:.2f} nT'.format(_B0*1e9))
     print('Gyfreq = {:.2f} Hz'.format(f0))
     
-    #plot_dipole_field_line(4.0, 0.0, offset=30.0)
+    plot_dipole_field_line(4.0, 0.0, offset=0.0)
     
     #B_eq = CLW_geomagnetic_magnitude(4.27, MLAT=0.)
     #print(B_eq)

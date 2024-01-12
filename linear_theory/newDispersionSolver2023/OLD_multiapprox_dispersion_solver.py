@@ -397,10 +397,13 @@ def hot_dispersion_eqn(w, k, Species):
     '''
     Function used in scipy.fsolve minimizer to find roots of dispersion relation
     for hot plasma approximation.
-    Iterates over each k to find values of w that minimize to D(w, k) = 0
+    Iterates over each k to find values of w that minimize to D(wr, k) = 0
     
     In this case, w is a vector [wr, wi] and fsolve is effectively doing a multivariate
     optimization.
+    
+    type_out allows purely real or purely imaginary (coefficient only) for root
+    finding. Set as anything else for complex output.
     
     FSOLVE OPTIONS :: If bad solution, return np.nan?
     
@@ -572,7 +575,7 @@ def get_dispersion_relation(Species, k, approx='warm', guesses=None, complex_out
     
     Type of dispersion relation controlled by 'approx' kwarg as:
         hot  :: Full dispersion relation for complex w = wr + i*gamma
-        warm :: Small growth rate approximation that assumes D(wr, k) = 0, i.e. wi << wr
+        warm :: Small growth rate approximation that allows D(wr, k) = 0
         cold :: Dispersion relation used for wr, growth rate calculated as per warm
         
     Gamma is only solved for in the DR with the hot approx
