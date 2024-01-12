@@ -4,8 +4,11 @@ Created on Tue Dec  5 17:57:08 2023
 
 @author: Yoshi
 """
+import warnings
 import numpy as np
+from   scipy.special import wofz
 
+SPLIGHT = 3e8
 BOLTZ   = 1.380649e-23  # Boltmann's constant
 AMU     = 1.660530e-27  # Dalton (atomic mass unit)
 PMASS   = 1.672622e-27  # Proton mass
@@ -193,12 +196,93 @@ class DispersionHandler():
     def __init__(self, plasmaInstance):
         self.plasma = plasmaInstance
         self.numSpecies = len(plasmaInstance.Species)
-        #print('The number of species is', numSpecies)
+        print('The number of species is', self.numSpecies)
         
     # To Do:
     # Count number of unique species
     # Code solver for dispersion relation
     # Analytic growth rate solver
+    
+    def Z(arg):
+        '''
+        Plasma Dispersion Function (Normalized Fadeeva function)
+        with normalization constant i*sqrt(pi) (Summers & Thorne, 1993)
+        '''
+        return 1j*np.sqrt(np.pi)*wofz(arg)
+
+    def Y(self, arg):
+        '''Real part of plasma dispersion function'''
+        return np.real(Z(arg))
+    
+    def hot_dispersion_eqn(w, k, Species):
+        '''
+        w is a vector [wr, wi] and fsolve is effectively doing a multivariate
+        optimization.
+        
+        Eqns 1, 13 of Chen et al. (2013) equivalent to those of Wang et al. (2016)
+        '''
+        wc = w[0] + 1j*w[1]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            hot_sum = 0.0
+            for ii in range(Species.shape[0]):
+                sp = Species[ii]
+                if sp['tper'] == 0:
+                    hot_sum += sp['plasma_freq_sq'] * wc / (sp['gyrofreq'] - wc)
+                else:
+                    pdisp_arg   = (wc - sp['gyrofreq']) / (sp['vth_par']*k)
+                    pdisp_func  = Z(pdisp_arg)*sp['gyrofreq'] / (sp['vth_par']*k)
+                    brackets    = (sp['anisotropy'] + 1) * (wc - sp['gyrofreq'])/sp['gyrofreq'] + 1
+                    Is          = brackets * pdisp_func + sp['anisotropy']
+                    hot_sum    += sp['plasma_freq_sq'] * Is
+
+        solution = (wc ** 2) - (SPLIGHT * k) ** 2 + hot_sum
+        return np.array([solution.real, solution.imag])
+
+
+    def warm_dispersion_eqn(w, k, Species):
+        '''    
+        Function used in scipy.fsolve minimizer to find roots of dispersion relation
+        for warm plasma approximation.
+        Iterates over each k to find values of w that minimize to D(wr, k) = 0
+        
+        Eqn 14 of Chen et al. (2013)
+        '''
+        wr = w[0]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            warm_sum = 0.0
+            for ii in range(Species.shape[0]):
+                sp = Species[ii]
+                if sp['tper'] == 0:
+                    warm_sum   += sp['plasma_freq_sq'] * wr / (sp['gyrofreq'] - wr)
+                else:
+                    pdisp_arg   = (wr - sp['gyrofreq']) / (sp['vth_par']*k)
+                    numer       = ((sp['anisotropy'] + 1)*wr - sp['anisotropy']*sp['gyrofreq'])
+                    Is          = sp['anisotropy'] + numer * Y(pdisp_arg) / (sp['vth_par']*k)
+                    warm_sum   += sp['plasma_freq_sq'] * Is
+                
+        solution = wr ** 2 - (SPLIGHT * k) ** 2 + warm_sum
+        return np.array([solution, 0.0])
+
+
+    def cold_dispersion_eqn(w, k, Species):
+        '''
+        Function used in scipy.fsolve minimizer to find roots of dispersion relation
+        for warm plasma approximation.
+        Iterates over each k to find values of w that minimize to D(wr, k) = 0
+        
+        Eqn 19 of Chen et al. (2013)
+        '''
+        wr = w[0]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            cold_sum = 0.0
+            for ii in range(Species.shape[0]):
+                cold_sum += Species[ii]['plasma_freq_sq'] * wr / (Species[ii]['gyrofreq'] - wr)
+                
+        solution = wr ** 2 - (SPLIGHT * k) ** 2 + cold_sum
+        return np.array([solution, 0.0])
     pass
 
     
@@ -207,7 +291,9 @@ if __name__ == '__main__':
     cH  = IonSpecies(200., 1., 1.)
     cHe = IonSpecies(20., 1., 1.)
     
+    # Set plasma conditions
     P = LocalPlasma(200., [wH, cH, cHe])
     
+    # Calculate plasma dispersion relation, store result in instance
     P.getDispersionRelation()
         
