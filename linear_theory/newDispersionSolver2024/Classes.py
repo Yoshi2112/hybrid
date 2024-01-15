@@ -4,7 +4,7 @@ Created on Tue Dec  5 17:57:08 2023
 
 @author: Yoshi
 """
-import warnings
+import warnings, pdb
 import numpy as np
 from   scipy.special import wofz
 
@@ -138,7 +138,8 @@ class IonSpecies:
     
     
 class LocalPlasma:
-    '''Local plasma conditions defined by magnetic field
+    '''
+    Local plasma conditions defined by magnetic field
     Requires calculation of cyclotron frequency for each species, and the
     overall Alfven velocity, which will depend on the magnetic field and the 
     mass density from the total species, as will plasma beta.
@@ -150,26 +151,29 @@ class LocalPlasma:
     Species : list
        Ion species present in plasma, instances of IonSpecies class
     '''
-    def __init__(self, B0, Species):
+    def __init__(self, B0, species):
         self.B0 = B0*1e-9
-        self.Species = Species
+        self.species = species
+        self.numSpecies = len(self.species)
         
         self.calcCyclotron()
-    
+        self.uniqueGyrofreq, self.numUniqueSpecies = self.countUnique()
+        print(f'Of {self.numSpecies} species, {self.numUniqueSpecies} are unique')
+        
     def calcElectronDensity(self):
         self.ne = 0.0
-        for ion in self.Species:
+        for ion in self.species:
             self.ne += ion.charge * ion.densitySI
         return
         
     def calcCyclotron(self):
-        for ion in self.Species:
+        for ion in self.species:
             ion.cyclotronFreq = ion.chargeSI * self.B0 / ion.massSI
         return
             
     def calcMassDensity(self):
         self.massDensity = 0.0
-        for ion in self.Species:
+        for ion in self.species:
             self.massDensity += ion.massSI * ion.densitySI
         return
     
@@ -177,13 +181,25 @@ class LocalPlasma:
         self.vA = self.B0 / np.sqrt(PERMEAB * self.massDensity)
         return
     
-    def getDispersionRelation(self):
+    def countUnique(self):
+        cyclotronList = np.array([self.species[ii].cyclotronFreq for ii in range(self.numSpecies)])
+        gyfreqs, counts = np.unique(cyclotronList, return_counts=True)
+        return gyfreqs, counts.shape[0]
+    
+    def getDispersionRelation(self, approx='warm'):
         '''
         Dispersion relation calculation is a beast, so split into its
         own class
+        
+        Store dispersion relation within instance? Or output?
+        
+        Want to generalise this to allow either vs. wavenumber (k) or
+        vs frequency (w)
+        -- Do wavenumber first since this is easier.
+        -- Vs. frequency may require swapping around the arguments in approx
         '''
-        dispersionRelation = DispersionHandler(self)
-        print(dispersionRelation.numSpecies)
+        dispersionRelation = DispersionHandler(self, approx)
+        dispersionRelation.calcDispersion()
         return
        
 
@@ -192,17 +208,25 @@ class DispersionHandler():
     '''
     Class to handle the calculation of dispersion relations, instantiated
     from a LocalPlasma instance.
-    '''
-    def __init__(self, plasmaInstance):
-        self.plasma = plasmaInstance
-        self.numSpecies = len(plasmaInstance.Species)
-        print('The number of species is', self.numSpecies)
-        
-    # To Do:
-    # Count number of unique species
-    # Code solver for dispersion relation
-    # Analytic growth rate solver
     
+    This class instance will have methods like
+    
+    dispersionRelation.calcDispersion
+    
+    which will call (in fsolve)
+    
+    coldDispersion
+    warmDispersion
+    hotDispersion
+    
+    The calcDispersion relies on information contained within the LocalPlasma instance,
+    which 
+    '''
+    def __init__(self, plasma, approx):
+        self.approx = approx
+        self.plasma = plasma
+        
+    @staticmethod
     def Z(arg):
         '''
         Plasma Dispersion Function (Normalized Fadeeva function)
@@ -210,36 +234,12 @@ class DispersionHandler():
         '''
         return 1j*np.sqrt(np.pi)*wofz(arg)
 
-    def Y(self, arg):
+    @staticmethod
+    def Y(arg):
         '''Real part of plasma dispersion function'''
-        return np.real(Z(arg))
-    
-    def hot_dispersion_eqn(w, k, Species):
-        '''
-        w is a vector [wr, wi] and fsolve is effectively doing a multivariate
-        optimization.
-        
-        Eqns 1, 13 of Chen et al. (2013) equivalent to those of Wang et al. (2016)
-        '''
-        wc = w[0] + 1j*w[1]
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            hot_sum = 0.0
-            for ii in range(Species.shape[0]):
-                sp = Species[ii]
-                if sp['tper'] == 0:
-                    hot_sum += sp['plasma_freq_sq'] * wc / (sp['gyrofreq'] - wc)
-                else:
-                    pdisp_arg   = (wc - sp['gyrofreq']) / (sp['vth_par']*k)
-                    pdisp_func  = Z(pdisp_arg)*sp['gyrofreq'] / (sp['vth_par']*k)
-                    brackets    = (sp['anisotropy'] + 1) * (wc - sp['gyrofreq'])/sp['gyrofreq'] + 1
-                    Is          = brackets * pdisp_func + sp['anisotropy']
-                    hot_sum    += sp['plasma_freq_sq'] * Is
+        return np.real(DispersionHandler.Z(arg))
 
-        solution = (wc ** 2) - (SPLIGHT * k) ** 2 + hot_sum
-        return np.array([solution.real, solution.imag])
-
-
+    @staticmethod
     def warm_dispersion_eqn(w, k, Species):
         '''    
         Function used in scipy.fsolve minimizer to find roots of dispersion relation
@@ -259,41 +259,185 @@ class DispersionHandler():
                 else:
                     pdisp_arg   = (wr - sp['gyrofreq']) / (sp['vth_par']*k)
                     numer       = ((sp['anisotropy'] + 1)*wr - sp['anisotropy']*sp['gyrofreq'])
-                    Is          = sp['anisotropy'] + numer * Y(pdisp_arg) / (sp['vth_par']*k)
+                    Is          = sp['anisotropy'] + numer * DispersionHandler.Y(pdisp_arg) / (sp['vth_par']*k)
                     warm_sum   += sp['plasma_freq_sq'] * Is
                 
         solution = wr ** 2 - (SPLIGHT * k) ** 2 + warm_sum
         return np.array([solution, 0.0])
-
-
-    def cold_dispersion_eqn(w, k, Species):
+     
+    @staticmethod
+    def get_warm_growth_rates(wr, k, Species):
         '''
-        Function used in scipy.fsolve minimizer to find roots of dispersion relation
-        for warm plasma approximation.
-        Iterates over each k to find values of w that minimize to D(wr, k) = 0
+        Calculates the temporal and convective linear growth rates for a plasma
+        composition contained in Species for each frequency w. Assumes a cold
+        dispersion relation is valid for k but uses a warm approximation in the
+        solution for D(w, k).
         
-        Eqn 19 of Chen et al. (2013)
-        '''
-        wr = w[0]
+        Equations adapted from Chen et al. (2013)
+        '''    
+        w_der_sum = 0.0
+        k_der_sum = 0.0
+        Di        = 0.0
+        
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            cold_sum = 0.0
+            
             for ii in range(Species.shape[0]):
-                cold_sum += Species[ii]['plasma_freq_sq'] * wr / (Species[ii]['gyrofreq'] - wr)
+                sp = Species[ii]
                 
-        solution = wr ** 2 - (SPLIGHT * k) ** 2 + cold_sum
-        return np.array([solution, 0.0])
+                # If cold
+                if sp['tper'] == 0:
+                    w_der_sum += sp['plasma_freq_sq'] * sp['gyrofreq'] / (wr - sp['gyrofreq'])**2
+                    k_der_sum += 0.0
+                    Di        += 0.0
+                
+                # If hot
+                else:
+                    zs           = (wr - sp['gyrofreq']) / (sp['vth_par']*k)
+                    Yz           = np.real(Z(zs))
+                    dYz          = -2*(1 + zs*Yz)
+                    A_bit        = (sp['anisotropy'] + 1) * wr / sp['gyrofreq']
+                    
+                    # Calculate frequency derivative of Dr (sums bit)
+                    w_der_outsd  = sp['plasma_freq_sq']*sp['gyrofreq'] / (wr*k*sp['vth_par'])
+                    w_der_first  = A_bit * Yz
+                    w_der_second = (A_bit - sp['anisotropy']) * wr * dYz / (k * sp['vth_par']) 
+                    w_der_sum   += w_der_outsd * (w_der_first + w_der_second)
+            
+                    # Calculate Di (sums bit)
+                    Di_bracket = 1 + (sp['anisotropy'] + 1) * (wr - sp['gyrofreq']) / sp['gyrofreq']
+                    Di_after   = sp['gyrofreq'] / (k * sp['vth_par']) * np.sqrt(np.pi) * np.exp(- zs ** 2)
+                    Di        += sp['plasma_freq_sq'] * Di_bracket * Di_after
+            
+                    # Calculate wavenumber derivative of Dr (sums bit)
+                    k_der_outsd  = sp['plasma_freq_sq']*sp['gyrofreq'] / (wr*k*k*sp['vth_par'])
+                    k_der_first  = A_bit - sp['anisotropy']
+                    k_der_second = Yz + zs * dYz
+                    k_der_sum   += k_der_outsd * k_der_first * k_der_second
+        
+        # Get and return ratio
+        Dr_wder = 2*wr + w_der_sum
+        Dr_kder = -2*k*c**2 - k_der_sum
+
+        temporal_growth_rate   = - Di / Dr_wder
+        group_velocity         = - Dr_kder / Dr_wder
+        convective_growth_rate =   temporal_growth_rate / np.abs(group_velocity)
+        return temporal_growth_rate, convective_growth_rate, group_velocity
+    
+    
+    def calcDispersion(self, approx='warm'):
+        '''
+        All input values in SI units from the Species array
+        
+        Remember, species doesn't contain an electron entry
+        -- Should it? Calculate as part of LocalPlasma
+        
+        The number of solutions is equal to the number of unique gyrofrequencies
+        '''
+# =============================================================================
+#         # Solution and error arrays :: Two-soln array for wr, gamma. 
+#         # PDR_solns init'd as ones because 0.0 returns spurious root
+#         PDR_solns = np.ones( (Nk, N_solns, 2), dtype=np.float64)*0.01
+#         CGR_solns = np.zeros((Nk, N_solns   ), dtype=np.float64)
+#         VEL_solns = np.zeros((Nk, N_solns   ), dtype=np.float64)
+#         ier       = np.zeros((Nk, N_solns   ), dtype=int)
+#         msg       = np.zeros((Nk, N_solns   ), dtype='<U256')
+# =============================================================================
+
+# =============================================================================
+#         # fsolve arguments
+#         eps    = 1.01           # Offset used to supply initial guess (since right on w_cyc returns an error)
+#         tol    = 1e-10          # Absolute solution convergence tolerance in rad/s
+#         fev    = 1000000        # Maximum number of iterations
+#         Nk     = k.shape[0]     # Number of wavenumbers to solve for
+# =============================================================================
+        
+
+
+# =============================================================================
+#         # Initial guesses (check this?)
+#         for ii in range(1, N_solns):
+#             PDR_solns[0, ii - 1]  = np.array([[gyfreqs[-ii - 1] * eps, 0.0]])
+# =============================================================================
+        
+# =============================================================================
+#         if approx == 'hot':
+#             func = hot_dispersion_eqn
+#         elif approx == 'warm':
+#             func = warm_dispersion_eqn
+#         elif approx == 'cold':
+#             func = cold_dispersion_eqn
+#         else:
+#             sys.exit('ABORT :: kwarg approx={} invalid. Must be \'cold\', \'warm\', or \'hot\'.'.format(approx))
+# =============================================================================
+        
+# =============================================================================
+#         # Define function to solve for (all have same arguments)
+#         if guesses is None or guesses.shape != PDR_solns.shape:
+#             for jj in range(N_solns):
+#                 for ii in range(1, Nk):
+#                     #if np.isnan(k[ii]):
+#                     #    PDR_solns[ii, jj] = np.nan
+#                     #else:
+#                         PDR_solns[ii, jj], infodict, ier[ii, jj], msg[ii, jj] =\
+#                             fsolve(func, x0=PDR_solns[ii - 1, jj], args=(k[ii], Species), xtol=tol, maxfev=fev, full_output=True)
+#                 
+#                 if False:
+#                     # Solve for k[0] using initial guess of k[1]
+#                     PDR_solns[0, jj], infodict, ier[0, jj], msg[0, jj] =\
+#                         fsolve(func, x0=PDR_solns[1, jj], args=(k[0], Species), xtol=tol, maxfev=fev, full_output=True)
+#                 else:
+#                     # Set k[0] as equal to k[1] (better for large Nk)
+#                     PDR_solns[0, jj] = PDR_solns[1, jj]
+#         else:
+#             for jj in range(N_solns):
+#                 for ii in range(1, Nk):
+#                     PDR_solns[ii, jj], infodict, ier[ii, jj], msg[ii, jj] =\
+#                         fsolve(func, x0=guesses[ii, jj], args=(k[ii], Species), xtol=tol, maxfev=fev, full_output=True)
+# =============================================================================
+
+# =============================================================================
+#         N_bad = remove_bad_solutions(PDR_solns, ier)
+#         #N_dup = remove_duplicates(PDR_solns)
+#         if print_filtered == True:
+#             print(f'{N_bad} solutions filtered for {approx} approximation.')
+#             #print(f'{N_dup} duplicates removed.')
+# =============================================================================
+
+# =============================================================================
+#         # Solve for growth rate/convective growth rate here
+#         if approx == 'hot':
+#             CGR_solns *= np.nan
+#         elif approx == 'warm':
+#             for jj in range(N_solns):
+#                 PDR_solns[:, jj, 1], CGR_solns[:, jj], VEL_solns[:, jj] = get_warm_growth_rates(PDR_solns[:, jj, 0], k, Species)
+#         elif approx == 'cold':
+#             for jj in range(N_solns):
+#                 PDR_solns[:, jj, 1], CGR_solns[:, jj], VEL_solns[:, jj] = get_cold_growth_rates(PDR_solns[:, jj, 0], k, Species)
+# =============================================================================
+
+# =============================================================================
+#         # Convert to complex number if flagged, else return as (Nk, N_solns, 2) for real/imag components
+#         if complex_out == True:
+#             OUT_solns = np.zeros((Nk, N_solns   ), dtype=np.complex128)
+#             for ii in range(Nk):
+#                 for jj in range(N_solns):
+#                     OUT_solns[ii, jj] = PDR_solns[ii, jj, 0] + 1j*PDR_solns[ii, jj, 1]
+#         else:
+#             OUT_solns = PDR_solns
+# =============================================================================
+
     pass
 
     
 if __name__ == '__main__':
     wH  = IonSpecies(10., 1., 1., temp=None, tperp=None, tpar=50, ani=0.0, name='H+')
     cH  = IonSpecies(200., 1., 1.)
-    cHe = IonSpecies(20., 1., 1.)
+    cHe = IonSpecies(20., 1., 4.)
     
     # Set plasma conditions
     P = LocalPlasma(200., [wH, cH, cHe])
     
     # Calculate plasma dispersion relation, store result in instance
-    P.getDispersionRelation()
+    #P.getDispersionRelation()
         
