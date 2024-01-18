@@ -156,14 +156,26 @@ class LocalPlasma:
         self.species = species
         self.numSpecies = len(self.species)
         
+        self.calcElectronParameters()
         self.calcCyclotron()
         self.uniqueGyrofreq, self.numUniqueSpecies = self.countUnique()
         print(f'Of {self.numSpecies} species, {self.numUniqueSpecies} are unique')
         
+    def calcElectronParameters(self):
+        self.calcElectronDensity()
+        self.calcElectronFreqs()
+        return
+    
     def calcElectronDensity(self):
         self.ne = 0.0
         for ion in self.species:
             self.ne += ion.charge * ion.densitySI
+        return
+    
+    def calcElectronFreqs(self):
+        '''Electron cyclotron frequency defined negative - check if consistent'''
+        self.wpe = np.sqrt(self.ne * ECHARGE ** 2) / (EMASS * PERMITT)
+        self.wce = - ECHARGE * self.B0 / EMASS
         return
         
     def calcCyclotron(self):
@@ -186,7 +198,7 @@ class LocalPlasma:
         gyfreqs, counts = np.unique(cyclotronList, return_counts=True)
         return gyfreqs, counts.shape[0]
     
-    def getDispersionRelation(self, approx='warm'):
+    def getDispersionRelation(self, approx='warm', kmax=None):
         '''
         Dispersion relation calculation is a beast, so split into its
         own class
@@ -197,6 +209,8 @@ class LocalPlasma:
         vs frequency (w)
         -- Do wavenumber first since this is easier.
         -- Vs. frequency may require swapping around the arguments in approx
+        These ranges are normalized either by the proton cyclotron frequency,
+        or the ion inertial length c/wpi
         '''
         dispersionRelation = DispersionHandler(self, approx)
         dispersionRelation.calcDispersion()
